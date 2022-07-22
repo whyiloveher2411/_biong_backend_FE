@@ -1,0 +1,1 @@
+export { makeStyles as default } from '@mui/styles'
