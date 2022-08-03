@@ -43,12 +43,12 @@ function Jobs() {
 
     return (
         <Page
-            title={__('Jobs')}
+            title={__('Batch Job')}
             isHeaderSticky
             header={
                 <>
-                    <Typography component="h2" gutterBottom variant="overline">{__('Trigger')}</Typography>
-                    <Typography component="h1" variant="h3">{__('Jobs')}</Typography>
+                    <Typography component="h2" gutterBottom variant="overline">{__('Manager')}</Typography>
+                    <Typography component="h1" variant="h3">{__('Batch Job')}</Typography>
                 </>
             }
         >

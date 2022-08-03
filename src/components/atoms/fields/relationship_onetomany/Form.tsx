@@ -163,7 +163,7 @@ export default React.memo(function RelationshipOneToManyForm({ config, post, onR
             onClose={() => {
                 setOpen(false);
             }}
-            disableClearable
+            disableClearable={config.disableClearable ? config.disableClearable : false}
             value={valueInital || { id: 0, title: '' }}
             size={config.size ?? 'medium'}
             defaultValue={valueInital || { id: 0, title: '' }}

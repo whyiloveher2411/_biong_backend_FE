@@ -138,11 +138,13 @@ export default function Search() {
 const useStyles = makeCSS(({ spacing, palette, zIndex }: Theme) => ({
     MuiPopperArrow: {
         top: 0,
-        left: 0,
         marginTop: '1px',
         width: '3em',
         height: '1em',
         fontSize: '7px',
+        position: 'absolute',
+        left: '50%',
+        transform: 'translateX(-50%)',
         '&:before': {
             content: '""',
             margin: 'auto',

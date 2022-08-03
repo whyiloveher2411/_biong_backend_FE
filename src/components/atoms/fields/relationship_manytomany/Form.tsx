@@ -1,4 +1,4 @@
-import { AutocompleteRenderInputParams } from '@mui/material';
+import { AutocompleteRenderInputParams, FormHelperText } from '@mui/material';
 import Autocomplete from 'components/atoms/Autocomplete';
 import Box from 'components/atoms/Box';
 import Checkbox from 'components/atoms/Checkbox';
@@ -142,79 +142,82 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
     console.log('render RELATIONSHIP MANY TO MANY');
 
     return (
-        <Autocomplete
-            multiple
-            open={open}
-            onOpen={() => { setOpen(true); setLoading(true); }}
-            onClose={() => {
-                setOpen(false);
-            }}
-            disableClearable={config.disableClearable ? config.disableClearable : false}
-            value={valueInital}
-            options={options !== false ? options : []}
-            disableCloseOnSelect
-            isOptionEqualToValue={(option: Option, value: Option) => option.id === value.id}
-            getOptionLabel={(option) => option.title}
-            loading={loading}
-            onChange={handleOnChange}
-            renderTags={(tagValue, getTagProps) =>
-                tagValue.map((option, index) => (
-                    <Chip
-                        label={
-                            <>
-                                {
-                                    (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + option.title
-                                }
-                                {
-                                    Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>
-                                }
-                            </>
-                        }
-                        {...getTagProps({ index })}
-                    />
-                ))
-            }
-            renderOption={(props, option: Option, { selected }) => (
-                <li {...props} key={option.id}>
-                    <Box
-                        sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            width: 1
-                        }}
-                    >
-                        {
-                            Boolean(option.optionLabel) &&
-                            <span dangerouslySetInnerHTML={{ __html: option.optionLabel ?? '' }} />
-                        }
-                        <Checkbox
-                            icon={<Icon icon="CheckBoxOutlineBlank" fontSize="small" />}
-                            checkedIcon={<Icon icon="CheckBox" fontSize="small" />}
-                            style={{ marginRight: 8 }}
-                            checked={selected}
-                            color="primary"
+        <>
+            <Autocomplete
+                multiple
+                open={open}
+                onOpen={() => { setOpen(true); setLoading(true); }}
+                onClose={() => {
+                    setOpen(false);
+                }}
+                disableClearable={config.disableClearable ? config.disableClearable : false}
+                value={valueInital}
+                options={options !== false ? options : []}
+                disableCloseOnSelect
+                isOptionEqualToValue={(option: Option, value: Option) => option.id === value.id}
+                getOptionLabel={(option) => option.title}
+                loading={loading}
+                onChange={handleOnChange}
+                renderTags={(tagValue, getTagProps) =>
+                    tagValue.map((option, index) => (
+                        <Chip
+                            label={
+                                <>
+                                    {
+                                        (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + option.title
+                                    }
+                                    {
+                                        Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>
+                                    }
+                                </>
+                            }
+                            {...getTagProps({ index })}
                         />
-                        {option.title}
-                        {Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>}
-                    </Box>
-                </li>
-            )}
-            renderInput={(params: AutocompleteRenderInputParamsExtends) => {
+                    ))
+                }
+                renderOption={(props, option: Option, { selected }) => (
+                    <li {...props} key={option.id}>
+                        <Box
+                            sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                width: 1
+                            }}
+                        >
+                            {
+                                Boolean(option.optionLabel) &&
+                                <span dangerouslySetInnerHTML={{ __html: option.optionLabel ?? '' }} />
+                            }
+                            <Checkbox
+                                icon={<Icon icon="CheckBoxOutlineBlank" fontSize="small" />}
+                                checkedIcon={<Icon icon="CheckBox" fontSize="small" />}
+                                style={{ marginRight: 8 }}
+                                checked={selected}
+                                color="primary"
+                            />
+                            {option.title}
+                            {Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>}
+                        </Box>
+                    </li>
+                )}
+                renderInput={(params: AutocompleteRenderInputParamsExtends) => {
 
-                params.onKeyPress = handleKeyPress;
+                    params.onKeyPress = handleKeyPress;
 
-                return <>
-                    <TextField
-                        {...params}
-                        variant="outlined"
-                        label={config.title ? config.title : undefined}
-                        placeholder={config.placeholder ?? 'Add'}
-                    />
-                    <SpecialNotes specialNotes={config.special_notes} />
-                </>
+                    return <>
+                        <TextField
+                            {...params}
+                            variant="outlined"
+                            label={config.title ? config.title : undefined}
+                            placeholder={config.placeholder ?? 'Add'}
+                        />
+                        <SpecialNotes specialNotes={config.special_notes} />
+                    </>
 
-            }}
-            {...rest}
-        />
+                }}
+                {...rest}
+            />
+            <FormHelperText><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+        </>
     );
 }
