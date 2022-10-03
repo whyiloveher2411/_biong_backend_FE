@@ -218,7 +218,7 @@ export default function Notification() {
                                     }
                                     <Divider color="dark" sx={{ borderStyle: 'dashed' }} />
                                     <Box sx={{ p: 1, paddingBottom: 0 }}>
-                                        <Button color="success" href="/post-type/admin_notification/list" fullWidth disableRipple>
+                                        <Button color="success" component={Link} to="/post-type/admin_notification/list" fullWidth disableRipple>
                                             {__('View All')}
                                         </Button>
                                     </Box>

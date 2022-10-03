@@ -89,7 +89,7 @@ function TotalMoney(props: FieldViewItemProps) {
                     <del style={{ textDecoration: 'line-through', color: 'red' }}>{moneyFormat(products.total + '')}</del> -
                 </>
             }
-            <span style={{ color: 'green', fontWeight: 'bold' }}> {moneyFormat(total + '')}</span>
+            <span style={{ color: 'green', fontWeight: 'bold' }}> {moneyFormat(post.total_money + '')}</span>
         </div>
     )
 }

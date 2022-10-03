@@ -24,6 +24,7 @@ body,
 
 body {
     background: #f4f6f8;
+    overflow-y: scroll;
 }
 
 .google-chart svg>g>g:last-child {
