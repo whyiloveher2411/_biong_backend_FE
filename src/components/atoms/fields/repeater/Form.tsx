@@ -41,6 +41,9 @@ const useStyles = makeStyles((theme: Theme) => ({
         lineHeight: theme.typography.pxToRem(22),
         alignItems: 'center',
     },
+    hicon: {
+        whiteSpace: 'nowrap',
+    },
     dragcontext: {
         marginTop: 8
     },
@@ -403,7 +406,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview }
                                                                             <Icon icon="StarRounded" style={{ marginBottom: '5px', color: 'rgb(244, 180, 0)' }} />
                                                                         }
                                                                     </Typography>
-                                                                    <span>
+                                                                    <Typography className={classes.hicon} onClick={e => e.stopPropagation()} >
 
                                                                         <IconButton
                                                                             onClick={(e: React.MouseEvent) => {
@@ -422,7 +425,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview }
                                                                             onClose={() => closeDialogConfirmDelete(index)}
                                                                             onConfirm={() => deleteRepeater(index)}
                                                                         />
-                                                                    </span>
+                                                                    </Typography>
                                                                 </AccordionSummary>
 
                                                                 {
