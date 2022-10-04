@@ -114,6 +114,9 @@ const useStyles = makeStyles((theme: Theme) => ({
         '&>.MuiAccordionSummary-root': {
             background: theme.palette.error.main,
         },
+        '& $heading, & $heading *, & $hicon .MuiIconButton-root,& $stt':{
+            color: 'white',
+        }
     },
     emptyValue: {
         marginTop: 8,
