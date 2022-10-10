@@ -73,7 +73,7 @@ function Main(props: FieldFormItemProps) {
             <FieldForm
                 component="relationship_onetomany"
                 config={{
-                    title: "Customer",
+                    title: props.config.title,
                     object: props.config.object
                 }}
                 post={post}
