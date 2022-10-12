@@ -524,9 +524,9 @@ export default function Log() {
                     </>
                     :
                     <NoticeContent
-                        title=''
-                        description=''
-                        image=''
+                        title={__('Nothing To Display.')}
+                        description={__('Seems like no data have been created yet.')}
+                        image='/images/notfound.svg'
                     />
             }
 
