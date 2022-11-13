@@ -271,6 +271,9 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                         editor.on('click', function (e: Event) {
                             e.preventDefault();
                             e.stopPropagation();
+                            if (config.clickElementCallback) {
+                                config.clickElementCallback(editor, e);
+                            }
                         });
 
                         editor.on('dblclick', function () {
@@ -298,7 +301,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
 
                             handleScrollWarperMain();
 
-                            let css = ':root { --color: ' + theme.palette.text.primary + ' }.mce-content-body[data-mce-placeholder]:not(.mce-visualblocks)::before{color: ' + theme.palette.text.secondary + ';opacity:0.7}',
+                            let css = ':root { --color: ' + theme.palette.text.primary + ' }.mce-content-body[data-mce-placeholder]:not(.mce-visualblocks)::before{color: ' + theme.palette.text.secondary + ';opacity:0.7}' + (config.editoStyle ?? ''),
                                 head = document.head || document.getElementsByTagName('head')[0],
                                 style = document.createElement('style');
 

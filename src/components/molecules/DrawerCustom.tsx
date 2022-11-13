@@ -29,7 +29,7 @@ const useStyles = makeStyles((theme: Theme) => ({
 
 interface DrawerCustomProps {
     [key: string]: ANY,
-    title: string,
+    title: string | React.ReactNode,
     content?: React.ReactNode,
     headerAction?: React.ReactNode,
     action?: React.ReactNode,
@@ -38,16 +38,17 @@ interface DrawerCustomProps {
     children: React.ReactNode,
     restDialogContent?: { [key: string]: ANY },
     width?: number,
+    activeOnClose?: boolean,
 }
 
-function DrawerCustom({ title, content, headerAction = false, action, open, onClose, children, restDialogContent, width, ...rest }: DrawerCustomProps) {
+function DrawerCustom({ title, content, activeOnClose, headerAction = false, action, open, onClose, children, restDialogContent, width, ...rest }: DrawerCustomProps) {
 
     const classes = useStyles();
 
     return (
         <Drawer
             anchor="right"
-            // onClose={onClose}
+            onClose={activeOnClose ? onClose : undefined}
             disableEnforceFocus
             open={open}
             variant="temporary"

@@ -192,10 +192,10 @@ const useStyles = makeStyles(({ typography, palette, spacing }: Theme) => ({
         letterSpacing: 0,
         borderRadius: 0,
         width: '100%',
-        fontWeight: typography.fontWeightRegular,
-        '&.depth-0': {
-            fontWeight: typography.fontWeightMedium
-        },
+        // fontWeight: typography.fontWeightRegular,
+        // '&.depth-0': {
+        //     fontWeight: typography.fontWeightMedium
+        // },
     },
     icon: {
         display: 'flex',
