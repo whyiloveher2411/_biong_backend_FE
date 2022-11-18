@@ -13,6 +13,8 @@ function ImageCode(props: FieldFormItemProps) {
 
     const [editor, setEditor] = React.useState<ANY>(null);
 
+    const [redirectTo, setRedirectTo] = React.useState('');
+
     return (
         <>
             <FieldForm
@@ -21,7 +23,7 @@ function ImageCode(props: FieldFormItemProps) {
                     title: props.config.title,
                     ...props.config,
                     customViewForm: undefined,
-                    editoStyle: 'svg .clickable-group{cursor: pointer;}svg .clickable-group:hover>[fill="rgb(255,229,153)"]{fill: #f3c950}svg .clickable-group:hover>[fill="rgb(255,255,0)"]{fill: #d6d700}svg .clickable-group:hover>[fill="rgb(255,255,255)"]{fill: #d7d7d7}svg .clickable-group[data-id]>[fill="rgb(255,229,153)"]{fill: #43a047 !important}svg .clickable-group[data-id]>[fill="rgb(255,255,0)"]{fill: #9ed6a0}svg .clickable-group[data-id]>[fill="rgb(255,255,255)"]{fill: #c9ffcb}svg .clickable-group[data-id]>[fill="rgb(153,153,153)"]{fill: #c9ffcb}svg .clickable-group.active>rect{fill: red !important;}',
+                    editoStyle: 'svg .clickable-group{cursor: pointer;}svg .clickable-group:hover>[fill="rgb(255,229,153)"]{fill: #f3c950}svg .clickable-group:hover>[fill="rgb(255,255,0)"]{fill: #d6d700}svg .clickable-group:hover>[fill="rgb(255,255,255)"]{fill: #d7d7d7}svg .clickable-group[data-id]>[fill="rgb(255,229,153)"]{fill: #43a047 !important}svg .clickable-group[data-id]>[fill="rgb(255,255,0)"]{fill: #9ed6a0}svg .clickable-group[data-id]>[fill="rgb(255,255,255)"]{fill: #c9ffcb}svg .clickable-group[data-id]>[fill="rgb(153,153,153)"]{fill: #c9ffcb}svg .clickable-group.active>rect{fill: red !important;}svg .clickable-group[data-redirect]>rect{fill: #d32f2f}',
                     clickElementCallback: (editor: ANY, event: ANY) => {
 
                         setEditor(editor);
@@ -45,6 +47,7 @@ function ImageCode(props: FieldFormItemProps) {
 
                             clickable.classList.add('active');
                             setElementClicked(clickable);
+                            setRedirectTo('');
                         }
                     }
                 }}
@@ -66,6 +69,9 @@ function ImageCode(props: FieldFormItemProps) {
             >
                 <Box
                     sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 3,
                         mt: 3
                     }}
                 >
@@ -86,10 +92,22 @@ function ImageCode(props: FieldFormItemProps) {
                         }}
                     />
 
-                    <Button
-                        sx={{
-                            mt: 2,
+                    <FieldForm
+                        component='text'
+                        config={{
+                            title: 'Redirect to',
+                            note: 'Chuyển đến đường dẫn này khi nhấp vào',
                         }}
+                        post={{
+                            redirectTo: redirectTo
+                        }}
+                        name="redirectTo"
+                        onReview={(value) => {
+                            setRedirectTo(value);
+                        }}
+                    />
+
+                    <Button
                         variant="contained"
                         color='success'
                         onClick={() => {
@@ -98,10 +116,18 @@ function ImageCode(props: FieldFormItemProps) {
 
                                 if (prev && editor) {
 
-                                    if (idSelected && idSelected.roadmap_item) {
-                                        prev.setAttribute("data-id", idSelected.roadmap_item + '');
-                                    } else {
+                                    if (redirectTo) {
+                                        prev.setAttribute("data-redirect", redirectTo);
+
                                         prev.removeAttribute("data-id");
+
+                                    } else {
+
+                                        if (idSelected && idSelected.roadmap_item) {
+                                            prev.setAttribute("data-id", idSelected.roadmap_item + '');
+                                        } else {
+                                            prev.removeAttribute("data-id");
+                                        }
                                     }
 
                                     prev.classList.remove('active');
@@ -109,7 +135,6 @@ function ImageCode(props: FieldFormItemProps) {
                                     setElementClicked(false);
 
                                     props.onReview(editor.getContent());
-
                                 }
 
                                 return false;
