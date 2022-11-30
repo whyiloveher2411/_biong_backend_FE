@@ -29,9 +29,9 @@ function Main(props: FieldViewItemProps) {
     const [customer, setCustomer] = React.useState<JsonFormat | false>(false);
 
     React.useEffect(() => {
-        if (props.post.ecom_customer_detail) {
+        if (props.post[props.name + '_detail']) {
             try {
-                setCustomer(JSON.parse(props.post.ecom_customer_detail));
+                setCustomer(JSON.parse(props.post[props.name + '_detail']));
                 //eslint-disable-next-line
             } catch (error) { }
 
