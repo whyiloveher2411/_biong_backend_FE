@@ -17,8 +17,8 @@ export function Customer({ customer }: {
         >
             <Avatar image={customer.avatar} name={(customer.first_name ?? '') + ' ' + (customer.last_name ?? '')} />
             <Box display="flex" flexDirection="column">
-                <Typography variant="body1">{customer.first_name ?? ''} {customer.last_name ?? ''}</Typography>
-                <Typography variant="body2">{customer.title}</Typography>
+                {/* <Typography variant="body1">{customer.first_name ?? ''} {customer.last_name ?? ''}</Typography> */}
+                <Typography variant="body1">{customer.title}</Typography>
             </Box>
         </Box>
     )
