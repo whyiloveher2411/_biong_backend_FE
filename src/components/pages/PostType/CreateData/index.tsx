@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import Form from './Form';
 import Header from './Header';
 
-const CreateData = ({ type, action }: { type: string, action: string }) => {
+const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: string, afterEditOrNew?: () => void }) => {
 
     const { data, setData, onUpdateData } = useForm(false);
 
@@ -45,12 +45,16 @@ const CreateData = ({ type, action }: { type: string, action: string }) => {
                     success: (result: CreatePostTypeData) => {
 
                         if (result.post) {
-                            if (result.post.id !== prev.post.id) {
-                                navigate(`/post-type/${type}/list?redirectTo=edit&post=${result.post.id}`);
-                                return;
+                            if (afterEditOrNew) {
+                                afterEditOrNew();
                             } else {
-                                result.updatePost = new Date();
-                                setData({ ...prev, post: result.post, author: result.author, editor: result.editor, updatePost: new Date() })
+                                if (result.post.id !== prev.post.id) {
+                                    navigate(`/post-type/${type}/list?redirectTo=edit&post=${result.post.id}`);
+                                    return;
+                                } else {
+                                    result.updatePost = new Date();
+                                    setData({ ...prev, post: result.post, author: result.author, editor: result.editor, updatePost: new Date() })
+                                }
                             }
                         }
 

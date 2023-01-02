@@ -1,4 +1,4 @@
-import { Theme } from '@mui/material';
+import { FormControl, Theme } from '@mui/material';
 import Box from 'components/atoms/Box';
 import Card from 'components/atoms/Card';
 import CardActions from 'components/atoms/CardActions';
@@ -123,15 +123,15 @@ interface ShowDataTableProps {
     isLoadedData: boolean,
     postType: string,
     acctionPost: (payload: JsonFormat, success?: ((result: JsonFormat) => void) | undefined) => void,
+    selectedCustomers: string[],
+    setSelectedCustomers: React.Dispatch<React.SetStateAction<string[]>>,
 }
 
-const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData, acctionPost, ...rest }: ShowDataTableProps) => {
+const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData, acctionPost, selectedCustomers, setSelectedCustomers, ...rest }: ShowDataTableProps) => {
 
     const classes = useStyles();
 
     const navigate = useNavigate();
-
-    const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
 
     const [confirmDelete, setConfirmDelete] = React.useState(0);
 
@@ -309,18 +309,20 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                     <TableCell padding="checkbox">
                                         {
                                             data.rows.total ?
-                                                <Checkbox
-                                                    checked={
-                                                        Boolean(selectedCustomers.length ===
-                                                            data.rows.total && data.rows.total)
-                                                    }
-                                                    color="primary"
-                                                    indeterminate={
-                                                        selectedCustomers.length > 0 &&
-                                                        selectedCustomers.length < data.rows.total
-                                                    }
-                                                    onClick={handleOnClickSelectAll}
-                                                />
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={
+                                                            Boolean(selectedCustomers.length ===
+                                                                data.rows.total && data.rows.total)
+                                                        }
+                                                        color="primary"
+                                                        indeterminate={
+                                                            selectedCustomers.length > 0 &&
+                                                            selectedCustomers.length < data.rows.total
+                                                        }
+                                                        onClick={handleOnClickSelectAll}
+                                                    />
+                                                </FormControl>
                                                 : <></>
                                         }
                                     </TableCell>
@@ -350,26 +352,28 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                 ) !== -1
                                             }>
                                             <TableCell padding="checkbox">
-                                                <Checkbox
-                                                    checked={
-                                                        selectedCustomers.indexOf(
-                                                            customer.id
-                                                        ) !== -1
-                                                    }
-                                                    color="primary"
-                                                    onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                                                        handleSelectOne(
-                                                            event,
-                                                            customer.id
-                                                        )
-                                                    }
-                                                    onClick={handleClickOne}
-                                                    value={
-                                                        selectedCustomers.indexOf(
-                                                            customer.id
-                                                        ) !== -1
-                                                    }
-                                                />
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={
+                                                            selectedCustomers.indexOf(
+                                                                customer.id
+                                                            ) !== -1
+                                                        }
+                                                        color="primary"
+                                                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                                                            handleSelectOne(
+                                                                event,
+                                                                customer.id
+                                                            )
+                                                        }
+                                                        onClick={handleClickOne}
+                                                        value={
+                                                            selectedCustomers.indexOf(
+                                                                customer.id
+                                                            ) !== -1
+                                                        }
+                                                    />
+                                                </FormControl>
                                             </TableCell>
                                             <TableCell padding="checkbox">
                                                 <Tooltip

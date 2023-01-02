@@ -23,11 +23,13 @@ import Header from './Header';
 import Results from './Results';
 import SearchBar from './SearchBar';
 import { FieldConfigProps } from 'components/atoms/fields/type'
+import DrawerCustom from 'components/molecules/DrawerCustom';
+import CreateData from '../CreateData';
 
 
 
 
-const ShowData = ({ type }: { type: string, action: string }) => {
+const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, action: string, enableNewInline?: boolean, onSelectPosts?: (postIds: Array<JsonFormat>) => void }) => {
 
     const [data, setData] = useState<ShowPostTypeData | false>(false);
     const [title, setTitle] = useState('...');
@@ -39,6 +41,10 @@ const ShowData = ({ type }: { type: string, action: string }) => {
     const navigate = useNavigate();
 
     const permission = usePermission(type + '_create');
+
+    const [openCreateInline, setOpenCreateInline] = React.useState(false);
+
+    const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
 
     const { callAddOn } = AddOn();
 
@@ -130,6 +136,27 @@ const ShowData = ({ type }: { type: string, action: string }) => {
         //eslint-disable-next-line
     }, [queryUrl]);
 
+    useEffect(() => {
+        if (onSelectPosts) {
+
+            if (data) {
+                const posts: Array<JsonFormat> = [];
+
+                selectedCustomers.forEach(id => {
+
+                    const post = data.rows.data.find(item => (item?.id + '') === (id + ''));
+
+                    if (post) {
+                        posts.push(post);
+                    }
+
+                });
+                onSelectPosts(posts);
+            }
+
+        }
+    }, [selectedCustomers]);
+
     const acctionPost = (payload: JsonFormat, success?: undefined | ((result: JsonFormat) => void)) => {
         ajaxHandle({
             url: `get-data/${type}`,
@@ -164,9 +191,23 @@ const ShowData = ({ type }: { type: string, action: string }) => {
     const ListDataComponent = (
         <Box display="flex">
             <div style={{ width: 255, flexShrink: 0, paddingRight: 24 }}>
-                <Button component={Link} to={`/post-type/${type}/new`} variant="contained" size="large" disabled={!permission[type + '_create']} color="primary" style={{ width: '100%', marginBottom: 24 }}>
-                    {__('Add new')}
-                </Button>
+                {
+                    enableNewInline ?
+                        <Button
+                            variant="contained"
+                            size="large"
+                            disabled={!permission[type + '_create']}
+                            color="primary"
+                            style={{ width: '100%', marginBottom: 24 }}
+                            onClick={() => setOpenCreateInline(true)}
+                        >
+                            {__('Add new')}
+                        </Button>
+                        :
+                        <Button component={Link} to={`/post-type/${type}/new`} variant="contained" size="large" disabled={!permission[type + '_create']} color="primary" style={{ width: '100%', marginBottom: 24 }}>
+                            {__('Add new')}
+                        </Button>
+                }
                 <FilterTab
                     name={type}
                     acctionPost={acctionPost}
@@ -189,6 +230,8 @@ const ShowData = ({ type }: { type: string, action: string }) => {
                         isLoadedData={isLoadedData}
                         postType={type}
                         acctionPost={acctionPost}
+                        selectedCustomers={selectedCustomers}
+                        setSelectedCustomers={setSelectedCustomers}
                     />
                 )}
             </div>
@@ -265,6 +308,32 @@ const ShowData = ({ type }: { type: string, action: string }) => {
                     </Page>
                     :
                     <SkeletonListData />
+            }
+
+            {
+                enableNewInline &&
+                <DrawerCustom
+                    open={openCreateInline}
+                    onClose={() => setOpenCreateInline(false)}
+                    title={'Create New'}
+                    width={1200}
+                    activeOnClose
+                    restDialogContent={{
+                        sx: {
+                            backgroundColor: 'body.background',
+                        }
+                    }}
+                >
+                    <CreateData
+                        type={type}
+                        action={'new'}
+                        afterEditOrNew={() => {
+                            setOpenCreateInline(false);
+                            setQueryUrl(prev => ({ ...prev }));
+                        }}
+                    />;
+                </DrawerCustom>
+
             }
         </>
     )
