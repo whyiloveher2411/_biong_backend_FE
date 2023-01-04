@@ -131,7 +131,7 @@ function Main(props: FieldFormItemProps) {
                 } else {
                     useFetch.showMessage('Vui lòng thêm youtube id trước khi get data.');
                 }
-            }} >Get data video thumbnail từ youtube</LoadingButton>
+            }} >Get image hover timeline from youtube</LoadingButton>
             {
                 typeof props.post['playerStoryboardSpecRenderer'] === 'object' &&
                 <Typography sx={{ mt: 1 }}>Total: {props.post['playerStoryboardSpecRenderer'].total} screen</Typography>
