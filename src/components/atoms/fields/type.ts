@@ -46,7 +46,7 @@ export type FieldViewItemProps = {
 export interface FieldConfigProps {
     //eslint-disable-next-line
     [key: string]: any,
-    title: string | boolean | null | undefined,
+    title?: string | boolean | null | undefined,
     view?: string,
     customViewList?: string,
     customViewForm?: string,

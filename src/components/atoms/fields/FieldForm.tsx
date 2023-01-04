@@ -4,7 +4,7 @@ import { FieldFormProps } from './type';
 
 function FieldForm(props: FieldFormProps) {
     if (props.config.customViewForm) {
-        return <Hook hook={props.config.customViewForm} fieldtype={"form"} {...props} />
+        return <Hook hook={props.config.customViewForm} fieldtype={"form"} {...props} config={{ ...props.config, customViewForm: undefined }} />
     }
     //eslint-disable-next-line
     let resolved = require(`./${props.component}/Form`).default;
