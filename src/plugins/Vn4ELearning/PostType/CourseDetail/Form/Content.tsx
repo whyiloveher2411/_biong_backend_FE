@@ -106,7 +106,12 @@ function Content(props: FieldFormItemProps) {
                             if (item.lessons && Array.isArray(item.lessons)) {
                                 item.lessons.forEach((lesson: JsonFormat) => {
                                     if (lesson.youtube_id && content?.[lesson.youtube_id]) {
-                                        lesson['playerStoryboardSpecRenderer'] = content[lesson.youtube_id];
+                                        lesson['playerStoryboardSpecRenderer'] = {
+                                            total: content[lesson.youtube_id].total,
+                                            url1: content[lesson.youtube_id].url1,
+                                            url2: content[lesson.youtube_id].url2,
+                                        };
+                                        lesson.time = content[lesson.youtube_id].lengthSeconds;
                                     }
                                 });
                             }
