@@ -33,7 +33,7 @@ function Content(props: FieldFormItemProps) {
                     }
                 }
             })
-        }} >Get data video thumbnail từ youtube</LoadingButton>
+        }} >Get image hover timeline from youtube</LoadingButton>
         <FieldForm
             {...props}
         />
