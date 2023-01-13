@@ -1,16 +1,16 @@
-import { SlideProps, Theme, useTheme } from '@mui/material'
+import { Box, InputLabel, SlideProps, Theme, useTheme } from '@mui/material'
 import Icon from 'components/atoms/Icon'
-import makeCSS from 'components/atoms/makeCSS'
+import Loading from 'components/atoms/Loading'
 import Slide from 'components/atoms/Slide'
 import TextField from 'components/atoms/TextField'
-import Typography from 'components/atoms/Typography'
+import makeCSS from 'components/atoms/makeCSS'
 import DrawerCustom from 'components/molecules/DrawerCustom'
 import { makeid } from 'helpers/dom'
 import { __ } from 'helpers/i18n'
 import React from 'react'
 import ReactDOMServer from 'react-dom/server'
-import GoogleDrive, { FileProps } from '../image/GoogleDrive'
 import SpecialNotes from '../SpecialNotes'
+import GoogleDrive, { FileProps } from '../image/GoogleDrive'
 import { FieldFormItemProps } from '../type'
 import Widget from './Widget'
 
@@ -95,6 +95,8 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
     const valueInital = post && post[name] ? post[name] : '';
     const [value, setValue] = React.useState(0);
     const [loadScript, setLoadScript] = React.useState(false);
+
+    const [isLoadedEditor, setIsloadedEditor] = React.useState(false);
 
     const filesActive = React.useState({});
 
@@ -321,6 +323,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                                 style.appendChild(document.createTextNode(css));
                             }
 
+                            setIsloadedEditor(true);
                             // var scriptId = editor.dom.uniqueId();
 
                             // var scriptElm = editor.dom.create('script', {
@@ -437,64 +440,88 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
     if (id) {
         return (
             <>
-                <Typography style={{ marginBottom: 4 }}>{config.title}</Typography>
-                <SpecialNotes specialNotes={config.special_notes} />
-                <div className={classes.root + " warpper-editor " + (theme.palette.mode === 'dark' ? classes.darkMode : '')} >
-                    <TextField
-                        fullWidth
-                        multiline
-                        className={classes.editor}
-                        variant="outlined"
-                        name={name}
-                        value={valueInital}
-                        helperText={config.note}
-                        id={id}
-                        onBlur={e => { onReview(e.target.value) }}
-                        onChange={e => { setValue(value + 1); post[name] = e.target.value }}
-                    />
-                    <DrawerCustom
-                        open={openFilemanagerDialog}
-                        onClose={handleCloseFilemanagerDialog}
-                        TransitionComponent={Transition}
-                        title={__('File Mangage')}
-                        width={1700}
-                        restDialogContent={{
-                            style: {
-                                padding: 0
-                            }
+                {
+                    !isLoadedEditor &&
+                    <Box
+                        sx={{
+                            maxWidth: '100%',
+                            height: 300,
+                            position: 'relative',
                         }}
                     >
-                        <GoogleDrive
-                            values={post[name]}
-                            fileType={fileType}
-                            handleChooseFile={handleChooseFile}
-                            filesActive={filesActive}
-                            config={{}}
+                        <Loading open={true} isCover />
+                    </Box>
+                }
+                <Box
+                    sx={{
+                        maxWidth: '100%',
+                        minHeight: 300,
+                        position: !isLoadedEditor ? 'absolute' : 'relative',
+                        opacity: !isLoadedEditor ? 0 : 1,
+                    }}
+                >
+                    {
+                        Boolean(config.title) &&
+                        <InputLabel {...config.labelProps}>{config.title}</InputLabel>
+                    }
+                    <SpecialNotes specialNotes={config.special_notes} />
+                    <div className={classes.root + " warpper-editor " + (theme.palette.mode === 'dark' ? classes.darkMode : '')} >
+                        <TextField
+                            fullWidth
+                            multiline
+                            className={classes.editor}
+                            variant="outlined"
+                            name={name}
+                            value={valueInital}
+                            helperText={config.note}
+                            id={id}
+                            onBlur={e => { onReview(e.target.value) }}
+                            onChange={e => { setValue(value + 1); post[name] = e.target.value }}
                         />
-                    </DrawerCustom>
-
-                    <DrawerCustom
-                        open={openWidgetDialog}
-                        onClose={handleChooseWidgetDialog}
-                        TransitionComponent={Transition}
-                        title={__('Edit Widget')}
-                        restDialogContent={{
-                            style: {
-                                padding: 0,
-                            }
-                        }}
-                    >
-                        <Widget
-                            post={widgetData}
-                            editWiget={widgetData.__widget_type ? true : false}
-                            widgets={{ data: widgets[0], set: widgets[1] }}
-                            onSubmit={(html) => {
-                                handleEditWidget(widgetData, html);
-                                handleChooseWidgetDialog();
+                        <DrawerCustom
+                            open={openFilemanagerDialog}
+                            onClose={handleCloseFilemanagerDialog}
+                            TransitionComponent={Transition}
+                            title={__('File Mangage')}
+                            width={1700}
+                            restDialogContent={{
+                                style: {
+                                    padding: 0
+                                }
                             }}
-                        />
-                    </DrawerCustom>
-                </div>
+                        >
+                            <GoogleDrive
+                                values={post[name]}
+                                fileType={fileType}
+                                handleChooseFile={handleChooseFile}
+                                filesActive={filesActive}
+                                config={{}}
+                            />
+                        </DrawerCustom>
+
+                        <DrawerCustom
+                            open={openWidgetDialog}
+                            onClose={handleChooseWidgetDialog}
+                            TransitionComponent={Transition}
+                            title={__('Edit Widget')}
+                            restDialogContent={{
+                                style: {
+                                    padding: 0,
+                                }
+                            }}
+                        >
+                            <Widget
+                                post={widgetData}
+                                editWiget={widgetData.__widget_type ? true : false}
+                                widgets={{ data: widgets[0], set: widgets[1] }}
+                                onSubmit={(html) => {
+                                    handleEditWidget(widgetData, html);
+                                    handleChooseWidgetDialog();
+                                }}
+                            />
+                        </DrawerCustom>
+                    </div>
+                </Box>
             </>
         )
     }
