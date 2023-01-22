@@ -462,7 +462,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                 >
                     {
                         Boolean(config.title) &&
-                        <InputLabel {...config.labelProps}>{config.title}</InputLabel>
+                        <InputLabel {...config.labelProps} sx={{ transform: 'none', position: 'unset' }}>{config.title}</InputLabel>
                     }
                     <SpecialNotes specialNotes={config.special_notes} />
                     <div className={classes.root + " warpper-editor " + (theme.palette.mode === 'dark' ? classes.darkMode : '')} >

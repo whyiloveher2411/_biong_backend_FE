@@ -1,19 +1,15 @@
-import { LoadingButton } from '@mui/lab';
-import { Box, Button, Chip, Typography, useTheme } from '@mui/material'
-import { FieldFormItemProps } from 'components/atoms/fields/type'
+import { Box, Button, Chip, Typography, useTheme } from '@mui/material';
+import { FieldFormItemProps } from 'components/atoms/fields/type';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import ShowData from 'components/pages/PostType/ShowData';
 import { __ } from 'helpers/i18n';
-import useAjax from 'hook/useApi';
-import React from 'react'
+import React from 'react';
 
 function Main(props: FieldFormItemProps) {
 
     const [openChooseTest, setOpenChooseTest] = React.useState(false);
 
     const [valueCurrent, setValueCurrent] = React.useState<JsonFormat[]>([]);
-
-    const useFetch = useAjax();
 
     const theme = useTheme();
 
@@ -42,7 +38,7 @@ function Main(props: FieldFormItemProps) {
 
     return (
         <>
-            <Button variant='contained' onClick={() => setOpenChooseTest(true)} >Chọn bài kiểm tra</Button>
+            <Button variant='outlined' color='inherit' onClick={() => setOpenChooseTest(true)} >Chọn bài kiểm tra</Button>
             {
                 valueCurrent.length > 0 &&
                 <Box
@@ -115,26 +111,9 @@ function Main(props: FieldFormItemProps) {
                 </Box>
 
             </DrawerCustom>
-
-            <LoadingButton sx={{ mt: 3 }} loading={useFetch.open} variant='contained' onClick={() => {
-                if (props.post['youtube_id']) {
-                    useFetch.ajax({
-                        url: 'plugin/vn4-e-learning/course-detail/get-data-youtube',
-                        data: {
-                            id: props.post['youtube_id'],
-                        },
-                        method: 'POST',
-                        success: (result) => {
-                            props.onReview(result, 'playerStoryboardSpecRenderer');
-                        }
-                    })
-                } else {
-                    useFetch.showMessage('Vui lòng thêm youtube id trước khi get data.');
-                }
-            }} >Get image hover timeline from youtube</LoadingButton>
             {
                 typeof props.post['playerStoryboardSpecRenderer'] === 'object' &&
-                <Typography sx={{ mt: 1 }}>Total: {props.post['playerStoryboardSpecRenderer'].total} screen</Typography>
+                <Typography variant='h4' sx={{ mt: 4 }}>Image hover timeline: {props.post['playerStoryboardSpecRenderer'].total} screen</Typography>
             }
         </>
     )
