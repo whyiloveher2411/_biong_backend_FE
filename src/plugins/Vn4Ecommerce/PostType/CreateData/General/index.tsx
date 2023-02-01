@@ -45,8 +45,8 @@ function General(props: {
                             title: __p('Price', PLUGIN_NAME),
                             note: ' ',
                             maxLength: 70,
-                            inputProps:{
-                                startAdornment:<InputAdornment position="start">$</InputAdornment>
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
                             }
                         }}
                         post={props.post}
@@ -70,8 +70,8 @@ function General(props: {
                             title: __p('Compare at price', PLUGIN_NAME),
                             note: ' ',
                             maxLength: 70,
-                            inputProps:{
-                                startAdornment:<InputAdornment position="start">$</InputAdornment>
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
                             }
                         }}
                         post={props.post}
@@ -95,8 +95,8 @@ function General(props: {
                             title: __p('Cost per item', PLUGIN_NAME),
                             note: __p('Customers won’t see this', PLUGIN_NAME),
                             maxLength: 70,
-                            inputProps:{
-                                startAdornment:<InputAdornment position="start">$</InputAdornment>
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
                             }
                         }}
                         post={props.post}
@@ -147,6 +147,87 @@ function General(props: {
                         </Grid>
                     </Grid>
                 </Grid>
+
+
+
+
+                <Grid item md={6} xs={12}>
+                    <FieldForm
+                        component='number'
+                        config={{
+                            title: __p('Price Offline', PLUGIN_NAME),
+                            note: ' ',
+                            maxLength: 70,
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
+                            }
+                        }}
+                        post={postDetail}
+                        name='price_offline'
+                        onReview={(value) => {
+                            props.onReview(value, 'price_offline')
+                        }}
+                    />
+                </Grid>
+                <Grid item md={6} xs={12}>
+                    <FieldForm
+                        component='number'
+                        config={{
+                            title: __p('Compare at price Offline', PLUGIN_NAME),
+                            note: ' ',
+                            maxLength: 70,
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
+                            }
+                        }}
+                        post={postDetail}
+                        name='compare_price_offline'
+                        onReview={(value) => {
+                            props.onReview(value, 'compare_price_offline')
+                        }}
+                    />
+                </Grid>
+
+
+                <Grid item md={6} xs={12}>
+                    <FieldForm
+                        component='number'
+                        config={{
+                            title: __p('Price Online (Zoom)', PLUGIN_NAME),
+                            note: ' ',
+                            maxLength: 70,
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
+                            }
+                        }}
+                        post={postDetail}
+                        name='price_online'
+                        onReview={(value) => {
+                            props.onReview(value, 'price_online')
+                        }}
+                    />
+                </Grid>
+                <Grid item md={6} xs={12}>
+                    <FieldForm
+                        component='number'
+                        config={{
+                            title: __p('Compare at price Online', PLUGIN_NAME),
+                            note: ' ',
+                            maxLength: 70,
+                            inputProps: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>
+                            }
+                        }}
+                        post={postDetail}
+                        name='compare_price_online'
+                        onReview={(value) => {
+                            props.onReview(value, 'compare_price_online')
+                        }}
+                    />
+                </Grid>
+
+
+
                 {/* <Grid item md={12} xs={12}>
                     <FieldForm
                         compoment={'dateTime'}

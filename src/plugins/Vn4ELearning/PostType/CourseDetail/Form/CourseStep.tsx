@@ -18,7 +18,7 @@ function CourseStep(props: FieldFormItemProps) {
     const [postIds, setPostIds] = React.useState<JsonFormat[]>([]);
 
     React.useEffect(() => {
-        if (typeof props.post[props.name] === 'object') {
+        if (props.post[props.name] && typeof props.post[props.name] === 'object') {
             setValueCurrent(props.post[props.name]);
         }
     }, []);
@@ -34,7 +34,7 @@ function CourseStep(props: FieldFormItemProps) {
     return (<>
         <Button variant='outlined' color='inherit' onClick={() => setOpenChooseTest(true)}>Chọn nội dung step by step</Button>
         {
-            valueCurrent.title ?
+            valueCurrent?.title ?
                 <Box
                     sx={{
                         display: 'flex',

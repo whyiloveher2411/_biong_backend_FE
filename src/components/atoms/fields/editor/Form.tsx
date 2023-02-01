@@ -398,6 +398,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                         "filemanager": "/admin/tinymce/plugins/biongFilemanager/ImageAddOn.js",
                         // "example": "/admin/js/tinymce/plugin/customplugin.js"
                     },
+                    ...config.editorProps
                 });
             }
         }
