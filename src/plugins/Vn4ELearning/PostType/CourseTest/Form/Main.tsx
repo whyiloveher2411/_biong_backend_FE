@@ -4,6 +4,7 @@ import DrawerCustom from 'components/molecules/DrawerCustom';
 import ShowData from 'components/pages/PostType/ShowData';
 import { __ } from 'helpers/i18n';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 function Main(props: FieldFormItemProps) {
 
@@ -52,10 +53,12 @@ function Main(props: FieldFormItemProps) {
                     <Typography variant='h5'>Bài kiểm tra:</Typography>
                     {
                         valueCurrent.map(item => (
-                            <Chip key={item.id} label={item.title} onDelete={() => {
-                                const valueTemp = valueCurrent.filter(searchItem => (searchItem.id + '') !== (item.id + ''));
-                                setValueCurrent([...valueTemp]);
-                            }} />
+                            <Chip key={item.id} label={item.title}
+                                sx={{ cursor: 'pointer' }} component={Link} target='_blank' to={'/post-type/e_course_test/edit?post_id=' + item.id}
+                                onDelete={() => {
+                                    const valueTemp = valueCurrent.filter(searchItem => (searchItem.id + '') !== (item.id + ''));
+                                    setValueCurrent([...valueTemp]);
+                                }} />
                         ))
                     }
                 </Box>

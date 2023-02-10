@@ -8,7 +8,7 @@ import { __ } from 'helpers/i18n';
 import React from 'react'
 import { Link } from 'react-router-dom';
 
-function CourseStep(props: FieldFormItemProps) {
+function CourseContentLiveCode(props: FieldFormItemProps) {
 
     const [openChooseTest, setOpenChooseTest] = React.useState(false);
 
@@ -45,11 +45,9 @@ function CourseStep(props: FieldFormItemProps) {
                     }}
                 >
                     <Typography variant='h5'>Nội dung bài học:</Typography>
-                    <Chip sx={{ cursor: 'pointer' }} label={valueCurrent.title} component={Link} target='_blank' to={'/post-type/e_course_content_step/edit?post_id=' + valueCurrent.id}
-
-                        onDelete={() => {
-                            setValueCurrent({});
-                        }} />
+                    <Chip sx={{ cursor: 'pointer' }} label={valueCurrent.title} component={Link} target='_blank' to={'/post-type/e_course_content_live/edit?post_id=' + valueCurrent.id} onDelete={() => {
+                        setValueCurrent({});
+                    }} />
                 </Box>
                 :
                 <></>
@@ -83,7 +81,7 @@ function CourseStep(props: FieldFormItemProps) {
         >
             <Box>
                 <ShowData
-                    type={'e_course_content_step'}
+                    type={'e_course_content_live'}
                     action={'list'}
                     enableNewInline
                     onSelectPosts={(posts: Array<JsonFormat>) => {
@@ -96,4 +94,4 @@ function CourseStep(props: FieldFormItemProps) {
     </>);
 }
 
-export default CourseStep
+export default CourseContentLiveCode
