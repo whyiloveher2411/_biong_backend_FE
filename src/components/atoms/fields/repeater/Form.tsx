@@ -101,7 +101,7 @@ const useStyles = makeStyles((theme: Theme) => ({
         '&>.MuiAccordionSummary-root': {
             background: theme.palette.error.main,
         },
-        '& $heading, & $heading *, & $hicon .MuiIconButton-root,& $stt':{
+        '& $heading, & $heading *, & $hicon .MuiIconButton-root,& $stt': {
             color: 'white',
         }
     },
@@ -355,11 +355,59 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview }
         setRender(prev => prev + 1);
     };
 
+    const handleCopyAll = () => {
+        let item = { config: config, value: copyArray(valueInital) };
+        navigator.clipboard.writeText(JSON.stringify(item));
+        showMessage(__('Copied to clipboard.'), 'info');
+        setIndexOfAction(false);
+    }
+
+    const handlePasteAll = () => {
+        let items = copyArray(valueInital);
+
+        navigator.clipboard.readText()
+            .then(text => {
+                let itemFromclipboard = JSON.parse(text);
+                console.log(itemFromclipboard);
+                if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
+                    if (itemFromclipboard.value) {
+                        items = [...itemFromclipboard.value];
+                        post[name] = items;
+                        showMessage(__('Paste from clipboard success.'), 'success');
+                    } else {
+                        showMessage(__('Paste from clipboard error.'), 'warning');
+                    }
+                } else {
+                    showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                }
+                setRender(prev => prev + 1);
+                setIndexOfAction(false);
+                onReview(post[name]);
+            })
+            .catch(() => {
+                showMessage(__('Paste from clipboard error.'), 'warning');
+                setIndexOfAction(false);
+            });
+    }
+
 
 
     return (
         <FormControl className={classes.root} component="div">
-            <FormLabel component="legend">{config.title}</FormLabel>
+            <Box
+                sx={{
+                    display: 'flex',
+                    gap: 1,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                }}
+            >
+                <FormLabel component="legend">{config.title}</FormLabel>
+                <Box>
+                    <Button color="inherit" onClick={handleCopyAll}>Copy</Button>
+                    <Button sx={{ ml: 1, }} variant='outlined' onClick={handlePasteAll}>Paste</Button>
+                </Box>
+            </Box>
             {
                 Boolean(config.note) &&
                 <FormHelperText style={{ marginTop: 5 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
