@@ -45,7 +45,7 @@ function CourseContentLiveCode(props: FieldFormItemProps) {
                     }}
                 >
                     <Typography variant='h5'>Nội dung bài học:</Typography>
-                    <Chip sx={{ cursor: 'pointer' }} label={valueCurrent.title} component={Link} target='_blank' to={'/post-type/e_course_content_live/edit?post_id=' + valueCurrent.id} onDelete={() => {
+                    <Chip sx={{ cursor: 'pointer' }} label={valueCurrent.title} component={Link} target='_blank' to={'/post-type/' + props.config.object + '/edit?post_id=' + valueCurrent.id} onDelete={() => {
                         setValueCurrent({});
                     }} />
                 </Box>
@@ -81,7 +81,7 @@ function CourseContentLiveCode(props: FieldFormItemProps) {
         >
             <Box>
                 <ShowData
-                    type={'e_course_content_live'}
+                    type={props.config.object}
                     action={'list'}
                     enableNewInline
                     onSelectPosts={(posts: Array<JsonFormat>) => {
