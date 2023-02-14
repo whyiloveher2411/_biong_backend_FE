@@ -33,7 +33,7 @@ const useStyles = makeStyles((theme: Theme) => ({
         margin: '16px 0 16px 0',
     },
     rootlg: {
-        width: 1280,
+        width: 1640,
     },
     rootXl: {
         width: '100%',
