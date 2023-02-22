@@ -9,6 +9,8 @@ import Tooltip from 'components/atoms/Tooltip';
 import { __ } from 'helpers/i18n';
 import React from 'react';
 import { CreatePostTypeData } from '.';
+import { Link } from 'react-router-dom';
+import { Button } from '@mui/material';
 
 function SectionStatus({ data, onReview }: {
     data: CreatePostTypeData,
@@ -26,231 +28,241 @@ function SectionStatus({ data, onReview }: {
         onReview(Number(data.post.starred) === 1 ? 0 : 1, 'starred');
     };
 
-    return <Card>
-        <CardContent>
-            <Box
-                sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3
-                }}
-            >
-
+    return <>
+        {
+            data.post.id ?
+                <Button
+                    component={Link}
+                    variant='outlined'
+                    to={'/post-type/' + data.post.type + '/edit?post_id=' + (data.post.id + 1)}
+                >Next Post</Button>
+                : null
+        }
+        <Card>
+            <CardContent>
                 <Box
                     sx={{
                         display: 'flex',
-                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        gap: 3
                     }}
                 >
-                    <Tooltip title={__('Starred')} aria-label="Starred">
-                        <IconButton onClick={handleOnClickStar} aria-label="Starred" component="span">
-                            {
-                                data.post?.starred
-                                    ?
-                                    <Icon icon="StarOutlined" style={{ color: '#f4b400' }} />
-                                    :
-                                    <Icon icon="StarBorderOutlined" />
-                            }
-                        </IconButton>
-                    </Tooltip>
-                </Box>
 
-                <FieldForm
-                    component='select'
-                    config={{
-                        title: 'Status',
-                        defaultValue: 'publish',
-                        list_option: {
-                            publish: { title: __('Publish'), color: 'rgb(67, 160, 71)' },
-                            draft: { title: __('Draft'), color: 'rgb(117, 117, 117)' },
-                            pending: { title: __('Pending'), color: 'rgb(246, 137, 36)' },
-                            trash: { title: __('Trash'), color: 'rgb(229, 57, 53)' },
-                        },
-                    }}
-                    post={data.post}
-                    name={'status'}
-                    onReview={(value) => {
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Tooltip title={__('Starred')} aria-label="Starred">
+                            <IconButton onClick={handleOnClickStar} aria-label="Starred" component="span">
+                                {
+                                    data.post?.starred
+                                        ?
+                                        <Icon icon="StarOutlined" style={{ color: '#f4b400' }} />
+                                        :
+                                        <Icon icon="StarBorderOutlined" />
+                                }
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
 
-                        if (data.post.status !== value) {
-                            data.post.status_old = data.post.status;
-                            data.post.status = value;
-                            onReview(null, {
-                                status: data.post.status,
-                                status_old: data.post.status_old
-                            });
-                        }
-
-                    }}
-                />
-
-                <div>
                     <FieldForm
                         component='select'
                         config={{
-                            title: __('Visibility'),
-                            defaultValue: 'public',
+                            title: 'Status',
+                            defaultValue: 'publish',
                             list_option: {
-                                public: { title: __('Public'), color: 'rgb(67, 160, 71)' },
-                                password: { title: __('Password protected'), color: '#3f51b5' },
-                                private: { title: __('Private'), color: 'rgb(134, 4, 196)' },
+                                publish: { title: __('Publish'), color: 'rgb(67, 160, 71)' },
+                                draft: { title: __('Draft'), color: 'rgb(117, 117, 117)' },
+                                pending: { title: __('Pending'), color: 'rgb(246, 137, 36)' },
+                                trash: { title: __('Trash'), color: 'rgb(229, 57, 53)' },
                             },
                         }}
                         post={data.post}
-                        name={'visibility'}
-                        onReview={(value) => onReview(value, 'visibility')}
-                    />
-                    <Collapse in={Boolean(data.post.visibility === 'password')}>
-                        <FieldForm
-                            component='password'
-                            config={{
-                                title: __('Password'),
-                                special_notes: [
-                                    {
-                                        'type': 'info',
-                                        'content': __('This password will not be encrypted, you can review or share it with everyone'),
-                                    },
-                                ],
-                                formControlProps: {
-                                    sx: {
-                                        marginTop: 3
-                                    }
-                                }
-                            }}
-                            post={{
-                                password: data.post?.password,
-                                _password: data.post?.password,
-                            }}
-                            name={'password'}
-                            onReview={(value) => onReview(value, 'password')}
-                        />
-                    </Collapse>
-                </div>
-
-                <div>
-                    <FieldForm
-                        component='true_false'
-                        config={{
-                            title: __('Schedule Posts'),
-                        }}
-                        post={{ active_post_date_gmt: activePostDateGmt.active ? 1 : 0 }}
-                        name={'active_post_date_gmt'}
+                        name={'status'}
                         onReview={(value) => {
 
-                            if (value) {
-                                setActivePostDateGmt(prev => ({
-                                    ...prev,
-                                    active: true,
-                                }));
+                            if (data.post.status !== value) {
+                                data.post.status_old = data.post.status;
+                                data.post.status = value;
                                 onReview(null, {
-                                    post_date_gmt: activePostDateGmt.oldValue,
-                                });
-                            } else {
-                                setActivePostDateGmt(prev => ({
-                                    ...prev,
-                                    oldValue: data.post.post_date_gmt,
-                                    active: false,
-                                }));
-                                onReview(null, {
-                                    post_date_gmt: '',
+                                    status: data.post.status,
+                                    status_old: data.post.status_old
                                 });
                             }
+
                         }}
                     />
-                    <Collapse in={activePostDateGmt.active}>
+
+                    <div>
                         <FieldForm
-                            component='date_time'
+                            component='select'
                             config={{
-                                title: __('Release Date'),
-                                formControlProps: {
-                                    sx: {
-                                        marginTop: 3
-                                    }
-                                }
+                                title: __('Visibility'),
+                                defaultValue: 'public',
+                                list_option: {
+                                    public: { title: __('Public'), color: 'rgb(67, 160, 71)' },
+                                    password: { title: __('Password protected'), color: '#3f51b5' },
+                                    private: { title: __('Private'), color: 'rgb(134, 4, 196)' },
+                                },
                             }}
                             post={data.post}
-                            name={'post_date_gmt'}
+                            name={'visibility'}
+                            onReview={(value) => onReview(value, 'visibility')}
+                        />
+                        <Collapse in={Boolean(data.post.visibility === 'password')}>
+                            <FieldForm
+                                component='password'
+                                config={{
+                                    title: __('Password'),
+                                    special_notes: [
+                                        {
+                                            'type': 'info',
+                                            'content': __('This password will not be encrypted, you can review or share it with everyone'),
+                                        },
+                                    ],
+                                    formControlProps: {
+                                        sx: {
+                                            marginTop: 3
+                                        }
+                                    }
+                                }}
+                                post={{
+                                    password: data.post?.password,
+                                    _password: data.post?.password,
+                                }}
+                                name={'password'}
+                                onReview={(value) => onReview(value, 'password')}
+                            />
+                        </Collapse>
+                    </div>
+
+                    <div>
+                        <FieldForm
+                            component='true_false'
+                            config={{
+                                title: __('Schedule Posts'),
+                            }}
+                            post={{ active_post_date_gmt: activePostDateGmt.active ? 1 : 0 }}
+                            name={'active_post_date_gmt'}
                             onReview={(value) => {
-                                if (!value) {
+
+                                if (value) {
+                                    setActivePostDateGmt(prev => ({
+                                        ...prev,
+                                        active: true,
+                                    }));
+                                    onReview(null, {
+                                        post_date_gmt: activePostDateGmt.oldValue,
+                                    });
+                                } else {
                                     setActivePostDateGmt(prev => ({
                                         ...prev,
                                         oldValue: data.post.post_date_gmt,
                                         active: false,
                                     }));
-                                    onReview('', 'post_date_gmt');
-                                } else {
-                                    onReview(value, 'post_date_gmt');
+                                    onReview(null, {
+                                        post_date_gmt: '',
+                                    });
                                 }
                             }}
                         />
-
-                        <div style={{ marginTop: 16 }}>
+                        <Collapse in={activePostDateGmt.active}>
                             <FieldForm
-                                component='true_false'
+                                component='date_time'
                                 config={{
-                                    title: __('Posting end date'),
+                                    title: __('Release Date'),
+                                    formControlProps: {
+                                        sx: {
+                                            marginTop: 3
+                                        }
+                                    }
                                 }}
-                                post={{ active_post_date_gmt_end: activePostDateGmt.activeEndDate ? 1 : 0 }}
-                                name={'active_post_date_gmt_end'}
+                                post={data.post}
+                                name={'post_date_gmt'}
                                 onReview={(value) => {
-
-                                    if (value) {
+                                    if (!value) {
                                         setActivePostDateGmt(prev => ({
                                             ...prev,
-                                            activeEndDate: true,
+                                            oldValue: data.post.post_date_gmt,
+                                            active: false,
                                         }));
-                                        onReview(null, {
-                                            post_date_gmt_end: activePostDateGmt.oldValueEnd,
-                                        });
+                                        onReview('', 'post_date_gmt');
                                     } else {
-                                        setActivePostDateGmt(prev => ({
-                                            ...prev,
-                                            oldValueEnd: data.post.post_date_gmt_end,
-                                            activeEndDate: false,
-                                        }));
-                                        onReview(null, {
-                                            post_date_gmt_end: '',
-                                        });
+                                        onReview(value, 'post_date_gmt');
                                     }
                                 }}
                             />
 
-                            <Collapse in={activePostDateGmt.activeEndDate}>
+                            <div style={{ marginTop: 16 }}>
                                 <FieldForm
-                                    component='date_time'
+                                    component='true_false'
                                     config={{
-                                        title: __('Posting end date time'),
-                                        formControlProps: {
-                                            sx: {
-                                                marginTop: 3
-                                            }
-                                        }
+                                        title: __('Posting end date'),
                                     }}
-                                    post={data.post}
-                                    name={'post_date_gmt_end'}
+                                    post={{ active_post_date_gmt_end: activePostDateGmt.activeEndDate ? 1 : 0 }}
+                                    name={'active_post_date_gmt_end'}
                                     onReview={(value) => {
-                                        if (!value) {
+
+                                        if (value) {
                                             setActivePostDateGmt(prev => ({
                                                 ...prev,
-                                                oldValue: data.post.post_date_gmt_end,
-                                                active: false,
+                                                activeEndDate: true,
                                             }));
-                                            onReview('', 'post_date_gmt_end');
+                                            onReview(null, {
+                                                post_date_gmt_end: activePostDateGmt.oldValueEnd,
+                                            });
                                         } else {
-                                            onReview(value, 'post_date_gmt_end');
+                                            setActivePostDateGmt(prev => ({
+                                                ...prev,
+                                                oldValueEnd: data.post.post_date_gmt_end,
+                                                activeEndDate: false,
+                                            }));
+                                            onReview(null, {
+                                                post_date_gmt_end: '',
+                                            });
                                         }
                                     }}
                                 />
-                            </Collapse>
-                        </div>
 
-                    </Collapse>
-                </div>
+                                <Collapse in={activePostDateGmt.activeEndDate}>
+                                    <FieldForm
+                                        component='date_time'
+                                        config={{
+                                            title: __('Posting end date time'),
+                                            formControlProps: {
+                                                sx: {
+                                                    marginTop: 3
+                                                }
+                                            }
+                                        }}
+                                        post={data.post}
+                                        name={'post_date_gmt_end'}
+                                        onReview={(value) => {
+                                            if (!value) {
+                                                setActivePostDateGmt(prev => ({
+                                                    ...prev,
+                                                    oldValue: data.post.post_date_gmt_end,
+                                                    active: false,
+                                                }));
+                                                onReview('', 'post_date_gmt_end');
+                                            } else {
+                                                onReview(value, 'post_date_gmt_end');
+                                            }
+                                        }}
+                                    />
+                                </Collapse>
+                            </div>
+
+                        </Collapse>
+                    </div>
 
 
 
-            </Box>
-        </CardContent>
-    </Card>;
+                </Box>
+            </CardContent>
+        </Card></>;
 }
 
 export default SectionStatus;
