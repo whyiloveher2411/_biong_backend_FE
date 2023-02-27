@@ -10,7 +10,6 @@ import FieldView from 'components/atoms/fields/FieldView';
 import Button from 'components/atoms/Button';
 import Icon from 'components/atoms/Icon';
 import IconButton from 'components/atoms/IconButton';
-import makeCSS from 'components/atoms/makeCSS';
 import ActionOnPost from 'components/atoms/PostType/ActionOnPost';
 import LabelPost from 'components/atoms/PostType/LabelPost';
 import Table from 'components/atoms/Table';
@@ -22,8 +21,10 @@ import TablePagination from 'components/atoms/TablePagination';
 import TableRow from 'components/atoms/TableRow';
 import Tooltip from 'components/atoms/Tooltip';
 import Typography from 'components/atoms/Typography';
+import makeCSS from 'components/atoms/makeCSS';
 import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import NotFound from 'components/molecules/NotFound';
+import { dateTimeFormat } from 'helpers/date';
 import { __ } from 'helpers/i18n';
 import useAjax from 'hook/useApi';
 import React, { useState } from 'react';
@@ -334,6 +335,11 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                             <TableCell className={classes.pad8} key={key}>{data.config.fields[key].title}</TableCell>
                                         ))
                                     }
+                                    {
+                                        data.config.show_created_at ?
+                                            <TableCell align='right'>{__('Created at')}</TableCell>
+                                            : null
+                                    }
                                     <TableCell align='right'>{__('Status')}</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -445,6 +451,11 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                             />
                                                         </TableCell>
                                                 ))
+                                            }
+                                            {
+                                                data.config.show_created_at ?
+                                                    <TableCell align='right'>{dateTimeFormat(customer.created_at)}</TableCell>
+                                                    : null
                                             }
                                             <TableCell style={{ position: 'relative', padding: 16 }} align='right'>
                                                 <LabelPost post={customer} />
