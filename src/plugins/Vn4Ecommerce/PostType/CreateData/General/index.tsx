@@ -169,6 +169,40 @@ function General(props: {
                         }}
                     />
                 </Grid>
+
+                <Grid item md={12} xs={12}>
+                    <FieldForm
+                        component='group'
+                        config={{
+                            title: __p('Discount Info', PLUGIN_NAME),
+                            sub_fields:{
+                                title: {
+                                    title: 'Title',
+                                    view: 'text',
+                                },
+                                start_time: {
+                                    title: 'Start Time',
+                                    view: 'date_time',
+                                },
+                                end_time: {
+                                    title: 'End Time',
+                                    view: 'date_time',
+                                },
+                                note: {
+                                    title: 'Note',
+                                    view: 'editor',
+                                },
+                            },
+                            note: 'Những thông tin sẽ được xuất hiện để user có thể biết được thông tin khuyến mãi',
+                        }}
+                        post={postDetail}
+                        name='discount_info'
+                        onReview={(value) => {
+                            props.onReview(value, 'discount_info')
+                        }}
+                    />
+                </Grid>
+
                 <Grid item md={6} xs={12}>
                     <FieldForm
                         component='number'

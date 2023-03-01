@@ -169,7 +169,7 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
             <FormLabel component="legend">{config.title}</FormLabel>
             {
                 Boolean(config.note) &&
-                <FormHelperText style={{ marginTop: 5 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                <FormHelperText style={{ marginTop: 4 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
             }
             <SpecialNotes specialNotes={config.special_notes} />
             {
