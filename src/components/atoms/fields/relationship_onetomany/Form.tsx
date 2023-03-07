@@ -168,13 +168,13 @@ export default React.memo(function RelationshipOneToManyForm({ config, post, onR
             size={config.size ?? 'medium'}
             defaultValue={valueInital || { id: 0, title: '' }}
             isOptionEqualToValue={(option: Option, value: Option) => option.id === value.id}
-            getOptionLabel={(option: Option) => option.title + (option.new_post ? ' ' + __('(New Option)') : '')}
+            getOptionLabel={(option: Option) => (option.id ? '[' + option.id + '] ' : '') + option.title + (option.new_post ? ' ' + __('(New Option)') : '')}
             onChange={handleOnChange}
             options={options !== false ? options : []}
             loading={loading || options === false}
             renderOption={(props, option: Option) => (
                 <li {...props} key={option.id}>
-                    <span dangerouslySetInnerHTML={{ __html: option.optionLabel }} />{option.title}&nbsp;{Boolean(option.new_post) && '(New Option)'}
+                    <span dangerouslySetInnerHTML={{ __html: option.optionLabel }} />{option.id ? '[' + option.id + '] ' : ''}{option.title}&nbsp;{Boolean(option.new_post) && '(New Option)'}
                 </li>
             )}
             renderInput={(params: AutocompleteRenderInputParamsExtends) => {
