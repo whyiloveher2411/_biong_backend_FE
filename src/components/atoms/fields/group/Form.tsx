@@ -166,50 +166,43 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
     return (
         <FormControl className={classes.root} component="div">
-            <FormLabel component="legend">{config.title}</FormLabel>
+            <FormLabel component="legend" sx={{ fontSize: 20, fontWeight: 500 }}>{config.title}</FormLabel>
             {
                 Boolean(config.note) &&
-                <FormHelperText style={{ marginTop: 4 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                <FormHelperText sx={{ marginTop: 4 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
             }
             <SpecialNotes specialNotes={config.special_notes} />
             {
                 Boolean(post[name]) &&
                     config.layout === 'table' ?
-                    <Grid
-                        container
-                        spacing={4}
-                        style={{ marginTop: 0 }}
-                    >
-                        <TableContainer>
-                            <Table>
-                                <TableBody>
-                                    <TableRow>
-                                        {
-                                            configKey &&
-                                            configKey.map(key => {
-                                                return (
-                                                    <TableCell key={key} className={classes.cell} >
-                                                        <FieldForm
-                                                            component={config.sub_fields[key].view ? config.sub_fields[key].view : 'text'}
-                                                            config={config.sub_fields[key]}
-                                                            post={post[name] ?? {}}
-                                                            name={key}
-                                                            onReview={(value, key2 = key) => onChangeInputRepeater(value, key2)}
-                                                        />
-                                                    </TableCell>
-                                                )
-                                            })
-                                        }
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </Grid>
+                    <TableContainer>
+                        <Table>
+                            <TableBody>
+                                <TableRow>
+                                    {
+                                        configKey &&
+                                        configKey.map(key => {
+                                            return (
+                                                <TableCell key={key} className={classes.cell} >
+                                                    <FieldForm
+                                                        component={config.sub_fields[key].view ? config.sub_fields[key].view : 'text'}
+                                                        config={config.sub_fields[key]}
+                                                        post={post[name] ?? {}}
+                                                        name={key}
+                                                        onReview={(value, key2 = key) => onChangeInputRepeater(value, key2)}
+                                                    />
+                                                </TableCell>
+                                            )
+                                        })
+                                    }
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                     :
                     <Grid
                         container
                         spacing={4}
-                        style={{ marginTop: 0 }}
                     >
                         {
                             configKey &&
