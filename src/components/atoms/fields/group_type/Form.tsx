@@ -173,6 +173,7 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
                 gap: 1,
                 flexWrap: 'wrap',
                 alignItems: 'center',
+                mb: 1,
             }}>
                 <FormLabel component="legend" sx={{ fontSize: 20, fontWeight: 500 }}>{config.title}</FormLabel>
                 {

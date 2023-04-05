@@ -166,7 +166,7 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
     return (
         <FormControl className={classes.root} component="div">
-            <FormLabel component="legend" sx={{ fontSize: 20, fontWeight: 500 }}>{config.title}</FormLabel>
+            <FormLabel component="legend" sx={{ fontSize: 20, fontWeight: 500, mb: 1 }}>{config.title}</FormLabel>
             {
                 Boolean(config.note) &&
                 <FormHelperText sx={{ marginTop: 4 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
