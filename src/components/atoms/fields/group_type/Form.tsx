@@ -98,9 +98,8 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
     const { config, post, name, onReview } = props;
 
-    const [type, setType] = React.useState(Object.keys(config.templates)[0]);
 
-    let valueInital = {};
+    let valueInital: JsonFormat = {};
 
     try {
         if (typeof post[name] === 'object') {
@@ -114,6 +113,8 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
     } catch (error) {
         valueInital = {};
     }
+
+    const [type, setType] = React.useState(valueInital?.type ? valueInital.type : Object.keys(config.templates)[0]);
 
     // console.log(valueInital);
 
