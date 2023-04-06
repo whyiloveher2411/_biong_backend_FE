@@ -187,7 +187,7 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
                                 fontSize: 16,
                             }}
                             color={type === typeStr ? 'primary' : 'inherit'}
-                            variant={type === typeStr ? 'contained' : 'text'}
+                            variant={type === typeStr ? 'contained' : 'outlined'}
                             onClick={() => {
                                 setType(typeStr);
                             }}
