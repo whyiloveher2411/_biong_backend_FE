@@ -18,7 +18,8 @@ function Difficult(props: FieldFormItemProps) {
                     8: { title: '8' },
                     9: { title: '9' },
                     10: { title: '10' },
-                }
+                },
+                defaultValue: 1,
             }}
             post={props.post}
             name={props.name}
