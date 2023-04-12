@@ -1,9 +1,7 @@
 import { LoadingButton } from '@mui/lab';
-import { Button } from '@mui/material'
 import { __ } from 'helpers/i18n';
 import useAjax from 'hook/useApi';
 import useConfirmDialog from 'hook/useConfirmDialog';
-import React from 'react'
 
 function CopyTestQuestion() {
 
@@ -55,7 +53,7 @@ function CopyTestQuestion() {
         <LoadingButton loading={useApi.open} color="inherit" onClick={handleCopyData}>
             Copy all data
         </LoadingButton>
-        <Button
+        <LoadingButton loading={useApi.open}
             variant='contained'
             onClick={() => {
                 confirm.onConfirm(() => {
@@ -64,7 +62,7 @@ function CopyTestQuestion() {
             }}
         >
             Paste data
-        </Button>
+        </LoadingButton>
         {confirm.component}
     </>
     )
