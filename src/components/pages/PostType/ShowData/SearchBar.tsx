@@ -137,7 +137,7 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
                     pt: '24px !important'
                 }
             }}
-            action={<>
+            headerAction={<>
                 <Button
                     variant='contained'
                     color='success'
@@ -145,7 +145,7 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
                         onFilter(filters);
                         setOpenFilter(false);
                     }}
-                >Filter</Button>
+                >Apply Filter</Button>
             </>}
         >
             <Box
