@@ -13,6 +13,7 @@ import FieldForm from 'components/atoms/fields/FieldForm'
 import MoreButton from 'components/atoms/MoreButton'
 import { ShowPostTypeData } from '.'
 import useQuery from 'hook/useQuery'
+import { toCamelCase } from 'helpers/string'
 
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
@@ -159,7 +160,8 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
                         filters.map((item, index) => (
                             <Box key={index}
                                 sx={{
-                                    display: 'flex',
+                                    display: 'grid',
+                                    gridTemplateColumns: '4fr 0.1fr 4fr',
                                     gap: 1,
                                     alignItems: 'center',
                                 }}
@@ -208,20 +210,41 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
                                         {item.condition}
                                     </Button>
                                 </MoreButton>
-                                <FieldForm
-                                    component='text'
-                                    config={{
-                                        title: 'Value',
-                                    }}
-                                    post={item}
-                                    name='value'
-                                    onReview={(value) => {
-                                        setFilters(prev => {
-                                            prev[index].value = value;
-                                            return [...prev];
-                                        });
-                                    }}
-                                />
+
+                                {
+                                    (() => {
+                                        try {
+                                            let compoment = toCamelCase(data.config.fields[item.key].view ?? '');
+                                            //eslint-disable-next-line
+                                            let resolved = require('./FieldFiter/' + compoment).default;
+                                            return React.createElement(resolved, {
+                                                config: data.config.fields[item.key],
+                                                data: item,
+                                                onReview: (value: ANY) => {
+                                                    setFilters(prev => {
+                                                        prev[index] = { ...prev[index], ...value };
+                                                        return [...prev];
+                                                    });
+                                                }
+                                            });
+                                        } catch (error) {
+                                            //
+                                        }
+
+                                        return <FieldForm
+                                            component={data.config.fields[item.key].view ?? 'text'}
+                                            config={data.config.fields[item.key]}
+                                            post={item}
+                                            name='value'
+                                            onReview={(value) => {
+                                                setFilters(prev => {
+                                                    prev[index].value = value;
+                                                    return [...prev];
+                                                });
+                                            }}
+                                        />
+                                    })()
+                                }
                             </Box>
                         ))
                         : null
