@@ -7,9 +7,10 @@ import Tooltip from 'components/atoms/Tooltip'
 import React, { Fragment, memo, useRef, useState } from 'react'
 import Divider from './Divider'
 import Icon, { IconFormat } from './Icon'
+import { Box } from '@mui/material'
 
 
-const MoreButton = ({ title, actions, selected, icon = 'MoreVert', ...rest }: {
+const MoreButton = ({ children, title, actions, selected, icon = 'MoreVert', ...rest }: {
     [key: string]: ANY,
     actions: Array<{
         [key: string]: {
@@ -21,6 +22,7 @@ const MoreButton = ({ title, actions, selected, icon = 'MoreVert', ...rest }: {
     title?: string,
     selected?: string,
     icon?: IconFormat,
+    children?: React.ReactNode,
 }) => {
 
     const moreRef = useRef(null)
@@ -37,12 +39,25 @@ const MoreButton = ({ title, actions, selected, icon = 'MoreVert', ...rest }: {
     return (
         <Fragment>
             <Tooltip title={title ?? "More actions"}>
-                <IconButton
-                    onClick={handleMenuOpen}
-                    ref={moreRef}
-                    size="small">
-                    <Icon icon={icon} />
-                </IconButton>
+                {
+                    children ?
+                        <Box
+                            sx={{ display: 'inline-block' }}
+                            className='MoreButton-root DropDown-root'
+                            onClick={handleMenuOpen}
+                            ref={moreRef}
+                        >
+                            {children}
+                        </Box>
+                        :
+                        <IconButton
+                            onClick={handleMenuOpen}
+                            className='MoreButton-root DropDown-root'
+                            ref={moreRef}
+                            size="small">
+                            <Icon icon={icon} />
+                        </IconButton>
+                }
             </Tooltip>
             <Menu
                 anchorEl={moreRef.current}

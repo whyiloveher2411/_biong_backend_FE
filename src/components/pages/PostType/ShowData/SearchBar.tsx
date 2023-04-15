@@ -8,6 +8,11 @@ import Button from 'components/atoms/Button'
 import React from 'react'
 import { Theme } from '@mui/material'
 import { __ } from 'helpers/i18n'
+import DrawerCustom from 'components/molecules/DrawerCustom'
+import FieldForm from 'components/atoms/fields/FieldForm'
+import MoreButton from 'components/atoms/MoreButton'
+import { ShowPostTypeData } from '.'
+import useQuery from 'hook/useQuery'
 
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
@@ -42,18 +47,43 @@ const useStyles = makeCSS((theme: Theme) => ({
 }))
 
 interface SearchBarProps {
+    data: ShowPostTypeData | false,
     onSearch: (value: string) => void,
     value: undefined | string,
     className?: string,
+    onFilter: (filter: Array<{
+        key: string,
+        condition: '=' | '!=',
+        value: string,
+    }>) => void,
 }
 
-const SearchBar = ({ onSearch, className = '', value, ...rest }: SearchBarProps) => {
+const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }: SearchBarProps) => {
 
     const classes = useStyles()
 
+    const [openFilter, setOpenFilter] = React.useState(false);
+
     const [inputValue, setInputValue] = React.useState('');
 
-    return (
+    const [filters, setFilters] = React.useState<Array<{
+        key: string,
+        condition: '=' | '!=',
+        value: string,
+    }>>([]);
+
+    const paramUrl = useQuery({ filters: '' });
+
+    React.useEffect(() => {
+
+        if (paramUrl.filters) {
+            const filters = JSON.parse(paramUrl.filters.toString());
+            setFilters(filters);
+        }
+
+    }, []);
+
+    return (<>
         <Grid
             {...rest}
             className={classes.root + ' ' + className}
@@ -93,10 +123,125 @@ const SearchBar = ({ onSearch, className = '', value, ...rest }: SearchBarProps)
                 </Box>
             </Grid>
             <Grid item>
-
+                <Button color="inherit" onClick={() => setOpenFilter(true)} variant='outlined'>{__('Filter')}</Button>
             </Grid>
         </Grid>
-    )
+        <DrawerCustom
+            title="Filter"
+            open={openFilter}
+            activeOnClose
+            onClose={() => setOpenFilter(false)}
+            restDialogContent={{
+                sx: {
+                    pt: '24px !important'
+                }
+            }}
+            action={<>
+                <Button
+                    variant='contained'
+                    color='success'
+                    onClick={() => {
+                        onFilter(filters);
+                        setOpenFilter(false);
+                    }}
+                >Filter</Button>
+            </>}
+        >
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                }}
+            >
+                {
+                    data ?
+                        filters.map((item, index) => (
+                            <Box key={index}
+                                sx={{
+                                    display: 'flex',
+                                    gap: 1,
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <FieldForm
+                                    component='select'
+                                    config={{
+                                        title: 'Key',
+                                        list_option: data.config.fields
+                                    }}
+                                    post={item}
+                                    name='key'
+                                    onReview={(value) => {
+                                        setFilters(prev => {
+                                            prev[index].key = value;
+                                            return [...prev];
+                                        });
+                                    }}
+                                />
+                                <MoreButton
+                                    actions={[
+                                        {
+                                            '=': {
+                                                title: '=',
+                                                action: () => {
+                                                    setFilters(prev => {
+                                                        prev[index].condition = '=';
+                                                        return [...prev];
+                                                    });
+                                                },
+                                            },
+                                            '!=': {
+                                                title: '!=',
+                                                action: () => {
+                                                    setFilters(prev => {
+                                                        prev[index].condition = '!=';
+                                                        return [...prev];
+                                                    });
+                                                },
+                                            }
+                                        }
+                                    ]}
+
+                                >
+                                    <Button sx={{ fontSize: 20, fontWeight: 600 }}>
+                                        {item.condition}
+                                    </Button>
+                                </MoreButton>
+                                <FieldForm
+                                    component='text'
+                                    config={{
+                                        title: 'Value',
+                                    }}
+                                    post={item}
+                                    name='value'
+                                    onReview={(value) => {
+                                        setFilters(prev => {
+                                            prev[index].value = value;
+                                            return [...prev];
+                                        });
+                                    }}
+                                />
+                            </Box>
+                        ))
+                        : null
+
+                }
+            </Box>
+            <Box
+                sx={{
+                    display: 'flex',
+                    mt: 2,
+                }}
+            >
+                <Button sx={{ ml: 'auto' }}
+                    onClick={() => {
+                        setFilters(prev => [...prev, { key: data ? Object.keys(data.config.fields)[0] : '', condition: '=', value: '' }]);
+                    }}
+                    variant='contained'>Thêm điều kiện</Button>
+            </Box>
+        </DrawerCustom>
+    </>)
 }
 
 export default SearchBar

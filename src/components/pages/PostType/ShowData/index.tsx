@@ -220,6 +220,13 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                 <SearchBar
                     value={queryUrl.search}
                     onSearch={handleSearch}
+                    onFilter={(filters) => {
+                        setQueryUrl({
+                            ...queryUrl,
+                            filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
+                        });
+                    }}
+                    data={data}
                 />
                 {data !== false && (
                     <Results
