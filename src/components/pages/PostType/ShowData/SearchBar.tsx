@@ -6,7 +6,7 @@ import Input from 'components/atoms/Input'
 import Paper from 'components/atoms/Paper'
 import Button from 'components/atoms/Button'
 import React from 'react'
-import { Theme } from '@mui/material'
+import { IconButton, Theme } from '@mui/material'
 import { __ } from 'helpers/i18n'
 import DrawerCustom from 'components/molecules/DrawerCustom'
 import FieldForm from 'components/atoms/fields/FieldForm'
@@ -14,7 +14,7 @@ import MoreButton from 'components/atoms/MoreButton'
 import { ShowPostTypeData } from '.'
 import useQuery from 'hook/useQuery'
 import { toCamelCase } from 'helpers/string'
-
+import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
         display: 'flex',
@@ -74,9 +74,11 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
         value: string,
     }>>([]);
 
-    const paramUrl = useQuery({ filters: '' });
+    const paramUrl = useQuery({ filters: '', search: '' });
 
     React.useEffect(() => {
+
+        setInputValue(paramUrl.search + '');
 
         if (paramUrl.filters) {
             const filters = JSON.parse(paramUrl.filters.toString());
@@ -127,7 +129,15 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                 </Box>
             </Grid>
             <Grid item>
-                <Button color="inherit" onClick={() => setOpenFilter(true)} variant='outlined'>{__('Filter')}</Button>
+                <Button
+                    {...(filters.length ? {
+                        color: "primary",
+                        variant: 'contained',
+                    } : {
+                        color: "inherit",
+                        variant: 'outlined',
+                    })}
+                    onClick={() => setOpenFilter(true)} >{__('Filter')}</Button>
             </Grid>
         </Grid>
         <DrawerCustom
@@ -164,7 +174,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                             <Box key={index}
                                 sx={{
                                     display: 'grid',
-                                    gridTemplateColumns: '4fr 0.1fr 4fr',
+                                    gridTemplateColumns: '4fr 0.1fr 4fr 0.1fr',
                                     gap: 1,
                                     alignItems: 'center',
                                 }}
@@ -248,6 +258,17 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                                         />
                                     })()
                                 }
+
+                                <IconButton
+                                    onClick={() => {
+                                        setFilters(prev => {
+                                            return prev.filter((item, i) => i !== index);
+                                        });
+                                    }}
+                                    color="error"
+                                >
+                                    <ClearRoundedIcon />
+                                </IconButton>
                             </Box>
                         ))
                         : null
