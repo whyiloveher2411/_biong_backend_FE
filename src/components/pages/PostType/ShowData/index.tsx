@@ -218,6 +218,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
             </div>
             <div style={{ width: 'calc(100% - 255px) ' }}>
                 <SearchBar
+                    type={type}
                     value={queryUrl.search}
                     onSearch={handleSearch}
                     onFilter={(filters) => {

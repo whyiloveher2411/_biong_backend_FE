@@ -48,6 +48,7 @@ const useStyles = makeCSS((theme: Theme) => ({
 }))
 
 interface SearchBarProps {
+    type: string,
     data: ShowPostTypeData | false,
     onSearch: (value: string) => void,
     value: undefined | string,
@@ -59,7 +60,7 @@ interface SearchBarProps {
     }>) => void,
 }
 
-const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }: SearchBarProps) => {
+const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...rest }: SearchBarProps) => {
 
     const classes = useStyles()
 
@@ -80,9 +81,11 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
         if (paramUrl.filters) {
             const filters = JSON.parse(paramUrl.filters.toString());
             setFilters(filters);
+        } else {
+            setFilters([]);
         }
 
-    }, []);
+    }, [type]);
 
     return (<>
         <Grid
@@ -156,7 +159,7 @@ const SearchBar = ({ data, onSearch, onFilter, className = '', value, ...rest }:
                 }}
             >
                 {
-                    data ?
+                    data && filters.length ?
                         filters.map((item, index) => (
                             <Box key={index}
                                 sx={{
