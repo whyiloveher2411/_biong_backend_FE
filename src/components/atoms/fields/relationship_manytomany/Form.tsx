@@ -11,6 +11,7 @@ import useAjax from 'hook/useApi';
 import React from 'react';
 import SpecialNotes from '../SpecialNotes';
 import { FieldFormItemProps } from '../type';
+import CodeBlock from 'components/atoms/CodeBlock';
 interface Option {
     [key: string]: ANY,
     id: string,
@@ -155,17 +156,19 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                 options={options !== false ? options : []}
                 disableCloseOnSelect
                 isOptionEqualToValue={(option: Option, value: Option) => option.id === value.id}
-                getOptionLabel={(option) => option.title}
+                getOptionLabel={(option) => '[' + option.id + '] ' + option.title}
                 loading={loading}
                 onChange={handleOnChange}
                 renderTags={(tagValue, getTagProps) =>
                     tagValue.map((option, index) => (
                         <Chip
+                            sx={{ height: 'auto' }}
                             label={
                                 <>
                                     {
-                                        (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + option.title
+                                        (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + '[' + option.id + '] '
                                     }
+                                    <CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={option.title as string} />
                                     {
                                         Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>
                                     }
@@ -195,7 +198,7 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                                 checked={selected}
                                 color="primary"
                             />
-                            {option.title}
+                            [{option.id}]&nbsp;<CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={option.title as string} />
                             {Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>}
                         </Box>
                     </li>

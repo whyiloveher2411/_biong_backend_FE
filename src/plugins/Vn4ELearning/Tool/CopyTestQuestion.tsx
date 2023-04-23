@@ -49,6 +49,13 @@ function CopyTestQuestion() {
             });
     }
 
+    const handleCheckData = () => {
+        useApi.ajax({
+            url: 'plugin/vn4-e-learning/test/check-data',
+            method: 'POST',
+        })
+    }
+
     return (<>
         <LoadingButton loading={useApi.open} color="inherit" onClick={handleCopyData}>
             Copy all data
@@ -63,6 +70,9 @@ function CopyTestQuestion() {
         >
             Paste data
         </LoadingButton>
+        <LoadingButton loading={useApi.open} onClick={handleCheckData}>
+            Check anwser data
+        </LoadingButton >
         {confirm.component}
     </>
     )

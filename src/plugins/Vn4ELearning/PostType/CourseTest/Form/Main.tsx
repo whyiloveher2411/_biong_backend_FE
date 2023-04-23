@@ -1,4 +1,5 @@
 import { Box, Button, Chip, Typography, useTheme } from '@mui/material';
+import CodeBlock from 'components/atoms/CodeBlock';
 import { FieldFormItemProps } from 'components/atoms/fields/type';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import ShowData from 'components/pages/PostType/ShowData';
@@ -17,6 +18,14 @@ function Main(props: FieldFormItemProps) {
     const [postIds, setPostIds] = React.useState<JsonFormat[]>([]);
 
     React.useEffect(() => {
+
+        if (typeof props.post[props.name] === 'string') {
+            try {
+                props.post[props.name] = JSON.parse(props.post[props.name]);
+            } catch (error) {
+                props.post[props.name] = [];
+            }
+        }
 
         if (Array.isArray(props.post[props.name])) {
 
@@ -46,15 +55,24 @@ function Main(props: FieldFormItemProps) {
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
+                        flexWrap: 'wrap',
                         gap: 1,
                         mt: 2,
                     }}
                 >
-                    <Typography variant='h5'>Bài kiểm tra:</Typography>
+                    <Typography variant='h5' noWrap>Bài kiểm tra:</Typography>
                     {
                         valueCurrent.map(item => (
-                            <Chip key={item.id} label={item.title}
-                                sx={{ cursor: 'pointer' }} component={Link} target='_blank' to={'/post-type/e_course_test/edit?post_id=' + item.id}
+                            <Chip
+                                key={item.id}
+                                label={<>
+                                    [{item.id}] <CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={item.title as string} />
+                                </>
+
+                                }
+                                sx={{ height: 'auto', cursor: 'pointer' }}
+                                component={Link}
+                                target='_blank' to={'/post-type/e_course_test/edit?post_id=' + item.id}
                                 onDelete={() => {
                                     const valueTemp = valueCurrent.filter(searchItem => (searchItem.id + '') !== (item.id + ''));
                                     setValueCurrent([...valueTemp]);
