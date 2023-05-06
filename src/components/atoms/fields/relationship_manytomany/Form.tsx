@@ -107,8 +107,18 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
     }, [loading]);
 
     const handleOnChange = (_e: React.SyntheticEvent<Element, Event>, value: Array<JsonFormat>) => {
-        post[name] = value;
-        onReview(value);
+
+        let valueAfterHandle = value;
+        if (Array.isArray(value)) {
+            valueAfterHandle = value.map(item => ({
+                id: item.id,
+                title: item.title,
+                slug: item.slug,
+            }));
+        }
+
+        post[name] = valueAfterHandle;
+        onReview(valueAfterHandle);
         setRender(render + 1);
     };
 

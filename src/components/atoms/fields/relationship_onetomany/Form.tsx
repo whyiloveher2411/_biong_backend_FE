@@ -110,11 +110,19 @@ export default React.memo(function RelationshipOneToManyForm({ config, post, onR
         if (value) {
 
             post[name] = value.id;
-            post[name + '_detail'] = value;
+            post[name + '_detail'] = {
+                id: value.id,
+                title: value.title,
+                slug: value.slug,
+            };
 
             onReview(null, {
                 [name]: value.id,
-                [name + '_detail']: value
+                [name + '_detail']: {
+                    id: value.id,
+                    title: value.title,
+                    slug: value.slug,
+                }
             });
 
         } else {

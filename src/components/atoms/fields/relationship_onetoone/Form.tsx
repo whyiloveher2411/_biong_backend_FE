@@ -66,11 +66,17 @@ export default function RelationshipOneToManyForm({ config, post, onReview, name
         if (value !== null) {
 
             post[name] = value.id;
-            post[name + '_detail'] = value;
+            post[name + '_detail'] = {
+                id: value.id,
+                title: value.title,
+            };
 
             onReview(null, {
                 [name]: value.id,
-                [name + '_detail']: value
+                [name + '_detail']: {
+                    id: value.id,
+                    title: value.title,
+                }
             });
 
         } else {
