@@ -8,7 +8,7 @@ import { FieldFormItemProps } from '../type';
 
 export default React.memo(function TextForm({ config, post, onReview, name, ...rest }: FieldFormItemProps) {
 
-    let valueInital = post && post[name] ? post[name] : '';
+    let valueInital = post && post[name] !== undefined ? post[name] : '';
 
     const [render, setRender] = React.useState(0);
 
