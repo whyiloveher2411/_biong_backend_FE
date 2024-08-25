@@ -10,6 +10,7 @@ import useAjax from 'hook/useApi';
 import React from 'react';
 import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
+import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 
 export default React.memo(function RelationshipOneToManyShowForm({ config, post }: FieldFormItemProps) {
 
@@ -183,6 +184,7 @@ export interface DataResultApiProps {
                 fields: string[]
             },
         },
+        actions: Array<IActionPostType>,
         extendedTab: JsonFormat
     },
     rows: {

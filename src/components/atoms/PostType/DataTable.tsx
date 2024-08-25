@@ -19,6 +19,7 @@ import FieldView from '../fields/FieldView';
 import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
 import { FieldConfigProps } from '../fields/type';
 import DrawerEditPost from './DrawerEditPost';
+import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 
 const useStyles = makeCSS({
     tr: {
@@ -334,6 +335,7 @@ export interface DataTableResultApiProps {
                 fields: string[]
             },
         },
+        actions: Array<IActionPostType>,
         extendedTab: JsonFormat
     },
     rows: {

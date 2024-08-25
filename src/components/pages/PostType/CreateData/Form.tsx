@@ -1,4 +1,4 @@
-import { Collapse, Theme } from '@mui/material';
+import { CircularProgress, CircularProgressProps, Collapse, Theme, Typography } from '@mui/material';
 import Box from 'components/atoms/Box';
 import LoadingButton from 'components/atoms/LoadingButton';
 import Button from 'components/atoms/Button';
@@ -153,6 +153,81 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
             [postType]: index
         });
     };
+
+    const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
+    const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
+
+    const useAjaxAction = useAjax();
+
+    const handleActionEvent = (id: ID, item: IActionPostType, index: number) => () => {
+        const callApi = () => {
+            setLoadingStateButton(prev => ({
+                ...prev,
+                [id]: true,
+            }));
+
+            setProgressButton(prev => ({
+                ...prev,
+                [index]: 0
+            }))
+
+            useAjaxAction.ajax({
+                url: item.link_api,
+                method: 'POST',
+                data: {
+                    id
+                },
+                success: () => {
+                    setLoadingStateButton(prev => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                }
+            });
+
+            if (item.check_progress) {
+
+                const callCheckProgress = () => {
+                    useAjaxAction.ajax({
+                        url: item.link_api,
+                        method: 'POST',
+                        data: {
+                            id,
+                            check_progress: true
+                        },
+                        success: (result) => {
+                            if (result.progress !== undefined) {
+                                setProgressButton(prev => ({
+                                    ...prev,
+                                    [index]: result.progress
+                                }));
+                                setTimeout(() => {
+                                    callCheckProgress();
+                                }, 1000);
+                            } else {
+                                setProgressButton(prev => {
+                                    delete prev[index];
+                                    return { ...prev };
+                                })
+                            }
+                        }
+                    });
+                };
+
+                callCheckProgress();
+            }
+        };
+
+        if (item.confirm_message) {
+            confirm.onConfirm(callApi, {
+                message: item.confirm_message
+            });
+            return;
+        }
+
+        callApi();
+
+    }
 
     const confirm = useConfirmDialog();
 
@@ -386,6 +461,34 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                             :
                                             <></>
                                     }
+                                    {
+                                        data?.config?.actions ? data.config.actions.map((item, index) =>
+                                            progressButton[index] !== undefined ?
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        marginTop: 3
+                                                    }}
+                                                >
+                                                    <CircularProgressWithLabel value={progressButton[index]} />
+                                                </Box>
+                                                :
+                                                <LoadingButton
+                                                    key={index}
+                                                    loading={loadingStateButton[index] ? true : false}
+                                                    loadingPosition="center"
+                                                    color={item.color}
+                                                    sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                                                    variant="contained"
+                                                    onClick={handleActionEvent(data.post.id, item, index)}
+                                                >
+                                                    {item.title}
+                                                </LoadingButton>
+                                        )
+                                            : null
+                                    }
                                 </div>
 
                                 {
@@ -468,4 +571,49 @@ export interface HookCreateDataTabItemProps {
         fields: string[],
     },
     onReview: (value: ANY, key: ANY) => void,
+}
+
+export interface IActionPostType {
+    title: string,
+    variant: string,
+    link_api: string,
+    confirm_message?: string,
+    check_progress?: boolean,
+    color: 'inherit'
+    | 'primary'
+    | 'secondary'
+    | 'success'
+    | 'error'
+    | 'info'
+    | 'warning',
+}
+
+
+
+function CircularProgressWithLabel(
+    props: CircularProgressProps & { value: number },
+) {
+    return (
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+            <CircularProgress variant="determinate" {...props} />
+            <Box
+                sx={{
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    right: 0,
+                    position: 'absolute',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.secondary"
+                >{`${Math.round(props.value)}%`}</Typography>
+            </Box>
+        </Box>
+    );
 }

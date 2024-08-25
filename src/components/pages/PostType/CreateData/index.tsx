@@ -14,7 +14,7 @@ import { useSnackbar } from 'notistack';
 import React from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import Form from './Form';
+import Form, { IActionPostType } from './Form';
 import Header from './Header';
 
 const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: string, afterEditOrNew?: () => void }) => {
@@ -283,6 +283,7 @@ export interface CreatePostTypeData {
                 compoment?: React.ReactNode
             }
         },
+        actions: Array<IActionPostType>,
         extendedTab?: ANY
     },
     editor: Array<{
