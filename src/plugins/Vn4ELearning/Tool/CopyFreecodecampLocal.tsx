@@ -145,6 +145,7 @@ function CopyFreecodecampLocal(props: FieldFormItemProps) {
                 Past data từ local đến server (Chỉ nhấn trên server)
             </Button>
         </Box>
+        {confirm.component}
     </>)
 }
 
