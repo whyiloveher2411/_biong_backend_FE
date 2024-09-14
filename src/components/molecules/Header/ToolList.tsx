@@ -15,7 +15,7 @@ import useAjax from 'hook/useApi';
 import useSetting, { MODE } from 'hook/useSettings';
 import useTool from "hook/useTool";
 import React from 'react';
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const useStyles = makeStyles({
     menuAccount: {
@@ -31,6 +31,7 @@ interface ToolMenuItemProps {
     title: string,
     icon: IconFormat,
     onClick: ANY,
+    href?: string,
     disable?: boolean,
     param?: { [key: string]: ANY },
 }
@@ -58,7 +59,9 @@ const ToolItem = (props: ToolMenuItemProps) => {
         <MenuItem
             style={{ minHeight: 36 }}
             disabled={props.disable}
-            onClick={handleClick}>
+            onClick={handleClick}
+            {...(props.href ? { component: Link, to: props.href } : {})}
+        >
             <ListItemIcon>
                 <Icon icon={props.icon} />
             </ListItemIcon>
@@ -115,8 +118,6 @@ function Tools() {
     const handleToggle = () => {
         setOpen((prevOpen) => !prevOpen);
     };
-
-    const navigate = useNavigate();
 
     const toolList: Array<Array<ToolMenuItemProps>> = [
         [
@@ -182,8 +183,9 @@ function Tools() {
             {
                 title: 'Log',
                 icon: 'AssignmentOutlined',
+                href: '/log',
                 onClick: () => {
-                    navigate('/log');
+                    // 
                 },
                 disable: false,
             }
