@@ -15,6 +15,7 @@ import useAjax from 'hook/useApi';
 import useSetting, { MODE } from 'hook/useSettings';
 import useTool from "hook/useTool";
 import React from 'react';
+import { useNavigate } from "react-router-dom";
 
 const useStyles = makeStyles({
     menuAccount: {
@@ -115,6 +116,8 @@ function Tools() {
         setOpen((prevOpen) => !prevOpen);
     };
 
+    const navigate = useNavigate();
+
     const toolList: Array<Array<ToolMenuItemProps>> = [
         [
             {
@@ -173,6 +176,16 @@ function Tools() {
                 icon: 'CodeOutlined',
                 onClick: tools.optimize.minifyHTML,
                 disable: mode && mode !== MODE.DEVELOPING
+            }
+        ],
+        [
+            {
+                title: 'Log',
+                icon: 'AssignmentOutlined',
+                onClick: () => {
+                    navigate('/log');
+                },
+                disable: false,
             }
         ]
     ];
