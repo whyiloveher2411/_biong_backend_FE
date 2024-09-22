@@ -25,6 +25,7 @@ import SearchBar from './SearchBar';
 import { FieldConfigProps } from 'components/atoms/fields/type'
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import CreateData from '../CreateData';
+import { IActionPostType } from '../CreateData/Form';
 
 
 
@@ -485,6 +486,8 @@ export interface ShowPostTypeData {
                 fields: string[]
             },
         },
+        actions?: Array<IActionPostType>,
+        global_actions?: Array<IActionPostType>,
         extendedTab: JsonFormat
     },
     permissions?: {

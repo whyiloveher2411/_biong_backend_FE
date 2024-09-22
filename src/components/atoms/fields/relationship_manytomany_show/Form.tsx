@@ -175,6 +175,7 @@ export interface DataResultApiProps {
             },
         },
         actions: Array<IActionPostType>,
+        global_actions?: Array<IActionPostType>,
         extendedTab: JsonFormat
     },
     rows: {

@@ -15,6 +15,9 @@ import { ShowPostTypeData } from '.'
 import useQuery from 'hook/useQuery'
 import { toCamelCase } from 'helpers/string'
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
+import { IActionPostType } from '../CreateData/Form'
+import useConfirmDialog from 'hook/useConfirmDialog'
+import useAjax from 'hook/useApi'
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
         display: 'flex',
@@ -76,6 +79,79 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
 
     const paramUrl = useQuery({ filters: '', search: '' });
 
+
+    const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
+    const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
+
+    const useAjaxAction = useAjax();
+    const confirm = useConfirmDialog();
+
+    const handleActionEvent = (item: IActionPostType, index: number) => () => {
+        const callApi = () => {
+            setLoadingStateButton(prev => ({
+                ...prev,
+                [index]: true,
+            }));
+
+            setProgressButton(prev => ({
+                ...prev,
+                [index]: 0
+            }))
+
+            useAjaxAction.ajax({
+                url: item.link_api,
+                method: 'POST',
+                success: () => {
+                    setLoadingStateButton(prev => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                }
+            });
+
+            if (item.check_progress) {
+
+                const callCheckProgress = () => {
+                    useAjaxAction.ajax({
+                        url: item.link_api,
+                        method: 'POST',
+                        data: {
+                            check_progress: true
+                        },
+                        success: (result) => {
+                            if (result.progress !== undefined) {
+                                setProgressButton(prev => ({
+                                    ...prev,
+                                    [index]: result.progress
+                                }));
+                                setTimeout(() => {
+                                    callCheckProgress();
+                                }, 1000);
+                            } else {
+                                setProgressButton(prev => {
+                                    delete prev[index];
+                                    return { ...prev };
+                                })
+                            }
+                        }
+                    });
+                };
+
+                callCheckProgress();
+            }
+        };
+
+        if (item.confirm_message) {
+            confirm.onConfirm(callApi, {
+                message: item.confirm_message
+            });
+            return;
+        }
+
+        callApi();
+
+    }
+
     React.useEffect(() => {
 
         setInputValue(paramUrl.search + '');
@@ -128,7 +204,26 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                     </Button>
                 </Box>
             </Grid>
-            <Grid item>
+            <Grid item sx={{
+
+                display: 'flex',
+                gap: 1,
+            }}>
+
+                {
+                    data && data.config?.global_actions?.map((item: IActionPostType, index) => (
+                        <Button
+                            key={index}
+                            color="inherit"
+                            variant="contained"
+                            disabled={loadingStateButton[index] ? true : false}
+                            onClick={handleActionEvent(item, index)}
+                        >
+                            {item.title} {progressButton[index] !== undefined ? ` (${progressButton[index]}%)` : ''}
+                        </Button>
+                    ))
+                }
+
                 <Button
                     {...(filters.length ? {
                         color: "primary",
@@ -288,6 +383,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                     variant='contained'>Thêm điều kiện</Button>
             </Box>
         </DrawerCustom>
+        {confirm.component}
     </>)
 }
 

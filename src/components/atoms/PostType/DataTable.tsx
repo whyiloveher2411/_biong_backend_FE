@@ -218,6 +218,7 @@ function DataTable(props: DataTableProps) {
                                             acctionPost={acctionPost}
                                             post={customer}
                                             postType={customer.type}
+                                            config={data.config}
                                         />
                                     </TableCell>
                                 </TableRow>
@@ -336,6 +337,7 @@ export interface DataTableResultApiProps {
             },
         },
         actions: Array<IActionPostType>,
+        global_actions?: Array<IActionPostType>,
         extendedTab: JsonFormat
     },
     rows: {

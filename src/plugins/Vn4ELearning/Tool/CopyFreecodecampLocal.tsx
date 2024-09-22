@@ -3,7 +3,6 @@ import { FieldFormItemProps } from 'components/atoms/fields/type';
 import { __ } from 'helpers/i18n';
 import useAjax from 'hook/useApi';
 import useConfirmDialog from 'hook/useConfirmDialog';
-import React from 'react';
 
 function CopyFreecodecampLocal(props: FieldFormItemProps) {
 

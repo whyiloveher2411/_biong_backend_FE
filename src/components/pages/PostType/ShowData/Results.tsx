@@ -465,6 +465,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                     acctionPost={acctionPost}
                                                     post={customer}
                                                     postType={postType}
+                                                    config={data.config}
                                                 />
                                             </TableCell>
                                         </TableRow>

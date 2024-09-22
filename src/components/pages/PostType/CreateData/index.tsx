@@ -284,6 +284,7 @@ export interface CreatePostTypeData {
             }
         },
         actions: Array<IActionPostType>,
+        global_actions?: Array<IActionPostType>,
         extendedTab?: ANY
     },
     editor: Array<{
