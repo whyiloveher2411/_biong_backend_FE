@@ -232,7 +232,7 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
                                                 fontWeight: 'bold !important',
                                                 fontSize: '14px !important',
                                             }}
-                                        >{convertHMS(parseInt(item.start)) ?? '00:00'}</Label>
+                                        >{convertHMS(parseInt(item.start)/1000) ?? '00:00'}</Label>
                                     </TableCell>
                                     <TableCell>
                                         <span
