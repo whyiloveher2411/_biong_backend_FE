@@ -1,4 +1,4 @@
-import { Theme } from '@mui/material'
+import { Button, Theme } from '@mui/material'
 import Box from 'components/atoms/Box'
 import Icon from 'components/atoms/Icon'
 import IconButton from 'components/atoms/IconButton'
@@ -8,7 +8,7 @@ import Typography from 'components/atoms/Typography'
 import { addClasses } from 'helpers/dom'
 import { __ } from 'helpers/i18n'
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ShowPostTypeData } from '.'
 
 
@@ -50,9 +50,23 @@ const Header = ({ data, className, ...rest }: { [key: string]: ANY, data: false 
                             <Typography component="h2" gutterBottom variant="overline">
                                 {__('Content')}
                             </Typography>
-                            <Typography component="h1" variant="h3">
-                                {data.config.label.name ?? '...'}
-                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    gap: 1,
+                                }}
+                            >
+                                <Typography component="h1" variant="h3">
+                                    {data.config.label.name ?? '...'}
+                                </Typography>
+                                {
+                                    data.config.links?.map((link, i) => (
+                                        <Button variant="contained" color="primary" component={Link} to={link.url} key={i}>
+                                            {link.title}
+                                        </Button>
+                                    ))
+                                }
+                            </Box>
                         </>
                 }
             </div >

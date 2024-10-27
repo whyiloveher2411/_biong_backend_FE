@@ -1,4 +1,4 @@
-import { Box, InputLabel, SlideProps, Theme, useTheme } from '@mui/material'
+import { Box, Button, InputLabel, SlideProps, Theme, useTheme } from '@mui/material'
 import Icon from 'components/atoms/Icon'
 import Loading from 'components/atoms/Loading'
 import Slide from 'components/atoms/Slide'
@@ -13,6 +13,7 @@ import SpecialNotes from '../SpecialNotes'
 import GoogleDrive, { FileProps } from '../image/GoogleDrive'
 import { FieldFormItemProps } from '../type'
 import Widget from './Widget'
+import TooltipAiSuggest, { useTooltipAiSuggest } from '../TooltipAiSuggest'
 
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
@@ -84,7 +85,7 @@ const Transition = React.forwardRef(function Transition(props: SlideProps, ref) 
     return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export default React.memo(function TextareaForm({ config, post, name, onReview }: FieldFormItemProps) {
+export default React.memo(function TextareaForm({ config, post, name, onReview, dataPostType }: FieldFormItemProps) {
 
     const theme = useTheme();
 
@@ -111,6 +112,18 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
     const widgets = React.useState<JsonFormat | false>(false);
 
     let interval: NodeJS.Timeout;
+
+    const tooltipAiSuggest = useTooltipAiSuggest({
+        config,
+        onAccept: (result: string) => {
+            if (editor) {
+                editor.insertContent(result.replaceAll('\n', '<br>'));
+            }
+        },
+        name,
+        post,
+        dataPostType,
+    });
 
     React.useEffect(() => {
 
@@ -323,6 +336,34 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                                 style.appendChild(document.createTextNode(css));
                             }
 
+                            editor.ui.registry.addIcon('ai-prompt', `
+                                <svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-i4bv87-MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" data-testid="AutoAwesomeRoundedIcon"><path d="m19.46 8 .79-1.75L22 5.46c.39-.18.39-.73 0-.91l-1.75-.79L19.46 2c-.18-.39-.73-.39-.91 0l-.79 1.75-1.76.79c-.39.18-.39.73 0 .91l1.75.79.79 1.76c.18.39.74.39.92 0zM11.5 9.5 9.91 6c-.35-.78-1.47-.78-1.82 0L6.5 9.5 3 11.09c-.78.36-.78 1.47 0 1.82l3.5 1.59L8.09 18c.36.78 1.47.78 1.82 0l1.59-3.5 3.5-1.59c.78-.36.78-1.47 0-1.82L11.5 9.5zm7.04 6.5-.79 1.75-1.75.79c-.39.18-.39.73 0 .91l1.75.79.79 1.76c.18.39.73.39.91 0l.79-1.75 1.76-.79c.39-.18.39-.73 0-.91l-1.75-.79-.79-1.76c-.18-.39-.74-.39-.92 0z"></path></svg>
+                            `);
+
+                            editor.ui.registry.addButton('addstyle', {
+                                icon: 'ai-prompt',
+                                tooltip: 'Sử dụng AI',
+                                onAction: () => {
+                                    tooltipAiSuggest.onToggle(true);
+                                    let node = editor.selection.getContent();
+
+                                    function decodeHTMLEntities(text: string) {
+                                        let textArea = document.createElement('textarea');
+                                        textArea.innerHTML = text;
+                                        return textArea.value;
+                                    }
+
+                                    tooltipAiSuggest.setTextSelected(decodeHTMLEntities(node));
+                                }
+                            });
+
+                            editor.ui.registry.addContextToolbar('textselection', {
+                                predicate: (node: ANY) => !editor.selection.isCollapsed(),
+                                items: 'addstyle',
+                                position: 'selection',
+                                scope: 'node'
+                            });
+
                             setIsloadedEditor(true);
                             // var scriptId = editor.dom.uniqueId();
 
@@ -461,10 +502,32 @@ export default React.memo(function TextareaForm({ config, post, name, onReview }
                         opacity: !isLoadedEditor ? 0 : 1,
                     }}
                 >
-                    {
-                        Boolean(config.title) &&
-                        <InputLabel {...config.labelProps} sx={{ transform: 'none', position: 'unset' }}>{config.title}</InputLabel>
-                    }
+                    <TooltipAiSuggest {...tooltipAiSuggest.tooltipAiSuggestProps}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1,
+                                mb: 1,
+                            }}
+                        >
+                            <Box sx={{ flexGrow: 1 }}>
+                                {
+                                    Boolean(config.title) &&
+                                    <InputLabel {...config.labelProps} sx={{ transform: 'none', position: 'unset' }}>{config.title}</InputLabel>
+                                }
+                            </Box>
+                            <Box>
+                                <Button
+                                    variant='contained'
+                                    onClick={tooltipAiSuggest.onToggle}
+                                >
+                                    Sử dụng AI
+                                </Button>
+                            </Box>
+                        </Box>
+                    </TooltipAiSuggest>
                     <SpecialNotes specialNotes={config.special_notes} />
                     <div className={classes.root + " warpper-editor " + (theme.palette.mode === 'dark' ? classes.darkMode : '')} >
                         <TextField

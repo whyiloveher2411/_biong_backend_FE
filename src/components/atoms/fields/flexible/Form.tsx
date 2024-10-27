@@ -134,7 +134,7 @@ const useStyles = makeStyles((theme: Theme) => ({
     }
 }));
 
-export default React.memo(function FlexibleForm({ config, post, name, onReview }: FieldFormItemProps) {
+export default React.memo(function FlexibleForm({ config, post, name, onReview, dataPostType }: FieldFormItemProps) {
 
     const classes = useStyles();
 
@@ -553,6 +553,7 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview }
                                                                                                                     post={item ?? {}}
                                                                                                                     name={key}
                                                                                                                     onReview={(value, key2 = key) => onChangeInputRepeater(value, index, key2)}
+                                                                                                                    dataPostType={dataPostType}
                                                                                                                 />
                                                                                                             </TableCell>
                                                                                                         )
@@ -584,6 +585,7 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview }
                                                                                                         post={item ?? {}}
                                                                                                         name={key}
                                                                                                         onReview={(value, key2 = key) => onChangeInputRepeater(value, index, key2)}
+                                                                                                        dataPostType={dataPostType}
                                                                                                     />
                                                                                                 </Grid>
                                                                                             )
@@ -843,6 +845,7 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview }
                         post={contentLabel.post}
                         name='_flexibleLabel'
                         onReview={(value, key2) => { contentLabel.post._flexibleLabel = value; }}
+                        dataPostType={dataPostType}
                     />
                 }
 

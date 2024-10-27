@@ -488,7 +488,11 @@ export interface ShowPostTypeData {
         },
         actions?: Array<IActionPostType>,
         global_actions?: Array<IActionPostType>,
-        extendedTab: JsonFormat
+        extendedTab: JsonFormat,
+        links?: Array<{
+            title: string,
+            url: string,
+        }>
     },
     permissions?: {
         [key: string]: boolean,

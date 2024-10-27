@@ -1,4 +1,4 @@
-import { AutocompleteRenderInputParams, FormHelperText } from '@mui/material';
+import { AutocompleteRenderInputParams, FormHelperText, IconButton } from '@mui/material';
 import Autocomplete from 'components/atoms/Autocomplete';
 import Box from 'components/atoms/Box';
 import Checkbox from 'components/atoms/Checkbox';
@@ -33,7 +33,7 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
     const [loading, setLoading] = React.useState(false);
     const [render, setRender] = React.useState(0);
 
-    let valueInital = [];
+    let valueInital: Option[] = [];
 
     try {
         if (post[name] && typeof post[name] === 'object') {
@@ -114,6 +114,7 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                 id: item.id,
                 title: item.title,
                 slug: item.slug,
+                new_post: item.new_post
             }));
         }
 
@@ -150,6 +151,17 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
         }
     }
 
+    const moveElement = (index: number, newIndex: number) => {
+
+        let valueAfterHandle = [...valueInital];
+        console.log(valueAfterHandle);
+        valueAfterHandle.splice(newIndex, 0, valueAfterHandle.splice(index, 1)[0]);
+
+        post[name] = valueAfterHandle;
+        onReview(valueAfterHandle);
+        setRender(render + 1);
+    }
+
     console.log('render RELATIONSHIP MANY TO MANY');
 
     return (
@@ -175,8 +187,14 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                             sx={{ height: 'auto' }}
                             label={
                                 <>
+                                    <IconButton size='small' onClick={() => moveElement(index, index - 1)}>
+                                        <Icon icon='ArrowLeftRounded' />
+                                    </IconButton>
+                                    <IconButton size='small' onClick={() => moveElement(index, index + 1)}>
+                                        <Icon icon='ArrowRightRounded' />
+                                    </IconButton>
                                     {
-                                        (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + '[' + option.id + '] '
+                                        (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + (option.new_post ? '' : '[' + option.id + '] ')
                                     }
                                     <CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={option.title as string} />
                                     {
@@ -208,7 +226,10 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                                 checked={selected}
                                 color="primary"
                             />
-                            [{option.id}]&nbsp;<CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={option.title as string} />
+                            {
+                                option.new_post ? '' : '[' + option.id + ']'
+                            }
+                            &nbsp;<CodeBlock component='span' sx={{ '& p': { m: 0 } }} html={option.title as string} />
                             {Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>}
                         </Box>
                     </li>

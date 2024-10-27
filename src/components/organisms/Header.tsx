@@ -12,7 +12,6 @@ import Notification from 'components/molecules/Header/Notification';
 import Search from 'components/molecules/Header/Search';
 import Tools from 'components/molecules/Header/ToolList';
 import { __ } from "helpers/i18n";
-import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { RootState } from 'store/configureStore';

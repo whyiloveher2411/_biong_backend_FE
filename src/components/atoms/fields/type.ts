@@ -8,7 +8,8 @@ export type FieldFormProps = {
     config: FieldConfigProps,
     name: string,
     post: JsonFormat,
-    onReview: OnReviewProps
+    onReview: OnReviewProps,
+    dataPostType?: JsonFormat
 }
 
 export type FieldFormItemProps = {
@@ -18,7 +19,8 @@ export type FieldFormItemProps = {
     config: JsonFormat,
     post: JsonFormat,
     onReview: OnReviewProps
-    name: string
+    name: string,
+    dataPostType?: JsonFormat
 }
 
 export type FieldViewProps = {

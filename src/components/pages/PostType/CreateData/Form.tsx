@@ -154,81 +154,6 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
         });
     };
 
-    const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
-    const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
-
-    const useAjaxAction = useAjax();
-
-    const handleActionEvent = (id: ID, item: IActionPostType, index: number) => () => {
-        const callApi = () => {
-            setLoadingStateButton(prev => ({
-                ...prev,
-                [id]: true,
-            }));
-
-            setProgressButton(prev => ({
-                ...prev,
-                [index]: 0
-            }))
-
-            useAjaxAction.ajax({
-                url: item.link_api,
-                method: 'POST',
-                data: {
-                    id
-                },
-                success: () => {
-                    setLoadingStateButton(prev => ({
-                        ...prev,
-                        [index]: false,
-                    }));
-                }
-            });
-
-            if (item.check_progress) {
-
-                const callCheckProgress = () => {
-                    useAjaxAction.ajax({
-                        url: item.link_api,
-                        method: 'POST',
-                        data: {
-                            id,
-                            check_progress: true
-                        },
-                        success: (result) => {
-                            if (result.progress !== undefined) {
-                                setProgressButton(prev => ({
-                                    ...prev,
-                                    [index]: result.progress
-                                }));
-                                setTimeout(() => {
-                                    callCheckProgress();
-                                }, 1000);
-                            } else {
-                                setProgressButton(prev => {
-                                    delete prev[index];
-                                    return { ...prev };
-                                })
-                            }
-                        }
-                    });
-                };
-
-                callCheckProgress();
-            }
-        };
-
-        if (item.confirm_message) {
-            confirm.onConfirm(callApi, {
-                message: item.confirm_message
-            });
-            return;
-        }
-
-        callApi();
-
-    }
-
     const confirm = useConfirmDialog();
 
     const useAjaxDelete = useAjax();
@@ -272,7 +197,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                             >
                                 {
                                     listTabLeft.length > 0 &&
-                                    <Card>
+                                    <Card sx={{ overflow: 'visible' }}>
                                         <CardContent>
                                             <div className={classes.root}>
                                                 <div className={classes.tabs}>
@@ -320,6 +245,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                                                                     post={data.post}
                                                                                     name={key}
                                                                                     onReview={(value, key2 = key) => onReview(value, key2)}
+                                                                                    dataPostType={data.post}
                                                                                 />
                                                                             </Grid>
                                                                         ))
@@ -345,7 +271,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                 }
                                 {
                                     Boolean(listFieldNotIntabs.length) &&
-                                    <Card>
+                                    <Card sx={{ overflow: 'visible' }}>
                                         <CardContent>
                                             <Grid
                                                 container
@@ -360,6 +286,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                                                     post={data.post}
                                                                     name={key}
                                                                     onReview={(value, key2 = key) => onReview(value, key2)}
+                                                                    dataPostType={data.post}
                                                                 />
                                                             </Grid>
                                                             :
@@ -463,29 +390,14 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                     }
                                     {
                                         data?.config?.actions ? data.config.actions.map((item, index) =>
-                                            progressButton[index] !== undefined ?
-                                                <Box
-                                                    sx={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        marginTop: 3
-                                                    }}
-                                                >
-                                                    <CircularProgressWithLabel value={progressButton[index]} />
-                                                </Box>
-                                                :
-                                                <LoadingButton
-                                                    key={index}
-                                                    loading={loadingStateButton[index] ? true : false}
-                                                    loadingPosition="center"
-                                                    color={item.color}
-                                                    sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
-                                                    variant="contained"
-                                                    onClick={handleActionEvent(data.post.id, item, index)}
-                                                >
-                                                    {item.title}
-                                                </LoadingButton>
+                                            <ButtonAction 
+                                                title={item.title}
+                                                link={item.link_api}
+                                                id={data.post.id}
+                                                confirmMessage={item.confirm_message}
+                                                checkProgress={item.check_progress}
+                                                color={item.color}
+                                            />
                                         )
                                             : null
                                     }
@@ -525,6 +437,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                                                             post={data.post}
                                                                             name={key}
                                                                             onReview={(value, key2 = key) => onReview(value, key2)}
+                                                                            dataPostType={data.post}
                                                                         />
                                                                     </Grid>
                                                                 ))
@@ -616,4 +529,84 @@ function CircularProgressWithLabel(
             </Box>
         </Box>
     );
+}
+
+function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }: { title: string, link: string, confirmMessage?: string, id: ID, checkProgress?: boolean, color: string }) {
+
+    const useAjaxAction = useAjax();
+
+    const confirm = useConfirmDialog();
+
+    const [progressButton,] = React.useState<number>(0);
+
+    const handleActionEvent = () => {
+        const callApi = () => {
+
+            useAjaxAction.ajax({
+                url: link,
+                method: 'POST',
+                data: {
+                    id
+                },
+                success: () => {
+                    //   
+                },
+            });
+
+            if (checkProgress) {
+
+                const callCheckProgress = () => {
+                    useAjaxAction.ajax({
+                        url: link,
+                        method: 'POST',
+                        data: {
+                            id,
+                            check_progress: true
+                        },
+                        success: (result) => {
+                            // 
+                        }
+                    });
+                };
+
+                callCheckProgress();
+            }
+        };
+
+        if (confirmMessage) {
+            confirm.onConfirm(callApi, {
+                message: confirmMessage
+            });
+            return;
+        }
+
+        callApi();
+
+    }
+
+
+    return <>
+        {useAjaxAction.open && checkProgress ? <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 3
+            }}
+        >
+            <CircularProgressWithLabel value={progressButton} />
+        </Box>
+            :
+            <LoadingButton
+                loading={useAjaxAction.open}
+                loadingPosition="center"
+                color={color as ANY}
+                sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                variant="contained"
+                onClick={handleActionEvent}
+            >
+                {title}
+            </LoadingButton>
+        }
+    </>
 }

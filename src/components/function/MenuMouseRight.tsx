@@ -231,7 +231,7 @@ function MenuMouseRight({ childrenLevel = 0, component = 'div', minWidth, listMe
                                     <React.Fragment key={index}>
                                         <List className={classes.menuFile} component="nav" aria-label="main mailbox folders">
                                             {
-                                                Object.keys(menu).map(key => {
+                                                Object.keys(menu).map((key) => {
 
                                                     if (menu[key].hidden) {
                                                         return <React.Fragment key={key}></React.Fragment>
@@ -278,6 +278,10 @@ function MenuMouseRight({ childrenLevel = 0, component = 'div', minWidth, listMe
                                                                 ...menu[key].componentProps
                                                             }
                                                         ))()}</React.Fragment>;
+                                                    }
+
+                                                    if (menu[key].renderMenuItem) {
+                                                        return menu[key].renderMenuItem;
                                                     }
 
                                                     return <ListItem disabled={menu[key].disabled ? menu[key].disabled : false} key={key} button
@@ -329,6 +333,7 @@ export interface MenuItem {
         [key: string]: (e: ANY, callback: (e: ANY) => void) => void,
         // onClick: (e: any) => void,
     },
+    renderMenuItem?: React.ReactNode,
     component?: ANY,
     componentProps?: JsonFormat,
     children?: Array<{ [key: string]: MenuItem }>
