@@ -1,4 +1,4 @@
-import { Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Box, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { FieldFormItemProps } from 'components/atoms/fields/type';
 import Label from 'components/atoms/Label';
 import NotFound from 'components/molecules/NotFound';
@@ -6,6 +6,7 @@ import { convertHMS } from 'helpers/date';
 import useAjax from 'hook/useApi';
 import useDebounce from 'hook/useDebounce';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 // import React, { useState } from 'react';
 // import { TableComponents, TableVirtuoso } from 'react-virtuoso';
 
@@ -26,6 +27,7 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
     const debounceChangeTranscript = useDebounce(changeTranscript, 1000);
 
     const postApi = useAjax();
+    const postApiClear = useAjax();
 
     // let [changeTranscript, setChangeTranscript] = useState<Array<string>>([]);
 
@@ -59,6 +61,8 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
         valueInitalTarget = [];
     }
 
+    const navigate = useNavigate();
+
     const valueInitalTargetObject = valueInitalTarget.reduce((accumulator, currentItem) => {
         accumulator[currentItem.start] = currentItem;
         return accumulator;
@@ -79,6 +83,19 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
             });
         }
     }, [debounceChangeTranscript]);
+
+    const handleClear = () => {
+        postApiClear.ajax({
+            url: 'plugin/vn4-e-learning/actions/ai_mindmap/clear-subtitles-target',
+            method: 'POST',
+            data: {
+                id: props.post['id'],
+            },
+            success: () => {
+                navigate(0);
+            }
+        })
+    }
 
     // const rows: TranscriptItem[] = valueInital.map((item) => ({
     //     ...item,
@@ -208,9 +225,25 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
                                 </Typography>
                             </TableCell>
                             <TableCell sx={{ width: '50%' }}>
-                                <Typography>
-                                    Target (VI)
-                                </Typography>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                    }}
+                                >
+                                    <Typography>
+                                        Target (VI)
+                                    </Typography>
+                                    <Button
+                                        variant='contained'
+                                        color='error'
+                                        size='small'
+                                        onClick={handleClear}
+                                    >
+                                        Clear
+                                    </Button>
+                                </Box>
                             </TableCell>
                         </TableRow>
                     </TableHead>
@@ -232,7 +265,7 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
                                                 fontWeight: 'bold !important',
                                                 fontSize: '14px !important',
                                             }}
-                                        >{convertHMS(parseInt(item.start)/1000) ?? '00:00'}</Label>
+                                        >{convertHMS(parseInt(item.start) / 1000) ?? '00:00'}</Label>
                                     </TableCell>
                                     <TableCell>
                                         <span
