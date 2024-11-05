@@ -3,7 +3,7 @@ import React from 'react'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import HighlightOffRoundedIcon from '@mui/icons-material/HighlightOffRounded';
 
-export default function SubtitlesTitle(props: FieldViewItemProps) {
+export default function TranslateSubtitle(props: FieldViewItemProps) {
 
     if ((props.name === 'subtitles_target' || props.name === 'subtitles_source') && !props.post['youtube_id']) {
         return <></>;

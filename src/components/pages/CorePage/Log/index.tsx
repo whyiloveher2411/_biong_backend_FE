@@ -118,6 +118,11 @@ function LabelLevel({ label }: {
             icon: 'fa-bug',
             title: __('Failed'),
         },
+        success: {
+            color: '#29B87E',
+            icon: 'fa-check-circle',
+            title: __('Success'),
+        },
     }
     return <span style={{ padding: '3px 10px', fontSize: 12, borderRadius: '4px', whiteSpace: 'nowrap', background: confiLabel[label].color, color: 'white', textShadow: '1px 1px 3px black' }} >{confiLabel[label].title}</span>
 }
