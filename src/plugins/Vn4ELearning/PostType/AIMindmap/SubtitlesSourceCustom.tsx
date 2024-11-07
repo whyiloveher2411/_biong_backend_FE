@@ -84,12 +84,13 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
         }
     }, [debounceChangeTranscript]);
 
-    const handleClear = () => {
+    const handleClear = (type: 'source' | 'target') => {
         postApiClear.ajax({
-            url: 'plugin/vn4-e-learning/actions/ai_mindmap/clear-subtitles-target',
+            url: 'plugin/vn4-e-learning/actions/ai_mindmap/clear-subtitles',
             method: 'POST',
             data: {
                 id: props.post['id'],
+                type: type
             },
             success: () => {
                 navigate(0);
@@ -220,9 +221,26 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
                                 </Typography>
                             </TableCell>
                             <TableCell sx={{ width: '50%' }}>
-                                <Typography>
-                                    Source
-                                </Typography>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                    }}
+                                >
+                                    <Typography>
+                                        Source
+                                    </Typography>
+                                    <Button
+                                        variant='contained'
+                                        color='error'
+                                        size='small'
+                                        onClick={() => handleClear('source')}
+                                    >
+                                        Clear
+                                    </Button>
+                                </Box>
+
                             </TableCell>
                             <TableCell sx={{ width: '50%' }}>
                                 <Box
@@ -239,7 +257,7 @@ function SubtitlesSourceCustom(props: FieldFormItemProps) {
                                         variant='contained'
                                         color='error'
                                         size='small'
-                                        onClick={handleClear}
+                                        onClick={() => handleClear('target')}
                                     >
                                         Clear
                                     </Button>
