@@ -61,9 +61,10 @@ interface SearchBarProps {
         condition: '=' | '!=',
         value: string,
     }>) => void,
+    moreButton?: React.ReactNode,
 }
 
-const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...rest }: SearchBarProps) => {
+const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, moreButton, ...rest }: SearchBarProps) => {
 
     const classes = useStyles()
 
@@ -233,6 +234,8 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, ...r
                         variant: 'outlined',
                     })}
                     onClick={() => setOpenFilter(true)} >{__('Filter')}</Button>
+
+                {moreButton}
             </Grid>
         </Grid>
         <DrawerCustom

@@ -8,6 +8,7 @@ import React from 'react';
 import { ShowPostTypeData } from '.';
 import MoreButton from 'components/atoms/MoreButton';
 import { fade } from 'helpers/mui4/color';
+import { __ } from 'helpers/i18n';
 
 const useStyles = makeCSS((theme: Theme) => ({
     tabsItem: {
@@ -149,16 +150,16 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                 >
                     <Button
                         size="large"
-                        startIcon={<Icon icon={data.config.filters[tabCurrent[name]].icon} />}
+                        startIcon={<Icon icon={data.config.filters[tabCurrent[name]]?.icon ?? 'PublicOutlined' } />}
                         variant='contained'
                         sx={{
-                            backgroundColor: data.config.filters[tabCurrent[name]].color ?? 'primary.main',
+                            backgroundColor: data.config.filters[tabCurrent[name]]?.color ?? 'primary.main',
                             '&:hover, &:active, &:focus': {
-                                backgroundColor: data.config.filters[tabCurrent[name]].color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
+                                backgroundColor: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
                             }
                         }}
                     >
-                        {data.config.filters[tabCurrent[name]].title}
+                        {data.config.filters[tabCurrent[name]]?.title ?? __('----')}
                    </Button>
                 </MoreButton>
             </div>

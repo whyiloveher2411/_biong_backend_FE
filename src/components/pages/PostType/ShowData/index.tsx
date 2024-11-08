@@ -242,6 +242,22 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                             });
                         }}
                         data={data}
+                        moreButton={
+                            enableNewInline ?
+                                <Button
+                                    variant="contained"
+                                    size="large"
+                                    disabled={!permission[type + '_create']}
+                                    color="primary"
+                                    onClick={() => setOpenCreateInline(true)}
+                                >
+                                    {__('Add new')}
+                                </Button>
+                                :
+                                <Button component={Link} to={`/post-type/${type}/new`} variant="contained" size="large" disabled={!permission[type + '_create']} color="primary">
+                                    {__('Add new')}
+                                </Button>
+                        }
                     />
                 </Box>
                 {data !== false && (
