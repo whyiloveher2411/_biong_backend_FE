@@ -4,10 +4,10 @@ import Icon from 'components/atoms/Icon';
 import makeCSS from 'components/atoms/makeCSS';
 // import Typography from 'components/atoms/Typography';
 import { addClasses } from 'helpers/dom';
-// import { fade } from 'helpers/mui4/color';
 import React from 'react';
 import { ShowPostTypeData } from '.';
 import MoreButton from 'components/atoms/MoreButton';
+import { fade } from 'helpers/mui4/color';
 
 const useStyles = makeCSS((theme: Theme) => ({
     tabsItem: {
@@ -151,6 +151,12 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                         size="large"
                         startIcon={<Icon icon={data.config.filters[tabCurrent[name]].icon} />}
                         variant='contained'
+                        sx={{
+                            background: data.config.filters[tabCurrent[name]].color ?? 'inherit',
+                            '&:hover, &:active, &:focus': {
+                                background: data.config.filters[tabCurrent[name]].color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'inherit',
+                            }
+                        }}
                     >
                         {data.config.filters[tabCurrent[name]].title}
                    </Button>
