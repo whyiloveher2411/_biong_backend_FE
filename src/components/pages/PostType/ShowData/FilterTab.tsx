@@ -152,9 +152,9 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                         startIcon={<Icon icon={data.config.filters[tabCurrent[name]].icon} />}
                         variant='contained'
                         sx={{
-                            background: data.config.filters[tabCurrent[name]].color ?? 'inherit',
+                            backgroundColor: data.config.filters[tabCurrent[name]].color ?? 'primary.main',
                             '&:hover, &:active, &:focus': {
-                                background: data.config.filters[tabCurrent[name]].color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'inherit',
+                                backgroundColor: data.config.filters[tabCurrent[name]].color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
                             }
                         }}
                     >
