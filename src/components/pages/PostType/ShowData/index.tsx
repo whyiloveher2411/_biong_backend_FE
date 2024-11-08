@@ -191,7 +191,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
 
     const ListDataComponent = (
         <Box display="flex">
-            <div style={{ width: 255, flexShrink: 0, paddingRight: 24 }}>
+            <div style={{ width: 255, flexShrink: 0, paddingRight: 24, display: 'none' }}>
                 {
                     enableNewInline ?
                         <Button
@@ -217,19 +217,33 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                     setQueryUrl={setQueryUrl}
                 />
             </div>
-            <div style={{ width: 'calc(100% - 255px) ' }}>
-                <SearchBar
-                    type={type}
-                    value={queryUrl.search}
-                    onSearch={handleSearch}
-                    onFilter={(filters) => {
-                        setQueryUrl({
-                            ...queryUrl,
-                            filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
-                        });
-                    }}
-                    data={data}
-                />
+            <Box sx={{width: '100%'}}>
+                <Box
+                sx={{
+                    display: 'flex',
+                    gap: 3,
+                }}
+                >
+                    <FilterTab
+                        name={type}
+                        acctionPost={acctionPost}
+                        queryUrl={queryUrl}
+                        data={data}
+                        setQueryUrl={setQueryUrl}
+                    />
+                    <SearchBar
+                        type={type}
+                        value={queryUrl.search}
+                        onSearch={handleSearch}
+                        onFilter={(filters) => {
+                            setQueryUrl({
+                                ...queryUrl,
+                                filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
+                            });
+                        }}
+                        data={data}
+                    />
+                </Box>
                 {data !== false && (
                     <Results
                         data={data}
@@ -243,7 +257,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                         setSelectedCustomers={setSelectedCustomers}
                     />
                 )}
-            </div>
+            </Box>
         </Box>
     );
 

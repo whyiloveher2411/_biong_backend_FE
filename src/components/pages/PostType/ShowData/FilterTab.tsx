@@ -2,11 +2,12 @@ import { Theme } from '@mui/material';
 import Button from 'components/atoms/Button';
 import Icon from 'components/atoms/Icon';
 import makeCSS from 'components/atoms/makeCSS';
-import Typography from 'components/atoms/Typography';
+// import Typography from 'components/atoms/Typography';
 import { addClasses } from 'helpers/dom';
-import { fade } from 'helpers/mui4/color';
+// import { fade } from 'helpers/mui4/color';
 import React from 'react';
 import { ShowPostTypeData } from '.';
+import MoreButton from 'components/atoms/MoreButton';
 
 const useStyles = makeCSS((theme: Theme) => ({
     tabsItem: {
@@ -35,11 +36,11 @@ const useStyles = makeCSS((theme: Theme) => ({
             '&.active': {
                 background: 'var(--activeColor)',
             },
-            '&.active, &.active $counter, &.active $filterTitle': {
-                opacity: 1,
-                color: 'var(--color)',
-                fontWeight: 'bold',
-            },
+            // '&.active, &.active $counter, &.active $filterTitle': {
+                // opacity: 1,
+                // color: 'var(--color)',
+                // fontWeight: 'bold',
+            // },
         },
         '& .MuiButton-label': {
             justifyContent: 'left',
@@ -47,15 +48,15 @@ const useStyles = makeCSS((theme: Theme) => ({
             alignItems: 'flex-start'
         }
     },
-    filterTitle: {
-        width: '100%',
-        textAlign: 'left',
-        textTransform: 'none',
-    },
-    counter: {
-        lineHeight: '24.5px',
-        paddingLeft: 8
-    },
+    // filterTitle: {
+        // width: '100%',
+        // textAlign: 'left',
+        // textTransform: 'none',
+    // },
+    // counter: {
+        // lineHeight: '24.5px',
+        // paddingLeft: 8
+    // },
     tabsIcon: {
         '&>button': {
             minWidth: 0,
@@ -95,7 +96,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
 
     const filters = data !== false && data.config.filters ? Object.keys(data.config.filters).filter(key => data.config.filters[key].count > 0) : [];
 
-    const tabSelectedIndex = filters.findIndex(item => item === tabCurrent[name]);
+    // const tabSelectedIndex = filters.findIndex(item => item === tabCurrent[name]);
 
     if (data !== false && Boolean(data.config.filters)) {
         return (
@@ -104,13 +105,13 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                     [classes.tabs]: true,
                     [classes.tabsIcon]: true,
                 })}
-                style={{ ['--activeColor' as string]: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.08) : 'rgba(228, 230, 235, 0.08)' }}
+                // style={{ ['--activeColor' as string]: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.08) : 'rgba(228, 230, 235, 0.08)' }}
             >
-                {
+                {/* {
                     filters.length > 0 &&
                     <span className='indicator' style={{ top: (tabSelectedIndex !== -1 ? tabSelectedIndex : 0) * 48 }}></span>
-                }
-                {
+                } */}
+                {/* {
                     filters.map((key: string) => (
                         <Button
                             key={key}
@@ -133,7 +134,27 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                             <Typography className={classes.counter} variant='body2'>{data.config.filters[key].count}</Typography>
                         </Button>
                     ))
-                }
+                } */}
+                <MoreButton
+                    actions={[filters.reduce((acc: {[key: string]: { title: string, action: () => void }}, item: string) => {
+                        acc[item] = {
+                            title: data.config.filters[item].title + ' (' + data.config.filters[item].count + ')',
+                            action: () => {
+                                setQueryUrl({ ...queryUrl, filter: item });
+                                handleChangeTab(item);
+                            }
+                        }
+                        return acc;
+                    }, {})]}
+                >
+                    <Button
+                        size="large"
+                        startIcon={<Icon icon={data.config.filters[tabCurrent[name]].icon} />}
+                        variant='contained'
+                    >
+                        {data.config.filters[tabCurrent[name]].title}
+                   </Button>
+                </MoreButton>
             </div>
         )
     }
