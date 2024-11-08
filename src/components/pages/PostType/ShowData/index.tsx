@@ -221,7 +221,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                 <Box
                 sx={{
                     display: 'flex',
-                    gap: 3,
+                    gap: 2,
                 }}
                 >
                     <FilterTab
