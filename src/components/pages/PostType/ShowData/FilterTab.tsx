@@ -139,7 +139,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                 <MoreButton
                     actions={[filters.reduce((acc: {[key: string]: { title: string, action: () => void }}, item: string) => {
                         acc[item] = {
-                            title: data.config.filters[item].title + ' (' + data.config.filters[item].count + ')',
+                            title: __(data.config.filters[item].title) + ' (' + data.config.filters[item].count + ')',
                             action: () => {
                                 setQueryUrl({ ...queryUrl, filter: item });
                                 handleChangeTab(item);
@@ -159,7 +159,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                             }
                         }}
                     >
-                        {data.config.filters[tabCurrent[name]]?.title ?? __('----')}
+                        {__(data.config.filters[tabCurrent[name]]?.title ?? 'All')}
                    </Button>
                 </MoreButton>
             </div>
