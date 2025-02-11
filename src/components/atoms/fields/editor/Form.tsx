@@ -547,7 +547,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview, 
                             onClose={handleCloseFilemanagerDialog}
                             TransitionComponent={Transition}
                             title={__('File Mangage')}
-                            width={1700}
+                            width={2500}
                             restDialogContent={{
                                 style: {
                                     padding: 0

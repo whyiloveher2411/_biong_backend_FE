@@ -43,8 +43,6 @@ export default React.memo(function TextareaForm({ dataPostType, ...props }: Fiel
         dataPostType,
     });
 
-    console.log('render TEXTAREA');
-
     return (
         <TooltipAiSuggest {...tooltipAiSuggest.tooltipAiSuggestProps}>
             <FormControl fullWidth variant="outlined">

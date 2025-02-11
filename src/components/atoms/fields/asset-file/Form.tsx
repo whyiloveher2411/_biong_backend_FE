@@ -240,7 +240,7 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
                             TransitionComponent={Transition}
                             disableEscapeKeyDown
                             title={__('File Mangage')}
-                            width={1700}
+                            width={2500}
                             restDialogContent={{
                                 style: {
                                     padding: 0

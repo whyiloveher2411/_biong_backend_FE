@@ -1,6 +1,6 @@
 import { Box, Collapse, Theme, Typography } from '@mui/material';
 import { makeStyles } from '@mui/styles';
-import Button from 'components/atoms/Button';
+// import Button from 'components/atoms/Button';
 import ClickAwayListener from 'components/atoms/ClickAwayListener';
 import Divider from 'components/atoms/Divider';
 import Icon from 'components/atoms/Icon';
@@ -210,7 +210,7 @@ const SidebarFull = () => {
                             ))
                         })()
                     }
-                    <Box
+                    {/* <Box
                         sx={{ padding: 2 }}
                         className={classes.footerLink}
                     >
@@ -220,8 +220,8 @@ const SidebarFull = () => {
                         <Button size="small" color="inherit">Copyright</Button>
                         <Button size="small" color="inherit">Privacy Policy</Button>
                         <Button size="small" color="inherit">Terms</Button>
-                    </Box>
-                    <Typography sx={{ pl: 2, pr: 2, pb: 2 }} variant='body2'>©{new Date().getFullYear()} {settings.admin_template_logo_text ? settings.admin_template_logo_text : 'Biong'}. All Rights Reserved.</Typography>
+                    </Box> */}
+                    <Typography sx={{ pl: 2, pr: 2, pb: 2, mt: 2 }} variant='body2'>©{new Date().getFullYear()} {settings.admin_template_logo_text ? settings.admin_template_logo_text : 'Biong'}. All Rights Reserved.</Typography>
                 </nav>
             </div>
         </ClickAwayListener>

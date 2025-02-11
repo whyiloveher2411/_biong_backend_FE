@@ -1,4 +1,4 @@
-import { Theme } from '@mui/material';
+import { ListItemText, MenuItem, MenuList, Theme } from '@mui/material';
 import Box from 'components/atoms/Box';
 import Breadcrumbs from 'components/atoms/Breadcrumbs';
 import Button from 'components/atoms/Button';
@@ -143,6 +143,11 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
     const classes = useStyles();
 
     const ajax1 = useAjax();
+    const ajax2 = useAjax();
+
+    const [stores, setStores] = React.useState<{ key: string, name: string }[]>([]);
+
+    const [storeType, setStoreType] = React.useState<{ key: string, name: string } | null>(null);
 
     const resourceInit: StateResourceProps = {
         loaded: false,
@@ -152,7 +157,7 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
         showInTrash: false,
         template: 'grid',
         version: 1,
-        ...JSON.parse(localStorage.getItem('fileManager') ?? '{}'),
+        ...(storeType ? JSON.parse(localStorage.getItem('fileManager_' + storeType.key) ?? '{}') : {}),
     };
 
     const [resource, setResource] = React.useState<StateResourceProps>(resourceInit);
@@ -191,6 +196,7 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
         file: null,
     });
 
+
     const [config, setConfig] = React.useState<StateConfigProps>({
         extension: {},
         extensionFilter: [],
@@ -199,8 +205,15 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
     });
 
     React.useEffect(() => {
-        handleOnLoadDir(null, true, 0, true);
+        if (storeType) {
+            let data = JSON.parse(localStorage.getItem('fileManager_' + storeType.key) ?? '{}');
+            handleOnLoadDir(data.path ?? 'uploads', true, 0, true);
+        }
         //eslint-disable-next-line
+    }, [storeType]);
+
+    React.useEffect(() => {
+        get_store_type();
     }, []);
 
     //Load Folder
@@ -222,7 +235,8 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
             data: {
                 path: path,
                 loadLocation: loadLocation,
-                version: version
+                version: version,
+                storeType: storeType?.key,
             },
             success: (result: {
                 config: {
@@ -390,9 +404,10 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
             data: {
                 file: openRenameDialog[0].file,
                 origin: openRenameDialog[0].origin,
+                storeType: storeType?.key,
             },
             success: (result: JsonFormat) => {
-                if (result.success && openRenameDialog[0].success) {
+                if (result.success && openRenameDialog[0].success !== undefined) {
                     openRenameDialog[0].success(result);
                 }
             }
@@ -478,12 +493,32 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
         success: null
     });
 
+    const get_store_type = () => {
+        ajax2.ajax({
+            url: 'file-manager/get_store',
+            success: (result: {
+                stores: Array<{
+                    key: string,
+                    name: string
+                }>,
+            }) => {
+                if (result.stores) {
+                    setStores(result.stores);
+                    if (result.stores.findIndex(item => item.key === 'google') === -1) {
+                        setStoreType(result.stores[0]);
+                    }
+                }
+            }
+        });
+    }
+
     const handleOnSubmitNewFolder = () => {
         ajax1.ajax({
             url: 'file-manager/new-folder',
             data: {
                 file: openNewDialog[0].file,
-                folder: openNewDialog[0].folder,
+                folder: resource.path,
+                storeType: storeType?.key,
             },
             success: (result: {
                 success: boolean,
@@ -498,6 +533,7 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
     const eventDragDropFile: FileDragDropProps = {
         fileOrigin: null,
         path: resource.path,
+        storeType: storeType?.key || 'local',
         onLoadFiles: FileDragDropOnLoadFileUpload,
         onProcesingFile: FileDragDropOnProcesingFile,
         upLoadFileSuccess: FileDragDropUpLoadFileSuccess,
@@ -510,7 +546,8 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
                 url: 'file-manager/move',
                 data: {
                     file: file,
-                    folder: folder
+                    folder: folder,
+                    storeType: storeType?.key,
                 },
                 success: (result: { success: boolean }) => {
                     if (result.success) {
@@ -541,9 +578,9 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
     }
 
     const handleSaveLocalStorage = (key: string, value: ANY) => {
-        let dataCurrent = JSON.parse(localStorage.getItem('fileManager') ?? '{}') ?? {};
+        let dataCurrent = JSON.parse(localStorage.getItem('fileManager_' + storeType?.key) ?? '{}') ?? {};
         dataCurrent[key] = value;
-        localStorage.setItem('fileManager', JSON.stringify(dataCurrent));
+        localStorage.setItem('fileManager_' + storeType?.key, JSON.stringify(dataCurrent));
     }
 
     const fileManagerProvider = {
@@ -567,202 +604,227 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
                 resource.loaded &&
                 <div className={classes.root}>
                     <Box
-                        display="flex"
-                        width={1}
-                        className={classes.root}
-                        onDrop={(e) => e.preventDefault()}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDragLeave={(e) => e.preventDefault()}
+                        sx={{
+                            display: 'flex',
+                            gap: 1,
+                        }}
                     >
-                        <div
-                            className={classes.col2 + ' ' + (resource.showInTrash ? '' : classes.notShowTrashFile)}
+                        <MenuList
+                            sx={{
+                                minWidth: 150,
+                            }}
                         >
-                            <Box display="flex" justifyContent="space-between" alignItems="center" className={classes.header}>
-                                <Breadcrumbs
-                                    itemsAfterCollapse={3}
-                                    itemsBeforeCollapse={2}
-                                    separator={<Icon icon="NavigateNext" fontSize="small" />}
-                                    className={classes.col2Header + ' custom_scroll'}
-                                    maxItems={5}
-                                    aria-label="breadcrumb"
-                                >
-                                    <Button color='inherit' onClick={() => { handleOnLoadDir('uploads', null, resource.version + 1) }}>
-                                        {__('My File')}
-                                    </Button>
-                                    {
-                                        Boolean(resource.breadcrumbs) &&
-                                        resource.breadcrumbs.filter((_item, index) => index > 0).map((item, index) => (
-                                            <Button
-                                                key={index}
-                                                color='inherit'
-                                                startIcon={
-                                                    <Icon
-                                                        icon="Folder"
-                                                        style={{
-                                                            width: 20,
-                                                            height: 20,
-                                                            color: item.color ? item.color : '#69caf7'
-                                                        }}
-                                                    />
-                                                }
-                                                onClick={() => { handleOnLoadDir(item.path, null, resource.version + 1) }} >
-                                                {item.title}
-                                            </Button>
-                                        ))
-                                    }
-                                </Breadcrumbs>
-                                <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    onClick={() => fileSelected[1](prev => ({ ...prev, file: null }))}
-                                >
-
-                                    <IconButton
-                                        onClick={() => {
-                                            handleSaveLocalStorage('template', resource?.template === 'list' ? 'grid' : 'list');
-                                            setResource(prev => ({ ...prev, template: resource?.template === 'list' ? 'grid' : 'list' }))
-                                        }}
+                            {
+                                stores.map((store) => (
+                                    <MenuItem
+                                        key={store.key}
+                                        selected={storeType?.key === store.key}
+                                        onClick={() => setStoreType(store)}
                                     >
-                                        <Icon icon={resource?.template === 'list' ? 'Apps' : 'ReorderRounded'} />
-                                    </IconButton>
-
-                                    <IconButton onClick={() => {
-                                        handleSaveLocalStorage('showInTrash', !resource.showInTrash);
-                                        setResource(prev => ({ ...prev, showInTrash: !prev.showInTrash }))
-                                    }}>
-                                        <Icon icon={resource?.showInTrash ? 'DeleteSweepOutlined' : 'RestoreFromTrashOutlined'} />
-                                    </IconButton>
-
-                                    <Divider orientation="vertical" flexItem />
-
-                                    {
-                                        Boolean(fileTypeFromParent && fileTypeFromParent.length > 1 && config.extensionFilter) &&
-                                        <ToggleButtonGroup className={classes.filters} size="medium" value={fileType} exclusive onChange={handleChangeFileType}>
-                                            {
-                                                config.extensionFilter.map(filterIcon => (
-                                                    <ToggleButton key={filterIcon.key} value={filterIcon.key}>
+                                        <ListItemText>{store.name}</ListItemText>
+                                    </MenuItem>
+                                ))
+                            }
+                        </MenuList>
+                        <Box
+                            display="flex"
+                            width={1}
+                            className={classes.root}
+                            onDrop={(e) => e.preventDefault()}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDragLeave={(e) => e.preventDefault()}
+                        >
+                            <div
+                                className={classes.col2 + ' ' + (resource.showInTrash ? '' : classes.notShowTrashFile)}
+                            >
+                                <Box display="flex" justifyContent="space-between" alignItems="center" className={classes.header}>
+                                    <Breadcrumbs
+                                        itemsAfterCollapse={3}
+                                        itemsBeforeCollapse={2}
+                                        separator={<Icon icon="NavigateNext" fontSize="small" />}
+                                        className={classes.col2Header + ' custom_scroll'}
+                                        maxItems={5}
+                                        aria-label="breadcrumb"
+                                    >
+                                        <Button color='inherit' onClick={() => { handleOnLoadDir('uploads', null, resource.version + 1) }}>
+                                            {__('My File')}
+                                        </Button>
+                                        {
+                                            Boolean(resource.breadcrumbs) &&
+                                            resource.breadcrumbs.filter((_item, index) => index > 0).map((item, index) => (
+                                                <Button
+                                                    key={index}
+                                                    color='inherit'
+                                                    startIcon={
                                                         <Icon
-                                                            icon={fileType === filterIcon.key ? filterIcon.iconActive : filterIcon.icon}
+                                                            icon="Folder"
+                                                            style={{
+                                                                width: 20,
+                                                                height: 20,
+                                                                color: item.color ? item.color : '#69caf7'
+                                                            }}
                                                         />
-                                                    </ToggleButton>
-                                                ))
-                                            }
-                                        </ToggleButtonGroup>
-                                    }
-                                    <div style={{ padding: '0 16px' }}>
-                                        <FieldForm
-                                            component="text"
-                                            config={{
-                                                title: __('Search'),
-                                                size: 'small',
-                                                inputProps: {
-                                                    onKeyPress: (e: React.KeyboardEvent<HTMLDivElement>) => {
-                                                        if (e.key === 'Enter') {
-                                                            setSearch({ query: (e.target as HTMLInputElement).value })
+                                                    }
+                                                    onClick={() => { handleOnLoadDir(item.path, null, resource.version + 1) }} >
+                                                    {item.title}
+                                                </Button>
+                                            ))
+                                        }
+                                    </Breadcrumbs>
+                                    <Box
+                                        display="flex"
+                                        alignItems="center"
+                                        onClick={() => fileSelected[1](prev => ({ ...prev, file: null }))}
+                                    >
+
+                                        <IconButton
+                                            onClick={() => {
+                                                handleSaveLocalStorage('template', resource?.template === 'list' ? 'grid' : 'list');
+                                                setResource(prev => ({ ...prev, template: resource?.template === 'list' ? 'grid' : 'list' }))
+                                            }}
+                                        >
+                                            <Icon icon={resource?.template === 'list' ? 'Apps' : 'ReorderRounded'} />
+                                        </IconButton>
+
+                                        <IconButton onClick={() => {
+                                            handleSaveLocalStorage('showInTrash', !resource.showInTrash);
+                                            setResource(prev => ({ ...prev, showInTrash: !prev.showInTrash }))
+                                        }}>
+                                            <Icon icon={resource?.showInTrash ? 'DeleteSweepOutlined' : 'RestoreFromTrashOutlined'} />
+                                        </IconButton>
+
+                                        <Divider orientation="vertical" flexItem />
+
+                                        {
+                                            Boolean(fileTypeFromParent && fileTypeFromParent.length > 1 && config.extensionFilter) &&
+                                            <ToggleButtonGroup className={classes.filters} size="medium" value={fileType} exclusive onChange={handleChangeFileType}>
+                                                {
+                                                    config.extensionFilter.map(filterIcon => (
+                                                        <ToggleButton key={filterIcon.key} value={filterIcon.key}>
+                                                            <Icon
+                                                                icon={fileType === filterIcon.key ? filterIcon.iconActive : filterIcon.icon}
+                                                            />
+                                                        </ToggleButton>
+                                                    ))
+                                                }
+                                            </ToggleButtonGroup>
+                                        }
+                                        <div style={{ padding: '0 16px' }}>
+                                            <FieldForm
+                                                component="text"
+                                                config={{
+                                                    title: __('Search'),
+                                                    size: 'small',
+                                                    inputProps: {
+                                                        onKeyPress: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                                                            if (e.key === 'Enter') {
+                                                                setSearch({ query: (e.target as HTMLInputElement).value })
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            }}
-                                            post={search}
-                                            name="query"
-                                            onReview={value => { setSearch({ query: value }) }}
-                                        />
-                                    </div>
+                                                }}
+                                                post={search}
+                                                name="query"
+                                                onReview={value => { setSearch({ query: value }) }}
+                                            />
+                                        </div>
+                                    </Box>
                                 </Box>
-                            </Box>
 
-                            <Box display="flex">
-                                <MainColumn
-                                    resource={resource}
-                                    handleOnLoadDir={handleOnLoadDir}
-                                    filesActive={filesActive}
-                                    eventDragDropFile={eventDragDropFile}
-                                    className={classes.col2Dir + ' custom_scroll'}
-                                    sx={{
-                                        width: '100%'
-                                    }}
-                                    onClick={(e: ANY) => {
-                                        if (!e.ctrlKey) {
-                                            fileSelected[1](prev => ({ ...prev, file: null }))
+                                <Box display="flex">
+                                    <MainColumn
+                                        resource={resource}
+                                        handleOnLoadDir={handleOnLoadDir}
+                                        filesActive={filesActive}
+                                        eventDragDropFile={eventDragDropFile}
+                                        className={classes.col2Dir + ' custom_scroll'}
+                                        sx={{
+                                            width: '100%'
+                                        }}
+                                        onClick={(e: ANY) => {
+                                            if (!e.ctrlKey) {
+                                                fileSelected[1](prev => ({ ...prev, file: null }))
+                                            }
+                                        }}
+                                    />
+
+                                    <div className={classes.col3 + ' ' + (fileSelected[0].open ? 'open' : '') + ' custom_scroll'}>
+                                        {
+                                            fileSelected[0].open &&
+                                            <FileDetail
+                                                setFileSelected={fileSelected[1]}
+                                                fileSelected={fileSelected[0].file}
+                                                handleOnLoadDir={handleOnLoadDir}
+                                                resource={resource} />
                                         }
-                                    }}
-                                />
+                                    </div>
 
-                                <div className={classes.col3 + ' ' + (fileSelected[0].open ? 'open' : '') + ' custom_scroll'}>
-                                    {
-                                        fileSelected[0].open &&
-                                        <FileDetail
-                                            setFileSelected={fileSelected[1]}
-                                            fileSelected={fileSelected[0].file}
-                                            handleOnLoadDir={handleOnLoadDir}
-                                            resource={resource} />
+                                </Box>
+                            </div>
+                        </Box >
+
+                        <DialogCustom
+                            open={openRenameDialog[0].open}
+                            onClose={() => openRenameDialog[1]({ ...openRenameDialog[0], open: false })}
+                            title={__('Rename')}
+                            action={<>
+                                <Button color='inherit' onClick={() => openRenameDialog[1]({ ...openRenameDialog[0], open: false })}>{__('Cancel')}</Button>
+                                <Button variant="contained" onClick={handleOnSubmitRenameFile} color="primary">{__('OK')}</Button>
+                            </>}
+                        >
+                            <FieldForm
+                                component="text"
+                                config={{
+                                    title: __('Name'),
+                                    endAdornment: openRenameDialog[0].file?.extension ? <InputAdornment position="end">.{openRenameDialog[0].file.extension}</InputAdornment> : undefined
+                                }}
+                                post={openRenameDialog[0].file ?? {}}
+                                name="filename"
+                                onReview={(value) => { }}  //eslint-disable-line
+                            />
+                        </DialogCustom>
+
+                        <DialogCustom
+                            open={openNewDialog[0].open}
+                            onClose={() => openNewDialog[1]({ ...openNewDialog[0], open: false })}
+                            title={__('New Folder')}
+                            action={<>
+                                <Button color='inherit' onClick={() => openNewDialog[1]({ ...openNewDialog[0], open: false })}>{__('Cancel')}</Button>
+                                <Button variant="contained" onClick={handleOnSubmitNewFolder} color="primary">{__('OK')}</Button>
+                            </>}
+                        >
+                            <FieldForm
+                                component="text"
+                                config={{
+                                    title: __('Name'),
+                                }}
+                                post={openNewDialog[0].file}
+                                name="filename"
+                                onReview={() => { }} //eslint-disable-line
+                            />
+                        </DialogCustom>
+
+                        <ConfirmDialog
+                            open={configrmDialog[0].open}
+                            onClose={() => configrmDialog[1](prev => ({ ...prev, open: false }))}
+                            onConfirm={() => {
+                                ajax1.ajax({
+                                    url: 'file-manager/delete',
+                                    data: {
+                                        file: configrmDialog[0].file,
+                                        storeType: storeType?.key,
+                                    },
+                                    success: (result: JsonFormat) => {
+                                        configrmDialog[0].success(result);
                                     }
-                                </div>
-
-                            </Box>
-                        </div>
-                    </Box >
-
-                    <DialogCustom
-                        open={openRenameDialog[0].open}
-                        onClose={() => openRenameDialog[1]({ ...openRenameDialog[0], open: false })}
-                        title={__('Rename')}
-                        action={<>
-                            <Button color='inherit' onClick={() => openRenameDialog[1]({ ...openRenameDialog[0], open: false })}>{__('Cancel')}</Button>
-                            <Button variant="contained" onClick={handleOnSubmitRenameFile} color="primary">{__('OK')}</Button>
-                        </>}
-                    >
-                        <FieldForm
-                            component="text"
-                            config={{
-                                title: __('Name'),
-                                endAdornment: openRenameDialog[0].file?.extension ? <InputAdornment position="end">.{openRenameDialog[0].file.extension}</InputAdornment> : undefined
+                                });
                             }}
-                            post={openRenameDialog[0].file ?? {}}
-                            name="filename"
-                            onReview={(value) => { }}  //eslint-disable-line
                         />
-                    </DialogCustom>
-
-                    <DialogCustom
-                        open={openNewDialog[0].open}
-                        onClose={() => openNewDialog[1]({ ...openNewDialog[0], open: false })}
-                        title={__('New Folder')}
-                        action={<>
-                            <Button color='inherit' onClick={() => openNewDialog[1]({ ...openNewDialog[0], open: false })}>{__('Cancel')}</Button>
-                            <Button variant="contained" onClick={handleOnSubmitNewFolder} color="primary">{__('OK')}</Button>
-                        </>}
-                    >
-                        <FieldForm
-                            component="text"
-                            config={{
-                                title: __('Name'),
-                            }}
-                            post={openNewDialog[0].file}
-                            name="filename"
-                            onReview={() => { }} //eslint-disable-line
+                        <UploadProcessing
+                            filesUpload={filesUpload}
+                            setFilesUpload={setFilesUpload}
                         />
-                    </DialogCustom>
-
-                    <ConfirmDialog
-                        open={configrmDialog[0].open}
-                        onClose={() => configrmDialog[1](prev => ({ ...prev, open: false }))}
-                        onConfirm={() => {
-                            ajax1.ajax({
-                                url: 'file-manager/delete',
-                                data: {
-                                    file: configrmDialog[0].file,
-                                },
-                                success: (result: JsonFormat) => {
-                                    configrmDialog[0].success(result);
-                                }
-                            });
-                        }}
-                    />
-                    <UploadProcessing
-                        filesUpload={filesUpload}
-                        setFilesUpload={setFilesUpload}
-                    />
+                    </Box>
                 </div >
             }
             {ajax1.Loading}

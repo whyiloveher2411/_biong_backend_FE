@@ -62,7 +62,6 @@ export function validURL(str: URL): boolean {
 export function convertToURL(domain: string | undefined, nextPartUrl: string): string {
 
     let result = domain;
-
     let nextPartUrlAfterClearPass = nextPartUrl[0] === '/' ? nextPartUrl.substring(1) : nextPartUrl;
 
     if (domain && domain.substring(domain.length - 1) === '/') {

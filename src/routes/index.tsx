@@ -69,7 +69,11 @@ const AdminRoute = [
         element: <PluginPage />,
     },
     {
-        path: '/plugin/:plugin/:subtab',
+        path: '/plugin/:plugin/:tab/:subtab',
+        element: <PluginPage />,
+    },
+    {
+        path: '/plugin/:plugin/:tab/:subtab/:subtab2',
         element: <PluginPage />,
     },
     {

@@ -190,9 +190,6 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                                     <IconButton size='small' onClick={() => moveElement(index, index - 1)}>
                                         <Icon icon='ArrowLeftRounded' />
                                     </IconButton>
-                                    <IconButton size='small' onClick={() => moveElement(index, index + 1)}>
-                                        <Icon icon='ArrowRightRounded' />
-                                    </IconButton>
                                     {
                                         (option.titleParents?.length > 0 ? (option.titleParents.join(' -> ') + ' -> ') : '') + (option.new_post ? '' : '[' + option.id + '] ')
                                     }
@@ -200,6 +197,9 @@ export default function RelationshipManyToManyFormForm({ config, post, onReview,
                                     {
                                         Boolean(option.new_post) && <strong>&nbsp;{__('(New Option)')}</strong>
                                     }
+                                    <IconButton size='small' onClick={() => moveElement(index, index + 1)}>
+                                        <Icon icon='ArrowRightRounded' />
+                                    </IconButton>
                                 </>
                             }
                             {...getTagProps({ index })}

@@ -51,21 +51,30 @@ const Header = ({ data, className, ...rest }: { [key: string]: ANY, data: false 
                                 {__('Content')}
                             </Typography>
                             <Box
+                                className={'show-data-header'}
                                 sx={{
                                     display: 'flex',
+                                    justifyContent: 'space-between',
                                     gap: 1,
                                 }}
                             >
                                 <Typography component="h1" variant="h3">
                                     {data.config.label.name ?? '...'}
                                 </Typography>
-                                {
-                                    data.config.links?.map((link, i) => (
-                                        <Button variant="contained" color="primary" component={Link} to={link.url} key={i}>
-                                            {link.title}
-                                        </Button>
-                                    ))
-                                }
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        gap: 1,
+                                    }}
+                                >
+                                    {
+                                        data.config.links?.map((link, i) => (
+                                            <Button variant="contained" color={window.location.pathname.includes(link.url) ? "primary" : "inherit"} component={Link} to={link.url} key={i}>
+                                                {link.title}
+                                            </Button>
+                                        ))
+                                    }
+                                </Box>
                             </Box>
                         </>
                 }

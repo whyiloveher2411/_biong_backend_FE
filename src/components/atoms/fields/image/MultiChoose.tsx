@@ -250,12 +250,12 @@ export default React.memo(function MultiChoose2(props: FieldFormItemProps) {
             };
 
             const conditionFunc: { [key: string]: (value: string | number) => true | string } = {
-                width: (value: string | number): true | string => img.width === value ? true : 'Width: ' + value + 'px',
-                minWidth: (value: string | number): true | string => img.width >= value ? true : 'Min Width: ' + value + 'px',
-                maxWidth: (value: string | number): true | string => img.width <= value ? true : 'Max Width: ' + value + 'px',
-                height: (value: string | number): true | string => img.height === value ? true : 'Height: ' + value + 'px',
-                minHeight: (value: string | number): true | string => img.height >= value ? true : 'Min Height: ' + value + 'px',
-                maxHeight: (value: string | number): true | string => img.height <= value ? true : 'Max Height: ' + value + 'px',
+                width: (value: string | number): true | string => Number(img.width) === Number(value) ? true : 'Width: ' + value + 'px',
+                minWidth: (value: string | number): true | string => Number(img.width) >= Number(value) ? true : 'Min Width: ' + value + 'px',
+                maxWidth: (value: string | number): true | string => Number(img.width) <= Number(value) ? true : 'Max Width: ' + value + 'px',
+                height: (value: string | number): true | string => Number(img.height) === Number(value) ? true : 'Height: ' + value + 'px',
+                minHeight: (value: string | number): true | string => Number(img.height) >= Number(value) ? true : 'Min Height: ' + value + 'px',
+                maxHeight: (value: string | number): true | string => Number(img.height) <= Number(value) ? true : 'Max Height: ' + value + 'px',
                 ratio: (value: string | number): true | string => {
                     if (typeof value === 'string') {
                         let ratio = value.split(':');
@@ -596,7 +596,7 @@ export default React.memo(function MultiChoose2(props: FieldFormItemProps) {
                 TransitionComponent={Transition}
                 disableEscapeKeyDown
                 title={__('File Mangage')}
-                width={1700}
+                width={2500}
                 restDialogContent={{
                     style: {
                         padding: 0

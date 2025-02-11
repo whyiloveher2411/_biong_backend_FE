@@ -20,6 +20,9 @@ import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
 import { FieldConfigProps } from '../fields/type';
 import DrawerEditPost from './DrawerEditPost';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
+import Box from '@mui/material/Box';
+import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
+import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
 
 const useStyles = makeCSS({
     tr: {
@@ -83,6 +86,21 @@ function DataTable(props: DataTableProps) {
         });
 
     };
+
+    const handleSort = (key: string) => {
+        const sortKey = queryUrl.sortKey;
+        const sortType = queryUrl.sortType;
+
+        if (sortKey === key) {
+            if (sortType === '1') {
+                setQueryUrl({ ...queryUrl, sortKey: key, sortType: '0' });
+            } else {
+                setQueryUrl({ ...queryUrl, sortKey: null, sortType: null });
+            }
+        } else {
+            setQueryUrl({ ...queryUrl, sortKey: key, sortType: '1' });
+        }
+    }
 
     const acctionPost = (payload: JsonFormat, success?: (result: JsonFormat) => void) => {
         ajax({
@@ -166,7 +184,24 @@ function DataTable(props: DataTableProps) {
                                         Object.keys(data.config.fields).map(key => (
                                             (data.config.fields[key].show_data !== false || data.config.fields[key].show_data === undefined)
                                                 ?
-                                                <TableCell key={key}>{data.config.fields[key].title}</TableCell>
+                                                <TableCell key={key} sx={{ cursor: 'pointer' }} onClick={() => handleSort(key)}>
+                                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+                                                        {data.config.fields[key].title}
+                                                        {
+                                                            queryUrl.sortKey === key ? <Box
+                                                                sx={{
+                                                                    display: 'inline-flex',
+                                                                    position: 'absolute',
+                                                                    right: 0,
+                                                                    transform: 'translateX(100%)',
+                                                                }}
+                                                            >
+                                                                {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
+                                                            </Box>
+                                                                : null
+                                                        }
+                                                    </Box>
+                                                </TableCell>
                                                 :
                                                 <React.Fragment key={key}></React.Fragment>
                                         ))

@@ -115,10 +115,11 @@ function Plugins() {
 
     const changePlugin = (plugin: string) => {
         ajax({
-            url: 'plugin/get-list/in-active-plugin',
+            url: 'plugin/get-list',
             method: 'POST',
             data: {
-                plugin: plugin
+                plugin: plugin,
+                action: 'in-active-plugin',
             },
             success: (result) => {
                 setData(result.rows);

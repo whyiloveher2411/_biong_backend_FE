@@ -19,9 +19,10 @@ export interface FileDragDropProps {
     uploadFileError: UploadFileErrorProps,
     fileOrigin: FileProps | null,
     path: string | null,
+    storeType: string,
 }
 
-export default function FileDragDrop({ fileOrigin, path, onLoadFiles, onProcesingFile, upLoadFileSuccess, uploadFileError }: FileDragDropProps) {
+export default function FileDragDrop({ fileOrigin, path, onLoadFiles, onProcesingFile, upLoadFileSuccess, uploadFileError, storeType }: FileDragDropProps) {
 
     const ajax = useAjax();
 
@@ -111,6 +112,7 @@ export default function FileDragDrop({ fileOrigin, path, onLoadFiles, onProcesin
         formdata.append('name', window.__fileManagerChunkFile[key].name);
         formdata.append('size', window.__fileManagerChunkFile[key].size);
         formdata.append('chunkName', window.__fileManagerChunkFile[key].chunkName);
+        formdata.append('storeType', storeType);
         formdata.append('chunk', index + '');
         formdata.append('chunks', window.__fileManagerChunkFile[key].chunks.length);
 

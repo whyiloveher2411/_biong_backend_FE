@@ -16,7 +16,6 @@ function RelationshipOneToOneShowForm({ name, onReview, ...props }: FieldFormIte
     const [data, setData] = React.useState<JsonFormat | false>(false);
 
     React.useEffect(() => {
-
         ajax({
             url: 'post-type/onetoone',
             method: 'POST',
@@ -35,7 +34,7 @@ function RelationshipOneToOneShowForm({ name, onReview, ...props }: FieldFormIte
             }
         });
 
-    }, [props.post.id]);
+    }, [props.post]);
 
     const onChangePost = (value: ANY, key: null | string | JsonFormat) => {
 
@@ -69,7 +68,7 @@ function RelationshipOneToOneShowForm({ name, onReview, ...props }: FieldFormIte
             spacing={4}
         >
             {
-                Object.keys(data.config.fields).filter(key => !data.config.fields[key].hidden).map(key => {
+                Object.keys(data.config.fields).filter(key => !data.config.fields[key].hidden && key !== 'title').map(key => {
                     return (
                         <Grid item md={12} xs={12} key={key} >
                             <FieldForm

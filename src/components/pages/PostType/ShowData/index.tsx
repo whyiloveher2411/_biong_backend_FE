@@ -419,14 +419,14 @@ function SkeletonListData() {
                 }}
                 style={{ marginTop: 16 }}
             >
-                <div>
+                {/* <div>
                     <Skeleton style={{ transform: 'scale(1, 1)', marginBottom: 24 }} width={230} height={40} />
                     {
                         [...Array(10)].map((key, index) => (
                             <Skeleton key={index} style={{ transform: 'scale(1, 1)', marginBottom: 12 }} width={230} height={24} />
                         ))
                     }
-                </div>
+                </div> */}
                 <div style={{ width: '100%' }}>
                     <Box
                         sx={{

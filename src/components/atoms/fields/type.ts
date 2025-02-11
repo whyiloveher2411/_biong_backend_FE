@@ -53,4 +53,5 @@ export interface FieldConfigProps {
     customViewList?: string,
     customViewForm?: string,
     inlineEdit?: boolean,
+    sortable?: boolean,
 }

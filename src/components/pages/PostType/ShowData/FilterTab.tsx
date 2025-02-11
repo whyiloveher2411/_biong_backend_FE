@@ -1,4 +1,4 @@
-import { Theme } from '@mui/material';
+import { Box, Theme } from '@mui/material';
 import Button from 'components/atoms/Button';
 import Icon from 'components/atoms/Icon';
 import makeCSS from 'components/atoms/makeCSS';
@@ -38,9 +38,9 @@ const useStyles = makeCSS((theme: Theme) => ({
                 background: 'var(--activeColor)',
             },
             // '&.active, &.active $counter, &.active $filterTitle': {
-                // opacity: 1,
-                // color: 'var(--color)',
-                // fontWeight: 'bold',
+            // opacity: 1,
+            // color: 'var(--color)',
+            // fontWeight: 'bold',
             // },
         },
         '& .MuiButton-label': {
@@ -50,13 +50,13 @@ const useStyles = makeCSS((theme: Theme) => ({
         }
     },
     // filterTitle: {
-        // width: '100%',
-        // textAlign: 'left',
-        // textTransform: 'none',
+    // width: '100%',
+    // textAlign: 'left',
+    // textTransform: 'none',
     // },
     // counter: {
-        // lineHeight: '24.5px',
-        // paddingLeft: 8
+    // lineHeight: '24.5px',
+    // paddingLeft: 8
     // },
     tabsIcon: {
         '&>button': {
@@ -106,7 +106,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                     [classes.tabs]: true,
                     [classes.tabsIcon]: true,
                 })}
-                // style={{ ['--activeColor' as string]: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.08) : 'rgba(228, 230, 235, 0.08)' }}
+            // style={{ ['--activeColor' as string]: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.08) : 'rgba(228, 230, 235, 0.08)' }}
             >
                 {/* {
                     filters.length > 0 &&
@@ -136,32 +136,45 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                         </Button>
                     ))
                 } */}
-                <MoreButton
-                    actions={[filters.reduce((acc: {[key: string]: { title: string, action: () => void }}, item: string) => {
-                        acc[item] = {
-                            title: __(data.config.filters[item].title) + ' (' + data.config.filters[item].count + ')',
-                            action: () => {
-                                setQueryUrl({ ...queryUrl, filter: item });
-                                handleChangeTab(item);
-                            }
-                        }
-                        return acc;
-                    }, {})]}
-                >
-                    <Button
-                        size="large"
-                        startIcon={<Icon icon={data.config.filters[tabCurrent[name]]?.icon ?? 'PublicOutlined' } />}
-                        variant='contained'
-                        sx={{
-                            backgroundColor: data.config.filters[tabCurrent[name]]?.color ?? 'primary.main',
-                            '&:hover, &:active, &:focus': {
-                                backgroundColor: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
-                            }
-                        }}
-                    >
-                        {__(data.config.filters[tabCurrent[name]]?.title ?? 'All')}
-                   </Button>
-                </MoreButton>
+                {
+                    filters.length > 1 ?
+                        <MoreButton
+                            actions={[filters.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: string) => {
+                                acc[item] = {
+                                    title: __(data.config.filters[item].title) + ' (' + data.config.filters[item].count + ')',
+                                    action: () => {
+                                        setQueryUrl({ ...queryUrl, filter: item });
+                                        handleChangeTab(item);
+                                    }
+                                }
+                                return acc;
+                            }, {})]}
+                        >
+                            <Button
+                                size="large"
+                                startIcon={<Icon icon={data.config.filters[tabCurrent[name]]?.icon ?? 'PublicOutlined'} />}
+                                variant='contained'
+                                sx={{
+                                    backgroundColor: data.config.filters[tabCurrent[name]]?.color ?? 'primary.main',
+                                    '&:hover, &:active, &:focus': {
+                                        backgroundColor: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
+                                    }
+                                }}
+                            >
+                                {__(data.config.filters[tabCurrent[name]]?.title ?? 'All')}
+                            </Button>
+                        </MoreButton>
+                        :
+                        <Box>
+                            <Button
+                                size="large"
+                                startIcon={<Icon icon={'PublicOutlined'} />}
+                                variant='contained'
+                            >
+                                {__('All')}
+                            </Button>
+                        </Box>
+                }
             </div>
         )
     }

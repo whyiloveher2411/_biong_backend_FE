@@ -31,6 +31,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShowPostTypeData } from '.';
 import ActionOnPostSelected from './Result/ActionOnPostSelected';
+import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
+import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
@@ -91,6 +93,7 @@ const useStyles = makeCSS((theme: Theme) => ({
     pad8: {
         paddingLeft: 8,
         paddingRight: 8,
+        cursor: 'pointer',
     },
     rowRecord: {
         cursor: 'pointer',
@@ -239,6 +242,22 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     // }
     // }
 
+    const handleSort = (key: string) => {
+        const sortKey = queryUrl.sortKey;
+        const sortType = queryUrl.sortType;
+
+        if (sortKey === key) {
+            if (sortType === '1') {
+                setQueryUrl({ ...queryUrl, sortKey: key, sortType: '0' });
+            } else {
+                setQueryUrl({ ...queryUrl, sortKey: null, sortType: null });
+            }
+        } else {
+            setQueryUrl({ ...queryUrl, sortKey: key, sortType: '1' });
+        }
+        setRender(render + 1);
+    }
+
     const eventClickRow = (_e: React.MouseEvent<HTMLTableRowElement>, id: string) => {
 
         if (id) {
@@ -275,20 +294,20 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     return (
         <div {...rest} className={classes.results}>
             {
-                data.rows.total ?
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                        {
-                            __('{{total}} Records found. Page {{current_page}} of {{total_page}}', {
-                                total: data.rows.total,
-                                current_page: data.rows.current_page,
-                                total_page: Math.ceil(data.rows.total / data.rows.per_page * 1)
-                            })
-                        }
-                    </Typography>
-                    :
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                        &nbsp;
-                    </Typography>
+                // data.rows.total ?
+                <Typography color="textSecondary" gutterBottom variant="body2">
+                    {
+                        __('{{total}} Records found. Page {{current_page}} of {{total_page}}', {
+                            total: data.rows.total,
+                            current_page: data.rows.current_page,
+                            total_page: Math.ceil(data.rows.total / data.rows.per_page * 1)
+                        })
+                    }
+                </Typography>
+                // :
+                // <Typography color="textSecondary" gutterBottom variant="body2">
+                //     &nbsp;
+                // </Typography>
             }
             <Card className={classes.cardWarper + ' ' + (loading ? classes.showLoading : '')}>
                 {/* <CardHeader
@@ -332,7 +351,22 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                     </TableCell>
                                     {keyFields.length > 0 &&
                                         keyFields.map(key => (
-                                            <TableCell className={classes.pad8} key={key}>{data.config.fields[key].title}</TableCell>
+                                            <TableCell className={classes.pad8} onClick={() => handleSort(key)} key={key}>
+                                                <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>{data.config.fields[key].title}
+                                                    {
+                                                        queryUrl.sortKey === key ? <Box
+                                                            sx={{
+                                                                display: 'inline-flex',
+                                                                position: 'absolute',
+                                                                right: 0,
+                                                                transform: 'translateX(100%)',
+                                                            }}
+                                                        >
+                                                            {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
+                                                        </Box>
+                                                            : null
+                                                    }
+                                                </Box></TableCell>
                                         ))
                                     }
                                     {

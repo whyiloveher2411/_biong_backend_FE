@@ -18,11 +18,25 @@ const useStyles = makeCSS((theme: Theme) => ({
         position: 'relative',
         border: '1px solid',
         borderColor: theme.palette.dividerDark,
-        width: 'calc( (100% - 75px) / 6 )',
         borderRadius: theme.spacing(1),
         '&.menuMouseRight-selected': {
             backgroundColor: theme.palette.dividerDark
-        }
+        },
+        ['@media(min-width: 668px)']: {
+            width: 'calc( (100% - 36px) / 4 )',
+        },
+        ['@media(min-width: 1082px)']: {
+            width: 'calc( (100% - 36px) / 8 )',
+        },
+        ['@media(min-width: 1576px)']: {
+            width: 'calc( (100% - 36px) / 12 )',
+        },
+        ['@media(min-width: 1902px)']: {
+            width: 'calc( (100% - 36px) / 16 )',
+        },
+        ['@media(min-width: 2228px)']: {
+            width: 'calc( (100% - 36px) / 18 )',
+        },
     },
     padding: {
         padding: '12px 16px',
@@ -238,10 +252,10 @@ function FileItemGrid({ file, className, handleReloadDir, eventDragDropFile, ...
                 <div className={'avatar ' + classes.avatar}>
                     {
                         file.is_dir ?
-                            <Icon icon="Folder" className={classes.avatar} style={{ width: 120, height: 120, color: file.data?.color ? file.data.color : '#69caf7' }} />
+                            <Icon icon="Folder" className={classes.avatar} style={{ width: 120, height: 60, color: file.data?.color ? file.data.color : '#69caf7' }} />
                             :
                             <Avatar
-                                style={{ width: 200, height: 120 }}
+                                style={{ width: 100, height: 60 }}
                                 className={classes.avatar + ' ' + (file.is_image ? classes.isImage : '')}
                                 variant="square"
                                 src={file.extension !== 'ico' ? file.thumbnail : file.public_path}

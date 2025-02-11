@@ -6,7 +6,7 @@ import { RootState } from 'store/configureStore';
 
 function PluginPage() {
 
-    let { plugin, tab, subtab } = useParams();
+    let { plugin, tab, subtab, subtab2 } = useParams();
 
     const plugins = useSelector((state: RootState) => state.plugins);
 
@@ -29,23 +29,113 @@ function PluginPage() {
 
             if (tab) {
 
+                if (subtab && subtab2) {
+
+                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/' + toCamelCase(subtab) + '/' + toCamelCase(subtab2);
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
+
+                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/' + toCamelCase(subtab) + '/' + '[slug]';
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
+
+                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/' + toCamelCase(subtab);
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
+                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/[slug]';
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
+                }
+
                 if (subtab) {
                     compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/' + toCamelCase(subtab);
-                } else {
-                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab);
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
+                    compoment = toCamelCase(plugin) + '/' + toCamelCase(tab) + '/[slug]';
+
+                    try {
+                        //eslint-disable-next-line
+                        resolved = require(`../../../plugins/${compoment}`).default;
+
+                        return <>
+                            {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
+                        </>;
+
+                    } catch (error) {
+                        //
+                    }
+
                 }
+
+                compoment = toCamelCase(plugin) + '/' + toCamelCase(tab);
 
                 try {
                     //eslint-disable-next-line
                     resolved = require(`../../../plugins/${compoment}`).default;
 
                     return <>
-                        {React.createElement(resolved, { plugin: plugins[plugin], meta: meta })}
+                        {React.createElement(resolved, { plugin: plugins[plugin], meta: meta, tab, subtab, subtab2 })}
                     </>;
 
                 } catch (error) {
                     //
                 }
+
             }
         } catch (error) {
             //

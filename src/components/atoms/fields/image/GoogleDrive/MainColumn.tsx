@@ -82,7 +82,7 @@ export default React.memo(function MainColumn({ resource, eventDragDropFile, han
                             display: "flex",
                             flexWrap: "wrap",
                             gap: '15px',
-                            padding: 1.25
+                            padding: 1.25,
                         }}
                     >
                         {

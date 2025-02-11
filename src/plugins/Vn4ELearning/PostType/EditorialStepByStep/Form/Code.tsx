@@ -1,4 +1,4 @@
-import { Box } from '@mui/material'
+import { Alert, Box, Typography } from '@mui/material'
 import FieldForm from 'components/atoms/fields/FieldForm';
 import { FieldFormItemProps } from 'components/atoms/fields/type'
 import React from 'react'
@@ -24,7 +24,12 @@ function Code(props: FieldFormItemProps) {
             } catch (error) {
                 temps = [];
             }
+            console.log(temps);
             setStepByStep(temps);
+        }
+
+        if (typeof props.post.step_by_step === 'object') {
+            setStepByStep(props.post.step_by_step);
         }
 
         isFirstLoad.current = false;
@@ -35,9 +40,9 @@ function Code(props: FieldFormItemProps) {
         if (!isFirstLoad.current) {
             setStepByStep((prev) => {
                 const temps: Array<ICodeStepByStep> = [];
-                (props.post.code as string)?.trim().split("\n").forEach((code, index) => {
+                (props.post.code_sample as string)?.trim().split("\n").forEach((code, index) => {
                     temps.push({
-                        code: code.replaceAll(' ','__'),
+                        code: code.replaceAll(' ', '__'),
                         position: prev[index]?.position !== undefined ? prev[index].position : (index ?? 0),
                         prePostion: prev[index]?.prePostion !== undefined ? prev[index].prePostion : -1,
                         comment: prev[index]?.comment !== undefined ? prev[index].comment : '',
@@ -46,7 +51,7 @@ function Code(props: FieldFormItemProps) {
                 return temps;
             });
         }
-    }, [props.post.code]);
+    }, [props.post.code_sample]);
 
     React.useEffect(() => {
         if (!isFirstLoad.current) {
@@ -56,17 +61,6 @@ function Code(props: FieldFormItemProps) {
 
     return (
         <Box>
-            <FieldForm
-                component='textarea'
-                config={{
-                    title: 'Code Editorial',
-                }}
-                name="code"
-                post={props.post}
-                onReview={(value: ANY, value2: ANY) => {
-                    props.onReview(value, 'code');
-                }}
-            />
             <Box
                 sx={{
                     display: 'flex',
@@ -75,85 +69,125 @@ function Code(props: FieldFormItemProps) {
                     mt: 2,
                 }}
             >
+                <Typography sx={{ fontSize: 16, fontWeight: 'bold' }}>Giải thích từng bước</Typography>
                 {
-                    stepByStep.map((step, index) => <Box
-                        key={index}
-                        sx={{
-                            border: '1px solid',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            borderColor: "divider",
-                            p: 1,
-                        }}
-                    >
-                        <Box
-                            sx={{
-                                width: 70,
-                            }}
-                        >
-                            <FieldForm
-                                component='number'
-                                config={{
-                                    title: false,
-                                    size: 'small',
+                    stepByStep.length > 0 ?
+                        <>
+                            <Box
+                                sx={{
+                                    border: '1px solid',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    borderColor: "divider",
+                                    p: 1,
                                 }}
-                                name="position"
-                                post={step}
-                                onReview={(value: ANY) => {
-                                    setStepByStep(prev => {
-                                        prev[index].position = value;
-                                        return prev;
-                                    })
+                            >
+                                <Box
+                                    sx={{
+                                        width: 70,
+                                    }}
+                                >
+                                    Bước
+                                </Box>
+                                <Box>
+                                    Xuất hiện trước bước hiện tại -1
+                                    <Typography variant='caption' sx={{ ml: 2 }}>
+                                        Chi hiện dòng trống
+                                    </Typography>
+                                </Box>
+                            </Box>
+                            {stepByStep.map((step, index) => <Box
+                                key={index}
+                                sx={{
+                                    border: '1px solid',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    borderColor: "divider",
+                                    p: 1,
                                 }}
-                            />
-                        </Box>
-                        <Box
-                            sx={{
-                                width: 70,
-                            }}
-                        >
-                            <FieldForm
-                                component='number'
-                                config={{
-                                    title: false,
-                                    size: 'small',
-                                }}
-                                name="prePostion"
-                                post={step}
-                                onReview={(value: ANY) => {
-                                    setStepByStep(prev => {
-                                        prev[index].prePostion = value;
-                                        return prev;
-                                    })
-                                }}
-                            />
-                        </Box>
-                        <Box
-                            dangerouslySetInnerHTML={{ __html: step.code.replace(' ', '&nbsp;') }}
-                        />
-                        <Box
-                            sx={{
-                                width: 200,
-                            }}
-                        >
-                            <FieldForm
-                                component='text'
-                                config={{
-                                    title: 'comment',
-                                    size: 'small',
-                                }}
-                                name="comment"
-                                post={step}
-                                onReview={(value: ANY) => {
-                                    setStepByStep(prev => {
-                                        prev[index].comment = value;
-                                        return prev;
-                                    })
-                                }}
-                            />
-                        </Box>
-                    </Box>)
+                            >
+                                <Box
+                                    sx={{
+                                        width: 70,
+                                    }}
+                                >
+                                    <FieldForm
+                                        component='number'
+                                        config={{
+                                            title: false,
+                                            size: 'small',
+                                        }}
+                                        name="position"
+                                        post={step}
+                                        onReview={(value: ANY) => {
+                                            setStepByStep(prev => {
+                                                prev[index].position = value;
+                                                return [...prev];
+                                            })
+                                        }}
+                                    />
+                                </Box>
+                                <Box
+                                    sx={{
+                                        width: 70,
+                                    }}
+                                >
+                                    <FieldForm
+                                        component='true_false'
+                                        config={{
+                                            title: false,
+                                            size: 'small',
+                                        }}
+                                        name="prePostion"
+                                        post={{
+                                            prePostion: step.prePostion !== -1
+                                        }}
+                                        onReview={(value: ANY) => {
+                                            setStepByStep(prev => {
+                                                prev[index].prePostion = value ? prev[index].position - 1 : -1;
+                                                return [...prev];
+                                            })
+                                        }}
+                                    />
+                                </Box>
+                                <Box
+                                    sx={{
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                    dangerouslySetInnerHTML={{ __html: step.code.replace(' ', '&nbsp;') }}
+                                />
+                                <Box
+                                    sx={{
+                                        width: 200,
+                                    }}
+                                >
+                                    <FieldForm
+                                        component='text'
+                                        config={{
+                                            title: 'comment',
+                                            size: 'small',
+                                        }}
+                                        name="comment"
+                                        post={step}
+                                        onReview={(value: ANY) => {
+                                            setStepByStep(prev => {
+                                                prev[index].comment = value;
+                                                return [...prev];
+                                            })
+                                        }}
+                                    />
+                                </Box>
+                            </Box>)
+                            }
+                        </>
+                        :
+                        <Alert severity="info">
+                            <Typography>
+                                Hãy nhập code sample để tạo giải thích từng bước
+                            </Typography>
+                        </Alert>
                 }
             </Box>
         </Box>
