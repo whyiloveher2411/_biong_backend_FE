@@ -57,7 +57,7 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
             }
             width={1300}
             {...data?.config?.dialogContent}
-            title={"Edit " + data?.config?.title ?? "Post"}
+            title={"Edit " + (data?.config?.title ?? "Post")}
             open={open}
             onClose={onClose}
         >
