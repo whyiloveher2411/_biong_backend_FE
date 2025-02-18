@@ -30,6 +30,7 @@ import React, { useCallback } from 'react';
 import { DragDropContext, Draggable, Droppable, DropResult } from 'react-beautiful-dnd';
 import SpecialNotes from '../SpecialNotes';
 import { FieldFormItemProps } from '../type';
+import useConfirmDialog from 'hook/useConfirmDialog';
 
 const useStyles = makeStyles((theme: Theme) => ({
     root: {
@@ -390,7 +391,13 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
             });
     }
 
+    const handleDeleteAll = () => {
+        post[name] = [];
+        onReview(post[name]);
+        setRender(prev => prev + 1);
+    }
 
+    const confirmDelete = useConfirmDialog();
 
     return (
         <FormControl className={classes.root} component="div">
@@ -406,6 +413,14 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                 <Box>
                     <Button color="inherit" onClick={handleCopyAll}>Copy</Button>
                     <Button sx={{ ml: 1, }} variant='outlined' onClick={handlePasteAll}>Paste</Button>
+                    <Button sx={{ ml: 1, }} variant='outlined' color='error' onClick={() => {
+                        confirmDelete.onConfirm(() => {
+                            handleDeleteAll();
+                        }, {
+                            message: 'Are you sure you want to delete all items?',
+                        });
+                    }}>Delete All</Button>
+                    {confirmDelete.component}
                 </Box>
             </Box>
             {

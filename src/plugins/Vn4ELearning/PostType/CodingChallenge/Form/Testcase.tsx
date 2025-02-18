@@ -128,6 +128,8 @@ function FormTestcase({ props, variableNames, testCase, onReview, setTimes }: { 
 
     const [isLoading, setIsLoading] = React.useState(false);
 
+    const [prompt, setPrompt] = React.useState('');
+
     const api = useAjax();
 
     function handleAddTestcaseByAI() {
@@ -139,6 +141,7 @@ function FormTestcase({ props, variableNames, testCase, onReview, setTimes }: { 
             data: {
                 id: props.post.id,
                 name: props.name,
+                prompt: prompt,
             },
             success: (res: ANY) => {
                 // setIsLoading(false);
@@ -160,6 +163,20 @@ function FormTestcase({ props, variableNames, testCase, onReview, setTimes }: { 
             post={{ value: testCase }}
             onReview={onReview}
         />
+        <Box sx={{ mt: 3 }}>
+            <FieldForm
+                component='textarea'
+                config={{
+                    title: 'Prompt',
+                    note: 'Nhập prompt để thêm yêu cầu cho ai',
+                }}
+                name={'prompt'}
+                post={{ prompt: prompt }}
+                onReview={(value: string) => {
+                    setPrompt(value);
+                }}
+            />
+        </Box>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <LoadingButton variant='contained' color='primary' onClick={handleAddTestcaseByAI} loading={isLoading}>Thêm testcase bằng AI</LoadingButton>
         </Box>
