@@ -91,7 +91,8 @@ const useStyles = makeStyles((theme: Theme) => ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            margin: 0
+            margin: 0,
+            width: '100%',
         }
     },
     accordionSummary: {
@@ -462,7 +463,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                                                                     {...provided.dragHandleProps}
                                                                     className={classes.accordionSummary}
                                                                 >
-                                                                    <Typography className={classes.heading} variant="body2">
+                                                                    <Typography className={classes.heading} variant="body2" noWrap>
                                                                         <span className={classes.stt}>{index + 1}.&nbsp;&nbsp;&nbsp;</span>{!item[keyTitle] ? 'Item' : (item[keyTitle] && typeof item[keyTitle] === 'object') ? item[keyTitle][0]?.title : item[keyTitle]}
                                                                         {
                                                                             item.star * 1 === 1 &&
