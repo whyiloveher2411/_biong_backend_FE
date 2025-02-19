@@ -317,7 +317,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                 .then(text => {
                     let itemFromclipboard = JSON.parse(text);
 
-                    if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
+                    // if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
                         if (itemFromclipboard.value) {
                             items[indexOfAction] = { ...itemFromclipboard.value, open: items[indexOfAction].open };
                             post[name] = items;
@@ -325,9 +325,9 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                         } else {
                             showMessage(__('Paste from clipboard error.'), 'warning');
                         }
-                    } else {
-                        showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
-                    }
+                    // } else {
+                    //     showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                    // }
 
                     setIndexOfAction(false);
                     onReview(post[name]);
