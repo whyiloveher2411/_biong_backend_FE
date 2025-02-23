@@ -369,7 +369,10 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                         component='select'
                                         config={{
                                             title: 'Key',
-                                            list_option: data.config.fields
+                                            list_option: {
+                                                status: { title: 'Trạng thái' },
+                                                ...data.config.fields,
+                                            }
                                         }}
                                         post={item}
                                         name='key'
@@ -414,9 +417,12 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                     {
                                         (() => {
                                             try {
-                                                let compoment = toCamelCase(data.config.fields[item.key].view ?? '');
+
+                                                let compoment = toCamelCase(data.config.fields[item.key]?.view ?? '');
                                                 //eslint-disable-next-line
                                                 let resolved = require('./FieldFiter/' + compoment).default;
+
+                                                
                                                 return React.createElement(resolved, {
                                                     config: data.config.fields[item.key],
                                                     data: item,
@@ -429,6 +435,17 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                                 });
                                             } catch (error) {
                                                 //
+                                            }
+
+                                            data.config.fields.status = {
+                                                title: 'Trạng thái',
+                                                view: 'select',
+                                                list_option: {
+                                                    publish: { title: 'Publish' },
+                                                    pending: { title: 'Pending' },
+                                                    draft: { title: 'Draft' },
+                                                    trash: { title: 'Trash' },
+                                                }
                                             }
 
                                             return <FieldForm
