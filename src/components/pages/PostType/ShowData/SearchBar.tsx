@@ -6,7 +6,7 @@ import Input from 'components/atoms/Input'
 import Paper from 'components/atoms/Paper'
 import Button from 'components/atoms/Button'
 import React from 'react'
-import { IconButton, Theme } from '@mui/material'
+import { IconButton, TextField, Theme, Typography } from '@mui/material'
 import { __ } from 'helpers/i18n'
 import DrawerCustom from 'components/molecules/DrawerCustom'
 import FieldForm from 'components/atoms/fields/FieldForm'
@@ -18,6 +18,7 @@ import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import { IActionPostType } from '../CreateData/Form'
 import useConfirmDialog from 'hook/useConfirmDialog'
 import useAjax from 'hook/useApi'
+import Dialog from 'components/molecules/Dialog'
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
         display: 'flex',
@@ -41,7 +42,7 @@ const useStyles = makeCSS((theme: Theme) => ({
     },
     search: {
         flexGrow: 1,
-        height: 42,
+        height: 42.5,
         gap: theme.spacing(2),
         padding: theme.spacing(0, 2),
         display: 'flex',
@@ -62,11 +63,18 @@ interface SearchBarProps {
         value: string,
     }>) => void,
     moreButton?: React.ReactNode,
+    setQueryUrl: React.Dispatch<React.SetStateAction<JsonFormat>>,
 }
 
-const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, moreButton, ...rest }: SearchBarProps) => {
+const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, moreButton, setQueryUrl, ...rest }: SearchBarProps) => {
 
-    const classes = useStyles()
+    const classes = useStyles();
+
+    const saveFilterApi = useAjax();
+
+    const [openDialogSaveFilter, setOpenDialogSaveFilter] = React.useState(false);
+
+    const [nameFilter, setNameFilter] = React.useState('');
 
     const [openFilter, setOpenFilter] = React.useState(false);
 
@@ -78,8 +86,14 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
         value: string,
     }>>([]);
 
-    const paramUrl = useQuery({ filters: '', search: '' });
+    const paramUrl = useQuery({ filters: '', search: '', filter_saved_name: '', sortKey: '', sortType: '' });
 
+    const [sortData, setSortData] = React.useState<{
+        sortKey: string,
+        sortType: string,
+    }>({ sortKey: paramUrl.sortKey?.toString() ?? '', sortType: paramUrl.sortType?.toString() ?? '' });
+
+    const [stateFilterSavedName, setStateFilterSavedName] = React.useState(paramUrl.filter_saved_name);
 
     const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
     const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
@@ -153,6 +167,30 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
 
     }
 
+    const handleSaveFilter = () => {
+        saveFilterApi.ajax({
+            url: '/post-type/save-filter',
+            method: 'POST',
+            data: {
+                name: nameFilter,
+                filters: JSON.stringify(filters),
+                sort: JSON.stringify(sortData),
+                post_type: type,
+            }
+        });
+    }
+
+    const handleDeleteFilterSaved = (index: number) => {
+        saveFilterApi.ajax({
+            url: '/post-type/delete-filter-saved',
+            method: 'POST',
+            data: {
+                post_type: type,
+                index: index,
+            }
+        });
+    }
+
     React.useEffect(() => {
 
         setInputValue(paramUrl.search + '');
@@ -163,6 +201,8 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
         } else {
             setFilters([]);
         }
+
+        setStateFilterSavedName(paramUrl.filter_saved_name);
 
     }, [type]);
 
@@ -177,6 +217,54 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                     display: 'flex',
                     gap: 2
                 }}>
+                    {
+                        data && data.config.filters_saved && data.config.filters_saved.length ?
+                            data.config.filters_saved.map((item, index) => (
+                                <Button variant='contained' color={(stateFilterSavedName === item.name) ? 'primary' : 'inherit'} onClick={() => {
+                                    setStateFilterSavedName(name => {
+                                        if (name === item.name) {
+                                            onFilter([]);
+                                            setFilters([]);
+                                            setQueryUrl(prev => {
+                                                return { ...prev, filter_saved_name: '', sortKey: '', sortType: '' };
+                                            });
+                                            return '';
+                                        }
+
+                                        onFilter(JSON.parse(item.filters));
+                                        setFilters(JSON.parse(item.filters));
+                                        let sort = { sortKey: '', sortType: '' };
+                                        try {
+                                            sort = JSON.parse(item.sort);
+                                        } catch (error) {
+                                            //
+                                        }
+                                        setSortData(sort);
+                                        setQueryUrl(prev => {
+                                            return {
+                                                ...prev,
+                                                ...sort,
+                                                filter_saved_name: item.name,
+                                            }
+                                        });
+                                        return item.name;
+                                    });
+                                }} key={index}
+                                    endIcon={<Icon icon='ClearRounded'
+                                        color="error"
+                                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                            e.stopPropagation();
+                                            confirm.onConfirm(() => {
+                                                handleDeleteFilterSaved(index);
+                                            }, {
+                                                message: 'Hành động này sẽ xóa filter đã lưu vĩnh viễn, bạn có chắc chắn muốn xóa filter này?'
+                                            });
+                                        }}
+                                    />}
+                                >{item.name}</Button>
+                            ))
+                            : null
+                    }
                     <Paper className={classes.search} elevation={2}>
                         <Icon icon="Search" className={classes.searchIcon} />
                         <Input
@@ -225,6 +313,8 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                     ))
                 }
 
+
+
                 <Button
                     {...(filters.length ? {
                         color: "primary",
@@ -233,7 +323,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         color: "inherit",
                         variant: 'outlined',
                     })}
-                    onClick={() => setOpenFilter(true)} >{__('Filter')}</Button>
+                    onClick={() => setOpenFilter(true)} >{__('Filter & Sort')}</Button>
 
                 {moreButton}
             </Grid>
@@ -242,6 +332,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             title="Filter"
             open={openFilter}
             activeOnClose
+            width={900}
             onClose={() => setOpenFilter(false)}
             restDialogContent={{
                 sx: {
@@ -250,13 +341,10 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             }}
             headerAction={<>
                 <Button
-                    variant='contained'
-                    color='success'
                     onClick={() => {
-                        onFilter(filters);
-                        setOpenFilter(false);
+                        setOpenDialogSaveFilter(true);
                     }}
-                >Apply Filter</Button>
+                    variant='contained'>Lưu filter</Button>
             </>}
         >
             <Box
@@ -271,27 +359,28 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         filters.map((item, index) => (
                             <Box key={index}
                                 sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '4fr 0.1fr 4fr 0.1fr',
+                                    display: 'flex',
                                     gap: 1,
                                     alignItems: 'center',
                                 }}
                             >
-                                <FieldForm
-                                    component='select'
-                                    config={{
-                                        title: 'Key',
-                                        list_option: data.config.fields
-                                    }}
-                                    post={item}
-                                    name='key'
-                                    onReview={(value) => {
-                                        setFilters(prev => {
-                                            prev[index].key = value;
-                                            return [...prev];
-                                        });
-                                    }}
-                                />
+                                <Box sx={{ width: '100%' }}>
+                                    <FieldForm
+                                        component='select'
+                                        config={{
+                                            title: 'Key',
+                                            list_option: data.config.fields
+                                        }}
+                                        post={item}
+                                        name='key'
+                                        onReview={(value) => {
+                                            setFilters(prev => {
+                                                prev[index].key = value;
+                                                return [...prev];
+                                            });
+                                        }}
+                                    />
+                                </Box>
                                 <MoreButton
                                     actions={[
                                         {
@@ -317,46 +406,46 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                     ]}
 
                                 >
-                                    <Button sx={{ fontSize: 20, fontWeight: 600 }}>
+                                    <Button sx={{ fontSize: 20, fontWeight: 600, flexShrink: 0, width: 100 }}>
                                         {item.condition}
                                     </Button>
                                 </MoreButton>
+                                <Box sx={{ width: '100%' }}>
+                                    {
+                                        (() => {
+                                            try {
+                                                let compoment = toCamelCase(data.config.fields[item.key].view ?? '');
+                                                //eslint-disable-next-line
+                                                let resolved = require('./FieldFiter/' + compoment).default;
+                                                return React.createElement(resolved, {
+                                                    config: data.config.fields[item.key],
+                                                    data: item,
+                                                    onReview: (value: ANY) => {
+                                                        setFilters(prev => {
+                                                            prev[index] = { ...prev[index], ...value };
+                                                            return [...prev];
+                                                        });
+                                                    }
+                                                });
+                                            } catch (error) {
+                                                //
+                                            }
 
-                                {
-                                    (() => {
-                                        try {
-                                            let compoment = toCamelCase(data.config.fields[item.key].view ?? '');
-                                            //eslint-disable-next-line
-                                            let resolved = require('./FieldFiter/' + compoment).default;
-                                            return React.createElement(resolved, {
-                                                config: data.config.fields[item.key],
-                                                data: item,
-                                                onReview: (value: ANY) => {
+                                            return <FieldForm
+                                                component={data.config.fields[item.key]?.view ?? 'text'}
+                                                config={data.config.fields[item.key]}
+                                                post={item}
+                                                name='value'
+                                                onReview={(value) => {
                                                     setFilters(prev => {
-                                                        prev[index] = { ...prev[index], ...value };
+                                                        prev[index].value = value;
                                                         return [...prev];
                                                     });
-                                                }
-                                            });
-                                        } catch (error) {
-                                            //
-                                        }
-
-                                        return <FieldForm
-                                            component={data.config.fields[item.key].view ?? 'text'}
-                                            config={data.config.fields[item.key]}
-                                            post={item}
-                                            name='value'
-                                            onReview={(value) => {
-                                                setFilters(prev => {
-                                                    prev[index].value = value;
-                                                    return [...prev];
-                                                });
-                                            }}
-                                        />
-                                    })()
-                                }
-
+                                                }}
+                                            />
+                                        })()
+                                    }
+                                </Box>
                                 <IconButton
                                     onClick={() => {
                                         setFilters(prev => {
@@ -364,6 +453,11 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                         });
                                     }}
                                     color="error"
+                                    sx={{
+                                        flexShrink: 0,
+                                        width: 40,
+                                        height: 40,
+                                    }}
                                 >
                                     <ClearRoundedIcon />
                                 </IconButton>
@@ -373,19 +467,114 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
 
                 }
             </Box>
+            {
+                data &&
+                <Box>
+                    <Typography variant='h4' sx={{ mb: 2, mt: 3 }}>Sort</Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            gap: 1,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Box sx={{ width: '100%' }}>
+                            <FieldForm
+                                component='select'
+                                config={{
+                                    title: 'Key',
+                                    list_option: {
+                                        'id': { title: 'ID' },
+                                        'order': { title: 'Sắp xếp' },
+                                        'created_at': { title: 'Ngày tạo' },
+                                        'updated_at': { title: 'Ngày cập nhật' },
+                                        ...data.config.fields
+                                    }
+                                }}
+                                post={sortData}
+                                name='sortKey'
+                                onReview={(value) => {
+                                    setQueryUrl(prev => {
+                                        return { ...prev, sortKey: value };
+                                    });
+                                    setSortData(prev => ({
+                                        ...prev,
+                                        sortKey: value,
+                                    }));
+                                }}
+                            />
+                        </Box>
+                        <Box sx={{ width: '100%' }}>
+                            <FieldForm
+                                component='select'
+                                config={{
+                                    title: 'Sắp xếp',
+                                    list_option: {
+                                        '0': { title: 'Giảm dần' },
+                                        '1': { title: 'Tăng dần' },
+                                    }
+                                }}
+                                post={sortData}
+                                name='sortType'
+                                onReview={(value) => {
+                                    setQueryUrl(prev => {
+                                        return { ...prev, sortType: value };
+                                    });
+                                    setSortData(prev => ({
+                                        ...prev,
+                                        sortType: value,
+                                    }));
+                                }}
+                            />
+                        </Box>
+                    </Box>
+                </Box>
+            }
             <Box
                 sx={{
                     display: 'flex',
-                    mt: 2,
+                    justifyContent: 'space-between',
+                    mt: 3,
                 }}
             >
-                <Button sx={{ ml: 'auto' }}
+                <Button
                     onClick={() => {
                         setFilters(prev => [...prev, { key: data ? Object.keys(data.config.fields)[0] : '', condition: '=', value: '' }]);
                     }}
                     variant='contained'>Thêm điều kiện</Button>
+                <Button
+                    variant='contained'
+                    color='success'
+                    onClick={() => {
+                        onFilter(filters);
+                        setOpenFilter(false);
+                    }}
+                >Apply Filter</Button>
+
             </Box>
         </DrawerCustom>
+
+        <Dialog
+            open={openDialogSaveFilter}
+            onClose={() => setOpenDialogSaveFilter(false)}
+            title='Lưu filter'
+            action={
+                <>
+                    <Button variant='contained' color='inherit' onClick={() => setOpenDialogSaveFilter(false)}>Hủy</Button>
+                    <Button variant='contained' color='success' onClick={() => {
+                        handleSaveFilter();
+                        setOpenDialogSaveFilter(false);
+                    }}>Lưu</Button>
+                </>
+            }
+        >
+            <TextField
+                fullWidth
+                label='Tên filter'
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+            />
+        </Dialog>
         {confirm.component}
     </>)
 }

@@ -150,6 +150,11 @@ export interface DataResultApiProps {
         fields: {
             [key: string]: FieldConfigProps
         },
+        filters_saved: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
         filters: {
             [key: string]: {
                 count: number,

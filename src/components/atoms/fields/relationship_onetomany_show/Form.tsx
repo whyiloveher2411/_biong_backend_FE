@@ -154,6 +154,11 @@ export interface DataResultApiProps {
         profile_picture: string | ImageProps
     }>,
     config: {
+        filters_saved: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
         [key: string]: any, //eslint-disable-line
         redirect: string | null,
         title: string,

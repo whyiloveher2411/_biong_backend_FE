@@ -112,8 +112,19 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                 if (result.config.redirect) {
                     navigate(result.config.redirect);
                 } else {
-
                     if (result.config && mounted) {
+
+                        try {
+                            if (typeof result.config.filters_saved === 'string') {
+                                result.config.filters_saved = JSON.parse(result.config.filters_saved);
+                            }
+                            if (typeof result.config.sort === 'string') {
+                                result.config.sort = JSON.parse(result.config.sort);
+                            }
+                        } catch (error) {
+                            // 
+                        }
+
                         result.type = type;
 
                         result.config.extendedTab = callAddOn('ShowData/Tabs', type, { list: { title: __('List'), priority: 1 } });
@@ -217,12 +228,12 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                     setQueryUrl={setQueryUrl}
                 />
             </div>
-            <Box sx={{width: '100%'}}>
+            <Box sx={{ width: '100%' }}>
                 <Box
-                sx={{
-                    display: 'flex',
-                    gap: 2,
-                }}
+                    sx={{
+                        display: 'flex',
+                        gap: 2,
+                    }}
                 >
                     <FilterTab
                         name={type}
@@ -235,6 +246,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                         type={type}
                         value={queryUrl.search}
                         onSearch={handleSearch}
+                        setQueryUrl={setQueryUrl}
                         onFilter={(filters) => {
                             setQueryUrl({
                                 ...queryUrl,
@@ -502,6 +514,11 @@ export interface ShowPostTypeData {
                 where: JsonFormat,
             },
         },
+        filters_saved: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
         label: {
             name: string,
             singularName: string,
