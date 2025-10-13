@@ -159,11 +159,10 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
             link = link.replace(process.env.REACT_APP_BASE_URL ?? '', '/');
         }
 
-
         img.onload = () => {
 
             let data: ImageObjectProps = {
-                link: link,
+                link: link.replace(/^\/\//, '/'),
                 type_link: type_link,
                 ext: linkImage.split('.').pop() ?? 'undefine',
                 width: img.width,
