@@ -35,7 +35,19 @@ const updatePlugin = (_state: object, action: PayloadAction<PluginsProps | undef
 
     window.__plugins = newState;
 
-    // localStorage.setItem("plugins", JSON.stringify(newState));
+    try {
+        // chỉ lưu plugin active/publish
+        const activeOnly: { [key: string]: ANY } = {};
+        Object.keys(newState).forEach(key => {
+            const p = newState[key];
+            if (p && (p.status === 'publish' || p.active === true)) {
+                activeOnly[key] = p;
+            }
+        });
+        localStorage.setItem('plugins', JSON.stringify(activeOnly));
+    } catch (_e) {
+        // ignore quota/corrupted
+    }
     return { ...newState };
 }
 
