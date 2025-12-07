@@ -9,6 +9,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FolderIcon from "@mui/icons-material/Folder";
 import { CreatePostTypeData } from "components/pages/PostType/CreateData";
 import { Collection } from "./types";
+import CircularProgress from "components/atoms/CircularProgress";
 
 interface DocumentDetailsColumnProps {
     selectedDocument: string | null;
@@ -17,7 +18,8 @@ interface DocumentDetailsColumnProps {
     data: CreatePostTypeData;
     documentData: Record<string, unknown>;
     onEditDocument: () => void;
-    subCollections: string[];
+    subCollections: Collection[];
+    ajaxSubCollections: { open: boolean };
 }
 
 const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
@@ -28,6 +30,7 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
     documentData,
     onEditDocument,
     subCollections,
+    ajaxSubCollections,
 }) => {
     const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(
         new Set()
@@ -375,11 +378,15 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                     gap: 0.5,
                                 }}
                             >
-                                {selectedDocument &&
-                                subCollections.length > 0 ? (
+                                {ajaxSubCollections.open ? (
+                                    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                                        <CircularProgress size={20} />
+                                    </Box>
+                                ) : selectedDocument &&
+                                  subCollections.length > 0 ? (
                                     subCollections.map((subCollection) => (
                                         <Box
-                                            key={subCollection}
+                                            key={subCollection.title}
                                             sx={{
                                                 p: 1,
                                                 borderRadius: "4px",
@@ -406,7 +413,7 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                                     fontWeight: "500",
                                                 }}
                                             >
-                                                {subCollection}
+                                                {subCollection.title}
                                             </Typography>
                                         </Box>
                                     ))
@@ -423,7 +430,7 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                         }}
                                     >
                                         <Typography variant="body2">
-                                            Chưa có sub collections
+                                            Không có sub collections
                                         </Typography>
                                     </Box>
                                 )}

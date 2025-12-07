@@ -12,48 +12,63 @@ import EditDocumentDrawer from "./EditDocumentDrawer";
 import { Collection } from "./types";
 
 const collectionInitialState: Collection = {
-  title: "",
-  icon: "",
-  fields: [],
-  status: "in-app",
+    title: "",
+    icon: "",
+    fields: [],
+    status: "in-app",
 };
 
 function Database({ data }: { data: CreatePostTypeData }) {
     const [collections, setCollections] = React.useState<Collection[]>([]);
-    const [documents, setDocuments] = React.useState<Array<{id: string, [key: string]: unknown}>>([]);
+    const [documents, setDocuments] = React.useState<
+        Array<{ id: string; [key: string]: unknown }>
+    >([]);
     const [collectionAction, setCollectionAction] = React.useState<{
-        action: "add" | "edit" | "delete",
-        oldCollectionName: string,
-        collection: Collection,
+        action: "add" | "edit" | "delete";
+        oldCollectionName: string;
+        collection: Collection;
     }>({
         action: "add",
         oldCollectionName: "",
         collection: collectionInitialState,
     });
 
-    const [selectedCollection, setSelectedCollection] = React.useState<string | null>(null);
-    const [selectedDocument, setSelectedDocument] = React.useState<string | null>(null);
-    const [documentData, setDocumentData] = React.useState<Record<string, unknown>>({});
+    const [selectedCollection, setSelectedCollection] = React.useState<
+        string | null
+    >(null);
+    const [selectedDocument, setSelectedDocument] = React.useState<
+        string | null
+    >(null);
+    const [documentData, setDocumentData] = React.useState<
+        Record<string, unknown>
+    >({});
     const [openAddCollection, setOpenAddCollection] = React.useState(false);
     const [openEditDocument, setOpenEditDocument] = React.useState(false);
-    const [editDocumentMode, setEditDocumentMode] = React.useState<"add" | "edit">("add");
-    const [subCollections, setSubCollections] = React.useState<string[]>([]);
+    const [editDocumentMode, setEditDocumentMode] = React.useState<
+        "add" | "edit"
+    >("add");
+    const [subCollections, setSubCollections] = React.useState<Collection[]>([]);
 
     const ajax = useAjax();
     const ajaxLoadData = useAjax();
     const ajaxDocuments = useAjax();
+    const ajaxSubCollections = useAjax();
     const ajaxDuplicate = useAjax();
     const ajaxDelete = useAjax();
 
     const getCollections = () => {
         ajaxLoadData.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/collections/index",
-            data: { id: data.post.id },
-            success: (result) => { setCollections(result.collections); },
+            data: { id: data.post.id, parent_path: "" },
+            success: (result) => {
+                setCollections(result.collections);
+            },
         });
     };
 
-    React.useEffect(() => { getCollections(); }, []);
+    React.useEffect(() => {
+        getCollections();
+    }, []);
 
     const handleCollectionClick = (collectionId: string) => {
         setSelectedCollection(collectionId);
@@ -61,10 +76,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
         handleGetDocumentsByCollectionName(collectionId);
     };
 
-    const handleDocumentClick = (documentId: string) => { 
+    const handleDocumentClick = (documentId: string) => {
         setSelectedDocument(documentId);
         // Tìm document data từ documents array đã có sẵn
-        const document = documents.find(doc => doc.id === documentId);
+        const document = documents.find((doc) => doc.id === documentId);
         if (document) {
             // Loại bỏ id field để chỉ lấy data fields
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -76,12 +91,20 @@ function Database({ data }: { data: CreatePostTypeData }) {
 
     const handleAddCollection = () => {
         setOpenAddCollection(true);
-        setCollectionAction({ action: "add", oldCollectionName: "", collection: collectionInitialState });
+        setCollectionAction({
+            action: "add",
+            oldCollectionName: "",
+            collection: collectionInitialState,
+        });
     };
 
     const handleEditCollection = (collection: Collection) => {
         setOpenAddCollection(true);
-        setCollectionAction({ action: "edit", oldCollectionName: collection.title, collection });
+        setCollectionAction({
+            action: "edit",
+            oldCollectionName: collection.title,
+            collection,
+        });
     };
 
     const handleDeleteCollection = (collection: Collection) => {
@@ -93,7 +116,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 delete_collection_name: collection.title,
             },
             success: (result) => {
-                if (result.success) { getCollections(); setOpenAddCollection(false); }
+                if (result.success) {
+                    getCollections();
+                    setOpenAddCollection(false);
+                }
             },
         });
     };
@@ -102,7 +128,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
         ajaxDocuments.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
             data: { id: data.post.id, collection_name: collectionName },
-            success: (result) => { 
+            success: (result) => {
                 if (result.success) {
                     setDocuments(result.documents || []);
                 }
@@ -110,21 +136,29 @@ function Database({ data }: { data: CreatePostTypeData }) {
         });
     };
 
-    const handleGetSubCollections = (parentCollectionName: string, document_id: string) => {
-        ajaxDocuments.ajax({
-        url: "plugin/vn4-e-learning/app-mobile/database/documents/get-subcollections",
-        data: { id: data.post.id, collection_name: parentCollectionName, document_id },
-        success: (result) => {
-            if (result.success) {
-                setSubCollections(result.sub_collections || []);
-            }
-        },
-    });
-};
+    const handleGetSubCollections = (
+        parentCollectionName: string,
+        document_id: string
+    ) => {
+        
+        ajaxSubCollections.ajax({
+
+            url: "plugin/vn4-e-learning/app-mobile/database/collections/index",
+            data: { id: data.post.id, parent_path: parentCollectionName+'/'+document_id },
+            success: (result) => {
+                if (result.success) {
+                    setSubCollections(result.collections || []);
+                }
+            },
+        });
+    };
 
     const handleSaveCollection = () => {
         ajax.ajax({
-            url: collectionAction.action === "add" ? "plugin/vn4-e-learning/app-mobile/database/collections/create" : "plugin/vn4-e-learning/app-mobile/database/collections/update",
+            url:
+                collectionAction.action === "add"
+                    ? "plugin/vn4-e-learning/app-mobile/database/collections/create"
+                    : "plugin/vn4-e-learning/app-mobile/database/collections/update",
             method: "POST",
             data: {
                 id: data.post.id,
@@ -133,7 +167,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 old_collection_name: collectionAction.oldCollectionName,
             },
             success: (result) => {
-                if (result.success) { getCollections(); setOpenAddCollection(false); }
+                if (result.success) {
+                    getCollections();
+                    setOpenAddCollection(false);
+                }
             },
         });
     };
@@ -143,7 +180,11 @@ function Database({ data }: { data: CreatePostTypeData }) {
         ajaxDuplicate.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/documents/duplicate",
             method: "POST",
-            data: { id: data.post.id, collection_name: selectedCollection, document_id: documentId },
+            data: {
+                id: data.post.id,
+                collection_name: selectedCollection,
+                document_id: documentId,
+            },
             success: (result) => {
                 if (result?.success) {
                     const newId = result.new_document_id;
@@ -196,7 +237,12 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     mb: 2,
                 }}
             >
-                <LoadingButton  variant="contained" color="primary" loading={ajax.open} onClick={handleGetIndexes}>
+                <LoadingButton
+                    variant="contained"
+                    color="primary"
+                    loading={ajax.open}
+                    onClick={handleGetIndexes}
+                >
                     Sync Data
                 </LoadingButton>
             </Box>
@@ -230,19 +276,32 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     documents={documents}
                     onDuplicateDocument={handleDuplicateDocument}
                     canAddDocument={(() => {
-                        const c = collections.find(i => i.title === selectedCollection);
-                        return !!(c && Array.isArray(c.fields) && c.fields.length > 0);
+                        const c = collections.find(
+                            (i) => i.title === selectedCollection
+                        );
+                        return !!(
+                            c &&
+                            Array.isArray(c.fields) &&
+                            c.fields.length > 0
+                        );
                     })()}
                     onDeleteDocument={(documentId) => {
                         if (!selectedCollection) return;
                         ajaxDelete.ajax({
                             url: "plugin/vn4-e-learning/app-mobile/database/documents/delete",
                             method: "POST",
-                            data: { id: data.post.id, collection_name: selectedCollection, document_id: documentId },
+                            data: {
+                                id: data.post.id,
+                                collection_name: selectedCollection,
+                                document_id: documentId,
+                            },
                             success: (result) => {
                                 if (result?.success) {
-                                    handleGetDocumentsByCollectionName(selectedCollection);
-                                    if (selectedDocument === documentId) setSelectedDocument(null);
+                                    handleGetDocumentsByCollectionName(
+                                        selectedCollection
+                                    );
+                                    if (selectedDocument === documentId)
+                                        setSelectedDocument(null);
                                 }
                             },
                         });
@@ -257,24 +316,46 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     documentData={documentData}
                     onEditDocument={handleEditDocument}
                     subCollections={subCollections}
+                    ajaxSubCollections={ajaxSubCollections}
                 />
             </Box>
             <DrawerCustom
                 title="Thêm collection"
                 open={openAddCollection}
-                onClose={() => { setOpenAddCollection(false); }}
+                onClose={() => {
+                    setOpenAddCollection(false);
+                }}
                 activeOnClose
                 headerAction={
-                    <LoadingButton variant="contained" color="success" loading={ajax.open} onClick={handleSaveCollection}>
-                        {collectionAction.action === "add" ? "Thêm" : "Cập nhật"} collection
+                    <LoadingButton
+                        variant="contained"
+                        color="success"
+                        loading={ajax.open}
+                        onClick={handleSaveCollection}
+                    >
+                        {collectionAction.action === "add"
+                            ? "Thêm"
+                            : "Cập nhật"}{" "}
+                        collection
                     </LoadingButton>
                 }
             >
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 3 }}>
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        pt: 3,
+                    }}
+                >
                     <FieldForm
                         data={data}
                         component="text"
-                        config={{ label: "Tên collection", placeholder: "Nhập tên collection", required: true }}
+                        config={{
+                            label: "Tên collection",
+                            placeholder: "Nhập tên collection",
+                            required: true,
+                        }}
                         name="title"
                         post={collectionAction.collection}
                         onReview={(title) => {
@@ -305,10 +386,13 @@ function Database({ data }: { data: CreatePostTypeData }) {
                         config={{
                             label: "Icon (optional)",
                             placeholder: "Nhập icon",
-                            special_notes: [{
-                              type: 'warning',
-                              content: 'Lưu ý icon phải đúng với material icon, nếu không chương trình sẽ crash, tham khảo thêm tại đây: https://mui.com/material-ui/material-icons/',
-                            }],
+                            special_notes: [
+                                {
+                                    type: "warning",
+                                    content:
+                                        "Lưu ý icon phải đúng với material icon, nếu không chương trình sẽ crash, tham khảo thêm tại đây: https://mui.com/material-ui/material-icons/",
+                                },
+                            ],
                             required: true,
                         }}
                         name="icon"
@@ -357,7 +441,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
                         config={{
                             label: "Indexes",
                             note: "Thiết lập các chỉ mục cho collection để tối ưu truy vấn",
-                            layout: 'block',
+                            layout: "block",
                             sub_fields: {
                                 name: { title: "Tên index", view: "text" },
                                 unique: { title: "Unique", view: "true_false" },
@@ -370,16 +454,42 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                             view: "select",
                                             // list_option sẽ được bind runtime từ các field hiện có
                                             list_option: (() => {
-                                                const opts: Record<string, { title: string }> = {};
-                                                const fieldsArr = Array.isArray(collectionAction.collection.fields) ? collectionAction.collection.fields : [];
-                                                fieldsArr.forEach((f) => { if (f?.title) opts[String(f.title)] = { title: String(f.title) }; });
-                                                return Object.keys(opts).length ? opts : { _placeholder: { title: "Chưa có field" } };
+                                                const opts: Record<
+                                                    string,
+                                                    { title: string }
+                                                > = {};
+                                                const fieldsArr = Array.isArray(
+                                                    collectionAction.collection
+                                                        .fields
+                                                )
+                                                    ? collectionAction
+                                                          .collection.fields
+                                                    : [];
+                                                fieldsArr.forEach((f) => {
+                                                    if (f?.title)
+                                                        opts[String(f.title)] =
+                                                            {
+                                                                title: String(
+                                                                    f.title
+                                                                ),
+                                                            };
+                                                });
+                                                return Object.keys(opts).length
+                                                    ? opts
+                                                    : {
+                                                          _placeholder: {
+                                                              title: "Chưa có field",
+                                                          },
+                                                      };
                                             })(),
                                         },
                                         order: {
                                             title: "Thứ tự",
                                             view: "select",
-                                            list_option: { asc: { title: "asc" }, desc: { title: "desc" } },
+                                            list_option: {
+                                                asc: { title: "asc" },
+                                                desc: { title: "desc" },
+                                            },
                                         },
                                     },
                                 },
@@ -400,7 +510,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
             <EditDocumentDrawer
                 open={openEditDocument}
                 onClose={handleCloseEditDocument}
-                selectedDocument={editDocumentMode === "edit" ? selectedDocument : null}
+                selectedDocument={
+                    editDocumentMode === "edit" ? selectedDocument : null
+                }
                 selectedCollection={selectedCollection}
                 collections={collections}
                 data={data}
@@ -412,5 +524,3 @@ function Database({ data }: { data: CreatePostTypeData }) {
 }
 
 export default Database;
-
-
