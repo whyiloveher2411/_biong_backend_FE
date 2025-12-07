@@ -110,6 +110,8 @@ export interface FieldFielManagerProp {
     config: JsonFormat,
     values: JsonFormat,
     fileType?: string[],
+    // Số cột tối đa khi hiển thị dạng grid
+    maxColumns?: number,
 }
 
 export interface StateConfigProps {
@@ -138,7 +140,7 @@ export interface StateResourceProps {
     version: number,
 }
 
-function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, fileType: fileTypeFromParent }: FieldFielManagerProp) {
+function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, fileType: fileTypeFromParent, maxColumns }: FieldFielManagerProp) {
 
     const classes = useStyles();
 
@@ -741,6 +743,7 @@ function GoogleDrive({ handleChooseFile, filesActive, config: configFromParent, 
                                         sx={{
                                             width: '100%'
                                         }}
+                                        maxColumns={maxColumns}
                                         onClick={(e: ANY) => {
                                             if (!e.ctrlKey) {
                                                 fileSelected[1](prev => ({ ...prev, file: null }))

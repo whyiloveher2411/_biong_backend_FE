@@ -8,6 +8,7 @@ import Database from './Database';
 import FileManager from './FileManager';
 import PushNotification from './PushNotification';
 import Analytics from './Analytics';
+import Modules from './Modules';
 
 export default function (props: CreatePostTypeData) {
     console.log(props.action);
@@ -46,6 +47,11 @@ export default function (props: CreatePostTypeData) {
             analytics: {
                 title: __p('Analytics', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Analytics data={props.data} />,
+                priority: 3,
+            },
+            modules: {
+                title: __p('Modules', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <Modules data={props.data} />,
                 priority: 3,
             },
             // customers: {

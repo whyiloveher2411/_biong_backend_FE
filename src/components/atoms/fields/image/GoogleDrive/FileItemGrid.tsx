@@ -23,19 +23,20 @@ const useStyles = makeCSS((theme: Theme) => ({
             backgroundColor: theme.palette.dividerDark
         },
         ['@media(min-width: 668px)']: {
-            width: 'calc( (100% - 36px) / 4 )',
+            // Giới hạn theo biến CSS --maxCols nếu có
+            width: 'calc( (100% - 36px) / var(--gridCols-md, 4) )',
         },
         ['@media(min-width: 1082px)']: {
-            width: 'calc( (100% - 36px) / 8 )',
+            width: 'calc( (100% - 36px) / var(--gridCols-lg, 8) )',
         },
         ['@media(min-width: 1576px)']: {
-            width: 'calc( (100% - 36px) / 12 )',
+            width: 'calc( (100% - 36px) / var(--gridCols-xl, 12) )',
         },
         ['@media(min-width: 1902px)']: {
-            width: 'calc( (100% - 36px) / 16 )',
+            width: 'calc( (100% - 36px) / var(--gridCols-2xl, 16) )',
         },
         ['@media(min-width: 2228px)']: {
-            width: 'calc( (100% - 36px) / 18 )',
+            width: 'calc( (100% - 36px) / var(--gridCols-3xl, 18) )',
         },
     },
     padding: {

@@ -25,9 +25,10 @@ interface MainColumnProps {
     eventDragDropFile: FileDragDropProps,
     handleOnLoadDir: (path?: null | string, loadLocation?: boolean | null, version?: number, loading?: boolean, callback?: ((result: JsonFormat) => void) | null) => void,
     filesActive: [{ [key: string]: ANY; }, React.Dispatch<React.SetStateAction<{ [key: string]: ANY; }>>],
+    maxColumns?: number,
 }
 // --------------------------------------------------------------
-export default React.memo(function MainColumn({ resource, eventDragDropFile, handleOnLoadDir, filesActive, ...rest }: MainColumnProps) {
+export default React.memo(function MainColumn({ resource, eventDragDropFile, handleOnLoadDir, filesActive, maxColumns, ...rest }: MainColumnProps) {
 
     const {
         onDoubleClickDir,
@@ -83,6 +84,14 @@ export default React.memo(function MainColumn({ resource, eventDragDropFile, han
                             flexWrap: "wrap",
                             gap: '15px',
                             padding: 1.25,
+                            // Truyền CSS variables để FileItemGrid giới hạn số cột theo từng breakpoint
+                            ...(maxColumns ? {
+                                '--gridCols-md': Math.min(4, maxColumns),
+                                '--gridCols-lg': Math.min(8, maxColumns),
+                                '--gridCols-xl': Math.min(12, maxColumns),
+                                '--gridCols-2xl': Math.min(16, maxColumns),
+                                '--gridCols-3xl': Math.min(18, maxColumns),
+                            } : {}),
                         }}
                     >
                         {

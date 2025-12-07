@@ -23,8 +23,6 @@ export default React.memo(function TrueFalseForm({ config, post, onReview, name,
         }
     }
 
-    console.log(post[name]);
-
     if (config.isChecked) {
         return <><FormControlLabel
             style={{ marginRight: 24 }}
