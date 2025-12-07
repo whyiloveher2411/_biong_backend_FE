@@ -6,6 +6,7 @@ import AddCircleIcon from "@mui/icons-material/AddCircle";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
+import CloseIcon from "@mui/icons-material/Close";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import useConfirmDialog from "hook/useConfirmDialog";
@@ -21,6 +22,7 @@ interface DocumentsColumnProps {
   onDuplicateDocument: (documentId: string) => void;
   onDeleteDocument: (documentId: string) => void;
   canAddDocument?: boolean;
+  onCloseColumn?: () => void;
 }
 
 const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
@@ -33,6 +35,7 @@ const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
   onDuplicateDocument,
   onDeleteDocument,
   canAddDocument = true,
+  onCloseColumn,
 }) => {
   const confirmDelete = useConfirmDialog();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -72,15 +75,28 @@ const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
               >
                   Documents
               </Typography>
-              <IconButton 
-                  color="primary"
-                  component="button"
-                  sx={{ p: 0.5 }}
-                  onClick={onAddDocument}
-                  disabled={!selectedCollection || !canAddDocument}
-              >
-                  <AddCircleIcon />
-              </IconButton>
+              <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                  {onCloseColumn && (
+                      <IconButton 
+                          size="small"
+                          component="button"
+                          sx={{ p: 0.5 }}
+                          onClick={onCloseColumn}
+                          title="Đóng"
+                      >
+                          <CloseIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                  )}
+                  <IconButton 
+                      color="primary"
+                      component="button"
+                      sx={{ p: 0.5 }}
+                      onClick={onAddDocument}
+                      disabled={!selectedCollection || !canAddDocument}
+                  >
+                      <AddCircleIcon />
+                  </IconButton>
+              </Box>
           </Box>
           {selectedCollection ? (
               <Box

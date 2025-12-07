@@ -4,6 +4,8 @@ import Box from "components/atoms/Box";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import FieldForm from "components/atoms/fields/FieldForm";
 import LoadingButton from "components/atoms/LoadingButton";
+import Breadcrumbs from "components/atoms/Breadcrumbs";
+import Typography from "components/atoms/Typography";
 import useAjax from "hook/useApi";
 import CollectionsColumn from "./CollectionsColumn";
 import DocumentsColumn from "./DocumentsColumn";
@@ -16,6 +18,11 @@ const collectionInitialState: Collection = {
     icon: "",
     fields: [],
     status: "in-app",
+};
+
+type ColumnConfig = {
+    component: React.ComponentType<Record<string, unknown>>;
+    props: Record<string, unknown>;
 };
 
 function Database({ data }: { data: CreatePostTypeData }) {
@@ -47,7 +54,25 @@ function Database({ data }: { data: CreatePostTypeData }) {
     const [editDocumentMode, setEditDocumentMode] = React.useState<
         "add" | "edit"
     >("add");
+    const [openSubCollectionEditDocument, setOpenSubCollectionEditDocument] = React.useState<
+        Record<string, boolean>
+    >({});
+    const [subCollectionEditDocumentMode, setSubCollectionEditDocumentMode] = React.useState<
+        Record<string, "add" | "edit">
+    >({});
     const [subCollections, setSubCollections] = React.useState<Collection[]>([]);
+    const [subCollectionColumns, setSubCollectionColumns] = React.useState<
+        Array<{
+            id: string;
+            parentPath: string;
+            collectionName: string;
+            collectionData?: Collection; // Lưu collection data để dùng trong DocumentDetailsColumn
+            documents: Array<{ id: string; [key: string]: unknown }>;
+            selectedDocument: string | null;
+            documentData?: Record<string, unknown>;
+            subCollections?: Collection[];
+        }>
+    >([]);
 
     const ajax = useAjax();
     const ajaxLoadData = useAjax();
@@ -55,6 +80,22 @@ function Database({ data }: { data: CreatePostTypeData }) {
     const ajaxSubCollections = useAjax();
     const ajaxDuplicate = useAjax();
     const ajaxDelete = useAjax();
+    
+    // Map để lưu loading state cho mỗi sub-collection column (documents loading)
+    const [subCollectionLoading, setSubCollectionLoading] = React.useState<
+        Record<string, boolean>
+    >({});
+    
+    // Map để lưu loading state cho sub-collections của mỗi column (riêng biệt)
+    const [subCollectionSubCollectionsLoading, setSubCollectionSubCollectionsLoading] = React.useState<
+        Record<string, boolean>
+    >({});
+    
+    // Ajax instance riêng cho sub-collections của sub-collection columns
+    const ajaxSubCollectionSubCollections = useAjax();
+    
+    // Ref để scroll đến column cuối
+    const columnsContainerRef = React.useRef<HTMLDivElement>(null);
 
     const getCollections = () => {
         ajaxLoadData.ajax({
@@ -70,14 +111,41 @@ function Database({ data }: { data: CreatePostTypeData }) {
         getCollections();
     }, []);
 
+    // Auto scroll đến column cuối khi documents được load hoặc document detail được hiển thị
+    React.useEffect(() => {
+        if (columnsContainerRef.current) {
+            // Sử dụng requestAnimationFrame để đảm bảo DOM đã render xong
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    if (columnsContainerRef.current) {
+                        columnsContainerRef.current.scrollTo({
+                            left: columnsContainerRef.current.scrollWidth,
+                            behavior: "smooth",
+                        });
+                    }
+                }, 50);
+            });
+        }
+    }, [documents, selectedDocument, subCollectionColumns]);
+
     const handleCollectionClick = (collectionId: string) => {
+        // Nếu collection đang active, không làm gì cả
+        if (selectedCollection === collectionId) {
+            return;
+        }
         setSelectedCollection(collectionId);
         setSelectedDocument(null);
         handleGetDocumentsByCollectionName(collectionId);
     };
 
     const handleDocumentClick = (documentId: string) => {
+        // Nếu document đang active, không làm gì cả
+        if (selectedDocument === documentId) {
+            return;
+        }
         setSelectedDocument(documentId);
+        // Reset sub-collection columns khi chọn document mới
+        setSubCollectionColumns([]);
         // Tìm document data từ documents array đã có sẵn
         const document = documents.find((doc) => doc.id === documentId);
         if (document) {
@@ -140,14 +208,308 @@ function Database({ data }: { data: CreatePostTypeData }) {
         parentCollectionName: string,
         document_id: string
     ) => {
-        
         ajaxSubCollections.ajax({
-
             url: "plugin/vn4-e-learning/app-mobile/database/collections/index",
             data: { id: data.post.id, parent_path: parentCollectionName+'/'+document_id },
             success: (result) => {
                 if (result.success) {
                     setSubCollections(result.collections || []);
+                }
+            },
+        });
+    };
+
+    const handleSubCollectionClick = (
+        subCollection: Collection,
+        parentPath: string
+    ) => {
+        const columnId = `${parentPath}/${subCollection.title}`;
+        
+        // Kiểm tra xem column đã tồn tại và đang active chưa
+        const existingColumn = subCollectionColumns.find(
+            (col) => col.id === columnId
+        );
+        
+        // Nếu column đã tồn tại và đang active (có documents), không làm gì cả
+        if (existingColumn && existingColumn.documents.length > 0) {
+            return;
+        }
+        
+        // Xóa tất cả các column cùng level (cùng parentPath) và các column con
+        // Xóa các columns có parentPath === parentPath (cùng level)
+        // Xóa các columns có parentPath bắt đầu bằng parentPath + "/" (các column con)
+        setSubCollectionColumns((prev) => {
+            return prev.filter((col) => {
+                // Giữ lại các column không cùng level và không phải là column con
+                // Column cùng level: có parentPath === parentPath
+                // Column con: có parentPath bắt đầu bằng parentPath + "/"
+                return col.parentPath !== parentPath && !col.parentPath.startsWith(parentPath + "/");
+            });
+        });
+
+        // Xóa loading states của các column đã bị xóa
+        // Xóa loading states của các columns cùng level (có key bắt đầu bằng parentPath + "/")
+        // và các columns con (có key bắt đầu bằng parentPath + "/" + ...)
+        setSubCollectionLoading((prev) => {
+            const newState: Record<string, boolean> = {};
+            Object.keys(prev).forEach((key) => {
+                // key là columnId có format: parentPath/collectionName
+                // Giữ lại loading state nếu key không bắt đầu bằng parentPath + "/"
+                if (!key.startsWith(parentPath + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        setSubCollectionSubCollectionsLoading((prev) => {
+            const newState: Record<string, boolean> = {};
+            Object.keys(prev).forEach((key) => {
+                // key là columnId, giữ lại nếu không bắt đầu bằng parentPath + "/"
+                if (!key.startsWith(parentPath + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        // Luôn thêm column mới (hoặc thêm lại nếu đã bị xóa ở trên)
+        const newColumn = {
+            id: columnId,
+            parentPath: parentPath,
+            collectionName: subCollection.title,
+            collectionData: subCollection, // Lưu collection data để dùng sau
+            documents: [],
+            selectedDocument: null,
+        };
+
+        setSubCollectionColumns((prev) => [...prev, newColumn]);
+        setSubCollectionLoading((prev) => ({ ...prev, [columnId]: true }));
+
+        // Gọi API để lấy documents
+        // Gộp parent_path và collection_name thành collection_name
+        const fullCollectionName = parentPath
+            ? `${parentPath}/${subCollection.title}`
+            : subCollection.title;
+        ajax.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
+            data: {
+                id: data.post.id,
+                collection_name: fullCollectionName,
+            },
+            success: (result) => {
+                if (result.success) {
+                    setSubCollectionColumns((prev) =>
+                        prev.map((col) =>
+                            col.id === columnId
+                                ? { ...col, documents: result.documents || [] }
+                                : col
+                        )
+                    );
+                }
+                setSubCollectionLoading((prev) => ({ ...prev, [columnId]: false }));
+            },
+            error: () => {
+                setSubCollectionLoading((prev) => ({ ...prev, [columnId]: false }));
+            },
+        });
+    };
+
+    const handleSubCollectionDocumentClick = (
+        columnId: string,
+        documentId: string
+    ) => {
+        const column = subCollectionColumns.find((col) => col.id === columnId);
+        if (!column) return;
+
+        // Nếu document đang active, không làm gì cả
+        if (column.selectedDocument === documentId) {
+            return;
+        }
+
+        // Tìm document data từ documents array
+        const document = column.documents.find((doc) => doc.id === documentId);
+        if (document) {
+            // Loại bỏ id field để chỉ lấy data fields
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, ...fields } = document;
+            
+            // Cập nhật selectedDocument và documentData
+            setSubCollectionColumns((prev) =>
+                prev.map((col) =>
+                    col.id === columnId
+                        ? { ...col, selectedDocument: documentId, documentData: fields }
+                        : col
+                )
+            );
+
+            // Load sub-collections cho document này
+            const fullCollectionName = column.parentPath
+                ? `${column.parentPath}/${column.collectionName}`
+                : column.collectionName;
+            const parentPath = `${fullCollectionName}/${documentId}`;
+            
+            setSubCollectionSubCollectionsLoading((prev) => ({ ...prev, [columnId]: true }));
+            // Sử dụng ajax instance riêng để tránh conflict với column 3
+            ajaxSubCollectionSubCollections.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/database/collections/index",
+                data: { id: data.post.id, parent_path: parentPath },
+                success: (result) => {
+                    if (result.success) {
+                        setSubCollectionColumns((prev) =>
+                            prev.map((col) =>
+                                col.id === columnId
+                                    ? { ...col, subCollections: result.collections || [] }
+                                    : col
+                            )
+                        );
+                    }
+                    setSubCollectionSubCollectionsLoading((prev) => ({ ...prev, [columnId]: false }));
+                },
+                error: () => {
+                    setSubCollectionSubCollectionsLoading((prev) => ({ ...prev, [columnId]: false }));
+                },
+            });
+        } else {
+            // Nếu không tìm thấy document, chỉ cập nhật selectedDocument
+            setSubCollectionColumns((prev) =>
+                prev.map((col) =>
+                    col.id === columnId
+                        ? { ...col, selectedDocument: documentId }
+                        : col
+                )
+            );
+        }
+    };
+
+    const handleRemoveSubCollectionColumn = (columnId: string) => {
+        const column = subCollectionColumns.find((col) => col.id === columnId);
+        if (!column) return;
+
+        // Xóa column và tất cả các column con
+        setSubCollectionColumns((prev) => {
+            return prev.filter((col) => {
+                // Xóa column hiện tại và tất cả column con
+                return col.id !== columnId && !col.parentPath.startsWith(columnId + "/");
+            });
+        });
+
+        // Xóa loading states và edit document states
+        setSubCollectionLoading((prev) => {
+            const newState: Record<string, boolean> = {};
+            Object.keys(prev).forEach((key) => {
+                if (key !== columnId && !key.startsWith(columnId + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        setSubCollectionSubCollectionsLoading((prev) => {
+            const newState: Record<string, boolean> = {};
+            Object.keys(prev).forEach((key) => {
+                if (key !== columnId && !key.startsWith(columnId + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        setOpenSubCollectionEditDocument((prev) => {
+            const newState: Record<string, boolean> = {};
+            Object.keys(prev).forEach((key) => {
+                if (key !== columnId && !key.startsWith(columnId + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        setSubCollectionEditDocumentMode((prev) => {
+            const newState: Record<string, "add" | "edit"> = {};
+            Object.keys(prev).forEach((key) => {
+                if (key !== columnId && !key.startsWith(columnId + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+    };
+
+    const handleSubCollectionAddDocument = (columnId: string) => {
+        setSubCollectionEditDocumentMode((prev) => ({ ...prev, [columnId]: "add" }));
+        setOpenSubCollectionEditDocument((prev) => ({ ...prev, [columnId]: true }));
+    };
+
+    const handleSubCollectionEditDocument = (columnId: string) => {
+        setSubCollectionEditDocumentMode((prev) => ({ ...prev, [columnId]: "edit" }));
+        setOpenSubCollectionEditDocument((prev) => ({ ...prev, [columnId]: true }));
+    };
+
+    const handleSubCollectionCloseEditDocument = (columnId: string) => {
+        setOpenSubCollectionEditDocument((prev) => ({ ...prev, [columnId]: false }));
+    };
+
+    const handleSubCollectionDocumentSaved = (columnId: string) => {
+        const column = subCollectionColumns.find((col) => col.id === columnId);
+        if (!column) return;
+
+        const fullCollectionName = column.parentPath
+            ? `${column.parentPath}/${column.collectionName}`
+            : column.collectionName;
+
+        ajax.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
+            data: {
+                id: data.post.id,
+                collection_name: fullCollectionName,
+            },
+            success: (result) => {
+                if (result.success) {
+                    setSubCollectionColumns((prev) =>
+                        prev.map((col) =>
+                            col.id === columnId
+                                ? { ...col, documents: result.documents || [] }
+                                : col
+                        )
+                    );
+                }
+            },
+        });
+    };
+
+    const handleSubCollectionDuplicateDocument = (
+        columnId: string,
+        documentId: string
+    ) => {
+        const column = subCollectionColumns.find((col) => col.id === columnId);
+        if (!column) return;
+
+        const fullCollectionName = column.parentPath
+            ? `${column.parentPath}/${column.collectionName}`
+            : column.collectionName;
+
+        ajaxDuplicate.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/documents/duplicate",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                collection_name: fullCollectionName,
+                document_id: documentId,
+            },
+            success: (result) => {
+                if (result?.success) {
+                    const newId = result.new_document_id;
+                    handleSubCollectionDocumentSaved(columnId);
+                    if (newId) {
+                        setSubCollectionColumns((prev) =>
+                            prev.map((col) =>
+                                col.id === columnId
+                                    ? { ...col, selectedDocument: newId }
+                                    : col
+                            )
+                        );
+                    }
                 }
             },
         });
@@ -227,55 +589,31 @@ function Database({ data }: { data: CreatePostTypeData }) {
         });
     };
 
-    return (
-        <>
-            <Box
-                sx={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: 2,
-                    mb: 2,
-                }}
-            >
-                <LoadingButton
-                    variant="contained"
-                    color="primary"
-                    loading={ajax.open}
-                    onClick={handleGetIndexes}
-                >
-                    Sync Data
-                </LoadingButton>
-            </Box>
-            <Box
-                sx={{
-                    display: "flex",
-                    height: "70vh",
-                    minHeight: "500px",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    backgroundColor: "#ffffff",
-                }}
-            >
-                <CollectionsColumn
-                    collections={collections}
-                    selectedCollection={selectedCollection}
-                    ajaxLoadData={ajaxLoadData}
-                    onCollectionClick={handleCollectionClick}
-                    onAddCollection={handleAddCollection}
-                    onEditCollection={handleEditCollection}
-                    onDeleteCollection={handleDeleteCollection}
-                />
-
-                <DocumentsColumn
-                    selectedCollection={selectedCollection}
-                    selectedDocument={selectedDocument}
-                    onDocumentClick={handleDocumentClick}
-                    onAddDocument={handleAddDocument}
-                    ajaxDocuments={ajaxDocuments}
-                    documents={documents}
-                    onDuplicateDocument={handleDuplicateDocument}
-                    canAddDocument={(() => {
+    const columns = React.useMemo<ColumnConfig[]>(
+        () => [
+            {
+                component: CollectionsColumn as unknown as React.ComponentType<Record<string, unknown>>,
+                props: {
+                    collections,
+                    selectedCollection,
+                    ajaxLoadData,
+                    onCollectionClick: handleCollectionClick,
+                    onAddCollection: handleAddCollection,
+                    onEditCollection: handleEditCollection,
+                    onDeleteCollection: handleDeleteCollection,
+                },
+            },
+            {
+                component: DocumentsColumn as unknown as React.ComponentType<Record<string, unknown>>,
+                props: {
+                    selectedCollection,
+                    selectedDocument,
+                    onDocumentClick: handleDocumentClick,
+                    onAddDocument: handleAddDocument,
+                    ajaxDocuments,
+                    documents,
+                    onDuplicateDocument: handleDuplicateDocument,
+                    canAddDocument: (() => {
                         const c = collections.find(
                             (i) => i.title === selectedCollection
                         );
@@ -284,8 +622,8 @@ function Database({ data }: { data: CreatePostTypeData }) {
                             Array.isArray(c.fields) &&
                             c.fields.length > 0
                         );
-                    })()}
-                    onDeleteDocument={(documentId) => {
+                    })(),
+                    onDeleteDocument: (documentId: string) => {
                         if (!selectedCollection) return;
                         ajaxDelete.ajax({
                             url: "plugin/vn4-e-learning/app-mobile/database/documents/delete",
@@ -305,19 +643,374 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                 }
                             },
                         });
-                    }}
-                />
+                    },
+                },
+            },
+            {
+                component: DocumentDetailsColumn as unknown as React.ComponentType<Record<string, unknown>>,
+                props: {
+                    selectedDocument,
+                    collections,
+                    selectedCollection,
+                    data,
+                    documentData,
+                    onEditDocument: handleEditDocument,
+                    subCollections,
+                    ajaxSubCollections,
+                    activeSubCollections: (() => {
+                        if (!selectedCollection || !selectedDocument) return [];
+                        const parentPath = `${selectedCollection}/${selectedDocument}`;
+                        // Tìm các sub-collection đang active (có column tương ứng trong subCollectionColumns)
+                        return subCollectionColumns
+                            .filter((col) => col.parentPath === parentPath)
+                            .map((col) => col.collectionName);
+                    })(),
+                    onSubCollectionClick: (subCollection: Collection) => {
+                        if (!selectedCollection || !selectedDocument) return;
+                        const parentPath = `${selectedCollection}/${selectedDocument}`;
+                        // Thêm sub-collection column mới (giữ nguyên column hiện tại)
+                        handleSubCollectionClick(subCollection, parentPath);
+                    },
+                },
+            },
+            // Thêm các sub-collection columns động
+            ...subCollectionColumns.flatMap((subCol) => {
+                const fullCollectionName = subCol.parentPath
+                    ? `${subCol.parentPath}/${subCol.collectionName}`
+                    : subCol.collectionName;
+                
+                const columns: ColumnConfig[] = [
+                    {
+                        component: DocumentsColumn as unknown as React.ComponentType<Record<string, unknown>>,
+                        props: {
+                            selectedCollection: subCol.collectionName,
+                            selectedDocument: subCol.selectedDocument,
+                            onDocumentClick: (documentId: string) =>
+                                handleSubCollectionDocumentClick(subCol.id, documentId),
+                            onAddDocument: () => handleSubCollectionAddDocument(subCol.id),
+                            ajaxDocuments: {
+                                open: subCollectionLoading[subCol.id] || false,
+                            },
+                            documents: subCol.documents,
+                            onDuplicateDocument: (documentId: string) =>
+                                handleSubCollectionDuplicateDocument(subCol.id, documentId),
+                    canAddDocument: (() => {
+                        const c = collections.find(
+                            (i) => i.title === subCol.collectionName
+                        );
+                        return !!(
+                            c &&
+                            Array.isArray(c.fields) &&
+                            c.fields.length > 0
+                        );
+                    })(),
+                            onDeleteDocument: (documentId: string) => {
+                                ajaxDelete.ajax({
+                                    url: "plugin/vn4-e-learning/app-mobile/database/documents/delete",
+                                    method: "POST",
+                                    data: {
+                                        id: data.post.id,
+                                        collection_name: fullCollectionName,
+                                        document_id: documentId,
+                                    },
+                                    success: (result) => {
+                                        if (result?.success) {
+                                            handleSubCollectionDocumentSaved(subCol.id);
+                                            setSubCollectionColumns((prev) =>
+                                                prev.map((col) =>
+                                                    col.id === subCol.id
+                                                        ? {
+                                                              ...col,
+                                                              selectedDocument:
+                                                                  col.selectedDocument ===
+                                                                  documentId
+                                                                      ? null
+                                                                      : col.selectedDocument,
+                                                          }
+                                                        : col
+                                                )
+                                            );
+                                        }
+                                    },
+                                });
+                            },
+                            onCloseColumn: () => handleRemoveSubCollectionColumn(subCol.id),
+                        },
+                    },
+                ];
 
-                <DocumentDetailsColumn
-                    selectedDocument={selectedDocument}
-                    collections={collections}
-                    selectedCollection={selectedCollection}
-                    data={data}
-                    documentData={documentData}
-                    onEditDocument={handleEditDocument}
-                    subCollections={subCollections}
-                    ajaxSubCollections={ajaxSubCollections}
-                />
+                // Thêm DocumentDetailsColumn nếu có selectedDocument
+                // Sử dụng documentData nếu có, nếu không thì dùng empty object (sẽ được load sau)
+                if (subCol.selectedDocument) {
+                    // Tìm collection từ collectionData đã lưu, hoặc từ collections array, hoặc từ subCollections
+                    const collectionForDetails = subCol.collectionData 
+                        || collections.find((c) => c.title === subCol.collectionName)
+                        || subCol.subCollections?.find((c) => c.title === subCol.collectionName);
+                    
+                    // Tạo collections array bao gồm cả collection chính và sub-collections
+                    const collectionsForDetails = collectionForDetails
+                        ? [
+                              ...collections.filter((c) => c.title !== subCol.collectionName),
+                              collectionForDetails,
+                              ...(subCol.subCollections || []).filter(
+                                  (c) => c.title !== subCol.collectionName
+                              ),
+                          ]
+                        : [
+                              ...collections,
+                              ...(subCol.subCollections || []),
+                          ];
+                    
+                    columns.push({
+                        component: DocumentDetailsColumn as unknown as React.ComponentType<Record<string, unknown>>,
+                        props: {
+                            selectedDocument: subCol.selectedDocument,
+                            collections: collectionsForDetails,
+                            selectedCollection: subCol.collectionName,
+                            data,
+                            documentData: subCol.documentData || {},
+                            onEditDocument: () => handleSubCollectionEditDocument(subCol.id),
+                            subCollections: subCol.subCollections || [],
+                            ajaxSubCollections: {
+                                open: subCollectionSubCollectionsLoading[subCol.id] || false,
+                            },
+                            activeSubCollections: (() => {
+                                if (!subCol.selectedDocument) return [];
+                                const newParentPath = `${fullCollectionName}/${subCol.selectedDocument}`;
+                                // Tìm các sub-collection đang active (có column tương ứng trong subCollectionColumns)
+                                return subCollectionColumns
+                                    .filter((col) => col.parentPath === newParentPath)
+                                    .map((col) => col.collectionName);
+                            })(),
+                            onSubCollectionClick: (subCollection: Collection) => {
+                                if (!subCol.selectedDocument) return;
+                                const newParentPath = `${fullCollectionName}/${subCol.selectedDocument}`;
+                                // Thêm sub-collection column mới (giữ nguyên column hiện tại)
+                                handleSubCollectionClick(subCollection, newParentPath);
+                            },
+                        },
+                    });
+                }
+
+                return columns;
+            }),
+        ],
+        [
+            collections,
+            selectedCollection,
+            selectedDocument,
+            documents,
+            documentData,
+            subCollections,
+            subCollectionColumns,
+            subCollectionLoading,
+            subCollectionSubCollectionsLoading,
+            ajaxLoadData,
+            ajaxDocuments,
+            ajaxSubCollections,
+            ajaxSubCollectionSubCollections,
+            ajaxDelete,
+            ajax,
+            ajaxDuplicate,
+            data,
+        ]
+    );
+
+    // Tính toán breadcrumb items
+    const breadcrumbItems = React.useMemo(() => {
+        const items: Array<{ label: string; onClick?: () => void; isActive?: boolean }> = [
+            {
+                label: "Collections",
+                onClick: () => {
+                    setSelectedCollection(null);
+                    setSelectedDocument(null);
+                    setSubCollectionColumns([]);
+                },
+            },
+        ];
+
+        if (selectedCollection) {
+            items.push({
+                label: selectedCollection,
+                onClick: () => {
+                    setSelectedDocument(null);
+                    setSubCollectionColumns([]);
+                    handleGetDocumentsByCollectionName(selectedCollection);
+                },
+            });
+        }
+
+        if (selectedDocument) {
+            const document = documents.find((doc) => doc.id === selectedDocument);
+            const documentName = document
+                ? String(document.name || document.title || selectedDocument)
+                : selectedDocument;
+            items.push({
+                label: documentName,
+                isActive: true,
+            });
+        }
+
+        // Thêm các sub-collection từ subCollectionColumns
+        subCollectionColumns.forEach((subCol, colIndex) => {
+            items.push({
+                label: subCol.collectionName,
+                onClick: () => {
+                    // Xóa tất cả columns sau column này
+                    const columnIndex = subCollectionColumns.findIndex(
+                        (col) => col.id === subCol.id
+                    );
+                    if (columnIndex !== -1) {
+                        setSubCollectionColumns((prev) => {
+                            const newColumns = prev.slice(0, columnIndex + 1);
+                            // Reset selectedDocument và documentData cho column này
+                            return newColumns.map((col, idx) =>
+                                idx === columnIndex
+                                    ? { ...col, selectedDocument: null, documentData: undefined, subCollections: [] }
+                                    : col
+                            );
+                        });
+                        // Reload documents cho sub-collection này
+                        const fullCollectionName = subCol.parentPath
+                            ? `${subCol.parentPath}/${subCol.collectionName}`
+                            : subCol.collectionName;
+                        ajaxDocuments.ajax({
+                            url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
+                            data: {
+                                id: data.post.id,
+                                collection_name: fullCollectionName,
+                            },
+                            success: (result) => {
+                                if (result.success) {
+                                    setSubCollectionColumns((prev) =>
+                                        prev.map((col) =>
+                                            col.id === subCol.id
+                                                ? { ...col, documents: result.documents || [] }
+                                                : col
+                                        )
+                                    );
+                                }
+                            },
+                        });
+                    }
+                },
+            });
+
+            if (subCol.selectedDocument) {
+                const document = subCol.documents.find(
+                    (doc) => doc.id === subCol.selectedDocument
+                );
+                const documentName = document
+                    ? String(document.name || document.title || subCol.selectedDocument)
+                    : subCol.selectedDocument;
+                items.push({
+                    label: documentName,
+                    isActive: colIndex === subCollectionColumns.length - 1,
+                });
+            }
+        });
+
+        return items;
+    }, [selectedCollection, selectedDocument, documents, subCollectionColumns, handleGetDocumentsByCollectionName, ajaxDocuments, data.post.id]);
+
+    return (
+        <>
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 2,
+                    mb: 2,
+                }}
+            >
+                <Breadcrumbs
+                    separator="›"
+                    sx={{
+                        flex: 1,
+                        "& .MuiBreadcrumbs-ol": {
+                            flexWrap: "nowrap",
+                        },
+                    }}
+                >
+                    {breadcrumbItems.map((item, index) => {
+                        const isLast = index === breadcrumbItems.length - 1 || item.isActive;
+                        return isLast ? (
+                            <Typography
+                                key={index}
+                                sx={{
+                                    color: "text.primary",
+                                    fontWeight: 500,
+                                    fontSize: "14px",
+                                }}
+                            >
+                                {item.label}
+                            </Typography>
+                        ) : (
+                            <Typography
+                                key={index}
+                                component="button"
+                                onClick={item.onClick}
+                                sx={{
+                                    color: "primary.main",
+                                    cursor: "pointer",
+                                    fontSize: "14px",
+                                    background: "none",
+                                    border: "none",
+                                    padding: 0,
+                                    font: "inherit",
+                                    "&:hover": {
+                                        textDecoration: "underline",
+                                    },
+                                }}
+                            >
+                                {item.label}
+                            </Typography>
+                        );
+                    })}
+                </Breadcrumbs>
+                <LoadingButton
+                    variant="contained"
+                    color="primary"
+                    loading={ajax.open}
+                    onClick={handleGetIndexes}
+                >
+                    Sync Data
+                </LoadingButton>
+            </Box>
+            <Box
+                ref={columnsContainerRef}
+                sx={{
+                    display: "flex",
+                    height: "70vh",
+                    minHeight: "500px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "8px",
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    backgroundColor: "#ffffff",
+                    "&::-webkit-scrollbar": {
+                        height: "8px",
+                    },
+                    "&::-webkit-scrollbar-track": {
+                        backgroundColor: "#f1f1f1",
+                        borderRadius: "4px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                        backgroundColor: "#888",
+                        borderRadius: "4px",
+                        "&:hover": {
+                            backgroundColor: "#555",
+                        },
+                    },
+                }}
+            >
+                {columns.map((column, index) => {
+                    const ColumnComponent = column.component;
+                    return (
+                        <ColumnComponent key={index} {...column.props} />
+                    );
+                })}
             </Box>
             <DrawerCustom
                 title="Thêm collection"
@@ -519,6 +1212,50 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 documentData={editDocumentMode === "edit" ? documentData : {}}
                 onSaved={handleDocumentSaved}
             />
+
+            {/* EditDocumentDrawer cho các sub-collection columns */}
+            {subCollectionColumns.map((subCol) => {
+                const fullCollectionName = subCol.parentPath
+                    ? `${subCol.parentPath}/${subCol.collectionName}`
+                    : subCol.collectionName;
+                
+                // Tìm collection thực sự trong mảng collections
+                const actualCollection = collections.find(
+                    (c) => c.title === subCol.collectionName
+                );
+                
+                // Tạo một collection object với title là fullCollectionName để EditDocumentDrawer có thể tìm thấy
+                // nhưng vẫn dùng fields từ collection thực sự
+                const collectionForDrawer = actualCollection
+                    ? { ...actualCollection, title: fullCollectionName }
+                    : undefined;
+                
+                const collectionsForDrawer = collectionForDrawer
+                    ? [...collections.filter((c) => c.title !== subCol.collectionName), collectionForDrawer]
+                    : collections;
+                
+                return (
+                    <EditDocumentDrawer
+                        key={subCol.id}
+                        open={openSubCollectionEditDocument[subCol.id] || false}
+                        onClose={() => handleSubCollectionCloseEditDocument(subCol.id)}
+                        selectedDocument={
+                            subCollectionEditDocumentMode[subCol.id] === "edit"
+                                ? subCol.selectedDocument
+                                : null
+                        }
+                        selectedCollection={fullCollectionName}
+                        collections={collectionsForDrawer}
+                        data={data}
+                        documentData={
+                            subCollectionEditDocumentMode[subCol.id] === "edit" && subCol.documentData
+                                ? subCol.documentData
+                                : {}
+                        }
+                        onSaved={() => handleSubCollectionDocumentSaved(subCol.id)}
+                    />
+                );
+            })}
         </>
     );
 }

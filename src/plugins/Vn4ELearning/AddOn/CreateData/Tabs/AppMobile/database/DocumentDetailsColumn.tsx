@@ -20,6 +20,8 @@ interface DocumentDetailsColumnProps {
     onEditDocument: () => void;
     subCollections: Collection[];
     ajaxSubCollections: { open: boolean };
+    onSubCollectionClick?: (subCollection: Collection) => void;
+    activeSubCollections?: string[]; // Danh sách các sub-collection đang active (đã được mở)
 }
 
 const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
@@ -31,6 +33,8 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
     onEditDocument,
     subCollections,
     ajaxSubCollections,
+    onSubCollectionClick,
+    activeSubCollections = [],
 }) => {
     const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(
         new Set()
@@ -313,10 +317,11 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
         <Box
             sx={{
                 flex: 1,
-                minWidth: "400px",
+                minWidth: "600px",
                 backgroundColor: "#fafafa",
                 display: "flex",
                 flexDirection: "column",
+                borderRight: "1px solid #e0e0e0",
             }}
         >
             <Box
@@ -384,9 +389,16 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                     </Box>
                                 ) : selectedDocument &&
                                   subCollections.length > 0 ? (
-                                    subCollections.map((subCollection) => (
+                                    subCollections.map((subCollection) => {
+                                        const isActive = activeSubCollections.includes(subCollection.title);
+                                        return (
                                         <Box
                                             key={subCollection.title}
+                                            onClick={() => {
+                                                if (onSubCollectionClick) {
+                                                    onSubCollectionClick(subCollection);
+                                                }
+                                            }}
                                             sx={{
                                                 p: 1,
                                                 borderRadius: "4px",
@@ -394,8 +406,10 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                                 alignItems: "center",
                                                 gap: 1,
                                                 cursor: "pointer",
+                                                backgroundColor: isActive ? "#e3f2fd" : "transparent",
+                                                border: isActive ? "1px solid #1976d2" : "1px solid transparent",
                                                 "&:hover": {
-                                                    backgroundColor: "#f5f5f5",
+                                                    backgroundColor: isActive ? "#e3f2fd" : "#f5f5f5",
                                                 },
                                             }}
                                         >
@@ -409,14 +423,15 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                                 variant="body2"
                                                 sx={{
                                                     fontSize: "13px",
-                                                    color: "#1976d2",
-                                                    fontWeight: "500",
+                                                    color: isActive ? "#1976d2" : "#1976d2",
+                                                    fontWeight: isActive ? "600" : "500",
                                                 }}
                                             >
                                                 {subCollection.title}
                                             </Typography>
                                         </Box>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <Box
                                         sx={{
