@@ -37,6 +37,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
     const [openAddCollection, setOpenAddCollection] = React.useState(false);
     const [openEditDocument, setOpenEditDocument] = React.useState(false);
     const [editDocumentMode, setEditDocumentMode] = React.useState<"add" | "edit">("add");
+    const [subCollections, setSubCollections] = React.useState<string[]>([]);
 
     const ajax = useAjax();
     const ajaxLoadData = useAjax();
@@ -69,6 +70,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { id, ...fields } = document;
             setDocumentData(fields);
+            handleGetSubCollections(selectedCollection || "", documentId);
         }
     };
 
@@ -107,6 +109,18 @@ function Database({ data }: { data: CreatePostTypeData }) {
             },
         });
     };
+
+    const handleGetSubCollections = (parentCollectionName: string, document_id: string) => {
+        ajaxDocuments.ajax({
+        url: "plugin/vn4-e-learning/app-mobile/database/documents/get-subcollections",
+        data: { id: data.post.id, collection_name: parentCollectionName, document_id },
+        success: (result) => {
+            if (result.success) {
+                setSubCollections(result.sub_collections || []);
+            }
+        },
+    });
+};
 
     const handleSaveCollection = () => {
         ajax.ajax({
@@ -242,6 +256,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     data={data}
                     documentData={documentData}
                     onEditDocument={handleEditDocument}
+                    subCollections={subCollections}
                 />
             </Box>
             <DrawerCustom
