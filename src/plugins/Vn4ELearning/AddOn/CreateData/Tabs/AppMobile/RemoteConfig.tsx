@@ -41,32 +41,34 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
         handleGetData();
     }, []);
 
-    const handleUpdateGroup = (groupKey: string) => {
-        setUpdatingGroups(prev => new Set(prev).add(groupKey));
+    const handleUpdateGroup = (templateKey: string, groupKey?: string) => {
+        const updateKey = groupKey ? `${templateKey}_${groupKey}` : templateKey;
+        setUpdatingGroups(prev => new Set(prev).add(updateKey));
         
         // Lọc chỉ các fields thuộc group được chọn
         let groupData: JsonFormat = {};
         
-        if (groupKey === 'untemplated') {
-            // Lấy các fields không có trong bất kỳ template nào
-            groupData = Object.keys(remoteConfig).reduce((acc: JsonFormat, key) => {
-                const isInAnyTemplate = Object.keys(templates).some(templateKey => 
-                    templates[templateKey].fields && templates[templateKey].fields[key]
-                );
-                if (!isInAnyTemplate) {
-                    acc[key] = remoteConfig[key as keyof typeof remoteConfig];
-                }
-                return acc;
-            }, {});
+        if (groupKey) {
+            // Lấy các fields thuộc group cụ thể
+            const template = templates[templateKey];
+            const group = template?.groups?.[groupKey];
+            if (group && group.fields) {
+                group.fields.forEach((fieldKey: string) => {
+                    if (Object.prototype.hasOwnProperty.call(remoteConfig, fieldKey)) {
+                        groupData[fieldKey] = remoteConfig[fieldKey as keyof typeof remoteConfig];
+                    }
+                });
+            }
         } else {
-            // Lấy các fields thuộc template group được chọn
-            const groupFields = templates[groupKey]?.fields || {};
-            groupData = Object.keys(groupFields).reduce((acc: JsonFormat, fieldKey) => {
-                if (Object.prototype.hasOwnProperty.call(remoteConfig, fieldKey)) {
-                    acc[fieldKey] = remoteConfig[fieldKey as keyof typeof remoteConfig];
-                }
-                return acc;
-            }, {});
+            // Lấy tất cả fields của template (bao gồm cả các fields trong groups nếu có)
+            const template = templates[templateKey];
+            if (template?.fields) {
+                Object.keys(template.fields).forEach((fieldKey: string) => {
+                    if (Object.prototype.hasOwnProperty.call(remoteConfig, fieldKey)) {
+                        groupData[fieldKey] = remoteConfig[fieldKey as keyof typeof remoteConfig];
+                    }
+                });
+            }
         }
         
         useApi.ajax({
@@ -76,24 +78,112 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                 action: 'update',
                 id: data.post.id,
                 data: groupData,
-                group: groupKey
+                group: updateKey
             },
             success: (result) => {
                 setUpdatingGroups(prev => {
                     const newSet = new Set(prev);
-                    newSet.delete(groupKey);
+                    newSet.delete(updateKey);
                     return newSet;
                 });
             },
             error: () => {
                 setUpdatingGroups(prev => {
                     const newSet = new Set(prev);
-                    newSet.delete(groupKey);
+                    newSet.delete(updateKey);
                     return newSet;
                 });
             }
         });
     }
+
+    const renderFields = (templateKey: string, fieldKeys: string[]) => {
+        const template = templates[templateKey];
+        return fieldKeys.map((fieldKey: string) => {
+            const field = template?.fields?.[fieldKey];
+            if (!field) return null;
+            
+            return (
+                <FieldForm
+                    key={fieldKey}
+                    component={field.view || 'text'}
+                    config={{
+                        ...field,
+                    }}
+                    name={fieldKey}
+                    post={remoteConfig}
+                    onReview={(value) => {
+                        setRemoteConfig((prev) => ({
+                            ...prev,
+                            [fieldKey]: value,
+                        }))
+                    }}
+                />
+            );
+        }).filter(Boolean);
+    };
+
+    const renderTemplateContent = (templateKey: string) => {
+        const template = templates[templateKey];
+        if (!template) return null;
+        
+        const hasGroups = template?.groups && Object.keys(template.groups).length > 0;
+        
+        if (hasGroups) {
+            // Nếu có groups: render mỗi group là 1 card
+            return (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {Object.keys(template.groups).map((groupKey: string) => {
+                        const group = template.groups[groupKey];
+                        
+                        return (
+                            <Card key={groupKey}>
+                                <CardContent>
+                                    <Box sx={{ mb: 3 }}>
+                                        <Typography variant="h6" gutterBottom>
+                                            {group.title}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                            {group.description || 'Không có mô tả'}
+                                        </Typography>
+                                        <Divider />
+                                    </Box>
+                                    
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                        {renderFields(templateKey, group.fields || [])}
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </Box>
+            );
+        } else {
+            // Nếu không có groups: render tất cả fields trong 1 card
+            const allFieldKeys = Object.keys(template.fields || {});
+            if (allFieldKeys.length === 0) return null;
+            
+            return (
+                <Card>
+                    <CardContent>
+                        <Box sx={{ mb: 3 }}>
+                            <Typography variant="h6" gutterBottom>
+                                {template.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                {template.description || 'Không có mô tả'}
+                            </Typography>
+                            <Divider />
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {renderFields(templateKey, allFieldKeys)}
+                        </Box>
+                    </CardContent>
+                </Card>
+            );
+        }
+    };
 
     return (
         <Box sx={{ height: '100%' }}>
@@ -231,103 +321,72 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
 
                     {/* Cột phải - Content của group được chọn */}
                     <Grid item xs={12} md={8}>
-                        <Card sx={{ height: '100%' }}>
-                            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ flex: 1, overflow: 'auto' }}>
                                 {selectedGroup && (templates[selectedGroup] || selectedGroup === 'untemplated') ? (
                                     <>
-                                        <Box sx={{ mb: 3 }}>
-                                            <Typography variant="h5" gutterBottom>
-                                                {selectedGroup === 'untemplated' ? 'Untemplated Fields' : templates[selectedGroup].title}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                                {selectedGroup === 'untemplated' 
-                                                    ? 'Các trường chưa được định nghĩa trong template' 
-                                                    : templates[selectedGroup].description || 'Không có mô tả'
-                                                }
-                                            </Typography>
-                                            <Divider />
-                                        </Box>
-
-                                        <Box sx={{ flex: 1 }}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                                {selectedGroup === 'untemplated' ? (
-                                                    /* Render các trường không có template */
-                                                    (() => {
-                                                        const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                                            return !Object.keys(templates).some(groupKey => 
-                                                                templates[groupKey].fields && templates[groupKey].fields[key]
-                                                            );
-                                                        });
-                                                        
-                                                        return untemplatedFields.map((key: string) => (
-                                                            <FieldForm
-                                                                key={key}
-                                                                component="textarea"
-                                                                config={{
-                                                                    title: `${key} ⚠️ (Chưa config template)`,
-                                                                    view: "textarea",
-                                                                    placeholder: "Giá trị hiện tại...",
-                                                                    inputProps: {
-                                                                        endAdornment: (
-                                                                            <InputAdornment position="end">
-                                                                                <Tooltip title="Trường chưa được config template - hiển thị dưới dạng textarea">
-                                                                                    <IconButton size="small" color="warning">
-                                                                                        <Warning fontSize="small" />
-                                                                                    </IconButton>
-                                                                                </Tooltip>
-                                                                            </InputAdornment>
-                                                                        )
-                                                                    }
-                                                                }}
-                                                                name={key}
-                                                                post={remoteConfig}
-                                                                onReview={(value) => {
-                                                                    setRemoteConfig((prev) => ({
-                                                                        ...prev,
-                                                                        [key]: value,
-                                                                    }))
-                                                                }}
-                                                            />
-                                                        ));
-                                                    })()
-                                                ) : (
-                                                    /* Render các trường của group được chọn */
-                                                    Object.keys(templates[selectedGroup].fields || {}).map((fieldKey: string) => {
-                                                        const field = templates[selectedGroup].fields[fieldKey];
-                                                        return (
-                                                            <FieldForm
-                                                                key={fieldKey}
-                                                                component={field.view || 'text'}
-                                                                config={{
-                                                                    ...field,
-                                                                }}
-                                                                name={fieldKey}
-                                                                post={remoteConfig}
-                                                                onReview={(value) => {
-                                                                    setRemoteConfig((prev) => ({
-                                                                        ...prev,
-                                                                        [fieldKey]: value,
-                                                                    }))
-                                                                }}
-                                                            />
-                                                        );
-                                                    })
-                                                )}
-                                            </Box>
-                                        </Box>
-
-                                        {/* Button update cho group hiện tại */}
-                                        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                                            <LoadingButton 
-                                                loading={updatingGroups.has(selectedGroup)}
-                                                variant="contained" 
-                                                color="primary" 
-                                                onClick={() => handleUpdateGroup(selectedGroup)}
-                                                fullWidth
-                                            >
-                                                Update {selectedGroup === 'untemplated' ? 'Untemplated Fields' : templates[selectedGroup].title}
-                                            </LoadingButton>
-                                        </Box>
+                                        {selectedGroup === 'untemplated' ? (
+                                            /* Render các trường không có template */
+                                            (() => {
+                                                const untemplatedFields = Object.keys(remoteConfig).filter(key => {
+                                                    return !Object.keys(templates).some(groupKey => 
+                                                        templates[groupKey].fields && templates[groupKey].fields[key]
+                                                    );
+                                                });
+                                                
+                                                return (
+                                                    <Card>
+                                                        <CardContent>
+                                                            <Box sx={{ mb: 3 }}>
+                                                                <Typography variant="h6" gutterBottom>
+                                                                    Untemplated Fields ⚠️
+                                                                </Typography>
+                                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                                    Các trường chưa được định nghĩa trong template
+                                                                </Typography>
+                                                                <Divider />
+                                                            </Box>
+                                                            
+                                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                                                {untemplatedFields.map((key: string) => (
+                                                                    <FieldForm
+                                                                        key={key}
+                                                                        component="textarea"
+                                                                        config={{
+                                                                            title: `${key} ⚠️ (Chưa config template)`,
+                                                                            view: "textarea",
+                                                                            placeholder: "Giá trị hiện tại...",
+                                                                            inputProps: {
+                                                                                endAdornment: (
+                                                                                    <InputAdornment position="end">
+                                                                                        <Tooltip title="Trường chưa được config template - hiển thị dưới dạng textarea">
+                                                                                            <IconButton size="small" color="warning">
+                                                                                                <Warning fontSize="small" />
+                                                                                            </IconButton>
+                                                                                        </Tooltip>
+                                                                                    </InputAdornment>
+                                                                                )
+                                                                            }
+                                                                        }}
+                                                                        name={key}
+                                                                        post={remoteConfig}
+                                                                        onReview={(value) => {
+                                                                            setRemoteConfig((prev) => ({
+                                                                                ...prev,
+                                                                                [key]: value,
+                                                                            }))
+                                                                        }}
+                                                                    />
+                                                                ))}
+                                                            </Box>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })()
+                                        ) : (
+                                            /* Render nội dung template với logic groups */
+                                            renderTemplateContent(selectedGroup)
+                                        )}
                                     </>
                                 ) : (
                                     <Box sx={{ 
@@ -344,8 +403,61 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         </Typography>
                                     </Box>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </Box>
+                            
+                            {/* Nút Update ở cuối mỗi template */}
+                            {selectedGroup && (templates[selectedGroup] || selectedGroup === 'untemplated') && (
+                                <Box sx={{ mt: 3, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
+                                    <LoadingButton 
+                                        loading={updatingGroups.has(selectedGroup)}
+                                        variant="contained" 
+                                        color="primary" 
+                                        onClick={() => {
+                                            if (selectedGroup === 'untemplated') {
+                                                const untemplatedFields = Object.keys(remoteConfig).filter(key => {
+                                                    return !Object.keys(templates).some(groupKey => 
+                                                        templates[groupKey].fields && templates[groupKey].fields[key]
+                                                    );
+                                                });
+                                                const untemplatedData: JsonFormat = {};
+                                                untemplatedFields.forEach((key: string) => {
+                                                    untemplatedData[key] = remoteConfig[key as keyof typeof remoteConfig];
+                                                });
+                                                setUpdatingGroups(prev => new Set(prev).add('untemplated'));
+                                                useApi.ajax({
+                                                    url: "plugin/vn4-e-learning/app-mobile/remote-config/update",
+                                                    method: "POST",
+                                                    data: {
+                                                        action: 'update',
+                                                        id: data.post.id,
+                                                        data: untemplatedData,
+                                                        group: 'untemplated'
+                                                    },
+                                                    success: () => {
+                                                        setUpdatingGroups(prev => {
+                                                            const newSet = new Set(prev);
+                                                            newSet.delete('untemplated');
+                                                            return newSet;
+                                                        });
+                                                    },
+                                                    error: () => {
+                                                        setUpdatingGroups(prev => {
+                                                            const newSet = new Set(prev);
+                                                            newSet.delete('untemplated');
+                                                            return newSet;
+                                                        });
+                                                    }
+                                                });
+                                            } else {
+                                                handleUpdateGroup(selectedGroup);
+                                            }
+                                        }}
+                                    >
+                                        Update {selectedGroup === 'untemplated' ? 'Untemplated Fields' : templates[selectedGroup].title}
+                                    </LoadingButton>
+                                </Box>
+                            )}
+                        </Box>
                     </Grid>
                 </Grid>
             ) : (
