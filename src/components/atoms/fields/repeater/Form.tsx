@@ -54,6 +54,7 @@ const useStyles = makeStyles((theme: Theme) => ({
         borderColor: theme.palette.dividerDark,
         borderTop: 'none',
         padding: theme.spacing(1, 4, 4),
+        backgroundColor: '#a4a4a44a',
     },
     padding0: {
         padding: '8px 0 0 0'
@@ -531,7 +532,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                                                                                 <Grid
                                                                                     container
                                                                                     spacing={4}
-                                                                                    style={{ marginTop: 0 }}
+                                                                                    sx={{ marginTop: 0 }}
                                                                                     {...config.layoutProps}
                                                                                 >
                                                                                     {

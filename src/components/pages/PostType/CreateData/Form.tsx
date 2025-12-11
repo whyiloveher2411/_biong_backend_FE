@@ -490,6 +490,7 @@ export interface IActionPostType {
     title: string,
     variant: string,
     link_api: string,
+    link: string,
     confirm_message?: string,
     check_progress?: boolean,
     color: 'inherit'

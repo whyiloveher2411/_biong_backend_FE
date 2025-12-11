@@ -17,6 +17,10 @@ import { FieldFormItemProps } from '../type';
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
         width: '100%',
+        padding: 24,
+        border: '1px solid #e0e0e0',
+        borderRadius: 8,
+        backgroundColor: '#a4a4a44a',
     },
     heading: {
         fontSize: theme.typography.pxToRem(15),
@@ -98,6 +102,8 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
     const { config, post, name, onReview } = props;
 
+    const [, setRender] = React.useState(0);
+
     let valueInital = {};
 
     try {
@@ -158,10 +164,8 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
         console.log('onChangeInputGroup', post[name]);
         onReview(post[name]);
-
+        setRender(prev => prev + 1);
     };
-
-    console.log('render GROUP')
 
 
     return (

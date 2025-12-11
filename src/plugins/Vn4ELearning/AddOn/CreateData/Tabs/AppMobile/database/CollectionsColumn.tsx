@@ -24,6 +24,9 @@ interface CollectionsColumnProps {
   onAddCollection: () => void;
   onEditCollection: (collection: Collection) => void;
   onDeleteCollection: (collection: Collection) => void;
+  width?: number;
+  onResizeStart?: (e: React.MouseEvent) => void;
+  isResizing?: boolean;
 }
 
 const CollectionsColumn: React.FC<CollectionsColumnProps> = ({
@@ -34,6 +37,9 @@ const CollectionsColumn: React.FC<CollectionsColumnProps> = ({
   onAddCollection,
   onEditCollection,
   onDeleteCollection,
+  width = 280,
+  onResizeStart,
+  isResizing = false,
 }) => {
   const confirmDelete = useConfirmDialog();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -52,11 +58,14 @@ const CollectionsColumn: React.FC<CollectionsColumnProps> = ({
   return (
       <Box
           sx={{
-              width: "280px",
+              width: `${width}px`,
+              minWidth: "200px",
               borderRight: "1px solid #e0e0e0",
               backgroundColor: "#fafafa",
               display: "flex",
               flexDirection: "column",
+              position: "relative",
+              flexShrink: 0,
           }}
       >
           <Box
@@ -248,6 +257,25 @@ const CollectionsColumn: React.FC<CollectionsColumnProps> = ({
               </MenuItem>
           </Menu>
           {confirmDelete.component}
+          {onResizeStart && (
+              <Box
+                  onMouseDown={onResizeStart}
+                  sx={{
+                      position: "absolute",
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: "4px",
+                      cursor: "col-resize",
+                      backgroundColor: isResizing ? "#1976d2" : "transparent",
+                      "&:hover": {
+                          backgroundColor: "#1976d2",
+                      },
+                      zIndex: 10,
+                      transition: "background-color 0.2s ease",
+                  }}
+              />
+          )}
       </Box>
   );
 };

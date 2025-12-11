@@ -22,6 +22,9 @@ interface DocumentDetailsColumnProps {
     ajaxSubCollections: { open: boolean };
     onSubCollectionClick?: (subCollection: Collection) => void;
     activeSubCollections?: string[]; // Danh sách các sub-collection đang active (đã được mở)
+    width?: number;
+    onResizeStart?: (e: React.MouseEvent) => void;
+    isResizing?: boolean;
 }
 
 const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
@@ -35,6 +38,9 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
     ajaxSubCollections,
     onSubCollectionClick,
     activeSubCollections = [],
+    width = 600,
+    onResizeStart,
+    isResizing = false,
 }) => {
     const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(
         new Set()
@@ -316,12 +322,14 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
     return (
         <Box
             sx={{
-                flex: 1,
-                minWidth: "600px",
+                width: `${width}px`,
+                minWidth: "400px",
                 backgroundColor: "#fafafa",
                 display: "flex",
                 flexDirection: "column",
                 borderRight: "1px solid #e0e0e0",
+                position: "relative",
+                flexShrink: 0,
             }}
         >
             <Box
@@ -542,6 +550,25 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                         Chọn một document để xem chi tiết
                     </Typography>
                 </Box>
+            )}
+            {onResizeStart && (
+                <Box
+                    onMouseDown={onResizeStart}
+                    sx={{
+                        position: "absolute",
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: "4px",
+                        cursor: "col-resize",
+                        backgroundColor: isResizing ? "#1976d2" : "transparent",
+                        "&:hover": {
+                            backgroundColor: "#1976d2",
+                        },
+                        zIndex: 10,
+                        transition: "background-color 0.2s ease",
+                    }}
+                />
             )}
         </Box>
     );

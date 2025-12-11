@@ -96,6 +96,23 @@ function Database({ data }: { data: CreatePostTypeData }) {
     
     // Ref để scroll đến column cuối
     const columnsContainerRef = React.useRef<HTMLDivElement>(null);
+    
+    // State để quản lý width của các columns
+    const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({
+        collections: 280,
+        documents: 350,
+        documentDetails: 600,
+    });
+    
+    // State để quản lý width của các sub-collection columns
+    const [subCollectionColumnWidths, setSubCollectionColumnWidths] = React.useState<
+        Record<string, number>
+    >({});
+    
+    // State để track column đang resize
+    const [resizingColumn, setResizingColumn] = React.useState<string | null>(null);
+    const [resizeStartX, setResizeStartX] = React.useState<number>(0);
+    const [resizeStartWidth, setResizeStartWidth] = React.useState<number>(0);
 
     const getCollections = () => {
         ajaxLoadData.ajax({
@@ -110,6 +127,59 @@ function Database({ data }: { data: CreatePostTypeData }) {
     React.useEffect(() => {
         getCollections();
     }, []);
+
+    // Handle resize logic
+    const handleResizeStart = (columnKey: string, startX: number, isSubCollection = false) => {
+        setResizingColumn(columnKey);
+        setResizeStartX(startX);
+        if (isSubCollection) {
+            // Xác định default width dựa trên loại column (documents hoặc details)
+            const defaultWidth = columnKey.includes('-details') ? 600 : 350;
+            setResizeStartWidth(subCollectionColumnWidths[columnKey] || defaultWidth);
+        } else {
+            setResizeStartWidth(columnWidths[columnKey] || 280);
+        }
+    };
+
+    const handleResizeMove = React.useCallback((e: MouseEvent) => {
+        if (!resizingColumn) return;
+        
+        const diff = e.clientX - resizeStartX;
+        const newWidth = Math.max(200, resizeStartWidth + diff); // Min width 200px
+        
+        // Kiểm tra xem có phải sub-collection column không (có chứa "/" trong key)
+        if (resizingColumn.includes('/')) {
+            setSubCollectionColumnWidths((prev) => ({
+                ...prev,
+                [resizingColumn]: newWidth,
+            }));
+        } else {
+            setColumnWidths((prev) => ({
+                ...prev,
+                [resizingColumn]: newWidth,
+            }));
+        }
+    }, [resizingColumn, resizeStartX, resizeStartWidth]);
+
+    const handleResizeEnd = React.useCallback(() => {
+        setResizingColumn(null);
+    }, []);
+
+    React.useEffect(() => {
+        if (resizingColumn) {
+            document.addEventListener('mousemove', handleResizeMove);
+            document.addEventListener('mouseup', handleResizeEnd);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            
+            return () => {
+                document.removeEventListener('mousemove', handleResizeMove);
+                document.removeEventListener('mouseup', handleResizeEnd);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            };
+        }
+    }, [resizingColumn, handleResizeMove, handleResizeEnd]);
 
     // Auto scroll đến column cuối khi documents được load hoặc document detail được hiển thị
     React.useEffect(() => {
@@ -273,6 +343,21 @@ function Database({ data }: { data: CreatePostTypeData }) {
             return newState;
         });
 
+        // Xóa width states của các columns cùng level và columns con
+        setSubCollectionColumnWidths((prev) => {
+            const newState: Record<string, number> = {};
+            Object.keys(prev).forEach((key) => {
+                // key có format: columnId-documents hoặc columnId-details
+                // Xóa nếu columnId bắt đầu bằng parentPath + "/"
+                // Tìm columnId từ key (loại bỏ "-documents" hoặc "-details")
+                const columnIdFromKey = key.replace(/-documents$|-details$/, '');
+                if (!columnIdFromKey.startsWith(parentPath + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
         // Luôn thêm column mới (hoặc thêm lại nếu đã bị xóa ở trên)
         const newColumn = {
             id: columnId,
@@ -429,6 +514,19 @@ function Database({ data }: { data: CreatePostTypeData }) {
             const newState: Record<string, "add" | "edit"> = {};
             Object.keys(prev).forEach((key) => {
                 if (key !== columnId && !key.startsWith(columnId + "/")) {
+                    newState[key] = prev[key];
+                }
+            });
+            return newState;
+        });
+
+        // Xóa width states của các column đã bị xóa
+        setSubCollectionColumnWidths((prev) => {
+            const newState: Record<string, number> = {};
+            Object.keys(prev).forEach((key) => {
+                // key có format: columnId-documents hoặc columnId-details
+                // Xóa nếu key bắt đầu bằng columnId + "-"
+                if (!key.startsWith(columnId + "-")) {
                     newState[key] = prev[key];
                 }
             });
@@ -601,6 +699,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     onAddCollection: handleAddCollection,
                     onEditCollection: handleEditCollection,
                     onDeleteCollection: handleDeleteCollection,
+                    width: columnWidths.collections,
+                    onResizeStart: (e: React.MouseEvent) => handleResizeStart('collections', e.clientX),
+                    isResizing: resizingColumn === 'collections',
                 },
             },
             {
@@ -644,6 +745,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                             },
                         });
                     },
+                    width: columnWidths.documents,
+                    onResizeStart: (e: React.MouseEvent) => handleResizeStart('documents', e.clientX),
+                    isResizing: resizingColumn === 'documents',
                 },
             },
             {
@@ -671,6 +775,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                         // Thêm sub-collection column mới (giữ nguyên column hiện tại)
                         handleSubCollectionClick(subCollection, parentPath);
                     },
+                    width: columnWidths.documentDetails,
+                    onResizeStart: (e: React.MouseEvent) => handleResizeStart('documentDetails', e.clientX),
+                    isResizing: resizingColumn === 'documentDetails',
                 },
             },
             // Thêm các sub-collection columns động
@@ -678,6 +785,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 const fullCollectionName = subCol.parentPath
                     ? `${subCol.parentPath}/${subCol.collectionName}`
                     : subCol.collectionName;
+                
+                const documentsColumnKey = `${subCol.id}-documents`;
+                const detailsColumnKey = `${subCol.id}-details`;
                 
                 const columns: ColumnConfig[] = [
                     {
@@ -735,6 +845,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                 });
                             },
                             onCloseColumn: () => handleRemoveSubCollectionColumn(subCol.id),
+                            width: subCollectionColumnWidths[documentsColumnKey] || 350,
+                            onResizeStart: (e: React.MouseEvent) => handleResizeStart(documentsColumnKey, e.clientX, true),
+                            isResizing: resizingColumn === documentsColumnKey,
                         },
                     },
                 ];
@@ -788,6 +901,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                 // Thêm sub-collection column mới (giữ nguyên column hiện tại)
                                 handleSubCollectionClick(subCollection, newParentPath);
                             },
+                            width: subCollectionColumnWidths[detailsColumnKey] || 600,
+                            onResizeStart: (e: React.MouseEvent) => handleResizeStart(detailsColumnKey, e.clientX, true),
+                            isResizing: resizingColumn === detailsColumnKey,
                         },
                     });
                 }
@@ -813,6 +929,9 @@ function Database({ data }: { data: CreatePostTypeData }) {
             ajax,
             ajaxDuplicate,
             data,
+            columnWidths,
+            subCollectionColumnWidths,
+            resizingColumn,
         ]
     );
 
@@ -1007,8 +1126,13 @@ function Database({ data }: { data: CreatePostTypeData }) {
             >
                 {columns.map((column, index) => {
                     const ColumnComponent = column.component;
+                    // Tạo key duy nhất cho mỗi column
+                    const columnKey = index === 0 ? 'collections' 
+                        : index === 1 ? 'documents'
+                        : index === 2 ? 'documentDetails'
+                        : `sub-collection-${index}`;
                     return (
-                        <ColumnComponent key={index} {...column.props} />
+                        <ColumnComponent key={columnKey} {...column.props} />
                     );
                 })}
             </Box>
