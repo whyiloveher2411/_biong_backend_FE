@@ -20,7 +20,10 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import useConfirmDialog from 'hook/useConfirmDialog'
 
 interface Question {
     id: string
@@ -189,7 +192,7 @@ function getChildren(node: TreeNode): TreeNode[] {
     }
 }
 
-function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChild }: { node: TreeNode; depth?: number; isLast?: boolean; onEditNode?: (nodeId: string, nodeType: string) => void; onAddChild?: (parentId: string, parentType: string, childType: string) => void }) {
+function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChild, onUpdateOrder, dragHandleProps }: { node: TreeNode; depth?: number; isLast?: boolean; onEditNode?: (nodeId: string, nodeType: string) => void; onAddChild?: (parentId: string, parentType: string, childType: string) => void; onUpdateOrder?: (parentId: string, parentType: string, sourceIndex: number, destinationIndex: number) => void; dragHandleProps?: React.HTMLAttributes<HTMLDivElement> }) {
     const [open, setOpen] = React.useState(false) // Mặc định đóng tất cả, chỉ hiển thị danh sách khóa học
     const nodeHasChildren = hasChildren(node)
     const childrenCount = getChildrenCount(node)
@@ -235,6 +238,37 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                     borderBottom: depth === 0 ? `1px solid ${nodeColor}` : 'none',
                     overflow: 'hidden'
                 }}>
+                    {/* Icon order - đặt ở đầu dòng, sát border left */}
+                    {dragHandleProps && (
+                        <Box
+                            {...dragHandleProps}
+                            onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: 40,
+                                alignSelf: 'stretch',
+                                pl: 1,
+                                pr: 1,
+                                py: 1,
+                                color: 'text.secondary',
+                                cursor: 'grab',
+                                flexShrink: 0,
+                                transition: 'background-color 0.2s ease',
+                                '&:active': {
+                                    cursor: 'grabbing'
+                                },
+                                '&:hover': {
+                                    color: nodeColor,
+                                    backgroundColor: 'rgba(0,0,0,0.05)'
+                                }
+                            }}
+                        >
+                            <DragIndicatorIcon sx={{ fontSize: 20 }} />
+                        </Box>
+                    )}
+
                     {/* Phần 1: Phần trước label - Click để expand/collapse */}
                     <Box
                         onClick={() => nodeHasChildren && setOpen(!open)}
@@ -284,13 +318,16 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                         </Box>
                     </Box>
 
-                    {/* Phần 2: Phần title và các button - Click để edit */}
+                    {/* Phần 2: Phần title và các button - Click vào dòng để thêm, click vào title để edit */}
                     <ListItemButton
                         onClick={() => {
-                            // Click vào phần này sẽ mở edit
-                            if (onEditNode) {
+                            // Click vào dòng sẽ thêm child (chapter, lesson, ...)
+                            if (onAddChild) {
                                 const nodeType = getNodeType(node)
-                                onEditNode(node.id, nodeType)
+                                const childType = getChildType(nodeType)
+                                if (childType) {
+                                    onAddChild(node.id, nodeType, childType)
+                                }
                             }
                         }}
                         sx={{ 
@@ -317,13 +354,26 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                         }}>
                             <Typography 
                                 variant="body2" 
+                                onClick={(e) => {
+                                    // Click vào title sẽ edit item hiện tại
+                                    e.stopPropagation()
+                                    if (onEditNode) {
+                                        const nodeType = getNodeType(node)
+                                        onEditNode(node.id, nodeType)
+                                    }
+                                }}
                                 sx={{ 
                                     fontWeight: nodeHasChildren ? 600 : 400,
                                     color: nodeHasChildren ? nodeColor : 'text.primary',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
-                                    fontSize: depth === 0 ? '0.8125rem' : '0.75rem'
+                                    fontSize: depth === 0 ? '0.8125rem' : '0.75rem',
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        textDecoration: 'underline',
+                                        color: nodeColor
+                                    }
                                 }}
                             >
                                 {node.title || `Untitled ${getNodeLabel(node)}`}
@@ -441,18 +491,70 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                                 zIndex: 0
                             }}
                         />
-                        <List component="div" disablePadding sx={{ position: 'relative', zIndex: 1 }}>
-                            {children.map((child, index) => (
-                                <CourseTreeItem 
-                                    key={child.id} 
-                                    node={child} 
-                                    depth={depth + 1}
-                                    isLast={isLastChild(index)}
-                                    onEditNode={onEditNode}
-                                    onAddChild={onAddChild}
-                                />
-                            ))}
-                        </List>
+                        <DragDropContext
+                            onDragEnd={(result: DropResult) => {
+                                if (!result.destination || !onUpdateOrder) return
+                                if (result.source.index === result.destination.index) return
+                                
+                                const nodeType = getNodeType(node)
+                                // Log để debug
+                                console.log('Drag end - Node info:', {
+                                    nodeId: node.id,
+                                    nodeType,
+                                    nodeTitle: node.title,
+                                    sourceIndex: result.source.index,
+                                    destinationIndex: result.destination.index,
+                                    childrenCount: children.length
+                                })
+                                onUpdateOrder(node.id, nodeType, result.source.index, result.destination.index)
+                            }}
+                        >
+                            <Droppable droppableId={`droppable-${node.id}-${nodeType}`}>
+                                {(provided) => (
+                                    <List 
+                                        component="div" 
+                                        disablePadding 
+                                        sx={{ position: 'relative', zIndex: 1 }}
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                    >
+                                        {children.map((child, index) => (
+                                            <Draggable 
+                                                key={child.id} 
+                                                draggableId={`draggable-${child.id}`} 
+                                                index={index}
+                                            >
+                                                {(provided, snapshot) => (
+                                                    <Box
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        sx={{
+                                                            ...provided.draggableProps.style,
+                                                            opacity: snapshot.isDragging ? 0.8 : 1,
+                                                            transform: snapshot.isDragging 
+                                                                ? `${provided.draggableProps.style?.transform} rotate(2deg)` 
+                                                                : provided.draggableProps.style?.transform,
+                                                            transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
+                                                        }}
+                                                    >
+                                                        <CourseTreeItem 
+                                                            node={child} 
+                                                            depth={depth + 1}
+                                                            isLast={isLastChild(index)}
+                                                            onEditNode={onEditNode}
+                                                            onAddChild={onAddChild}
+                                                            onUpdateOrder={onUpdateOrder}
+                                                            dragHandleProps={provided.dragHandleProps}
+                                                        />
+                                                    </Box>
+                                                )}
+                                            </Draggable>
+                                        ))}
+                                        {provided.placeholder}
+                                    </List>
+                                )}
+                            </Droppable>
+                        </DragDropContext>
                     </Box>
                 </Collapse>
             )}
@@ -469,6 +571,10 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [loading, setLoading] = React.useState(true)
     const [openDrawer, setOpenDrawer] = React.useState(false)
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false)
+    const confirmSync = useConfirmDialog({
+        title: 'Xác nhận đồng bộ Courses',
+        message: 'Bạn có chắc chắn muốn đồng bộ tất cả courses lên Firestore? Hãy đảm bảo bạn đã kiểm tra và xác nhận dữ liệu trước khi đồng bộ.'
+    })
 
     const handleBackToOverview = () => {
         const searchParams = new URLSearchParams(location.search)
@@ -477,15 +583,17 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
     }
 
     const handleSyncCourses = () => {
-        apiSyncCourses.ajax({
-            url: 'plugin/vn4-e-learning/app-mobile/course/sync-course-to-firestore',
-            method: 'POST',
-            data: {
-                id: data.post.id,
-            },
-            success: (result) => {
-                // API sẽ tự động hiển thị thông báo qua showMessage
-            },
+        confirmSync.onConfirm(() => {
+            apiSyncCourses.ajax({
+                url: 'plugin/vn4-e-learning/app-mobile/course/sync-course-to-firestore',
+                method: 'POST',
+                data: {
+                    id: data.post.id,
+                },
+                success: (result) => {
+                    // API sẽ tự động hiển thị thông báo qua showMessage
+                },
+            })
         })
     }
 
@@ -627,6 +735,220 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
     const handleCloseDrawer = () => {
         setOpenDrawer(false)
         setDrawerData(false)
+    }
+
+    const handleUpdateOrder = (parentId: string, parentType: string, sourceIndex: number, destinationIndex: number) => {
+        if (!courses) {
+            console.error('Courses is null')
+            return
+        }
+
+        // Validate parentId
+        if (!parentId) {
+            console.error('parentId is empty')
+            return
+        }
+
+        // Validate parentType
+        if (!parentType) {
+            console.error('parentType is empty')
+            return
+        }
+
+        // Tìm parent node và cập nhật order trong state local
+        const updateChildrenOrder = (nodes: TreeNode[], parentIdToFind: string, parentTypeToFind: string): TreeNode[] => {
+            return nodes.map(node => {
+                const nodeType = getNodeType(node)
+                
+                // Nếu node này là parent cần update
+                if (node.id === parentIdToFind && nodeType === parentTypeToFind) {
+                    const children = getChildren(node)
+                    const newChildren = [...children]
+                    const [movedItem] = newChildren.splice(sourceIndex, 1)
+                    newChildren.splice(destinationIndex, 0, movedItem)
+                    
+                    // Cập nhật children dựa trên node type
+                    switch (nodeType) {
+                        case 'course':
+                            return { ...node, translates: newChildren as Translate[] }
+                        case 'translate':
+                            return { ...node, sections: newChildren as Section[] }
+                        case 'section':
+                            return { ...node, chapters: newChildren as Chapter[] }
+                        case 'chapter':
+                            return { ...node, lessons: newChildren as Lesson[] }
+                        case 'lesson':
+                            return { ...node, questions: newChildren as Question[] }
+                        default:
+                            return node
+                    }
+                }
+                
+                // Recursively update children
+                const children = getChildren(node)
+                if (children.length > 0) {
+                    const updatedChildren = updateChildrenOrder(children, parentIdToFind, parentTypeToFind)
+                    switch (nodeType) {
+                        case 'course':
+                            return { ...node, translates: updatedChildren as Translate[] }
+                        case 'translate':
+                            return { ...node, sections: updatedChildren as Section[] }
+                        case 'section':
+                            return { ...node, chapters: updatedChildren as Chapter[] }
+                        case 'chapter':
+                            return { ...node, lessons: updatedChildren as Lesson[] }
+                        case 'lesson':
+                            return { ...node, questions: updatedChildren as Question[] }
+                        default:
+                            return node
+                    }
+                }
+                
+                return node
+            })
+        }
+
+        // Update courses list
+        const updatedCourses = updateChildrenOrder(courses, parentId, parentType) as Course[]
+        setCourses(updatedCourses)
+
+        // Lấy danh sách IDs theo thứ tự mới từ cây đã được update
+        const getChildrenIds = (node: TreeNode): string[] => {
+            const children = getChildren(node)
+            const ids = children.map(child => {
+                // Kiểm tra xem child có id không
+                if (!child.id) {
+                    console.warn('Child không có id:', child)
+                }
+                return child.id
+            }).filter(id => id) // Lọc bỏ các id null/undefined
+            return ids
+        }
+
+        // Tìm node dựa trên cả id và type để tránh trùng lặp ID
+        const findNodeByIdAndType = (nodes: TreeNode[], id: string, type: string): TreeNode | null => {
+            for (const node of nodes) {
+                const nodeType = getNodeType(node)
+                // Kiểm tra cả id và type
+                if (node.id === id && nodeType === type) {
+                    return node
+                }
+                // Tìm trong children
+                const children = getChildren(node)
+                const found = findNodeByIdAndType(children, id, type)
+                if (found) return found
+            }
+            return null
+        }
+
+        // Tìm parent node từ cây đã được update (updatedCourses) để lấy thứ tự mới
+        // Sử dụng cả id và type để tìm chính xác
+        const parentNode = findNodeByIdAndType(updatedCourses, parentId, parentType)
+        if (!parentNode) {
+            console.error('Không tìm thấy parent node với id:', parentId, 'type:', parentType)
+            // Log toàn bộ cây để debug
+            console.log('Current courses structure:', JSON.stringify(updatedCourses, null, 2))
+            return
+        }
+
+        // Verify node type (đã được kiểm tra trong findNodeByIdAndType nhưng double check)
+        const foundNodeType = getNodeType(parentNode)
+        if (foundNodeType !== parentType) {
+            console.error('Parent node type không khớp (không nên xảy ra):', {
+                expected: parentType,
+                found: foundNodeType,
+                parentId,
+                parentNode
+            })
+            return
+        }
+
+        const childrenIds = getChildrenIds(parentNode)
+        const childType = getChildType(parentType)
+        const childObjectType = getNodeObjectType(childType)
+
+        // Kiểm tra childType và childObjectType
+        if (!childType) {
+            console.error('Không tìm thấy childType cho parentType:', parentType)
+            return
+        }
+        if (!childObjectType) {
+            console.error('Không tìm thấy childObjectType cho childType:', childType)
+            return
+        }
+
+        // Kiểm tra childrenIds
+        if (childrenIds.length === 0) {
+            console.warn('Không có children để sắp xếp')
+            return
+        }
+
+        // Kiểm tra xem có ID nào null/undefined không
+        const invalidIds = childrenIds.filter(id => !id)
+        if (invalidIds.length > 0) {
+            console.error('Có children không có ID hợp lệ:', invalidIds)
+            return
+        }
+
+        // Debug log để kiểm tra
+        console.log('Update Order Debug:', {
+            parentId,
+            parentType,
+            foundNodeType,
+            childType,
+            childObjectType,
+            childrenIds,
+            childrenCount: childrenIds.length,
+            parentNodeTitle: parentNode.title,
+            sourceIndex,
+            destinationIndex
+        })
+
+        // Gọi API để update order
+        api.ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course/update-order',
+            method: 'POST',
+            data: {
+                id: data.post.id,
+                parent_id: parentId,
+                parent_type: parentType,
+                child_type: childType,
+                child_object_type: childObjectType,
+                order: childrenIds
+            },
+            loading: false,
+            success: () => {
+                // api.showMessage('Đã cập nhật thứ tự thành công', 'success')
+            },
+            error: (error: ANY) => {
+                console.error('Error updating order:', error, {
+                    parentId,
+                    parentType,
+                    childType,
+                    childObjectType,
+                    childrenIds
+                })
+                // Rollback nếu lỗi
+                api.ajax({
+                    url: 'plugin/vn4-e-learning/app-mobile/course/get-course',
+                    method: 'POST',
+                    data: {
+                        id: data.post.id,
+                    },
+                    loading: false,
+                    success: (result: ANY) => {
+                        if (result.courses) {
+                            setCourses(result.courses)
+                        } else if (Array.isArray(result)) {
+                            setCourses(result)
+                        } else {
+                            setCourses([])
+                        }
+                    }
+                })
+                api.showMessage('Có lỗi xảy ra khi cập nhật thứ tự', 'error')
+            }
+        })
     }
 
     const handleSubmitCourse = () => {
@@ -773,35 +1095,121 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                 overflowX: 'auto',
                 maxHeight: 'calc(100vh - 250px)',
-                overflowY: 'auto'
+                overflowY: 'auto',
+                // Tắt scroll cho container này để tránh nested scroll với react-beautiful-dnd
+                overflow: 'visible'
             }}>
                 {courses.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
                         Chưa có khóa học nào
                     </Typography>
                 ) : (
-                    <List sx={{ minWidth: 'fit-content' }}>
-                        {courses.map((course, index) => (
-                            <Box 
-                                key={course.id}
-                                sx={{
-                                    mb: index < courses.length - 1 ? 2 : 0,
-                                    '&:not(:last-child)': {
-                                        borderBottom: '2px solid',
-                                        borderColor: 'divider',
-                                        pb: 2
-                                    }
-                                }}
-                            >
-                                <CourseTreeItem 
-                                    node={course} 
-                                    isLast={index === courses.length - 1}
-                                    onEditNode={handleEditNode}
-                                    onAddChild={handleAddChild}
-                                />
-                            </Box>
-                        ))}
-                    </List>
+                    <DragDropContext
+                        onDragEnd={(result: DropResult) => {
+                            if (!result.destination) return
+                            if (result.source.index === result.destination.index) return
+                            
+                            // Update order cho courses (level cao nhất)
+                            const newCourses = [...courses]
+                            const [movedCourse] = newCourses.splice(result.source.index, 1)
+                            newCourses.splice(result.destination.index, 0, movedCourse)
+                            setCourses(newCourses)
+
+                            // Gọi API để update order
+                            const courseIds = newCourses.map(c => c.id)
+                            api.ajax({
+                                url: 'plugin/vn4-e-learning/app-mobile/course/update-order',
+                                method: 'POST',
+                                data: {
+                                    id: data.post.id,
+                                    parent_id: data.post.id,
+                                    parent_type: 'app_mobile',
+                                    child_type: 'course',
+                                    child_object_type: 'sac_course',
+                                    order: courseIds
+                                },
+                                loading: false,
+                                success: () => {
+                                    // api.showMessage('Đã cập nhật thứ tự thành công', 'success')
+                                },
+                                error: () => {
+                                    // Rollback nếu lỗi
+                                    api.ajax({
+                                        url: 'plugin/vn4-e-learning/app-mobile/course/get-course',
+                                        method: 'POST',
+                                        data: {
+                                            id: data.post.id,
+                                        },
+                                        loading: false,
+                                        success: (result: ANY) => {
+                                            if (result.courses) {
+                                                setCourses(result.courses)
+                                            } else if (Array.isArray(result)) {
+                                                setCourses(result)
+                                            } else {
+                                                setCourses([])
+                                            }
+                                        }
+                                    })
+                                    api.showMessage('Có lỗi xảy ra khi cập nhật thứ tự', 'error')
+                                }
+                            })
+                        }}
+                    >
+                        <Droppable droppableId="droppable-courses">
+                            {(provided) => (
+                                <List 
+                                    sx={{ 
+                                        minWidth: 'fit-content',
+                                        maxHeight: 'calc(100vh - 250px)',
+                                        overflowY: 'auto',
+                                        overflowX: 'auto'
+                                    }}
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                >
+                                    {courses.map((course, index) => (
+                                        <Draggable 
+                                            key={course.id} 
+                                            draggableId={`draggable-course-${course.id}`} 
+                                            index={index}
+                                        >
+                                            {(provided, snapshot) => (
+                                                <Box
+                                                    ref={provided.innerRef}
+                                                    {...provided.draggableProps}
+                                                    sx={{
+                                                        mb: index < courses.length - 1 ? 2 : 0,
+                                                        '&:not(:last-child)': {
+                                                            borderBottom: '2px solid',
+                                                            borderColor: 'divider',
+                                                            pb: 2
+                                                        },
+                                                        ...provided.draggableProps.style,
+                                                        opacity: snapshot.isDragging ? 0.8 : 1,
+                                                        transform: snapshot.isDragging 
+                                                            ? `${provided.draggableProps.style?.transform} rotate(2deg)` 
+                                                            : provided.draggableProps.style?.transform,
+                                                        transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
+                                                    }}
+                                                >
+                                                    <CourseTreeItem 
+                                                        node={course} 
+                                                        isLast={index === courses.length - 1}
+                                                        onEditNode={handleEditNode}
+                                                        onAddChild={handleAddChild}
+                                                        onUpdateOrder={handleUpdateOrder}
+                                                        dragHandleProps={provided.dragHandleProps}
+                                                    />
+                                                </Box>
+                                            )}
+                                        </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+                                </List>
+                            )}
+                        </Droppable>
+                    </DragDropContext>
                 )}
             </Box>
             {drawerData && (
@@ -814,6 +1222,7 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
                     handleSubmit={handleSubmitCourse}
                 />
             )}
+            {confirmSync.component}
         </Box>
     )
 }
