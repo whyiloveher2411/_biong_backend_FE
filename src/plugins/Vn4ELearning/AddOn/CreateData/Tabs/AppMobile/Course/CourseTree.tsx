@@ -21,6 +21,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import useConfirmDialog from 'hook/useConfirmDialog'
@@ -70,6 +71,11 @@ function getNodeType(node: TreeNode): 'course' | 'translate' | 'section' | 'chap
     if ('lessons' in node) return 'chapter'
     if ('questions' in node) return 'lesson'
     return 'question'
+}
+
+// Hàm tạo key duy nhất cho node (nodeId-nodeType để tránh conflict khi các node khác loại có cùng ID)
+function getNodeKey(node: TreeNode): string {
+    return `${node.id}-${getNodeType(node)}`
 }
 
 function getChildrenCount(node: TreeNode): number {
@@ -192,8 +198,40 @@ function getChildren(node: TreeNode): TreeNode[] {
     }
 }
 
-function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChild, onUpdateOrder, dragHandleProps }: { node: TreeNode; depth?: number; isLast?: boolean; onEditNode?: (nodeId: string, nodeType: string) => void; onAddChild?: (parentId: string, parentType: string, childType: string) => void; onUpdateOrder?: (parentId: string, parentType: string, sourceIndex: number, destinationIndex: number) => void; dragHandleProps?: React.HTMLAttributes<HTMLDivElement> }) {
+function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChild, onUpdateOrder, dragHandleProps, expandedNodes, onExpandAll, onCollapse, onExpandNode }: { node: TreeNode; depth?: number; isLast?: boolean; onEditNode?: (nodeId: string, nodeType: string) => void; onAddChild?: (parentId: string, parentType: string, childType: string) => void; onUpdateOrder?: (parentId: string, parentType: string, sourceIndex: number, destinationIndex: number) => void; dragHandleProps?: React.HTMLAttributes<HTMLDivElement>; expandedNodes?: Set<string>; onExpandAll?: (nodeKey: string) => void; onCollapse?: (nodeKey: string) => void; onExpandNode?: (nodeKey: string) => void }) {
     const [open, setOpen] = React.useState(false) // Mặc định đóng tất cả, chỉ hiển thị danh sách khóa học
+    
+    // Tự động mở/đóng dựa trên expandedNodes
+    React.useEffect(() => {
+        if (expandedNodes) {
+            const nodeKey = getNodeKey(node)
+            const isInExpandedNodes = expandedNodes.has(nodeKey)
+            if (isInExpandedNodes && !open) {
+                // Tự động mở nếu node có trong expandedNodes và chưa mở
+                console.log(`[useEffect] Tự động mở node:`, {
+                    nodeId: node.id,
+                    nodeTitle: node.title,
+                    nodeType: getNodeType(node),
+                    nodeKey: nodeKey,
+                    wasOpen: open,
+                    isInExpandedNodes
+                })
+                setOpen(true)
+            } else if (!isInExpandedNodes && open) {
+                // Tự động đóng nếu node không còn trong expandedNodes và đang mở
+                // Điều này xảy ra khi toggle đóng hết hoặc khi node bị xóa khỏi expandedNodes
+                console.log(`[useEffect] Tự động đóng node:`, {
+                    nodeId: node.id,
+                    nodeTitle: node.title,
+                    nodeType: getNodeType(node),
+                    nodeKey: nodeKey,
+                    wasOpen: open,
+                    isInExpandedNodes
+                })
+                setOpen(false)
+            }
+        }
+    }, [expandedNodes, node.id, open])
     const nodeHasChildren = hasChildren(node)
     const childrenCount = getChildrenCount(node)
     const nodeColor = getNodeColor(node)
@@ -271,13 +309,26 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
 
                     {/* Phần 1: Phần trước label - Click để expand/collapse */}
                     <Box
-                        onClick={() => nodeHasChildren && setOpen(!open)}
+                        onClick={() => {
+                            if (nodeHasChildren) {
+                                const newOpen = !open
+                                setOpen(newOpen)
+                                const nodeKey = getNodeKey(node)
+                                if (newOpen && onExpandNode) {
+                                    // Nếu mở node, thêm vào expandedNodes
+                                    onExpandNode(nodeKey)
+                                } else if (!newOpen && onCollapse) {
+                                    // Nếu đóng node, xóa khỏi expandedNodes
+                                    onCollapse(nodeKey)
+                                }
+                            }
+                        }}
                         sx={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: 0.5,
                             pl: paddingLeft,
-                            pr: 0.5,
+                            pr: 2,
                             py: 1,
                             cursor: nodeHasChildren ? 'pointer' : 'default',
                             flexShrink: 0,
@@ -317,6 +368,47 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                             {getFolderIcon(nodeHasChildren, open)}
                         </Box>
                     </Box>
+
+                    {/* Button mở rộng tối đa - tách riêng, chỉ hiển thị khi có children */}
+                    {nodeHasChildren && onExpandAll && (
+                        <Box
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                const nodeKey = getNodeKey(node)
+                                console.log('Button mở rộng tối đa clicked:', {
+                                    nodeId: node.id,
+                                    nodeTitle: node.title,
+                                    nodeType: getNodeType(node),
+                                    nodeKey: nodeKey,
+                                    currentOpen: open
+                                })
+                                onExpandAll(nodeKey)
+                            }}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                pl: 1,
+                                pr: 1,
+                                py: 1,
+                                minHeight: 40,
+                                minWidth: 24,
+                                color: nodeColor,
+                                cursor: 'pointer',
+                                borderRadius: 1,
+                                transition: 'all 0.2s ease',
+                                flexShrink: 0,
+                                alignSelf: 'stretch',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(0,0,0,0.08)',
+                                    transform: 'scale(1.1)'
+                                }
+                            }}
+                            title="Mở rộng tối đa"
+                        >
+                            <UnfoldMoreIcon sx={{ fontSize: 18 }} />
+                        </Box>
+                    )}
 
                     {/* Phần 2: Phần title và các button - Click vào dòng để thêm, click vào title để edit */}
                     <ListItemButton
@@ -545,6 +637,10 @@ function CourseTreeItem({ node, depth = 0, isLast = false, onEditNode, onAddChil
                                                             onAddChild={onAddChild}
                                                             onUpdateOrder={onUpdateOrder}
                                                             dragHandleProps={provided.dragHandleProps}
+                                                            expandedNodes={expandedNodes}
+                                                            onExpandAll={onExpandAll}
+                                                            onCollapse={onCollapse}
+                                                            onExpandNode={onExpandNode}
                                                         />
                                                     </Box>
                                                 )}
@@ -571,6 +667,7 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [loading, setLoading] = React.useState(true)
     const [openDrawer, setOpenDrawer] = React.useState(false)
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false)
+    const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set())
     const confirmSync = useConfirmDialog({
         title: 'Xác nhận đồng bộ Courses',
         message: 'Bạn có chắc chắn muốn đồng bộ tất cả courses lên Firestore? Hãy đảm bảo bạn đã kiểm tra và xác nhận dữ liệu trước khi đồng bộ.'
@@ -735,6 +832,150 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
     const handleCloseDrawer = () => {
         setOpenDrawer(false)
         setDrawerData(false)
+    }
+
+    // Hàm đệ quy để lấy tất cả keys của node và children
+    const getAllNodeKeys = (node: TreeNode): string[] => {
+        const keys = [getNodeKey(node)]
+        const children = getChildren(node)
+        children.forEach(child => {
+            keys.push(...getAllNodeKeys(child))
+        })
+        return keys
+    }
+
+    // Hàm đệ quy để lấy tất cả keys của children (không bao gồm node cha)
+    const getAllChildrenKeys = (node: TreeNode): string[] => {
+        const keys: string[] = []
+        const children = getChildren(node)
+        children.forEach(child => {
+            keys.push(...getAllNodeKeys(child))
+        })
+        return keys
+    }
+
+    // Hàm tìm node theo key (nodeId-nodeType) để tránh conflict khi các node khác loại có cùng ID
+    const findNodeByKey = (nodes: TreeNode[], targetKey: string): TreeNode | null => {
+        for (const node of nodes) {
+            const nodeKey = getNodeKey(node)
+            if (nodeKey === targetKey) {
+                return node
+            }
+            const children = getChildren(node)
+            const found = findNodeByKey(children, targetKey)
+            if (found) return found
+        }
+        return null
+    }
+
+    const handleExpandAll = (nodeKey: string) => {
+        console.log('=== handleExpandAll START ===')
+        console.log('nodeKey:', nodeKey)
+        
+        if (!courses) {
+            console.log('ERROR: courses is null')
+            return
+        }
+
+        // Tìm node trong cây theo key (để tránh conflict khi các node khác loại có cùng ID)
+        const node = findNodeByKey(courses, nodeKey)
+        if (!node) {
+            console.log('ERROR: node not found with key:', nodeKey)
+            return
+        }
+        
+        const nodeType = getNodeType(node)
+        const foundNodeKey = getNodeKey(node)
+        console.log('Node found:', {
+            id: node.id,
+            title: node.title,
+            type: nodeType,
+            key: foundNodeKey
+        })
+
+        // Lấy tất cả keys của node và children (để thêm/xóa)
+        const allKeysArray = getAllNodeKeys(node)
+        // Loại bỏ trùng lặp bằng Set
+        const allKeys = Array.from(new Set(allKeysArray))
+        console.log('allKeys (node + children, đã loại bỏ trùng):', allKeys)
+        console.log('allKeys (trước khi loại bỏ trùng):', allKeysArray)
+        
+        // Lấy tất cả keys của children (không bao gồm node cha) để kiểm tra
+        const childrenKeysArray = getAllChildrenKeys(node)
+        // Loại bỏ trùng lặp bằng Set
+        const childrenKeys = Array.from(new Set(childrenKeysArray))
+        console.log('childrenKeys (chỉ children, đã loại bỏ trùng):', childrenKeys)
+        console.log('childrenKeys (trước khi loại bỏ trùng):', childrenKeysArray)
+
+        // Kiểm tra trạng thái hiện tại
+        const currentExpandedStatus = {
+            nodeKey: expandedNodes.has(nodeKey),
+            childrenStatus: childrenKeys.map(key => ({
+                key,
+                expanded: expandedNodes.has(key)
+            }))
+        }
+        console.log('Current expanded status:', currentExpandedStatus)
+
+        // Kiểm tra xem tất cả children có đang mở không (chỉ kiểm tra children, không kiểm tra node cha)
+        // Nếu không có children, coi như chưa mở hết để mở node đó
+        const allChildrenExpanded = childrenKeys.length > 0 && childrenKeys.every(key => expandedNodes.has(key))
+        console.log('allChildrenExpanded:', allChildrenExpanded, {
+            hasChildren: childrenKeys.length > 0,
+            allChildrenInExpandedNodes: childrenKeys.length > 0 ? childrenKeys.every(key => expandedNodes.has(key)) : false
+        })
+
+        // Cập nhật expandedNodes: nếu tất cả children đều mở thì đóng hết, nếu chưa mở hết thì mở hết
+        setExpandedNodes(prev => {
+            const newSet = new Set(prev)
+            if (allChildrenExpanded) {
+                console.log('Action: ĐÓNG HẾT - Xóa tất cả keys')
+                // Đóng hết: xóa tất cả keys (bao gồm cả node cha và children)
+                allKeys.forEach(key => {
+                    const deleted = newSet.delete(key)
+                    console.log(`  - Deleted ${key}: ${deleted}`)
+                })
+            } else {
+                console.log('Action: MỞ HẾT - Thêm tất cả keys')
+                // Mở hết: thêm tất cả keys (bao gồm cả node cha và children)
+                allKeys.forEach(key => {
+                    newSet.add(key)
+                    console.log(`  - Added ${key}`)
+                })
+            }
+            
+            console.log('expandedNodes after update:', Array.from(newSet))
+            console.log('=== handleExpandAll END ===')
+            return newSet
+        })
+    }
+
+    const handleExpandNode = (nodeKey: string) => {
+        // Thêm node vào expandedNodes khi user mở node thủ công
+        setExpandedNodes(prev => {
+            const newSet = new Set(prev)
+            newSet.add(nodeKey)
+            return newSet
+        })
+    }
+
+    const handleCollapse = (nodeKey: string) => {
+        if (!courses) return
+
+        // Tìm node trong cây theo key (để tránh conflict khi các node khác loại có cùng ID)
+        const node = findNodeByKey(courses, nodeKey)
+        if (!node) return
+
+        // Chỉ xóa node đó và tất cả children của nó (không ảnh hưởng đến node cha)
+        // Lấy tất cả keys của node và children
+        const allKeys = getAllNodeKeys(node)
+
+        // Xóa khỏi expandedNodes
+        setExpandedNodes(prev => {
+            const newSet = new Set(prev)
+            allKeys.forEach(key => newSet.delete(key))
+            return newSet
+        })
     }
 
     const handleUpdateOrder = (parentId: string, parentType: string, sourceIndex: number, destinationIndex: number) => {
@@ -1200,6 +1441,10 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         onAddChild={handleAddChild}
                                                         onUpdateOrder={handleUpdateOrder}
                                                         dragHandleProps={provided.dragHandleProps}
+                                                        expandedNodes={expandedNodes}
+                                                        onExpandAll={handleExpandAll}
+                                                        onCollapse={handleCollapse}
+                                                        onExpandNode={handleExpandNode}
                                                     />
                                                 </Box>
                                             )}
