@@ -793,7 +793,7 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
 
     const handleBackToOverview = () => {
         const searchParams = new URLSearchParams(location.search);
-        searchParams.delete("view"); // Xóa view param để quay về overview
+        searchParams.set("view", "overview"); // Set view=overview để quay về overview
         navigate(`${location.pathname}?${searchParams.toString()}`);
     };
 

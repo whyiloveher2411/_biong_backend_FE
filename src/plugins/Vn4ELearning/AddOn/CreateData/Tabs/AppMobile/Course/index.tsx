@@ -7,10 +7,10 @@ import CourseTree from "./CourseTree";
 function Courses({ data }: { data: CreatePostTypeData }) {
 
     const { view } = useQuery({
-        view: "overview",
+        view: "course-tree",
     });
 
-    if( view !== 'course-tree' ) {
+    if( view === 'overview' ) {
         return <Overview data={data} />;
     }
     return <CourseTree data={data} />;
