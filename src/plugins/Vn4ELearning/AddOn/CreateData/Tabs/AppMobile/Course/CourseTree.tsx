@@ -454,15 +454,22 @@ function CourseTreeItem({
                         </Box>
                     )}
 
-                    {/* Phần 2: Phần title và các button - Click vào dòng để thêm, click vào title để edit */}
+                    {/* Phần 2: Phần title và các button - Click vào dòng để thêm (hoặc edit nếu không có children), click vào title để edit */}
                     <ListItemButton
                         onClick={() => {
-                            // Click vào dòng sẽ thêm child (chapter, lesson, ...)
-                            if (onAddChild) {
-                                const nodeType = getNodeType(node);
-                                const childType = getChildType(nodeType);
-                                if (childType) {
-                                    onAddChild(node.id, nodeType, childType);
+                            const nodeType = getNodeType(node);
+                            // Nếu node không có children (như question), click vào dòng sẽ edit
+                            if (!nodeHasChildren) {
+                                if (onEditNode) {
+                                    onEditNode(node.id, nodeType);
+                                }
+                            } else {
+                                // Click vào dòng sẽ thêm child (chapter, lesson, ...)
+                                if (onAddChild) {
+                                    const childType = getChildType(nodeType);
+                                    if (childType) {
+                                        onAddChild(node.id, nodeType, childType);
+                                    }
                                 }
                             }
                         }}
