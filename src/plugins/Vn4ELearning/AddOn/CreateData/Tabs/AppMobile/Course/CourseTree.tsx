@@ -790,6 +790,11 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
         message:
             "Bạn có chắc chắn muốn import course? Dữ liệu hiện tại có thể bị ghi đè.",
     });
+    const confirmExport = useConfirmDialog({
+        title: "Xác nhận Export Course",
+        message:
+            "Bạn có chắc chắn muốn export course? File export sẽ được tải xuống sau khi hoàn tất.",
+    });
 
     const handleBackToOverview = () => {
         const searchParams = new URLSearchParams(location.search);
@@ -807,16 +812,18 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
 
     const handleExportCourse = () => {
         handleCloseMenu();
-        apiExportCourse.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course/export-course",
-            method: "POST",
-            data: {
-                id: data.post.id,
-                debug: 1,
-            },
-            success: (result: ANY) => {
-                //
-            },
+        confirmExport.onConfirm(() => {
+            apiExportCourse.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course/export-course",
+                method: "POST",
+                data: {
+                    id: data.post.id,
+                    debug: 1,
+                },
+                success: (result: ANY) => {
+                    //
+                },
+            });
         });
     };
 
@@ -1764,6 +1771,7 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
             )}
             {confirmSync.component}
             {confirmImport.component}
+            {confirmExport.component}
         </Box>
     );
 }
