@@ -21,8 +21,11 @@ import {
     Chip,
     Checkbox,
     FormControlLabel,
+    Button,
 } from "@mui/material";
 import { TableVirtuoso } from "react-virtuoso";
+import Language from "./Language";
+import useConfirmDialog from "hook/useConfirmDialog";
 
 interface Language {
     code: string;
@@ -314,6 +317,8 @@ const EditableTextField = React.memo(
 function Localization({ data }: { data: CreatePostTypeData }) {
     const classes = useStyles();
     const useApi = useAjax();
+    const apiSyncLanguage = useAjax();
+    const [view, setView] = React.useState<"localization" | "language">("localization");
     const [languages, setLanguages] = React.useState<Language[]>([]);
     const [localizeData, setLocalizeData] = React.useState<LocalizeData | null>(
         null
@@ -330,6 +335,26 @@ function Localization({ data }: { data: CreatePostTypeData }) {
     // State để force re-render khi global storage thay đổi - sử dụng debounce
     const [editingValuesVersion, setEditingValuesVersion] = React.useState(0);
     const editingValuesVersionTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    const confirmSyncLanguage = useConfirmDialog({
+        title: 'Xác nhận đồng bộ Languages',
+        message: 'Bạn có chắc chắn muốn đồng bộ tất cả languages lên Firestore? Hãy đảm bảo bạn đã kiểm tra và xác nhận dữ liệu trước khi đồng bộ.'
+    });
+
+    const handleSyncLanguage = () => {
+        confirmSyncLanguage.onConfirm(() => {
+            apiSyncLanguage.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/localization/sync-language",
+                method: "POST",
+                data: {
+                    id: data.post.id,
+                },
+                success: (result) => {
+                    // API sẽ tự động hiển thị thông báo qua showMessage
+                },
+            });
+        });
+    };
 
     const handleGetData = () => {
         useApi.ajax({
@@ -927,6 +952,40 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         );
     };
 
+    // Nếu view là "language", render component Language
+    if (view === "language") {
+        return (
+            <Box sx={{ height: "100%" }}>
+                <Box
+                    sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 2,
+                    }}
+                >
+                    <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => setView("localization")}
+                    >
+                        Quay lại Localization
+                    </Button>
+                    <LoadingButton
+                        variant="contained"
+                        color="primary"
+                        onClick={handleSyncLanguage}
+                        loading={apiSyncLanguage.open}
+                    >
+                        Sync Languages
+                    </LoadingButton>
+                </Box>
+                <Language data={data} />
+                {confirmSyncLanguage.component}
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ height: "100%" }}>
             <Box
@@ -964,6 +1023,13 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     />
                 </Box>
                 <Box sx={{ display: "flex", gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => setView("language")}
+                    >
+                        Languages
+                    </Button>
                     <LoadingButton
                         loading={useApi.open}
                         variant="outlined"
