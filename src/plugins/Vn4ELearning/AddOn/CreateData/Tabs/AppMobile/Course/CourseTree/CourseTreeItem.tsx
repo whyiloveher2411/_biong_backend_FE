@@ -7,6 +7,7 @@ import Collapse from "components/atoms/Collapse";
 import Typography from "components/atoms/Typography";
 import Chip from "components/atoms/Chip";
 import Button from "components/atoms/Button";
+import LinearProgress from "components/atoms/LinearProgress";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
@@ -31,7 +32,7 @@ import {
     hasChildren,
     getChildren,
 } from "./utils";
-import { getLanguageCodeFromTranslate, findTranslateParent } from "./helpers";
+import { getLanguageCodeFromTranslate, findTranslateParent, calculateTranslationProgress } from "./helpers";
 import LanguageFlags from "./LanguageFlags";
 
 interface CourseTreeItemProps {
@@ -165,6 +166,21 @@ export default function CourseTreeItem({
         }
     }
     const isLastChild = (index: number) => index === children.length - 1;
+
+    // Tính toán tiến trình dịch (hiển thị cho course, translate, section, chapter, lesson, question)
+    const translationProgress = React.useMemo(() => {
+        // Lấy courseId để tính tiến trình
+        // Với course, courseId là chính node.id
+        // Với các node khác, tìm courseId từ courses
+        let currentCourseId: string | null = null;
+        if (nodeType === "course") {
+            currentCourseId = node.id;
+        } else {
+            currentCourseId = findCourseIdByPostId && courses ? findCourseIdByPostId(node.id, courses) : null;
+        }
+        
+        return calculateTranslationProgress(node, languages, courseNodeMap, currentCourseId);
+    }, [node, nodeType, languages, courseNodeMap, findCourseIdByPostId, courses]);
 
     return (
         <Box sx={{ position: "relative" }}>
@@ -519,9 +535,54 @@ export default function CourseTreeItem({
                                 </Box>
                             )}
                         </Box>
-                        {/* Language flags ở cuối dòng */}
-                        {languages && languages.length > 0 && courseNodeMap && findCourseIdByPostId && courses && (
-                            <Box sx={{ ml: "auto", flexShrink: 0 }}>
+                        {/* Thanh tiến trình dịch và Language flags ở cuối dòng */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexShrink: 0 }}>
+                            {/* Thanh tiến trình dịch - đặt trước language flags */}
+                            {translationProgress !== null && (
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 0.5,
+                                        minWidth: 80,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={translationProgress}
+                                        sx={{
+                                            flex: 1,
+                                            height: 6,
+                                            borderRadius: 3,
+                                            backgroundColor: "rgba(0,0,0,0.1)",
+                                            "& .MuiLinearProgress-bar": {
+                                                borderRadius: 3,
+                                                backgroundColor:
+                                                    translationProgress === 100
+                                                        ? "#4caf50"
+                                                        : translationProgress >= 50
+                                                        ? "#ff9800"
+                                                        : "#f44336",
+                                            },
+                                        }}
+                                    />
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            fontWeight: 600,
+                                            fontSize: "0.625rem",
+                                            minWidth: 35,
+                                            textAlign: "right",
+                                        }}
+                                    >
+                                        {translationProgress}%
+                                    </Typography>
+                                </Box>
+                            )}
+                            {/* Language flags ở cuối dòng */}
+                            {languages && languages.length > 0 && courseNodeMap && findCourseIdByPostId && courses && (
                                 <LanguageFlags
                                     node={node}
                                     languages={languages}
@@ -532,8 +593,8 @@ export default function CourseTreeItem({
                                     onCreateCopyFromEnglish={onCreateCopyFromEnglish}
                                     courses={courses}
                                 />
-                            </Box>
-                        )}
+                            )}
+                        </Box>
                     </ListItemButton>
                 </Box>
             </ListItem>

@@ -1,5 +1,5 @@
 import { Translate, Section, Chapter, Lesson, Question, TreeNode, Course, CourseNodeMap } from "./types";
-import { getNodeType } from "./utils";
+import { getNodeType, getChildren } from "./utils";
 
 // Helper function: Map từ sac_language ID hoặc title sang language code
 export function getLanguageCodeFromTranslate(
@@ -223,4 +223,113 @@ export function findTranslateParent(
     };
 
     return findParent(node, courses);
+}
+
+// Helper function: Tính toán tiến trình dịch của một node (0-100%)
+// Translate 100% khi tất cả section đều 100%
+// Section 100% khi tất cả chapter 100%
+// Chapter 100% khi tất cả lesson 100%
+// Lesson 100% khi tất cả question đều có title (key) và đều 100%
+// Question 100% khi tồn tại ở tất cả ngôn ngữ (dựa trên số lượng cờ)
+// Các post chưa có key thì không tính vào tiến trình
+export function calculateTranslationProgress(
+    node: TreeNode,
+    languages?: Array<{ code: string; title: string; flag_code: string; icon_url?: string; id?: string | number }>,
+    courseNodeMap?: CourseNodeMap,
+    courseId?: string | null
+): number {
+    const nodeType = getNodeType(node);
+    
+    // Với question: tính dựa trên số lượng bản dịch (số lượng cờ)
+    if (nodeType === "question") {
+        const question = node as Question;
+        
+        // Nếu không có title, trả về 0%
+        if (!question.title) {
+            return 0;
+        }
+        
+        // Nếu không có đủ thông tin để tính, trả về 0%
+        if (!languages || !courseNodeMap || !courseId || languages.length === 0) {
+            return 0;
+        }
+        
+        // Tìm trong courseNodeMap xem question này có trong bao nhiêu ngôn ngữ
+        const mapKey = `course_${courseId}_question_${question.title}`;
+        const nodeMap = courseNodeMap[mapKey] || {};
+        
+        // Đếm số ngôn ngữ có bản dịch
+        let translatedCount = 0;
+        for (const lang of languages) {
+            if (nodeMap[lang.code]) {
+                translatedCount++;
+            }
+        }
+        
+        // Tính tiến trình: (số ngôn ngữ có / tổng số ngôn ngữ) * 100%
+        return Math.round((translatedCount * 100) / languages.length);
+    }
+    
+    // Với các node type khác, tính dựa trên children
+    const children = getChildren(node);
+    
+    // Lọc children có key (hoặc title cho question)
+    const childrenWithKey = children.filter((child: TreeNode) => {
+        const childType = getNodeType(child);
+        if (childType === "question") {
+            return !!(child as Question).title;
+        } else {
+            // Với translate, section, chapter, lesson - kiểm tra key
+            const translate = child as Translate;
+            const section = child as Section;
+            const chapter = child as Chapter;
+            const lesson = child as Lesson;
+            return !!(translate.key || section.key || chapter.key || lesson.key);
+        }
+    });
+    
+    // Với lesson: tính tiến trình dựa trên tất cả question (bao gồm cả question chưa có title)
+    // Question chưa có title sẽ có tiến trình 0%
+    if (nodeType === "lesson") {
+        const lesson = node as Lesson;
+        const allQuestions = lesson.questions || [];
+        
+        if (allQuestions.length === 0) {
+            return 0;
+        }
+        
+        // Tính tiến trình của từng question (dựa trên số bản dịch)
+        let totalProgress = 0;
+        for (const question of allQuestions) {
+            totalProgress += calculateTranslationProgress(question, languages, courseNodeMap, courseId);
+        }
+        
+        // Trả về trung bình tiến trình của tất cả question
+        return Math.round(totalProgress / allQuestions.length);
+    }
+    
+    // Nếu không có children có key, trả về 0%
+    if (childrenWithKey.length === 0) {
+        return 0;
+    }
+    
+    // Tính tiến trình của từng child và lấy trung bình
+    // Chỉ trả về 100% khi tất cả children có key đều 100%
+    let totalProgress = 0;
+    let allChildrenComplete = true;
+    
+    for (const child of childrenWithKey) {
+        const childProgress = calculateTranslationProgress(child, languages, courseNodeMap, courseId);
+        totalProgress += childProgress;
+        
+        // Nếu có child chưa 100%, thì parent không thể 100%
+        if (childProgress < 100) {
+            allChildrenComplete = false;
+        }
+    }
+    
+    const averageProgress = Math.round(totalProgress / childrenWithKey.length);
+    
+    // Đảm bảo chỉ trả về 100% khi tất cả children đều 100%
+    return allChildrenComplete ? 100 : averageProgress;
 }
