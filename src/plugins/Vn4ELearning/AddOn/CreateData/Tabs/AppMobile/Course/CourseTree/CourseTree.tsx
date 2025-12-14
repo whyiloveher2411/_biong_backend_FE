@@ -337,9 +337,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             courseId,
         });
 
-        // Chỉ xử lý cho question
-        if (nodeType !== "question") {
-            console.log("[handleCreateCopyFromEnglish] Bỏ qua - không phải question");
+        // Chỉ xử lý cho question, translate, section, chapter và lesson
+        if (nodeType !== "question" && nodeType !== "translate" && nodeType !== "section" && nodeType !== "chapter" && nodeType !== "lesson") {
+            console.log("[handleCreateCopyFromEnglish] Bỏ qua - không phải question, translate, section, chapter hoặc lesson");
             return;
         }
 
@@ -356,12 +356,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         console.log("[handleCreateCopyFromEnglish] Node map:", nodeMap);
 
         // Tìm node tiếng Anh (thường là "en" hoặc ngôn ngữ đầu tiên có sẵn)
-        let englishNode: Question | null = null;
+        let englishNode: TreeNode | null = null;
         const englishLang = languages.find(lang => lang.code === "en") || languages[0];
         console.log("[handleCreateCopyFromEnglish] English lang:", englishLang);
         
         if (englishLang && nodeMap[englishLang.code]) {
-            englishNode = nodeMap[englishLang.code] as Question;
+            englishNode = nodeMap[englishLang.code] as TreeNode;
             console.log("[handleCreateCopyFromEnglish] Tìm thấy English node:", englishNode);
         } else {
             console.log("[handleCreateCopyFromEnglish] Không tìm thấy English node trong map");
@@ -396,25 +396,38 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 console.log("[handleCreateCopyFromEnglish] API success - result.post:", result.post);
                 
                 if (result.post) {
-                    // Tìm lesson key từ question tiếng Anh
-                    // Tìm lesson chứa question này trong cây courses để lấy lesson.key
-                    let lessonKey: string | null = null;
-                    console.log("[handleCreateCopyFromEnglish] Tìm lesson key cho question ID:", englishNodeId);
+                    // Khai báo các biến cho question, section, chapter và lesson
+                    let lessonParentId: string | null = null;
+                    let targetLessonNode: Lesson | null = null;
+                    let translateParentId: string | null = null;
+                    let targetTranslateNode: Translate | null = null;
+                    let sectionParentId: string | null = null;
+                    let targetSectionNode: Section | null = null;
+                    let chapterParentId: string | null = null;
+                    let targetChapterNode: Chapter | null = null;
                     
-                    for (const course of courses) {
-                        if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
-                        if (course.translates) {
-                            for (const translate of course.translates) {
-                                if (translate.sections) {
-                                    for (const section of translate.sections) {
-                                        if (section.chapters) {
-                                            for (const chapter of section.chapters) {
-                                                if (chapter.lessons) {
-                                                    for (const lesson of chapter.lessons) {
-                                                        if (lesson.questions?.some(q => q.id === englishNodeId)) {
-                                                            lessonKey = lesson.key || null;
-                                                            console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson key:", lessonKey, "từ lesson:", lesson);
-                                                            break;
+                    // Xử lý khác nhau cho question, translate, section, chapter và lesson
+                    if (nodeType === "question") {
+                        // Tìm lesson key từ question tiếng Anh
+                        // Tìm lesson chứa question này trong cây courses để lấy lesson.key
+                        let lessonKey: string | null = null;
+                        console.log("[handleCreateCopyFromEnglish] Tìm lesson key cho question ID:", englishNodeId);
+                        
+                        for (const course of courses) {
+                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (course.translates) {
+                                for (const translate of course.translates) {
+                                    if (translate.sections) {
+                                        for (const section of translate.sections) {
+                                            if (section.chapters) {
+                                                for (const chapter of section.chapters) {
+                                                    if (chapter.lessons) {
+                                                        for (const lesson of chapter.lessons) {
+                                                            if (lesson.questions?.some(q => q.id === englishNodeId)) {
+                                                                lessonKey = lesson.key || null;
+                                                                console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson key:", lessonKey, "từ lesson:", lesson);
+                                                                break;
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -423,63 +436,293 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     }
                                 }
                             }
+                            if (lessonKey) break; // Đã tìm thấy, dừng lại
                         }
-                        if (lessonKey) break; // Đã tìm thấy, dừng lại
-                    }
 
-                    if (!lessonKey) {
-                        console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson key");
-                    }
+                        if (!lessonKey) {
+                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson key");
+                        }
 
-                    // Tìm lesson parent đúng ngôn ngữ từ courseNodeMap
-                    let lessonParentId: string | null = null;
-                    let targetLessonNode: Lesson | null = null;
-                    
-                    if (lessonKey) {
-                        const lessonMapKey = `course_${courseId}_lesson_${lessonKey}`;
-                        const lessonNodeMap = courseNodeMap[lessonMapKey] || {};
-                        console.log("[handleCreateCopyFromEnglish] Lesson map key:", lessonMapKey);
-                        console.log("[handleCreateCopyFromEnglish] Lesson node map:", lessonNodeMap);
+                        // Tìm lesson parent đúng ngôn ngữ từ courseNodeMap
                         
-                        targetLessonNode = lessonNodeMap[langCode] as Lesson | null;
-                        console.log("[handleCreateCopyFromEnglish] Target lesson node cho langCode", langCode, ":", targetLessonNode);
-                        
-                        if (targetLessonNode && targetLessonNode.id) {
-                            lessonParentId = targetLessonNode.id;
-                            console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson parent ID đúng ngôn ngữ:", lessonParentId);
+                        if (lessonKey) {
+                            const lessonMapKey = `course_${courseId}_lesson_${lessonKey}`;
+                            const lessonNodeMap = courseNodeMap[lessonMapKey] || {};
+                            console.log("[handleCreateCopyFromEnglish] Lesson map key:", lessonMapKey);
+                            console.log("[handleCreateCopyFromEnglish] Lesson node map:", lessonNodeMap);
+                            
+                            targetLessonNode = lessonNodeMap[langCode] as Lesson | null;
+                            console.log("[handleCreateCopyFromEnglish] Target lesson node cho langCode", langCode, ":", targetLessonNode);
+                            
+                            if (targetLessonNode && targetLessonNode.id) {
+                                lessonParentId = targetLessonNode.id;
+                                console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson parent ID đúng ngôn ngữ:", lessonParentId);
+                            } else {
+                                // Fallback: nếu không tìm thấy lesson đúng ngôn ngữ, 
+                                // thử dùng lesson tiếng Anh (từ result.post.sac_lesson nếu có)
+                                if (result.post.sac_lesson) {
+                                    lessonParentId = result.post.sac_lesson;
+                                    // Tìm lesson node tiếng Anh để lấy title
+                                    const englishLessonNode = lessonNodeMap[englishLang.code] as Lesson | null;
+                                    if (englishLessonNode) {
+                                        targetLessonNode = englishLessonNode;
+                                    }
+                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng lesson từ post tiếng Anh:", lessonParentId);
+                                } else {
+                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson parent và không có fallback");
+                                }
+                            }
                         } else {
-                            // Fallback: nếu không tìm thấy lesson đúng ngôn ngữ, 
-                            // thử dùng lesson tiếng Anh (từ result.post.sac_lesson nếu có)
+                            // Nếu không tìm thấy lessonKey, dùng lesson từ post tiếng Anh
                             if (result.post.sac_lesson) {
                                 lessonParentId = result.post.sac_lesson;
-                                // Tìm lesson node tiếng Anh để lấy title
-                                const englishLessonNode = lessonNodeMap[englishLang.code] as Lesson | null;
-                                if (englishLessonNode) {
-                                    targetLessonNode = englishLessonNode;
+                                // Nếu có sac_lesson_detail trong post, dùng nó
+                                if (result.post.sac_lesson_detail) {
+                                    try {
+                                        const lessonDetail = typeof result.post.sac_lesson_detail === 'string' 
+                                            ? JSON.parse(result.post.sac_lesson_detail) 
+                                            : result.post.sac_lesson_detail;
+                                        targetLessonNode = { id: lessonDetail.id, title: lessonDetail.title } as Lesson;
+                                    } catch (e) {
+                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_lesson_detail:", e);
+                                    }
                                 }
-                                console.log("[handleCreateCopyFromEnglish] Fallback: Dùng lesson từ post tiếng Anh:", lessonParentId);
+                                console.log("[handleCreateCopyFromEnglish] Không có lessonKey, dùng lesson từ post:", lessonParentId);
                             } else {
-                                console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson parent và không có fallback");
+                                console.log("[handleCreateCopyFromEnglish] Không có lessonKey và không có sac_lesson trong post");
                             }
                         }
-                    } else {
-                        // Nếu không tìm thấy lessonKey, dùng lesson từ post tiếng Anh
-                        if (result.post.sac_lesson) {
-                            lessonParentId = result.post.sac_lesson;
-                            // Nếu có sac_lesson_detail trong post, dùng nó
-                            if (result.post.sac_lesson_detail) {
-                                try {
-                                    const lessonDetail = typeof result.post.sac_lesson_detail === 'string' 
-                                        ? JSON.parse(result.post.sac_lesson_detail) 
-                                        : result.post.sac_lesson_detail;
-                                    targetLessonNode = { id: lessonDetail.id, title: lessonDetail.title } as Lesson;
-                                } catch (e) {
-                                    console.warn("[handleCreateCopyFromEnglish] Không parse được sac_lesson_detail:", e);
+                    } else if (nodeType === "translate") {
+                        // Với translate, không cần tìm lesson parent
+                        // Translate thuộc về course, sẽ set course và course_detail
+                        console.log("[handleCreateCopyFromEnglish] Xử lý translate - không cần tìm lesson parent");
+                    } else if (nodeType === "section") {
+                        // Tìm translate key từ section tiếng Anh
+                        // Tìm translate chứa section này trong cây courses để lấy translate.key
+                        let translateKey: string | null = null;
+                        console.log("[handleCreateCopyFromEnglish] Tìm translate key cho section ID:", englishNodeId);
+                        
+                        for (const course of courses) {
+                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (course.translates) {
+                                for (const translate of course.translates) {
+                                    if (translate.sections?.some(s => s.id === englishNodeId)) {
+                                        translateKey = translate.key || null;
+                                        console.log("[handleCreateCopyFromEnglish] Tìm thấy translate key:", translateKey, "từ translate:", translate);
+                                        break;
+                                    }
                                 }
                             }
-                            console.log("[handleCreateCopyFromEnglish] Không có lessonKey, dùng lesson từ post:", lessonParentId);
+                            if (translateKey) break; // Đã tìm thấy, dừng lại
+                        }
+
+                        if (!translateKey) {
+                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy translate key");
+                        }
+
+                        // Tìm translate parent đúng ngôn ngữ từ courseNodeMap
+                        if (translateKey) {
+                            const translateMapKey = `course_${courseId}_translate_${translateKey}`;
+                            const translateNodeMap = courseNodeMap[translateMapKey] || {};
+                            console.log("[handleCreateCopyFromEnglish] Translate map key:", translateMapKey);
+                            console.log("[handleCreateCopyFromEnglish] Translate node map:", translateNodeMap);
+                            
+                            targetTranslateNode = translateNodeMap[langCode] as Translate | null;
+                            console.log("[handleCreateCopyFromEnglish] Target translate node cho langCode", langCode, ":", targetTranslateNode);
+                            
+                            if (targetTranslateNode && targetTranslateNode.id) {
+                                translateParentId = targetTranslateNode.id;
+                                console.log("[handleCreateCopyFromEnglish] Tìm thấy translate parent ID đúng ngôn ngữ:", translateParentId);
+                            } else {
+                                // Fallback: nếu không tìm thấy translate đúng ngôn ngữ, 
+                                // thử dùng translate tiếng Anh (từ result.post.translate nếu có)
+                                if (result.post.translate) {
+                                    translateParentId = result.post.translate;
+                                    // Tìm translate node tiếng Anh để lấy title
+                                    const englishTranslateNode = translateNodeMap[englishLang.code] as Translate | null;
+                                    if (englishTranslateNode) {
+                                        targetTranslateNode = englishTranslateNode;
+                                    }
+                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng translate từ post tiếng Anh:", translateParentId);
+                                } else {
+                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy translate parent và không có fallback");
+                                }
+                            }
                         } else {
-                            console.log("[handleCreateCopyFromEnglish] Không có lessonKey và không có sac_lesson trong post");
+                            // Nếu không tìm thấy translateKey, dùng translate từ post tiếng Anh
+                            if (result.post.translate) {
+                                translateParentId = result.post.translate;
+                                // Nếu có translate_detail trong post, dùng nó
+                                if (result.post.translate_detail) {
+                                    try {
+                                        const translateDetail = typeof result.post.translate_detail === 'string' 
+                                            ? JSON.parse(result.post.translate_detail) 
+                                            : result.post.translate_detail;
+                                        targetTranslateNode = { id: translateDetail.id, title: translateDetail.title } as Translate;
+                                    } catch (e) {
+                                        console.warn("[handleCreateCopyFromEnglish] Không parse được translate_detail:", e);
+                                    }
+                                }
+                                console.log("[handleCreateCopyFromEnglish] Không có translateKey, dùng translate từ post:", translateParentId);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có translateKey và không có translate trong post");
+                            }
+                        }
+                    } else if (nodeType === "chapter") {
+                        // Tìm section key từ chapter tiếng Anh
+                        // Tìm section chứa chapter này trong cây courses để lấy section.key
+                        let sectionKey: string | null = null;
+                        console.log("[handleCreateCopyFromEnglish] Tìm section key cho chapter ID:", englishNodeId);
+                        
+                        for (const course of courses) {
+                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (course.translates) {
+                                for (const translate of course.translates) {
+                                    if (translate.sections) {
+                                        for (const section of translate.sections) {
+                                            if (section.chapters?.some(c => c.id === englishNodeId)) {
+                                                sectionKey = section.key || null;
+                                                console.log("[handleCreateCopyFromEnglish] Tìm thấy section key:", sectionKey, "từ section:", section);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (sectionKey) break; // Đã tìm thấy, dừng lại
+                        }
+
+                        if (!sectionKey) {
+                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy section key");
+                        }
+
+                        // Tìm section parent đúng ngôn ngữ từ courseNodeMap
+                        if (sectionKey) {
+                            const sectionMapKey = `course_${courseId}_section_${sectionKey}`;
+                            const sectionNodeMap = courseNodeMap[sectionMapKey] || {};
+                            console.log("[handleCreateCopyFromEnglish] Section map key:", sectionMapKey);
+                            console.log("[handleCreateCopyFromEnglish] Section node map:", sectionNodeMap);
+                            
+                            targetSectionNode = sectionNodeMap[langCode] as Section | null;
+                            console.log("[handleCreateCopyFromEnglish] Target section node cho langCode", langCode, ":", targetSectionNode);
+                            
+                            if (targetSectionNode && targetSectionNode.id) {
+                                sectionParentId = targetSectionNode.id;
+                                console.log("[handleCreateCopyFromEnglish] Tìm thấy section parent ID đúng ngôn ngữ:", sectionParentId);
+                            } else {
+                                // Fallback: nếu không tìm thấy section đúng ngôn ngữ, 
+                                // thử dùng section tiếng Anh (từ result.post.sac_section nếu có)
+                                if (result.post.sac_section) {
+                                    sectionParentId = result.post.sac_section;
+                                    // Tìm section node tiếng Anh để lấy title
+                                    const englishSectionNode = sectionNodeMap[englishLang.code] as Section | null;
+                                    if (englishSectionNode) {
+                                        targetSectionNode = englishSectionNode;
+                                    }
+                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng section từ post tiếng Anh:", sectionParentId);
+                                } else {
+                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy section parent và không có fallback");
+                                }
+                            }
+                        } else {
+                            // Nếu không tìm thấy sectionKey, dùng section từ post tiếng Anh
+                            if (result.post.sac_section) {
+                                sectionParentId = result.post.sac_section;
+                                // Nếu có sac_section_detail trong post, dùng nó
+                                if (result.post.sac_section_detail) {
+                                    try {
+                                        const sectionDetail = typeof result.post.sac_section_detail === 'string' 
+                                            ? JSON.parse(result.post.sac_section_detail) 
+                                            : result.post.sac_section_detail;
+                                        targetSectionNode = { id: sectionDetail.id, title: sectionDetail.title } as Section;
+                                    } catch (e) {
+                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_section_detail:", e);
+                                    }
+                                }
+                                console.log("[handleCreateCopyFromEnglish] Không có sectionKey, dùng section từ post:", sectionParentId);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có sectionKey và không có sac_section trong post");
+                            }
+                        }
+                    } else if (nodeType === "lesson") {
+                        // Tìm chapter key từ lesson tiếng Anh
+                        // Tìm chapter chứa lesson này trong cây courses để lấy chapter.key
+                        let chapterKey: string | null = null;
+                        console.log("[handleCreateCopyFromEnglish] Tìm chapter key cho lesson ID:", englishNodeId);
+                        
+                        for (const course of courses) {
+                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (course.translates) {
+                                for (const translate of course.translates) {
+                                    if (translate.sections) {
+                                        for (const section of translate.sections) {
+                                            if (section.chapters) {
+                                                for (const chapter of section.chapters) {
+                                                    if (chapter.lessons?.some(l => l.id === englishNodeId)) {
+                                                        chapterKey = chapter.key || null;
+                                                        console.log("[handleCreateCopyFromEnglish] Tìm thấy chapter key:", chapterKey, "từ chapter:", chapter);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (chapterKey) break; // Đã tìm thấy, dừng lại
+                        }
+
+                        if (!chapterKey) {
+                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy chapter key");
+                        }
+
+                        // Tìm chapter parent đúng ngôn ngữ từ courseNodeMap
+                        if (chapterKey) {
+                            const chapterMapKey = `course_${courseId}_chapter_${chapterKey}`;
+                            const chapterNodeMap = courseNodeMap[chapterMapKey] || {};
+                            console.log("[handleCreateCopyFromEnglish] Chapter map key:", chapterMapKey);
+                            console.log("[handleCreateCopyFromEnglish] Chapter node map:", chapterNodeMap);
+                            
+                            targetChapterNode = chapterNodeMap[langCode] as Chapter | null;
+                            console.log("[handleCreateCopyFromEnglish] Target chapter node cho langCode", langCode, ":", targetChapterNode);
+                            
+                            if (targetChapterNode && targetChapterNode.id) {
+                                chapterParentId = targetChapterNode.id;
+                                console.log("[handleCreateCopyFromEnglish] Tìm thấy chapter parent ID đúng ngôn ngữ:", chapterParentId);
+                            } else {
+                                // Fallback: nếu không tìm thấy chapter đúng ngôn ngữ, 
+                                // thử dùng chapter tiếng Anh (từ result.post.sac_chapter nếu có)
+                                if (result.post.sac_chapter) {
+                                    chapterParentId = result.post.sac_chapter;
+                                    // Tìm chapter node tiếng Anh để lấy title
+                                    const englishChapterNode = chapterNodeMap[englishLang.code] as Chapter | null;
+                                    if (englishChapterNode) {
+                                        targetChapterNode = englishChapterNode;
+                                    }
+                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng chapter từ post tiếng Anh:", chapterParentId);
+                                } else {
+                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy chapter parent và không có fallback");
+                                }
+                            }
+                        } else {
+                            // Nếu không tìm thấy chapterKey, dùng chapter từ post tiếng Anh
+                            if (result.post.sac_chapter) {
+                                chapterParentId = result.post.sac_chapter;
+                                // Nếu có sac_chapter_detail trong post, dùng nó
+                                if (result.post.sac_chapter_detail) {
+                                    try {
+                                        const chapterDetail = typeof result.post.sac_chapter_detail === 'string' 
+                                            ? JSON.parse(result.post.sac_chapter_detail) 
+                                            : result.post.sac_chapter_detail;
+                                        targetChapterNode = { id: chapterDetail.id, title: chapterDetail.title } as Chapter;
+                                    } catch (e) {
+                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_chapter_detail:", e);
+                                    }
+                                }
+                                console.log("[handleCreateCopyFromEnglish] Không có chapterKey, dùng chapter từ post:", chapterParentId);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có chapterKey và không có sac_chapter trong post");
+                            }
                         }
                     }
 
@@ -494,23 +737,99 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     delete newPostData.updated_at;
                     console.log("[handleCreateCopyFromEnglish] Sau khi xóa id, created_at, updated_at");
                     
-                    // Set relationship với lesson parent đúng ngôn ngữ
-                    if (lessonParentId) {
-                        newPostData.sac_lesson = lessonParentId;
-                        console.log("[handleCreateCopyFromEnglish] Set sac_lesson:", lessonParentId);
-                        
-                        // Set sac_lesson_detail với thông tin của lesson node
-                        if (targetLessonNode && targetLessonNode.id && targetLessonNode.title) {
-                            newPostData.sac_lesson_detail = {
-                                id: targetLessonNode.id,
-                                title: targetLessonNode.title,
-                            };
-                            console.log("[handleCreateCopyFromEnglish] Set sac_lesson_detail:", newPostData.sac_lesson_detail);
+                    // Set relationship dựa trên nodeType
+                    if (nodeType === "question") {
+                        // Set relationship với lesson parent đúng ngôn ngữ
+                        if (lessonParentId) {
+                            newPostData.sac_lesson = lessonParentId;
+                            console.log("[handleCreateCopyFromEnglish] Set sac_lesson:", lessonParentId);
+                            
+                            // Set sac_lesson_detail với thông tin của lesson node
+                            if (targetLessonNode && targetLessonNode.id && targetLessonNode.title) {
+                                newPostData.sac_lesson_detail = {
+                                    id: targetLessonNode.id,
+                                    title: targetLessonNode.title,
+                                };
+                                console.log("[handleCreateCopyFromEnglish] Set sac_lesson_detail:", newPostData.sac_lesson_detail);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có targetLessonNode để set sac_lesson_detail");
+                            }
                         } else {
-                            console.log("[handleCreateCopyFromEnglish] Không có targetLessonNode để set sac_lesson_detail");
+                            console.log("[handleCreateCopyFromEnglish] Không set sac_lesson vì không có lessonParentId");
                         }
-                    } else {
-                        console.log("[handleCreateCopyFromEnglish] Không set sac_lesson vì không có lessonParentId");
+                    } else if (nodeType === "translate") {
+                        // Set relationship với course parent
+                        newPostData.course = courseId;
+                        console.log("[handleCreateCopyFromEnglish] Set course:", courseId);
+                        
+                        // Tìm course node để lấy title
+                        const courseNode = courses.find(c => c.id === courseId);
+                        if (courseNode && courseNode.title) {
+                            newPostData.course_detail = {
+                                id: courseId,
+                                title: courseNode.title,
+                            };
+                            console.log("[handleCreateCopyFromEnglish] Set course_detail:", newPostData.course_detail);
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy course node để set course_detail");
+                        }
+                    } else if (nodeType === "section") {
+                        // Set relationship với translate parent đúng ngôn ngữ
+                        if (translateParentId) {
+                            newPostData.translate = translateParentId;
+                            console.log("[handleCreateCopyFromEnglish] Set translate:", translateParentId);
+                            
+                            // Set translate_detail với thông tin của translate node
+                            if (targetTranslateNode && targetTranslateNode.id && targetTranslateNode.title) {
+                                newPostData.translate_detail = {
+                                    id: targetTranslateNode.id,
+                                    title: targetTranslateNode.title,
+                                };
+                                console.log("[handleCreateCopyFromEnglish] Set translate_detail:", newPostData.translate_detail);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có targetTranslateNode để set translate_detail");
+                            }
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không set translate vì không có translateParentId");
+                        }
+                    } else if (nodeType === "chapter") {
+                        // Set relationship với section parent đúng ngôn ngữ
+                        if (sectionParentId) {
+                            newPostData.sac_section = sectionParentId;
+                            console.log("[handleCreateCopyFromEnglish] Set sac_section:", sectionParentId);
+                            
+                            // Set sac_section_detail với thông tin của section node
+                            if (targetSectionNode && targetSectionNode.id && targetSectionNode.title) {
+                                newPostData.sac_section_detail = {
+                                    id: targetSectionNode.id,
+                                    title: targetSectionNode.title,
+                                };
+                                console.log("[handleCreateCopyFromEnglish] Set sac_section_detail:", newPostData.sac_section_detail);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có targetSectionNode để set sac_section_detail");
+                            }
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không set sac_section vì không có sectionParentId");
+                        }
+                    } else if (nodeType === "lesson") {
+                        // Set relationship với chapter parent đúng ngôn ngữ
+                        if (chapterParentId) {
+                            newPostData.sac_chapter = chapterParentId;
+                            console.log("[handleCreateCopyFromEnglish] Set sac_chapter:", chapterParentId);
+                            
+                            // Set sac_chapter_detail với thông tin của chapter node
+                            if (targetChapterNode && targetChapterNode.id && targetChapterNode.title) {
+                                newPostData.sac_chapter_detail = {
+                                    id: targetChapterNode.id,
+                                    title: targetChapterNode.title,
+                                };
+                                console.log("[handleCreateCopyFromEnglish] Set sac_chapter_detail:", newPostData.sac_chapter_detail);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có targetChapterNode để set sac_chapter_detail");
+                            }
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không set sac_chapter vì không có chapterParentId");
+                        }
                     }
                     
                     // Set ngôn ngữ mới (nếu có field language)
@@ -522,6 +841,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         if (targetLang.id) {
                             newPostData.sac_language = targetLang.id;
                             console.log("[handleCreateCopyFromEnglish] Set sac_language:", targetLang.id);
+                            
+                            // Set sac_language_detail với thông tin của language
+                            if (targetLang.title) {
+                                newPostData.sac_language_detail = {
+                                    id: targetLang.id,
+                                    title: targetLang.title,
+                                };
+                                console.log("[handleCreateCopyFromEnglish] Set sac_language_detail:", newPostData.sac_language_detail);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không có title để set sac_language_detail");
+                            }
                         }
                         // Hoặc set language code nếu có field language
                         if (newPostData.language !== undefined) {

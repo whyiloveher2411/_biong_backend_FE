@@ -63,8 +63,8 @@ export default function LanguageFlags({
                 const opacity = isAvailable ? 1 : 0.1;
                 const isCurrentLanguage = lang.code === currentLanguage;
                 const isUnavailable = !isAvailable;
-                // Chỉ cho phép click vào ngôn ngữ chưa có nếu là question
-                const canCreateCopy = isUnavailable && nodeType === "question" && onCreateCopyFromEnglish && nodeKey;
+                // Cho phép click vào ngôn ngữ chưa có nếu là question, translate, section, chapter hoặc lesson
+                const canCreateCopy = isUnavailable && (nodeType === "question" || nodeType === "translate" || nodeType === "section" || nodeType === "chapter" || nodeType === "lesson") && onCreateCopyFromEnglish && nodeKey;
 
                 return (
                     <Box
@@ -74,7 +74,7 @@ export default function LanguageFlags({
                             if (isAvailable && nodeForLang && onEditNode) {
                                 onEditNode(nodeForLang.id, nodeType);
                             } else if (canCreateCopy && nodeKey && courseId) {
-                                // Tạo copy từ tiếng Anh cho question
+                                // Tạo copy từ tiếng Anh cho question, translate, section, chapter hoặc lesson
                                 onCreateCopyFromEnglish(lang.code, nodeKey, nodeType, courseId);
                             }
                         }}
