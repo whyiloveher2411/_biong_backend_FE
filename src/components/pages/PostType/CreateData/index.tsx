@@ -264,6 +264,7 @@ export interface CreatePostTypeData {
     type: string,
     action: string,
     config: {
+        layout?: 'simple',
         title: string,
         dialogContent?: {
             width: number

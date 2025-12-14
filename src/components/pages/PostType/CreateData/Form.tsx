@@ -118,7 +118,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
 
             return prev;
         });
-
+        
     };
 
     let listFieldInTabs: string[] = [],
@@ -175,6 +175,93 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
         });
     };
 
+    const isSimpleLayout = data.config?.layout === 'simple';
+
+    const renderSaveButton = () => (
+        <div>
+            {
+                data ?
+                    data.action === 'ADD_NEW' ?
+                        <>
+                            {
+                                permission[postType + '_create'] &&
+                                <LoadingButton
+                                    loading={openLoading}
+                                    loadingPosition="center"
+                                    color="primary"
+                                    sx={{ width: '100%', height: 48, fontSize: 16 }}
+                                    variant="contained"
+                                    onClick={handleSubmit}
+                                >
+                                    {__('Save Changes')}
+                                </LoadingButton>
+                            }
+                        </>
+                        :
+                        <>
+                            {
+                                permission[postType + '_edit'] &&
+                                <React.Fragment>
+                                    <LoadingButton
+                                        variant='contained'
+                                        sx={{ width: '100%', height: 48, fontSize: 16 }}
+                                        onClick={handleSubmit}
+                                        loading={openLoading}
+                                        loadingPosition="center"
+                                    >
+                                        {__('Save Changes')}
+                                    </LoadingButton>
+                                    {!isSimpleLayout && (
+                                        <Tooltip title={__('Create a new post is a copy of the current post')}>
+                                            <LoadingButton
+                                                loading={openLoading}
+                                                loadingPosition="center"
+                                                variant='contained'
+                                                color="inherit"
+                                                sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                                                onClick={(e) => { data.post._copy = true; handleSubmit(); }}
+                                            >
+                                                {__('Copy')}
+                                            </LoadingButton>
+                                        </Tooltip>
+                                    )}
+                                </React.Fragment>
+                            }
+                            {
+                                permission[postType + '_delete'] && data.post?.id &&
+                                <Collapse in={Boolean(data.post.status === 'trash')}>
+                                    <LoadingButton
+                                        loading={openLoading}
+                                        loadingPosition="center"
+                                        variant='contained'
+                                        color='error'
+                                        sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                                        onClick={() => confirm.onConfirm(() => deletePost())}
+                                    >
+                                        {__('Delete')}
+                                    </LoadingButton>
+                                </Collapse>
+                            }
+                        </>
+                    :
+                    <></>
+            }
+            {
+                data?.config?.actions ? data.config.actions.map((item, index) =>
+                    <ButtonAction 
+                        title={item.title}
+                        link={item.link_api}
+                        id={data.post.id}
+                        confirmMessage={item.confirm_message}
+                        checkProgress={item.check_progress}
+                        color={item.color}
+                    />
+                )
+                    : null
+            }
+        </div>
+    );
+
     return (
         <>
             <Grid
@@ -186,8 +273,13 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                         container
                         spacing={3}>
 
+                        {isSimpleLayout && (
+                            <Grid item md={12} xs={12}>
+                                {renderSaveButton()}
+                            </Grid>
+                        )}
 
-                        <Grid item md={8} xs={12}>
+                        <Grid item md={isSimpleLayout ? 12 : 8} xs={12}>
                             <Box
                                 sx={{
                                     display: 'flex',
@@ -307,158 +399,137 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                             </Box>
                         </Grid>
 
-                        <Grid item md={4} xs={12}>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 3
-                                }}
-                            >
+                        {!isSimpleLayout && (
+                            <Grid item md={4} xs={12}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 3
+                                    }}
+                                >
 
 
-                                <SectionStatus
-                                    data={data}
-                                    onReview={onReview}
-                                />
+                                    <SectionStatus
+                                        data={data}
+                                        onReview={onReview}
+                                    />
 
-                                <div>
+                                    {renderSaveButton()}
+
                                     {
-                                        data ?
-                                            data.action === 'ADD_NEW' ?
-                                                <>
-                                                    {
-                                                        permission[postType + '_create'] &&
-                                                        <LoadingButton
-                                                            loading={openLoading}
-                                                            loadingPosition="center"
-                                                            color="primary"
-                                                            sx={{ width: '100%', height: 48, fontSize: 16 }}
-                                                            variant="contained"
-                                                            onClick={handleSubmit}
-                                                        >
-                                                            {__('Save Changes')}
-                                                        </LoadingButton>
-                                                    }
-                                                </>
-                                                :
-                                                <>
-                                                    {
-                                                        permission[postType + '_edit'] &&
-                                                        <React.Fragment>
-                                                            <LoadingButton
-                                                                variant='contained'
-                                                                sx={{ width: '100%', height: 48, fontSize: 16 }}
-                                                                onClick={handleSubmit}
-                                                                loading={openLoading}
-                                                                loadingPosition="center"
-                                                            >
-                                                                {__('Save Changes')}
-                                                            </LoadingButton>
-                                                            <Tooltip title={__('Create a new post is a copy of the current post')}>
-                                                                <LoadingButton
-                                                                    loading={openLoading}
-                                                                    loadingPosition="center"
-                                                                    variant='contained'
-                                                                    color="inherit"
-                                                                    sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
-                                                                    onClick={(e) => { data.post._copy = true; handleSubmit(); }}
-                                                                >
-                                                                    {__('Copy')}
-                                                                </LoadingButton>
-                                                            </Tooltip>
-                                                        </React.Fragment>
-                                                    }
-                                                    {
-                                                        permission[postType + '_delete'] && data.post?.id &&
-                                                        <Collapse in={Boolean(data.post.status === 'trash')}>
-                                                            <LoadingButton
-                                                                loading={openLoading}
-                                                                loadingPosition="center"
-                                                                variant='contained'
-                                                                color='error'
-                                                                sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
-                                                                onClick={() => confirm.onConfirm(() => deletePost())}
-                                                            >
-                                                                {__('Delete')}
-                                                            </LoadingButton>
-                                                        </Collapse>
-                                                    }
-                                                </>
-                                            :
-                                            <></>
-                                    }
-                                    {
-                                        data?.config?.actions ? data.config.actions.map((item, index) =>
-                                            <ButtonAction 
-                                                title={item.title}
-                                                link={item.link_api}
-                                                id={data.post.id}
-                                                confirmMessage={item.confirm_message}
-                                                checkProgress={item.check_progress}
-                                                color={item.color}
-                                            />
-                                        )
-                                            : null
-                                    }
-                                </div>
+                                        listTabRight.length > 0 &&
+                                        listTabRight.map(key => (
+                                            <Card key={key}>
+                                                <CardContent>
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: 4
+                                                        }}
+                                                    >
+                                                        {
+                                                            (() => {
 
+                                                                if (typeof data.config.tabs[key].hook === 'string') {
+                                                                    return <Grid item md={12} xs={12}>
+                                                                        <Hook
+                                                                            hook={data.config.tabs[key].hook as string}
+                                                                            data={data}
+                                                                            dataField={{ ...data.config.tabs[key] }}
+                                                                            onReview={onReview}
+                                                                        />
+                                                                    </Grid>
+                                                                } else if (data.config.tabs[key].fields) {
+
+                                                                    return data.config.tabs[key].fields.map((key: string) => (
+                                                                        <Grid item md={12} xs={12} key={key}>
+                                                                            <FieldForm
+                                                                                component={data.config.fields[key].view ?? 'text'}
+                                                                                config={data.config.fields[key]}
+                                                                                post={data.post}
+                                                                                name={key}
+                                                                                onReview={(value, key2 = key) => onReview(value, key2)}
+                                                                                dataPostType={data.post}
+                                                                            />
+                                                                        </Grid>
+                                                                    ))
+                                                                }
+
+                                                                return data.config.tabs[key].compoment;
+
+                                                            })()
+                                                        }
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        ))
+                                    }
+
+                                    <SectionInfo
+                                        data={data}
+                                    />
+
+                                </Box>
+                            </Grid>
+                        )}
+
+                        {isSimpleLayout && (
+                            <>
                                 {
                                     listTabRight.length > 0 &&
                                     listTabRight.map(key => (
-                                        <Card key={key}>
-                                            <CardContent>
-                                                <Box
-                                                    sx={{
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        gap: 4
-                                                    }}
-                                                >
-                                                    {
-                                                        (() => {
+                                        <Grid item md={12} xs={12} key={key}>
+                                            <Card>
+                                                <CardContent>
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: 4
+                                                        }}
+                                                    >
+                                                        {
+                                                            (() => {
 
-                                                            if (typeof data.config.tabs[key].hook === 'string') {
-                                                                return <Grid item md={12} xs={12}>
-                                                                    <Hook
-                                                                        hook={data.config.tabs[key].hook as string}
-                                                                        data={data}
-                                                                        dataField={{ ...data.config.tabs[key] }}
-                                                                        onReview={onReview}
-                                                                    />
-                                                                </Grid>
-                                                            } else if (data.config.tabs[key].fields) {
-
-                                                                return data.config.tabs[key].fields.map((key: string) => (
-                                                                    <Grid item md={12} xs={12} key={key}>
-                                                                        <FieldForm
-                                                                            component={data.config.fields[key].view ?? 'text'}
-                                                                            config={data.config.fields[key]}
-                                                                            post={data.post}
-                                                                            name={key}
-                                                                            onReview={(value, key2 = key) => onReview(value, key2)}
-                                                                            dataPostType={data.post}
+                                                                if (typeof data.config.tabs[key].hook === 'string') {
+                                                                    return <Grid item md={12} xs={12}>
+                                                                        <Hook
+                                                                            hook={data.config.tabs[key].hook as string}
+                                                                            data={data}
+                                                                            dataField={{ ...data.config.tabs[key] }}
+                                                                            onReview={onReview}
                                                                         />
                                                                     </Grid>
-                                                                ))
-                                                            }
+                                                                } else if (data.config.tabs[key].fields) {
 
-                                                            return data.config.tabs[key].compoment;
+                                                                    return data.config.tabs[key].fields.map((key: string) => (
+                                                                        <Grid item md={12} xs={12} key={key}>
+                                                                            <FieldForm
+                                                                                component={data.config.fields[key].view ?? 'text'}
+                                                                                config={data.config.fields[key]}
+                                                                                post={data.post}
+                                                                                name={key}
+                                                                                onReview={(value, key2 = key) => onReview(value, key2)}
+                                                                                dataPostType={data.post}
+                                                                            />
+                                                                        </Grid>
+                                                                    ))
+                                                                }
 
-                                                        })()
-                                                    }
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
+                                                                return data.config.tabs[key].compoment;
+
+                                                            })()
+                                                        }
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
                                     ))
                                 }
-
-                                <SectionInfo
-                                    data={data}
-                                />
-
-                            </Box>
-                        </Grid>
+                            </>
+                        )}
 
                     </Grid>
                 </Grid>
