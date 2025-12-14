@@ -1758,6 +1758,42 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     : copyingFromLanguage.toUpperCase())
                                 : null;
                             
+                            // Lấy ngôn ngữ đích (target language)
+                            let toLanguageName: string | null = null;
+                            if (isCurrentlyCopying && drawerData?.post) {
+                                // Thử lấy từ sac_language_detail (object hoặc JSON string)
+                                if (drawerData.post.sac_language_detail) {
+                                    try {
+                                        const langDetail = typeof drawerData.post.sac_language_detail === 'string' 
+                                            ? JSON.parse(drawerData.post.sac_language_detail) 
+                                            : drawerData.post.sac_language_detail;
+                                        toLanguageName = langDetail?.title || null;
+                                    } catch (e) {
+                                        // Ignore parse error
+                                    }
+                                }
+                                
+                                // Nếu chưa có, thử tìm trong languages array
+                                if (!toLanguageName && languages.length > 0 && drawerData.post) {
+                                    const post = drawerData.post;
+                                    if (post.sac_language) {
+                                        const targetLang = languages.find(lang => 
+                                            lang.id?.toString() === post.sac_language?.toString()
+                                        );
+                                        if (targetLang) {
+                                            toLanguageName = targetLang.title;
+                                        }
+                                    } else if (post.language) {
+                                        const targetLang = languages.find(lang => 
+                                            lang.code === post.language
+                                        );
+                                        if (targetLang) {
+                                            toLanguageName = targetLang.title;
+                                        }
+                                    }
+                                }
+                            }
+                            
                                             const shouldShow = (currentEditNodeType === "translate" || 
                                              currentEditNodeType === "section" || 
                                              currentEditNodeType === "chapter" || 
@@ -1779,7 +1815,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 fontStyle: "italic",
                                             }}
                                         >
-                                            Đang copy từ {fromLanguageName}
+                                            {toLanguageName 
+                                                ? `Đang copy từ ${fromLanguageName} sang ${toLanguageName}`
+                                                : `Đang copy từ ${fromLanguageName}`}
                                         </Typography>
                                     );
                                 }
@@ -1805,7 +1843,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 fontStyle: "italic",
                                             }}
                                         >
-                                            Đang copy từ {fromLanguageName}
+                                            {toLanguageName 
+                                                ? `Đang copy từ ${fromLanguageName} sang ${toLanguageName}`
+                                                : `Đang copy từ ${fromLanguageName}`}
                                         </Typography>
                                     );
                                 }
@@ -1838,7 +1878,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 fontStyle: "italic",
                                             }}
                                         >
-                                            Đang copy từ {fromLanguageName}
+                                            {toLanguageName 
+                                                ? `Đang copy từ ${fromLanguageName} sang ${toLanguageName}`
+                                                : `Đang copy từ ${fromLanguageName}`}
                                         </Typography>
                                     );
                                 }
@@ -1927,7 +1969,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 fontStyle: "italic",
                                             }}
                                         >
-                                            Đang copy từ {fromLanguageName}
+                                            {toLanguageName 
+                                                ? `Đang copy từ ${fromLanguageName} sang ${toLanguageName}`
+                                                : `Đang copy từ ${fromLanguageName}`}
                                         </Typography>
                                     )}
                                     <LanguageSelector
