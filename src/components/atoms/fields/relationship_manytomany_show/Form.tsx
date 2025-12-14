@@ -39,7 +39,10 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
         ajax({
             url: 'post-type/show-post-relationship',
             method: 'POST',
-            data: queryUrl,
+            data: {
+                ...queryUrl,
+                id: post.id,
+            },
             success: (result: DataResultApiProps) => {
                 if (result.rows) {
                     result.action = 'ADD_NEW';
@@ -57,7 +60,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             setData(false);
         }
 
-    }, [queryUrl]);
+    }, [post.id]);
 
     const handleSubmit = () => {
         if (!open) {
