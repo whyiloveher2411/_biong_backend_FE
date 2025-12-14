@@ -26,11 +26,13 @@ import {
 import { TableVirtuoso } from "react-virtuoso";
 import Language from "./Language";
 import useConfirmDialog from "hook/useConfirmDialog";
+import { useSearchParams } from "react-router-dom";
 
 interface Language {
     code: string;
     name: string;
-    icon_url: string;
+    flag_code: string;
+    icon_url?: string;
 }
 
 interface LocalizeData {
@@ -318,7 +320,15 @@ function Localization({ data }: { data: CreatePostTypeData }) {
     const classes = useStyles();
     const useApi = useAjax();
     const apiSyncLanguage = useAjax();
-    const [view, setView] = React.useState<"localization" | "language">("localization");
+    const [searchParams, setSearchParams] = useSearchParams();
+    
+    // Đọc view từ URL params, mặc định là "localization"
+    const viewFromUrl = searchParams.get("view") as "localization" | "language" | null;
+    const initialView = (viewFromUrl === "localization" || viewFromUrl === "language") 
+        ? viewFromUrl 
+        : "localization";
+    
+    const [view, setView] = React.useState<"localization" | "language">(initialView);
     const [languages, setLanguages] = React.useState<Language[]>([]);
     const [localizeData, setLocalizeData] = React.useState<LocalizeData | null>(
         null
@@ -335,6 +345,30 @@ function Localization({ data }: { data: CreatePostTypeData }) {
     // State để force re-render khi global storage thay đổi - sử dụng debounce
     const [editingValuesVersion, setEditingValuesVersion] = React.useState(0);
     const editingValuesVersionTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Đồng bộ view với URL params khi URL thay đổi (ví dụ: back/forward button)
+    React.useEffect(() => {
+        const viewFromUrl = searchParams.get("view") as "localization" | "language" | null;
+        if (viewFromUrl === "localization" || viewFromUrl === "language") {
+            setView(viewFromUrl);
+        } else {
+            // Nếu URL không có view param, mặc định là "localization"
+            setView("localization");
+        }
+    }, [searchParams]);
+
+    // Hàm để cập nhật view và URL params
+    const handleViewChange = React.useCallback((newView: "localization" | "language") => {
+        setView(newView);
+        const newSearchParams = new URLSearchParams(searchParams.toString());
+        if (newView === "localization") {
+            // Xóa param view nếu về localization (mặc định)
+            newSearchParams.delete("view");
+        } else {
+            newSearchParams.set("view", newView);
+        }
+        setSearchParams(newSearchParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const confirmSyncLanguage = useConfirmDialog({
         title: 'Xác nhận đồng bộ Languages',
@@ -544,6 +578,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
     // Kiểm tra xem một key có chưa dịch không
     const isKeyUntranslated = React.useCallback(
         (item: TranslationItem) => {
+            if (languages.length === 0) return false;
             return languages.some((lang) => {
                 const translationValue = item.translations[lang.code] || "";
                 return !translationValue.trim();
@@ -598,7 +633,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                             variant="outlined"
                         />
                     </TableCell>
-                    {languages.map((lang) => {
+                    {languages.length > 0 && languages.map((lang) => {
                         // Kiểm tra xem có giá trị đang edit trong global storage không
                         const editingValue = window.__editingValues__?.[item.key]?.[lang.code];
                         // Ưu tiên dùng giá trị từ global storage nếu có, nếu không thì dùng từ translations
@@ -779,9 +814,9 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         );
     }
 
-    if (!localizeData || languages.length === 0) {
-  return (
-    <Box>
+    if (!localizeData) {
+        return (
+            <Box>
                 <Typography variant="h6">
                     Không có dữ liệu localization
                 </Typography>
@@ -815,19 +850,21 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         const untranslatedCountByLanguageForNamespace: {
             [langCode: string]: number;
         } = {};
-        languages.forEach((lang) => {
-            untranslatedCountByLanguageForNamespace[lang.code] = 0;
-        });
-        namespaceTranslations.forEach((item) => {
-            Object.keys(item.translations).forEach((langCode) => {
-                const translationValue = item.translations[langCode] || "";
-                if (!translationValue.trim()) {
-                    untranslatedCountByLanguageForNamespace[langCode] =
-                        (untranslatedCountByLanguageForNamespace[langCode] || 0) +
-                        1;
-                }
+        if (languages.length > 0) {
+            languages.forEach((lang) => {
+                untranslatedCountByLanguageForNamespace[lang.code] = 0;
             });
-        });
+            namespaceTranslations.forEach((item) => {
+                Object.keys(item.translations).forEach((langCode) => {
+                    const translationValue = item.translations[langCode] || "";
+                    if (!translationValue.trim()) {
+                        untranslatedCountByLanguageForNamespace[langCode] =
+                            (untranslatedCountByLanguageForNamespace[langCode] || 0) +
+                            1;
+                    }
+                });
+            });
+        }
 
         const fixedHeaderContent = () => (
             <TableRow>
@@ -852,7 +889,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 >
                     Default
                 </TableCell>
-                {languages.map((lang) => (
+                {languages.length > 0 && languages.map((lang) => (
                     <TableCell
                         key={lang.code}
                         sx={{
@@ -877,15 +914,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                                 />
                             ) : (
                                 <img
-                                    src={`https://flagcdn.com/w20/${
-                                        lang.code === "en"
-                                            ? "gb"
-                                            : lang.code === "vi"
-                                            ? "vn"
-                                            : lang.code === "jp"
-                                            ? "jp"
-                                            : lang.code
-                                    }.png`}
+                                    src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
                                     alt=""
                                     className={classes.flagIcon}
                                 />
@@ -967,7 +996,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     <Button
                         variant="outlined"
                         color="primary"
-                        onClick={() => setView("localization")}
+                        onClick={() => handleViewChange("localization")}
                     >
                         Quay lại Localization
                     </Button>
@@ -1026,7 +1055,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     <Button
                         variant="outlined"
                         color="primary"
-                        onClick={() => setView("language")}
+                        onClick={() => handleViewChange("language")}
                     >
                         Languages
                     </Button>
