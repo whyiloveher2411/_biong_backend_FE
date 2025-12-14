@@ -40,6 +40,7 @@ import {
 } from "./helpers";
 import CourseTreeItem from "./CourseTreeItem";
 import LanguageSelector from "./LanguageSelector";
+import MultiLanguageDrawer from "./MultiLanguageDrawer";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -60,6 +61,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [currentEditNodeType, setCurrentEditNodeType] = React.useState<string | null>(null);
     const [isCopying, setIsCopying] = React.useState(false);
     const [copyingFromLanguage, setCopyingFromLanguage] = React.useState<string>("en");
+    const [initialHasKey, setInitialHasKey] = React.useState<boolean>(false);
     const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
         new Set()
     );
@@ -173,6 +175,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     result.action = "ADD_NEW";
                     result.type = "sac_course";
                     setIsCopying(false); // Clear copy state khi thêm mới bình thường
+                    setInitialHasKey(false); // Post mới chưa có key
                     setDrawerData({ ...result });
                     setOpenDrawer(true);
                 }
@@ -221,6 +224,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         result.post = { [relationshipField]: parentId };
                     }
                     setIsCopying(false); // Clear copy state khi thêm mới bình thường
+                    setInitialHasKey(false); // Post mới chưa có key
                     setDrawerData({ ...result });
                     setOpenDrawer(true);
                 }
@@ -280,6 +284,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         type: objectType,
                         action: "EDIT",
                     };
+                    // Lưu trạng thái ban đầu: có key hay không
+                    const hasKey = nodeType === "question" 
+                        ? !!result.post.title 
+                        : !!result.post.key;
+                    setInitialHasKey(hasKey);
                     setDrawerData(editData);
                     setOpenDrawer(true);
                 } else {
@@ -870,6 +879,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     setCurrentEditNodeType(nodeType);
                     setIsCopying(true);
                     setCopyingFromLanguage("en"); // Mặc định copy từ tiếng Anh
+                    // Post mới copy chưa có key
+                    setInitialHasKey(false);
                     setDrawerData(addData);
                     setOpenDrawer(true);
                 } else {
@@ -894,6 +905,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         setCurrentEditNodeType(null);
         setIsCopying(false);
         setCopyingFromLanguage("en");
+        setInitialHasKey(false);
     };
 
     // Helper function để set courses và build map cùng lúc
@@ -973,6 +985,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         action: "EDIT",
                     };
                     setIsCopying(false); // Clear copy state khi navigate sang ngôn ngữ khác (đây là edit, không phải copy)
+                    // Kiểm tra key ban đầu của post mới
+                    const hasKey = currentEditNodeType === "question" 
+                        ? !!result.post.title 
+                        : !!result.post.key;
+                    setInitialHasKey(hasKey);
                     setDrawerData(editData);
                     // Giữ nguyên openDrawer và currentEditNodeType
                 } else {
@@ -1318,6 +1335,28 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const reloadCourses = React.useCallback(() => {
+        api.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/get-course",
+            method: "POST",
+            data: {
+                id: data.post.id,
+            },
+            loading: false,
+            success: (result: ANY) => {
+                let coursesData: Course[] = [];
+                if (result.courses) {
+                    coursesData = result.courses;
+                } else if (Array.isArray(result)) {
+                    coursesData = result;
+                } else {
+                    coursesData = [];
+                }
+                setCoursesAndBuildMap(coursesData);
+            },
+        });
+    }, [data.post.id, api]);
+
     const handleSubmitCourse = () => {
         if (!api.open && drawerData) {
             const objectType = drawerData.type || "sac_course";
@@ -1330,25 +1369,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         setOpenDrawer(false);
                         setDrawerData(false);
                         // Reload danh sách courses
-                        api.ajax({
-                            url: "plugin/vn4-e-learning/app-mobile/course/get-course",
-                            method: "POST",
-                            data: {
-                                id: data.post.id,
-                            },
-                            loading: false,
-                        success: (result: ANY) => {
-                            let coursesData: Course[] = [];
-                            if (result.courses) {
-                                coursesData = result.courses;
-                            } else if (Array.isArray(result)) {
-                                coursesData = result;
-                            } else {
-                                coursesData = [];
-                            }
-                            setCoursesAndBuildMap(coursesData);
-                        },
-                        });
+                        reloadCourses();
                     }
                 },
             });
@@ -1738,15 +1759,51 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     </DragDropContext>
                 )}
             </Box>
-            {drawerData && (
-                <DrawerEditPost
-                    open={openDrawer}
-                    openLoading={api.open}
-                    onClose={handleCloseDrawer}
-                    data={drawerData}
-                    setData={setDrawerData}
-                    handleSubmit={handleSubmitCourse}
-                    headerAction={
+            {drawerData && (() => {
+                // Kiểm tra xem có nên dùng MultiLanguageDrawer không
+                // Chỉ dùng khi edit (không phải copy) và là các node type có nhiều ngôn ngữ
+                const isCurrentlyCopying = isCopying || (drawerData?.action === "ADD_NEW" && !drawerData?.post?.id);
+                
+                // Sử dụng initialHasKey thay vì kiểm tra key hiện tại trong drawerData
+                // để tránh UI chuyển đổi khi user thay đổi key trong form
+                const shouldUseMultiLanguageDrawer = !isCurrentlyCopying && 
+                    initialHasKey &&
+                    (currentEditNodeType === "translate" || 
+                     currentEditNodeType === "section" || 
+                     currentEditNodeType === "chapter" || 
+                     currentEditNodeType === "lesson" || 
+                     currentEditNodeType === "question") &&
+                    languages.length > 0 &&
+                    courses;
+
+                if (shouldUseMultiLanguageDrawer) {
+                    return (
+                        <MultiLanguageDrawer
+                            open={openDrawer}
+                            openLoading={api.open}
+                            onClose={handleCloseDrawer}
+                            initialData={drawerData}
+                            setInitialData={setDrawerData}
+                            handleSubmit={handleSubmitCourse}
+                            onAfterSubmit={reloadCourses}
+                            languages={languages}
+                            currentEditNodeType={currentEditNodeType}
+                            courses={courses}
+                            courseNodeMap={courseNodeMap}
+                            findCourseIdByPostId={findCourseIdByPostId}
+                        />
+                    );
+                }
+
+                return (
+                    <DrawerEditPost
+                        open={openDrawer}
+                        openLoading={api.open}
+                        onClose={handleCloseDrawer}
+                        data={drawerData}
+                        setData={setDrawerData}
+                        handleSubmit={handleSubmitCourse}
+                        headerAction={
                         /* Language Selector - hiển thị khi edit translate, section, chapter, lesson, question */
                         (() => {
                             // Kiểm tra xem có đang copy không - kiểm tra cả state và drawerData
@@ -1985,7 +2042,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         })()
                     }
                 />
-            )}
+                );
+            })()}
             {confirmSync.component}
             {confirmImport.component}
             {confirmExport.component}
