@@ -489,6 +489,7 @@ export default function CourseTreeItem({
                                     currentLanguage={currentLanguage}
                                     onEditNode={onEditNode}
                                     onCreateCopyFromEnglish={onCreateCopyFromEnglish}
+                                    courses={courses}
                                 />
                             </Box>
                         )}

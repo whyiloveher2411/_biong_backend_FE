@@ -349,6 +349,124 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             return;
         }
 
+        // Kiểm tra parent node có tồn tại trong ngôn ngữ target không
+        // Nếu parent chưa có thì không thể copy child
+        const checkParentExists = (): boolean => {
+            if (nodeType === "translate") {
+                // Translate không có parent (parent là course)
+                return true;
+            }
+
+            // Tìm parent key từ node tiếng Anh
+            let parentKey: string | null = null;
+            let parentType: string | null = null;
+
+            // Tìm parent trong cây courses
+            for (const course of courses) {
+                if (course.id !== courseId) continue;
+                if (course.translates) {
+                    for (const translate of course.translates) {
+                        if (nodeType === "section") {
+                            // Section parent là translate
+                            if (translate.sections?.some(s => s.key === nodeKey)) {
+                                parentKey = translate.key || null;
+                                parentType = "translate";
+                                break;
+                            }
+                        } else if (nodeType === "chapter") {
+                            // Chapter parent là section
+                            if (translate.sections) {
+                                for (const section of translate.sections) {
+                                    if (section.chapters?.some(c => c.key === nodeKey)) {
+                                        parentKey = section.key || null;
+                                        parentType = "section";
+                                        break;
+                                    }
+                                }
+                            }
+                        } else if (nodeType === "lesson") {
+                            // Lesson parent là chapter
+                            if (translate.sections) {
+                                for (const section of translate.sections) {
+                                    if (section.chapters) {
+                                        for (const chapter of section.chapters) {
+                                            if (chapter.lessons?.some(l => l.key === nodeKey)) {
+                                                parentKey = chapter.key || null;
+                                                parentType = "chapter";
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (nodeType === "question") {
+                            // Question parent là lesson
+                            if (translate.sections) {
+                                for (const section of translate.sections) {
+                                    if (section.chapters) {
+                                        for (const chapter of section.chapters) {
+                                            if (chapter.lessons) {
+                                                for (const lesson of chapter.lessons) {
+                                                    if (lesson.questions?.some(q => q.title === nodeKey)) {
+                                                        parentKey = lesson.key || null;
+                                                        parentType = "lesson";
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (parentKey && parentType) break;
+            }
+
+            if (!parentKey || !parentType) {
+                console.log("[handleCreateCopyFromEnglish] Không tìm thấy parent key");
+                return false;
+            }
+
+            // Kiểm tra parent có tồn tại trong ngôn ngữ target không
+            const parentMapKey = `course_${courseId}_${parentType}_${parentKey}`;
+            const parentNodeMap = courseNodeMap[parentMapKey] || {};
+            const parentExists = !!parentNodeMap[langCode];
+
+            console.log("[handleCreateCopyFromEnglish] Kiểm tra parent:", {
+                parentType,
+                parentKey,
+                parentMapKey,
+                parentNodeMap,
+                langCode,
+                parentExists,
+            });
+
+            if (!parentExists) {
+                const parentLabels: Record<string, string> = {
+                    translate: "Translate",
+                    section: "Section",
+                    chapter: "Chapter",
+                    lesson: "Lesson",
+                };
+                const parentLabel = parentLabels[parentType] || parentType;
+                api.showMessage(
+                    `Không thể copy vì ${parentLabel} chưa được tạo cho ngôn ngữ này. Vui lòng tạo ${parentLabel} trước.`,
+                    "error"
+                );
+                return false;
+            }
+
+            return true;
+        };
+
+        // Validate parent trước khi tiếp tục
+        if (!checkParentExists()) {
+            console.log("[handleCreateCopyFromEnglish] Validation failed - parent không tồn tại");
+            return;
+        }
+
         // Tạo map key để tìm node tiếng Anh
         const mapKey = `course_${courseId}_${nodeType}_${nodeKey}`;
         const nodeMap = courseNodeMap[mapKey] || {};
