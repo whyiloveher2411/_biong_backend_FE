@@ -58,6 +58,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         DataResultApiProps | false
     >(false);
     const [currentEditNodeType, setCurrentEditNodeType] = React.useState<string | null>(null);
+    const [isCopying, setIsCopying] = React.useState(false);
+    const [copyingFromLanguage, setCopyingFromLanguage] = React.useState<string>("en");
     const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
         new Set()
     );
@@ -170,6 +172,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 if (result.rows) {
                     result.action = "ADD_NEW";
                     result.type = "sac_course";
+                    setIsCopying(false); // Clear copy state khi thêm mới bình thường
                     setDrawerData({ ...result });
                     setOpenDrawer(true);
                 }
@@ -217,6 +220,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     } else {
                         result.post = { [relationshipField]: parentId };
                     }
+                    setIsCopying(false); // Clear copy state khi thêm mới bình thường
                     setDrawerData({ ...result });
                     setOpenDrawer(true);
                 }
@@ -261,6 +265,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
         // Lưu nodeType để biết có phải translate/section không
         setCurrentEditNodeType(nodeType);
+        setIsCopying(false); // Clear copy state khi edit bình thường
 
         api.ajax({
             url: `post-type/detail/${objectType}/${nodeId}`,
@@ -330,21 +335,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         nodeType: string,
         courseId: string
     ) => {
-        console.log("[handleCreateCopyFromEnglish] Bắt đầu:", {
-            langCode,
-            nodeKey,
-            nodeType,
-            courseId,
-        });
-
         // Chỉ xử lý cho question, translate, section, chapter và lesson
         if (nodeType !== "question" && nodeType !== "translate" && nodeType !== "section" && nodeType !== "chapter" && nodeType !== "lesson") {
-            console.log("[handleCreateCopyFromEnglish] Bỏ qua - không phải question, translate, section, chapter hoặc lesson");
             return;
         }
 
         if (!courseId || !courses) {
-            console.log("[handleCreateCopyFromEnglish] Lỗi: Không tìm thấy course");
             api.showMessage("Không tìm thấy course", "error");
             return;
         }
@@ -425,7 +421,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             }
 
             if (!parentKey || !parentType) {
-                console.log("[handleCreateCopyFromEnglish] Không tìm thấy parent key");
                 return false;
             }
 
@@ -433,15 +428,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             const parentMapKey = `course_${courseId}_${parentType}_${parentKey}`;
             const parentNodeMap = courseNodeMap[parentMapKey] || {};
             const parentExists = !!parentNodeMap[langCode];
-
-            console.log("[handleCreateCopyFromEnglish] Kiểm tra parent:", {
-                parentType,
-                parentKey,
-                parentMapKey,
-                parentNodeMap,
-                langCode,
-                parentExists,
-            });
 
             if (!parentExists) {
                 const parentLabels: Record<string, string> = {
@@ -463,30 +449,22 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
         // Validate parent trước khi tiếp tục
         if (!checkParentExists()) {
-            console.log("[handleCreateCopyFromEnglish] Validation failed - parent không tồn tại");
             return;
         }
 
         // Tạo map key để tìm node tiếng Anh
         const mapKey = `course_${courseId}_${nodeType}_${nodeKey}`;
         const nodeMap = courseNodeMap[mapKey] || {};
-        console.log("[handleCreateCopyFromEnglish] Map key:", mapKey);
-        console.log("[handleCreateCopyFromEnglish] Node map:", nodeMap);
 
         // Tìm node tiếng Anh (thường là "en" hoặc ngôn ngữ đầu tiên có sẵn)
         let englishNode: TreeNode | null = null;
         const englishLang = languages.find(lang => lang.code === "en") || languages[0];
-        console.log("[handleCreateCopyFromEnglish] English lang:", englishLang);
         
         if (englishLang && nodeMap[englishLang.code]) {
             englishNode = nodeMap[englishLang.code] as TreeNode;
-            console.log("[handleCreateCopyFromEnglish] Tìm thấy English node:", englishNode);
-        } else {
-            console.log("[handleCreateCopyFromEnglish] Không tìm thấy English node trong map");
         }
 
         if (!englishNode || !englishNode.id) {
-            console.log("[handleCreateCopyFromEnglish] Lỗi: Không tìm thấy bản tiếng Anh để copy");
             api.showMessage("Không tìm thấy bản tiếng Anh để copy", "error");
             return;
         }
@@ -511,7 +489,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 id: englishNodeId,
             },
             success: (result: ANY) => {
-                console.log("[handleCreateCopyFromEnglish] API success - result.post:", result.post);
                 
                 if (result.post) {
                     // Khai báo các biến cho question, section, chapter và lesson
@@ -529,7 +506,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         // Tìm lesson key từ question tiếng Anh
                         // Tìm lesson chứa question này trong cây courses để lấy lesson.key
                         let lessonKey: string | null = null;
-                        console.log("[handleCreateCopyFromEnglish] Tìm lesson key cho question ID:", englishNodeId);
                         
                         for (const course of courses) {
                             if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
@@ -543,7 +519,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         for (const lesson of chapter.lessons) {
                                                             if (lesson.questions?.some(q => q.id === englishNodeId)) {
                                                                 lessonKey = lesson.key || null;
-                                                                console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson key:", lessonKey, "từ lesson:", lesson);
                                                                 break;
                                                             }
                                                         }
@@ -557,24 +532,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             if (lessonKey) break; // Đã tìm thấy, dừng lại
                         }
 
-                        if (!lessonKey) {
-                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson key");
-                        }
 
                         // Tìm lesson parent đúng ngôn ngữ từ courseNodeMap
                         
                         if (lessonKey) {
                             const lessonMapKey = `course_${courseId}_lesson_${lessonKey}`;
                             const lessonNodeMap = courseNodeMap[lessonMapKey] || {};
-                            console.log("[handleCreateCopyFromEnglish] Lesson map key:", lessonMapKey);
-                            console.log("[handleCreateCopyFromEnglish] Lesson node map:", lessonNodeMap);
                             
                             targetLessonNode = lessonNodeMap[langCode] as Lesson | null;
-                            console.log("[handleCreateCopyFromEnglish] Target lesson node cho langCode", langCode, ":", targetLessonNode);
                             
                             if (targetLessonNode && targetLessonNode.id) {
                                 lessonParentId = targetLessonNode.id;
-                                console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson parent ID đúng ngôn ngữ:", lessonParentId);
                             } else {
                                 // Fallback: nếu không tìm thấy lesson đúng ngôn ngữ, 
                                 // thử dùng lesson tiếng Anh (từ result.post.sac_lesson nếu có)
@@ -585,9 +553,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     if (englishLessonNode) {
                                         targetLessonNode = englishLessonNode;
                                     }
-                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng lesson từ post tiếng Anh:", lessonParentId);
-                                } else {
-                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson parent và không có fallback");
                                 }
                             }
                         } else {
@@ -605,20 +570,15 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                         console.warn("[handleCreateCopyFromEnglish] Không parse được sac_lesson_detail:", e);
                                     }
                                 }
-                                console.log("[handleCreateCopyFromEnglish] Không có lessonKey, dùng lesson từ post:", lessonParentId);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có lessonKey và không có sac_lesson trong post");
                             }
                         }
                     } else if (nodeType === "translate") {
                         // Với translate, không cần tìm lesson parent
                         // Translate thuộc về course, sẽ set course và course_detail
-                        console.log("[handleCreateCopyFromEnglish] Xử lý translate - không cần tìm lesson parent");
                     } else if (nodeType === "section") {
                         // Tìm translate key từ section tiếng Anh
                         // Tìm translate chứa section này trong cây courses để lấy translate.key
                         let translateKey: string | null = null;
-                        console.log("[handleCreateCopyFromEnglish] Tìm translate key cho section ID:", englishNodeId);
                         
                         for (const course of courses) {
                             if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
@@ -626,7 +586,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 for (const translate of course.translates) {
                                     if (translate.sections?.some(s => s.id === englishNodeId)) {
                                         translateKey = translate.key || null;
-                                        console.log("[handleCreateCopyFromEnglish] Tìm thấy translate key:", translateKey, "từ translate:", translate);
                                         break;
                                     }
                                 }
@@ -634,23 +593,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             if (translateKey) break; // Đã tìm thấy, dừng lại
                         }
 
-                        if (!translateKey) {
-                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy translate key");
-                        }
 
                         // Tìm translate parent đúng ngôn ngữ từ courseNodeMap
                         if (translateKey) {
                             const translateMapKey = `course_${courseId}_translate_${translateKey}`;
                             const translateNodeMap = courseNodeMap[translateMapKey] || {};
-                            console.log("[handleCreateCopyFromEnglish] Translate map key:", translateMapKey);
-                            console.log("[handleCreateCopyFromEnglish] Translate node map:", translateNodeMap);
                             
                             targetTranslateNode = translateNodeMap[langCode] as Translate | null;
-                            console.log("[handleCreateCopyFromEnglish] Target translate node cho langCode", langCode, ":", targetTranslateNode);
                             
                             if (targetTranslateNode && targetTranslateNode.id) {
                                 translateParentId = targetTranslateNode.id;
-                                console.log("[handleCreateCopyFromEnglish] Tìm thấy translate parent ID đúng ngôn ngữ:", translateParentId);
                             } else {
                                 // Fallback: nếu không tìm thấy translate đúng ngôn ngữ, 
                                 // thử dùng translate tiếng Anh (từ result.post.translate nếu có)
@@ -661,9 +613,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     if (englishTranslateNode) {
                                         targetTranslateNode = englishTranslateNode;
                                     }
-                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng translate từ post tiếng Anh:", translateParentId);
-                                } else {
-                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy translate parent và không có fallback");
                                 }
                             }
                         } else {
@@ -681,16 +630,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                         console.warn("[handleCreateCopyFromEnglish] Không parse được translate_detail:", e);
                                     }
                                 }
-                                console.log("[handleCreateCopyFromEnglish] Không có translateKey, dùng translate từ post:", translateParentId);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có translateKey và không có translate trong post");
                             }
                         }
                     } else if (nodeType === "chapter") {
                         // Tìm section key từ chapter tiếng Anh
                         // Tìm section chứa chapter này trong cây courses để lấy section.key
                         let sectionKey: string | null = null;
-                        console.log("[handleCreateCopyFromEnglish] Tìm section key cho chapter ID:", englishNodeId);
                         
                         for (const course of courses) {
                             if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
@@ -700,7 +645,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                         for (const section of translate.sections) {
                                             if (section.chapters?.some(c => c.id === englishNodeId)) {
                                                 sectionKey = section.key || null;
-                                                console.log("[handleCreateCopyFromEnglish] Tìm thấy section key:", sectionKey, "từ section:", section);
                                                 break;
                                             }
                                         }
@@ -710,23 +654,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             if (sectionKey) break; // Đã tìm thấy, dừng lại
                         }
 
-                        if (!sectionKey) {
-                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy section key");
-                        }
 
                         // Tìm section parent đúng ngôn ngữ từ courseNodeMap
                         if (sectionKey) {
                             const sectionMapKey = `course_${courseId}_section_${sectionKey}`;
                             const sectionNodeMap = courseNodeMap[sectionMapKey] || {};
-                            console.log("[handleCreateCopyFromEnglish] Section map key:", sectionMapKey);
-                            console.log("[handleCreateCopyFromEnglish] Section node map:", sectionNodeMap);
                             
                             targetSectionNode = sectionNodeMap[langCode] as Section | null;
-                            console.log("[handleCreateCopyFromEnglish] Target section node cho langCode", langCode, ":", targetSectionNode);
                             
                             if (targetSectionNode && targetSectionNode.id) {
                                 sectionParentId = targetSectionNode.id;
-                                console.log("[handleCreateCopyFromEnglish] Tìm thấy section parent ID đúng ngôn ngữ:", sectionParentId);
                             } else {
                                 // Fallback: nếu không tìm thấy section đúng ngôn ngữ, 
                                 // thử dùng section tiếng Anh (từ result.post.sac_section nếu có)
@@ -737,9 +674,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     if (englishSectionNode) {
                                         targetSectionNode = englishSectionNode;
                                     }
-                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng section từ post tiếng Anh:", sectionParentId);
-                                } else {
-                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy section parent và không có fallback");
                                 }
                             }
                         } else {
@@ -757,16 +691,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                         console.warn("[handleCreateCopyFromEnglish] Không parse được sac_section_detail:", e);
                                     }
                                 }
-                                console.log("[handleCreateCopyFromEnglish] Không có sectionKey, dùng section từ post:", sectionParentId);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có sectionKey và không có sac_section trong post");
                             }
                         }
                     } else if (nodeType === "lesson") {
                         // Tìm chapter key từ lesson tiếng Anh
                         // Tìm chapter chứa lesson này trong cây courses để lấy chapter.key
                         let chapterKey: string | null = null;
-                        console.log("[handleCreateCopyFromEnglish] Tìm chapter key cho lesson ID:", englishNodeId);
                         
                         for (const course of courses) {
                             if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
@@ -778,7 +708,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 for (const chapter of section.chapters) {
                                                     if (chapter.lessons?.some(l => l.id === englishNodeId)) {
                                                         chapterKey = chapter.key || null;
-                                                        console.log("[handleCreateCopyFromEnglish] Tìm thấy chapter key:", chapterKey, "từ chapter:", chapter);
                                                         break;
                                                     }
                                                 }
@@ -790,23 +719,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             if (chapterKey) break; // Đã tìm thấy, dừng lại
                         }
 
-                        if (!chapterKey) {
-                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy chapter key");
-                        }
 
                         // Tìm chapter parent đúng ngôn ngữ từ courseNodeMap
                         if (chapterKey) {
                             const chapterMapKey = `course_${courseId}_chapter_${chapterKey}`;
                             const chapterNodeMap = courseNodeMap[chapterMapKey] || {};
-                            console.log("[handleCreateCopyFromEnglish] Chapter map key:", chapterMapKey);
-                            console.log("[handleCreateCopyFromEnglish] Chapter node map:", chapterNodeMap);
                             
                             targetChapterNode = chapterNodeMap[langCode] as Chapter | null;
-                            console.log("[handleCreateCopyFromEnglish] Target chapter node cho langCode", langCode, ":", targetChapterNode);
                             
                             if (targetChapterNode && targetChapterNode.id) {
                                 chapterParentId = targetChapterNode.id;
-                                console.log("[handleCreateCopyFromEnglish] Tìm thấy chapter parent ID đúng ngôn ngữ:", chapterParentId);
                             } else {
                                 // Fallback: nếu không tìm thấy chapter đúng ngôn ngữ, 
                                 // thử dùng chapter tiếng Anh (từ result.post.sac_chapter nếu có)
@@ -817,9 +739,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     if (englishChapterNode) {
                                         targetChapterNode = englishChapterNode;
                                     }
-                                    console.log("[handleCreateCopyFromEnglish] Fallback: Dùng chapter từ post tiếng Anh:", chapterParentId);
-                                } else {
-                                    console.log("[handleCreateCopyFromEnglish] Không tìm thấy chapter parent và không có fallback");
                                 }
                             }
                         } else {
@@ -837,9 +756,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                         console.warn("[handleCreateCopyFromEnglish] Không parse được sac_chapter_detail:", e);
                                     }
                                 }
-                                console.log("[handleCreateCopyFromEnglish] Không có chapterKey, dùng chapter từ post:", chapterParentId);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có chapterKey và không có sac_chapter trong post");
                             }
                         }
                     }
@@ -847,20 +763,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     // Tạo dữ liệu mới từ bản tiếng Anh
                     // Copy tất cả dữ liệu và loại bỏ các field không cần thiết khi tạo mới
                     const newPostData: ANY = { ...result.post };
-                    console.log("[handleCreateCopyFromEnglish] Post data ban đầu:", newPostData);
                     
                     // Xóa các field ID và metadata không cần thiết
                     delete newPostData.id;
                     delete newPostData.created_at;
                     delete newPostData.updated_at;
-                    console.log("[handleCreateCopyFromEnglish] Sau khi xóa id, created_at, updated_at");
                     
                     // Set relationship dựa trên nodeType
                     if (nodeType === "question") {
                         // Set relationship với lesson parent đúng ngôn ngữ
                         if (lessonParentId) {
                             newPostData.sac_lesson = lessonParentId;
-                            console.log("[handleCreateCopyFromEnglish] Set sac_lesson:", lessonParentId);
                             
                             // Set sac_lesson_detail với thông tin của lesson node
                             if (targetLessonNode && targetLessonNode.id && targetLessonNode.title) {
@@ -868,17 +781,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     id: targetLessonNode.id,
                                     title: targetLessonNode.title,
                                 };
-                                console.log("[handleCreateCopyFromEnglish] Set sac_lesson_detail:", newPostData.sac_lesson_detail);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có targetLessonNode để set sac_lesson_detail");
                             }
-                        } else {
-                            console.log("[handleCreateCopyFromEnglish] Không set sac_lesson vì không có lessonParentId");
                         }
                     } else if (nodeType === "translate") {
                         // Set relationship với course parent
                         newPostData.course = courseId;
-                        console.log("[handleCreateCopyFromEnglish] Set course:", courseId);
                         
                         // Tìm course node để lấy title
                         const courseNode = courses.find(c => c.id === courseId);
@@ -887,15 +794,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 id: courseId,
                                 title: courseNode.title,
                             };
-                            console.log("[handleCreateCopyFromEnglish] Set course_detail:", newPostData.course_detail);
-                        } else {
-                            console.log("[handleCreateCopyFromEnglish] Không tìm thấy course node để set course_detail");
                         }
                     } else if (nodeType === "section") {
                         // Set relationship với translate parent đúng ngôn ngữ
                         if (translateParentId) {
                             newPostData.translate = translateParentId;
-                            console.log("[handleCreateCopyFromEnglish] Set translate:", translateParentId);
                             
                             // Set translate_detail với thông tin của translate node
                             if (targetTranslateNode && targetTranslateNode.id && targetTranslateNode.title) {
@@ -903,18 +806,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     id: targetTranslateNode.id,
                                     title: targetTranslateNode.title,
                                 };
-                                console.log("[handleCreateCopyFromEnglish] Set translate_detail:", newPostData.translate_detail);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có targetTranslateNode để set translate_detail");
                             }
-                        } else {
-                            console.log("[handleCreateCopyFromEnglish] Không set translate vì không có translateParentId");
                         }
                     } else if (nodeType === "chapter") {
                         // Set relationship với section parent đúng ngôn ngữ
                         if (sectionParentId) {
                             newPostData.sac_section = sectionParentId;
-                            console.log("[handleCreateCopyFromEnglish] Set sac_section:", sectionParentId);
                             
                             // Set sac_section_detail với thông tin của section node
                             if (targetSectionNode && targetSectionNode.id && targetSectionNode.title) {
@@ -922,18 +819,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     id: targetSectionNode.id,
                                     title: targetSectionNode.title,
                                 };
-                                console.log("[handleCreateCopyFromEnglish] Set sac_section_detail:", newPostData.sac_section_detail);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có targetSectionNode để set sac_section_detail");
                             }
-                        } else {
-                            console.log("[handleCreateCopyFromEnglish] Không set sac_section vì không có sectionParentId");
                         }
                     } else if (nodeType === "lesson") {
                         // Set relationship với chapter parent đúng ngôn ngữ
                         if (chapterParentId) {
                             newPostData.sac_chapter = chapterParentId;
-                            console.log("[handleCreateCopyFromEnglish] Set sac_chapter:", chapterParentId);
                             
                             // Set sac_chapter_detail với thông tin của chapter node
                             if (targetChapterNode && targetChapterNode.id && targetChapterNode.title) {
@@ -941,24 +832,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     id: targetChapterNode.id,
                                     title: targetChapterNode.title,
                                 };
-                                console.log("[handleCreateCopyFromEnglish] Set sac_chapter_detail:", newPostData.sac_chapter_detail);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có targetChapterNode để set sac_chapter_detail");
                             }
-                        } else {
-                            console.log("[handleCreateCopyFromEnglish] Không set sac_chapter vì không có chapterParentId");
                         }
                     }
                     
                     // Set ngôn ngữ mới (nếu có field language)
                     const targetLang = languages.find(lang => lang.code === langCode);
-                    console.log("[handleCreateCopyFromEnglish] Target lang:", targetLang);
                     
                     if (targetLang) {
                         // Tìm language ID từ languages array nếu có
                         if (targetLang.id) {
                             newPostData.sac_language = targetLang.id;
-                            console.log("[handleCreateCopyFromEnglish] Set sac_language:", targetLang.id);
                             
                             // Set sac_language_detail với thông tin của language
                             if (targetLang.title) {
@@ -966,19 +850,14 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     id: targetLang.id,
                                     title: targetLang.title,
                                 };
-                                console.log("[handleCreateCopyFromEnglish] Set sac_language_detail:", newPostData.sac_language_detail);
-                            } else {
-                                console.log("[handleCreateCopyFromEnglish] Không có title để set sac_language_detail");
                             }
                         }
                         // Hoặc set language code nếu có field language
                         if (newPostData.language !== undefined) {
                             newPostData.language = langCode;
-                            console.log("[handleCreateCopyFromEnglish] Set language code:", langCode);
                         }
                     }
 
-                    console.log("[handleCreateCopyFromEnglish] Post data cuối cùng:", newPostData);
 
                     const addData: DataResultApiProps = {
                         ...result,
@@ -987,9 +866,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         action: "ADD_NEW",
                     };
                     
-                    console.log("[handleCreateCopyFromEnglish] Mở drawer với data:", addData);
                     
                     setCurrentEditNodeType(nodeType);
+                    setIsCopying(true);
+                    setCopyingFromLanguage("en"); // Mặc định copy từ tiếng Anh
                     setDrawerData(addData);
                     setOpenDrawer(true);
                 } else {
@@ -1012,6 +892,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         setOpenDrawer(false);
         setDrawerData(false);
         setCurrentEditNodeType(null);
+        setIsCopying(false);
+        setCopyingFromLanguage("en");
     };
 
     // Helper function để set courses và build map cùng lúc
@@ -1090,6 +972,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         type: objectType,
                         action: "EDIT",
                     };
+                    setIsCopying(false); // Clear copy state khi navigate sang ngôn ngữ khác (đây là edit, không phải copy)
                     setDrawerData(editData);
                     // Giữ nguyên openDrawer và currentEditNodeType
                 } else {
@@ -1866,7 +1749,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     headerAction={
                         /* Language Selector - hiển thị khi edit translate, section, chapter, lesson, question */
                         (() => {
-                            const shouldShow = (currentEditNodeType === "translate" || 
+                            // Kiểm tra xem có đang copy không - kiểm tra cả state và drawerData
+                            const isCurrentlyCopying = isCopying || (drawerData?.action === "ADD_NEW" && !drawerData?.post?.id);
+                            // Tính fromLanguageName ngay cả khi languages chưa có, sẽ fallback về "EN"
+                            const fromLanguageName = isCurrentlyCopying
+                                ? (languages.length > 0 
+                                    ? (languages.find(lang => lang.code === copyingFromLanguage)?.title || copyingFromLanguage.toUpperCase())
+                                    : copyingFromLanguage.toUpperCase())
+                                : null;
+                            
+                                            const shouldShow = (currentEditNodeType === "translate" || 
                                              currentEditNodeType === "section" || 
                                              currentEditNodeType === "chapter" || 
                                              currentEditNodeType === "lesson" || 
@@ -1875,7 +1767,24 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                              drawerData && 
                                              courses;
 
-                            if (!shouldShow) return undefined;
+                            // Nếu đang copy nhưng không có Language Selector, vẫn hiển thị thông báo copy
+                            if (!shouldShow) {
+                                if (isCurrentlyCopying && fromLanguageName) {
+                                    return (
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontSize: "0.75rem",
+                                                fontStyle: "italic",
+                                            }}
+                                        >
+                                            Đang copy từ {fromLanguageName}
+                                        </Typography>
+                                    );
+                                }
+                                return undefined;
+                            }
 
                             // Lấy key từ post hiện tại
                             // Với question thì dùng title, các node type khác dùng key
@@ -1884,13 +1793,55 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 : drawerData.post?.key;
                             const currentPostId = drawerData.post?.id;
                             
-                            if (!currentKey || !currentEditNodeType || !currentPostId || !courses) {
+                            if (!currentKey || !currentEditNodeType || !courses) {
+                                // Nếu đang copy nhưng không có đủ thông tin, vẫn hiển thị copy message
+                                if (isCurrentlyCopying && fromLanguageName) {
+                                    return (
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontSize: "0.75rem",
+                                                fontStyle: "italic",
+                                            }}
+                                        >
+                                            Đang copy từ {fromLanguageName}
+                                        </Typography>
+                                    );
+                                }
                                 return undefined;
                             }
 
-                            // Tìm courseId chứa post hiện tại
-                            const courseId = findCourseIdByPostId(currentPostId, courses);
+                            // Tìm courseId: nếu đang copy, lấy từ drawerData.post.course, nếu không thì tìm từ currentPostId
+                            let courseId: string | null = null;
+                            if (isCurrentlyCopying && drawerData.post?.course) {
+                                // Khi đang copy, lấy courseId từ post data
+                                if (typeof drawerData.post.course === 'string') {
+                                    courseId = drawerData.post.course;
+                                } else if (drawerData.post.course && typeof drawerData.post.course === 'object' && 'id' in drawerData.post.course) {
+                                    courseId = String((drawerData.post.course as { id: string | number }).id);
+                                }
+                            } else if (currentPostId) {
+                                // Khi edit, tìm courseId từ currentPostId
+                                courseId = findCourseIdByPostId(currentPostId, courses);
+                            }
+                            
                             if (!courseId) {
+                                // Nếu đang copy nhưng không tìm thấy courseId, vẫn hiển thị copy message
+                                if (isCurrentlyCopying && fromLanguageName) {
+                                    return (
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontSize: "0.75rem",
+                                                fontStyle: "italic",
+                                            }}
+                                        >
+                                            Đang copy từ {fromLanguageName}
+                                        </Typography>
+                                    );
+                                }
                                 return undefined;
                             }
 
@@ -1959,12 +1910,33 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             }
 
                             return (
-                                <LanguageSelector
-                                    languages={languages}
-                                    currentLanguage={currentLanguage}
-                                    availableLanguages={availableLanguages}
-                                    onNavigateToLanguage={handleNavigateToLanguage}
-                                />
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "flex-end",
+                                        gap: 1,
+                                    }}
+                                >
+                                    {isCurrentlyCopying && fromLanguageName && (
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontSize: "0.75rem",
+                                                fontStyle: "italic",
+                                            }}
+                                        >
+                                            Đang copy từ {fromLanguageName}
+                                        </Typography>
+                                    )}
+                                    <LanguageSelector
+                                        languages={languages}
+                                        currentLanguage={currentLanguage}
+                                        availableLanguages={availableLanguages}
+                                        onNavigateToLanguage={handleNavigateToLanguage}
+                                    />
+                                </Box>
                             );
                         })()
                     }

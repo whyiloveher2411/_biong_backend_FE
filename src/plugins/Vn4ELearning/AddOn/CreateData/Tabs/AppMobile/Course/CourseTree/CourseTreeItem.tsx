@@ -97,12 +97,42 @@ export default function CourseTreeItem({
             }
         }
     }, [expandedNodes, node.id, open]);
-    const nodeHasChildren = hasChildren(node);
-    const childrenCount = getChildrenCount(node);
+    
+    const nodeType = getNodeType(node);
+    
+    // Kiểm tra hasChildren: với course, chỉ đếm translate có ngôn ngữ "en"
+    let nodeHasChildren = hasChildren(node);
+    if (nodeType === "course" && languages && languages.length > 0) {
+        const course = node as Course;
+        if (course.translates) {
+            // Chỉ đếm translate có ngôn ngữ là "en"
+            const enTranslates = course.translates.filter((translate: Translate) => {
+                const langCode = getLanguageCodeFromTranslate(translate, languages);
+                return langCode === "en";
+            });
+            nodeHasChildren = enTranslates.length > 0;
+        } else {
+            nodeHasChildren = false;
+        }
+    }
+    
+    // Tính childrenCount: với course, chỉ đếm translate có ngôn ngữ "en"
+    let childrenCount = getChildrenCount(node);
+    if (nodeType === "course" && languages && languages.length > 0) {
+        const course = node as Course;
+        if (course.translates) {
+            const enTranslates = course.translates.filter((translate: Translate) => {
+                const langCode = getLanguageCodeFromTranslate(translate, languages);
+                return langCode === "en";
+            });
+            childrenCount = enTranslates.length;
+        } else {
+            childrenCount = 0;
+        }
+    }
     const nodeColor = getNodeColor(node);
     const backgroundColor = getNodeBackgroundColor(node, depth);
     const indentSize = 5; // Giảm xuống 5px mỗi level để giảm khoảng cách cho question
-    const nodeType = getNodeType(node);
     // Giảm thêm khoảng cách cho question (level sâu nhất)
     const basePadding = nodeType === "question" ? 0 : 2;
     const paddingLeft =
@@ -122,7 +152,18 @@ export default function CourseTreeItem({
         }
     }
 
-    const children = getChildren(node);
+    // Filter children: chỉ hiển thị translate có ngôn ngữ "en" nếu node là course
+    let children = getChildren(node);
+    if (nodeType === "course" && languages && languages.length > 0) {
+        const course = node as Course;
+        if (course.translates) {
+            // Chỉ lấy translate có ngôn ngữ là "en"
+            children = course.translates.filter((translate: Translate) => {
+                const langCode = getLanguageCodeFromTranslate(translate, languages);
+                return langCode === "en";
+            }) as TreeNode[];
+        }
+    }
     const isLastChild = (index: number) => index === children.length - 1;
 
     return (
