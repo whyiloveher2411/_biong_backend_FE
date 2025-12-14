@@ -39,6 +39,7 @@ interface CourseTreeItemProps {
     depth?: number;
     isLast?: boolean;
     onEditNode?: (nodeId: string, nodeType: string) => void;
+    onCreateCopyFromEnglish?: (langCode: string, nodeKey: string, nodeType: string, courseId: string) => void;
     onAddChild?: (
         parentId: string,
         parentType: string,
@@ -66,6 +67,7 @@ export default function CourseTreeItem({
     depth = 0,
     isLast = false,
     onEditNode,
+    onCreateCopyFromEnglish,
     onAddChild,
     onUpdateOrder,
     dragHandleProps,
@@ -486,6 +488,7 @@ export default function CourseTreeItem({
                                     courseId={findCourseIdByPostId(node.id, courses)}
                                     currentLanguage={currentLanguage}
                                     onEditNode={onEditNode}
+                                    onCreateCopyFromEnglish={onCreateCopyFromEnglish}
                                 />
                             </Box>
                         )}
@@ -578,6 +581,9 @@ export default function CourseTreeItem({
                                                             )}
                                                             onEditNode={
                                                                 onEditNode
+                                                            }
+                                                            onCreateCopyFromEnglish={
+                                                                onCreateCopyFromEnglish
                                                             }
                                                             onAddChild={
                                                                 onAddChild

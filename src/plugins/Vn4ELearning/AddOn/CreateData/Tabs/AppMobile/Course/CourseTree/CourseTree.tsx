@@ -50,8 +50,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const location = useLocation();
     const [courses, setCourses] = React.useState<Course[] | null>(null);
     const [loading, setLoading] = React.useState(true);
-    const [languages, setLanguages] = React.useState<Array<{ code: string; title: string; flag_code: string; icon_url?: string }>>([]);
-    const languagesRef = React.useRef<Array<{ code: string; title: string; flag_code: string; icon_url?: string }>>([]);
+    const [languages, setLanguages] = React.useState<Array<{ code: string; title: string; flag_code: string; icon_url?: string; id?: string | number }>>([]);
+    const languagesRef = React.useRef<Array<{ code: string; title: string; flag_code: string; icon_url?: string; id?: string | number }>>([]);
     const [courseNodeMap, setCourseNodeMap] = React.useState<CourseNodeMap>({});
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const [drawerData, setDrawerData] = React.useState<
@@ -320,6 +320,242 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         );
                     }
                 }
+            },
+        });
+    };
+
+    const handleCreateCopyFromEnglish = (
+        langCode: string,
+        nodeKey: string,
+        nodeType: string,
+        courseId: string
+    ) => {
+        console.log("[handleCreateCopyFromEnglish] Bắt đầu:", {
+            langCode,
+            nodeKey,
+            nodeType,
+            courseId,
+        });
+
+        // Chỉ xử lý cho question
+        if (nodeType !== "question") {
+            console.log("[handleCreateCopyFromEnglish] Bỏ qua - không phải question");
+            return;
+        }
+
+        if (!courseId || !courses) {
+            console.log("[handleCreateCopyFromEnglish] Lỗi: Không tìm thấy course");
+            api.showMessage("Không tìm thấy course", "error");
+            return;
+        }
+
+        // Tạo map key để tìm node tiếng Anh
+        const mapKey = `course_${courseId}_${nodeType}_${nodeKey}`;
+        const nodeMap = courseNodeMap[mapKey] || {};
+        console.log("[handleCreateCopyFromEnglish] Map key:", mapKey);
+        console.log("[handleCreateCopyFromEnglish] Node map:", nodeMap);
+
+        // Tìm node tiếng Anh (thường là "en" hoặc ngôn ngữ đầu tiên có sẵn)
+        let englishNode: Question | null = null;
+        const englishLang = languages.find(lang => lang.code === "en") || languages[0];
+        console.log("[handleCreateCopyFromEnglish] English lang:", englishLang);
+        
+        if (englishLang && nodeMap[englishLang.code]) {
+            englishNode = nodeMap[englishLang.code] as Question;
+            console.log("[handleCreateCopyFromEnglish] Tìm thấy English node:", englishNode);
+        } else {
+            console.log("[handleCreateCopyFromEnglish] Không tìm thấy English node trong map");
+        }
+
+        if (!englishNode || !englishNode.id) {
+            console.log("[handleCreateCopyFromEnglish] Lỗi: Không tìm thấy bản tiếng Anh để copy");
+            api.showMessage("Không tìm thấy bản tiếng Anh để copy", "error");
+            return;
+        }
+
+        const objectType = getNodeObjectType(nodeType);
+        if (!objectType) {
+            api.showMessage(
+                `Không tìm thấy object type cho ${nodeType}`,
+                "error"
+            );
+            return;
+        }
+
+        // Lưu englishNode.id vào biến để tránh lỗi TypeScript trong callback
+        const englishNodeId = englishNode.id;
+
+        // Lấy dữ liệu của node tiếng Anh
+        api.ajax({
+            url: `post-type/detail/${objectType}/${englishNodeId}`,
+            method: "POST",
+            data: {
+                id: englishNodeId,
+            },
+            success: (result: ANY) => {
+                console.log("[handleCreateCopyFromEnglish] API success - result.post:", result.post);
+                
+                if (result.post) {
+                    // Tìm lesson key từ question tiếng Anh
+                    // Tìm lesson chứa question này trong cây courses để lấy lesson.key
+                    let lessonKey: string | null = null;
+                    console.log("[handleCreateCopyFromEnglish] Tìm lesson key cho question ID:", englishNodeId);
+                    
+                    for (const course of courses) {
+                        if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                        if (course.translates) {
+                            for (const translate of course.translates) {
+                                if (translate.sections) {
+                                    for (const section of translate.sections) {
+                                        if (section.chapters) {
+                                            for (const chapter of section.chapters) {
+                                                if (chapter.lessons) {
+                                                    for (const lesson of chapter.lessons) {
+                                                        if (lesson.questions?.some(q => q.id === englishNodeId)) {
+                                                            lessonKey = lesson.key || null;
+                                                            console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson key:", lessonKey, "từ lesson:", lesson);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (lessonKey) break; // Đã tìm thấy, dừng lại
+                    }
+
+                    if (!lessonKey) {
+                        console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson key");
+                    }
+
+                    // Tìm lesson parent đúng ngôn ngữ từ courseNodeMap
+                    let lessonParentId: string | null = null;
+                    let targetLessonNode: Lesson | null = null;
+                    
+                    if (lessonKey) {
+                        const lessonMapKey = `course_${courseId}_lesson_${lessonKey}`;
+                        const lessonNodeMap = courseNodeMap[lessonMapKey] || {};
+                        console.log("[handleCreateCopyFromEnglish] Lesson map key:", lessonMapKey);
+                        console.log("[handleCreateCopyFromEnglish] Lesson node map:", lessonNodeMap);
+                        
+                        targetLessonNode = lessonNodeMap[langCode] as Lesson | null;
+                        console.log("[handleCreateCopyFromEnglish] Target lesson node cho langCode", langCode, ":", targetLessonNode);
+                        
+                        if (targetLessonNode && targetLessonNode.id) {
+                            lessonParentId = targetLessonNode.id;
+                            console.log("[handleCreateCopyFromEnglish] Tìm thấy lesson parent ID đúng ngôn ngữ:", lessonParentId);
+                        } else {
+                            // Fallback: nếu không tìm thấy lesson đúng ngôn ngữ, 
+                            // thử dùng lesson tiếng Anh (từ result.post.sac_lesson nếu có)
+                            if (result.post.sac_lesson) {
+                                lessonParentId = result.post.sac_lesson;
+                                // Tìm lesson node tiếng Anh để lấy title
+                                const englishLessonNode = lessonNodeMap[englishLang.code] as Lesson | null;
+                                if (englishLessonNode) {
+                                    targetLessonNode = englishLessonNode;
+                                }
+                                console.log("[handleCreateCopyFromEnglish] Fallback: Dùng lesson từ post tiếng Anh:", lessonParentId);
+                            } else {
+                                console.log("[handleCreateCopyFromEnglish] Không tìm thấy lesson parent và không có fallback");
+                            }
+                        }
+                    } else {
+                        // Nếu không tìm thấy lessonKey, dùng lesson từ post tiếng Anh
+                        if (result.post.sac_lesson) {
+                            lessonParentId = result.post.sac_lesson;
+                            // Nếu có sac_lesson_detail trong post, dùng nó
+                            if (result.post.sac_lesson_detail) {
+                                try {
+                                    const lessonDetail = typeof result.post.sac_lesson_detail === 'string' 
+                                        ? JSON.parse(result.post.sac_lesson_detail) 
+                                        : result.post.sac_lesson_detail;
+                                    targetLessonNode = { id: lessonDetail.id, title: lessonDetail.title } as Lesson;
+                                } catch (e) {
+                                    console.warn("[handleCreateCopyFromEnglish] Không parse được sac_lesson_detail:", e);
+                                }
+                            }
+                            console.log("[handleCreateCopyFromEnglish] Không có lessonKey, dùng lesson từ post:", lessonParentId);
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không có lessonKey và không có sac_lesson trong post");
+                        }
+                    }
+
+                    // Tạo dữ liệu mới từ bản tiếng Anh
+                    // Copy tất cả dữ liệu và loại bỏ các field không cần thiết khi tạo mới
+                    const newPostData: ANY = { ...result.post };
+                    console.log("[handleCreateCopyFromEnglish] Post data ban đầu:", newPostData);
+                    
+                    // Xóa các field ID và metadata không cần thiết
+                    delete newPostData.id;
+                    delete newPostData.created_at;
+                    delete newPostData.updated_at;
+                    console.log("[handleCreateCopyFromEnglish] Sau khi xóa id, created_at, updated_at");
+                    
+                    // Set relationship với lesson parent đúng ngôn ngữ
+                    if (lessonParentId) {
+                        newPostData.sac_lesson = lessonParentId;
+                        console.log("[handleCreateCopyFromEnglish] Set sac_lesson:", lessonParentId);
+                        
+                        // Set sac_lesson_detail với thông tin của lesson node
+                        if (targetLessonNode && targetLessonNode.id && targetLessonNode.title) {
+                            newPostData.sac_lesson_detail = {
+                                id: targetLessonNode.id,
+                                title: targetLessonNode.title,
+                            };
+                            console.log("[handleCreateCopyFromEnglish] Set sac_lesson_detail:", newPostData.sac_lesson_detail);
+                        } else {
+                            console.log("[handleCreateCopyFromEnglish] Không có targetLessonNode để set sac_lesson_detail");
+                        }
+                    } else {
+                        console.log("[handleCreateCopyFromEnglish] Không set sac_lesson vì không có lessonParentId");
+                    }
+                    
+                    // Set ngôn ngữ mới (nếu có field language)
+                    const targetLang = languages.find(lang => lang.code === langCode);
+                    console.log("[handleCreateCopyFromEnglish] Target lang:", targetLang);
+                    
+                    if (targetLang) {
+                        // Tìm language ID từ languages array nếu có
+                        if (targetLang.id) {
+                            newPostData.sac_language = targetLang.id;
+                            console.log("[handleCreateCopyFromEnglish] Set sac_language:", targetLang.id);
+                        }
+                        // Hoặc set language code nếu có field language
+                        if (newPostData.language !== undefined) {
+                            newPostData.language = langCode;
+                            console.log("[handleCreateCopyFromEnglish] Set language code:", langCode);
+                        }
+                    }
+
+                    console.log("[handleCreateCopyFromEnglish] Post data cuối cùng:", newPostData);
+
+                    const addData: DataResultApiProps = {
+                        ...result,
+                        post: newPostData,
+                        type: objectType,
+                        action: "ADD_NEW",
+                    };
+                    
+                    console.log("[handleCreateCopyFromEnglish] Mở drawer với data:", addData);
+                    
+                    setCurrentEditNodeType(nodeType);
+                    setDrawerData(addData);
+                    setOpenDrawer(true);
+                } else {
+                    api.showMessage(
+                        `Không tìm thấy dữ liệu để copy`,
+                        "error"
+                    );
+                }
+            },
+            error: () => {
+                api.showMessage(
+                    `Không thể tải dữ liệu từ bản tiếng Anh`,
+                    "error"
+                );
             },
         });
     };
@@ -1130,6 +1366,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         }
                                                         onEditNode={
                                                             handleEditNode
+                                                        }
+                                                        onCreateCopyFromEnglish={
+                                                            handleCreateCopyFromEnglish
                                                         }
                                                         onAddChild={
                                                             handleAddChild

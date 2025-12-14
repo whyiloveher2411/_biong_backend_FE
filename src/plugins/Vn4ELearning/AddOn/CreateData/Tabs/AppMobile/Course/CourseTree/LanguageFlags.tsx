@@ -10,6 +10,7 @@ interface LanguageFlagsProps {
     courseId: string | null;
     currentLanguage?: string;
     onEditNode?: (nodeId: string, nodeType: string) => void;
+    onCreateCopyFromEnglish?: (langCode: string, nodeKey: string, nodeType: string, courseId: string) => void;
 }
 
 export default function LanguageFlags({
@@ -19,6 +20,7 @@ export default function LanguageFlags({
     courseId,
     currentLanguage,
     onEditNode,
+    onCreateCopyFromEnglish,
 }: LanguageFlagsProps) {
     const nodeType = getNodeType(node);
     
@@ -60,6 +62,9 @@ export default function LanguageFlags({
                 const isAvailable = !!nodeForLang;
                 const opacity = isAvailable ? 1 : 0.1;
                 const isCurrentLanguage = lang.code === currentLanguage;
+                const isUnavailable = !isAvailable;
+                // Chỉ cho phép click vào ngôn ngữ chưa có nếu là question
+                const canCreateCopy = isUnavailable && nodeType === "question" && onCreateCopyFromEnglish && nodeKey;
 
                 return (
                     <Box
@@ -68,23 +73,40 @@ export default function LanguageFlags({
                             e.stopPropagation();
                             if (isAvailable && nodeForLang && onEditNode) {
                                 onEditNode(nodeForLang.id, nodeType);
+                            } else if (canCreateCopy && nodeKey && courseId) {
+                                // Tạo copy từ tiếng Anh cho question
+                                onCreateCopyFromEnglish(lang.code, nodeKey, nodeType, courseId);
                             }
                         }}
                         sx={{
                             display: "flex",
                             alignItems: "center",
-                            cursor: isAvailable ? "pointer" : "not-allowed",
+                            cursor: isAvailable || canCreateCopy ? "pointer" : "not-allowed",
                             transition: "all 0.2s ease",
                             borderRadius: 0.5,
                             p: 0.25,
-                            border: isCurrentLanguage ? "2px solid" : "none",
-                            borderColor: isCurrentLanguage ? "primary.main" : "transparent",
-                            "&:hover": isAvailable ? {
+                            border: isCurrentLanguage 
+                                ? "2px solid" 
+                                : isUnavailable 
+                                    ? "2px solid" 
+                                    : "none",
+                            borderColor: isCurrentLanguage 
+                                ? "primary.main" 
+                                : isUnavailable 
+                                    ? "#ffc107" // Màu vàng cho ngôn ngữ chưa có
+                                    : "transparent",
+                            "&:hover": isAvailable || canCreateCopy ? {
                                 backgroundColor: "action.hover",
                                 transform: "scale(1.1)",
                             } : {},
                         }}
-                        title={isAvailable ? `${lang.title} - Click để chuyển` : `${lang.title} - Chưa có`}
+                        title={
+                            isAvailable 
+                                ? `${lang.title} - Click để chuyển` 
+                                : canCreateCopy
+                                    ? `${lang.title} - Click để tạo bản copy từ tiếng Anh`
+                                    : `${lang.title} - Chưa có`
+                        }
                     >
                         {lang.icon_url ? (
                             <img
