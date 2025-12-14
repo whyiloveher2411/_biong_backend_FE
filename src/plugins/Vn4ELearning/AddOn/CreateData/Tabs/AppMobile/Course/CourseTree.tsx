@@ -244,6 +244,10 @@ function CourseTreeItem({
     onExpandAll,
     onCollapse,
     onExpandNode,
+    languages,
+    courseNodeMap,
+    findCourseIdByPostId,
+    courses,
 }: {
     node: TreeNode;
     depth?: number;
@@ -265,6 +269,10 @@ function CourseTreeItem({
     onExpandAll?: (nodeKey: string) => void;
     onCollapse?: (nodeKey: string) => void;
     onExpandNode?: (nodeKey: string) => void;
+    languages?: Array<{ code: string; title: string; flag_code: string; icon_url?: string }>;
+    courseNodeMap?: CourseNodeMap;
+    findCourseIdByPostId?: (postId: string, coursesList: Course[]) => string | null;
+    courses?: Course[] | null;
 }) {
     const [open, setOpen] = React.useState(false); // Mặc định đóng tất cả, chỉ hiển thị danh sách khóa học
 
@@ -293,6 +301,20 @@ function CourseTreeItem({
     const basePadding = nodeType === "question" ? 0 : 2;
     const paddingLeft =
         depth > 0 ? depth * indentSize + basePadding : basePadding;
+
+    // Tính toán currentLanguage cho node hiện tại
+    let currentLanguage = "";
+    if (languages && languages.length > 0 && courses) {
+        if (nodeType === "translate") {
+            const translateNode = node as Translate;
+            currentLanguage = getLanguageCodeFromTranslate(translateNode, languages);
+        } else if (nodeType !== "course") {
+            const translateParent = findTranslateParent(node, courses);
+            if (translateParent) {
+                currentLanguage = getLanguageCodeFromTranslate(translateParent, languages);
+            }
+        }
+    }
 
     const children = getChildren(node);
     const isLastChild = (index: number) => index === children.length - 1;
@@ -611,14 +633,13 @@ function CourseTreeItem({
                                     }
                                     return null;
                                 })()}
-                            {/* Count indicator ở cuối */}
+                            {/* Count indicator */}
                             {nodeHasChildren && (
                                 <Box
                                     sx={{
                                         display: "flex",
                                         alignItems: "center",
                                         gap: 0.25,
-                                        ml: "auto",
                                         backgroundColor: "rgba(0,0,0,0.05)",
                                         borderRadius: 0.5,
                                         px: 0.5,
@@ -651,6 +672,19 @@ function CourseTreeItem({
                                 </Box>
                             )}
                         </Box>
+                        {/* Language flags ở cuối dòng */}
+                        {languages && languages.length > 0 && courseNodeMap && findCourseIdByPostId && courses && (
+                            <Box sx={{ ml: "auto", flexShrink: 0 }}>
+                                <LanguageFlags
+                                    node={node}
+                                    languages={languages}
+                                    courseNodeMap={courseNodeMap}
+                                    courseId={findCourseIdByPostId(node.id, courses)}
+                                    currentLanguage={currentLanguage}
+                                    onEditNode={onEditNode}
+                                />
+                            </Box>
+                        )}
                     </ListItemButton>
                 </Box>
             </ListItem>
@@ -762,6 +796,10 @@ function CourseTreeItem({
                                                             onExpandNode={
                                                                 onExpandNode
                                                             }
+                                                            languages={languages}
+                                                            courseNodeMap={courseNodeMap}
+                                                            findCourseIdByPostId={findCourseIdByPostId}
+                                                            courses={courses}
                                                         />
                                                     </Box>
                                                 )}
@@ -1003,6 +1041,118 @@ function findTranslateParent(
     return findParent(node, courses);
 }
 
+// Component LanguageFlags để hiển thị danh sách ngôn ngữ ở cuối dòng tree
+function LanguageFlags({
+    node,
+    languages,
+    courseNodeMap,
+    courseId,
+    currentLanguage,
+    onEditNode,
+}: {
+    node: TreeNode;
+    languages: Array<{ code: string; title: string; flag_code: string; icon_url?: string }>;
+    courseNodeMap: CourseNodeMap;
+    courseId: string | null;
+    currentLanguage?: string;
+    onEditNode?: (nodeId: string, nodeType: string) => void;
+}) {
+    const nodeType = getNodeType(node);
+    
+    // Chỉ hiển thị cho translate, section, chapter, lesson, question
+    if (nodeType === "course" || !courseId || !languages || languages.length === 0) {
+        return null;
+    }
+
+    // Lấy key của node
+    let nodeKey: string | undefined;
+    if (nodeType === "translate") {
+        nodeKey = (node as Translate).key;
+    } else if (nodeType === "section") {
+        nodeKey = (node as Section).key;
+    } else if (nodeType === "chapter") {
+        nodeKey = (node as Chapter).key;
+    } else if (nodeType === "lesson") {
+        nodeKey = (node as Lesson).key;
+    } else if (nodeType === "question") {
+        nodeKey = (node as Question).key;
+    }
+
+    // Tạo map key để lookup (nếu có nodeKey)
+    const mapKey = nodeKey ? `course_${courseId}_${nodeType}_${nodeKey}` : null;
+    const nodeMap = mapKey ? (courseNodeMap[mapKey] || {}) : {};
+
+    // Luôn hiển thị flags, ngay cả khi không có node nào trong map
+    return (
+        <Box
+            sx={{
+                display: "flex",
+                gap: 0.5,
+                alignItems: "center",
+                flexShrink: 0,
+            }}
+        >
+            {languages.map((lang) => {
+                const nodeForLang = nodeMap[lang.code];
+                const isAvailable = !!nodeForLang;
+                const opacity = isAvailable ? 1 : 0.1;
+                const isCurrentLanguage = lang.code === currentLanguage;
+
+                return (
+                    <Box
+                        key={lang.code}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (isAvailable && nodeForLang && onEditNode) {
+                                onEditNode(nodeForLang.id, nodeType);
+                            }
+                        }}
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            cursor: isAvailable ? "pointer" : "not-allowed",
+                            transition: "all 0.2s ease",
+                            borderRadius: 0.5,
+                            p: 0.25,
+                            border: isCurrentLanguage ? "2px solid" : "none",
+                            borderColor: isCurrentLanguage ? "primary.main" : "transparent",
+                            "&:hover": isAvailable ? {
+                                backgroundColor: "action.hover",
+                                transform: "scale(1.1)",
+                            } : {},
+                        }}
+                        title={isAvailable ? `${lang.title} - Click để chuyển` : `${lang.title} - Chưa có`}
+                    >
+                        {lang.icon_url ? (
+                            <img
+                                src={lang.icon_url}
+                                alt={lang.title}
+                                style={{
+                                    width: 16,
+                                    height: 12,
+                                    objectFit: "cover",
+                                    opacity,
+                                }}
+                            />
+                        ) : (
+                            <img
+                                src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
+                                alt={lang.title}
+                                style={{
+                                    width: 16,
+                                    height: 12,
+                                    objectFit: "cover",
+                                    opacity,
+                                }}
+                            />
+                        )}
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
 // Component LanguageSelector để chọn ngôn ngữ trong drawer
 function LanguageSelector({
     languages,
@@ -1047,29 +1197,38 @@ function LanguageSelector({
                             }
                         }}
                         startIcon={
-                            lang.icon_url ? (
-                                <img
-                                    src={lang.icon_url}
-                                    alt=""
-                                    style={{
-                                        width: 20,
-                                        height: 15,
-                                        objectFit: "cover",
-                                        opacity: isAvailable ? 1 : 0.5,
-                                    }}
-                                />
-                            ) : (
-                                <img
-                                    src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
-                                    alt=""
-                                    style={{
-                                        width: 20,
-                                        height: 15,
-                                        objectFit: "cover",
-                                        opacity: isAvailable ? 1 : 0.5,
-                                    }}
-                                />
-                            )
+                            <Box
+                                sx={{
+                                    borderRadius: 0.5,
+                                    p: 0.25,
+                                    display: "flex",
+                                    alignItems: "center",
+                                }}
+                            >
+                                {lang.icon_url ? (
+                                    <img
+                                        src={lang.icon_url}
+                                        alt=""
+                                        style={{
+                                            width: 20,
+                                            height: 15,
+                                            objectFit: "cover",
+                                            opacity: isAvailable ? 1 : 0.5,
+                                        }}
+                                    />
+                                ) : (
+                                    <img
+                                        src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
+                                        alt=""
+                                        style={{
+                                            width: 20,
+                                            height: 15,
+                                            objectFit: "cover",
+                                            opacity: isAvailable ? 1 : 0.5,
+                                        }}
+                                    />
+                                )}
+                            </Box>
                         }
                         sx={{
                             textTransform: "none",
@@ -2211,6 +2370,10 @@ function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         onExpandNode={
                                                             handleExpandNode
                                                         }
+                                                        languages={languages}
+                                                        courseNodeMap={courseNodeMap}
+                                                        findCourseIdByPostId={findCourseIdByPostId}
+                                                        courses={courses}
                                                     />
                                                 </Box>
                                             )}
