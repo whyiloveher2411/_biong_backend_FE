@@ -65,7 +65,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
             setData(false);
         }
         // eslint-disable-next-line
-    }, [post.id]);
+    }, [queryUrl, post.id]);
 
     const handleSubmit = () => {
 

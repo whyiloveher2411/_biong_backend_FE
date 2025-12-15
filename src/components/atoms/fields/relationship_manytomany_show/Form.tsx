@@ -60,7 +60,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             setData(false);
         }
 
-    }, [post.id]);
+    }, [queryUrl, post.id]);
 
     const handleSubmit = () => {
         if (!open) {
