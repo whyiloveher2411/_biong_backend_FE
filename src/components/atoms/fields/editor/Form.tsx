@@ -218,7 +218,7 @@ export default React.memo(function TextareaForm({ config, post, name, onReview, 
 
                 //eslint-disable-next-line
                 //@ts-ignore
-                el.setAttribute('style', '--width:' + ((el.offsetWidth > 400 ? el.offsetWidth - 2 + 'px' : '100%')) + '; --toxHeaderHeight:' + $menubar.offsetHeight + 'px;');
+                el.setAttribute('style', '--width:' + ((el.offsetWidth > 400 ? el.offsetWidth - 2 + 'px' : '100%')) + '; --toxHeaderHeight:' + ($menubar.offsetHeight < 156 ? $menubar.offsetHeight : 156) + 'px;');
 
                 let $tinymce_editor = el.querySelector('.tox-tinymce'),
                     top = el.getBoundingClientRect().top, dk = false;
