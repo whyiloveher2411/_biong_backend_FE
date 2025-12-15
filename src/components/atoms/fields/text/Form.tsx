@@ -55,6 +55,7 @@ export default React.memo(function TextForm({ config, post, onReview, name, data
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setRender(render + 1); post[name] = e.currentTarget.value }}
                 placeholder={config.placeholder ?? ''}
                 {...config.inputProps}
+                disabled={config.disable_if_has_value ? (valueInital?.length > 0 && post.id) : (config.inputProps?.disable ?? false)}
                 startAdornment={tooltipAiSuggest.startAdornment}
             />
             {

@@ -33,6 +33,9 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
 
     const { callAddOn } = AddOn();
 
+    const hasCalledApiRef = React.useRef(false);
+    const currentIdRef = React.useRef<string | number>(id);
+
     const handleSubmit = () => {
 
         setData((prev: JsonFormat) => {
@@ -68,64 +71,81 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
 
     React.useLayoutEffect(() => {
 
-        ajax({
-            url: `post-type/detail/${type}/${id}`,
-            method: 'POST',
-            success: function (result: CreatePostTypeData) {
+        // Reset flag nếu id thay đổi
+        if (currentIdRef.current !== id) {
+            hasCalledApiRef.current = false;
+            currentIdRef.current = id;
+        }
 
-                unstable_batchedUpdates(() => {
-                    if (result.redirect) {
+        // Chỉ gọi API nếu chưa gọi hoặc id đã thay đổi
+        if (!hasCalledApiRef.current && id) {
+            hasCalledApiRef.current = true;
 
-                        navigate(result.redirect);
-                        return;
+            ajax({
+                url: `post-type/detail/${type}/${id}`,
+                method: 'POST',
+                success: function (result: CreatePostTypeData) {
 
-                    } else {
+                    unstable_batchedUpdates(() => {
+                        if (result.redirect) {
 
-                        if (result.config) {
+                            navigate(result.redirect);
+                            return;
 
-                            result.type = type;
-                            result.updatePost = new Date();
+                        } else {
 
-                            if (result.post) {
+                            if (result.config) {
 
-                                result.action = 'EDIT';
+                                result.type = type;
+                                result.updatePost = new Date();
 
-                            } else {
+                                if (result.post) {
 
-                                if (action === 'edit') {
-
-                                    navigate(`/post-type/${type}/list`);
-
-                                    enqueueSnackbar(__('Does not exist {{post_type}} with id is {{id}}', {
-                                        post_type: result.config.title,
-                                        id
-                                    }), {
-                                        variant: 'warning'
-                                    });
+                                    result.action = 'EDIT';
 
                                 } else {
-                                    result.action = 'ADD_NEW';
-                                    result = { ...result, post: { meta: {} } };
+
+                                    if (action === 'edit') {
+
+                                        navigate(`/post-type/${type}/list`);
+
+                                        enqueueSnackbar(__('Does not exist {{post_type}} with id is {{id}}', {
+                                            post_type: result.config.title,
+                                            id
+                                        }), {
+                                            variant: 'warning'
+                                        });
+
+                                    } else {
+                                        result.action = 'ADD_NEW';
+                                        result = { ...result, post: { meta: {} } };
+                                    }
                                 }
+
+                                result.config.extendedTab = callAddOn(
+                                    'CreateData/Tabs',
+                                    type,
+                                    { formEdit: { title: __('Edit'), priority: 1 } },
+                                    { ...result }
+                                );
+
+                                setTimes(prev => prev + 1);
+                                setData({ ...result });
+
                             }
 
-                            result.config.extendedTab = callAddOn(
-                                'CreateData/Tabs',
-                                type,
-                                { formEdit: { title: __('Edit'), priority: 1 } },
-                                { ...result }
-                            );
-
-                            setTimes(prev => prev + 1);
-                            setData({ ...result });
-
                         }
+                    })
+                }
+            });
+        }
 
-                    }
-                })
+        return () => {
+            // Cleanup: reset flag khi component unmount hoặc id thay đổi
+            if (currentIdRef.current !== id) {
+                hasCalledApiRef.current = false;
             }
-        });
-
+        };
         //eslint-disable-next-line
     }, [id]);
 

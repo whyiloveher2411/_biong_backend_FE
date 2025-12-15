@@ -14,10 +14,12 @@ function EditPostType({ open, onClose, id, postType, onEdit }: {
 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
     const useAjax1 = useAjax({ loadingType: 'custom' });
+    const isMountedRef = React.useRef(false);
 
     React.useEffect(() => {
 
-        if (open) {
+        if (open && !isMountedRef.current) {
+            isMountedRef.current = true;
             useAjax1.ajax({
                 url: 'post-type/detail/' + postType + '/' + id,
                 data: {
@@ -35,7 +37,12 @@ function EditPostType({ open, onClose, id, postType, onEdit }: {
             });
         }
 
-    }, [open]);
+        return () => {
+            if (!open) {
+                isMountedRef.current = false;
+            }
+        };
+    }, [open, id, postType]);
 
     const handleSubmit = () => {
 
@@ -75,8 +82,6 @@ function EditPostType({ open, onClose, id, postType, onEdit }: {
             }
         </DrawerEditPost>
     )
-
-    return <></>
 }
 
 export default EditPostType

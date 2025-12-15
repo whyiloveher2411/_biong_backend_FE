@@ -724,8 +724,8 @@ export default function MultiLanguageDrawer({
                             <Box
                                 key={lang.code}
                                 sx={{
-                                    minWidth: 500,
-                                    width: 500,
+                                    minWidth: 700,
+                                    width: 700,
                                     flexShrink: 0,
                                     border: "1px solid",
                                     borderColor: "divider",
