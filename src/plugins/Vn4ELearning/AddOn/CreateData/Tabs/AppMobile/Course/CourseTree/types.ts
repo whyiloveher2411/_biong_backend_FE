@@ -2,6 +2,7 @@ export interface Question {
     id: string;
     title: string;
     key?: string;
+    is_complete?: boolean;
 }
 
 export interface Lesson {

@@ -1,5 +1,6 @@
 import React from "react";
 import Box from "components/atoms/Box";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { TreeNode, CourseNodeMap, Translate, Section, Chapter, Lesson, Question, Course } from "./types";
 import { getNodeType } from "./utils";
 
@@ -163,6 +164,13 @@ export default function LanguageFlags({
                     nodeKey && 
                     parentExists;
                 
+                // Kiểm tra is_complete cho question
+                let isComplete = false;
+                if (nodeType === "question" && nodeForLang) {
+                    const questionNode = nodeForLang as Question;
+                    isComplete = questionNode.is_complete === true;
+                }
+                
                 // Opacity cho flag image
                 const flagOpacity = isAvailable ? 1 : (canCreateCopy ? 0.1 : 0.05);
 
@@ -181,6 +189,7 @@ export default function LanguageFlags({
                         sx={{
                             display: "flex",
                             alignItems: "center",
+                            position: "relative",
                             cursor: isAvailable || canCreateCopy ? "pointer" : "not-allowed",
                             transition: "all 0.2s ease",
                             borderRadius: 0.5,
@@ -225,6 +234,19 @@ export default function LanguageFlags({
                                     height: 12,
                                     objectFit: "cover",
                                     opacity: flagOpacity,
+                                }}
+                            />
+                        )}
+                        {isComplete && isAvailable && (
+                            <CheckCircleIcon
+                                sx={{
+                                    position: "absolute",
+                                    top: -4,
+                                    right: -4,
+                                    fontSize: 12,
+                                    color: "success.main",
+                                    backgroundColor: "background.paper",
+                                    borderRadius: "50%",
                                 }}
                             />
                         )}

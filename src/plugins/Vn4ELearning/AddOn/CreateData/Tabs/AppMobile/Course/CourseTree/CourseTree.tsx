@@ -1366,6 +1366,54 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 data: { ...drawerData.post, _action: drawerData.action },
                 success: (result) => {
                     if (result.post?.id) {
+                        // Nếu là question và có is_complete, cập nhật courseNodeMap ngay lập tức
+                        if (currentEditNodeType === "question" && drawerData.post && courses) {
+                            const questionTitle = drawerData.post.title;
+                            // Tìm courseId từ result.post.id hoặc từ drawerData.post.course
+                            let courseId = findCourseIdByPostId(result.post.id, courses);
+                            if (!courseId && drawerData.post.course) {
+                                courseId = String(drawerData.post.course);
+                            }
+                            
+                            if (courseId && questionTitle) {
+                                const mapKey = `course_${courseId}_question_${questionTitle}`;
+                                // Tìm language code từ drawerData
+                                let langCode = "";
+                                if (drawerData.post?.sac_language) {
+                                    const lang = languages.find(l => 
+                                        l.id?.toString() === drawerData.post?.sac_language?.toString()
+                                    );
+                                    if (lang) {
+                                        langCode = lang.code;
+                                    }
+                                } else if (drawerData.post?.language) {
+                                    langCode = drawerData.post.language;
+                                }
+                                
+                                if (langCode) {
+                                    setCourseNodeMap((prevMap) => {
+                                        const newMap = { ...prevMap };
+                                        if (!newMap[mapKey]) {
+                                            newMap[mapKey] = {};
+                                        }
+                                        
+                                        // Cập nhật is_complete cho node trong map
+                                        if (newMap[mapKey][langCode] && drawerData.post) {
+                                            const updatedNode = {
+                                                ...newMap[mapKey][langCode],
+                                                is_complete: drawerData.post.is_complete || false,
+                                            };
+                                            newMap[mapKey] = {
+                                                ...newMap[mapKey],
+                                                [langCode]: updatedNode,
+                                            };
+                                        }
+                                        return newMap;
+                                    });
+                                }
+                            }
+                        }
+                        
                         setOpenDrawer(false);
                         setDrawerData(false);
                         // Reload danh sách courses
@@ -1790,6 +1838,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             currentEditNodeType={currentEditNodeType}
                             courses={courses}
                             courseNodeMap={courseNodeMap}
+                            setCourseNodeMap={setCourseNodeMap}
                             findCourseIdByPostId={findCourseIdByPostId}
                         />
                     );
@@ -1953,9 +2002,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             // Tạo availableLanguages array từ map
                             const availableLanguages = languages.map((lang) => {
                                 const node = nodeMap?.[lang.code];
+                                // Nếu là question, kiểm tra is_complete
+                                let isComplete = false;
+                                if (currentEditNodeType === "question" && node) {
+                                    const questionNode = node as Question;
+                                    isComplete = questionNode.is_complete === true;
+                                }
                                 return {
                                     code: lang.code,
                                     postId: node?.id || null,
+                                    isComplete: isComplete,
                                 };
                             });
 

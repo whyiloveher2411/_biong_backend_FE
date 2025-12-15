@@ -26,6 +26,7 @@ interface MultiLanguageDrawerProps {
     currentEditNodeType: string | null;
     courses: Course[] | null;
     courseNodeMap: Record<string, Record<string, TreeNode>>;
+    setCourseNodeMap?: React.Dispatch<React.SetStateAction<Record<string, Record<string, TreeNode>>>>;
     findCourseIdByPostId: (postId: string, coursesList: Course[]) => string | null;
 }
 
@@ -42,6 +43,7 @@ export default function MultiLanguageDrawer({
     currentEditNodeType,
     courses,
     courseNodeMap,
+    setCourseNodeMap,
     findCourseIdByPostId,
 }: MultiLanguageDrawerProps) {
     const theme = useTheme();
@@ -627,6 +629,36 @@ export default function MultiLanguageDrawer({
             data: { ...langData.post, _action: langData.action },
             success: (result) => {
                 if (result.post?.id) {
+                    // Nếu là question và có is_complete, cập nhật courseNodeMap ngay lập tức
+                    if (currentEditNodeType === "question" && langData.post && courses && setCourseNodeMap) {
+                        const questionTitle = langData.post.title;
+                        const courseId = findCourseIdByPostId(result.post.id, courses) || 
+                                      (langData.post.course ? String(langData.post.course) : null);
+                        
+                        if (courseId && questionTitle) {
+                            const mapKey = `course_${courseId}_question_${questionTitle}`;
+                            setCourseNodeMap((prevMap) => {
+                                const newMap = { ...prevMap };
+                                if (!newMap[mapKey]) {
+                                    newMap[mapKey] = {};
+                                }
+                                
+                                if (newMap[mapKey][langCode] && langData.post) {
+                                    // Cập nhật is_complete cho node trong map
+                                    const updatedNode = {
+                                        ...newMap[mapKey][langCode],
+                                        is_complete: langData.post.is_complete || false,
+                                    };
+                                    newMap[mapKey] = {
+                                        ...newMap[mapKey],
+                                        [langCode]: updatedNode,
+                                    };
+                                }
+                                return newMap;
+                            });
+                        }
+                    }
+                    
                     // Reload dữ liệu cho ngôn ngữ này
                     const postId = result.post.id;
                     api.ajax({

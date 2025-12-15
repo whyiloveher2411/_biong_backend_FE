@@ -1,11 +1,12 @@
 import React from "react";
 import Box from "components/atoms/Box";
 import Button from "components/atoms/Button";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 interface LanguageSelectorProps {
     languages: Array<{ code: string; title: string; flag_code: string; icon_url?: string }>;
     currentLanguage: string;
-    availableLanguages: Array<{ code: string; postId: string | null }>;
+    availableLanguages: Array<{ code: string; postId: string | null; isComplete?: boolean }>;
     onNavigateToLanguage: (langCode: string, postId: string) => void;
 }
 
@@ -17,7 +18,7 @@ export default function LanguageSelector({
 }: LanguageSelectorProps) {
     // Tạo map để dễ lookup
     const availableMap = new Map(
-        availableLanguages.map((item) => [item.code, item.postId])
+        availableLanguages.map((item) => [item.code, { postId: item.postId, isComplete: item.isComplete || false }])
     );
 
     return (
@@ -31,8 +32,10 @@ export default function LanguageSelector({
         >
             {languages.map((lang) => {
                 const isSelected = lang.code === currentLanguage;
-                const postId = availableMap.get(lang.code);
+                const langData = availableMap.get(lang.code);
+                const postId = langData?.postId;
                 const isAvailable = postId !== null && postId !== undefined;
+                const isComplete = langData?.isComplete || false;
 
                 return (
                     <Button
@@ -53,6 +56,7 @@ export default function LanguageSelector({
                                     p: 0.25,
                                     display: "flex",
                                     alignItems: "center",
+                                    position: "relative",
                                 }}
                             >
                                 {lang.icon_url ? (
@@ -75,6 +79,19 @@ export default function LanguageSelector({
                                             height: 15,
                                             objectFit: "cover",
                                             opacity: isAvailable ? 1 : 0.5,
+                                        }}
+                                    />
+                                )}
+                                {isComplete && isAvailable && (
+                                    <CheckCircleIcon
+                                        sx={{
+                                            position: "absolute",
+                                            top: -4,
+                                            right: -4,
+                                            fontSize: 14,
+                                            color: "success.main",
+                                            backgroundColor: "background.paper",
+                                            borderRadius: "50%",
                                         }}
                                     />
                                 )}
