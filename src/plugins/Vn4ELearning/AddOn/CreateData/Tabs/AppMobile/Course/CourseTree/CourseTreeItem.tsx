@@ -8,6 +8,11 @@ import Typography from "components/atoms/Typography";
 import Chip from "components/atoms/Chip";
 import Button from "components/atoms/Button";
 import LinearProgress from "components/atoms/LinearProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
@@ -19,6 +24,7 @@ import {
     Draggable,
     DropResult,
 } from "react-beautiful-dnd";
+import useAjax from "hook/useApi";
 import { TreeNode, Course, CourseNodeMap, Translate } from "./types";
 import {
     getNodeType,
@@ -40,6 +46,9 @@ interface CourseTreeItemProps {
     depth?: number;
     isLast?: boolean;
     onEditNode?: (nodeId: string, nodeType: string) => void;
+    onSelectCourseForEdit?: (courseId: string) => void;
+    onBackToCourseList?: () => void;
+    selectedCourseId?: string | null;
     onCreateCopyFromEnglish?: (langCode: string, nodeKey: string, nodeType: string, courseId: string) => void;
     onAddChild?: (
         parentId: string,
@@ -71,6 +80,9 @@ export default function CourseTreeItem({
     onCreateCopyFromEnglish,
     onAddChild,
     onUpdateOrder,
+    onSelectCourseForEdit,
+    onBackToCourseList,
+    selectedCourseId,
     dragHandleProps,
     expandedNodes,
     onExpandAll,
@@ -81,6 +93,11 @@ export default function CourseTreeItem({
     findCourseIdByPostId,
     courses,
 }: CourseTreeItemProps) {
+    const apiCreateContentAi = useAjax();
+    const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
+    const [aiDialogValue, setAiDialogValue] = React.useState("");
+    const [aiDialogTranslateId, setAiDialogTranslateId] = React.useState<string | null>(null);
+    const [aiDialogCourseId, setAiDialogCourseId] = React.useState<string | null>(null);
     const [open, setOpen] = React.useState(false); // Mặc định đóng tất cả, chỉ hiển thị danh sách khóa học
 
     // Tự động mở/đóng dựa trên expandedNodes
@@ -181,6 +198,50 @@ export default function CourseTreeItem({
         
         return calculateTranslationProgress(node, languages, courseNodeMap, currentCourseId);
     }, [node, nodeType, languages, courseNodeMap, findCourseIdByPostId, courses]);
+
+    const handleOpenAiContentDialog = () => {
+        if (nodeType !== "translate" || !findCourseIdByPostId || !courses) {
+            return;
+        }
+        const courseId = findCourseIdByPostId(node.id, courses);
+        if (!courseId) {
+            apiCreateContentAi.showMessage("Không tìm thấy khóa học", "error");
+            return;
+        }
+        setAiDialogCourseId(courseId);
+        setAiDialogTranslateId(String(node.id));
+        setAiDialogValue("");
+        setAiDialogOpen(true);
+    };
+
+    const handleCloseAiContentDialog = () => {
+        setAiDialogOpen(false);
+        setAiDialogValue("");
+        setAiDialogTranslateId(null);
+        setAiDialogCourseId(null);
+    };
+
+    const handleSubmitAiContent = () => {
+        if (!aiDialogCourseId || !aiDialogTranslateId) {
+            apiCreateContentAi.showMessage("Thiếu thông tin course hoặc translate", "error");
+            return;
+        }
+        apiCreateContentAi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/create-content-course-by-ai",
+            method: "POST",
+            data: {
+                course_id: aiDialogCourseId,
+                translate_id: aiDialogTranslateId,
+                content: aiDialogValue.trim(),
+            },
+            success: () => {
+                handleCloseAiContentDialog();
+            },
+            error: () => {
+                apiCreateContentAi.showMessage("Không thể tạo nội dung bằng AI", "error");
+            },
+        });
+    };
 
     return (
         <Box sx={{ position: "relative" }}>
@@ -537,6 +598,39 @@ export default function CourseTreeItem({
                         </Box>
                         {/* Thanh tiến trình dịch và Language flags ở cuối dòng */}
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexShrink: 0 }}>
+                            {nodeType === "course" && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (String(selectedCourseId) === String(node.id)) {
+                                            onBackToCourseList && onBackToCourseList();
+                                        } else if (onSelectCourseForEdit) {
+                                            onSelectCourseForEdit(node.id);
+                                        }
+                                    }}
+                                    sx={{ whiteSpace: "nowrap" }}
+                                >
+                                    {String(selectedCourseId) === String(node.id)
+                                        ? "<- Danh sách khóa học"
+                                        : "Chỉnh sửa khóa học"}
+                                </Button>
+                            )}
+                            {nodeType === "translate" && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenAiContentDialog();
+                                    }}
+                                    disabled={apiCreateContentAi.open}
+                                    sx={{ whiteSpace: "nowrap" }}
+                                >
+                                    {apiCreateContentAi.open ? "Đang tạo..." : "Thêm nội dung bằng AI"}
+                                </Button>
+                            )}
                             {/* Thanh tiến trình dịch - đặt trước language flags */}
                             {translationProgress !== null && (
                                 <Box
@@ -598,6 +692,34 @@ export default function CourseTreeItem({
                     </ListItemButton>
                 </Box>
             </ListItem>
+            <Dialog open={aiDialogOpen} onClose={handleCloseAiContentDialog} fullWidth maxWidth="md">
+                <DialogTitle>Thêm nội dung bằng AI</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Nội dung"
+                        fullWidth
+                        multiline
+                        minRows={6}
+                        value={aiDialogValue}
+                        onChange={(e) => setAiDialogValue(e.target.value)}
+                        disabled={apiCreateContentAi.open}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseAiContentDialog} disabled={apiCreateContentAi.open}>
+                        Hủy
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleSubmitAiContent}
+                        disabled={apiCreateContentAi.open}
+                    >
+                        {apiCreateContentAi.open ? "Đang gửi..." : "Submit"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Children với đường nối */}
             {nodeHasChildren && (
@@ -693,6 +815,15 @@ export default function CourseTreeItem({
                                                             }
                                                             onUpdateOrder={
                                                                 onUpdateOrder
+                                                            }
+                                                            onSelectCourseForEdit={
+                                                                onSelectCourseForEdit
+                                                            }
+                                                            onBackToCourseList={
+                                                                onBackToCourseList
+                                                            }
+                                                            selectedCourseId={
+                                                                selectedCourseId
                                                             }
                                                             dragHandleProps={
                                                                 provided.dragHandleProps

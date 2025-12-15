@@ -27,6 +27,7 @@ interface MultiLanguageDrawerProps {
     courses: Course[] | null;
     courseNodeMap: Record<string, Record<string, TreeNode>>;
     setCourseNodeMap?: React.Dispatch<React.SetStateAction<Record<string, Record<string, TreeNode>>>>;
+    currentCourseId?: string | null;
     findCourseIdByPostId: (postId: string, coursesList: Course[]) => string | null;
 }
 
@@ -44,13 +45,16 @@ export default function MultiLanguageDrawer({
     courses,
     courseNodeMap,
     setCourseNodeMap,
+    currentCourseId,
     findCourseIdByPostId,
 }: MultiLanguageDrawerProps) {
     const theme = useTheme();
     const api = useAjax();
+    const apiTranslate = useAjax();
     const [languageDataMap, setLanguageDataMap] = React.useState<Record<string, DataResultApiProps>>({});
     const [loadingLanguages, setLoadingLanguages] = React.useState<Record<string, boolean>>({});
     const [copyingLanguages, setCopyingLanguages] = React.useState<Record<string, boolean>>({});
+    const [translatingLanguages, setTranslatingLanguages] = React.useState<Record<string, boolean>>({});
     const [attemptedCopy, setAttemptedCopy] = React.useState<Set<string>>(new Set());
 
     // Lấy key từ post hiện tại
@@ -59,11 +63,19 @@ export default function MultiLanguageDrawer({
         : initialData.post?.key;
     const currentPostId = initialData.post?.id;
 
+    // Ưu tiên lấy courseId trực tiếp từ post (ví dụ field course của translate)
+    const explicitCourseId = initialData.post?.course ? String(initialData.post.course) : null;
+
     // Tìm courseId
     const courseId = React.useMemo(() => {
+        // 1. Ưu tiên courseId từ post hiện tại (nếu có)
+        if (explicitCourseId) return explicitCourseId;
+
+        // Ưu tiên dùng courseId được truyền trực tiếp từ CourseTree
+        if (currentCourseId) return currentCourseId;
         if (!currentPostId || !courses) return null;
         return findCourseIdByPostId(currentPostId, courses);
-    }, [currentPostId, courses, findCourseIdByPostId]);
+    }, [explicitCourseId, currentCourseId, currentPostId, courses, findCourseIdByPostId]);
 
     // Tìm node trong cây courses bằng id
     const findNodeById = React.useCallback((nodes: TreeNode[], targetId: string): TreeNode | null => {
@@ -214,6 +226,7 @@ export default function MultiLanguageDrawer({
             setLanguageDataMap({});
             setLoadingLanguages({});
             setCopyingLanguages({});
+            setTranslatingLanguages({});
             setAttemptedCopy(new Set());
         }
     }, [open]);
@@ -327,7 +340,6 @@ export default function MultiLanguageDrawer({
             );
             return;
         }
-
         // Tìm node tiếng Anh
         const mapKey = `course_${courseId}_${currentEditNodeType}_${currentKey}`;
         const nodeMap = courseNodeMap[mapKey] || {};
@@ -689,6 +701,105 @@ export default function MultiLanguageDrawer({
         });
     };
 
+    // Hàm translate từ tiếng Anh bằng AI
+    const handleTranslateByAI = React.useCallback((langCode: string) => {
+        if (!courseId || !currentKey || !currentEditNodeType || !courses) {
+            api.showMessage("Không tìm thấy thông tin cần thiết", "error");
+            return;
+        }
+
+        const langData = languageDataMap[langCode];
+        if (!langData || !langData.post?.id) {
+            api.showMessage("Không tìm thấy dữ liệu để translate", "error");
+            return;
+        }
+
+        // Tìm ID của post tiếng Anh
+        const mapKey = `course_${courseId}_${currentEditNodeType}_${currentKey}`;
+        const nodeMap = courseNodeMap[mapKey] || {};
+        const englishLang = languages.find(lang => lang.code === "en") || languages[0];
+        const englishNode = englishLang && nodeMap[englishLang.code] ? nodeMap[englishLang.code] as TreeNode : null;
+
+        if (!englishNode || !englishNode.id) {
+            api.showMessage("Không tìm thấy bản tiếng Anh để translate", "error");
+            return;
+        }
+
+        setTranslatingLanguages(prev => ({ ...prev, [langCode]: true }));
+
+        // Lấy post type
+        const objectType = langData.type || getNodeObjectType(currentEditNodeType || "");
+        if (!objectType) {
+            api.showMessage("Không tìm thấy post type", "error");
+            setTranslatingLanguages(prev => {
+                const newMap = { ...prev };
+                delete newMap[langCode];
+                return newMap;
+            });
+            return;
+        }
+
+        // Gọi API translate
+        apiTranslate.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/translate-question-by-ai",
+            method: "POST",
+            data: {
+                id_source: englishNode.id,
+                id_target: langData.post.id,
+                language_target: langCode,
+                post_type: objectType,
+            },
+            success: (result: ANY) => {
+                setTranslatingLanguages(prev => {
+                    const newMap = { ...prev };
+                    delete newMap[langCode];
+                    return newMap;
+                });
+                
+                if (result.post?.id) {
+                    // Reload dữ liệu sau khi translate
+                    const objectType = langData.type || getNodeObjectType(currentEditNodeType || "");
+                    if (objectType) {
+                        api.ajax({
+                            url: `post-type/detail/${objectType}/${result.post.id}`,
+                            method: "POST",
+                            data: { id: result.post.id },
+                            loading: false,
+                            success: (detailResult: ANY) => {
+                                if (detailResult.post) {
+                                    const editData: DataResultApiProps = {
+                                        ...detailResult,
+                                        type: objectType,
+                                        action: "EDIT",
+                                    };
+                                    setLanguageDataMap(prev => ({
+                                        ...prev,
+                                        [langCode]: editData,
+                                    }));
+                                    api.showMessage("Đã translate thành công", "success");
+                                }
+                            },
+                        });
+                    }
+                    // Gọi onAfterSubmit để reload courses nếu có
+                    if (onAfterSubmit) {
+                        onAfterSubmit();
+                    }
+                } else {
+                    api.showMessage("Translate thành công nhưng không có dữ liệu trả về", "warning");
+                }
+            },
+            error: () => {
+                setTranslatingLanguages(prev => {
+                    const newMap = { ...prev };
+                    delete newMap[langCode];
+                    return newMap;
+                });
+                api.showMessage("Không thể translate bằng AI", "error");
+            },
+        });
+    }, [courseId, currentKey, currentEditNodeType, courses, courseNodeMap, languages, languageDataMap, api, apiTranslate, onAfterSubmit]);
+
     const title = React.useMemo(() => {
         const nodeTypeLabel = currentEditNodeType === "translate" ? "Translate"
             : currentEditNodeType === "section" ? "Section"
@@ -803,18 +914,33 @@ export default function MultiLanguageDrawer({
                                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                         {lang.title}
                                     </Typography>
-                                    {!hasData && (
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                ml: "auto",
-                                                color: "text.secondary",
-                                                fontStyle: "italic",
-                                            }}
-                                        >
-                                            Chưa có dữ liệu
-                                        </Typography>
-                                    )}
+                                    <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+                                        {lang.code !== "en" && hasData && (
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                onClick={() => handleTranslateByAI(lang.code)}
+                                                disabled={translatingLanguages[lang.code] || apiTranslate.open}
+                                                sx={{
+                                                    minWidth: "auto",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {translatingLanguages[lang.code] ? "Đang translate..." : "Translate từ tiếng Anh bằng AI"}
+                                            </Button>
+                                        )}
+                                        {!hasData && (
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    fontStyle: "italic",
+                                                }}
+                                            >
+                                                Chưa có dữ liệu
+                                            </Typography>
+                                        )}
+                                    </Box>
                                 </Box>
 
                                 {/* Content cho mỗi column */}

@@ -65,6 +65,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
         new Set()
     );
+    const [selectedCourseId, setSelectedCourseId] = React.useState<string | null>(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        return searchParams.get("course") || null;
+    });
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const openMenu = Boolean(anchorEl);
     const confirmSync = useConfirmDialog({
@@ -83,10 +87,33 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             "Bạn có chắc chắn muốn export course? File export sẽ được tải xuống sau khi hoàn tất.",
     });
 
+    // Đồng bộ selectedCourseId với URL (trường hợp user dùng back/forward)
+    React.useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const courseId = searchParams.get("course");
+        setSelectedCourseId(courseId || null);
+    }, [location.search]);
+
     const handleBackToOverview = () => {
         const searchParams = new URLSearchParams(location.search);
         searchParams.set("view", "overview"); // Set view=overview để quay về overview
         navigate(`${location.pathname}?${searchParams.toString()}`);
+    };
+
+    const handleSelectCourseForEdit = (courseId: string) => {
+        setSelectedCourseId(courseId);
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.set("course", courseId);
+        navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true });
+    };
+
+    const handleBackToCourseList = () => {
+        setSelectedCourseId(null);
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.delete("course");
+        const query = searchParams.toString();
+        const url = query ? `${location.pathname}?${query}` : location.pathname;
+        navigate(url, { replace: true });
     };
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -468,7 +495,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         // Tìm node tiếng Anh (thường là "en" hoặc ngôn ngữ đầu tiên có sẵn)
         let englishNode: TreeNode | null = null;
         const englishLang = languages.find(lang => lang.code === "en") || languages[0];
-        
+        console.log(englishLang);
         if (englishLang && nodeMap[englishLang.code]) {
             englishNode = nodeMap[englishLang.code] as TreeNode;
         }
@@ -1479,6 +1506,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
     // Đảm bảo courses luôn là array
     const coursesList = courses || [];
+    const displayCourses =
+        selectedCourseId && coursesList.length > 0
+            ? coursesList.filter((c) => String(c.id) === String(selectedCourseId))
+            : coursesList;
 
     return (
         <Box sx={{ p: 2 }}>
@@ -1606,7 +1637,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     overflow: "visible",
                 }}
             >
-                {coursesList.length === 0 ? (
+                {displayCourses.length === 0 ? (
                     <Box
                         sx={{
                             p: 4,
@@ -1643,7 +1674,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 return;
 
                             // Update order cho courses (level cao nhất)
-                            const newCourses = [...coursesList];
+                            const newCourses = [...displayCourses];
                             const [movedCourse] = newCourses.splice(
                                 result.source.index,
                                 1
@@ -1713,7 +1744,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     {...provided.droppableProps}
                                     ref={provided.innerRef}
                                 >
-                                    {coursesList.map((course, index) => (
+                                    {displayCourses.map((course, index) => (
                                         <Draggable
                                             key={course.id}
                                             draggableId={`draggable-course-${course.id}`}
@@ -1761,7 +1792,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         node={course}
                                                         isLast={
                                                             index ===
-                                                            coursesList.length -
+                                                            displayCourses.length -
                                                                 1
                                                         }
                                                         onEditNode={
@@ -1776,6 +1807,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         onUpdateOrder={
                                                             handleUpdateOrder
                                                         }
+                                                        onSelectCourseForEdit={handleSelectCourseForEdit}
+                                                        onBackToCourseList={handleBackToCourseList}
+                                                        selectedCourseId={selectedCourseId}
                                                         dragHandleProps={
                                                             provided.dragHandleProps
                                                         }
@@ -1838,6 +1872,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             currentEditNodeType={currentEditNodeType}
                             courses={courses}
                             courseNodeMap={courseNodeMap}
+                            currentCourseId={selectedCourseId}
                             setCourseNodeMap={setCourseNodeMap}
                             findCourseIdByPostId={findCourseIdByPostId}
                         />
