@@ -12,6 +12,30 @@
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+  <script>
+    (function() {
+        // 1. Tạo kho chứa log
+        window.myLogStorage = [];
+
+        // 2. Lưu lại hàm console.log gốc của trình duyệt
+        const originalLog = console.log;
+
+        // 3. Ghi đè hàm console.log mới
+        console.log = function(...args) {
+            // Lưu dữ liệu raw vào kho chứa
+            // args là một mảng các tham số bạn truyền vào console.log
+            window.myLogStorage.push({
+                timestamp: new Date().toISOString(),
+                data: args
+            });
+
+            // 4. Vẫn gọi hàm gốc để hiển thị trên màn hình như bình thường
+            originalLog.apply(console, args);
+        };
+        
+        console.info("✅ Console Collector đã kích hoạt! Mọi log tiếp theo sẽ được lưu vào window.myLogStorage");
+    })();
+  </script>
 </head>
 
 <body>
