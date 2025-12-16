@@ -68,7 +68,7 @@ interface CourseTreeItemProps {
     onExpandNode?: (nodeKey: string) => void;
     languages?: Array<{ code: string; title: string; flag_code: string; icon_url?: string }>;
     courseNodeMap?: CourseNodeMap;
-    findCourseIdByPostId?: (postId: string, coursesList: Course[]) => string | null;
+    findCourseIdByPostId?: (postId: string, coursesList: Course[], nodeType?: string) => string | null;
     courses?: Course[] | null;
 }
 
@@ -170,15 +170,16 @@ export default function CourseTreeItem({
         }
     }
 
-    // Filter children: chỉ hiển thị translate có ngôn ngữ "en" nếu node là course
+    // Filter children: chỉ hiển thị translate có ngôn ngữ "en" hoặc translate mới chưa có language code nếu node là course
     let children = getChildren(node);
     if (nodeType === "course" && languages && languages.length > 0) {
         const course = node as Course;
         if (course.translates) {
-            // Chỉ lấy translate có ngôn ngữ là "en"
+            // Lấy translate có ngôn ngữ là "en" HOẶC translate mới chưa có language code (langCode === "")
             children = course.translates.filter((translate: Translate) => {
                 const langCode = getLanguageCodeFromTranslate(translate, languages);
-                return langCode === "en";
+                // Hiển thị translate tiếng Anh hoặc translate mới chưa có language code
+                return langCode === "en" || langCode === "";
             }) as TreeNode[];
         }
     }
@@ -193,7 +194,9 @@ export default function CourseTreeItem({
         if (nodeType === "course") {
             currentCourseId = node.id;
         } else {
-            currentCourseId = findCourseIdByPostId && courses ? findCourseIdByPostId(node.id, courses) : null;
+            currentCourseId = findCourseIdByPostId && courses
+                ? findCourseIdByPostId(node.id, courses, nodeType)
+                : null;
         }
         
         return calculateTranslationProgress(node, languages, courseNodeMap, currentCourseId);
@@ -203,7 +206,7 @@ export default function CourseTreeItem({
         if (nodeType !== "translate" || !findCourseIdByPostId || !courses) {
             return;
         }
-        const courseId = findCourseIdByPostId(node.id, courses);
+        const courseId = findCourseIdByPostId(node.id, courses, nodeType);
         if (!courseId) {
             apiCreateContentAi.showMessage("Không tìm thấy khóa học", "error");
             return;
@@ -681,7 +684,7 @@ export default function CourseTreeItem({
                                     node={node}
                                     languages={languages}
                                     courseNodeMap={courseNodeMap}
-                                    courseId={findCourseIdByPostId(node.id, courses)}
+                                    courseId={findCourseIdByPostId(node.id, courses, nodeType)}
                                     currentLanguage={currentLanguage}
                                     onEditNode={onEditNode}
                                     onCreateCopyFromEnglish={onCreateCopyFromEnglish}

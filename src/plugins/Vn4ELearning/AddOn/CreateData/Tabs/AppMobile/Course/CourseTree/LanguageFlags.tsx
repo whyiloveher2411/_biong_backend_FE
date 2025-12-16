@@ -3,6 +3,7 @@ import Box from "components/atoms/Box";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { TreeNode, CourseNodeMap, Translate, Section, Chapter, Lesson, Question, Course } from "./types";
 import { getNodeType } from "./utils";
+import { buildCourseNodeMapKey } from "./helpers";
 
 interface LanguageFlagsProps {
     node: TreeNode;
@@ -25,33 +26,147 @@ export default function LanguageFlags({
     onCreateCopyFromEnglish,
     courses,
 }: LanguageFlagsProps) {
-    const nodeType = getNodeType(node);
+    const rawNodeType = getNodeType(node);
     
     // Chỉ hiển thị cho translate, section, chapter, lesson, question
-    if (nodeType === "course" || !courseId || !languages || languages.length === 0) {
+    if (rawNodeType === "course" || !courseId || !languages || languages.length === 0) {
         return null;
     }
 
-    // Lấy key của node
+    const nodeType = rawNodeType as "translate" | "section" | "chapter" | "lesson" | "question";
+
+    // Lấy key của node & tạo mapKey theo cấu trúc phân cấp
     let nodeKey: string | undefined;
+    let mapKey: string | null = null;
+
     if (nodeType === "translate") {
-        nodeKey = (node as Translate).key;
+        const translate = node as Translate;
+        nodeKey = translate.key;
+        if (nodeKey) {
+            mapKey = buildCourseNodeMapKey({
+                courseId: String(courseId),
+                translateKey: nodeKey,
+            });
+        }
     } else if (nodeType === "section") {
-        nodeKey = (node as Section).key;
+        const section = node as Section;
+        nodeKey = section.key;
+        if (nodeKey && courses) {
+            for (const course of courses) {
+                if (String(course.id) !== String(courseId)) continue;
+                if (!course.translates) continue;
+                for (const translate of course.translates) {
+                    if (translate.sections?.some(s => s.key === nodeKey)) {
+                        if (translate.key) {
+                            mapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                translateKey: translate.key,
+                                sectionKey: nodeKey,
+                            });
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     } else if (nodeType === "chapter") {
-        nodeKey = (node as Chapter).key;
+        const chapter = node as Chapter;
+        nodeKey = chapter.key;
+        if (nodeKey && courses) {
+            for (const course of courses) {
+                if (String(course.id) !== String(courseId)) continue;
+                if (!course.translates) continue;
+                for (const translate of course.translates) {
+                    if (!translate.sections) continue;
+                    for (const section of translate.sections) {
+                        if (section.chapters?.some(c => c.key === nodeKey)) {
+                            if (translate.key && section.key) {
+                                mapKey = buildCourseNodeMapKey({
+                                    courseId: String(courseId),
+                                    translateKey: translate.key,
+                                    sectionKey: section.key,
+                                    chapterKey: nodeKey,
+                                });
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     } else if (nodeType === "lesson") {
-        nodeKey = (node as Lesson).key;
+        const lesson = node as Lesson;
+        nodeKey = lesson.key;
+        if (nodeKey && courses) {
+            for (const course of courses) {
+                if (String(course.id) !== String(courseId)) continue;
+                if (!course.translates) continue;
+                for (const translate of course.translates) {
+                    if (!translate.sections) continue;
+                    for (const section of translate.sections) {
+                        if (!section.chapters) continue;
+                        for (const chapter of section.chapters) {
+                            // Dò đúng chapter chứa CHÍNH lesson này (theo id), tránh nhầm lesson khác có cùng key
+                            if (chapter.lessons?.some(l => String(l.id) === String(lesson.id))) {
+                                if (translate.key && section.key && chapter.key) {
+                                    mapKey = buildCourseNodeMapKey({
+                                        courseId: String(courseId),
+                                        translateKey: translate.key,
+                                        sectionKey: section.key,
+                                        chapterKey: chapter.key,
+                                        lessonKey: nodeKey,
+                                    });
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     } else if (nodeType === "question") {
-        nodeKey = (node as Question).title;
+        const question = node as Question;
+        nodeKey = question.title;
+        if (nodeKey && courses) {
+            for (const course of courses) {
+                if (String(course.id) !== String(courseId)) continue;
+                if (!course.translates) continue;
+                for (const translate of course.translates) {
+                    if (!translate.sections) continue;
+                    for (const section of translate.sections) {
+                        if (!section.chapters) continue;
+                        for (const chapter of section.chapters) {
+                            if (!chapter.lessons) continue;
+                            for (const lesson of chapter.lessons) {
+                                if (lesson.questions?.some(q => q.title === nodeKey)) {
+                                    if (translate.key && section.key && chapter.key && lesson.key) {
+                                        mapKey = buildCourseNodeMapKey({
+                                            courseId: String(courseId),
+                                            translateKey: translate.key,
+                                            sectionKey: section.key,
+                                            chapterKey: chapter.key,
+                                            lessonKey: lesson.key,
+                                            questionKey: nodeKey,
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    // Tạo map key để lookup (nếu có nodeKey)
-    const mapKey = nodeKey ? `course_${courseId}_${nodeType}_${nodeKey}` : null;
     const nodeMap = mapKey ? (courseNodeMap[mapKey] || {}) : {};
 
     // Hàm kiểm tra parent có tồn tại trong ngôn ngữ target không
     const checkParentExists = (langCode: string): boolean => {
+        // Lấy sẵn id của lesson/question (nếu cần so sánh theo id thay vì key)
+        const lessonNode = nodeType === "lesson" ? (node as Lesson) : null;
+        const lessonId = lessonNode?.id ? String(lessonNode.id) : null;
+
         if (nodeType === "translate") {
             // Translate không có parent (parent là course)
             return true;
@@ -64,10 +179,13 @@ export default function LanguageFlags({
         // Tìm parent key từ node trong cây courses
         let parentKey: string | null = null;
         let parentType: string | null = null;
+        let parentTranslateKey: string | null = null;
+        let parentSectionKey: string | null = null;
+        let parentChapterKey: string | null = null;
 
         // Tìm parent trong cây courses
         for (const course of courses) {
-            if (course.id !== courseId) continue;
+            if (String(course.id) !== String(courseId)) continue;
             if (course.translates) {
                 for (const translate of course.translates) {
                     if (nodeType === "section") {
@@ -75,6 +193,7 @@ export default function LanguageFlags({
                         if (translate.sections?.some(s => s.key === nodeKey)) {
                             parentKey = translate.key || null;
                             parentType = "translate";
+                            parentTranslateKey = translate.key || null;
                             break;
                         }
                     } else if (nodeType === "chapter") {
@@ -84,6 +203,8 @@ export default function LanguageFlags({
                                 if (section.chapters?.some(c => c.key === nodeKey)) {
                                     parentKey = section.key || null;
                                     parentType = "section";
+                                    parentTranslateKey = translate.key || null;
+                                    parentSectionKey = section.key || null;
                                     break;
                                 }
                             }
@@ -94,9 +215,13 @@ export default function LanguageFlags({
                             for (const section of translate.sections) {
                                 if (section.chapters) {
                                     for (const chapter of section.chapters) {
-                                        if (chapter.lessons?.some(l => l.key === nodeKey)) {
+                                        // Dò đúng chapter chứa CHÍNH lesson này (theo id), tránh nhầm lesson khác có cùng key
+                                        if (chapter.lessons?.some(l => (lessonId ? String(l.id) === lessonId : l.key === nodeKey))) {
                                             parentKey = chapter.key || null;
                                             parentType = "chapter";
+                                            parentTranslateKey = translate.key || null;
+                                            parentSectionKey = section.key || null;
+                                            parentChapterKey = chapter.key || null;
                                             break;
                                         }
                                     }
@@ -114,6 +239,9 @@ export default function LanguageFlags({
                                                 if (lesson.questions?.some(q => q.title === nodeKey)) {
                                                     parentKey = lesson.key || null;
                                                     parentType = "lesson";
+                                                    parentTranslateKey = translate.key || null;
+                                                    parentSectionKey = section.key || null;
+                                                    parentChapterKey = chapter.key || null;
                                                     break;
                                                 }
                                             }
@@ -133,7 +261,13 @@ export default function LanguageFlags({
         }
 
         // Kiểm tra parent có tồn tại trong ngôn ngữ target không
-        const parentMapKey = `course_${courseId}_${parentType}_${parentKey}`;
+        const parentMapKey = buildCourseNodeMapKey({
+            courseId: String(courseId),
+            translateKey: parentTranslateKey || undefined,
+            sectionKey: parentType === "section" || parentSectionKey ? parentSectionKey || undefined : undefined,
+            chapterKey: parentType === "chapter" || parentChapterKey ? parentChapterKey || undefined : undefined,
+            lessonKey: parentType === "lesson" ? parentKey || undefined : undefined,
+        });
         const parentNodeMap = courseNodeMap[parentMapKey] || {};
         const parentExists = !!parentNodeMap[langCode];
 

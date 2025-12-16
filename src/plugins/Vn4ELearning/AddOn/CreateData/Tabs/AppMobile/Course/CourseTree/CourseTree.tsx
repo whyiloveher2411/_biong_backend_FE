@@ -37,6 +37,7 @@ import {
     getLanguageCodeFromTranslate,
     buildCourseNodeMap,
     findTranslateParent,
+    buildCourseNodeMapKey,
 } from "./helpers";
 import CourseTreeItem from "./CourseTreeItem";
 import LanguageSelector from "./LanguageSelector";
@@ -395,7 +396,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
             // Tìm parent trong cây courses
             for (const course of courses) {
-                if (course.id !== courseId) continue;
+                if (String(course.id) !== String(courseId)) continue;
                 if (course.translates) {
                     for (const translate of course.translates) {
                         if (nodeType === "section") {
@@ -461,7 +462,27 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             }
 
             // Kiểm tra parent có tồn tại trong ngôn ngữ target không
-            const parentMapKey = `course_${courseId}_${parentType}_${parentKey}`;
+            // (ở đây parent chỉ dùng cho translate/section/chapter/lesson, question xử lý riêng)
+            let parentMapKey: string | null = null;
+            if (parentType === "section") {
+                parentMapKey = buildCourseNodeMapKey({
+                    courseId: String(courseId),
+                    sectionKey: parentKey,
+                });
+            } else if (parentType === "chapter") {
+                parentMapKey = buildCourseNodeMapKey({
+                    courseId: String(courseId),
+                    chapterKey: parentKey,
+                });
+            } else if (parentType === "lesson") {
+                parentMapKey = buildCourseNodeMapKey({
+                    courseId: String(courseId),
+                    lessonKey: parentKey,
+                });
+            }
+            if (!parentMapKey) {
+                return false;
+            }
             const parentNodeMap = courseNodeMap[parentMapKey] || {};
             const parentExists = !!parentNodeMap[langCode];
 
@@ -488,14 +509,19 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             return;
         }
 
-        // Tạo map key để tìm node tiếng Anh
-        const mapKey = `course_${courseId}_${nodeType}_${nodeKey}`;
-        const nodeMap = courseNodeMap[mapKey] || {};
+        // Tạo map key để tìm node tiếng Anh (chỉ áp dụng tốt cho translate với key duy nhất)
+        let nodeMap: Record<string, TreeNode> = {};
+        if (nodeType === "translate") {
+            const mapKey = buildCourseNodeMapKey({
+                courseId: String(courseId),
+                translateKey: nodeKey,
+            });
+            nodeMap = courseNodeMap[mapKey] || {};
+        }
 
         // Tìm node tiếng Anh (thường là "en" hoặc ngôn ngữ đầu tiên có sẵn)
         let englishNode: TreeNode | null = null;
         const englishLang = languages.find(lang => lang.code === "en") || languages[0];
-        console.log(englishLang);
         if (englishLang && nodeMap[englishLang.code]) {
             englishNode = nodeMap[englishLang.code] as TreeNode;
         }
@@ -544,7 +570,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         let lessonKey: string | null = null;
                         
                         for (const course of courses) {
-                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (String(course.id) !== String(courseId)) continue; // Chỉ tìm trong course hiện tại
                             if (course.translates) {
                                 for (const translate of course.translates) {
                                     if (translate.sections) {
@@ -570,9 +596,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
 
                         // Tìm lesson parent đúng ngôn ngữ từ courseNodeMap
-                        
                         if (lessonKey) {
-                            const lessonMapKey = `course_${courseId}_lesson_${lessonKey}`;
+                            const lessonMapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                lessonKey,
+                            });
                             const lessonNodeMap = courseNodeMap[lessonMapKey] || {};
                             
                             targetLessonNode = lessonNodeMap[langCode] as Lesson | null;
@@ -603,7 +631,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                             : result.post.sac_lesson_detail;
                                         targetLessonNode = { id: lessonDetail.id, title: lessonDetail.title } as Lesson;
                                     } catch (e) {
-                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_lesson_detail:", e);
+                                        // ignore JSON parse error, giữ nguyên targetLessonNode mặc định
                                     }
                                 }
                             }
@@ -617,7 +645,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         let translateKey: string | null = null;
                         
                         for (const course of courses) {
-                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (String(course.id) !== String(courseId)) continue; // Chỉ tìm trong course hiện tại
                             if (course.translates) {
                                 for (const translate of course.translates) {
                                     if (translate.sections?.some(s => s.id === englishNodeId)) {
@@ -632,7 +660,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
                         // Tìm translate parent đúng ngôn ngữ từ courseNodeMap
                         if (translateKey) {
-                            const translateMapKey = `course_${courseId}_translate_${translateKey}`;
+                            const translateMapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                translateKey,
+                            });
                             const translateNodeMap = courseNodeMap[translateMapKey] || {};
                             
                             targetTranslateNode = translateNodeMap[langCode] as Translate | null;
@@ -663,7 +694,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                             : result.post.translate_detail;
                                         targetTranslateNode = { id: translateDetail.id, title: translateDetail.title } as Translate;
                                     } catch (e) {
-                                        console.warn("[handleCreateCopyFromEnglish] Không parse được translate_detail:", e);
+                                        // ignore JSON parse error, giữ nguyên targetTranslateNode mặc định
                                     }
                                 }
                             }
@@ -674,7 +705,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         let sectionKey: string | null = null;
                         
                         for (const course of courses) {
-                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (String(course.id) !== String(courseId)) continue; // Chỉ tìm trong course hiện tại
                             if (course.translates) {
                                 for (const translate of course.translates) {
                                     if (translate.sections) {
@@ -693,7 +724,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
                         // Tìm section parent đúng ngôn ngữ từ courseNodeMap
                         if (sectionKey) {
-                            const sectionMapKey = `course_${courseId}_section_${sectionKey}`;
+                            const sectionMapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                sectionKey,
+                            });
                             const sectionNodeMap = courseNodeMap[sectionMapKey] || {};
                             
                             targetSectionNode = sectionNodeMap[langCode] as Section | null;
@@ -724,7 +758,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                             : result.post.sac_section_detail;
                                         targetSectionNode = { id: sectionDetail.id, title: sectionDetail.title } as Section;
                                     } catch (e) {
-                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_section_detail:", e);
+                                        // ignore JSON parse error, giữ nguyên targetSectionNode mặc định
                                     }
                                 }
                             }
@@ -735,7 +769,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         let chapterKey: string | null = null;
                         
                         for (const course of courses) {
-                            if (course.id !== courseId) continue; // Chỉ tìm trong course hiện tại
+                            if (String(course.id) !== String(courseId)) continue; // Chỉ tìm trong course hiện tại
                             if (course.translates) {
                                 for (const translate of course.translates) {
                                     if (translate.sections) {
@@ -758,7 +792,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
                         // Tìm chapter parent đúng ngôn ngữ từ courseNodeMap
                         if (chapterKey) {
-                            const chapterMapKey = `course_${courseId}_chapter_${chapterKey}`;
+                            const chapterMapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                chapterKey,
+                            });
                             const chapterNodeMap = courseNodeMap[chapterMapKey] || {};
                             
                             targetChapterNode = chapterNodeMap[langCode] as Chapter | null;
@@ -789,7 +826,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                             : result.post.sac_chapter_detail;
                                         targetChapterNode = { id: chapterDetail.id, title: chapterDetail.title } as Chapter;
                                     } catch (e) {
-                                        console.warn("[handleCreateCopyFromEnglish] Không parse được sac_chapter_detail:", e);
+                                        // ignore JSON parse error, giữ nguyên targetChapterNode mặc định
                                     }
                                 }
                             }
@@ -947,24 +984,35 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         }
     }, []); // Không cần dependencies vì đã dùng ref
 
-    // Helper function: Tìm courseId chứa post với postId
-    const findCourseIdByPostId = (postId: string, coursesList: Course[]): string | null => {
+    // Helper function: Tìm courseId chứa post với postId (kèm theo nodeType để tránh trùng id giữa các loại node)
+    const findCourseIdByPostId = (
+        postId: string,
+        coursesList: Course[],
+        targetNodeType?: string
+    ): string | null => {
         // Hàm đệ quy để tìm node và trả về courseId
         const findCourseId = (nodes: TreeNode[], targetId: string, currentCourseId: string | null): string | null => {
             for (const node of nodes) {
+                const nodeType = getNodeType(node);
+
                 // Nếu node là course và có id trùng, return courseId
-                if (getNodeType(node) === "course" && node.id === targetId) {
+                if (nodeType === "course" && node.id === targetId) {
                     return node.id;
                 }
                 
-                // Nếu tìm thấy node với id trùng, return courseId hiện tại
-                if (node.id === targetId && currentCourseId) {
+                // Nếu tìm thấy node với id trùng (và nếu có truyền targetNodeType thì phải trùng type),
+                // return courseId hiện tại
+                if (
+                    node.id === targetId &&
+                    currentCourseId &&
+                    (!targetNodeType || nodeType === targetNodeType)
+                ) {
                     return currentCourseId;
                 }
                 
                 // Nếu node là course, update currentCourseId
                 let newCourseId = currentCourseId;
-                if (getNodeType(node) === "course") {
+                if (nodeType === "course") {
                     newCourseId = node.id;
                 }
                 
@@ -1403,7 +1451,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             }
                             
                             if (courseId && questionTitle) {
-                                const mapKey = `course_${courseId}_question_${questionTitle}`;
+                                const mapKey = buildCourseNodeMapKey({
+                                    courseId: String(courseId),
+                                    questionKey: questionTitle,
+                                });
                                 // Tìm language code từ drawerData
                                 let langCode = "";
                                 if (drawerData.post?.sac_language) {
@@ -2028,8 +2079,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 return undefined;
                             }
 
-                            // Tạo map key: course_{courseId}_{nodeType}_{key}
-                            const mapKey = `course_${courseId}_${currentEditNodeType}_${currentKey}`;
+                            // Tạo map key: sử dụng buildCourseNodeMapKey với questionKey (đang dùng cho dialog question)
+                            const mapKey = buildCourseNodeMapKey({
+                                courseId: String(courseId),
+                                questionKey: currentEditNodeType === "question" ? currentKey : undefined,
+                            });
                             
                             // Lookup trong courseNodeMap
                             const nodeMap = courseNodeMap[mapKey];

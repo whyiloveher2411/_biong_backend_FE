@@ -29,7 +29,7 @@ export function getLanguageCodeFromTranslate(
                 return matchedLang.code;
             }
         } catch (e) {
-            console.warn(`[getLanguageCodeFromTranslate] Failed to parse sac_language_detail:`, e);
+            // ignore parse error, fallback below
         }
     }
 
@@ -48,6 +48,31 @@ export function getLanguageCodeFromTranslate(
     return "";
 }
 
+// Helper function: Tạo mapKey thống nhất cho CourseNodeMap theo cấu trúc phân cấp
+// course:   course_{courseId}
+// translate: course_{courseId}_translate_{translateKey}
+// section:   course_{courseId}_translate_{translateKey}_section_{sectionKey}
+// chapter:   course_{courseId}_translate_{translateKey}_section_{sectionKey}_chapter_{chapterKey}
+// lesson:    course_{courseId}_translate_{translateKey}_section_{sectionKey}_chapter_{chapterKey}_lesson_{lessonKey}
+// question:  course_{courseId}_translate_{translateKey}_section_{sectionKey}_chapter_{chapterKey}_lesson_{lessonKey}_question_{questionKey}
+export function buildCourseNodeMapKey(params: {
+    courseId: string;
+    translateKey?: string;
+    sectionKey?: string;
+    chapterKey?: string;
+    lessonKey?: string;
+    questionKey?: string;
+}): string {
+    const { courseId, translateKey, sectionKey, chapterKey, lessonKey, questionKey } = params;
+    let key = `course_${courseId}`;
+    if (translateKey) key += `_translate_${translateKey}`;
+    if (sectionKey) key += `_section_${sectionKey}`;
+    if (chapterKey) key += `_chapter_${chapterKey}`;
+    if (lessonKey) key += `_lesson_${lessonKey}`;
+    if (questionKey) key += `_question_${questionKey}`;
+    return key;
+}
+
 // Helper function: Build course node map
 export function buildCourseNodeMap(
     courses: Course[],
@@ -55,30 +80,10 @@ export function buildCourseNodeMap(
 ): CourseNodeMap {
     const map: CourseNodeMap = {};
 
-    const addNodeToMap = (
-        node: TreeNode,
-        courseId: string,
-        nodeType: string,
-        language: string
-    ) => {
-        let nodeKey: string | undefined;
-        if (nodeType === "translate") {
-            nodeKey = (node as Translate).key;
-        } else if (nodeType === "section") {
-            nodeKey = (node as Section).key;
-        } else if (nodeType === "chapter") {
-            nodeKey = (node as Chapter).key;
-        } else if (nodeType === "lesson") {
-            nodeKey = (node as Lesson).key;
-        } else if (nodeType === "question") {
-            nodeKey = (node as Question).title;
-        }
-
-        if (!nodeKey || !language) {
+    const addNodeToMap = (mapKey: string, language: string, node: TreeNode) => {
+        if (!language) {
             return;
         }
-
-        const mapKey = `course_${courseId}_${nodeType}_${nodeKey}`;
         if (!map[mapKey]) {
             map[mapKey] = {};
         }
@@ -93,45 +98,80 @@ export function buildCourseNodeMap(
         if (course.translates) {
             for (const translate of course.translates) {
                 const language = getLanguageCodeFromTranslate(translate, languages);
+                const translateKey = translate.key;
                 
-                if (language && translate.key) {
-                    addNodeToMap(translate, course.id, "translate", language);
+                if (language && translateKey) {
+                    const translateMapKey = buildCourseNodeMapKey({
+                        courseId: course.id,
+                        translateKey,
+                    });
+                    addNodeToMap(translateMapKey, language, translate);
                 }
 
                 // Traverse sections
-                if (translate.sections) {
+                if (translate.sections && translateKey) {
                     for (const section of translate.sections) {
                         const sectionLanguage = language; // Section dùng language từ translate parent
+                        const sectionKey = section.key;
                         
-                        if (section.key && sectionLanguage) {
-                            addNodeToMap(section, course.id, "section", sectionLanguage);
+                        if (sectionKey && sectionLanguage) {
+                            const sectionMapKey = buildCourseNodeMapKey({
+                                courseId: course.id,
+                                translateKey,
+                                sectionKey,
+                            });
+                            addNodeToMap(sectionMapKey, sectionLanguage, section);
                         }
 
                         // Traverse chapters
-                        if (section.chapters) {
+                        if (section.chapters && sectionKey) {
                             for (const chapter of section.chapters) {
                                 const chapterLanguage = sectionLanguage;
+                                const chapterKey = chapter.key;
                                 
-                                if (chapter.key && chapterLanguage) {
-                                    addNodeToMap(chapter, course.id, "chapter", chapterLanguage);
+                                if (chapterKey && chapterLanguage) {
+                                    const chapterMapKey = buildCourseNodeMapKey({
+                                        courseId: course.id,
+                                        translateKey,
+                                        sectionKey,
+                                        chapterKey,
+                                    });
+                                    addNodeToMap(chapterMapKey, chapterLanguage, chapter);
                                 }
 
                                 // Traverse lessons
-                                if (chapter.lessons) {
+                                if (chapter.lessons && chapterKey) {
                                     for (const lesson of chapter.lessons) {
                                         const lessonLanguage = chapterLanguage;
+                                        const lessonKey = lesson.key;
                                         
-                                        if (lesson.key && lessonLanguage) {
-                                            addNodeToMap(lesson, course.id, "lesson", lessonLanguage);
+                                        if (lessonKey && lessonLanguage) {
+                                            const lessonMapKey = buildCourseNodeMapKey({
+                                                courseId: course.id,
+                                                translateKey,
+                                                sectionKey,
+                                                chapterKey,
+                                                lessonKey,
+                                            });
+                                            addNodeToMap(lessonMapKey, lessonLanguage, lesson);
                                         }
 
                                         // Traverse questions
-                                        if (lesson.questions) {
+                                        if (lesson.questions && lessonKey) {
                                             for (const question of lesson.questions) {
                                                 const questionLanguage = lessonLanguage;
-                                                
-                                                if (question.title && questionLanguage) {
-                                                    addNodeToMap(question, course.id, "question", questionLanguage);
+                                                const questionKey = question.title;
+
+                                                if (questionKey && questionLanguage) {
+                                                    const questionMapKey = buildCourseNodeMapKey({
+                                                        courseId: course.id,
+                                                        translateKey,
+                                                        sectionKey,
+                                                        chapterKey,
+                                                        lessonKey,
+                                                        questionKey,
+                                                    });
+                                                    addNodeToMap(questionMapKey, questionLanguage, question);
                                                 }
                                             }
                                         }
@@ -255,7 +295,13 @@ export function calculateTranslationProgress(
         }
         
         // Tìm trong courseNodeMap xem question này có trong bao nhiêu ngôn ngữ
-        const mapKey = `course_${courseId}_question_${question.title}`;
+        const mapKey = buildCourseNodeMapKey({
+            courseId,
+            // Với question, key là title, nhưng để phân biệt theo path, cần lessonKey / sectionKey / chapterKey / translateKey.
+            // Tuy nhiên, ở đây chúng ta chỉ cần phân biệt theo title trong phạm vi course,
+            // vì buildCourseNodeMap cũng dùng cùng cấu trúc mapKey cho question.
+            questionKey: question.title,
+        });
         const nodeMap = courseNodeMap[mapKey] || {};
         
         // Đếm số ngôn ngữ có bản dịch
