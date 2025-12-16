@@ -70,6 +70,7 @@ interface CourseTreeItemProps {
     courseNodeMap?: CourseNodeMap;
     findCourseIdByPostId?: (postId: string, coursesList: Course[], nodeType?: string) => string | null;
     courses?: Course[] | null;
+    showAllLanguages?: boolean;
 }
 
 export default function CourseTreeItem({
@@ -92,6 +93,7 @@ export default function CourseTreeItem({
     courseNodeMap,
     findCourseIdByPostId,
     courses,
+    showAllLanguages = true,
 }: CourseTreeItemProps) {
     const apiCreateContentAi = useAjax();
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
@@ -118,32 +120,43 @@ export default function CourseTreeItem({
     
     const nodeType = getNodeType(node);
     
-    // Kiểm tra hasChildren: với course, chỉ đếm translate có ngôn ngữ "en"
+    // Kiểm tra hasChildren: với course, đếm translate dựa trên showAllLanguages
     let nodeHasChildren = hasChildren(node);
     if (nodeType === "course" && languages && languages.length > 0) {
         const course = node as Course;
         if (course.translates) {
-            // Chỉ đếm translate có ngôn ngữ là "en"
-            const enTranslates = course.translates.filter((translate: Translate) => {
-                const langCode = getLanguageCodeFromTranslate(translate, languages);
-                return langCode === "en";
-            });
-            nodeHasChildren = enTranslates.length > 0;
+            if (showAllLanguages) {
+                // Đếm tất cả translate
+                nodeHasChildren = course.translates.length > 0;
+            } else {
+                // Chỉ đếm translate có ngôn ngữ là "en" hoặc translate mới chưa có language code
+                const enTranslates = course.translates.filter((translate: Translate) => {
+                    const langCode = getLanguageCodeFromTranslate(translate, languages);
+                    return langCode === "en" || langCode === "";
+                });
+                nodeHasChildren = enTranslates.length > 0;
+            }
         } else {
             nodeHasChildren = false;
         }
     }
     
-    // Tính childrenCount: với course, chỉ đếm translate có ngôn ngữ "en"
+    // Tính childrenCount: với course, đếm translate dựa trên showAllLanguages
     let childrenCount = getChildrenCount(node);
     if (nodeType === "course" && languages && languages.length > 0) {
         const course = node as Course;
         if (course.translates) {
-            const enTranslates = course.translates.filter((translate: Translate) => {
-                const langCode = getLanguageCodeFromTranslate(translate, languages);
-                return langCode === "en";
-            });
-            childrenCount = enTranslates.length;
+            if (showAllLanguages) {
+                // Đếm tất cả translate
+                childrenCount = course.translates.length;
+            } else {
+                // Chỉ đếm translate có ngôn ngữ là "en" hoặc translate mới chưa có language code
+                const enTranslates = course.translates.filter((translate: Translate) => {
+                    const langCode = getLanguageCodeFromTranslate(translate, languages);
+                    return langCode === "en" || langCode === "";
+                });
+                childrenCount = enTranslates.length;
+            }
         } else {
             childrenCount = 0;
         }
@@ -170,17 +183,21 @@ export default function CourseTreeItem({
         }
     }
 
-    // Filter children: chỉ hiển thị translate có ngôn ngữ "en" hoặc translate mới chưa có language code nếu node là course
+    // Filter children: hiển thị translate dựa trên showAllLanguages nếu node là course
     let children = getChildren(node);
     if (nodeType === "course" && languages && languages.length > 0) {
         const course = node as Course;
         if (course.translates) {
-            // Lấy translate có ngôn ngữ là "en" HOẶC translate mới chưa có language code (langCode === "")
-            children = course.translates.filter((translate: Translate) => {
-                const langCode = getLanguageCodeFromTranslate(translate, languages);
-                // Hiển thị translate tiếng Anh hoặc translate mới chưa có language code
-                return langCode === "en" || langCode === "";
-            }) as TreeNode[];
+            if (showAllLanguages) {
+                // Hiển thị tất cả translate
+                children = course.translates as TreeNode[];
+            } else {
+                // Chỉ hiển thị translate có ngôn ngữ là "en" hoặc translate mới chưa có language code
+                children = course.translates.filter((translate: Translate) => {
+                    const langCode = getLanguageCodeFromTranslate(translate, languages);
+                    return langCode === "en" || langCode === "";
+                }) as TreeNode[];
+            }
         }
     }
     const isLastChild = (index: number) => index === children.length - 1;
@@ -847,6 +864,7 @@ export default function CourseTreeItem({
                                                             courseNodeMap={courseNodeMap}
                                                             findCourseIdByPostId={findCourseIdByPostId}
                                                             courses={courses}
+                                                            showAllLanguages={showAllLanguages}
                                                         />
                                                     </Box>
                                                 )}

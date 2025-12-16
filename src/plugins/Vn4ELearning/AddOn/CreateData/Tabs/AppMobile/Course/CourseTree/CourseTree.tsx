@@ -11,6 +11,8 @@ import { DataResultApiProps } from "components/atoms/fields/relationship_onetoma
 import Menu from "components/atoms/Menu";
 import MenuItem from "components/atoms/MenuItem";
 import IconButton from "components/atoms/IconButton";
+import Checkbox from "components/atoms/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -72,6 +74,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     });
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const openMenu = Boolean(anchorEl);
+    const [showAllLanguages, setShowAllLanguages] = React.useState<boolean>(true);
     const confirmSync = useConfirmDialog({
         title: "Xác nhận đồng bộ Courses",
         message:
@@ -1599,6 +1602,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </Typography>
                     </Box>
                     <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={showAllLanguages}
+                                    onChange={(e) => setShowAllLanguages(e.target.checked)}
+                                />
+                            }
+                            label="Hiển thị tất cả ngôn ngữ"
+                            sx={{ mr: 1 }}
+                        />
                         <Button
                             variant="outlined"
                             startIcon={<ArrowBackIcon />}
@@ -1880,6 +1893,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         courseNodeMap={courseNodeMap}
                                                         findCourseIdByPostId={findCourseIdByPostId}
                                                         courses={courses}
+                                                        showAllLanguages={showAllLanguages}
                                                     />
                                                 </Box>
                                             )}
