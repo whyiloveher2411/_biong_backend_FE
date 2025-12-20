@@ -997,10 +997,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         const findCourseId = (nodes: TreeNode[], targetId: string, currentCourseId: string | null): string | null => {
             for (const node of nodes) {
                 const nodeType = getNodeType(node);
-
+                
                 // Nếu node là course và có id trùng, return courseId
+                // NHƯNG: nếu đang tìm question, không match với course (vì questionId có thể trùng với courseId)
                 if (nodeType === "course" && node.id === targetId) {
-                    return node.id;
+                    // Nếu đang tìm question, bỏ qua việc match với course
+                    if (targetNodeType === "question") {
+                        // Tiếp tục tìm trong children thay vì return ngay
+                    } else {
+                        return node.id;
+                    }
                 }
                 
                 // Nếu tìm thấy node với id trùng (và nếu có truyền targetNodeType thì phải trùng type),
