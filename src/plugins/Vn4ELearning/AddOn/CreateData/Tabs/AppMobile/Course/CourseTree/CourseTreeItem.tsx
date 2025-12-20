@@ -28,6 +28,8 @@ import {
     DropResult,
 } from "react-beautiful-dnd";
 import useAjax from "hook/useApi";
+import useStreamSync, { extractMessageString } from "hook/useStreamSync";
+import SyncProgressDialog from "components/molecules/SyncProgressDialog";
 import { TreeNode, Course, CourseNodeMap, Translate, Lesson, Question } from "./types";
 import {
     getNodeType,
@@ -105,6 +107,8 @@ export default function CourseTreeItem({
     const apiCreateContentAi = useAjax();
     const apiSyncCourse = useAjax();
     const apiTrashQuestion = useAjax();
+    const streamSync = useStreamSync();
+    const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
     const [aiDialogValue, setAiDialogValue] = React.useState("");
     const [aiDialogTranslateId, setAiDialogTranslateId] = React.useState<string | null>(null);
@@ -327,18 +331,34 @@ export default function CourseTreeItem({
         if (nodeType !== "course" || !postId) {
             return;
         }
-        apiSyncCourse.ajax({
+        
+        // Mở dialog progress
+        setSyncProgressDialogOpen(true);
+        streamSync.reset();
+        
+        // Gọi streaming sync
+        streamSync.sync({
             url: "plugin/vn4-e-learning/app-mobile/course/sync-course-to-firestore",
-            method: "POST",
             data: {
-                id: postId,
+                id: String(postId),
                 course_id: node.id,
             },
-            success: () => {
-                // API sẽ tự động hiển thị thông báo qua showMessage
+            onProgress: (data) => {
+                // Progress được cập nhật tự động qua hook
             },
-            error: () => {
-                apiSyncCourse.showMessage("Không thể đồng bộ khóa học lên Firebase", "error");
+            onComplete: (data) => {
+                const message = extractMessageString(data.message) || "Đồng bộ khóa học lên Firebase thành công";
+                apiSyncCourse.showMessage(message, "success");
+                // Đóng dialog sau 2 giây
+                setTimeout(() => {
+                    setSyncProgressDialogOpen(false);
+                }, 2000);
+            },
+            onError: (error) => {
+                apiSyncCourse.showMessage(
+                    error || "Không thể đồng bộ khóa học lên Firebase",
+                    "error"
+                );
             },
         });
     };
@@ -752,10 +772,10 @@ export default function CourseTreeItem({
                                             e.stopPropagation();
                                             handleSyncCourseToFirebase();
                                         }}
-                                        disabled={apiSyncCourse.open}
+                                        disabled={streamSync.isSyncing}
                                         sx={{ whiteSpace: "nowrap" }}
                                     >
-                                        {apiSyncCourse.open ? "Đang đồng bộ..." : "Sync to firebase"}
+                                        {streamSync.isSyncing ? "Đang đồng bộ..." : "Sync to firebase"}
                                     </Button>
                                 </>
                             )}
@@ -1086,6 +1106,24 @@ export default function CourseTreeItem({
                     </Box>
                 </Collapse>
             )}
+            
+            {/* Sync Progress Dialog */}
+            <SyncProgressDialog
+                open={syncProgressDialogOpen}
+                onClose={() => {
+                    if (!streamSync.isSyncing) {
+                        setSyncProgressDialogOpen(false);
+                        streamSync.reset();
+                    }
+                }}
+                progress={streamSync.progress}
+                currentStage={streamSync.currentStage}
+                messages={streamSync.messages}
+                error={streamSync.error}
+                isSyncing={streamSync.isSyncing}
+                totalObjects={streamSync.totalObjects}
+                completedObjects={streamSync.completedObjects}
+            />
         </Box>
     );
 }

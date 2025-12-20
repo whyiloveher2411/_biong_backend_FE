@@ -4,6 +4,8 @@ import FieldForm from "components/atoms/fields/FieldForm";
 import Box from "components/atoms/Box";
 import { LoadingButton } from "@mui/lab";
 import useAjax from "hook/useApi";
+import useStreamSync, { extractMessageString } from "hook/useStreamSync";
+import SyncProgressDialog from "components/molecules/SyncProgressDialog";
 import { Button } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import useConfirmDialog from "hook/useConfirmDialog";
@@ -12,6 +14,8 @@ function Overview({ data }: { data: CreatePostTypeData }) {
 
     const apiSyncCategories = useAjax();
     const apiSyncCourses = useAjax();
+    const streamSync = useStreamSync();
+    const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
     const navigate = useNavigate();
     const location = useLocation();
     
@@ -42,14 +46,32 @@ function Overview({ data }: { data: CreatePostTypeData }) {
 
     const handleSyncCourses = () => {
         confirmSyncCourses.onConfirm(() => {
-            apiSyncCourses.ajax({
+            // Mở dialog progress
+            setSyncProgressDialogOpen(true);
+            streamSync.reset();
+            
+            // Gọi streaming sync
+            streamSync.sync({
                 url: "plugin/vn4-e-learning/app-mobile/course/sync-course-to-firestore",
-                method: "POST",
                 data: {
-                    id: data.post.id,
+                    id: String(data.post.id),
                 },
-                success: (result) => {
-                    // API sẽ tự động hiển thị thông báo qua showMessage
+                onProgress: (data) => {
+                    // Progress được cập nhật tự động qua hook
+                },
+                onComplete: (data) => {
+                    const message = extractMessageString(data.message) || "Đồng bộ tất cả courses lên Firebase thành công";
+                    apiSyncCourses.showMessage(message, "success");
+                    // Đóng dialog sau 2 giây
+                    setTimeout(() => {
+                        setSyncProgressDialogOpen(false);
+                    }, 2000);
+                },
+                onError: (error) => {
+                    apiSyncCourses.showMessage(
+                        error || "Không thể đồng bộ courses lên Firebase",
+                        "error"
+                    );
                 },
             });
         });
@@ -97,7 +119,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                         variant="contained" 
                         color="primary" 
                         onClick={handleSyncCourses}
-                        loading={apiSyncCourses.open}
+                        loading={streamSync.isSyncing}
                     >
                         Sync Courses
                     </LoadingButton>
@@ -120,6 +142,24 @@ function Overview({ data }: { data: CreatePostTypeData }) {
             </Box>
             {confirmSyncCategories.component}
             {confirmSyncCourses.component}
+            
+            {/* Sync Progress Dialog */}
+            <SyncProgressDialog
+                open={syncProgressDialogOpen}
+                onClose={() => {
+                    if (!streamSync.isSyncing) {
+                        setSyncProgressDialogOpen(false);
+                        streamSync.reset();
+                    }
+                }}
+                progress={streamSync.progress}
+                currentStage={streamSync.currentStage}
+                messages={streamSync.messages}
+                error={streamSync.error}
+                isSyncing={streamSync.isSyncing}
+                totalObjects={streamSync.totalObjects}
+                completedObjects={streamSync.completedObjects}
+            />
         </Box>
     );
 }
