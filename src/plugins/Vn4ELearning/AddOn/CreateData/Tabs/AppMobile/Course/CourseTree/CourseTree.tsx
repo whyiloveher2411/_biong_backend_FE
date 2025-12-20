@@ -1894,6 +1894,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         findCourseIdByPostId={findCourseIdByPostId}
                                                         courses={courses}
                                                         showAllLanguages={showAllLanguages}
+                                                        postId={data.post.id}
                                                     />
                                                 </Box>
                                             )}

@@ -10,6 +10,7 @@ export interface Lesson {
     title: string;
     key?: string;
     questions?: Question[];
+    data_sololearn?: unknown;
 }
 
 export interface Chapter {
@@ -37,6 +38,7 @@ export interface Translate {
         language?: string;
     };
     sections?: Section[];
+    data_sololearn?: unknown;
 }
 
 export interface Course {

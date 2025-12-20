@@ -25,7 +25,7 @@ import {
     DropResult,
 } from "react-beautiful-dnd";
 import useAjax from "hook/useApi";
-import { TreeNode, Course, CourseNodeMap, Translate } from "./types";
+import { TreeNode, Course, CourseNodeMap, Translate, Lesson } from "./types";
 import {
     getNodeType,
     getNodeKey,
@@ -71,6 +71,7 @@ interface CourseTreeItemProps {
     findCourseIdByPostId?: (postId: string, coursesList: Course[], nodeType?: string) => string | null;
     courses?: Course[] | null;
     showAllLanguages?: boolean;
+    postId?: string | number;
 }
 
 export default function CourseTreeItem({
@@ -94,12 +95,16 @@ export default function CourseTreeItem({
     findCourseIdByPostId,
     courses,
     showAllLanguages = true,
+    postId,
 }: CourseTreeItemProps) {
     const apiCreateContentAi = useAjax();
+    const apiSyncCourse = useAjax();
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
     const [aiDialogValue, setAiDialogValue] = React.useState("");
     const [aiDialogTranslateId, setAiDialogTranslateId] = React.useState<string | null>(null);
+    const [aiDialogLessonId, setAiDialogLessonId] = React.useState<string | null>(null);
     const [aiDialogCourseId, setAiDialogCourseId] = React.useState<string | null>(null);
+    const [aiDialogNodeType, setAiDialogNodeType] = React.useState<"translate" | "lesson" | null>(null);
     const [open, setOpen] = React.useState(false); // Mặc định đóng tất cả, chỉ hiển thị danh sách khóa học
 
     // Tự động mở/đóng dựa trên expandedNodes
@@ -220,7 +225,7 @@ export default function CourseTreeItem({
     }, [node, nodeType, languages, courseNodeMap, findCourseIdByPostId, courses]);
 
     const handleOpenAiContentDialog = () => {
-        if (nodeType !== "translate" || !findCourseIdByPostId || !courses) {
+        if ((nodeType !== "translate" && nodeType !== "lesson") || !findCourseIdByPostId || !courses) {
             return;
         }
         const courseId = findCourseIdByPostId(node.id, courses, nodeType);
@@ -229,7 +234,20 @@ export default function CourseTreeItem({
             return;
         }
         setAiDialogCourseId(courseId);
-        setAiDialogTranslateId(String(node.id));
+        setAiDialogNodeType(nodeType);
+        if (nodeType === "translate") {
+            setAiDialogTranslateId(String(node.id));
+            setAiDialogLessonId(null);
+        } else if (nodeType === "lesson") {
+            // Với lesson, cần tìm translate parent
+            const translateParent = findTranslateParent(node, courses);
+            if (!translateParent || !translateParent.id) {
+                apiCreateContentAi.showMessage("Không tìm thấy bản dịch", "error");
+                return;
+            }
+            setAiDialogLessonId(String(node.id));
+            setAiDialogTranslateId(String(translateParent.id));
+        }
         setAiDialogValue("");
         setAiDialogOpen(true);
     };
@@ -238,27 +256,83 @@ export default function CourseTreeItem({
         setAiDialogOpen(false);
         setAiDialogValue("");
         setAiDialogTranslateId(null);
+        setAiDialogLessonId(null);
         setAiDialogCourseId(null);
+        setAiDialogNodeType(null);
     };
 
     const handleSubmitAiContent = () => {
-        if (!aiDialogCourseId || !aiDialogTranslateId) {
-            apiCreateContentAi.showMessage("Thiếu thông tin course hoặc translate", "error");
+        if (!aiDialogCourseId) {
+            apiCreateContentAi.showMessage("Thiếu thông tin course", "error");
             return;
         }
-        apiCreateContentAi.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course/create-content-course-by-ai",
+
+        // Với translate: dùng API create-content-course-by-ai
+        if (aiDialogNodeType === "translate") {
+            if (!aiDialogTranslateId) {
+                apiCreateContentAi.showMessage("Thiếu thông tin bản dịch", "error");
+                return;
+            }
+            apiCreateContentAi.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course/create-content-course-by-ai",
+                method: "POST",
+                data: {
+                    course_id: aiDialogCourseId,
+                    translate_id: aiDialogTranslateId,
+                    content: aiDialogValue.trim(),
+                },
+                success: () => {
+                    handleCloseAiContentDialog();
+                },
+                error: () => {
+                    apiCreateContentAi.showMessage("Không thể tạo nội dung bằng AI", "error");
+                },
+            });
+            return;
+        }
+
+        // Với lesson: dùng API create-content-lesson-by-ai
+        if (aiDialogNodeType === "lesson") {
+            if (!aiDialogLessonId || !aiDialogTranslateId) {
+                apiCreateContentAi.showMessage("Thiếu thông tin lesson hoặc bản dịch", "error");
+                return;
+            }
+            apiCreateContentAi.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course/create-content-lesson-by-ai",
+                method: "POST",
+                data: {
+                    course_id: aiDialogCourseId,
+                    translate_id: aiDialogTranslateId,
+                    lesson_id: aiDialogLessonId,
+                    content: aiDialogValue.trim(),
+                },
+                success: () => {
+                    handleCloseAiContentDialog();
+                },
+                error: () => {
+                    apiCreateContentAi.showMessage("Không thể tạo nội dung bằng AI", "error");
+                },
+            });
+            return;
+        }
+    };
+
+    const handleSyncCourseToFirebase = () => {
+        if (nodeType !== "course" || !postId) {
+            return;
+        }
+        apiSyncCourse.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/sync-course-to-firestore",
             method: "POST",
             data: {
-                course_id: aiDialogCourseId,
-                translate_id: aiDialogTranslateId,
-                content: aiDialogValue.trim(),
+                id: postId,
+                course_id: node.id,
             },
             success: () => {
-                handleCloseAiContentDialog();
+                // API sẽ tự động hiển thị thông báo qua showMessage
             },
             error: () => {
-                apiCreateContentAi.showMessage("Không thể tạo nội dung bằng AI", "error");
+                apiSyncCourse.showMessage("Không thể đồng bộ khóa học lên Firebase", "error");
             },
         });
     };
@@ -619,37 +693,82 @@ export default function CourseTreeItem({
                         {/* Thanh tiến trình dịch và Language flags ở cuối dòng */}
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexShrink: 0 }}>
                             {nodeType === "course" && (
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (String(selectedCourseId) === String(node.id)) {
-                                            onBackToCourseList && onBackToCourseList();
-                                        } else if (onSelectCourseForEdit) {
-                                            onSelectCourseForEdit(node.id);
-                                        }
-                                    }}
-                                    sx={{ whiteSpace: "nowrap" }}
-                                >
-                                    {String(selectedCourseId) === String(node.id)
-                                        ? "<- Danh sách khóa học"
-                                        : "Chỉnh sửa khóa học"}
-                                </Button>
+                                <>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (String(selectedCourseId) === String(node.id)) {
+                                                onBackToCourseList && onBackToCourseList();
+                                            } else if (onSelectCourseForEdit) {
+                                                onSelectCourseForEdit(node.id);
+                                            }
+                                        }}
+                                        sx={{ whiteSpace: "nowrap" }}
+                                    >
+                                        {String(selectedCourseId) === String(node.id)
+                                            ? "<- Danh sách khóa học"
+                                            : "Chọn ->"}
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSyncCourseToFirebase();
+                                        }}
+                                        disabled={apiSyncCourse.open}
+                                        sx={{ whiteSpace: "nowrap" }}
+                                    >
+                                        {apiSyncCourse.open ? "Đang đồng bộ..." : "Sync to firebase"}
+                                    </Button>
+                                </>
                             )}
-                            {nodeType === "translate" && (
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenAiContentDialog();
-                                    }}
-                                    disabled={apiCreateContentAi.open}
-                                    sx={{ whiteSpace: "nowrap" }}
-                                >
-                                    {apiCreateContentAi.open ? "Đang tạo..." : "Thêm nội dung bằng AI"}
-                                </Button>
+                            {(nodeType === "translate" || nodeType === "lesson") && (
+                                <>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenAiContentDialog();
+                                        }}
+                                        disabled={apiCreateContentAi.open}
+                                        sx={{ whiteSpace: "nowrap" }}
+                                    >
+                                        {apiCreateContentAi.open ? "Đang tạo..." : "Thêm nội dung bằng AI"}
+                                    </Button>
+                                    {/* Label Sololearn đặt sát bên cạnh button thêm nội dung bằng AI */}
+                                    {(() => {
+                                        const hasSololearnData =
+                                            nodeType === "translate"
+                                                ? (node as Translate).data_sololearn
+                                                : (node as Lesson).data_sololearn;
+                                        return hasSololearnData ? (
+                                            <Chip
+                                                label="Sololearn"
+                                                size="small"
+                                                sx={{
+                                                    height: 20,
+                                                    fontSize: "0.65rem",
+                                                    minWidth: "auto",
+                                                    px: 0.75,
+                                                    backgroundColor: "#ff6b35",
+                                                    color: "white",
+                                                    fontWeight: 600,
+                                                    border: "1px solid #ff8c5a",
+                                                    borderRadius: 1,
+                                                    boxShadow:
+                                                        "0 1px 2px rgba(255, 107, 53, 0.3)",
+                                                    flexShrink: 0,
+                                                    textTransform: "uppercase",
+                                                    letterSpacing: "0.5px",
+                                                }}
+                                            />
+                                        ) : null;
+                                    })()}
+                                </>
                             )}
                             {/* Thanh tiến trình dịch - đặt trước language flags */}
                             {translationProgress !== null && (
@@ -865,6 +984,7 @@ export default function CourseTreeItem({
                                                             findCourseIdByPostId={findCourseIdByPostId}
                                                             courses={courses}
                                                             showAllLanguages={showAllLanguages}
+                                                            postId={postId}
                                                         />
                                                     </Box>
                                                 )}
