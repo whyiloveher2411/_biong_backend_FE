@@ -3,6 +3,7 @@ export interface Question {
     title: string;
     key?: string;
     is_complete?: boolean;
+    status?: "publish" | "trash";
 }
 
 export interface Lesson {

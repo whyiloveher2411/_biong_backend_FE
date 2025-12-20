@@ -18,6 +18,9 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
+import DeleteIcon from "@mui/icons-material/Delete";
+import RestoreIcon from "@mui/icons-material/Restore";
+import IconButton from "components/atoms/IconButton";
 import {
     DragDropContext,
     Droppable,
@@ -25,7 +28,7 @@ import {
     DropResult,
 } from "react-beautiful-dnd";
 import useAjax from "hook/useApi";
-import { TreeNode, Course, CourseNodeMap, Translate, Lesson } from "./types";
+import { TreeNode, Course, CourseNodeMap, Translate, Lesson, Question } from "./types";
 import {
     getNodeType,
     getNodeKey,
@@ -72,6 +75,7 @@ interface CourseTreeItemProps {
     courses?: Course[] | null;
     showAllLanguages?: boolean;
     postId?: string | number;
+    onReloadCourses?: () => void;
 }
 
 export default function CourseTreeItem({
@@ -96,9 +100,11 @@ export default function CourseTreeItem({
     courses,
     showAllLanguages = true,
     postId,
+    onReloadCourses,
 }: CourseTreeItemProps) {
     const apiCreateContentAi = useAjax();
     const apiSyncCourse = useAjax();
+    const apiTrashQuestion = useAjax();
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
     const [aiDialogValue, setAiDialogValue] = React.useState("");
     const [aiDialogTranslateId, setAiDialogTranslateId] = React.useState<string | null>(null);
@@ -333,6 +339,34 @@ export default function CourseTreeItem({
             },
             error: () => {
                 apiSyncCourse.showMessage("Không thể đồng bộ khóa học lên Firebase", "error");
+            },
+        });
+    };
+
+    const handleTrashOrRestoreQuestion = () => {
+        if (nodeType !== "question" || !node.id) {
+            return;
+        }
+        const question = node as Question;
+        const currentStatus = question.status || "publish";
+        const newStatus = currentStatus === "publish" ? "trash" : "publish";
+        const actionText = currentStatus === "publish" ? "xóa" : "khôi phục";
+        
+        apiTrashQuestion.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/trash-question",
+            method: "POST",
+            data: {
+                id: node.id,
+                status: newStatus,
+            },
+            success: () => {
+                // Reload courses sau khi thành công
+                if (onReloadCourses) {
+                    onReloadCourses();
+                }
+            },
+            error: () => {
+                apiTrashQuestion.showMessage(`Không thể ${actionText} question`, "error");
             },
         });
     };
@@ -814,6 +848,59 @@ export default function CourseTreeItem({
                                     </Typography>
                                 </Box>
                             )}
+                            {/* Icon trash/restore cho question - đặt kế bên thanh progress */}
+                            {nodeType === "question" ? (() => {
+                                const question = node as Question;
+                                const status = question.status || "publish";
+                                const isTrash = status === "trash";
+                                const iconColor = isTrash ? "#1976d2" : "#d32f2f";
+                                const hoverColor = isTrash ? "#1565c0" : "#b71c1c";
+                                const title = isTrash ? "Khôi phục question" : "Xóa question";
+                                
+                                return (
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleTrashOrRestoreQuestion();
+                                        }}
+                                        disabled={apiTrashQuestion.open}
+                                        sx={{
+                                            color: iconColor,
+                                            ml: translationProgress !== null ? 0.5 : 0,
+                                            flexShrink: 0,
+                                            minWidth: 32,
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0.5,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            position: "relative",
+                                            zIndex: 1,
+                                            "& .MuiSvgIcon-root": {
+                                                color: iconColor,
+                                                fontSize: 18,
+                                            },
+                                            "&:hover": {
+                                                backgroundColor: isTrash 
+                                                    ? "rgba(25, 118, 210, 0.1)" 
+                                                    : "rgba(211, 47, 47, 0.1)",
+                                                color: hoverColor,
+                                                "& .MuiSvgIcon-root": {
+                                                    color: hoverColor,
+                                                },
+                                            },
+                                            "&:disabled": {
+                                                opacity: 0.5,
+                                            },
+                                        }}
+                                        title={title}
+                                    >
+                                        {isTrash ? <RestoreIcon /> : <DeleteIcon />}
+                                    </IconButton>
+                                );
+                            })() : null}
                             {/* Language flags ở cuối dòng */}
                             {languages && languages.length > 0 && courseNodeMap && findCourseIdByPostId && courses && (
                                 <LanguageFlags
@@ -985,6 +1072,7 @@ export default function CourseTreeItem({
                                                             courses={courses}
                                                             showAllLanguages={showAllLanguages}
                                                             postId={postId}
+                                                            onReloadCourses={onReloadCourses}
                                                         />
                                                     </Box>
                                                 )}

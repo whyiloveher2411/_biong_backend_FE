@@ -1895,6 +1895,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         courses={courses}
                                                         showAllLanguages={showAllLanguages}
                                                         postId={data.post.id}
+                                                        onReloadCourses={reloadCourses}
                                                     />
                                                 </Box>
                                             )}
