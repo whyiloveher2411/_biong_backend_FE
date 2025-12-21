@@ -51,19 +51,25 @@ export default function LanguageFlags({
     } else if (nodeType === "section") {
         const section = node as Section;
         nodeKey = section.key;
+        const sectionId = section.id ? String(section.id) : null;
         if (nodeKey && courses) {
             for (const course of courses) {
                 if (String(course.id) !== String(courseId)) continue;
                 if (!course.translates) continue;
                 for (const translate of course.translates) {
-                    if (translate.sections?.some(s => s.key === nodeKey)) {
-                        if (translate.key) {
-                            mapKey = buildCourseNodeMapKey({
-                                courseId: String(courseId),
-                                translateKey: translate.key,
-                                sectionKey: nodeKey,
-                            });
-                        }
+                    // Section: ưu tiên so sánh theo id để tránh trùng key
+                    const foundSection = translate.sections?.find(s => {
+                        const sId = s.id ? String(s.id) : null;
+                        const matchById = sectionId && sId && sectionId === sId;
+                        const matchByKey = !sectionId && nodeKey && s.key === nodeKey;
+                        return matchById || matchByKey;
+                    });
+                    if (foundSection && translate.key) {
+                        mapKey = buildCourseNodeMapKey({
+                            courseId: String(courseId),
+                            translateKey: translate.key,
+                            sectionKey: nodeKey,
+                        });
                         break;
                     }
                 }
@@ -127,6 +133,7 @@ export default function LanguageFlags({
     } else if (nodeType === "question") {
         const question = node as Question;
         nodeKey = question.title;
+
         const questionId = question.id ? String(question.id) : null;
         if (courses) {
             for (const course of courses) {
@@ -171,7 +178,9 @@ export default function LanguageFlags({
 
     // Hàm kiểm tra parent có tồn tại trong ngôn ngữ target không
     const checkParentExists = (langCode: string): boolean => {
-        // Lấy sẵn id của lesson/question (nếu cần so sánh theo id thay vì key)
+        // Lấy sẵn id của section/lesson/question (nếu cần so sánh theo id thay vì key)
+        const sectionNode = nodeType === "section" ? (node as Section) : null;
+        const sectionId = sectionNode?.id ? String(sectionNode.id) : null;
         const lessonNode = nodeType === "lesson" ? (node as Lesson) : null;
         const lessonId = lessonNode?.id ? String(lessonNode.id) : null;
         const questionNode = nodeType === "question" ? (node as Question) : null;
@@ -200,7 +209,13 @@ export default function LanguageFlags({
                 for (const translate of course.translates) {
                     if (nodeType === "section") {
                         // Section parent là translate
-                        if (translate.sections?.some(s => s.key === nodeKey)) {
+                        // Section: ưu tiên so sánh theo id để tránh trùng key
+                        const foundSection = translate.sections?.find(s => {
+                            const sId = s.id ? String(s.id) : null;
+                            return (sectionId && sId && sectionId === sId) ||
+                                   (!sectionId && nodeKey && s.key === nodeKey);
+                        });
+                        if (foundSection) {
                             parentKey = translate.key || null;
                             parentType = "translate";
                             parentTranslateKey = translate.key || null;

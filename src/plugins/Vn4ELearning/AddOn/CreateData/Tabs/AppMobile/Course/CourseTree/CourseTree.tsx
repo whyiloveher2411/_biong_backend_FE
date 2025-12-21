@@ -1021,10 +1021,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 const nodeType = getNodeType(node);
                 
                 // Nếu node là course và có id trùng, return courseId
-                // NHƯNG: nếu đang tìm question, không match với course (vì questionId có thể trùng với courseId)
+                // NHƯNG: nếu đang tìm một node type cụ thể (section, chapter, lesson, question),
+                // không match với course (vì id có thể trùng giữa các loại node)
                 if (nodeType === "course" && node.id === targetId) {
-                    // Nếu đang tìm question, bỏ qua việc match với course
-                    if (targetNodeType === "question") {
+                    // Nếu đang tìm một node type cụ thể, bỏ qua việc match với course
+                    // và tiếp tục tìm trong children
+                    if (targetNodeType && targetNodeType !== "course" && targetNodeType !== "translate") {
                         // Tiếp tục tìm trong children thay vì return ngay
                     } else {
                         return node.id;
