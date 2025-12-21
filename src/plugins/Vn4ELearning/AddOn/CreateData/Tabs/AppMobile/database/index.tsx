@@ -80,6 +80,8 @@ function Database({ data }: { data: CreatePostTypeData }) {
     const ajaxSubCollections = useAjax();
     const ajaxDuplicate = useAjax();
     const ajaxDelete = useAjax();
+    const ajaxClearProgress = useAjax();
+    const ajaxClearCourseCache = useAjax();
     
     // Map để lưu loading state cho mỗi sub-collection column (documents loading)
     const [subCollectionLoading, setSubCollectionLoading] = React.useState<
@@ -676,6 +678,40 @@ function Database({ data }: { data: CreatePostTypeData }) {
         }
     };
 
+    const handleClearProgress = (documentId: string) => {
+        if (!selectedCollection || selectedCollection !== "users") return;
+        ajaxClearProgress.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/users/clear-progress",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                document_id: documentId,
+            },
+            success: (result) => {
+                if (result?.success) {
+                    handleGetDocumentsByCollectionName(selectedCollection);
+                }
+            },
+        });
+    };
+
+    const handleClearCourseCache = (documentId: string) => {
+        if (!selectedCollection || selectedCollection !== "users") return;
+        ajaxClearCourseCache.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/users/clear-course-cache",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                document_id: documentId,
+            },
+            success: (result) => {
+                if (result?.success) {
+                    handleGetDocumentsByCollectionName(selectedCollection);
+                }
+            },
+        });
+    };
+
     const handleGetIndexes = () => {
         ajax.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/firebase/index-list",
@@ -745,6 +781,8 @@ function Database({ data }: { data: CreatePostTypeData }) {
                             },
                         });
                     },
+                    onClearProgress: selectedCollection === "users" ? handleClearProgress : undefined,
+                    onClearCourseCache: selectedCollection === "users" ? handleClearCourseCache : undefined,
                     width: columnWidths.documents,
                     onResizeStart: (e: React.MouseEvent) => handleResizeStart('documents', e.clientX),
                     isResizing: resizingColumn === 'documents',

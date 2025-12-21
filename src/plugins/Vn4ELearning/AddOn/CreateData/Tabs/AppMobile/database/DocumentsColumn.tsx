@@ -6,9 +6,11 @@ import AddCircleIcon from "@mui/icons-material/AddCircle";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Divider from "@mui/material/Divider";
 import useConfirmDialog from "hook/useConfirmDialog";
 import CircularProgress from "components/atoms/CircularProgress";
 
@@ -26,6 +28,8 @@ interface DocumentsColumnProps {
   width?: number;
   onResizeStart?: (e: React.MouseEvent) => void;
   isResizing?: boolean;
+  onClearProgress?: (documentId: string) => void;
+  onClearCourseCache?: (documentId: string) => void;
 }
 
 const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
@@ -42,6 +46,8 @@ const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
   width = 350,
   onResizeStart,
   isResizing = false,
+  onClearProgress,
+  onClearCourseCache,
 }) => {
   const confirmDelete = useConfirmDialog();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -200,6 +206,30 @@ const DocumentsColumn: React.FC<DocumentsColumnProps> = ({
                   <MenuItem onClick={() => { if (activeDoc) onDuplicateDocument(activeDoc); closeMenu(); }}>
                       <ContentCopyIcon fontSize="small" style={{ marginRight: 8 }} /> Duplicate
                   </MenuItem>
+                  {selectedCollection === "users" && (onClearProgress || onClearCourseCache) && (
+                      <>
+                          <Divider />
+                          {onClearProgress && (
+                              <MenuItem onClick={() => {
+                                  if (!activeDoc) return;
+                                  confirmDelete.onConfirm(() => { onClearProgress(activeDoc); }, { message: "Bạn có chắc chắn muốn xóa progress của user này không?" });
+                                  closeMenu();
+                              }}>
+                                  <DeleteOutlineIcon fontSize="small" style={{ marginRight: 8 }} /> Xóa progress
+                              </MenuItem>
+                          )}
+                          {onClearCourseCache && (
+                              <MenuItem onClick={() => {
+                                  if (!activeDoc) return;
+                                  confirmDelete.onConfirm(() => { onClearCourseCache(activeDoc); }, { message: "Bạn có chắc chắn muốn xóa course cache của user này không?" });
+                                  closeMenu();
+                              }}>
+                                  <DeleteOutlineIcon fontSize="small" style={{ marginRight: 8 }} /> Xóa course Cache
+                              </MenuItem>
+                          )}
+                          <Divider />
+                      </>
+                  )}
                   <MenuItem onClick={() => {
                       if (!activeDoc) return;
                       confirmDelete.onConfirm(() => { onDeleteDocument(activeDoc); }, { message: "Bạn có chắc chắn muốn xoá document này không?" });
