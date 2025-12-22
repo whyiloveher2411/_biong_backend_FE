@@ -1,8 +1,6 @@
 import Box from 'components/atoms/Box';
-import CircularProgress from 'components/atoms/CircularProgress';
 import ToggleButton from 'components/atoms/ToggleButton';
 import ToggleButtonGroup from 'components/atoms/ToggleButtonGroup';
-import Typography from 'components/atoms/Typography';
 import { HookCreateDataProps } from 'components/pages/PostType/CreateData/Form';
 import useAjax from 'hook/useApi';
 import React from 'react';
@@ -26,14 +24,7 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
         serviceAccountDev: '',
     });
 
-    const shouldRender = React.useMemo(() => {
-        if (!data?.post?.id) return false;
-        return postType === 'app_mobile' || postType === 'app-mobile' || postType === 'appMobile';
-    }, [data?.post?.id, postType]);
-
     React.useEffect(() => {
-        if (!shouldRender) return;
-    
         apiGetConfig.ajax({
             url: 'plugin/vn4-e-learning/app-mobile/config/get',
             method: 'POST',
@@ -53,10 +44,10 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                 });
             },
         });
-    }, [data?.post?.id, shouldRender]);
+    }, [data?.post?.id]);
 
     const handleSwitchEnvironment = (_e: React.MouseEvent<HTMLElement>, value: string | null) => {
-        if (!value || value === envState.current || !shouldRender) return;
+        if (!value || value === envState.current) return;
 
         apiUpdateConfig.ajax({
             url: 'plugin/vn4-e-learning/app-mobile/config/update',
@@ -75,8 +66,6 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
         });
     };
 
-    if (!shouldRender) return null;
-
     const isLoading = apiGetConfig.open || apiUpdateConfig.open;
 
     return (
@@ -87,9 +76,6 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                 gap: 1.5,
             }}
         >
-            <Typography variant="body2" color="textSecondary">
-                Environment
-            </Typography>
             <ToggleButtonGroup
                 exclusive
                 size="small"
@@ -103,7 +89,6 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                     </ToggleButton>
                 ))}
             </ToggleButtonGroup>
-            {isLoading && <CircularProgress size={18} thickness={5} />}
         </Box>
     );
 }
