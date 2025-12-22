@@ -77,12 +77,12 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
             currentIdRef.current = id;
         }
 
-        // Chỉ gọi API nếu chưa gọi hoặc id đã thay đổi
-        if (!hasCalledApiRef.current && id) {
+        // Chỉ gọi API nếu chưa gọi (kể cả khi tạo mới không có id)
+        if (!hasCalledApiRef.current) {
             hasCalledApiRef.current = true;
 
             ajax({
-                url: `post-type/detail/${type}/${id}`,
+                url: `post-type/detail/${type}/${id || 0}`,
                 method: 'POST',
                 success: function (result: CreatePostTypeData) {
 
