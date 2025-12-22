@@ -12,6 +12,7 @@ export interface Lesson {
     key?: string;
     questions?: Question[];
     data_sololearn?: unknown;
+    is_final_test?: boolean;
 }
 
 export interface Chapter {

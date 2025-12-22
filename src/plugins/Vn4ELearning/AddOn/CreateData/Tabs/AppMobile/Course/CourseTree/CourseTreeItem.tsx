@@ -13,6 +13,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
+import Checkbox from "components/atoms/Checkbox";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
@@ -107,6 +108,7 @@ export default function CourseTreeItem({
     const apiCreateContentAi = useAjax();
     const apiSyncCourse = useAjax();
     const apiTrashQuestion = useAjax();
+    const apiSetFinalTest = useAjax();
     const streamSync = useStreamSync();
     const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
@@ -197,6 +199,36 @@ export default function CourseTreeItem({
             }
         }
     }
+
+    // Tìm thông tin chapter/section/translate của lesson (để group radio final test theo chapter)
+    const lessonParentContext = React.useMemo(() => {
+        if (nodeType !== "lesson" || !courses) return null;
+        const lessonId = String(node.id);
+        for (const course of courses) {
+            if (!course.translates) continue;
+            for (const translate of course.translates) {
+                if (!translate.sections) continue;
+                for (const section of translate.sections) {
+                    if (!section.chapters) continue;
+                    for (const chapter of section.chapters) {
+                        if (chapter.lessons?.some((lesson) => String(lesson.id) === lessonId)) {
+                            return {
+                                courseId: course.id,
+                                translateId: translate.id,
+                                sectionId: section.id,
+                                chapterId: chapter.id,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }, [nodeType, node.id, courses]);
+
+    const isFinalTestLesson =
+        nodeType === "lesson" &&
+        Boolean((node as Lesson).is_final_test);
 
     // Filter children: hiển thị translate dựa trên showAllLanguages nếu node là course
     let children = getChildren(node);
@@ -387,6 +419,44 @@ export default function CourseTreeItem({
             },
             error: () => {
                 apiTrashQuestion.showMessage(`Không thể ${actionText} question`, "error");
+            },
+        });
+    };
+
+    const handleSetFinalTest = () => {
+        if (nodeType !== "lesson") {
+            return;
+        }
+        const lessonId = String(node.id);
+        if (!lessonParentContext) {
+            apiSetFinalTest.showMessage("Không tìm thấy chương của bài học", "error");
+            return;
+        }
+
+        const payload: Record<string, string> = {
+            lesson_id: lessonId,
+            chapter_id: String(lessonParentContext.chapterId),
+            course_id: String(lessonParentContext.courseId),
+        };
+
+        if (lessonParentContext.translateId) {
+            payload.translate_id = String(lessonParentContext.translateId);
+        }
+        if (lessonParentContext.sectionId) {
+            payload.section_id = String(lessonParentContext.sectionId);
+        }
+        if (postId) {
+            payload.id = String(postId);
+        }
+
+        apiSetFinalTest.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course/set-final-test",
+            method: "POST",
+            data: payload,
+            success: () => {
+                if (onReloadCourses) {
+                    onReloadCourses();
+                }
             },
         });
     };
@@ -608,6 +678,21 @@ export default function CourseTreeItem({
                                 minWidth: 0,
                             }}
                         >
+                            {nodeType === "lesson" && (
+                                <Checkbox
+                                    size="small"
+                                    checked={isFinalTestLesson}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                        e.stopPropagation();
+                                        handleSetFinalTest();
+                                    }}
+                                    disabled={apiSetFinalTest.open || !lessonParentContext}
+                                    sx={{ p: 0.25, ml: 0.5 }}
+                                    title="Đánh dấu bài kiểm tra cuối chương"
+                                    inputProps={{ "aria-label": "Final test của chương" }}
+                                />
+                            )}
                             <Typography
                                 variant="body2"
                                 onClick={(e) => {
