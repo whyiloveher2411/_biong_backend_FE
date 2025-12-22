@@ -10,10 +10,13 @@ import Typography from "components/atoms/Typography";
 import Alert from "components/atoms/Alert";
 
 function Config({ data }: { data: CreatePostTypeData }) {
-    const [serviceAccountGoogle, setServiceAccountGoogle] =
+    const [serviceAccountProd, setServiceAccountProd] =
         React.useState<string>("");
-    const [projectId, setProjectId] = React.useState<string>("");
+    const [serviceAccountDev, setServiceAccountDev] =
+        React.useState<string>("");
     const apiPostConfig = useApi();
+    const [environmentCurrent, setEnvironmentCurrent] = React.useState<string>("");
+
 
     const handleGetData = () => {
         apiPostConfig.ajax({
@@ -24,11 +27,13 @@ function Config({ data }: { data: CreatePostTypeData }) {
                 id: data.post.id,
             },
             success: (result: {
-                service_account_google: string;
-                project_id: string;
+                service_account_prod: string;
+                service_account_dev: string;
+                environment_current: string;
             }) => {
-                setServiceAccountGoogle(result.service_account_google);
-                setProjectId(result.project_id);
+                setServiceAccountProd(result.service_account_prod);
+                setServiceAccountDev(result.service_account_dev);
+                setEnvironmentCurrent(result.environment_current);
             },
         });
     };
@@ -40,8 +45,9 @@ function Config({ data }: { data: CreatePostTypeData }) {
             data: {
                 action: "UPDATE_CONFIG",
                 id: data.post.id,
-                service_account_google: serviceAccountGoogle,
-                project_id: projectId,
+                service_account_prod: serviceAccountProd,
+                service_account_dev: serviceAccountDev,
+                environment_current: environmentCurrent,
             },
             success: (result) => {
                 //
@@ -64,6 +70,30 @@ function Config({ data }: { data: CreatePostTypeData }) {
                             gap: 2,
                         }}
                     >
+
+                    <FieldForm
+                        data={data}
+                        component="select"
+                        config={{
+                            title: "Environment",
+                            list_option: {
+                                production: {
+                                    title: "Production",
+                                },
+                                development: {
+                                    title: "Development",
+                                },
+                            },
+                        }}
+                        name="environment_current"
+                        post={{
+                            environment_current: environmentCurrent,
+                        }}
+                        onReview={(environment_current) => {
+                            setEnvironmentCurrent(environment_current);
+                        }}
+                    />
+
                       <Typography variant="h3">
                         Connect to Google Cloud
                       </Typography>
@@ -71,16 +101,32 @@ function Config({ data }: { data: CreatePostTypeData }) {
                             data={data}
                             component="json"
                             config={{
-                                title: "Service Account Google",
+                                title: "Service Account Google (Production)",
                             }}
                             name="service_account_google"
                             post={{
-                                service_account_google: serviceAccountGoogle,
+                                service_account_google: serviceAccountProd,
                             }}
                             onReview={(service_account_google) => {
-                                setServiceAccountGoogle(service_account_google);
+                                setServiceAccountProd(service_account_google);
                             }}
                         />
+
+                        <FieldForm
+                            data={data}
+                            component="json"
+                            config={{
+                                title: "Service Account Google (Development)",
+                            }}
+                            name="service_account_google"
+                            post={{
+                                service_account_google: serviceAccountDev,
+                            }}
+                            onReview={(service_account_google) => {
+                                setServiceAccountDev(service_account_google);
+                            }}
+                        />
+
                         <Alert severity="info">
                             <Typography variant="h6">Hướng dẫn tạo Service Account Google</Typography>
                             <Typography variant="body1">
@@ -95,18 +141,6 @@ function Config({ data }: { data: CreatePostTypeData }) {
                                 5. Tải xuống key cho service account bằng cách click vào "Download"
                             </Typography>
                         </Alert>
-                        <FieldForm
-                            data={data}
-                            component="text"
-                            config={{
-                                title: "Project ID",
-                            }}
-                            name="project_id"
-                            post={{ project_id: projectId }}
-                            onReview={(project_id) => {
-                                setProjectId(project_id);
-                            }}
-                        />
                     </Box>
                 </CardContent>
             </Card>
