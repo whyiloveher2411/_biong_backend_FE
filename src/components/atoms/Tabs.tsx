@@ -208,6 +208,7 @@ interface TabsProps {
     onChangeTab?: (tab: number, subTab: number | undefined | null) => void,
     isTabSticky?: boolean,
     backgroundTabWarper?: string,
+    headerRight?: React.ReactNode,
 }
 
 function Tabs({
@@ -225,6 +226,7 @@ function Tabs({
     isTabSticky = false,
     activeAutoScrollToTab = false,
     backgroundTabWarper = 'transparent',
+    headerRight,
     onChangeTab,
     ...props
 }: TabsProps) {
@@ -488,30 +490,51 @@ function Tabs({
     return (
         <Box ref={tabRef} className={classes.scrollable} {...props}>
             <div className={isTabSticky ? classes.tabWarper : ''} style={{ ['--backgroundTabWarper' as string]: backgroundTabWarper }}>
-                <StyledTabs
-                    scrollButtons="auto"
-                    variant="scrollable"
-                    value={Number(tabCurrent[name])}
-                    textColor="primary"
-                    className={addClasses({
-                        [classes.dense]: !disableDense,
-                        tabItems: true,
-                    })}
-                    onChange={(_e, v: number) => handleChangeTab(v)}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                    }}
                 >
-                    {tabs.map((tab, i) => (
-                        <StyledTab
-                            className={addClasses({
-                                [classes.tabHorizontal]: true,
-                                [classes.tabHorizontalDense]: isDenseLabel,
-                                [classes.displayNone]: tab.hidden,
-                            })}
-                            key={i}
-                            label={tab.title}
-                            value={i}
-                        />
-                    ))}
-                </StyledTabs>
+                    <StyledTabs
+                        scrollButtons="auto"
+                        variant="scrollable"
+                        value={Number(tabCurrent[name])}
+                        textColor="primary"
+                        className={addClasses({
+                            [classes.dense]: !disableDense,
+                            tabItems: true,
+                        })}
+                        onChange={(_e, v: number) => handleChangeTab(v)}
+                        style={{ flex: 1, minWidth: 0 }}
+                    >
+                        {tabs.map((tab, i) => (
+                            <StyledTab
+                                className={addClasses({
+                                    [classes.tabHorizontal]: true,
+                                    [classes.tabHorizontalDense]: isDenseLabel,
+                                    [classes.displayNone]: tab.hidden,
+                                })}
+                                key={i}
+                                label={tab.title}
+                                value={i}
+                            />
+                        ))}
+                    </StyledTabs>
+                    {
+                        headerRight ?
+                            <Box
+                                sx={{
+                                    ml: 1,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {headerRight}
+                            </Box>
+                            : null
+                    }
+                </Box>
                 <Divider color="dark" />
             </div>
             <div className={classes.tabContent}>

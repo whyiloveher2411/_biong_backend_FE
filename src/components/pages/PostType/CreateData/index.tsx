@@ -246,6 +246,12 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
                                                             return result;
                                                         })()
                                                     }
+                                                    headerRight={<Hook
+                                                        hook={`AddOn/CreateData/Tabs/${toCamelCase(type)}/HeaderRight`}
+                                                        data={data}
+                                                        postType={type}
+                                                        onUpdateData={onUpdateData}
+                                                    />}
                                                 />
                                                 :
                                                 <Form
