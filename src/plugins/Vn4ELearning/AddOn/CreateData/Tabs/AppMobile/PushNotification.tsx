@@ -9,18 +9,21 @@ import Typography from 'components/atoms/Typography'
 import LoadingButton from 'components/atoms/LoadingButton'
 import useApi from 'hook/useApi'
 import ComposeForm from './PushNotification/ComposeForm'
-import PlatformOverrides from './PushNotification/PlatformOverrides'
+// import PlatformOverrides from './PushNotification/PlatformOverrides'
 import TargetingForm from './PushNotification/TargetingForm'
-import AdvancedOptions from './PushNotification/AdvancedOptions'
+// import AdvancedOptions from './PushNotification/AdvancedOptions'
 import Preview from './PushNotification/Preview'
-import { AdvancedOptionsState, ComposeState, TargetingState } from './PushNotification/types'
+import DeviceTest from './PushNotification/DeviceTest'
+import { ComposeState, TargetingState } from './PushNotification/types'
 import Campaigns from './Campaigns'
 import { Tab, Tabs } from '@mui/material'
+import { useSearchParams } from 'react-router-dom'
 
 import { getImageUrl } from 'helpers/image'
 
 function PushNotification({ data }: { data: CreatePostTypeData }) {
   const api = useApi();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [compose, setCompose] = React.useState<ComposeState>({
     payload: { title: '', body: '', imageUrl: '', iconUrl: '', data: {} },
@@ -28,9 +31,38 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
   });
 
   const [targeting, setTargeting] = React.useState<TargetingState>({ type: 'topic', topic: 'all_users' });
-  const [advanced, setAdvanced] = React.useState<AdvancedOptionsState>({ priority: 'high', ttlSeconds: undefined, scheduleAt: null });
+  // const [advanced, setAdvanced] = React.useState<AdvancedOptionsState>({ priority: 'high', ttlSeconds: undefined, scheduleAt: null });
 
-  const [tab, setTab] = React.useState<'compose' | 'campaigns'>('compose');
+  // Đọc tab từ URL params, mặc định là 'compose'
+  const tabFromUrl = searchParams.get('tab') as 'compose' | 'campaigns' | 'deviceTest' | null;
+  const initialTab = (tabFromUrl === 'compose' || tabFromUrl === 'campaigns' || tabFromUrl === 'deviceTest') 
+    ? tabFromUrl 
+    : 'compose';
+
+  const [tab, setTab] = React.useState<'compose' | 'campaigns' | 'deviceTest'>(initialTab);
+
+  // Đồng bộ tab với URL params khi URL thay đổi (ví dụ: back/forward button)
+  React.useEffect(() => {
+    const tabFromUrl = searchParams.get('tab') as 'compose' | 'campaigns' | 'deviceTest' | null;
+    if (tabFromUrl === 'compose' || tabFromUrl === 'campaigns' || tabFromUrl === 'deviceTest') {
+      setTab(tabFromUrl);
+    } else {
+      setTab('compose');
+    }
+  }, [searchParams]);
+
+  // Hàm để cập nhật tab và URL params
+  const handleTabChange = React.useCallback((_: ANY, newTab: 'compose' | 'campaigns' | 'deviceTest') => {
+    setTab(newTab);
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    if (newTab === 'compose') {
+      // Xóa param tab nếu về compose (mặc định)
+      newSearchParams.delete('tab');
+    } else {
+      newSearchParams.set('tab', newTab);
+    }
+    setSearchParams(newSearchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const isValidToSend = React.useMemo(() => {
     if (!compose.payload.title || !compose.payload.body) return false;
@@ -40,6 +72,10 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
     if (targeting.type === 'deviceGroup') return !!targeting.notificationKey;
     return false;
   }, [compose, targeting]);
+
+  const isValidToTest = React.useMemo(() => {
+    return !!(compose.payload.title && compose.payload.body);
+  }, [compose.payload.title, compose.payload.body]);
 
   const handleSend = () => {
     api.ajax({
@@ -55,7 +91,7 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
         iconUrl: getImageUrl(compose.payload.iconUrl),
         compose,
         targeting,
-        advanced
+        // advanced
       },
       success: (res) => {
         if (res.status === 'success') {
@@ -66,11 +102,33 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
     })
   }
 
+  const handleTest = () => {
+    api.ajax({
+      url: 'plugin/vn4-e-learning/app-mobile/push-notification/send',
+      method: 'POST',
+      data: {
+        id: data.post.id,
+        title: compose.payload.title,
+        body: compose.payload.body,
+        imageUrl: getImageUrl(compose.payload.imageUrl),
+        iconUrl: getImageUrl(compose.payload.iconUrl),
+        compose,
+        test: 1
+      },
+      success: (res) => {
+        if (res.status === 'success') {
+          // Success handling
+        }
+      }
+    })
+  }
+
   return (
     <Box>
       <Box sx={{ mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tabs value={tab} onChange={handleTabChange}>
           <Tab value='compose' label='Soạn thông báo' />
+          <Tab value='deviceTest' label='Device Test' />
           <Tab value='campaigns' label='Campaigns' />
         </Tabs>
       </Box>
@@ -82,11 +140,11 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
               <CardContent>
                 <ComposeForm value={compose.payload} onChange={(payload) => setCompose(prev => ({ ...prev, payload }))} />
                 <Divider sx={{ my: 3 }} />
-                <PlatformOverrides value={compose.overrides} onChange={(overrides) => setCompose(prev => ({ ...prev, overrides }))} />
-                <Divider sx={{ my: 3 }} />
+                {/* <PlatformOverrides value={compose.overrides} onChange={(overrides) => setCompose(prev => ({ ...prev, overrides }))} />
+                <Divider sx={{ my: 3 }} /> */}
                 <TargetingForm value={targeting} onChange={setTargeting} />
-                <Divider sx={{ my: 3 }} />
-                <AdvancedOptions value={advanced} onChange={setAdvanced} />
+                {/* <Divider sx={{ my: 3 }} />
+                <AdvancedOptions value={advanced} onChange={setAdvanced} /> */}
               </CardContent>
             </Card>
           </Grid>
@@ -99,6 +157,16 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
                     Hành động
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
+                    <LoadingButton
+                      loading={api.open}
+                      variant='outlined'
+                      color='primary'
+                      fullWidth
+                      onClick={handleTest}
+                      disabled={!isValidToTest}
+                    >
+                      Test
+                    </LoadingButton>
                     <LoadingButton
                       loading={api.open}
                       variant='contained'
@@ -120,6 +188,12 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
             </Box>
           </Grid>
         </Grid>
+      ) : tab === 'deviceTest' ? (
+        <Card>
+          <CardContent>
+            <DeviceTest post={data.post as PostTypeProps} />
+          </CardContent>
+        </Card>
       ) : (
         <Campaigns data={data} />
       )}

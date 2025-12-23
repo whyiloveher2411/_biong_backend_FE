@@ -53,7 +53,7 @@ export default function ComposeForm({ value, onChange }: ComposeFormProps) {
                         onReview={(v) => handleReview('body', v)}
                     />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                {/* <Grid item xs={12} md={6}>
                     <FieldForm
                         component="image"
                         config={{ title: "Notification Image URL" }}
@@ -70,7 +70,7 @@ export default function ComposeForm({ value, onChange }: ComposeFormProps) {
                         post={value}
                         onReview={(v) => handleReview('iconUrl', v)}
                     />
-                </Grid>
+                </Grid> */}
             </Grid>
             <Box sx={{ mt: 2 }}>
                 <FieldForm
