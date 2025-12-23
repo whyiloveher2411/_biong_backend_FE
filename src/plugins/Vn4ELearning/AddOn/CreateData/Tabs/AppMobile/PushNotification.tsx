@@ -4,28 +4,42 @@ import Box from 'components/atoms/Box'
 import Grid from 'components/atoms/Grid'
 import Card from 'components/atoms/Card'
 import CardContent from 'components/atoms/CardContent'
+import Divider from 'components/atoms/Divider'
 import Typography from 'components/atoms/Typography'
 import LoadingButton from 'components/atoms/LoadingButton'
 import useApi from 'hook/useApi'
+import ComposeForm from './PushNotification/ComposeForm'
+import PlatformOverrides from './PushNotification/PlatformOverrides'
+import TargetingForm from './PushNotification/TargetingForm'
+import AdvancedOptions from './PushNotification/AdvancedOptions'
 import Preview from './PushNotification/Preview'
+import { AdvancedOptionsState, ComposeState, TargetingState } from './PushNotification/types'
 import Campaigns from './Campaigns'
-import { Tab, Tabs, TextField } from '@mui/material'
+import { Tab, Tabs } from '@mui/material'
+
+import { getImageUrl } from 'helpers/image'
 
 function PushNotification({ data }: { data: CreatePostTypeData }) {
   const api = useApi();
 
-  const [form, setForm] = React.useState({
-    title: '',
-    body: '',
-    topic: 'all_users',
-    fcm_token: ''
+  const [compose, setCompose] = React.useState<ComposeState>({
+    payload: { title: '', body: '', imageUrl: '', iconUrl: '', data: {} },
+    overrides: { ios: {}, android: {} }
   });
+
+  const [targeting, setTargeting] = React.useState<TargetingState>({ type: 'topic', topic: 'all_users' });
+  const [advanced, setAdvanced] = React.useState<AdvancedOptionsState>({ priority: 'high', ttlSeconds: undefined, scheduleAt: null });
 
   const [tab, setTab] = React.useState<'compose' | 'campaigns'>('compose');
 
   const isValidToSend = React.useMemo(() => {
-    return !!(form.title && form.body && (form.topic || form.fcm_token));
-  }, [form]);
+    if (!compose.payload.title || !compose.payload.body) return false;
+    if (targeting.type === 'single') return !!targeting.token;
+    if (targeting.type === 'multicast') return (targeting.tokens?.length || 0) > 0;
+    if (targeting.type === 'topic') return !!targeting.topic;
+    if (targeting.type === 'deviceGroup') return !!targeting.notificationKey;
+    return false;
+  }, [compose, targeting]);
 
   const handleSend = () => {
     api.ajax({
@@ -33,11 +47,20 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
       method: 'POST',
       data: {
         id: data.post.id,
-        ...form
+        title: compose.payload.title,
+        body: compose.payload.body,
+        topic: targeting.topic,
+        fcm_token: targeting.token,
+        imageUrl: getImageUrl(compose.payload.imageUrl),
+        iconUrl: getImageUrl(compose.payload.iconUrl),
+        compose,
+        targeting,
+        advanced
       },
       success: (res) => {
         if (res.status === 'success') {
-          setForm({ ...form, title: '', body: '' });
+          // Keep title/body empty after success? Original didn't do this for complex state.
+          // But might be good to clear.
         }
       }
     })
@@ -57,54 +80,19 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Soạn nội dung
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Title"
-                      value={form.title}
-                      onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      minRows={3}
-                      label="Body"
-                      value={form.body}
-                      onChange={(e) => setForm(prev => ({ ...prev, body: e.target.value }))}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Topic"
-                      value={form.topic}
-                      onChange={(e) => setForm(prev => ({ ...prev, topic: e.target.value }))}
-                      helperText="Gửi đến topic này (mặc định: all_users)"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="FCM Token"
-                      placeholder="Nhập FCM token của thiết bị cụ thể"
-                      value={form.fcm_token}
-                      onChange={(e) => setForm(prev => ({ ...prev, fcm_token: e.target.value }))}
-                      helperText="Gửi đến một thiết bị cụ thể qua token này"
-                    />
-                  </Grid>
-                </Grid>
+                <ComposeForm value={compose.payload} onChange={(payload) => setCompose(prev => ({ ...prev, payload }))} />
+                <Divider sx={{ my: 3 }} />
+                <PlatformOverrides value={compose.overrides} onChange={(overrides) => setCompose(prev => ({ ...prev, overrides }))} />
+                <Divider sx={{ my: 3 }} />
+                <TargetingForm value={targeting} onChange={setTargeting} />
+                <Divider sx={{ my: 3 }} />
+                <AdvancedOptions value={advanced} onChange={setAdvanced} />
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={4}>
             <Box sx={{ position: 'sticky', top: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Preview title={form.title} body={form.body} />
+              <Preview compose={compose} />
               <Card>
                 <CardContent>
                   <Typography variant='subtitle1' fontWeight={700} gutterBottom>
@@ -124,7 +112,7 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
                   </Box>
                   {!isValidToSend && (
                     <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1 }}>
-                      Nhập Title, Body và ít nhất một mục tiêu (Topic hoặc FCM Token) để gửi
+                      Nhập Title, Body và cấu hình mục tiêu hợp lệ để gửi
                     </Typography>
                   )}
                 </CardContent>

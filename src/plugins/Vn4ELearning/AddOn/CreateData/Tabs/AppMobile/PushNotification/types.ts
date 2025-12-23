@@ -8,28 +8,30 @@ export interface KeyValueItem {
     value: string;
 }
 
+import { ImageObjectProps } from "helpers/image";
+
 export interface NotificationPayload {
     title: string;
     body: string;
-    imageUrl?: string;
-    iconUrl?: string;
-    data: Record<string, string>;
+    imageUrl?: string | ImageObjectProps;
+    iconUrl?: string | ImageObjectProps;
+    data: Record<string, ANY>;
 }
 
 export interface IOSOverrides {
     sound?: string;
     badge?: number;
-    imageUrl?: string;
+    imageUrl?: string | ImageObjectProps;
     category?: string;
     contentAvailable?: boolean;
-    mutableContent?: boolean;
+    mutableContent?: boolean | number;
 }
 
 export interface AndroidOverrides {
     channelId?: string;
     sound?: string;
-    iconUrl?: string;
-    imageUrl?: string;
+    iconUrl?: string | ImageObjectProps;
+    imageUrl?: string | ImageObjectProps;
     clickAction?: string;
 }
 

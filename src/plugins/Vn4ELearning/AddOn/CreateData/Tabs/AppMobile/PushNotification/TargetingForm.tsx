@@ -1,11 +1,11 @@
 import React from 'react';
 import Box from 'components/atoms/Box';
-import TextField from 'components/atoms/TextField';
 import Typography from 'components/atoms/Typography';
 import Divider from 'components/atoms/Divider';
 import Radio from 'components/atoms/Radio';
 import RadioGroup from 'components/atoms/RadioGroup';
 import FormControlLabel from 'components/atoms/FormControlLabel';
+import FieldForm from 'components/atoms/fields/FieldForm';
 import { TargetingState, TargetType } from './types';
 
 interface TargetingFormProps {
@@ -28,26 +28,43 @@ export default function TargetingForm({ value, onChange }: TargetingFormProps) {
             <Divider sx={{ my: 2 }} />
 
             {value.type === 'single' && (
-                <TextField fullWidth label="FCM Token" value={value.token || ''} onChange={(e) => onChange({ ...value, token: e.target.value })} />
+                <FieldForm
+                    component="text"
+                    config={{ title: "FCM Token" }}
+                    name="token"
+                    post={value}
+                    onReview={(v) => onChange({ ...value, token: v })}
+                />
             )}
 
             {value.type === 'multicast' && (
-                <TextField
-                    fullWidth
-                    label="Danh sách token (mỗi dòng 1 token, tối đa 500)"
-                    multiline
-                    minRows={4}
-                    value={(value.tokens || []).join('\n')}
-                    onChange={(e) => onChange({ ...value, tokens: e.target.value.split(/\n+/).map(s => s.trim()).filter(Boolean) })}
+                <FieldForm
+                    component="textarea"
+                    config={{ title: "Danh sách token (mỗi dòng 1 token, tối đa 500)" }}
+                    name="tokens_str"
+                    post={{ tokens_str: (value.tokens || []).join('\n') }}
+                    onReview={(v) => onChange({ ...value, tokens: v.split(/\n+/).map((s: string) => s.trim()).filter(Boolean) })}
                 />
             )}
 
             {value.type === 'topic' && (
-                <TextField fullWidth label="Topic" placeholder="news, promotions..." value={value.topic || ''} onChange={(e) => onChange({ ...value, topic: e.target.value })} />
+                <FieldForm
+                    component="text"
+                    config={{ title: "Topic", placeholder: "news, promotions..." }}
+                    name="topic"
+                    post={value}
+                    onReview={(v) => onChange({ ...value, topic: v })}
+                />
             )}
 
             {value.type === 'deviceGroup' && (
-                <TextField fullWidth label="Notification Key (Device Group)" value={value.notificationKey || ''} onChange={(e) => onChange({ ...value, notificationKey: e.target.value })} />
+                <FieldForm
+                    component="text"
+                    config={{ title: "Notification Key (Device Group)" }}
+                    name="notificationKey"
+                    post={value}
+                    onReview={(v) => onChange({ ...value, notificationKey: v })}
+                />
             )}
         </Box>
     );

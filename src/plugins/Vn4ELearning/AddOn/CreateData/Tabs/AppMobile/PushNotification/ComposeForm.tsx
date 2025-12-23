@@ -1,10 +1,8 @@
 import React from 'react';
 import Box from 'components/atoms/Box';
 import Grid from 'components/atoms/Grid';
-import TextField from 'components/atoms/TextField';
 import Typography from 'components/atoms/Typography';
-import Divider from 'components/atoms/Divider';
-import KeyValueEditor from './KeyValueEditor';
+import FieldForm from 'components/atoms/fields/FieldForm';
 import { NotificationPayload } from './types';
 
 interface ComposeFormProps {
@@ -13,9 +11,23 @@ interface ComposeFormProps {
 }
 
 export default function ComposeForm({ value, onChange }: ComposeFormProps) {
-    const handleChange = (field: keyof NotificationPayload, v: ANY) => {
-        onChange({ ...value, [field]: v });
+    const handleReview = (field: keyof NotificationPayload, v: ANY) => {
+        let finalValue = v;
+        if (field === 'data' && typeof v === 'string') {
+            try {
+                finalValue = JSON.parse(v);
+            } catch (e) {
+                finalValue = value.data;
+            }
+        }
+        onChange({ ...value, [field]: finalValue });
     };
+
+    // Need a temporary object for JSON field because it expects a string in post[name]
+    const postWithJsonStr = React.useMemo(() => ({
+        ...value,
+        data: JSON.stringify(value.data || {}, null, 4)
+    }), [value.data]);
 
     return (
         <Box>
@@ -24,48 +36,54 @@ export default function ComposeForm({ value, onChange }: ComposeFormProps) {
             </Typography>
             <Grid container spacing={2}>
                 <Grid item xs={12}>
-                    <TextField
-                        fullWidth
-                        label="Title"
-                        value={value.title}
-                        onChange={(e) => handleChange('title', e.target.value)}
+                    <FieldForm
+                        component="text"
+                        config={{ title: "Title" }}
+                        name="title"
+                        post={value}
+                        onReview={(v) => handleReview('title', v)}
                     />
                 </Grid>
                 <Grid item xs={12}>
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        label="Body"
-                        value={value.body}
-                        onChange={(e) => handleChange('body', e.target.value)}
+                    <FieldForm
+                        component="textarea"
+                        config={{ title: "Body" }}
+                        name="body"
+                        post={value}
+                        onReview={(v) => handleReview('body', v)}
                     />
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <TextField
-                        fullWidth
-                        label="Notification Image URL"
-                        placeholder="https://..."
-                        value={value.imageUrl || ''}
-                        onChange={(e) => handleChange('imageUrl', e.target.value)}
+                    <FieldForm
+                        component="image"
+                        config={{ title: "Notification Image URL" }}
+                        name="imageUrl"
+                        post={value}
+                        onReview={(v) => handleReview('imageUrl', v)}
                     />
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <TextField
-                        fullWidth
-                        label="Icon URL"
-                        placeholder="https://..."
-                        value={value.iconUrl || ''}
-                        onChange={(e) => handleChange('iconUrl', e.target.value)}
+                    <FieldForm
+                        component="image"
+                        config={{ title: "Icon URL" }}
+                        name="iconUrl"
+                        post={value}
+                        onReview={(v) => handleReview('iconUrl', v)}
                     />
                 </Grid>
             </Grid>
-            <Divider sx={{ my: 2 }} />
-            <KeyValueEditor
-                label="Data Payload (ẩn)"
-                value={value.data || {}}
-                onChange={(record) => handleChange('data', record)}
-            />
+            <Box sx={{ mt: 2 }}>
+                <FieldForm
+                    component="repeater"
+                    config={{ title: "Data Payload (ẩn)", sub_fields: {
+                        key: { title: "Key", type: "text" },
+                        value: { title: "Value", type: "text" }
+                    } }}
+                    name="data"
+                    post={postWithJsonStr}
+                    onReview={(v) => handleReview('data', v)}
+                />
+            </Box>
         </Box>
     );
 }

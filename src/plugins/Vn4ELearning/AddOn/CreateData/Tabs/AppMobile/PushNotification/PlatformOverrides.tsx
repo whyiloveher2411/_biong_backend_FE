@@ -1,10 +1,10 @@
 import React from 'react';
 import Box from 'components/atoms/Box';
 import Grid from 'components/atoms/Grid';
-import TextField from 'components/atoms/TextField';
-import Typography from 'components/atoms/Typography';
 import Divider from 'components/atoms/Divider';
+import Typography from 'components/atoms/Typography';
 import { Tab, Tabs } from '@mui/material';
+import FieldForm from 'components/atoms/fields/FieldForm';
 import { PlatformOverridesState } from './types';
 
 interface PlatformOverridesProps {
@@ -33,19 +33,19 @@ export default function PlatformOverrides({ value, onChange }: PlatformOverrides
             {tab === 'android' && (
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                        <TextField label="channel_id" fullWidth value={value.android.channelId || ''} onChange={(e) => handleChange('android', 'channelId', e.target.value)} />
+                        <FieldForm component="text" config={{ title: "channel_id" }} name="channelId" post={value.android} onReview={(v) => handleChange('android', 'channelId', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <TextField label="sound" fullWidth value={value.android.sound || ''} onChange={(e) => handleChange('android', 'sound', e.target.value)} />
+                        <FieldForm component="text" config={{ title: "sound" }} name="sound" post={value.android} onReview={(v) => handleChange('android', 'sound', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <TextField label="iconUrl" fullWidth value={value.android.iconUrl || ''} onChange={(e) => handleChange('android', 'iconUrl', e.target.value)} />
+                        <FieldForm component="image" config={{ title: "iconUrl" }} name="iconUrl" post={value.android} onReview={(v) => handleChange('android', 'iconUrl', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <TextField label="imageUrl" fullWidth value={value.android.imageUrl || ''} onChange={(e) => handleChange('android', 'imageUrl', e.target.value)} />
+                        <FieldForm component="image" config={{ title: "imageUrl" }} name="imageUrl" post={value.android} onReview={(v) => handleChange('android', 'imageUrl', v)} />
                     </Grid>
                     <Grid item xs={12}>
-                        <TextField label="click_action" fullWidth value={value.android.clickAction || ''} onChange={(e) => handleChange('android', 'clickAction', e.target.value)} />
+                        <FieldForm component="text" config={{ title: "click_action" }} name="clickAction" post={value.android} onReview={(v) => handleChange('android', 'clickAction', v)} />
                     </Grid>
                 </Grid>
             )}
@@ -53,19 +53,19 @@ export default function PlatformOverrides({ value, onChange }: PlatformOverrides
             {tab === 'ios' && (
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={4}>
-                        <TextField type="number" label="badge" fullWidth value={value.ios.badge ?? ''} onChange={(e) => handleChange('ios', 'badge', e.target.value === '' ? undefined : Number(e.target.value))} />
+                        <FieldForm component="number" config={{ title: "badge" }} name="badge" post={value.ios} onReview={(v) => handleChange('ios', 'badge', v)} />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                        <TextField label="sound" fullWidth value={value.ios.sound || ''} onChange={(e) => handleChange('ios', 'sound', e.target.value)} />
+                        <FieldForm component="text" config={{ title: "sound" }} name="sound" post={value.ios} onReview={(v) => handleChange('ios', 'sound', v)} />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                        <TextField label="category" fullWidth value={value.ios.category || ''} onChange={(e) => handleChange('ios', 'category', e.target.value)} />
+                        <FieldForm component="text" config={{ title: "category" }} name="category" post={value.ios} onReview={(v) => handleChange('ios', 'category', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <TextField label="imageUrl" fullWidth value={value.ios.imageUrl || ''} onChange={(e) => handleChange('ios', 'imageUrl', e.target.value)} />
+                        <FieldForm component="image" config={{ title: "imageUrl" }} name="imageUrl" post={value.ios} onReview={(v) => handleChange('ios', 'imageUrl', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <TextField label="mutable-content (true/false)" fullWidth value={String(value.ios.mutableContent ?? '')} onChange={(e) => handleChange('ios', 'mutableContent', e.target.value === 'true')} />
+                        <FieldForm component="true_false" config={{ title: "mutable-content" }} name="mutableContent" post={value.ios} onReview={(v) => handleChange('ios', 'mutableContent', v)} />
                     </Grid>
                 </Grid>
             )}
