@@ -22,7 +22,10 @@ import {
     Checkbox,
     FormControlLabel,
     Button,
+    IconButton,
+    Tooltip,
 } from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { TableVirtuoso } from "react-virtuoso";
 import Language from "./Language";
 import useConfirmDialog from "hook/useConfirmDialog";
@@ -320,6 +323,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
     const classes = useStyles();
     const useApi = useAjax();
     const apiSyncLanguage = useAjax();
+    const apiTranslateByAI = useAjax();
     const [searchParams, setSearchParams] = useSearchParams();
     
     // Đọc view từ URL params, mặc định là "localization"
@@ -580,6 +584,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         (item: TranslationItem) => {
             if (languages.length === 0) return false;
             return languages.some((lang) => {
+                // Ignore English
+                if (lang.code === 'en') return false;
                 const translationValue = item.translations[lang.code] || "";
                 return !translationValue.trim();
             });
@@ -642,7 +648,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                             : (item.translations[lang.code] || "");
                         const isChanged = isKeyChanged(item, lang.code);
                         // Chỉ highlight ô này nếu ô này chưa dịch (không check toàn bộ key)
-                        const isLangUntranslated = !displayValue.trim();
+                        // Ignore English for highlighting
+                        const isLangUntranslated = !displayValue.trim() && lang.code !== 'en';
                         const shouldHighlight = highlightUntranslated && isLangUntranslated;
                         return (
                             <TableCell
@@ -798,6 +805,21 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleTranslateByAI = (languageCode: string) => {
+        apiTranslateByAI.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/localization/translate-by-ai",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                language_target: languageCode,
+            },
+            success: (result) => {
+                // Re-fetch data after successful translation
+                handleGetData();
+            },
+        });
+    };
+
     if (!isLoadData) {
         return (
             <Box
@@ -856,6 +878,9 @@ function Localization({ data }: { data: CreatePostTypeData }) {
             });
             namespaceTranslations.forEach((item) => {
                 Object.keys(item.translations).forEach((langCode) => {
+                    // Ignore English for untranslated count
+                    if (langCode === 'en') return;
+                    
                     const translationValue = item.translations[langCode] || "";
                     if (!translationValue.trim()) {
                         untranslatedCountByLanguageForNamespace[langCode] =
@@ -903,44 +928,68 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                             sx={{
                                 display: "flex",
                                 alignItems: "center",
+                                justifyContent: "space-between",
                                 gap: 1,
                             }}
                         >
-                            {lang.icon_url ? (
-                                <img
-                                    src={lang.icon_url}
-                                    alt=""
-                                    className={classes.flagIcon}
-                                />
-                            ) : (
-                                <img
-                                    src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
-                                    alt=""
-                                    className={classes.flagIcon}
-                                />
-                            )}
-                            <Typography variant="body2" component="span">
-                                {lang.name}
-                            </Typography>
-                            {untranslatedCountByLanguageForNamespace[lang.code] >
-                                0 && (
-                                <Chip
-                                    label={
-                                        untranslatedCountByLanguageForNamespace[
-                                            lang.code
-                                        ]
-                                    }
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 1,
+                                }}
+                            >
+                                {lang.icon_url ? (
+                                    <img
+                                        src={lang.icon_url}
+                                        alt=""
+                                        className={classes.flagIcon}
+                                    />
+                                ) : (
+                                    <img
+                                        src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
+                                        alt=""
+                                        className={classes.flagIcon}
+                                    />
+                                )}
+                                <Typography variant="body2" component="span">
+                                    {lang.name}
+                                </Typography>
+                                {untranslatedCountByLanguageForNamespace[lang.code] >
+                                    0 && (
+                                    <Chip
+                                        label={
+                                            untranslatedCountByLanguageForNamespace[
+                                                lang.code
+                                            ]
+                                        }
+                                        size="small"
+                                        color="warning"
+                                        variant="outlined"
+                                        sx={{
+                                            minWidth: 24,
+                                            height: 20,
+                                            fontSize: "0.7rem",
+                                        }}
+                                    />
+                                )}
+                            </Box>
+                            <Tooltip title="Translate by AI">
+                                <IconButton
                                     size="small"
-                                    color="warning"
-                                    variant="outlined"
+                                    onClick={() => handleTranslateByAI(lang.code)}
+                                    disabled={apiTranslateByAI.open}
                                     sx={{
-                                        minWidth: 24,
-                                        height: 20,
-                                        fontSize: "0.7rem",
+                                        color: "primary.main",
+                                        "&:hover": {
+                                            backgroundColor: "primary.light",
+                                        },
                                     }}
-                                />
-                            )}
-    </Box>
+                                >
+                                    <AutoAwesomeIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
                     </TableCell>
                 ))}
             </TableRow>
