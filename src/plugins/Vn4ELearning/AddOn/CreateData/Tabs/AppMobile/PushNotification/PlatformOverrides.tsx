@@ -36,7 +36,16 @@ export default function PlatformOverrides({ value, onChange }: PlatformOverrides
                         <FieldForm component="text" config={{ title: "channel_id" }} name="channelId" post={value.android} onReview={(v) => handleChange('android', 'channelId', v)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                        <FieldForm component="text" config={{ title: "sound" }} name="sound" post={value.android} onReview={(v) => handleChange('android', 'sound', v)} />
+                        <FieldForm 
+                        component="select" 
+                        config={{ title: "sound",list_option:{
+                            'default': {title: "default"},
+                            "sound_notification_1.wav": {title: "sound_notification_1.wav"}
+                        } }} 
+                        name="sound" 
+                        post={value.android} 
+                        onReview={(v) => handleChange('android', 'sound', v)} 
+                        />
                     </Grid>
                     <Grid item xs={12} md={6}>
                         <FieldForm component="image" config={{ title: "iconUrl" }} name="iconUrl" post={value.android} onReview={(v) => handleChange('android', 'iconUrl', v)} />
@@ -52,11 +61,23 @@ export default function PlatformOverrides({ value, onChange }: PlatformOverrides
 
             {tab === 'ios' && (
                 <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                        <FieldForm component="text" config={{ title: "subTitle" }} name="subTitle" post={value.ios} onReview={(v) => handleChange('ios', 'subTitle', v)} />
+                    </Grid>
                     <Grid item xs={12} md={4}>
                         <FieldForm component="number" config={{ title: "badge" }} name="badge" post={value.ios} onReview={(v) => handleChange('ios', 'badge', v)} />
                     </Grid>
                     <Grid item xs={12} md={4}>
-                        <FieldForm component="text" config={{ title: "sound" }} name="sound" post={value.ios} onReview={(v) => handleChange('ios', 'sound', v)} />
+                        <FieldForm 
+                        component="select" 
+                        config={{ title: "sound",list_option:{
+                            "default": {title: "default"},
+                            "sound_notification_1.wav": {title: "sound_notification_1.wav"}
+                        } }} 
+                        name="sound" 
+                        post={value.ios} 
+                        onReview={(v) => handleChange('ios', 'sound', v)} 
+                        />
                     </Grid>
                     <Grid item xs={12} md={4}>
                         <FieldForm component="text" config={{ title: "category" }} name="category" post={value.ios} onReview={(v) => handleChange('ios', 'category', v)} />

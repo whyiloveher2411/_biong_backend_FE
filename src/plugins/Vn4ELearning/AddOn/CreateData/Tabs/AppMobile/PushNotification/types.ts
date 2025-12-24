@@ -25,6 +25,7 @@ export interface IOSOverrides {
     category?: string;
     contentAvailable?: boolean;
     mutableContent?: boolean | number;
+    subTitle?: string;
 }
 
 export interface AndroidOverrides {

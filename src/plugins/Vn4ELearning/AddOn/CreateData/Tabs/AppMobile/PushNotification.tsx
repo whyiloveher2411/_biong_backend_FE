@@ -20,6 +20,7 @@ import { Tab, Tabs } from '@mui/material'
 import { useSearchParams } from 'react-router-dom'
 
 import { getImageUrl } from 'helpers/image'
+import PlatformOverrides from './PushNotification/PlatformOverrides'
 
 function PushNotification({ data }: { data: CreatePostTypeData }) {
   const api = useApi();
@@ -140,11 +141,11 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
               <CardContent>
                 <ComposeForm value={compose.payload} onChange={(payload) => setCompose(prev => ({ ...prev, payload }))} />
                 <Divider sx={{ my: 3 }} />
-                {/* <PlatformOverrides value={compose.overrides} onChange={(overrides) => setCompose(prev => ({ ...prev, overrides }))} />
-                <Divider sx={{ my: 3 }} /> */}
+                <PlatformOverrides value={compose.overrides} onChange={(overrides) => setCompose(prev => ({ ...prev, overrides }))} />
+                <Divider sx={{ my: 3 }} />
                 <TargetingForm value={targeting} onChange={setTargeting} />
-                {/* <Divider sx={{ my: 3 }} />
-                <AdvancedOptions value={advanced} onChange={setAdvanced} /> */}
+                {/* {/* <Divider sx={{ my: 3 }} /> */}
+                {/* <AdvancedOptions value={advanced} onChange={setAdvanced} /> */}
               </CardContent>
             </Card>
           </Grid>
