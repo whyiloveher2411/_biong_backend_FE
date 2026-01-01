@@ -140,6 +140,41 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                     onReview={() => {}} //eslint-disable-line
                 />
             </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                    <Button variant="outlined" color="primary" onClick={() => {
+                        const searchParams = new URLSearchParams(location.search);
+                        searchParams.set('view', 'course-tree-new');
+                        navigate(`${location.pathname}?${searchParams.toString()}`);
+                    }}>
+                        Coruse Tree New
+                    </Button>
+                    <LoadingButton 
+                        variant="contained" 
+                        color="primary" 
+                        onClick={handleSyncCourses}
+                        loading={streamSync.isSyncing}
+                    >
+                        Sync Courses New
+                    </LoadingButton>
+                </Box>
+                <FieldForm
+                    component={"relationship_onetomany_show"}
+                    config={{
+                        title: "Courses",
+                        object: "spacedev_course",
+                        field: "app_mobile",
+                        view: "relationship_onetomany_show",
+                        paginate: {
+                            rowsPerPage: 10,
+                        },
+                    }}
+                    post={data.post}
+                    name={"app_mobile"}
+                    onReview={() => {}} //eslint-disable-line
+                />
+            </Box>
             {confirmSyncCategories.component}
             {confirmSyncCourses.component}
             
