@@ -4,7 +4,7 @@ import { convertToURL } from 'helpers/url';
 const urlPrefixDefault = convertToURL(process.env.REACT_APP_HOST_API_KEY, '/api/admin/');
 
 export interface StreamProgressData {
-    type: 'init' | 'progress' | 'course' | 'translates' | 'translate' | 'lessons' | 'course_complete' | 'finished' | 'final' | 'error';
+    type: 'init' | 'progress' | 'course' | 'translates' | 'translate' | 'lessons' | 'course_complete' | 'finished' | 'final' | 'error' | 'complete';
     stage?: string;
     message?: string | { content: string; options?: ANY };
     progress?: number;
@@ -173,6 +173,7 @@ export default function useStreamSync(): UseStreamSyncProps {
 
                             case 'final':
                             case 'finished':
+                            case 'complete':
                                 setIsSyncing(false);
                                 if (onComplete) {
                                     onComplete(data);

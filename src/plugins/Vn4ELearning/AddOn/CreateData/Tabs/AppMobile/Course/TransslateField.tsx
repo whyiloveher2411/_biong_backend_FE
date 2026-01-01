@@ -4,13 +4,14 @@ import { FieldFormItemProps } from 'components/atoms/fields/type'
 import Box from 'components/atoms/Box'
 import { FormLabel, Tooltip, IconButton } from '@mui/material'
 import FieldForm from 'components/atoms/fields/FieldForm'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 function TransslateField(props: FieldFormItemProps) {
 
     const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
 
     
-    let valueInital: Array<{ [key: string]: ANY }> = [];
+    let valueInital: { [key: string]: ANY } = {};
 
     try {
         if (props.post[props.name] && typeof props.post[props.name] === 'object') {
@@ -19,12 +20,12 @@ function TransslateField(props: FieldFormItemProps) {
             if (props.post[props.name]) {
                 valueInital = JSON.parse(props.post[props.name]);
             } else {
-                valueInital = [];
+                valueInital = {};
             }
         }
 
     } catch (error) {
-        valueInital = [];
+        valueInital = {};
     }
 
     props.post[props.name] = valueInital;
@@ -58,10 +59,27 @@ function TransslateField(props: FieldFormItemProps) {
                                     ...(langCodeCurrent === language.code ? {
                                         backgroundColor: 'action.hover',
                                         borderColor: 'primary.main',
-                                    } : {})
+                                    } : {}),
+                                    position: 'relative',
+                                    overflow: 'visible'
                                 }}
                                 onClick={() => setLangCodeCurrent(language.code)}
                             >
+                                {valueInital?.[language.code] && (
+                                    <CheckCircleIcon
+                                        sx={{
+                                            position: 'absolute',
+                                            top: -6,
+                                            right: -6,
+                                            width: 14,
+                                            height: 14,
+                                            color: 'success.main',
+                                            backgroundColor: 'background.paper',
+                                            borderRadius: '50%',
+                                            zIndex: 1,
+                                        }}
+                                    />
+                                )}
                                 {language.icon_url ? (
                                     <img
                                         src={language.icon_url}

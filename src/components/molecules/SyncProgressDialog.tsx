@@ -1,8 +1,8 @@
 import React from 'react';
 import Dialog from 'components/molecules/Dialog';
 import { Box, LinearProgress, Typography, List, ListItem, ListItemText, IconButton } from '@mui/material';
-import Icon from 'components/atoms/Icon';
 import { StreamProgressData } from 'hook/useStreamSync';
+import CloseIcon from '@mui/icons-material/Close';
 
 interface SyncProgressDialogProps {
     open: boolean;
@@ -166,7 +166,7 @@ function SyncProgressDialog({
                 {!isSyncing && (
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                         <IconButton onClick={onClose} color="primary">
-                            <Icon icon="Close" />
+                            <CloseIcon />
                         </IconButton>
                     </Box>
                 )}
