@@ -106,7 +106,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                     onReview={() => {}} //eslint-disable-line
                 />
             </Box>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {/* <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                     <Button variant="outlined" color="primary" onClick={() => {
                         const searchParams = new URLSearchParams(location.search);
@@ -139,7 +139,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                     name={"app_mobile"}
                     onReview={() => {}} //eslint-disable-line
                 />
-            </Box>
+            </Box> */}
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -148,7 +148,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                         searchParams.set('view', 'course-tree-new');
                         navigate(`${location.pathname}?${searchParams.toString()}`);
                     }}>
-                        Coruse Tree New
+                        Coruse Tree
                     </Button>
                     <LoadingButton 
                         variant="contained" 
@@ -156,7 +156,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                         onClick={handleSyncCourses}
                         loading={streamSync.isSyncing}
                     >
-                        Sync Courses New
+                        Sync Courses
                     </LoadingButton>
                 </Box>
                 <FieldForm

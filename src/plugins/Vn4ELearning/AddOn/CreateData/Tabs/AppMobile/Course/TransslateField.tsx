@@ -44,6 +44,7 @@ function TransslateField(props: FieldFormItemProps) {
                             sx={{
                                 
                             }}
+                            placement="top"
                         >
                             <IconButton
                                 size="small"

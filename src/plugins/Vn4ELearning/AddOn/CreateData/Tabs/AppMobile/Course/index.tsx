@@ -3,7 +3,7 @@ import Overview from "./Overview";
 import useQuery from "hook/useQuery";
 import { CreatePostTypeData } from "components/pages/PostType/CreateData";
 import useAjax from "hook/useApi";
-import CourseTree from "./CourseTree/CourseTree";
+// import CourseTree from "./CourseTree/CourseTree";
 import CourseTreeNew from "./CourseTreeNew";
 
 interface Language {
@@ -47,10 +47,10 @@ function Courses({ data }: { data: CreatePostTypeData }) {
         return <Overview data={data} />;
     }
 
-    if( view === 'course-tree-new' ) {
-        return <CourseTreeNew data={data} />;
-    }
-    return <CourseTree data={data} />;
+    // if( view === 'course-tree-new' ) {
+    return <CourseTreeNew data={data} />;
+    // }
+    // return <CourseTree data={data} />;
 }
 
 export default Courses;
