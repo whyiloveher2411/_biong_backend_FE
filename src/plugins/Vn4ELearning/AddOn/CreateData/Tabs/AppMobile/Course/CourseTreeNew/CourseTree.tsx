@@ -48,11 +48,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
     const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set());
-    
+
     // New features state
     const apiSyncCourses = useAjax();
     const apiExportCourse = useAjax();
     const apiImportCourse = useAjax();
+    // const apiImportJson = useAjax(); // Removed
     const streamSync = useStreamSync();
     const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -69,6 +70,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const confirmExport = useConfirmDialog({
         title: "Xác nhận Export Course",
         message: "Bạn có chắc chắn muốn export course? File export sẽ được tải xuống sau khi hoàn tất.",
+    });
+    const confirmImportJson = useConfirmDialog({
+        title: "Xác nhận Import Json",
+        message: "Bạn có chắc chắn muốn import course từ JSON? Hành động này sẽ thêm dữ liệu mới.",
     });
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -114,12 +119,39 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleImportJson = () => {
+        confirmImportJson.onConfirm(() => {
+            setSyncProgressDialogOpen(true);
+            streamSync.reset();
+
+            streamSync.sync({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/import-course-form-json",
+                data: {
+                    id: String(data.post.id),
+                },
+                onComplete: (data) => {
+                    loadData();
+                    // Keep dialog open for a moment or close it? 
+                    // Usually useful to see the summary. 
+                    // But if successful, maybe we can auto-close after delay.
+                    // For now let's match handleSyncCourses behavior but maybe with a slight delay
+                    setTimeout(() => {
+                        setSyncProgressDialogOpen(false);
+                    }, 500);
+                },
+                onError: (error) => {
+                    // specific error handling if needed
+                }
+            });
+        });
+    };
+
     const handleSyncCourses = () => {
         handleCloseMenu();
         confirmSync.onConfirm(() => {
             setSyncProgressDialogOpen(true);
             streamSync.reset();
-            
+
             streamSync.sync({
                 url: "plugin/vn4-e-learning/app-mobile/course-new/sync-course-to-firestore",
                 data: {
@@ -159,17 +191,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             success: (result: { courses: Course[]; languages: Language[] }) => {
                 if (result.courses) {
                     setCourses((prev) => {
-                         // Use mergeNodes to preserve object references for unchanged nodes
-                         return mergeNodes(prev || [], result.courses);
+                        // Use mergeNodes to preserve object references for unchanged nodes
+                        return mergeNodes(prev || [], result.courses);
                     });
                 } else {
-                     setCourses([]);
+                    setCourses([]);
                 }
-                
+
                 if (result.languages) {
                     setLanguages(result.languages);
                 }
-                
+
                 if (result.languages && result.languages.length > 0 && !currentLanguageCode) {
                     const defaultLang = result.languages.find((l: Language) => l.is_default) || result.languages[0];
                     setCurrentLanguageCode(defaultLang.code);
@@ -192,7 +224,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const handleAddChild = (parentId: string | number, parentType: string, childType: string) => {
         const childObjectType = getNodeObjectType(childType);
         const parentObjectType = getNodeObjectType(parentType);
-        
+
         let relationshipField = "";
         switch (childType) {
             case "course": relationshipField = "app_mobile"; break;
@@ -349,36 +381,36 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             return nodes.map(node => {
                 // If it's a chapter, check its lessons
                 if (node.lessons) {
-                     const hasTargetLesson = node.lessons.some((l: ANY) => String(l.id) === String(lessonId));
-                     if (hasTargetLesson) {
-                         const updatedLessons = node.lessons.map((l: ANY) => {
-                             if (String(l.id) === String(lessonId)) {
-                                 return { ...l, is_final_test: isFinalTest };
-                             }
-                             // If setting to true, others in chapter become false
-                             if (isFinalTest) {
-                                 // Only update if it was true to avoid unnecessary changes? 
-                                 // well, just force false to be safe as per requirement "mutually exclusive" likely?
-                                 // Or just "re-render lessons in same chapter". 
-                                 // Let's assume mutual exclusivity for 'final test' in a chapter usually makes sense.
-                                 return { ...l, is_final_test: false };
-                             }
-                             return l;
-                         });
-                         return { ...node, lessons: updatedLessons };
-                     }
+                    const hasTargetLesson = node.lessons.some((l: ANY) => String(l.id) === String(lessonId));
+                    if (hasTargetLesson) {
+                        const updatedLessons = node.lessons.map((l: ANY) => {
+                            if (String(l.id) === String(lessonId)) {
+                                return { ...l, is_final_test: isFinalTest };
+                            }
+                            // If setting to true, others in chapter become false
+                            if (isFinalTest) {
+                                // Only update if it was true to avoid unnecessary changes? 
+                                // well, just force false to be safe as per requirement "mutually exclusive" likely?
+                                // Or just "re-render lessons in same chapter". 
+                                // Let's assume mutual exclusivity for 'final test' in a chapter usually makes sense.
+                                return { ...l, is_final_test: false };
+                            }
+                            return l;
+                        });
+                        return { ...node, lessons: updatedLessons };
+                    }
                 }
-                
+
                 // Recursively check children
                 const newNode = { ...node };
                 if (newNode.translates) newNode.translates = updateNodes(newNode.translates);
                 if (newNode.sections) newNode.sections = updateNodes(newNode.sections);
                 if (newNode.chapters) newNode.chapters = updateNodes(newNode.chapters);
-                
+
                 return newNode;
             });
         }
-        
+
         setCourses(prev => prev ? updateNodes(prev) as Course[] : null);
     };
 
@@ -424,18 +456,18 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
         const allKeys = getAllNodeKeys(node);
         const childrenKeys = getAllChildrenKeys(node);
-        
+
         // Check if all children are expanded
         const allChildrenExpanded = childrenKeys.length > 0 && childrenKeys.every(key => expandedNodes.has(key));
 
         setExpandedNodes(prev => {
             const newSet = new Set(prev);
             if (allChildrenExpanded) {
-                 // Close all
-                 allKeys.forEach(key => newSet.delete(key));
+                // Close all
+                allKeys.forEach(key => newSet.delete(key));
             } else {
-                 // Open all
-                 allKeys.forEach(key => newSet.add(key));
+                // Open all
+                allKeys.forEach(key => newSet.add(key));
             }
             return newSet;
         });
@@ -451,6 +483,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             </Box>
         );
     }
+
+    const handleRefresh = () => {
+        handleCloseMenu();
+        loadData();
+    };
 
     return (
         <Box sx={{ p: 2, backgroundColor: "#f5f5f7", minHeight: "100vh" }}>
@@ -495,18 +532,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             ))}
                         </Select>
                     </FormControl>
-                    <IconButton 
-                        onClick={loadData} 
-                        title="Refresh Data"
-                        sx={{ 
-                            border: "1px solid", 
-                            borderColor: "divider",
-                            borderRadius: 2,
-                            p: 1
-                        }}
-                    >
-                        <SyncIcon fontSize="small" />
-                    </IconButton>
                     <IconButton
                         onClick={handleOpenMenu}
                         title="More Options"
@@ -526,6 +551,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                         transformOrigin={{ vertical: "top", horizontal: "right" }}
                     >
+                        <MenuItem onClick={handleRefresh}>
+                            <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Refresh Data
+                        </MenuItem>
                         <MenuItem onClick={handleExportCourse} disabled={apiExportCourse.open}>
                             <FileDownloadIcon sx={{ mr: 1, fontSize: 20 }} />
                             Export Course
@@ -546,6 +575,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
                     >
                         Add Course
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<FileUploadIcon />}
+                        onClick={handleImportJson}
+                        sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                        disabled={streamSync.isSyncing}
+                    >
+                        Import course form Json
                     </Button>
                 </Box>
             </Box>
@@ -631,7 +670,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             {confirmSync.component}
             {confirmImport.component}
             {confirmExport.component}
-            
+            {confirmImportJson.component}
+
             <SyncProgressDialog
                 open={syncProgressDialogOpen}
                 onClose={() => {

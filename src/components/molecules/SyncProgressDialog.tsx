@@ -46,6 +46,11 @@ function SyncProgressDialog({
             finished: 'Hoàn thành',
             final: 'Kết quả cuối cùng',
             error: 'Lỗi',
+            start: 'Bắt đầu',
+            progress: 'Đang xử lý',
+            log: 'Nhật ký',
+            success: 'Thành công',
+            done: 'Hoàn tất',
         };
         return labels[stage] || stage;
     };
