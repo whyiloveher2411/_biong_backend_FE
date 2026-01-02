@@ -2,7 +2,113 @@ import React from "react";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { TreeNode, Course, Section, Chapter, Lesson } from "./types";
+import { TreeNode, Course, Section, Chapter, Lesson, Language } from "./types";
+
+const MULTILANG_FIELDS: { [key: string]: string[] } = {
+    course: ["title", "shortDescription", "description"],
+    section: ["title", "description"],
+    chapter: ["title", "subtitle", "guidebook", "finalTestConfig.titleOverride", "finalTestConfig.shortDescription"],
+    lesson: ["title", "shortTitle", "special.title", "special.description"],
+    question: ["title", "body", "content"],
+};
+
+export const calculateNodeProgress = (node: TreeNode, languages: Language[]): number => {
+    if (!languages || languages.length === 0) return 0;
+    
+    const type = getNodeType(node);
+    const fields = MULTILANG_FIELDS[type] || [];
+    
+    // 1. Calculate Field Progress
+    let totalFields = fields.length * languages.length;
+    let filledFields = 0;
+
+    fields.forEach(fieldPath => {
+        // Resolve nested path (e.g., 'special.title')
+        const parts = fieldPath.split('.');
+        let value: unknown = node;
+        for (const part of parts) {
+            value = (value as Record<string, unknown>)?.[part];
+            if (value === undefined || value === null) break;
+        }
+
+        let parsedValue: Record<string, unknown> = {};
+        try {
+             if (typeof value === 'object' && value !== null) {
+                 parsedValue = value as Record<string, unknown>;
+             } else if (typeof value === 'string') {
+                 parsedValue = JSON.parse(value) as Record<string, unknown>;
+             }
+        } catch (e) {
+            // If parse error, treat as empty
+        }
+
+        languages.forEach(lang => {
+            if (parsedValue && parsedValue[lang.code]) {
+                filledFields++;
+            }
+        });
+    });
+
+    // 2. Calculate Children Progress
+    const children = getChildren(node);
+    let totalChildrenProgress = 0;
+    let childrenCount = 0;
+
+    if (children.length > 0) {
+        children.forEach(child => {
+            const childProgress = calculateNodeProgress(child, languages);
+            totalChildrenProgress += childProgress;
+            childrenCount++;
+        });
+    }
+
+    // Combine Progress
+    // We can weight them. 
+    // Option A: Treat fields and children as equal units?
+    // Option B: Average of (Fields % + Children %) ?
+    // Option C: (Filled Fields + Sum(ChildProgress/100)) / (TotalFields + ChildrenCount) ?? No this is mixing units.
+
+    // Let's use weighted average.
+    // If leaf node (Question): Progress = FilledFields / TotalFields
+    // If parent node: Progress = (SelfFieldsProgress + ChildrenAverageProgress) / 2 ? OR
+    // Progress = (FilledFields + Sum(ChildProgress for each child)) / (TotalFields + ChildrenCount * 100) * 100 ??
+    // Let's stick to the prompt's implication: "lesson: ... and question children complete".
+    // This implies if a lesson has 3 questions, and 2 are done, lesson is partial?
+    
+    // Revised Formula:
+    // Total Units = TotalFields (each field-lang pair is 1 unit) + ChildrenCount (each child complete is effectively 1 unit scaled to fields?)
+    
+    // Let's try: Total Score = (Percentage Fields * 1) + (Average Percentage Children * 1) / 2 ?
+    // If no children: Percentage Fields.
+    // If no fields: Average Percentage Children.
+    // If both: Average of both.
+    
+    let fieldPercentage = totalFields > 0 ? (filledFields / totalFields) * 100 : 100; // If no fields, assume 100% on that part? Or 0?
+    // If no fields defined (unlikely for these types), usually it means config driven.
+    if (totalFields === 0) fieldPercentage = 100;
+
+    let childrenPercentage = 0;
+    if (childrenCount > 0) {
+        childrenPercentage = totalChildrenProgress / childrenCount;
+    } else {
+        childrenPercentage = 100; // If no children required, 100% on that part.
+    }
+
+    // Special case: If node expects children but has none?
+    // E.g. Lesson should have questions? Maybe not strictly required.
+    // Let's keep it simple: strict average of the two components existence.
+
+    if (totalFields > 0 && childrenCount > 0) {
+        return Math.round((fieldPercentage + childrenPercentage) / 2);
+    } else if (totalFields > 0) {
+        return Math.round(fieldPercentage);
+    } else if (childrenCount > 0) {
+        return Math.round(childrenPercentage);
+    } else {
+        return 0; // Or 100? If nothing to do, it's done?
+    }
+};
+
 
 export const getNodeType = (node: TreeNode): string => {
     if ('sections' in node) return "course";

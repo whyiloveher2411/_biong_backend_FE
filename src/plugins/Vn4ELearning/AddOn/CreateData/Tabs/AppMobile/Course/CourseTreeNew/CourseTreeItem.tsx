@@ -37,6 +37,7 @@ import {
     hasChildren,
     getChildren,
     parseJsonTitle,
+    calculateNodeProgress,
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
@@ -373,40 +374,44 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     sx={{ p: 0.5 }}
                                 />
                             )}
-                            <Typography
-                                variant="body2"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onEditNode) onEditNode(node.id, nodeType);
-                                }}
-                                sx={{
-                                    fontWeight: nodeHasChildren ? 600 : 400,
-                                    color: nodeHasChildren ? nodeColor : "text.primary",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                    "&:hover": { textDecoration: "underline" },
-                                }}
-                            >
-                                {title || `Untitled ${getNodeLabel(node)}`}
-                            </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography
+                                        variant="body2"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onEditNode) onEditNode(node.id, nodeType);
+                                        }}
+                                        sx={{
+                                            fontWeight: nodeHasChildren ? 600 : 400,
+                                            color: nodeHasChildren ? nodeColor : "text.primary",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                            "&:hover": { textDecoration: "underline" },
+                                        }}
+                                    >
+                                        {title || `Untitled ${getNodeLabel(node)}`}
+                                    </Typography>
 
-                            <Chip
-                                label={getNodeLabel(node)}
-                                size="small"
-                                sx={{
-                                    height: 16,
-                                    fontSize: "0.625rem",
-                                    backgroundColor: nodeColor,
-                                    color: "white",
-                                    fontWeight: 600,
-                                    cursor: "pointer",
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onEditNode) onEditNode(node.id, nodeType);
-                                }}
-                            />
+                                    <Chip
+                                        label={getNodeLabel(node)}
+                                        size="small"
+                                        sx={{
+                                            height: 16,
+                                            fontSize: "0.625rem",
+                                            backgroundColor: nodeColor,
+                                            color: "white",
+                                            fontWeight: 600,
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onEditNode) onEditNode(node.id, nodeType);
+                                        }}
+                                    />
+                                </Box>
+                            </Box>
 
 
                             {onAddChild && (() => {
@@ -456,7 +461,24 @@ const CourseTreeItem = memo(function CourseTreeItem({
                         </Box>
 
                         {/* RIGHT SIDE: Delete Button (for Questions) and Sync Button (for Courses) */}
-                        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", paddingLeft: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", paddingLeft: 1, gap: 1 }}>
+                            {/* Progress Bar */}
+                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
+                                <Box sx={{ width: 60, height: 4, bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden' }}>
+                                    <Box 
+                                        sx={{ 
+                                            width: `${calculateNodeProgress(node, languages || [])}%`, 
+                                            height: '100%', 
+                                            bgcolor: calculateNodeProgress(node, languages || []) === 100 ? 'success.main' : 'warning.main',
+                                            transition: 'width 0.3s ease'
+                                        }} 
+                                    />
+                                </Box>
+                                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', minWidth: 24, textAlign: 'right' }}>
+                                    {calculateNodeProgress(node, languages || [])}%
+                                </Typography>
+                            </Box>
+
                             {nodeType === "course" && (
                                 <Button
                                     variant="outlined"

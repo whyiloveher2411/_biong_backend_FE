@@ -7,6 +7,8 @@ export interface Question {
     estimated_seconds?: number;
     is_complete?: boolean;
     status?: string;
+    body?: string; // JSON
+    content?: string; // JSON
 }
 
 export interface Lesson {
@@ -17,6 +19,11 @@ export interface Lesson {
     is_final_test?: number | boolean;
     questions?: Question[];
     order?: number;
+    special?: {
+        title?: string;
+        description?: string;
+        [key: string]: unknown;
+    };
 }
 
 export interface Chapter {
@@ -26,6 +33,12 @@ export interface Chapter {
     subtitle?: string; // JSON
     lessons?: Lesson[];
     order?: number;
+    guidebook?: string; // JSON
+    finalTestConfig?: {
+        titleOverride?: string;
+        shortDescription?: string;
+        [key: string]: unknown;
+    };
 }
 
 export interface Section {
