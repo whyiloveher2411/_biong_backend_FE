@@ -19,6 +19,7 @@ export interface Lesson {
     is_final_test?: number | boolean;
     questions?: Question[];
     order?: number;
+    link_data_craw_json?: string;
     special?: {
         title?: string;
         description?: string;
@@ -57,6 +58,7 @@ export interface Course {
     shortDescription?: string; // JSON
     description?: string; // JSON
     sections?: Section[];
+    link_data_craw_json?: string;
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;

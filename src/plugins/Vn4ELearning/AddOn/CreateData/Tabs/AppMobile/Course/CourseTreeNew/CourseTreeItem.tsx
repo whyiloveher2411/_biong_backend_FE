@@ -240,6 +240,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                         mb: 0.5,
                         backgroundColor: backgroundColor,
                         borderLeft: `3px solid ${nodeColor}`,
+                        borderRight: (node as Course | Lesson).link_data_craw_json ? `3px solid ${nodeColor}` : undefined,
                         overflow: "hidden",
                         ml: paddingLeft,
                         transition: "all 0.2s ease",
