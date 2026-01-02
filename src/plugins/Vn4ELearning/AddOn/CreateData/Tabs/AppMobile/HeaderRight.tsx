@@ -3,6 +3,8 @@ import ToggleButton from 'components/atoms/ToggleButton';
 import ToggleButtonGroup from 'components/atoms/ToggleButtonGroup';
 import { HookCreateDataProps } from 'components/pages/PostType/CreateData/Form';
 import useAjax from 'hook/useApi';
+import ConfirmDialog from 'components/molecules/ConfirmDialog';
+import { __ } from 'helpers/i18n';
 import React from 'react';
 
 const ENV_OPTIONS = [
@@ -22,6 +24,14 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
         current: '',
         serviceAccountProd: '',
         serviceAccountDev: '',
+    });
+
+    const [confirmState, setConfirmState] = React.useState<{
+        open: boolean;
+        pendingValue: string | null;
+    }>({
+        open: false,
+        pendingValue: null,
     });
 
     React.useEffect(() => {
@@ -48,6 +58,15 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
 
     const handleSwitchEnvironment = (_e: React.MouseEvent<HTMLElement>, value: string | null) => {
         if (!value || value === envState.current) return;
+        setConfirmState({
+            open: true,
+            pendingValue: value,
+        });
+    };
+
+    const handleConfirmSwitch = () => {
+        const value = confirmState.pendingValue;
+        if (!value) return;
 
         apiUpdateConfig.ajax({
             url: 'plugin/vn4-e-learning/app-mobile/config/update',
@@ -64,32 +83,48 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                 }));
             },
         });
+        setConfirmState({ open: false, pendingValue: null });
+    };
+
+    const handleCloseConfirm = () => {
+        setConfirmState({ open: false, pendingValue: null });
     };
 
     const isLoading = apiGetConfig.open || apiUpdateConfig.open;
 
     return (
-        <Box
-            sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-            }}
-        >
-            <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={envState.current}
-                onChange={handleSwitchEnvironment}
-                disabled={isLoading || !envState.current}
+        <React.Fragment>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                }}
             >
-                {ENV_OPTIONS.map((item) => (
-                    <ToggleButton key={item.value} value={item.value} disableRipple>
-                        {item.label}
-                    </ToggleButton>
-                ))}
-            </ToggleButtonGroup>
-        </Box>
+                <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={envState.current}
+                    onChange={handleSwitchEnvironment}
+                    disabled={isLoading || !envState.current}
+                >
+                    {ENV_OPTIONS.map((item) => (
+                        <ToggleButton key={item.value} value={item.value} disableRipple>
+                            {item.label}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+            </Box>
+            {confirmState.open && (
+                <ConfirmDialog
+                    open={confirmState.open}
+                    onClose={handleCloseConfirm}
+                    onConfirm={handleConfirmSwitch}
+                    title={__('Switch Environment')}
+                    message={__('Are you sure you want to switch the environment?')}
+                />
+            )}
+        </React.Fragment>
     );
 }
 

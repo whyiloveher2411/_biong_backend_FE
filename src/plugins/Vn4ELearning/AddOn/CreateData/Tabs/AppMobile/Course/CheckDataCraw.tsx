@@ -54,7 +54,7 @@ function CheckDataCraw(props: FieldFormItemProps) {
                 onChange={handleChange}
                 displayEmpty
             >
-                <MenuItem value="">
+                <MenuItem value="" disabled>
                     <em>Select Data</em>
                 </MenuItem>
                 {chapters.map((chapter, index) => {
@@ -81,7 +81,7 @@ function CheckDataCraw(props: FieldFormItemProps) {
                                             {lesson.title} {lesson.has_data ? '' : ' (No Data)'}
                                             {lesson.match_with_title === maxMatchScore && maxMatchScore > 0 && <span style={{ color: 'green', fontSize: '0.85em', marginLeft: '5px', fontWeight: 'bold' }}>(Match: {lesson.match_with_title}%)</span>}
                                         </span>
-                                        {lesson.used_in_lesson && (
+                                        {lesson.used_in_lesson && lesson.used_in_lesson !== props.post.id && (
                                             <span style={{ color: '#ff9800', fontSize: '0.85em', marginLeft: '10px' }}>
                                               (Used)
                                             </span>

@@ -54,8 +54,8 @@ function ChecCourseStructure(props: FieldFormItemProps) {
                 onChange={handleChange}
                 displayEmpty
             >
-                <MenuItem value="">
-                    <em>Select Course</em>
+                <MenuItem value="" disabled>
+                    <em>Select Data</em>
                 </MenuItem>
                 {courses.map((course, index) => {
                     let maxMatchScore = 0;
@@ -73,6 +73,11 @@ function ChecCourseStructure(props: FieldFormItemProps) {
                                     {course.title}
                                     {course.match_with_title === maxMatchScore && maxMatchScore > 0 && <span style={{ color: 'green', fontSize: '0.85em', marginLeft: '5px', fontWeight: 'bold' }}>(Match: {course.match_with_title}%)</span>}
                                 </span>
+                                 {course.used_in_course && course.used_in_course !== props.post.id && (
+                                    <span style={{ color: '#ff9800', fontSize: '0.85em', marginLeft: '10px' }}>
+                                        (Used)
+                                    </span>
+                                )}
                             </div>
                         </MenuItem>
                     )
