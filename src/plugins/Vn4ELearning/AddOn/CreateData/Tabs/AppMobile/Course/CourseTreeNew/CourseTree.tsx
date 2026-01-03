@@ -36,6 +36,7 @@ import {
 } from "./utils";
 import CourseTreeItem from "./CourseTreeItem";
 import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
+import GolfCourseIcon from "@mui/icons-material/GolfCourse";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -592,12 +593,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
-                            <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Sync All to Firebase
+                            <GolfCourseIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Sync course to Firebase
                         </MenuItem>
                         <MenuItem onClick={handleSyncConfig}>
                             <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Sync Course Config
+                            Sync Course Config to Firebase
                         </MenuItem>
                     </Menu>
                     <Button
