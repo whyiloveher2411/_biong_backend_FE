@@ -14,6 +14,7 @@ interface SyncProgressDialogProps {
     isSyncing: boolean;
     totalObjects: number;
     completedObjects: number;
+    title?: string;
 }
 
 function SyncProgressDialog({
@@ -26,6 +27,7 @@ function SyncProgressDialog({
     isSyncing,
     totalObjects,
     completedObjects,
+    title,
 }: SyncProgressDialogProps) {
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -83,7 +85,7 @@ function SyncProgressDialog({
         <Dialog
             open={open}
             onClose={handleClose}
-            title="Đồng bộ lên Firebase"
+            title={title || "Đồng bộ lên Firebase"}
             style={{ minHeight: 400 }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

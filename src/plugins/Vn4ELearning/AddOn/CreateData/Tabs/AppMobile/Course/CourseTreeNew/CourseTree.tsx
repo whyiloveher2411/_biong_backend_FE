@@ -35,7 +35,7 @@ import {
     mergeNodes,
 } from "./utils";
 import CourseTreeItem from "./CourseTreeItem";
-import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel } from "@mui/material";
+import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -56,6 +56,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     // const apiImportJson = useAjax(); // Removed
     const streamSync = useStreamSync();
     const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
+    const [syncDialogTitle, setSyncDialogTitle] = React.useState<string>("");
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const openMenu = Boolean(anchorEl);
 
@@ -74,6 +75,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const confirmImportJson = useConfirmDialog({
         title: "Xác nhận Import Json",
         message: "Bạn có chắc chắn muốn import course từ JSON? Hành động này sẽ thêm dữ liệu mới.",
+    });
+
+    const confirmSyncConfig = useConfirmDialog({
+        title: "Xác nhận đồng bộ cấu hình",
+        message: "Bạn có chắc chắn muốn chi tiết cấu hình Course?",
     });
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -121,6 +127,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
     const handleImportJson = () => {
         confirmImportJson.onConfirm(() => {
+            setSyncDialogTitle("Import course form Json");
             setSyncProgressDialogOpen(true);
             streamSync.reset();
 
@@ -146,9 +153,28 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleSyncConfig = () => {
+        handleCloseMenu();
+        confirmSyncConfig.onConfirm(() => {
+            apiSyncCourses.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/sync-course-config",
+                method: "POST",
+                data: {
+                    id: data.post.id,
+                },
+                success: (result: { message?: string }) => {
+                    const message = result?.message || "Đồng bộ cấu hình thành công";
+                    apiSyncCourses.showMessage(message, "success");
+                    loadData();
+                },
+            });
+        });
+    };
+
     const handleSyncCourses = () => {
         handleCloseMenu();
         confirmSync.onConfirm(() => {
+            setSyncDialogTitle("Đồng bộ lên Firebase");
             setSyncProgressDialogOpen(true);
             streamSync.reset();
 
@@ -555,6 +581,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
                             Refresh Data
                         </MenuItem>
+                        <Divider />
                         <MenuItem onClick={handleExportCourse} disabled={apiExportCourse.open}>
                             <FileDownloadIcon sx={{ mr: 1, fontSize: 20 }} />
                             Export Course
@@ -563,9 +590,14 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             <FileUploadIcon sx={{ mr: 1, fontSize: 20 }} />
                             Import Course
                         </MenuItem>
+                        <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
                             <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
                             Sync All to Firebase
+                        </MenuItem>
+                        <MenuItem onClick={handleSyncConfig}>
+                            <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Sync Course Config
                         </MenuItem>
                     </Menu>
                     <Button
@@ -671,9 +703,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             {confirmImport.component}
             {confirmExport.component}
             {confirmImportJson.component}
+            {confirmSyncConfig.component}
 
             <SyncProgressDialog
                 open={syncProgressDialogOpen}
+                title={syncDialogTitle}
                 onClose={() => {
                     if (!streamSync.isSyncing) {
                         setSyncProgressDialogOpen(false);
