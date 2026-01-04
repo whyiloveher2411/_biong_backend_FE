@@ -95,6 +95,12 @@ function CheckDataCraw(props: FieldFormItemProps) {
 
                     result.post.body = { en: jsonBody };
 
+                    // Map content if it exists and is a valid object (not empty array)
+                    if (question.content && !Array.isArray(question.content)) {
+                        const jsonContent = JSON.stringify(question.content, null, 4);
+                        result.post.content = { en: jsonContent };
+                    }
+
                     setDrawerData({ ...result });
                     setOpenDrawerEditPost(true);
                 }
@@ -500,6 +506,45 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                     );
                             }
                         })}
+
+                        {/* Render content field if available (e.g. select_answer) */}
+                        {question.content && !Array.isArray(question.content) && question.content.type === 'select_answer' && question.content.options && (
+                            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Select Answer Options:</Typography>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {question.content.options.map((option: ANY, optIndex: number) => (
+                                        <div key={optIndex} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            padding: '8px',
+                                            borderRadius: '4px',
+                                            backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
+                                            border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
+                                        }}>
+                                            <span style={{
+                                                width: '24px',
+                                                height: '24px',
+                                                borderRadius: '50%',
+                                                backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
+                                                color: option.isCorrect ? '#fff' : '#666',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontWeight: 'bold',
+                                                fontSize: '13px'
+                                            }}>
+                                                {String.fromCharCode(65 + optIndex)}
+                                            </span>
+                                            <span style={{ flex: 1, color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
+                                                {option.text}
+                                            </span>
+                                            {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold' }}>(Correct)</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </Box>
                 </Box>
             </Box>
