@@ -7,6 +7,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FolderIcon from "@mui/icons-material/Folder";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { CreatePostTypeData } from "components/pages/PostType/CreateData";
 import { Collection } from "./types";
 import CircularProgress from "components/atoms/CircularProgress";
@@ -60,6 +61,11 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
             }
             return newSet;
         });
+    };
+
+    const handleCopyJson = (e: React.MouseEvent, value: unknown) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(JSON.stringify(value, null, 4));
     };
 
     const renderValue = (
@@ -183,6 +189,14 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                         >
                             array ({value.length})
                         </Typography>
+                        <IconButton
+                            size="small"
+                            sx={{ p: 0.5, ml: 1 }}
+                            onClick={(e) => handleCopyJson(e, value)}
+                            title="Copy JSON"
+                        >
+                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
                     </Box>
                     {isExpanded && (
                         <Box sx={{ ml: 3, mt: 0.5 }}>
@@ -267,6 +281,14 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                         >
                             object ({filteredKeys.length})
                         </Typography>
+                        <IconButton
+                            size="small"
+                            sx={{ p: 0.5, ml: 1 }}
+                            onClick={(e) => handleCopyJson(e, value)}
+                            title="Copy JSON"
+                        >
+                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
                     </Box>
                     {isExpanded && (
                         <Box sx={{ ml: 3, mt: 0.5 }}>
@@ -354,17 +376,28 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                 >
                     Document Details
                 </Typography>
-                {selectedDocument && (
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<EditIcon />}
-                        onClick={onEditDocument}
-                        sx={{ ml: 1 }}
-                    >
-                        Edit
-                    </Button>
-                )}
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                    {selectedDocument && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => handleCopyJson(e, documentData)}
+                            title="Copy Document JSON"
+                            sx={{ mr: 1 }}
+                        >
+                            <ContentCopyIcon />
+                        </IconButton>
+                    )}
+                    {selectedDocument && (
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<EditIcon />}
+                            onClick={onEditDocument}
+                        >
+                            Edit
+                        </Button>
+                    )}
+                </Box>
             </Box>
             {selectedCollection && selectedCollectionData ? (
                 <Box
@@ -396,48 +429,48 @@ const DocumentDetailsColumn: React.FC<DocumentDetailsColumnProps> = ({
                                         <CircularProgress size={20} />
                                     </Box>
                                 ) : selectedDocument &&
-                                  subCollections.length > 0 ? (
+                                    subCollections.length > 0 ? (
                                     subCollections.map((subCollection) => {
                                         const isActive = activeSubCollections.includes(subCollection.title);
                                         return (
-                                        <Box
-                                            key={subCollection.title}
-                                            onClick={() => {
-                                                if (onSubCollectionClick) {
-                                                    onSubCollectionClick(subCollection);
-                                                }
-                                            }}
-                                            sx={{
-                                                p: 1,
-                                                borderRadius: "4px",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 1,
-                                                cursor: "pointer",
-                                                backgroundColor: isActive ? "#e3f2fd" : "transparent",
-                                                border: isActive ? "1px solid #1976d2" : "1px solid transparent",
-                                                "&:hover": {
-                                                    backgroundColor: isActive ? "#e3f2fd" : "#f5f5f5",
-                                                },
-                                            }}
-                                        >
-                                            <FolderIcon
-                                                sx={{
-                                                    fontSize: 18,
-                                                    color: "#1976d2",
+                                            <Box
+                                                key={subCollection.title}
+                                                onClick={() => {
+                                                    if (onSubCollectionClick) {
+                                                        onSubCollectionClick(subCollection);
+                                                    }
                                                 }}
-                                            />
-                                            <Typography
-                                                variant="body2"
                                                 sx={{
-                                                    fontSize: "13px",
-                                                    color: isActive ? "#1976d2" : "#1976d2",
-                                                    fontWeight: isActive ? "600" : "500",
+                                                    p: 1,
+                                                    borderRadius: "4px",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
+                                                    cursor: "pointer",
+                                                    backgroundColor: isActive ? "#e3f2fd" : "transparent",
+                                                    border: isActive ? "1px solid #1976d2" : "1px solid transparent",
+                                                    "&:hover": {
+                                                        backgroundColor: isActive ? "#e3f2fd" : "#f5f5f5",
+                                                    },
                                                 }}
                                             >
-                                                {subCollection.title}
-                                            </Typography>
-                                        </Box>
+                                                <FolderIcon
+                                                    sx={{
+                                                        fontSize: 18,
+                                                        color: "#1976d2",
+                                                    }}
+                                                />
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontSize: "13px",
+                                                        color: isActive ? "#1976d2" : "#1976d2",
+                                                        fontWeight: isActive ? "600" : "500",
+                                                    }}
+                                                >
+                                                    {subCollection.title}
+                                                </Typography>
+                                            </Box>
                                         );
                                     })
                                 ) : (

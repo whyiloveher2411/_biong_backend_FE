@@ -28,7 +28,7 @@ type ColumnConfig = {
 function Database({ data }: { data: CreatePostTypeData }) {
     const [collections, setCollections] = React.useState<Collection[]>([]);
     const [documents, setDocuments] = React.useState<
-        Array<{ id: string; [key: string]: unknown }>
+        Array<{ id: string;[key: string]: unknown }>
     >([]);
     const [collectionAction, setCollectionAction] = React.useState<{
         action: "add" | "edit" | "delete";
@@ -39,6 +39,8 @@ function Database({ data }: { data: CreatePostTypeData }) {
         oldCollectionName: "",
         collection: collectionInitialState,
     });
+    const [searchText, setSearchText] = React.useState("");
+
 
     const [selectedCollection, setSelectedCollection] = React.useState<
         string | null
@@ -67,10 +69,11 @@ function Database({ data }: { data: CreatePostTypeData }) {
             parentPath: string;
             collectionName: string;
             collectionData?: Collection; // Lưu collection data để dùng trong DocumentDetailsColumn
-            documents: Array<{ id: string; [key: string]: unknown }>;
+            documents: Array<{ id: string;[key: string]: unknown }>;
             selectedDocument: string | null;
             documentData?: Record<string, unknown>;
             subCollections?: Collection[];
+            searchText?: string;
         }>
     >([]);
 
@@ -82,35 +85,35 @@ function Database({ data }: { data: CreatePostTypeData }) {
     const ajaxDelete = useAjax();
     const ajaxClearProgress = useAjax();
     const ajaxClearCourseCache = useAjax();
-    
+
     // Map để lưu loading state cho mỗi sub-collection column (documents loading)
     const [subCollectionLoading, setSubCollectionLoading] = React.useState<
         Record<string, boolean>
     >({});
-    
+
     // Map để lưu loading state cho sub-collections của mỗi column (riêng biệt)
     const [subCollectionSubCollectionsLoading, setSubCollectionSubCollectionsLoading] = React.useState<
         Record<string, boolean>
     >({});
-    
+
     // Ajax instance riêng cho sub-collections của sub-collection columns
     const ajaxSubCollectionSubCollections = useAjax();
-    
+
     // Ref để scroll đến column cuối
     const columnsContainerRef = React.useRef<HTMLDivElement>(null);
-    
+
     // State để quản lý width của các columns
     const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({
         collections: 280,
         documents: 350,
         documentDetails: 600,
     });
-    
+
     // State để quản lý width của các sub-collection columns
     const [subCollectionColumnWidths, setSubCollectionColumnWidths] = React.useState<
         Record<string, number>
     >({});
-    
+
     // State để track column đang resize
     const [resizingColumn, setResizingColumn] = React.useState<string | null>(null);
     const [resizeStartX, setResizeStartX] = React.useState<number>(0);
@@ -145,10 +148,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
 
     const handleResizeMove = React.useCallback((e: MouseEvent) => {
         if (!resizingColumn) return;
-        
+
         const diff = e.clientX - resizeStartX;
         const newWidth = Math.max(200, resizeStartWidth + diff); // Min width 200px
-        
+
         // Kiểm tra xem có phải sub-collection column không (có chứa "/" trong key)
         if (resizingColumn.includes('/')) {
             setSubCollectionColumnWidths((prev) => ({
@@ -173,7 +176,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
             document.addEventListener('mouseup', handleResizeEnd);
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
-            
+
             return () => {
                 document.removeEventListener('mousemove', handleResizeMove);
                 document.removeEventListener('mouseup', handleResizeEnd);
@@ -207,7 +210,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
         }
         setSelectedCollection(collectionId);
         setSelectedDocument(null);
-        handleGetDocumentsByCollectionName(collectionId);
+        setSelectedCollection(collectionId);
+        setSelectedDocument(null);
+        setSearchText("");
+        handleGetDocumentsByCollectionName(collectionId, "");
     };
 
     const handleDocumentClick = (documentId: string) => {
@@ -264,10 +270,11 @@ function Database({ data }: { data: CreatePostTypeData }) {
         });
     };
 
-    const handleGetDocumentsByCollectionName = (collectionName: string) => {
+    const handleGetDocumentsByCollectionName = (collectionName: string, paramSearchText?: string) => {
+        const search = paramSearchText !== undefined ? paramSearchText : searchText;
         ajaxDocuments.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
-            data: { id: data.post.id, collection_name: collectionName },
+            data: { id: data.post.id, collection_name: collectionName, search_text: search },
             success: (result) => {
                 if (result.success) {
                     setDocuments(result.documents || []);
@@ -282,7 +289,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
     ) => {
         ajaxSubCollections.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/collections/index",
-            data: { id: data.post.id, parent_path: parentCollectionName+'/'+document_id },
+            data: { id: data.post.id, parent_path: parentCollectionName + '/' + document_id },
             success: (result) => {
                 if (result.success) {
                     setSubCollections(result.collections || []);
@@ -296,17 +303,17 @@ function Database({ data }: { data: CreatePostTypeData }) {
         parentPath: string
     ) => {
         const columnId = `${parentPath}/${subCollection.title}`;
-        
+
         // Kiểm tra xem column đã tồn tại và đang active chưa
         const existingColumn = subCollectionColumns.find(
             (col) => col.id === columnId
         );
-        
+
         // Nếu column đã tồn tại và đang active (có documents), không làm gì cả
         if (existingColumn && existingColumn.documents.length > 0) {
             return;
         }
-        
+
         // Xóa tất cả các column cùng level (cùng parentPath) và các column con
         // Xóa các columns có parentPath === parentPath (cùng level)
         // Xóa các columns có parentPath bắt đầu bằng parentPath + "/" (các column con)
@@ -368,6 +375,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
             collectionData: subCollection, // Lưu collection data để dùng sau
             documents: [],
             selectedDocument: null,
+            searchText: "",
         };
 
         setSubCollectionColumns((prev) => [...prev, newColumn]);
@@ -383,6 +391,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
             data: {
                 id: data.post.id,
                 collection_name: fullCollectionName,
+                search_text: "",
             },
             success: (result) => {
                 if (result.success) {
@@ -420,7 +429,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
             // Loại bỏ id field để chỉ lấy data fields
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { id, ...fields } = document;
-            
+
             // Cập nhật selectedDocument và documentData
             setSubCollectionColumns((prev) =>
                 prev.map((col) =>
@@ -435,7 +444,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 ? `${column.parentPath}/${column.collectionName}`
                 : column.collectionName;
             const parentPath = `${fullCollectionName}/${documentId}`;
-            
+
             setSubCollectionSubCollectionsLoading((prev) => ({ ...prev, [columnId]: true }));
             // Sử dụng ajax instance riêng để tránh conflict với column 3
             ajaxSubCollectionSubCollections.ajax({
@@ -712,6 +721,47 @@ function Database({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleSubCollectionSearch = (columnId: string, text: string) => {
+        setSubCollectionColumns((prev) =>
+            prev.map((col) =>
+                col.id === columnId ? { ...col, searchText: text } : col
+            )
+        );
+
+        const column = subCollectionColumns.find((col) => col.id === columnId);
+        if (!column) return;
+
+        const fullCollectionName = column.parentPath
+            ? `${column.parentPath}/${column.collectionName}`
+            : column.collectionName;
+
+        setSubCollectionLoading((prev) => ({ ...prev, [columnId]: true }));
+
+        ajaxDocuments.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/database/documents/index",
+            data: {
+                id: data.post.id,
+                collection_name: fullCollectionName,
+                search_text: text,
+            },
+            success: (result) => {
+                if (result.success) {
+                    setSubCollectionColumns((prev) =>
+                        prev.map((col) =>
+                            col.id === columnId
+                                ? { ...col, documents: result.documents || [] }
+                                : col
+                        )
+                    );
+                }
+                setSubCollectionLoading((prev) => ({ ...prev, [columnId]: false }));
+            },
+            error: () => {
+                setSubCollectionLoading((prev) => ({ ...prev, [columnId]: false }));
+            },
+        });
+    };
+
     const handleGetIndexes = () => {
         ajax.ajax({
             url: "plugin/vn4-e-learning/app-mobile/database/firebase/index-list",
@@ -749,6 +799,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
                     onAddDocument: handleAddDocument,
                     ajaxDocuments,
                     documents,
+                    onSearch: (text: string) => {
+                        setSearchText(text);
+                        if (selectedCollection) handleGetDocumentsByCollectionName(selectedCollection, text);
+                    },
                     onDuplicateDocument: handleDuplicateDocument,
                     canAddDocument: (() => {
                         const c = collections.find(
@@ -823,10 +877,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 const fullCollectionName = subCol.parentPath
                     ? `${subCol.parentPath}/${subCol.collectionName}`
                     : subCol.collectionName;
-                
+
                 const documentsColumnKey = `${subCol.id}-documents`;
                 const detailsColumnKey = `${subCol.id}-details`;
-                
+
                 const columns: ColumnConfig[] = [
                     {
                         component: DocumentsColumn as unknown as React.ComponentType<Record<string, unknown>>,
@@ -840,18 +894,19 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                 open: subCollectionLoading[subCol.id] || false,
                             },
                             documents: subCol.documents,
+                            onSearch: (text: string) => handleSubCollectionSearch(subCol.id, text),
                             onDuplicateDocument: (documentId: string) =>
                                 handleSubCollectionDuplicateDocument(subCol.id, documentId),
-                    canAddDocument: (() => {
-                        const c = collections.find(
-                            (i) => i.title === subCol.collectionName
-                        );
-                        return !!(
-                            c &&
-                            Array.isArray(c.fields) &&
-                            c.fields.length > 0
-                        );
-                    })(),
+                            canAddDocument: (() => {
+                                const c = collections.find(
+                                    (i) => i.title === subCol.collectionName
+                                );
+                                return !!(
+                                    c &&
+                                    Array.isArray(c.fields) &&
+                                    c.fields.length > 0
+                                );
+                            })(),
                             onDeleteDocument: (documentId: string) => {
                                 ajaxDelete.ajax({
                                     url: "plugin/vn4-e-learning/app-mobile/database/documents/delete",
@@ -868,13 +923,13 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                                 prev.map((col) =>
                                                     col.id === subCol.id
                                                         ? {
-                                                              ...col,
-                                                              selectedDocument:
-                                                                  col.selectedDocument ===
-                                                                  documentId
-                                                                      ? null
-                                                                      : col.selectedDocument,
-                                                          }
+                                                            ...col,
+                                                            selectedDocument:
+                                                                col.selectedDocument ===
+                                                                    documentId
+                                                                    ? null
+                                                                    : col.selectedDocument,
+                                                        }
                                                         : col
                                                 )
                                             );
@@ -894,24 +949,24 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 // Sử dụng documentData nếu có, nếu không thì dùng empty object (sẽ được load sau)
                 if (subCol.selectedDocument) {
                     // Tìm collection từ collectionData đã lưu, hoặc từ collections array, hoặc từ subCollections
-                    const collectionForDetails = subCol.collectionData 
+                    const collectionForDetails = subCol.collectionData
                         || collections.find((c) => c.title === subCol.collectionName)
                         || subCol.subCollections?.find((c) => c.title === subCol.collectionName);
-                    
+
                     // Tạo collections array bao gồm cả collection chính và sub-collections
                     const collectionsForDetails = collectionForDetails
                         ? [
-                              ...collections.filter((c) => c.title !== subCol.collectionName),
-                              collectionForDetails,
-                              ...(subCol.subCollections || []).filter(
-                                  (c) => c.title !== subCol.collectionName
-                              ),
-                          ]
+                            ...collections.filter((c) => c.title !== subCol.collectionName),
+                            collectionForDetails,
+                            ...(subCol.subCollections || []).filter(
+                                (c) => c.title !== subCol.collectionName
+                            ),
+                        ]
                         : [
-                              ...collections,
-                              ...(subCol.subCollections || []),
-                          ];
-                    
+                            ...collections,
+                            ...(subCol.subCollections || []),
+                        ];
+
                     columns.push({
                         component: DocumentDetailsColumn as unknown as React.ComponentType<Record<string, unknown>>,
                         props: {
@@ -1036,6 +1091,7 @@ function Database({ data }: { data: CreatePostTypeData }) {
                             data: {
                                 id: data.post.id,
                                 collection_name: fullCollectionName,
+                                search_text: subCol.searchText || "",
                             },
                             success: (result) => {
                                 if (result.success) {
@@ -1165,10 +1221,10 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 {columns.map((column, index) => {
                     const ColumnComponent = column.component;
                     // Tạo key duy nhất cho mỗi column
-                    const columnKey = index === 0 ? 'collections' 
+                    const columnKey = index === 0 ? 'collections'
                         : index === 1 ? 'documents'
-                        : index === 2 ? 'documentDetails'
-                        : `sub-collection-${index}`;
+                            : index === 2 ? 'documentDetails'
+                                : `sub-collection-${index}`;
                     return (
                         <ColumnComponent key={columnKey} {...column.props} />
                     );
@@ -1318,24 +1374,24 @@ function Database({ data }: { data: CreatePostTypeData }) {
                                                         .fields
                                                 )
                                                     ? collectionAction
-                                                          .collection.fields
+                                                        .collection.fields
                                                     : [];
                                                 fieldsArr.forEach((f) => {
                                                     if (f?.title)
                                                         opts[String(f.title)] =
-                                                            {
-                                                                title: String(
-                                                                    f.title
-                                                                ),
-                                                            };
+                                                        {
+                                                            title: String(
+                                                                f.title
+                                                            ),
+                                                        };
                                                 });
                                                 return Object.keys(opts).length
                                                     ? opts
                                                     : {
-                                                          _placeholder: {
-                                                              title: "Chưa có field",
-                                                          },
-                                                      };
+                                                        _placeholder: {
+                                                            title: "Chưa có field",
+                                                        },
+                                                    };
                                             })(),
                                         },
                                         order: {
@@ -1380,22 +1436,22 @@ function Database({ data }: { data: CreatePostTypeData }) {
                 const fullCollectionName = subCol.parentPath
                     ? `${subCol.parentPath}/${subCol.collectionName}`
                     : subCol.collectionName;
-                
+
                 // Tìm collection thực sự trong mảng collections
                 const actualCollection = collections.find(
                     (c) => c.title === subCol.collectionName
                 );
-                
+
                 // Tạo một collection object với title là fullCollectionName để EditDocumentDrawer có thể tìm thấy
                 // nhưng vẫn dùng fields từ collection thực sự
                 const collectionForDrawer = actualCollection
                     ? { ...actualCollection, title: fullCollectionName }
                     : undefined;
-                
+
                 const collectionsForDrawer = collectionForDrawer
                     ? [...collections.filter((c) => c.title !== subCol.collectionName), collectionForDrawer]
                     : collections;
-                
+
                 return (
                     <EditDocumentDrawer
                         key={subCol.id}
