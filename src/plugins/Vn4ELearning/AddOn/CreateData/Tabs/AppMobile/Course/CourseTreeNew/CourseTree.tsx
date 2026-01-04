@@ -49,6 +49,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
     const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set());
+    const [selectedCourseId, setSelectedCourseId] = React.useState<string | null>(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        return searchParams.get("course") || null;
+    });
 
     // New features state
     const apiSyncCourses = useAjax();
@@ -247,6 +251,27 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     React.useEffect(() => {
         loadData();
     }, []);
+
+    React.useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const courseId = searchParams.get("course");
+        setSelectedCourseId(courseId || null);
+    }, [location.search]);
+
+    const handleSelectCourseForEdit = (courseId: string | number) => {
+        const idStr = String(courseId);
+        setSelectedCourseId(idStr);
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.set("course", idStr);
+        navigate(`${location.pathname}?${searchParams.toString()}`);
+    };
+
+    const handleBackToCourseList = () => {
+        setSelectedCourseId(null);
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.delete("course");
+        navigate(`${location.pathname}?${searchParams.toString()}`);
+    };
 
     const handleAddChild = (parentId: string | number, parentType: string, childType: string) => {
         const childObjectType = getNodeObjectType(childType);
@@ -516,6 +541,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         loadData();
     };
 
+    const displayCourses = selectedCourseId
+        ? courses?.filter(c => String(c.id) === String(selectedCourseId))
+        : courses;
+
     return (
         <Box sx={{ p: 2, backgroundColor: "#f5f5f7", minHeight: "100vh" }}>
             <Box
@@ -544,6 +573,15 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     >
                         Back to Overview
                     </Button>
+                    {selectedCourseId && (
+                        <Button
+                            variant="outlined"
+                            onClick={handleBackToCourseList}
+                            sx={{ borderRadius: 2, textTransform: "none", mr: 1 }}
+                        >
+                            Back to Course List
+                        </Button>
+                    )}
                     <FormControl size="small" sx={{ minWidth: 150 }}>
                         <InputLabel>Language</InputLabel>
                         <Select
@@ -630,7 +668,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             ref={provided.innerRef}
                             sx={{ width: "100%", bgcolor: "background.paper" }}
                         >
-                            {courses?.map((course, index) => (
+                            {displayCourses?.map((course, index) => (
                                 <Draggable
                                     key={String(course.id)}
                                     draggableId={String(course.id)}
@@ -661,6 +699,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                     next.delete(key);
                                                     return next;
                                                 })}
+                                                onSelectCourseForEdit={handleSelectCourseForEdit}
+                                                onBackToCourseList={handleBackToCourseList}
+                                                selectedCourseId={selectedCourseId}
                                             />
                                         </div>
                                     )}

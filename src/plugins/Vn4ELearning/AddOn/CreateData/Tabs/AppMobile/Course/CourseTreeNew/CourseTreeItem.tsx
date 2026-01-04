@@ -114,10 +114,10 @@ const CourseTreeItem = memo(function CourseTreeItem({
         if (nodeType !== "course" || !postId) {
             return;
         }
-        
+
         setSyncProgressDialogOpen(true);
         streamSync.reset();
-        
+
         streamSync.sync({
             url: "plugin/vn4-e-learning/app-mobile/course-new/sync-course-to-firestore",
             data: {
@@ -154,7 +154,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
             }
         }
     }, [expandedNodes, node]);
-    
+
     const nodeHasChildren = hasChildren(node);
     const childrenCount = getChildrenCount(node);
     const nodeColor = getNodeColor(node);
@@ -181,7 +181,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
     const handleSetFinalTest = () => {
         if (nodeType !== "lesson") return;
         const lessonId = String(node.id);
-        
+
         if (!parentContext || !parentContext.chapterId) {
             apiSetFinalTest.showMessage("Không tìm thấy chương của bài học", "error");
             return;
@@ -211,7 +211,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
         if (nodeType !== "question") return;
         const question = node as Question;
         const isTrash = question.status === "trash";
-        
+
         apiSetFinalTest.ajax({
             url: "plugin/vn4-e-learning/app-mobile/course-new/trash-question",
             method: "POST",
@@ -350,8 +350,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                 if (childType) onAddChild(node.id, nodeType, childType);
                             }
                         }}
-                        sx={{ 
-                            flex: 1, 
+                        sx={{
+                            flex: 1,
                             py: 1,
                             display: "flex",
                             alignItems: "center",
@@ -427,8 +427,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                                 e.stopPropagation();
                                                 onAddChild(node.id, nodeType, childType);
                                             }}
-                                            sx={{ 
-                                                textTransform: "none", 
+                                            sx={{
+                                                textTransform: "none",
                                                 color: nodeColor,
                                                 fontSize: "0.75rem",
                                                 minWidth: "auto",
@@ -464,15 +464,15 @@ const CourseTreeItem = memo(function CourseTreeItem({
                         {/* RIGHT SIDE: Delete Button (for Questions) and Sync Button (for Courses) */}
                         <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", paddingLeft: 1, gap: 1 }}>
                             {/* Progress Bar */}
-                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
                                 <Box sx={{ width: 60, height: 4, bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden' }}>
-                                    <Box 
-                                        sx={{ 
-                                            width: `${calculateNodeProgress(node, languages || [])}%`, 
-                                            height: '100%', 
+                                    <Box
+                                        sx={{
+                                            width: `${calculateNodeProgress(node, languages || [])}%`,
+                                            height: '100%',
                                             bgcolor: calculateNodeProgress(node, languages || []) === 100 ? 'success.main' : 'warning.main',
                                             transition: 'width 0.3s ease'
-                                        }} 
+                                        }}
                                     />
                                 </Box>
                                 <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', minWidth: 24, textAlign: 'right' }}>
@@ -481,23 +481,48 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             </Box>
 
                             {nodeType === "course" && (
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSyncCourseToFirebase();
-                                    }}
-                                    disabled={streamSync.isSyncing}
-                                    sx={{ 
-                                        textTransform: "none",
-                                        fontSize: "0.75rem",
-                                        py: 0.5,
-                                        mr: 1
-                                    }}
-                                >
-                                    {streamSync.isSyncing ? "Syncing..." : "Sync to Firebase"}
-                                </Button>
+                                <>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (String(selectedCourseId) === String(node.id)) {
+                                                if (onBackToCourseList) onBackToCourseList();
+                                            } else if (onSelectCourseForEdit) {
+                                                onSelectCourseForEdit(String(node.id));
+                                            }
+                                        }}
+                                        sx={{
+                                            textTransform: "none",
+                                            fontSize: "0.75rem",
+                                            py: 0.5,
+                                            mr: 1,
+                                            whiteSpace: "nowrap"
+                                        }}
+                                    >
+                                        {String(selectedCourseId) === String(node.id)
+                                            ? "<- Danh sách khóa học"
+                                            : "Chọn ->"}
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSyncCourseToFirebase();
+                                        }}
+                                        disabled={streamSync.isSyncing}
+                                        sx={{
+                                            textTransform: "none",
+                                            fontSize: "0.75rem",
+                                            py: 0.5,
+                                            mr: 1
+                                        }}
+                                    >
+                                        {streamSync.isSyncing ? "Syncing..." : "Sync to Firebase"}
+                                    </Button>
+                                </>
                             )}
                             {nodeType === "question" && (
                                 <IconButton
@@ -537,7 +562,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             onDragEnd={(result: DropResult) => {
                                 if (!result.destination || !onUpdateOrder) return;
                                 if (result.source.index === result.destination.index) return;
-                                
+
                                 onUpdateOrder(
                                     node.id,
                                     nodeType,
@@ -584,6 +609,9 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                                             postId={postId}
                                                             onReloadCourses={onReloadCourses}
                                                             onUpdateLessonStatus={onUpdateLessonStatus}
+                                                            onSelectCourseForEdit={onSelectCourseForEdit}
+                                                            onBackToCourseList={onBackToCourseList}
+                                                            selectedCourseId={selectedCourseId}
                                                         />
                                                     </div>
                                                 )}
