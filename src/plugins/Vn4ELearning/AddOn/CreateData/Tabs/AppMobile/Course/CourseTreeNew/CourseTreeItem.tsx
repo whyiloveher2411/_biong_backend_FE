@@ -41,6 +41,7 @@ import {
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
+import useConfirmDialog from "hook/useConfirmDialog";
 
 export interface ParentContext {
     courseId?: string | number;
@@ -108,6 +109,11 @@ const CourseTreeItem = memo(function CourseTreeItem({
     const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
     const streamSync = useStreamSync();
 
+    const confirmSync = useConfirmDialog({
+        title: "Xác nhận đồng bộ khóa học",
+        message: "Bạn có chắc chắn muốn đồng bộ khóa học này lên Firebase?",
+    });
+
     const nodeType = getNodeType(node);
 
     const handleSyncCourseToFirebase = () => {
@@ -115,31 +121,33 @@ const CourseTreeItem = memo(function CourseTreeItem({
             return;
         }
 
-        setSyncProgressDialogOpen(true);
-        streamSync.reset();
+        confirmSync.onConfirm(() => {
+            setSyncProgressDialogOpen(true);
+            streamSync.reset();
 
-        streamSync.sync({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/sync-course-to-firestore",
-            data: {
-                id: String(postId),
-                course_id: node.id,
-            },
-            onProgress: (data) => {
-                // Progress handled by hook
-            },
-            onComplete: (data) => {
-                const message = extractMessageString(data.message) || "Đồng bộ khóa học lên Firebase thành công";
-                apiSyncCourse.showMessage(message, "success");
-                setTimeout(() => {
-                    setSyncProgressDialogOpen(false);
-                }, 100);
-            },
-            onError: (error) => {
-                apiSyncCourse.showMessage(
-                    error || "Không thể đồng bộ khóa học lên Firebase",
-                    "error"
-                );
-            },
+            streamSync.sync({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/sync-course-to-firestore",
+                data: {
+                    id: String(postId),
+                    course_id: node.id,
+                },
+                onProgress: (data) => {
+                    // Progress handled by hook
+                },
+                onComplete: (data) => {
+                    const message = extractMessageString(data.message) || "Đồng bộ khóa học lên Firebase thành công";
+                    apiSyncCourse.showMessage(message, "success");
+                    setTimeout(() => {
+                        setSyncProgressDialogOpen(false);
+                    }, 100);
+                },
+                onError: (error) => {
+                    apiSyncCourse.showMessage(
+                        error || "Không thể đồng bộ khóa học lên Firebase",
+                        "error"
+                    );
+                },
+            });
         });
     };
 
@@ -667,6 +675,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
                     </Box>
                 </Collapse>
             )}
+
+            {confirmSync.component}
 
             <SyncProgressDialog
                 open={syncProgressDialogOpen}
