@@ -412,6 +412,48 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         }}
                                     />
                                 </Box>
+                                {nodeType === 'course' && (() => {
+                                    const courseNode = node as Course;
+                                    let summaryData = courseNode.summary_data;
+                                    if (typeof summaryData === 'string') {
+                                        try {
+                                            summaryData = JSON.parse(summaryData);
+                                        } catch (e) {
+                                            summaryData = {};
+                                        }
+                                    }
+                                    const summary = summaryData as {
+                                        count_section?: number;
+                                        count_chapter?: number;
+                                        count_lesson?: number;
+                                        count_lesson_no_question?: number;
+                                        count_question?: number;
+                                    };
+
+                                    if (!summary) return null;
+
+                                    return (
+                                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                                            <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                                                Sections: <b>{summary.count_section || 0}</b>
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                                                Chapters: <b>{summary.count_chapter || 0}</b>
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                                                Lessons: <b>{summary.count_lesson || 0}</b>
+                                                {!!summary.count_lesson_no_question && (
+                                                    <Box component="span" sx={{ color: "warning.main", ml: 0.5, fontWeight: 500 }}>
+                                                        ({summary.count_lesson_no_question} empty)
+                                                    </Box>
+                                                )}
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
+                                                Questions: <b>{summary.count_question || 0}</b>
+                                            </Typography>
+                                        </Box>
+                                    );
+                                })()}
                             </Box>
 
 

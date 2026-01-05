@@ -59,6 +59,13 @@ export interface Course {
     description?: string; // JSON
     sections?: Section[];
     link_data_craw_json?: string;
+    summary_data?: string | {
+        count_section?: number;
+        count_chapter?: number;
+        count_lesson?: number;
+        count_lesson_no_question?: number;
+        count_question?: number;
+    };
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;

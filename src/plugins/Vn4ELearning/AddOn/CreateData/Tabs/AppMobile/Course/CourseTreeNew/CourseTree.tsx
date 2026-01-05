@@ -12,6 +12,7 @@ import IconButton from "components/atoms/IconButton";
 import AddIcon from "@mui/icons-material/Add";
 import SyncIcon from "@mui/icons-material/Sync";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import AssessmentIcon from "@mui/icons-material/Assessment";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -173,6 +174,20 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     loadData();
                 },
             });
+        });
+    };
+
+    const handleSummaryData = () => {
+        handleCloseMenu();
+        api.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/summary-data",
+            method: "POST",
+            data: {
+                id: data.post.id,
+            },
+            success: (result: { message?: string }) => {
+                // 
+            },
         });
     };
 
@@ -628,6 +643,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         <MenuItem onClick={handleImportCourse} disabled={apiImportCourse.open}>
                             <FileUploadIcon sx={{ mr: 1, fontSize: 20 }} />
                             Import Course
+                        </MenuItem>
+                        <Divider />
+                        <MenuItem onClick={handleSummaryData}>
+                            <AssessmentIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Summary data
                         </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
