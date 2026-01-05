@@ -9,6 +9,7 @@ export interface Question {
     status?: string;
     body?: string; // JSON
     content?: string; // JSON
+    verify?: boolean;
 }
 
 export interface Lesson {

@@ -393,7 +393,11 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         }}
                                         sx={{
                                             fontWeight: nodeHasChildren ? 600 : 400,
-                                            color: nodeHasChildren ? nodeColor : "text.primary",
+                                            color: nodeHasChildren ? nodeColor : (
+                                                nodeType === "question"
+                                                    ? ((node as Question).verify ? "success.main" : "error.main")
+                                                    : "text.primary"
+                                            ),
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",

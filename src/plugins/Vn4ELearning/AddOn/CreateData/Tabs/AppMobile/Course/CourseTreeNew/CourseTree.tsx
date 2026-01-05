@@ -13,6 +13,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SyncIcon from "@mui/icons-material/Sync";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import FactCheckIcon from "@mui/icons-material/FactCheck";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -187,6 +188,22 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             },
             success: (result: { message?: string }) => {
                 // 
+            },
+        });
+    };
+
+    const handleCheckDataQuestion = () => {
+        handleCloseMenu();
+        api.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/check-data-question",
+            method: "POST",
+            data: {
+                id: data.post.id,
+            },
+            success: (result: { message?: string }) => {
+                if (result.message) {
+                    // 
+                }
             },
         });
     };
@@ -648,6 +665,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         <MenuItem onClick={handleSummaryData}>
                             <AssessmentIcon sx={{ mr: 1, fontSize: 20 }} />
                             Summary data
+                        </MenuItem>
+                        <MenuItem onClick={handleCheckDataQuestion}>
+                            <FactCheckIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Check verify question
                         </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>

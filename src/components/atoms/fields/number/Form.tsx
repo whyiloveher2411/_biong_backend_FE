@@ -12,7 +12,17 @@ import SpecialNotes from '../SpecialNotes';
 
 export default React.memo(function NumberForm({ config, post, onReview, name }: FieldFormItemProps) {
 
-    let valueInital = (post[name] !== undefined && post[name] !== null && !isNaN(post[name])) ? Number((parseFloat(post[name])).toFixed(6)) : '';
+    let valueInital = post[name];
+
+    if (post[name] !== undefined && post[name] !== null) {
+        if (typeof post[name] === 'number') {
+            valueInital = Number((post[name]).toFixed(6));
+        } else if (isNaN(post[name]) && post[name] !== '-') {
+            valueInital = '';
+        }
+    } else {
+        valueInital = '';
+    }
 
     const [value, setValue] = React.useState(0);
 
