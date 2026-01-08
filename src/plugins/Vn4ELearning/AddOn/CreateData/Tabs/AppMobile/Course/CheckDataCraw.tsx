@@ -5,6 +5,7 @@ import React from "react";
 import { LoadingButton } from "@mui/lab";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import DeleteIcon from "@mui/icons-material/Delete";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
 
@@ -496,6 +497,43 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                     ))}
                                                 </div>
                                             )}
+                                        </div>
+                                    );
+                                case 'run_code':
+                                    return (
+                                        <div key={compIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
+                                            <div style={{
+                                                backgroundColor: '#f5f5f5',
+                                                padding: '8px 12px',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                borderBottom: '1px solid #ddd'
+                                            }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
+                                                    {component.language || 'Code'} Playground
+                                                </Typography>
+                                                <LoadingButton
+                                                    size="small"
+                                                    variant="contained"
+                                                    color="success"
+                                                    startIcon={<PlayArrowIcon fontSize="small" />}
+                                                    sx={{ textTransform: 'none', py: 0.5, minWidth: 'auto', fontSize: '0.75rem', height: 24 }}
+                                                >
+                                                    Run
+                                                </LoadingButton>
+                                            </div>
+                                            <div style={{
+                                                padding: '12px',
+                                                backgroundColor: '#282c34',
+                                                color: '#abb2bf',
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.9rem',
+                                                whiteSpace: 'pre-wrap',
+                                                overflowX: 'auto'
+                                            }}>
+                                                {component.code}
+                                            </div>
                                         </div>
                                     );
                                 default:

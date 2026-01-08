@@ -10,10 +10,11 @@ import PushNotification from './PushNotification';
 import Analytics from './Analytics';
 import Modules from './Modules';
 import Course from './Course';
+import Content from './Content';
 
 
 export default function (props: CreatePostTypeData) {
-    console.log(props.action);
+
     if (props.action === 'EDIT') {
         return {
             config: {
@@ -24,6 +25,11 @@ export default function (props: CreatePostTypeData) {
             database: {
                 title: __p('Database', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Database data={props.data} />,
+                priority: 3,
+            },
+            content: {
+                title: __p('Content', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <Content data={props.data} />,
                 priority: 3,
             },
             localization: {

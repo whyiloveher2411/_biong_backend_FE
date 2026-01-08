@@ -38,16 +38,35 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
     }
 
     React.useEffect(() => {
+        if (window.__languages) {
+            return;
+        }
+        useApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/localization/languages",
+            method: "POST",
+            data: {
+                action: "get",
+                id: data.post.id,
+            },
+            success: (result: ANY) => {
+                if (result.success && result.data?.languages) {
+                    window.__languages = result.data.languages;
+                }
+            },
+        });
+    }, []);
+
+    React.useEffect(() => {
         handleGetData();
     }, []);
 
     const handleUpdateGroup = (templateKey: string, groupKey?: string) => {
         const updateKey = groupKey ? `${templateKey}_${groupKey}` : templateKey;
         setUpdatingGroups(prev => new Set(prev).add(updateKey));
-        
+
         // Lọc chỉ các fields thuộc group được chọn
         let groupData: JsonFormat = {};
-        
+
         if (groupKey) {
             // Lấy các fields thuộc group cụ thể
             const template = templates[templateKey];
@@ -70,7 +89,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                 });
             }
         }
-        
+
         useApi.ajax({
             url: "plugin/vn4-e-learning/app-mobile/remote-config/update",
             method: "POST",
@@ -102,7 +121,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
         return fieldKeys.map((fieldKey: string) => {
             const field = template?.fields?.[fieldKey];
             if (!field) return null;
-            
+
             return (
                 <FieldForm
                     key={fieldKey}
@@ -126,16 +145,16 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
     const renderTemplateContent = (templateKey: string) => {
         const template = templates[templateKey];
         if (!template) return null;
-        
+
         const hasGroups = template?.groups && Object.keys(template.groups).length > 0;
-        
+
         if (hasGroups) {
             // Nếu có groups: render mỗi group là 1 card
             return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {Object.keys(template.groups).map((groupKey: string) => {
                         const group = template.groups[groupKey];
-                        
+
                         return (
                             <Card key={groupKey}>
                                 <CardContent>
@@ -148,7 +167,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         </Typography>
                                         <Divider />
                                     </Box>
-                                    
+
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                         {renderFields(templateKey, group.fields || [])}
                                     </Box>
@@ -162,7 +181,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
             // Nếu không có groups: render tất cả fields trong 1 card
             const allFieldKeys = Object.keys(template.fields || {});
             if (allFieldKeys.length === 0) return null;
-            
+
             return (
                 <Card>
                     <CardContent>
@@ -175,7 +194,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                             </Typography>
                             <Divider />
                         </Box>
-                        
+
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {renderFields(templateKey, allFieldKeys)}
                         </Box>
@@ -198,7 +217,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                     const group = templates[groupKey];
                                     const isSelected = selectedGroup === groupKey;
                                     const fieldCount = Object.keys(group.fields || {}).length;
-                                    
+
                                     return (
                                         <ListItem key={groupKey} disablePadding>
                                             <ListItemButton
@@ -229,12 +248,12 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                                 <ListItemText
                                                     primary={
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            <Typography variant="subtitle1" sx={{color: isSelected ? 'primary.contrastText' : 'text.primary'}} fontWeight="bold">
+                                                            <Typography variant="subtitle1" sx={{ color: isSelected ? 'primary.contrastText' : 'text.primary' }} fontWeight="bold">
                                                                 {group.title}
                                                             </Typography>
-                                                            <Chip 
-                                                                label={fieldCount} 
-                                                                size="small" 
+                                                            <Chip
+                                                                label={fieldCount}
+                                                                size="small"
                                                                 color={isSelected ? "default" : "primary"}
                                                                 variant={isSelected ? "filled" : "outlined"}
                                                             />
@@ -250,16 +269,16 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         </ListItem>
                                     );
                                 })}
-                                
+
                                 {/* Render group cho các fields không có template */}
                                 {(() => {
                                     const untemplatedFields = Object.keys(remoteConfig).filter(key => {
                                         // Kiểm tra xem field có tồn tại trong bất kỳ template nào không
-                                        return !Object.keys(templates).some(groupKey => 
+                                        return !Object.keys(templates).some(groupKey =>
                                             templates[groupKey].fields && templates[groupKey].fields[key]
                                         );
                                     });
-                                    
+
                                     if (untemplatedFields.length > 0) {
                                         const isSelected = selectedGroup === 'untemplated';
                                         return (
@@ -292,12 +311,12 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                                     <ListItemText
                                                         primary={
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <Typography variant="subtitle1" sx={{color: isSelected ? 'primary.contrastText' : 'text.primary'}} fontWeight="bold">
+                                                                <Typography variant="subtitle1" sx={{ color: isSelected ? 'primary.contrastText' : 'text.primary' }} fontWeight="bold">
                                                                     Untemplated Fields
                                                                 </Typography>
-                                                                <Chip 
-                                                                    label={untemplatedFields.length} 
-                                                                    size="small" 
+                                                                <Chip
+                                                                    label={untemplatedFields.length}
+                                                                    size="small"
                                                                     color={isSelected ? "default" : "warning"}
                                                                     variant={isSelected ? "filled" : "outlined"}
                                                                 />
@@ -329,11 +348,11 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                             /* Render các trường không có template */
                                             (() => {
                                                 const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                                    return !Object.keys(templates).some(groupKey => 
+                                                    return !Object.keys(templates).some(groupKey =>
                                                         templates[groupKey].fields && templates[groupKey].fields[key]
                                                     );
                                                 });
-                                                
+
                                                 return (
                                                     <Card>
                                                         <CardContent>
@@ -346,7 +365,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                                                 </Typography>
                                                                 <Divider />
                                                             </Box>
-                                                            
+
                                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                                                 {untemplatedFields.map((key: string) => (
                                                                     <FieldForm
@@ -389,10 +408,10 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         )}
                                     </>
                                 ) : (
-                                    <Box sx={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'center', 
-                                        alignItems: 'center', 
+                                    <Box sx={{
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
                                         height: '100%',
                                         flexDirection: 'column',
                                         gap: 2
@@ -404,18 +423,18 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                     </Box>
                                 )}
                             </Box>
-                            
+
                             {/* Nút Update ở cuối mỗi template */}
                             {selectedGroup && (templates[selectedGroup] || selectedGroup === 'untemplated') && (
                                 <Box sx={{ mt: 3, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <LoadingButton 
+                                    <LoadingButton
                                         loading={updatingGroups.has(selectedGroup)}
-                                        variant="contained" 
-                                        color="primary" 
+                                        variant="contained"
+                                        color="primary"
                                         onClick={() => {
                                             if (selectedGroup === 'untemplated') {
                                                 const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                                    return !Object.keys(templates).some(groupKey => 
+                                                    return !Object.keys(templates).some(groupKey =>
                                                         templates[groupKey].fields && templates[groupKey].fields[key]
                                                     );
                                                 });
@@ -461,12 +480,12 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                     </Grid>
                 </Grid>
             ) : (
-                <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center', 
-                    height: '100%', 
-                    minHeight: 400 
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100%',
+                    minHeight: 400
                 }}>
                     <CircularProgress size={40} />
                 </Box>
