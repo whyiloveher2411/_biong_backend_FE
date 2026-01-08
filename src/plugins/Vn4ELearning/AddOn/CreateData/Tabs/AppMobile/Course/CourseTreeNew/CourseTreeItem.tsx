@@ -57,6 +57,7 @@ interface CourseTreeItemProps {
     onSelectCourseForEdit?: (courseId: string | number) => void;
     onBackToCourseList?: () => void;
     selectedCourseId?: string | number | null;
+    index?: number;
     onAddChild?: (
         parentId: string | number,
         parentType: string,
@@ -91,6 +92,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
     onSelectCourseForEdit,
     onBackToCourseList,
     selectedCourseId,
+    index,
     dragHandleProps,
     expandedNodes,
     onExpandAll,
@@ -404,6 +406,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                             "&:hover": { textDecoration: "underline" },
                                         }}
                                     >
+                                        {nodeType === 'question' && typeof index === 'number' ? `${index + 1}. ` : ''}
                                         {title || `Untitled ${getNodeLabel(node)}`}
                                     </Typography>
 
@@ -666,6 +669,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                                             onSelectCourseForEdit={onSelectCourseForEdit}
                                                             onBackToCourseList={onBackToCourseList}
                                                             selectedCourseId={selectedCourseId}
+                                                            index={index}
                                                         />
                                                     </div>
                                                 )}
