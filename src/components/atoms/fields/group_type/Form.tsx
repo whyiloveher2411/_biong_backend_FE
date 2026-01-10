@@ -103,6 +103,8 @@ export default React.memo(
 
         let valueInital: JsonFormat = {};
 
+        const keyField = props.config.key_field ? props.config.key_field : 'type';
+
         try {
             if (typeof post[name] === "object") {
                 valueInital = post[name];
@@ -116,8 +118,8 @@ export default React.memo(
         }
 
         const [type, setType] = React.useState(
-            valueInital?.type
-                ? valueInital.type
+            valueInital?.[keyField]
+                ? valueInital[keyField]
                 : Object.keys(config.templates)[0]
         );
 
@@ -158,7 +160,7 @@ export default React.memo(
                 };
             }
 
-            post[name]["type"] = type;
+            post[name][keyField] = type;
 
             console.log("onChangeInputGroup", post[name]);
             onReview(post[name]);
@@ -302,11 +304,11 @@ export default React.memo(
                                                             ].sub_fields[key]
                                                                 .view
                                                                 ? config
-                                                                      .templates[
-                                                                      type
-                                                                  ].sub_fields[
-                                                                      key
-                                                                  ].view
+                                                                    .templates[
+                                                                    type
+                                                                ].sub_fields[
+                                                                    key
+                                                                ].view
                                                                 : "text"
                                                         }
                                                         config={
@@ -334,7 +336,7 @@ export default React.memo(
                         </Table>
                     </TableContainer>
                 ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", border: "1px solid #e0e0e0", borderRadius: 2,backgroundColor: "#a4a4a44a",padding: 2 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, width: "100%", border: "1px solid #e0e0e0", borderRadius: 2, backgroundColor: "#a4a4a44a", padding: 2 }}>
                         {configKey &&
                             configKey.map((key) => {
                                 return (
@@ -344,7 +346,7 @@ export default React.memo(
                                                 config.templates[type]
                                                     .sub_fields[key].view
                                                     ? config.templates[type]
-                                                          .sub_fields[key].view
+                                                        .sub_fields[key].view
                                                     : "text"
                                             }
                                             config={
