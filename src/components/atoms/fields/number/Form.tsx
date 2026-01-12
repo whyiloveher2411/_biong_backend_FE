@@ -35,6 +35,12 @@ export default React.memo(function NumberForm({ config, post, onReview, name }: 
 
     }
 
+    React.useEffect(() => {
+        if (config.default_value !== undefined && (valueInital === '' || valueInital === null || valueInital === undefined)) {
+            onReview(config.default_value, name);
+        }
+    }, []);
+
     return (
         <FormControl size={config.size ?? 'medium'} fullWidth variant="outlined">
             {

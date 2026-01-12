@@ -8,7 +8,7 @@ import useAjax from 'hook/useApi';
 import React from 'react';
 import SpecialNotes from '../SpecialNotes';
 import { FieldFormItemProps } from '../type';
-
+import { FormHelperText } from '@mui/material';
 
 interface Option {
     [key: string]: ANY,
@@ -205,6 +205,11 @@ export default React.memo(function RelationshipOneToManyForm({ config, post, onR
                         ),
                     }}
                 />
+                    {
+                        config.note ?
+                            <FormHelperText><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                            : null
+                    }
                     <SpecialNotes specialNotes={config.special_notes} />
                 </>
 

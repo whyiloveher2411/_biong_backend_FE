@@ -34,6 +34,11 @@ export default React.memo(function TextForm({ config, post, onReview, name, data
         onReview(post[name]);
     };
 
+    React.useEffect(() => {
+        if (config.default_value !== undefined && (valueInital === '' || valueInital === null || valueInital === undefined)) {
+            onReview(config.default_value, name);
+        }
+    }, []);
 
     return (<TooltipAiSuggest
         {...tooltipAiSuggest.tooltipAiSuggestProps}

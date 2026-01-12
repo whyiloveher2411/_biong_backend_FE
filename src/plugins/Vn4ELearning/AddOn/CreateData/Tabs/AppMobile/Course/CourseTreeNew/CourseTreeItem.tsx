@@ -168,7 +168,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
     const nodeHasChildren = hasChildren(node);
     const childrenCount = getChildrenCount(node);
     const nodeColor = getNodeColor(node);
-    const backgroundColor = getNodeBackgroundColor(node, depth);
+    const isMissingReward = nodeType === "lesson" && typeof index === 'number' && (index + 1) % 5 === 4;
+    const backgroundColor = isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth);
     const indentSize = 5;
     const basePadding = nodeType === "question" ? 8 : 2;
     const paddingLeft = depth > 0 ? depth * indentSize + basePadding : basePadding;
@@ -426,6 +427,60 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                             if (onEditNode) onEditNode(node.id, nodeType);
                                         }}
                                     />
+
+                                    {nodeType === "lesson" && ((node as Lesson).special?.active) && (
+                                        <Box
+                                            sx={{
+                                                p: '4px 8px',
+                                                backgroundColor: "#289303",
+                                                borderRadius: '32px',
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                            }}
+                                        >
+                                            <Box
+                                                component="img"
+                                                src="/images/gift_box.png"
+                                                alt="gift"
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    objectFit: "contain",
+                                                }}
+                                            />
+                                            {
+                                                (node as Lesson).special?.lessonId ?
+                                                    <Typography sx={{ color: "white" }}>Thử thách</Typography>
+                                                    :
+                                                    <Typography sx={{ color: "white" }}>Phần thưởng miễn phí</Typography>
+                                            }
+                                        </Box>
+                                    )}
+                                    {isMissingReward && !((node as Lesson).special?.active) && (
+                                        <Box
+                                            sx={{
+                                                p: '4px 8px',
+                                                backgroundColor: "#d32f2f",
+                                                borderRadius: '32px',
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                            }}
+                                        >
+                                            <Box
+                                                component="img"
+                                                src="/images/gift_box.png"
+                                                alt="gift"
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    objectFit: "contain",
+                                                }}
+                                            />
+                                            <Typography sx={{ color: "white" }}>Node chưa có phần thưởng</Typography>
+                                        </Box>
+                                    )}
                                 </Box>
                                 {nodeType === 'course' && (() => {
                                     const courseNode = node as Course;

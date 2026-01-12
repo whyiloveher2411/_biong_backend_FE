@@ -24,6 +24,8 @@ export interface Lesson {
     special?: {
         title?: string;
         description?: string;
+        active?: boolean;
+        lessonId: ID,
         [key: string]: unknown;
     };
 }
