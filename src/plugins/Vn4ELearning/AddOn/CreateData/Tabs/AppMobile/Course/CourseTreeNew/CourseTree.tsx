@@ -677,7 +677,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </MenuItem>
                         <MenuItem onClick={handleSyncConfig}>
                             <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Sync Course Config to Firebase
+                            Sync Course category
                         </MenuItem>
                     </Menu>
                     <Button
