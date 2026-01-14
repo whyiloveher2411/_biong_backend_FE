@@ -11,7 +11,7 @@ import Analytics from './Analytics';
 import Modules from './Modules';
 import Course from './Course';
 import Content from './Content';
-import Asset from './Asset';
+
 
 
 export default function (props: CreatePostTypeData) {
@@ -63,11 +63,7 @@ export default function (props: CreatePostTypeData) {
                 component: (props: CreatePostAddOnProps) => <Analytics data={props.data} />,
                 priority: 3,
             },
-            asset: {
-                title: __p('Asset', PLUGIN_NAME),
-                component: (props: CreatePostAddOnProps) => <Asset data={props.data} />,
-                priority: 3,
-            },
+
             modules: {
                 title: __p('Modules', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Modules data={props.data} />,

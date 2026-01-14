@@ -4,25 +4,16 @@ import Box from 'components/atoms/Box'
 import Typography from 'components/atoms/Typography'
 import Divider from 'components/atoms/Divider'
 import Icon from 'components/atoms/Icon'
-import { Grid, Card, CardContent, List, ListItem, ListItemButton, ListItemText, Chip } from '@mui/material'
-import GamificationModule from './modules/GamificationModule'
-import NotificationModule from './modules/NotificationModule'
-import AnalyticsModule from './modules/AnalyticsModule'
-import SocialModule from './modules/SocialModule'
+import { Grid, Card, CardContent, List, ListItem, ListItemButton, ListItemText } from '@mui/material'
+import Asset from './Asset';
 import { availableModules, ModuleConfig } from './modules/modulesConfig'
 
 function Modules({ data }: { data: CreatePostTypeData }) {
-  const [selectedModule, setSelectedModule] = React.useState<string>(availableModules[0]?.id || 'gamification')
+  const [selectedModule, setSelectedModule] = React.useState<string>('assets')
   const renderModuleContent = (moduleId: string) => {
     switch (moduleId) {
-      case 'gamification':
-        return <GamificationModule data={data} />
-      case 'notifications':
-        return <NotificationModule data={data} />
-      case 'analytics':
-        return <AnalyticsModule data={data} />
-      case 'social':
-        return <SocialModule data={data} />
+      case 'assets':
+        return <Asset data={data} />
       default:
         return (
           <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -37,14 +28,8 @@ function Modules({ data }: { data: CreatePostTypeData }) {
 
   const getModuleIcon = (moduleId: string) => {
     switch (moduleId) {
-      case 'gamification':
-        return 'SportsEsports'
-      case 'notifications':
-        return 'Notifications'
-      case 'analytics':
-        return 'Analytics'
-      case 'social':
-        return 'Groups'
+      case 'assets':
+        return 'FolderZip'
       default:
         return 'Settings'
     }
@@ -92,15 +77,9 @@ function Modules({ data }: { data: CreatePostTypeData }) {
               }}>
                 <Icon icon={getModuleIcon(module.id)} sx={{ fontSize: 16 }} />
               </Box>
-              <Typography variant="subtitle1" sx={{color: isSelected ? 'primary.contrastText' : 'text.primary'}} fontWeight="bold">
+              <Typography variant="subtitle1" sx={{ color: isSelected ? 'primary.contrastText' : 'text.primary' }} fontWeight="bold">
                 {module.name.toUpperCase()}
               </Typography>
-              <Chip 
-                label={module.badge || 0} 
-                size="small" 
-                color={isSelected ? 'default' : 'primary'}
-                variant={isSelected ? 'filled' : 'outlined'}
-              />
             </Box>
           }
           secondary={
@@ -116,57 +95,19 @@ function Modules({ data }: { data: CreatePostTypeData }) {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header Section */}
-      <Box sx={{ 
-        mb: 3,
-        p: 3,
-        backgroundColor: 'background.paper',
-        borderRadius: 2,
-        border: '1px solid',
-        borderColor: 'divider'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 48,
-            height: 48,
-            borderRadius: 2,
-            backgroundColor: 'primary.main',
-            color: 'primary.contrastText'
-          }}>
-            <Icon icon="Settings" sx={{ fontSize: 24 }} />
-          </Box>
-          <Box>
-            <Typography variant="h4" sx={{ 
-              fontWeight: 700,
-              color: 'text.primary',
-              mb: 0.5
-            }}>
-              Quản lý Modules
-            </Typography>
-            <Typography variant="body1" sx={{ 
-              color: 'text.secondary',
-              fontSize: '1rem'
-            }}>
-              Cấu hình và quản lý các chức năng khác nhau của ứng dụng
-            </Typography>
-          </Box>
-        </Box>
-        <Divider sx={{ mt: 2 }} />
-      </Box>
-      
+      {/* Header Section Removed */}
+
       {/* Main Content */}
       <Box sx={{ flex: 1 }}>
         <Grid container spacing={2} sx={{ height: '100%' }}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={2}>
             <Box sx={{ height: '100%' }}>
               <List>
                 {availableModules.map((m) => renderModuleItem(m, selectedModule === m.id))}
               </List>
             </Box>
           </Grid>
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} md={10}>
             <Card sx={{ height: '100%' }}>
               <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ mb: 3 }}>
