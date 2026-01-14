@@ -193,11 +193,11 @@ const EditableTextField = React.memo(
             };
 
             // Thêm event listener cho scroll trên window và container
-            const container = inputRef.current?.closest('.MuiTableContainer-root') || 
-                             inputRef.current?.closest('[class*="TableContainer"]') ||
-                             inputRef.current?.closest('[class*="virtuoso"]') ||
-                             document.querySelector('[data-testid="virtuoso-scroller"]');
-            
+            const container = inputRef.current?.closest('.MuiTableContainer-root') ||
+                inputRef.current?.closest('[class*="TableContainer"]') ||
+                inputRef.current?.closest('[class*="virtuoso"]') ||
+                document.querySelector('[data-testid="virtuoso-scroller"]');
+
             if (container) {
                 container.addEventListener('scroll', handleScroll, { passive: true });
                 // Cũng listen trên window để catch mọi scroll event
@@ -236,7 +236,7 @@ const EditableTextField = React.memo(
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const newValue = e.target.value;
             lastValueRef.current = newValue;
-            
+
             // Lưu vào global storage ngay
             if (!window.__editingValues__) {
                 window.__editingValues__ = {};
@@ -245,12 +245,12 @@ const EditableTextField = React.memo(
                 window.__editingValues__[itemKey] = {};
             }
             window.__editingValues__[itemKey][langCode] = newValue;
-            
+
             // Sync vào ref qua onScrollSync
             if (onScrollSync) {
                 onScrollSync(itemKey, langCode, newValue);
             }
-            
+
             // Sau đó mới gọi onChange
             onChange(newValue);
         };
@@ -270,7 +270,7 @@ const EditableTextField = React.memo(
             <TextField
                 key={inputKey}
                 inputRef={inputRef}
-                inputProps={{ 
+                inputProps={{
                     "data-key": inputKey,
                     "data-item-key": itemKey,
                     "data-lang-code": langCode,
@@ -287,21 +287,21 @@ const EditableTextField = React.memo(
                         backgroundColor: isChanged
                             ? "rgba(255, 235, 59, 0.1)"
                             : shouldHighlight
-                            ? "rgba(255, 152, 0, 0.05)"
-                            : "transparent",
+                                ? "rgba(255, 152, 0, 0.05)"
+                                : "transparent",
                         "&:hover": {
                             backgroundColor: isChanged
                                 ? "rgba(255, 235, 59, 0.15)"
                                 : shouldHighlight
-                                ? "rgba(255, 152, 0, 0.1)"
-                                : "rgba(0, 0, 0, 0.04)",
+                                    ? "rgba(255, 152, 0, 0.1)"
+                                    : "rgba(0, 0, 0, 0.04)",
                         },
                         "&.Mui-focused": {
                             backgroundColor: isChanged
                                 ? "rgba(255, 235, 59, 0.2)"
                                 : shouldHighlight
-                                ? "rgba(255, 152, 0, 0.15)"
-                                : "transparent",
+                                    ? "rgba(255, 152, 0, 0.15)"
+                                    : "transparent",
                         },
                     },
                 }}
@@ -322,16 +322,15 @@ const EditableTextField = React.memo(
 function Localization({ data }: { data: CreatePostTypeData }) {
     const classes = useStyles();
     const useApi = useAjax();
-    const apiSyncLanguage = useAjax();
     const apiTranslateByAI = useAjax();
     const [searchParams, setSearchParams] = useSearchParams();
-    
+
     // Đọc view từ URL params, mặc định là "localization"
     const viewFromUrl = searchParams.get("view") as "localization" | "language" | null;
-    const initialView = (viewFromUrl === "localization" || viewFromUrl === "language") 
-        ? viewFromUrl 
+    const initialView = (viewFromUrl === "localization" || viewFromUrl === "language")
+        ? viewFromUrl
         : "localization";
-    
+
     const [view, setView] = React.useState<"localization" | "language">(initialView);
     const [languages, setLanguages] = React.useState<Language[]>([]);
     const [localizeData, setLocalizeData] = React.useState<LocalizeData | null>(
@@ -378,21 +377,6 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         title: 'Xác nhận đồng bộ Languages',
         message: 'Bạn có chắc chắn muốn đồng bộ tất cả languages lên Firestore? Hãy đảm bảo bạn đã kiểm tra và xác nhận dữ liệu trước khi đồng bộ.'
     });
-
-    const handleSyncLanguage = () => {
-        confirmSyncLanguage.onConfirm(() => {
-            apiSyncLanguage.ajax({
-                url: "plugin/vn4-e-learning/app-mobile/localization/sync-language",
-                method: "POST",
-                data: {
-                    id: data.post.id,
-                },
-                success: (result) => {
-                    // API sẽ tự động hiển thị thông báo qua showMessage
-                },
-            });
-        });
-    };
 
     const handleGetData = () => {
         useApi.ajax({
@@ -441,7 +425,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
 
                 const translations: { [langCode: string]: string } = {};
                 const originalTranslations: { [langCode: string]: string } = {};
-                
+
                 languagesData.forEach((lang) => {
                     // Load translation từ API nếu có (key không có namespace)
                     let translationValue = translationsFromApi[lang.code]?.[key] || "";
@@ -485,7 +469,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 editingValuesRef.current[itemKey] = {};
             }
             editingValuesRef.current[itemKey][langCode] = value;
-            
+
             // Lưu vào global storage
             if (!window.__editingValues__) {
                 window.__editingValues__ = {};
@@ -494,7 +478,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 window.__editingValues__[itemKey] = {};
             }
             window.__editingValues__[itemKey][langCode] = value;
-            
+
             // Force re-render để update highlight - sử dụng debounce để tránh re-render quá nhiều
             if (editingValuesVersionTimeoutRef.current) {
                 clearTimeout(editingValuesVersionTimeoutRef.current);
@@ -550,8 +534,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
             Object.keys(item.translations).forEach((langCode) => {
                 // Kiểm tra giá trị từ global storage (đang edit) hoặc từ translations
                 const editingValue = window.__editingValues__?.[item.key]?.[langCode];
-                const currentValue = editingValue !== undefined 
-                    ? editingValue 
+                const currentValue = editingValue !== undefined
+                    ? editingValue
                     : (item.translations[langCode] || "");
                 const originalValue = item.originalTranslations[langCode] || "";
                 if (currentValue !== originalValue) {
@@ -570,8 +554,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         (item: TranslationItem, langCode: string) => {
             // Kiểm tra giá trị từ global storage (đang edit) hoặc từ translations
             const editingValue = window.__editingValues__?.[item.key]?.[langCode];
-            const currentValue = editingValue !== undefined 
-                ? editingValue 
+            const currentValue = editingValue !== undefined
+                ? editingValue
                 : (item.translations[langCode] || "");
             const originalValue = item.originalTranslations[langCode] || "";
             return currentValue !== originalValue;
@@ -643,8 +627,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                         // Kiểm tra xem có giá trị đang edit trong global storage không
                         const editingValue = window.__editingValues__?.[item.key]?.[lang.code];
                         // Ưu tiên dùng giá trị từ global storage nếu có, nếu không thì dùng từ translations
-                        const displayValue = editingValue !== undefined 
-                            ? editingValue 
+                        const displayValue = editingValue !== undefined
+                            ? editingValue
                             : (item.translations[lang.code] || "");
                         const isChanged = isKeyChanged(item, lang.code);
                         // Chỉ highlight ô này nếu ô này chưa dịch (không check toàn bộ key)
@@ -659,8 +643,8 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                                     backgroundColor: isChanged
                                         ? "rgba(255, 235, 59, 0.2)"
                                         : shouldHighlight
-                                        ? "rgba(255, 152, 0, 0.1)"
-                                        : "transparent",
+                                            ? "rgba(255, 152, 0, 0.1)"
+                                            : "transparent",
                                     width: 300,
                                     minWidth: 300,
                                     maxWidth: 300,
@@ -690,17 +674,17 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 </>
             );
         },
-            [
-                highlightUntranslated,
-                languages,
-                classes,
-                handleTranslationChange,
-                handleTranslationBlur,
-                isKeyChanged,
-                isKeyUntranslated,
-                translations,
-                editingValuesVersion,
-            ]
+        [
+            highlightUntranslated,
+            languages,
+            classes,
+            handleTranslationChange,
+            handleTranslationBlur,
+            isKeyChanged,
+            isKeyUntranslated,
+            translations,
+            editingValuesVersion,
+        ]
     );
 
     const handleSave = () => {
@@ -880,7 +864,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 Object.keys(item.translations).forEach((langCode) => {
                     // Ignore English for untranslated count
                     if (langCode === 'en') return;
-                    
+
                     const translationValue = item.translations[langCode] || "";
                     if (!translationValue.trim()) {
                         untranslatedCountByLanguageForNamespace[langCode] =
@@ -957,22 +941,22 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                                 </Typography>
                                 {untranslatedCountByLanguageForNamespace[lang.code] >
                                     0 && (
-                                    <Chip
-                                        label={
-                                            untranslatedCountByLanguageForNamespace[
+                                        <Chip
+                                            label={
+                                                untranslatedCountByLanguageForNamespace[
                                                 lang.code
-                                            ]
-                                        }
-                                        size="small"
-                                        color="warning"
-                                        variant="outlined"
-                                        sx={{
-                                            minWidth: 24,
-                                            height: 20,
-                                            fontSize: "0.7rem",
-                                        }}
-                                    />
-                                )}
+                                                ]
+                                            }
+                                            size="small"
+                                            color="warning"
+                                            variant="outlined"
+                                            sx={{
+                                                minWidth: 24,
+                                                height: 20,
+                                                fontSize: "0.7rem",
+                                            }}
+                                        />
+                                    )}
                             </Box>
                             <Tooltip title="Translate by AI">
                                 <IconButton
@@ -1049,14 +1033,6 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     >
                         Quay lại Localization
                     </Button>
-                    <LoadingButton
-                        variant="contained"
-                        color="primary"
-                        onClick={handleSyncLanguage}
-                        loading={apiSyncLanguage.open}
-                    >
-                        Sync Languages
-                    </LoadingButton>
                 </Box>
                 <Language data={data} />
                 {confirmSyncLanguage.component}
@@ -1167,13 +1143,13 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                                                                 "primary.dark",
                                                         },
                                                         "& .MuiListItemText-primary":
-                                                            {
-                                                                color: "white",
-                                                            },
+                                                        {
+                                                            color: "white",
+                                                        },
                                                         "& .MuiListItemText-secondary":
-                                                            {
-                                                                color: "rgba(255,255,255,0.7)",
-                                                            },
+                                                        {
+                                                            color: "rgba(255,255,255,0.7)",
+                                                        },
                                                         "& .MuiChip-root": {
                                                             backgroundColor:
                                                                 "rgba(255,255,255,0.2)",
