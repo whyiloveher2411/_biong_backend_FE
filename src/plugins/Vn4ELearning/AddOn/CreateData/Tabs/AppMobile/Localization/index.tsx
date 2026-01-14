@@ -775,20 +775,6 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         });
     };
 
-    const handleChangeVersion = () => {
-        useApi.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/localization/change-version",
-            method: "POST",
-            data: {
-                action: "change-version",
-                id: data.post.id,
-            },
-            success: (result) => {
-                //
-            },
-        });
-    };
-
     const handleTranslateByAI = (languageCode: string) => {
         apiTranslateByAI.ajax({
             url: "plugin/vn4-e-learning/app-mobile/localization/translate-by-ai",
@@ -1084,14 +1070,6 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     >
                         Languages
                     </Button>
-                    <LoadingButton
-                        loading={useApi.open}
-                        variant="outlined"
-                        color="secondary"
-                        onClick={handleChangeVersion}
-                    >
-                        Change Version
-                    </LoadingButton>
                     <LoadingButton
                         loading={useApi.open}
                         variant="contained"
