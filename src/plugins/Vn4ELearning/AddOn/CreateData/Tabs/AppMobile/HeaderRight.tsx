@@ -6,6 +6,10 @@ import useAjax from 'hook/useApi';
 import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import { __ } from 'helpers/i18n';
 import React from 'react';
+import { IconButton } from '@mui/material';
+import SettingsIcon from '@mui/icons-material/Settings';
+import DrawerCustom from 'components/molecules/DrawerCustom';
+import Config from './Config';
 
 const ENV_OPTIONS = [
     { value: 'production', label: 'Production' },
@@ -15,6 +19,8 @@ const ENV_OPTIONS = [
 function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
     const apiGetConfig = useAjax();
     const apiUpdateConfig = useAjax();
+
+    const [drawerOpen, setDrawerOpen] = React.useState(false);
 
     const [envState, setEnvState] = React.useState<{
         current: string;
@@ -114,6 +120,9 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                         </ToggleButton>
                     ))}
                 </ToggleButtonGroup>
+                <IconButton onClick={() => setDrawerOpen(true)}>
+                    <SettingsIcon />
+                </IconButton>
             </Box>
             {confirmState.open && (
                 <ConfirmDialog
@@ -124,6 +133,14 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                     message={__('Are you sure you want to switch the environment?')}
                 />
             )}
+
+            <DrawerCustom
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                title={__('Config')}
+                children={<Config data={data} />}
+                activeOnClose
+            />
         </React.Fragment>
     );
 }

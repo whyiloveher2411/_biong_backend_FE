@@ -1,7 +1,6 @@
 import { CreatePostAddOnProps, CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { __p } from 'helpers/i18n';
 import { PLUGIN_NAME } from 'plugins/Vn4Ecommerce/helpers/plugin';
-import Config from './Config';
 import RemoteConfig from './RemoteConfig';
 import Localization from './Localization';
 import Database from './Database';
@@ -18,11 +17,6 @@ export default function (props: CreatePostTypeData) {
 
     if (props.action === 'EDIT') {
         return {
-            config: {
-                title: __p('Config', PLUGIN_NAME),
-                component: (props: CreatePostAddOnProps) => <Config data={props.data} />,
-                priority: 2,
-            },
             database: {
                 title: __p('Database', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Database data={props.data} />,

@@ -71,32 +71,32 @@ function Config({ data }: { data: CreatePostTypeData }) {
                         }}
                     >
 
-                    <FieldForm
-                        data={data}
-                        component="select"
-                        config={{
-                            title: "Environment",
-                            list_option: {
-                                production: {
-                                    title: "Production",
+                        <FieldForm
+                            data={data}
+                            component="select"
+                            config={{
+                                title: "Environment",
+                                list_option: {
+                                    production: {
+                                        title: "Production",
+                                    },
+                                    development: {
+                                        title: "Development",
+                                    },
                                 },
-                                development: {
-                                    title: "Development",
-                                },
-                            },
-                        }}
-                        name="environment_current"
-                        post={{
-                            environment_current: environmentCurrent,
-                        }}
-                        onReview={(environment_current) => {
-                            setEnvironmentCurrent(environment_current);
-                        }}
-                    />
+                            }}
+                            name="environment_current"
+                            post={{
+                                environment_current: environmentCurrent,
+                            }}
+                            onReview={(environment_current) => {
+                                setEnvironmentCurrent(environment_current);
+                            }}
+                        />
 
-                      <Typography variant="h3">
-                        Connect to Google Cloud
-                      </Typography>
+                        <Typography variant="h3">
+                            Connect to Google Cloud
+                        </Typography>
                         <FieldForm
                             data={data}
                             component="json"
@@ -146,7 +146,7 @@ function Config({ data }: { data: CreatePostTypeData }) {
             </Card>
             <Box
                 sx={{
-                    pt: 3,
+                    py: 3,
                     display: "flex",
                     justifyContent: "flex-end",
                 }}
