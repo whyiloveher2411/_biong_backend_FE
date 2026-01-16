@@ -6,7 +6,7 @@ import Localization from './Localization';
 import Database from './Database';
 import FileManager from './FileManager';
 import PushNotification from './PushNotification';
-import Analytics from './Analytics';
+// import Analytics from './Analytics';
 import Modules from './Modules';
 import Course from './Course';
 import Content from './Content';
@@ -52,11 +52,11 @@ export default function (props: CreatePostTypeData) {
                 component: (props: CreatePostAddOnProps) => <PushNotification data={props.data} />,
                 priority: 3,
             },
-            analytics: {
-                title: __p('Analytics', PLUGIN_NAME),
-                component: (props: CreatePostAddOnProps) => <Analytics data={props.data} />,
-                priority: 3,
-            },
+            // analytics: {
+            //     title: __p('Analytics', PLUGIN_NAME),
+            //     component: (props: CreatePostAddOnProps) => <Analytics data={props.data} />,
+            //     priority: 3,
+            // },
 
             modules: {
                 title: __p('Modules', PLUGIN_NAME),
