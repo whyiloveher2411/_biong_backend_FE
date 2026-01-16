@@ -23,6 +23,9 @@ import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 import Box from '@mui/material/Box';
 import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
 import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
+import useDebounce from 'hook/useDebounce';
+import { InputAdornment, TextField } from '@mui/material';
+import { Search } from '@mui/icons-material';
 
 const useStyles = makeCSS({
     tr: {
@@ -65,6 +68,17 @@ function DataTable(props: DataTableProps) {
     const [dataDrawer, setDataDrawer] = React.useState<DataTableResultApiProps | false>(false);
 
     const [confirmDelete, setConfirmDelete] = React.useState(0);
+
+    const [search, setSearch] = React.useState(queryUrl.search || '');
+
+    const debouncedSearch = useDebounce(search, 500);
+
+    React.useEffect(() => {
+        if (debouncedSearch !== (queryUrl.search || '')) {
+            setQueryUrl({ ...queryUrl, search: debouncedSearch });
+        }
+    }, [debouncedSearch]);
+
 
     const closeDialogConfirmDelete = () => {
         setConfirmDelete(0);
@@ -169,7 +183,22 @@ function DataTable(props: DataTableProps) {
     }
 
     return (
-        <>
+        <Box>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                <TextField
+                    size="small"
+                    placeholder={__('Search')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <Search />
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+            </Box>
             <TableContainer component={Paper}>
                 <Table>
                     <TableHead>
@@ -302,7 +331,7 @@ function DataTable(props: DataTableProps) {
                 }}
             />
             {Loading}
-        </>
+        </Box>
     )
 }
 
