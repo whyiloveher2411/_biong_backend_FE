@@ -24,7 +24,10 @@ import {
     Button,
     IconButton,
     Tooltip,
+    InputAdornment,
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { TableVirtuoso } from "react-virtuoso";
 import Language from "./Language";
@@ -345,6 +348,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         React.useState<boolean>(false);
     const [highlightUntranslated, setHighlightUntranslated] =
         React.useState<boolean>(false);
+    const [searchQuery, setSearchQuery] = React.useState<string>("");
     // State để force re-render khi global storage thay đổi - sử dụng debounce
     const [editingValuesVersion, setEditingValuesVersion] = React.useState(0);
     const editingValuesVersionTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -828,14 +832,56 @@ function Localization({ data }: { data: CreatePostTypeData }) {
 
     const groupNames = Object.keys(groupedTranslations);
 
-    const renderTable = (namespace: string) => {
-        let namespaceTranslations = groupedTranslations[namespace] || [];
+    // Hàm filter theo search query
+    const filterBySearchQuery = (items: TranslationItem[]): TranslationItem[] => {
+        if (!searchQuery.trim()) return items;
 
-        // Filter chỉ hiển thị key chưa dịch nếu checkbox được bật
+        const query = searchQuery.toLowerCase().trim();
+        return items.filter((item) => {
+            // Tìm theo key
+            if (item.key.toLowerCase().includes(query)) return true;
+
+            // Tìm theo default value
+            if (item.default.toLowerCase().includes(query)) return true;
+
+            // Tìm theo text đã dịch ở tất cả ngôn ngữ
+            return Object.values(item.translations).some(
+                (translation) => translation && translation.toLowerCase().includes(query)
+            );
+        });
+    };
+
+    // Lấy tất cả translations đã filter theo search query
+    const getFilteredTranslations = (): TranslationItem[] => {
+        let allTranslations = translations;
+
+        // Filter theo search query
+        allTranslations = filterBySearchQuery(allTranslations);
+
+        // Filter theo untranslated
         if (showUntranslatedOnly) {
-            namespaceTranslations = namespaceTranslations.filter((item) => {
-                return isKeyUntranslated(item);
-            });
+            allTranslations = allTranslations.filter((item) => isKeyUntranslated(item));
+        }
+
+        return allTranslations;
+    };
+
+    const renderTable = (namespace: string | null, customTranslations?: TranslationItem[]) => {
+        let namespaceTranslations = customTranslations
+            ? customTranslations
+            : (namespace ? (groupedTranslations[namespace] || []) : []);
+
+        // Chỉ filter nếu không có customTranslations (vì customTranslations đã được filter sẵn)
+        if (!customTranslations) {
+            // Filter theo search query
+            namespaceTranslations = filterBySearchQuery(namespaceTranslations);
+
+            // Filter chỉ hiển thị key chưa dịch nếu checkbox được bật
+            if (showUntranslatedOnly) {
+                namespaceTranslations = namespaceTranslations.filter((item) => {
+                    return isKeyUntranslated(item);
+                });
+            }
         }
 
         // Đếm số lượng key chưa translate cho namespace hiện tại
@@ -975,7 +1021,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
             >
                 <TableContainer
                     component={Paper}
-                    sx={{ flex: 1, height: "100%" }}
+                    sx={{ flex: 1, height: "calc(100vh - 300px)", minHeight: 400 }}
                 >
                     <TableVirtuoso
                         data={namespaceTranslations}
@@ -1061,6 +1107,31 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                         }
                         label="Add style các key chưa dịch"
                     />
+                    <TextField
+                        size="small"
+                        placeholder="Tìm kiếm key, text dịch..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        sx={{ minWidth: 280 }}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon color="action" />
+                                </InputAdornment>
+                            ),
+                            endAdornment: searchQuery && (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setSearchQuery("")}
+                                        edge="end"
+                                    >
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
                 </Box>
                 <Box sx={{ display: "flex", gap: 2 }}>
                     <Button
@@ -1089,107 +1160,151 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                     spacing={2}
                     sx={{ height: "calc(100% - 80px)" }}
                 >
-                    {/* Cột trái - Danh sách groups */}
+                    {/* Cột trái - Danh sách groups hoặc kết quả tìm kiếm */}
                     <Grid item xs={12} md={2}>
                         <Box sx={{ height: "100%" }}>
                             <List>
-                                {groupNames.map((namespace) => {
-                                    const isSelected =
-                                        selectedTab === namespace;
-                                    const keyCount =
-                                        groupedTranslations[namespace].length;
-
-                                    return (
-                                        <ListItem
-                                            key={namespace}
-                                            disablePadding
-                                        >
-                                            <ListItemButton
-                                                selected={isSelected}
-                                                onClick={() =>
-                                                    setSelectedTab(namespace)
-                                                }
-                                                sx={{
-                                                    borderRadius: 1,
-                                                    mb: 1,
-                                                    "&.Mui-selected": {
-                                                        backgroundColor:
-                                                            "primary.main",
-                                                        color: "white",
-                                                        "&:hover": {
-                                                            backgroundColor:
-                                                                "primary.dark",
-                                                        },
-                                                        "& .MuiListItemText-primary":
-                                                        {
-                                                            color: "white",
-                                                        },
-                                                        "& .MuiListItemText-secondary":
-                                                        {
-                                                            color: "rgba(255,255,255,0.7)",
-                                                        },
-                                                        "& .MuiChip-root": {
-                                                            backgroundColor:
-                                                                "rgba(255,255,255,0.2)",
-                                                            color: "white",
-                                                        },
+                                {searchQuery.trim() ? (
+                                    // Khi có search, hiển thị 1 group "Kết quả tìm kiếm"
+                                    <ListItem disablePadding>
+                                        <ListItemButton
+                                            selected={true}
+                                            sx={{
+                                                borderRadius: 1,
+                                                mb: 1,
+                                                "&.Mui-selected": {
+                                                    backgroundColor: "primary.main",
+                                                    color: "white",
+                                                    "&:hover": {
+                                                        backgroundColor: "primary.dark",
                                                     },
-                                                }}
-                                            >
-                                                <ListItemText
-                                                    primary={
-                                                        <Box
-                                                            sx={{
-                                                                display: "flex",
-                                                                alignItems:
-                                                                    "center",
-                                                                gap: 1,
-                                                            }}
+                                                    "& .MuiListItemText-primary": {
+                                                        color: "white",
+                                                    },
+                                                    "& .MuiListItemText-secondary": {
+                                                        color: "rgba(255,255,255,0.7)",
+                                                    },
+                                                    "& .MuiChip-root": {
+                                                        backgroundColor: "rgba(255,255,255,0.2)",
+                                                        color: "white",
+                                                    },
+                                                },
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primary={
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <Typography
+                                                            variant="subtitle1"
+                                                            sx={{ color: "primary.contrastText" }}
+                                                            fontWeight="bold"
                                                         >
-                                                            <Typography
-                                                                variant="subtitle1"
+                                                            Kết quả
+                                                        </Typography>
+                                                        <Chip
+                                                            label={getFilteredTranslations().length}
+                                                            size="small"
+                                                            color="default"
+                                                            variant="filled"
+                                                        />
+                                                    </Box>
+                                                }
+                                                secondary={
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="rgba(255,255,255,0.7)"
+                                                    >
+                                                        {getFilteredTranslations().length} keys
+                                                    </Typography>
+                                                }
+                                            />
+                                        </ListItemButton>
+                                    </ListItem>
+                                ) : (
+                                    // Khi không search, hiển thị danh sách groups bình thường
+                                    groupNames.map((namespace) => {
+                                        const isSelected = selectedTab === namespace;
+                                        const keyCount = groupedTranslations[namespace].length;
+
+                                        return (
+                                            <ListItem key={namespace} disablePadding>
+                                                <ListItemButton
+                                                    selected={isSelected}
+                                                    onClick={() => setSelectedTab(namespace)}
+                                                    sx={{
+                                                        borderRadius: 1,
+                                                        mb: 1,
+                                                        "&.Mui-selected": {
+                                                            backgroundColor: "primary.main",
+                                                            color: "white",
+                                                            "&:hover": {
+                                                                backgroundColor: "primary.dark",
+                                                            },
+                                                            "& .MuiListItemText-primary": {
+                                                                color: "white",
+                                                            },
+                                                            "& .MuiListItemText-secondary": {
+                                                                color: "rgba(255,255,255,0.7)",
+                                                            },
+                                                            "& .MuiChip-root": {
+                                                                backgroundColor: "rgba(255,255,255,0.2)",
+                                                                color: "white",
+                                                            },
+                                                        },
+                                                    }}
+                                                >
+                                                    <ListItemText
+                                                        primary={
+                                                            <Box
                                                                 sx={{
-                                                                    color: isSelected
-                                                                        ? "primary.contrastText"
-                                                                        : "text.primary",
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: 1,
                                                                 }}
-                                                                fontWeight="bold"
                                                             >
-                                                                {namespace}
-                                                            </Typography>
-                                                            <Chip
-                                                                label={keyCount}
-                                                                size="small"
+                                                                <Typography
+                                                                    variant="subtitle1"
+                                                                    sx={{
+                                                                        color: isSelected
+                                                                            ? "primary.contrastText"
+                                                                            : "text.primary",
+                                                                    }}
+                                                                    fontWeight="bold"
+                                                                >
+                                                                    {namespace}
+                                                                </Typography>
+                                                                <Chip
+                                                                    label={keyCount}
+                                                                    size="small"
+                                                                    color={isSelected ? "default" : "primary"}
+                                                                    variant={isSelected ? "filled" : "outlined"}
+                                                                />
+                                                            </Box>
+                                                        }
+                                                        secondary={
+                                                            <Typography
+                                                                variant="body2"
                                                                 color={
                                                                     isSelected
-                                                                        ? "default"
-                                                                        : "primary"
+                                                                        ? "rgba(255,255,255,0.7)"
+                                                                        : "text.secondary"
                                                                 }
-                                                                variant={
-                                                                    isSelected
-                                                                        ? "filled"
-                                                                        : "outlined"
-                                                                }
-                                                            />
-                                                        </Box>
-                                                    }
-                                                    secondary={
-                                                        <Typography
-                                                            variant="body2"
-                                                            color={
-                                                                isSelected
-                                                                    ? "rgba(255,255,255,0.7)"
-                                                                    : "text.secondary"
-                                                            }
-                                                        >
-                                                            {keyCount} keys
-                                                        </Typography>
-                                                    }
-                                                />
-                                            </ListItemButton>
-                                        </ListItem>
-                                    );
-                                })}
+                                                            >
+                                                                {keyCount} keys
+                                                            </Typography>
+                                                        }
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                        );
+                                    })
+                                )}
                             </List>
                         </Box>
                     </Grid>
@@ -1203,26 +1318,52 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                                 flexDirection: "column",
                             }}
                         >
-                            {selectedTab && groupedTranslations[selectedTab] ? (
-                                renderTable(selectedTab)
-                            ) : (
-                                <Box
-                                    sx={{
-                                        display: "flex",
-                                        justifyContent: "center",
-                                        alignItems: "center",
-                                        height: "100%",
-                                        flexDirection: "column",
-                                        gap: 2,
-                                    }}
-                                >
-                                    <Typography
-                                        variant="h6"
-                                        color="text.secondary"
+                            {searchQuery.trim() ? (
+                                // Khi có search, hiển thị kết quả tìm kiếm
+                                getFilteredTranslations().length > 0 ? (
+                                    renderTable(null, getFilteredTranslations())
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                            height: "100%",
+                                            flexDirection: "column",
+                                            gap: 2,
+                                        }}
                                     >
-                                        Chọn một group để xem translations
-                                    </Typography>
-                                </Box>
+                                        <Typography
+                                            variant="h6"
+                                            color="text.secondary"
+                                        >
+                                            Không tìm thấy kết quả phù hợp với "{searchQuery}"
+                                        </Typography>
+                                    </Box>
+                                )
+                            ) : (
+                                // Khi không search, hiển thị theo group được chọn
+                                selectedTab && groupedTranslations[selectedTab] ? (
+                                    renderTable(selectedTab)
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                            height: "100%",
+                                            flexDirection: "column",
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Typography
+                                            variant="h6"
+                                            color="text.secondary"
+                                        >
+                                            Chọn một group để xem translations
+                                        </Typography>
+                                    </Box>
+                                )
                             )}
                         </Box>
                     </Grid>
