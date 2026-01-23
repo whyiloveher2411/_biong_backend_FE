@@ -28,6 +28,7 @@ export interface Lesson {
         lessonId: ID,
         [key: string]: unknown;
     };
+    count_app_course_flashcard?: number;
 }
 
 export interface Chapter {
@@ -69,6 +70,7 @@ export interface Course {
         count_lesson_no_question?: number;
         count_question?: number;
     };
+    count_app_course_flashcard?: number;
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;

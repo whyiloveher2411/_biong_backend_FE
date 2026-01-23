@@ -14,10 +14,10 @@ const MULTILANG_FIELDS: { [key: string]: string[] } = {
 
 export const calculateNodeProgress = (node: TreeNode, languages: Language[]): number => {
     if (!languages || languages.length === 0) return 0;
-    
+
     const type = getNodeType(node);
     const fields = MULTILANG_FIELDS[type] || [];
-    
+
     // 1. Calculate Field Progress
     let totalFields = fields.length * languages.length;
     let filledFields = 0;
@@ -33,11 +33,11 @@ export const calculateNodeProgress = (node: TreeNode, languages: Language[]): nu
 
         let parsedValue: Record<string, unknown> = {};
         try {
-             if (typeof value === 'object' && value !== null) {
-                 parsedValue = value as Record<string, unknown>;
-             } else if (typeof value === 'string') {
-                 parsedValue = JSON.parse(value) as Record<string, unknown>;
-             }
+            if (typeof value === 'object' && value !== null) {
+                parsedValue = value as Record<string, unknown>;
+            } else if (typeof value === 'string') {
+                parsedValue = JSON.parse(value) as Record<string, unknown>;
+            }
         } catch (e) {
             // If parse error, treat as empty
         }
@@ -74,15 +74,15 @@ export const calculateNodeProgress = (node: TreeNode, languages: Language[]): nu
     // Progress = (FilledFields + Sum(ChildProgress for each child)) / (TotalFields + ChildrenCount * 100) * 100 ??
     // Let's stick to the prompt's implication: "lesson: ... and question children complete".
     // This implies if a lesson has 3 questions, and 2 are done, lesson is partial?
-    
+
     // Revised Formula:
     // Total Units = TotalFields (each field-lang pair is 1 unit) + ChildrenCount (each child complete is effectively 1 unit scaled to fields?)
-    
+
     // Let's try: Total Score = (Percentage Fields * 1) + (Average Percentage Children * 1) / 2 ?
     // If no children: Percentage Fields.
     // If no fields: Average Percentage Children.
     // If both: Average of both.
-    
+
     let fieldPercentage = totalFields > 0 ? (filledFields / totalFields) * 100 : 100; // If no fields, assume 100% on that part? Or 0?
     // If no fields defined (unlikely for these types), usually it means config driven.
     if (totalFields === 0) fieldPercentage = 100;
@@ -207,9 +207,9 @@ export const getAllChildrenKeys = (node: TreeNode): string[] => {
     return keys;
 };
 
-export const getChildrenIds = (node: TreeNode): (string|number)[] => {
+export const getChildrenIds = (node: TreeNode): (string | number)[] => {
     const children = getChildren(node);
-    return children.map((child: TreeNode) => child.id).filter((id): id is (string|number) => id !== undefined && id !== null);
+    return children.map((child: TreeNode) => child.id).filter((id): id is (string | number) => id !== undefined && id !== null);
 };
 
 export const hasChildren = (node: TreeNode): boolean => {
@@ -289,9 +289,9 @@ export const arePropsEqual = (prev: ANY, next: ANY, keysToIgnore: string[] = [])
     for (const key of prevKeys) {
         if (prev[key] !== next[key]) {
             if (typeof prev[key] === 'object' && prev[key] !== null && next[key] !== null) {
-                 if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) return false;
+                if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) return false;
             } else {
-                 return false;
+                return false;
             }
         }
     }
@@ -303,7 +303,7 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
     if (!next) return next;
 
     let hasChanges = false;
-    
+
     // Map next nodes to potentially reused prev nodes
     const newResult = next.map(nextNode => {
         const nodeType = getNodeType(nextNode);
@@ -319,27 +319,27 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
         let prevChildren: TreeNode[] = [];
         let nextChildren: TreeNode[] = [];
 
-        if ('sections' in nextNode) { 
-            childrenKey = 'sections'; 
-            nextChildren = (nextNode as ANY).sections || []; 
-            prevChildren = (prevNode as ANY).sections || []; 
-        } else if ('chapters' in nextNode) { 
-            childrenKey = 'chapters'; 
-            nextChildren = (nextNode as ANY).chapters || []; 
-            prevChildren = (prevNode as ANY).chapters || []; 
-        } else if ('lessons' in nextNode) { 
-            childrenKey = 'lessons'; 
-            nextChildren = (nextNode as ANY).lessons || []; 
-            prevChildren = (prevNode as ANY).lessons || []; 
-        } else if ('questions' in nextNode) { 
-            childrenKey = 'questions'; 
-            nextChildren = (nextNode as ANY).questions || []; 
-            prevChildren = (prevNode as ANY).questions || []; 
+        if ('sections' in nextNode) {
+            childrenKey = 'sections';
+            nextChildren = (nextNode as ANY).sections || [];
+            prevChildren = (prevNode as ANY).sections || [];
+        } else if ('chapters' in nextNode) {
+            childrenKey = 'chapters';
+            nextChildren = (nextNode as ANY).chapters || [];
+            prevChildren = (prevNode as ANY).chapters || [];
+        } else if ('lessons' in nextNode) {
+            childrenKey = 'lessons';
+            nextChildren = (nextNode as ANY).lessons || [];
+            prevChildren = (prevNode as ANY).lessons || [];
+        } else if ('questions' in nextNode) {
+            childrenKey = 'questions';
+            nextChildren = (nextNode as ANY).questions || [];
+            prevChildren = (prevNode as ANY).questions || [];
         }
-        
+
         // Merge children
         const mergedChildren = childrenKey ? mergeNodes(prevChildren, nextChildren) : [];
-        
+
         // Check if children changed reference
         const childrenChanged = childrenKey && mergedChildren !== prevChildren;
 
@@ -353,9 +353,9 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
         hasChanges = true;
         // If props equal but children changed, reuse prevNode props + new children
         if (propsEqual) {
-             return { ...prevNode, [childrenKey]: mergedChildren };
+            return { ...prevNode, [childrenKey]: mergedChildren };
         }
-        
+
         // If props changed, use nextNode props + merged children (to keep reused children refs)
         return { ...nextNode, [childrenKey]: mergedChildren };
     });
@@ -366,4 +366,22 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
     }
 
     return newResult;
+};
+
+export const calculateTotalLessonFlashcards = (course: Course): number => {
+    let total = 0;
+    if (course.sections) {
+        course.sections.forEach(section => {
+            if (section.chapters) {
+                section.chapters.forEach(chapter => {
+                    if (chapter.lessons) {
+                        chapter.lessons.forEach(lesson => {
+                            total += (lesson.count_app_course_flashcard || 0);
+                        });
+                    }
+                });
+            }
+        });
+    }
+    return total;
 };

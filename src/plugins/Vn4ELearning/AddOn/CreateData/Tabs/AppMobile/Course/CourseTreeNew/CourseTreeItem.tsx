@@ -38,6 +38,7 @@ import {
     getChildren,
     parseJsonTitle,
     calculateNodeProgress,
+    calculateTotalLessonFlashcards,
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
@@ -526,6 +527,51 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                 })()}
                             </Box>
 
+
+                            {nodeType === "course" && (() => {
+                                const courseNode = node as Course;
+                                const x = courseNode.count_app_course_flashcard || 0;
+                                const y = calculateTotalLessonFlashcards(courseNode);
+
+                                if (x > 0 || y > 0) {
+                                    return (
+                                        <Box
+                                            sx={{
+                                                p: '4px 8px',
+                                                backgroundColor: "#1976d2",
+                                                borderRadius: '32px',
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                                mr: 1
+                                            }}
+                                        >
+                                            <Typography sx={{ color: "white", fontSize: "0.75rem" }}>
+                                                {x} course | {y} lesson Flash card
+                                            </Typography>
+                                        </Box>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {nodeType === "lesson" && ((node as Lesson).count_app_course_flashcard || 0) > 0 && (
+                                <Box
+                                    sx={{
+                                        p: '4px 8px',
+                                        backgroundColor: "#1976d2",
+                                        borderRadius: '32px',
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 1,
+                                        mr: 1
+                                    }}
+                                >
+                                    <Typography sx={{ color: "white", fontSize: "0.75rem" }}>
+                                        {((node as Lesson).count_app_course_flashcard)} Flash card
+                                    </Typography>
+                                </Box>
+                            )}
 
                             {onAddChild && (() => {
                                 const childType = getChildType(nodeType);
