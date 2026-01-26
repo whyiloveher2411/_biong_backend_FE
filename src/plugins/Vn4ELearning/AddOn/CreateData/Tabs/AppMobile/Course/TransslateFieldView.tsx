@@ -24,7 +24,7 @@ function TransslateFieldView(props: FieldViewItemProps) {
 
     return (
         <div>
-            {valueInital['en']}
+            {valueInital['vi'] || valueInital['en']}
         </div>
     )
 }

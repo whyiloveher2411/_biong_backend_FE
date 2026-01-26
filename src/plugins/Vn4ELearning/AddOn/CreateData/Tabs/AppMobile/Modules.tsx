@@ -1,19 +1,30 @@
 import React from 'react'
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData'
 import Box from 'components/atoms/Box'
-import Typography from 'components/atoms/Typography'
-import Divider from 'components/atoms/Divider'
 import Icon from 'components/atoms/Icon'
-import { Grid, Card, CardContent, List, ListItem, ListItemButton, ListItemText } from '@mui/material'
+import { Grid, List, ListItem, ListItemButton, ListItemText } from '@mui/material'
+import { useSearchParams } from 'react-router-dom';
 import Asset from './Asset';
+import AppLocalNotification from './AppLocalNotification';
 import { availableModules, ModuleConfig } from './modules/modulesConfig'
+import Typography from 'components/atoms/Typography'
 
 function Modules({ data }: { data: CreatePostTypeData }) {
-  const [selectedModule, setSelectedModule] = React.useState<string>('assets')
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedModule = searchParams.get('module') || 'assets';
+
+  const setSelectedModule = (moduleId: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('module', moduleId);
+    setSearchParams(newParams, { replace: true });
+  }
+
   const renderModuleContent = (moduleId: string) => {
     switch (moduleId) {
       case 'assets':
         return <Asset data={data} />
+      case 'local_notification':
+        return <AppLocalNotification data={data} />
       default:
         return (
           <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -30,6 +41,8 @@ function Modules({ data }: { data: CreatePostTypeData }) {
     switch (moduleId) {
       case 'assets':
         return 'FolderZip'
+      case 'local_notification':
+        return 'Notifications'
       default:
         return 'Settings'
     }
@@ -108,22 +121,7 @@ function Modules({ data }: { data: CreatePostTypeData }) {
             </Box>
           </Grid>
           <Grid item xs={12} md={10}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="h5" gutterBottom>
-                    {availableModules.find(m => m.id === selectedModule)?.name || ''}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {availableModules.find(m => m.id === selectedModule)?.description || ''}
-                  </Typography>
-                  <Divider />
-                </Box>
-                <Box sx={{ flex: 1, overflow: 'auto' }}>
-                  {renderModuleContent(selectedModule)}
-                </Box>
-              </CardContent>
-            </Card>
+            {renderModuleContent(selectedModule)}
           </Grid>
         </Grid>
       </Box>

@@ -16,6 +16,9 @@ import Content from './Content';
 export default function (props: CreatePostTypeData) {
 
     if (props.action === 'EDIT') {
+
+        window.__app_mobile_id = props.post.id;
+
         return {
             database: {
                 title: __p('Database', PLUGIN_NAME),

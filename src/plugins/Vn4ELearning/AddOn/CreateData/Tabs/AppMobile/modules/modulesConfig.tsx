@@ -15,5 +15,12 @@ export const availableModules: ModuleConfig[] = [
     description: 'Quản lý tài nguyên ứng dụng',
     icon: 'folder_zip',
     enabled: true,
+  },
+  {
+    id: 'local_notification',
+    name: 'Local Notification',
+    description: 'Quản lý thông báo nội bộ',
+    icon: 'notifications',
+    enabled: true,
   }
 ]

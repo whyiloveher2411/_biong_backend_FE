@@ -1,18 +1,19 @@
 import React from 'react'
 import { FieldFormItemProps } from 'components/atoms/fields/type'
-// import FieldForm from 'components/atoms/fields/FieldForm'
 import Box from 'components/atoms/Box'
 import { FormLabel, Tooltip, IconButton } from '@mui/material'
 import FieldForm from 'components/atoms/fields/FieldForm'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import useLanguages from '../hooks/useLanguages';
 
 function TransslateField(props: FieldFormItemProps) {
 
     const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
+    const refLangCodeCurrent = React.useRef(langCodeCurrent);
+    const { languages } = useLanguages();
 
-    
+
     let valueInital: { [key: string]: ANY } = {};
-
     try {
         if (props.post[props.name] && typeof props.post[props.name] === 'object') {
             valueInital = props.post[props.name];
@@ -39,10 +40,10 @@ function TransslateField(props: FieldFormItemProps) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <FormLabel sx={{ fontWeight: 'bold', color: 'text.primary', whiteSpace: 'nowrap' }}>{props.config.title}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {window.__languages?.map((language) => (
+                    {languages?.map((language) => (
                         <Tooltip key={language.code} title={language.name}
                             sx={{
-                                
+
                             }}
                             placement="top"
                         >
@@ -64,7 +65,10 @@ function TransslateField(props: FieldFormItemProps) {
                                     position: 'relative',
                                     overflow: 'visible'
                                 }}
-                                onClick={() => setLangCodeCurrent(language.code)}
+                                onClick={() => {
+                                    refLangCodeCurrent.current = language.code;
+                                    setLangCodeCurrent(language.code)
+                                }}
                             >
                                 {valueInital?.[language.code] && (
                                     <CheckCircleIcon
@@ -101,14 +105,14 @@ function TransslateField(props: FieldFormItemProps) {
             </Box>
             <FieldForm
                 component={props.config.primary_view}
-                config={{...props.config, title: false}}
-                post={{value: props.post[props.name]?.[langCodeCurrent]}}
+                config={{ ...props.config, title: false }}
+                post={{ value: props.post[props.name]?.[refLangCodeCurrent.current] }}
                 name={'value'}
                 onReview={(value) => {
 
-                     props.onReview({
+                    props.onReview({
                         ...props.post[props.name],
-                        [langCodeCurrent]: value
+                        [refLangCodeCurrent.current]: value
                     }, props.name)
                 }}
             />

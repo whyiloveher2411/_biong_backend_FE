@@ -7,6 +7,8 @@ import { LoadingButton } from "@mui/lab";
 import { Card, CardContent, CircularProgress, InputAdornment, IconButton, Tooltip, Grid, Typography, List, ListItem, ListItemButton, ListItemText, Divider, Chip } from "@mui/material";
 import { Warning, Settings } from "@mui/icons-material";
 
+import useLanguages from './hooks/useLanguages';
+
 function RemoteConfig({ data }: { data: CreatePostTypeData }) {
 
     const useApi = useAjax();
@@ -15,6 +17,8 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
     const [isLoadData, setIsLoadData] = React.useState<boolean>(false);
     const [selectedGroup, setSelectedGroup] = React.useState<string>('');
     const [updatingGroups, setUpdatingGroups] = React.useState<Set<string>>(new Set());
+
+    useLanguages();
 
     const handleGetData = () => {
         useApi.ajax({
@@ -36,25 +40,6 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
             },
         });
     }
-
-    React.useEffect(() => {
-        if (window.__languages) {
-            return;
-        }
-        useApi.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/localization/languages",
-            method: "POST",
-            data: {
-                action: "get",
-                id: data.post.id,
-            },
-            success: (result: ANY) => {
-                if (result.success && result.data?.languages) {
-                    window.__languages = result.data.languages;
-                }
-            },
-        });
-    }, []);
 
     React.useEffect(() => {
         handleGetData();
