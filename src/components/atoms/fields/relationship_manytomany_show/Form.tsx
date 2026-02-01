@@ -100,6 +100,9 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
         <div>
             <Typography variant="h5" style={{ margin: '8px 0' }}>
                 {config.title}
+                < Fab onClick={onLoadCollection} style={{ marginLeft: 8 }} size="small" color="inherit" aria-label="refresh">
+                    <Icon icon="RefreshRounded" />
+                </Fab>
                 < Fab onClick={handelOnOpen} style={{ marginLeft: 8 }} size="small" color="primary" aria-label="add">
                     <Icon icon="AddRounded" />
                 </Fab>
