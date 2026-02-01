@@ -417,7 +417,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             label="JSON Body"
                             fullWidth
                             multiline
-                            minRows={10}
+                            minRows={1}
                             maxRows={20}
                             value={jsonBody}
                             onChange={handleJsonChange}
@@ -432,7 +432,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             label="JSON Content"
                             fullWidth
                             multiline
-                            minRows={10}
+                            minRows={1}
                             maxRows={20}
                             value={jsonContent}
                             onChange={handleJsonContentChange}
@@ -443,7 +443,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             }}
                         />
                     </Box>
-                    <Box sx={{ flex: 1, border: '1px solid #ddd', borderRadius: '4px', p: 2, bgcolor: '#fafafa', overflowY: 'auto', maxHeight: '430px' }}>
+                    <Box sx={{ flex: 1, border: '1px solid #ddd', borderRadius: '4px', p: 2, bgcolor: '#fafafa' }}>
                         <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1 }}>Preview:</Typography>
                         {question.body?.map((component: ANY, compIndex: number) => {
                             switch (component.type) {
@@ -470,8 +470,14 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                     );
                                 case 'parts': {
                                     let secretIndexCounter = 0;
+                                    const isKeyboard = component.input_method === 'keyboard';
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px' }}>
+                                            {isKeyboard && (
+                                                <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#666', mb: 1, fontStyle: 'italic', bgcolor: '#f0f0f0', p: '2px 6px', borderRadius: '4px', width: 'fit-content' }}>
+                                                    <span style={{ fontSize: '14px' }}>⌨️</span> Keyboard Input
+                                                </Typography>
+                                            )}
                                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
                                                 {component.parts?.map((part: ANY, partIndex: number) => {
                                                     if (!part.isASecret) {
@@ -479,6 +485,28 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                     } else {
                                                         const currentSecretIndex = secretIndexCounter++;
                                                         const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
+
+                                                        if (isKeyboard) {
+                                                            const widthStyle = part.maxLength ? { minWidth: `${Math.max(30, part.maxLength * 9)}px` } : { minWidth: '40px' };
+                                                            return (
+                                                                <span key={partIndex} style={{
+                                                                    display: 'inline-block',
+                                                                    ...widthStyle,
+                                                                    padding: '2px 8px',
+                                                                    backgroundColor: '#fff',
+                                                                    border: '1px solid #ccc',
+                                                                    borderRadius: '4px',
+                                                                    textAlign: 'center',
+                                                                    color: matchingAnswer ? '#333' : '#ccc',
+                                                                    fontFamily: 'monospace',
+                                                                    fontWeight: 'bold',
+                                                                    fontSize: '0.95em',
+                                                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+                                                                }}>
+                                                                    {matchingAnswer ? matchingAnswer.text : ''}
+                                                                </span>
+                                                            );
+                                                        }
 
                                                         return (
                                                             <span key={partIndex} style={{
@@ -564,6 +592,35 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             }}>
                                                 {component.code}
                                             </div>
+                                            {component.testCases && component.testCases.length > 0 && (
+                                                <div style={{ borderTop: '1px solid #ddd', backgroundColor: '#fff', padding: '10px' }}>
+                                                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', display: 'block', mb: 1 }}>Test Cases:</Typography>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {component.testCases.map((testCase: ANY, tcIndex: number) => (
+                                                            <div key={tcIndex} style={{
+                                                                backgroundColor: '#f9f9f9',
+                                                                padding: '8px',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #eee',
+                                                                fontSize: '0.85rem'
+                                                            }}>
+                                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                                    <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Input:</span>
+                                                                    <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
+                                                                        {testCase.input || '(empty)'}
+                                                                    </code>
+                                                                </div>
+                                                                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                                                                    <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Output:</span>
+                                                                    <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
+                                                                        {testCase.output}
+                                                                    </code>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 default:
