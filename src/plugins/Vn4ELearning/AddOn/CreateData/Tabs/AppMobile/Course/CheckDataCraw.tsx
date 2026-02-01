@@ -336,6 +336,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     // const ajaxUseApi = useAjax(); // No longer needed
     const [question, setQuestion] = React.useState(initialQuestion);
     const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body, null, 2));
+    const [jsonContent, setJsonContent] = React.useState(initialQuestion.content ? JSON.stringify(initialQuestion.content, null, 2) : '');
     // const [loading, setLoading] = React.useState(false); // Managed by parent
     const [error, setError] = React.useState<string | null>(null);
 
@@ -348,6 +349,17 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
             setError(null);
         } catch (e) {
             // setError("Invalid JSON");
+        }
+    };
+
+    const handleJsonContentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newVal = e.target.value;
+        setJsonContent(newVal);
+        try {
+            const parsed = JSON.parse(newVal);
+            setQuestion({ ...question, content: parsed });
+        } catch (e) {
+            // Ignore error for now or handle it
         }
     };
 
@@ -412,6 +424,20 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             error={!!error}
                             helperText={error}
                             size="small"
+                            InputProps={{
+                                style: { fontFamily: 'monospace', fontSize: '0.85rem' }
+                            }}
+                        />
+                        <TextField
+                            label="JSON Content"
+                            fullWidth
+                            multiline
+                            minRows={10}
+                            maxRows={20}
+                            value={jsonContent}
+                            onChange={handleJsonContentChange}
+                            size="small"
+                            sx={{ mt: 2 }}
                             InputProps={{
                                 style: { fontFamily: 'monospace', fontSize: '0.85rem' }
                             }}
