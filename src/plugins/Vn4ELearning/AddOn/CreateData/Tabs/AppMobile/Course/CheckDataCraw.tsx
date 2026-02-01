@@ -468,7 +468,8 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', color: '#0d47a1', borderRadius: '4px', borderLeft: '4px solid #1976d2' }} dangerouslySetInnerHTML={{ __html: component.info }} />
                                     );
-                                case 'parts':
+                                case 'parts': {
+                                    let secretIndexCounter = 0;
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px' }}>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
@@ -476,40 +477,43 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                     if (!part.isASecret) {
                                                         return <span key={partIndex}>{part.content}</span>;
                                                     } else {
+                                                        const currentSecretIndex = secretIndexCounter++;
+                                                        const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
+
                                                         return (
                                                             <span key={partIndex} style={{
                                                                 display: 'inline-block',
                                                                 minWidth: '30px',
                                                                 padding: '2px 5px',
-                                                                backgroundColor: '#e0e0e0',
-                                                                borderBottom: '2px solid #999',
+                                                                backgroundColor: matchingAnswer ? '#e8f5e9' : '#e0e0e0',
+                                                                borderBottom: `2px solid ${matchingAnswer ? '#4caf50' : '#999'}`,
                                                                 borderRadius: '2px',
                                                                 textAlign: 'center',
-                                                                color: '#555',
+                                                                color: matchingAnswer ? '#2e7d32' : '#555',
+                                                                fontWeight: matchingAnswer ? 'bold' : 'normal',
                                                                 fontSize: '0.9em'
                                                             }}>
-                                                                {part.content || '[...]'}
+                                                                {matchingAnswer ? matchingAnswer.text : (part.content || '[...]')}
                                                             </span>
                                                         );
                                                     }
                                                 })}
                                             </div>
-                                            {/* Render Answers/Options */}
-                                            {component.answer && (
+                                            {/* Render Answers/Options (Distractors only) */}
+                                            {component.answer && component.answer.some((a: ANY) => a.index_correct === -1) && (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '10px' }}>
-                                                    {component.answer.map((answer: ANY, ansIndex: number) => (
+                                                    {component.answer.filter((a: ANY) => a.index_correct === -1).map((answer: ANY, ansIndex: number) => (
                                                         <div key={ansIndex} style={{
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             gap: '8px',
-                                                            color: answer.index_correct !== -1 ? 'green' : (answer.index_correct === -1 ? 'red' : 'inherit'),
-                                                            fontWeight: answer.index_correct !== -1 ? 'bold' : 'normal'
+                                                            color: 'inherit'
                                                         }}>
                                                             <span style={{
                                                                 width: '20px',
                                                                 height: '20px',
                                                                 borderRadius: '50%',
-                                                                border: `1px solid ${answer.index_correct !== -1 ? 'green' : '#ccc'}`,
+                                                                border: '1px solid #ccc',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
@@ -518,13 +522,13 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                                 {String.fromCharCode(65 + ansIndex)}
                                                             </span>
                                                             <span>{answer.text}</span>
-                                                            {answer.index_correct !== -1 && <span style={{ fontSize: '0.8em', color: 'green' }}>(Correct)</span>}
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
                                     );
+                                }
                                 case 'run_code':
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
