@@ -6,6 +6,7 @@ import { LoadingButton } from "@mui/lab";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
 
@@ -443,8 +444,58 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             }}
                         />
                     </Box>
-                    <Box sx={{ flex: 1, border: '1px solid #ddd', borderRadius: '4px', p: 2, bgcolor: '#fafafa' }}>
-                        <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1 }}>Preview:</Typography>
+                    <Box sx={{ flex: 1, border: '1px solid #ddd', borderRadius: '4px', p: 2, bgcolor: '#fafafa', position: 'relative' }}>
+                        {(() => {
+                            const checkSufficientData = () => {
+                                // Check body
+                                if (question.body && Array.isArray(question.body)) {
+                                    for (const comp of question.body) {
+                                        if (comp.type === 'parts') {
+                                            const hasSecrets = comp.parts?.some((p: ANY) => p.isASecret);
+                                            if (hasSecrets) {
+                                                if (!comp.answer || comp.answer.length === 0) return false;
+                                            }
+                                        }
+                                    }
+                                }
+                                // Check content
+                                if (question.content && typeof question.content === 'object' && !Array.isArray(question.content)) {
+                                    if (question.content.type === 'select_answer') {
+                                        if (!question.content.options || !Array.isArray(question.content.options)) return false;
+                                        if (!question.content.options.some((o: ANY) => o.isCorrect)) return false;
+                                    }
+                                }
+                                return true;
+                            };
+
+                            const isSufficient = checkSufficientData();
+
+                            return (
+                                <>
+                                    {isSufficient && (
+                                        <Box sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            bgcolor: 'rgba(46, 125, 50, 0.05)',
+                                            zIndex: 10,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: '4px',
+                                            pointerEvents: 'none'
+                                        }}>
+                                            <CheckCircleIcon color="success" sx={{ fontSize: 200, opacity: 0.4, bgcolor: 'white', borderRadius: '50%', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
+                                        </Box>
+                                    )}
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                        <Typography variant="caption" sx={{ color: '#666' }}>Preview:</Typography>
+                                    </Box>
+                                </>
+                            );
+                        })()}
                         {question.body?.map((component: ANY, compIndex: number) => {
                             switch (component.type) {
                                 case 'text':
@@ -481,6 +532,9 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
                                                 {component.parts?.map((part: ANY, partIndex: number) => {
                                                     if (!part.isASecret) {
+                                                        if (part.content === '\n') {
+                                                            return <div key={partIndex} style={{ flexBasis: '100%', height: 0 }} />;
+                                                        }
                                                         return <span key={partIndex}>{part.content}</span>;
                                                     } else {
                                                         const currentSecretIndex = secretIndexCounter++;
