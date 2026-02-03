@@ -630,6 +630,19 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </Select>
                     </FormControl>
                     <IconButton
+                        onClick={handleRefresh}
+                        title="Refresh Data"
+                        sx={{
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 2,
+                            p: 1,
+                            mr: 1
+                        }}
+                    >
+                        <SyncIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
                         onClick={handleOpenMenu}
                         title="More Options"
                         sx={{
@@ -648,10 +661,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                         transformOrigin={{ vertical: "top", horizontal: "right" }}
                     >
-                        <MenuItem onClick={handleRefresh}>
-                            <SyncIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Refresh Data
-                        </MenuItem>
+
                         <Divider />
                         <MenuItem onClick={handleExportCourse} disabled={apiExportCourse.open}>
                             <FileDownloadIcon sx={{ mr: 1, fontSize: 20 }} />
