@@ -21,6 +21,7 @@ export interface Lesson {
     questions?: Question[];
     order?: number;
     link_data_craw_json?: string;
+    status?: string;
     special?: {
         title?: string;
         description?: string;

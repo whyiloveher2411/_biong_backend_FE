@@ -240,6 +240,27 @@ const CourseTreeItem = memo(function CourseTreeItem({
         });
     };
 
+    const handleTrashOrRestoreLesson = () => {
+        if (nodeType !== "lesson") return;
+        const lesson = node as Lesson;
+        const isTrash = lesson.status === "trash";
+
+        apiSetFinalTest.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/trash-lesson",
+            method: "POST",
+            data: {
+                id: postId,
+                lesson_id: node.id,
+                action: isTrash ? "restore" : "trash",
+            },
+            success: () => {
+                if (onReloadCourses) {
+                    onReloadCourses();
+                }
+            },
+        });
+    };
+
     return (
         <Box sx={{ position: "relative" }}>
             <ListItem disablePadding sx={{ position: "relative", zIndex: 1 }}>
@@ -355,12 +376,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
 
                     <ListItemButton
                         onClick={() => {
-                            if (!nodeHasChildren) {
-                                if (onEditNode) onEditNode(node.id, nodeType);
-                            } else if (onAddChild) {
-                                const childType = getChildType(nodeType);
-                                if (childType) onAddChild(node.id, nodeType, childType);
-                            }
+                            if (onEditNode) onEditNode(node.id, nodeType);
                         }}
                         sx={{
                             flex: 1,
@@ -396,12 +412,12 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                             if (onEditNode) onEditNode(node.id, nodeType);
                                         }}
                                         sx={{
-                                            fontWeight: nodeHasChildren ? 600 : 400,
-                                            color: nodeHasChildren ? nodeColor : (
+                                            fontWeight: (node as ANY).status === 'trash' ? "bold" : (nodeHasChildren ? 600 : 400),
+                                            color: (node as ANY).status === 'trash' ? "error.main" : (nodeHasChildren ? nodeColor : (
                                                 nodeType === "question"
                                                     ? ((node as Question).verify ? "success.main" : "error.main")
                                                     : "text.primary"
-                                            ),
+                                            )),
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
@@ -410,6 +426,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     >
                                         {nodeType === 'question' && typeof index === 'number' ? `${index + 1}. ` : ''}
                                         {title || `Untitled ${getNodeLabel(node)}`}
+                                        {(node as ANY).status === 'trash' && " - Deleted"}
                                     </Typography>
 
                                     <Chip
@@ -682,6 +699,21 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     </Button>
                                 </>
                             )}
+                            {nodeType === "lesson" && (
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTrashOrRestoreLesson();
+                                    }}
+                                    sx={{
+                                        color: (node as Lesson).status === "trash" ? "#1976d2" : "#d32f2f",
+                                        p: 0.5,
+                                    }}
+                                >
+                                    {(node as Lesson).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
+                                </IconButton>
+                            )}
                             {nodeType === "question" && (
                                 <IconButton
                                     size="small"
@@ -737,45 +769,52 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         disablePadding
                                         sx={{ position: "relative", zIndex: 1, pl: 2.5 }}
                                     >
-                                        {children.map((child, index) => (
-                                            <Draggable
-                                                key={getNodeKey(child)}
-                                                draggableId={getNodeKey(child)}
-                                                index={index}
-                                            >
-                                                {(provided) => (
-                                                    <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
+                                        {(() => {
+                                            let validIndexCounter = 0;
+                                            return children.map((child, index) => {
+                                                const isTrash = (child as { status?: string }).status === 'trash';
+                                                const validIndex = isTrash ? -1 : validIndexCounter++;
+                                                return (
+                                                    <Draggable
+                                                        key={getNodeKey(child)}
+                                                        draggableId={getNodeKey(child)}
+                                                        index={index}
                                                     >
-                                                        <CourseTreeItem
-                                                            key={getNodeKey(child)}
-                                                            node={child}
-                                                            depth={depth + 1}
-                                                            isLast={index === children.length - 1}
-                                                            onEditNode={onEditNode}
-                                                            onAddChild={onAddChild}
-                                                            onUpdateOrder={onUpdateOrder}
-                                                            dragHandleProps={provided.dragHandleProps}
-                                                            expandedNodes={expandedNodes}
-                                                            onExpandAll={onExpandAll}
-                                                            onExpandNode={onExpandNode}
-                                                            onCollapse={onCollapse}
-                                                            currentLanguageCode={currentLanguageCode}
-                                                            languages={languages}
-                                                            parentContext={childContext}
-                                                            postId={postId}
-                                                            onReloadCourses={onReloadCourses}
-                                                            onUpdateLessonStatus={onUpdateLessonStatus}
-                                                            onSelectCourseForEdit={onSelectCourseForEdit}
-                                                            onBackToCourseList={onBackToCourseList}
-                                                            selectedCourseId={selectedCourseId}
-                                                            index={index}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </Draggable>
-                                        ))}
+                                                        {(provided) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                            >
+                                                                <CourseTreeItem
+                                                                    key={getNodeKey(child)}
+                                                                    node={child}
+                                                                    depth={depth + 1}
+                                                                    isLast={index === children.length - 1}
+                                                                    onEditNode={onEditNode}
+                                                                    onAddChild={onAddChild}
+                                                                    onUpdateOrder={onUpdateOrder}
+                                                                    dragHandleProps={provided.dragHandleProps}
+                                                                    expandedNodes={expandedNodes}
+                                                                    onExpandAll={onExpandAll}
+                                                                    onExpandNode={onExpandNode}
+                                                                    onCollapse={onCollapse}
+                                                                    currentLanguageCode={currentLanguageCode}
+                                                                    languages={languages}
+                                                                    parentContext={childContext}
+                                                                    postId={postId}
+                                                                    onReloadCourses={onReloadCourses}
+                                                                    onUpdateLessonStatus={onUpdateLessonStatus}
+                                                                    onSelectCourseForEdit={onSelectCourseForEdit}
+                                                                    onBackToCourseList={onBackToCourseList}
+                                                                    selectedCourseId={selectedCourseId}
+                                                                    index={validIndex}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                );
+                                            });
+                                        })()}
                                         {provided.placeholder}
                                     </List>
                                 )}
