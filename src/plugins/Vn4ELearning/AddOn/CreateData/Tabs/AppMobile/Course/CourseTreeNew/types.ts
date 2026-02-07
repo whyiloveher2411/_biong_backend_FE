@@ -39,6 +39,7 @@ export interface Chapter {
     subtitle?: string; // JSON
     lessons?: Lesson[];
     order?: number;
+    status?: string;
     guidebook?: string; // JSON
     finalTestConfig?: {
         titleOverride?: string;
@@ -53,6 +54,7 @@ export interface Section {
     key?: string;
     description?: string; // JSON
     chapters?: Chapter[];
+    status?: string;
     order?: number;
 }
 
@@ -63,6 +65,7 @@ export interface Course {
     shortDescription?: string; // JSON
     description?: string; // JSON
     sections?: Section[];
+    status?: string;
     link_data_craw_json?: string;
     summary_data?: string | {
         count_section?: number;

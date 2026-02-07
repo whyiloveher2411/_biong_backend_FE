@@ -24,7 +24,7 @@ import useAjax from "hook/useApi";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RestoreIcon from "@mui/icons-material/Restore";
 import IconButton from "components/atoms/IconButton";
-import { TreeNode, Course, Lesson, Language, Question } from "./types";
+import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
     getNodeKey,
@@ -170,7 +170,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
     const childrenCount = getChildrenCount(node);
     const nodeColor = getNodeColor(node);
     const isMissingReward = nodeType === "lesson" && typeof index === 'number' && (index + 1) % 5 === 4;
-    const backgroundColor = isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth);
+    const isTrash = (node as { status?: string }).status === 'trash';
+    const backgroundColor = isTrash ? "#ffebee" : (isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth));
     const indentSize = 5;
     const basePadding = nodeType === "question" ? 8 : 2;
     const paddingLeft = depth > 0 ? depth * indentSize + basePadding : basePadding;
@@ -219,40 +220,33 @@ const CourseTreeItem = memo(function CourseTreeItem({
         });
     };
 
-    const handleTrashOrRestoreQuestion = () => {
-        if (nodeType !== "question") return;
-        const question = node as Question;
-        const isTrash = question.status === "trash";
+    const handleTrashOrRestoreNode = () => {
+        const supportedTypes = ["lesson", "section", "chapter", "course", "question"];
+        if (!supportedTypes.includes(nodeType)) return;
+
+        const currentNode = node as Lesson | Section | Chapter | Course | Question;
+        const isTrash = currentNode.status === "trash";
+
+        const url = "plugin/vn4-e-learning/app-mobile/course-new/trash-post";
+
+        interface TrashParams {
+            id: string | number | undefined;
+            action: string;
+            type: string;
+            post_id: string | number;
+        }
+
+        const params: TrashParams = {
+            id: postId,
+            action: isTrash ? "restore" : "trash",
+            type: nodeType,
+            post_id: node.id,
+        };
 
         apiSetFinalTest.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/trash-question",
+            url: url,
             method: "POST",
-            data: {
-                id: postId,
-                question_id: node.id,
-                action: isTrash ? "restore" : "trash",
-            },
-            success: () => {
-                if (onReloadCourses) {
-                    onReloadCourses();
-                }
-            },
-        });
-    };
-
-    const handleTrashOrRestoreLesson = () => {
-        if (nodeType !== "lesson") return;
-        const lesson = node as Lesson;
-        const isTrash = lesson.status === "trash";
-
-        apiSetFinalTest.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/trash-lesson",
-            method: "POST",
-            data: {
-                id: postId,
-                lesson_id: node.id,
-                action: isTrash ? "restore" : "trash",
-            },
+            data: params,
             success: () => {
                 if (onReloadCourses) {
                     onReloadCourses();
@@ -699,19 +693,19 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     </Button>
                                 </>
                             )}
-                            {nodeType === "lesson" && (
+                            {(nodeType === "lesson" || nodeType === "section" || nodeType === "chapter" || nodeType === "course") && (
                                 <IconButton
                                     size="small"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTrashOrRestoreLesson();
+                                        handleTrashOrRestoreNode();
                                     }}
                                     sx={{
-                                        color: (node as Lesson).status === "trash" ? "#1976d2" : "#d32f2f",
+                                        color: (node as Lesson | Section | Chapter | Course).status === "trash" ? "#1976d2" : "#d32f2f",
                                         p: 0.5,
                                     }}
                                 >
-                                    {(node as Lesson).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
+                                    {(node as Lesson | Section | Chapter | Course).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
                                 </IconButton>
                             )}
                             {nodeType === "question" && (
@@ -719,7 +713,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     size="small"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTrashOrRestoreQuestion();
+                                        handleTrashOrRestoreNode();
                                     }}
                                     sx={{
                                         color: (node as Question).status === "trash" ? "#1976d2" : "#d32f2f",
