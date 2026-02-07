@@ -324,6 +324,10 @@ function CheckDataCraw(props: FieldFormItemProps) {
                         setOpenDrawerEditPost(false);
                     }}
                     data={drawerData}
+                    handleAfterDelete={() => {
+                        setOpenDrawerEditPost(false);
+                        handlePreviewDataFromJson();
+                    }}
                 />
             )}
 

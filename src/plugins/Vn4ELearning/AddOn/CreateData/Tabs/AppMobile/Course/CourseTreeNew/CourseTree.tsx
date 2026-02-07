@@ -789,6 +789,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         setOpenDrawer(false);
                     }}
                     data={drawerData}
+                    handleAfterDelete={() => {
+                        setOpenDrawer(false);
+                        loadData();
+                    }}
                 />
             )}
 
