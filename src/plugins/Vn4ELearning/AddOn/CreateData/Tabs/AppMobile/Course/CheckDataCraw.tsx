@@ -23,6 +23,51 @@ function CheckDataCraw(props: FieldFormItemProps) {
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawerEditPost, setOpenDrawerEditPost] = React.useState(false);
 
+    const [activeQuestionIndex, setActiveQuestionIndex] = React.useState<number>(0);
+    const questionRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+
+    React.useEffect(() => {
+        questionRefs.current = questionRefs.current.slice(0, previewData?.questions?.length || 0);
+    }, [previewData]);
+
+    React.useEffect(() => {
+        if (!openPreview) return;
+        const checkContainer = setInterval(() => {
+            const scrollContainer = document.getElementById('scroll-container-questions');
+            // Wait for elements to be painted and refs to be populated
+            if (scrollContainer && questionRefs.current.length > 0) {
+                clearInterval(checkContainer);
+                initObserver(scrollContainer);
+            }
+        }, 100);
+
+        let observer: IntersectionObserver;
+
+        const initObserver = (root: HTMLElement) => {
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const index = Number(entry.target.getAttribute('data-index'));
+                        setActiveQuestionIndex(index);
+                    }
+                });
+            }, {
+                root: root,
+                rootMargin: '-40% 0px -40% 0px', // Active when in center 20%
+                threshold: 0
+            });
+
+            questionRefs.current.forEach(el => {
+                if (el) observer.observe(el);
+            });
+        };
+
+        return () => {
+            clearInterval(checkContainer);
+            if (observer) observer.disconnect();
+        };
+    }, [previewData, openPreview]);
+
     const handleCreateQuestion = (question: ANY, index: number) => {
 
         if (question.post_id) {
@@ -254,46 +299,107 @@ function CheckDataCraw(props: FieldFormItemProps) {
                 open={openPreview}
                 onClose={handleClosePreview}
                 title={`Preview Questions (${previewData?.count || 0})`}
-                width={1300} // Set a wider width for better editing experience
+                width={1300}
                 restDialogContent={{
                     sx: {
                         backgroundColor: '#f5f5f5',
-                        padding: '20px',
+                        padding: '0px',
+                        overflow: 'hidden',
                     }
                 }}
             >
-                <div>
-                    {previewData && previewData.questions.map((question: ANY, index: number) => {
-                        // Initialize state for this question if not exists (handled by render logic usually, but here we can iterate)
-                        // For simplicity in this functional component without creating sub-components yet, we'll verify if we can edit directly.
-                        // However, to manage state for *each* question independently without easy sub-components in this large file,
-                        // we might need a wrapper or just use uncontrolled inputs with refs, or better, extracted component.
-                        // Given the constraints of a single file edit, I will create a small internal functional component if possible,
-                        // OR, more simply, I will render the list and assume the user edits the JSON/Fields which updates a local state.
+                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-                        // Note: Since `previewData` is state, we can update it directly or distinct state. 
-                        // Let's assume we use `previewData` for display and create a separate `editedQuestions` state map if needed, 
-                        // or just clone `previewData` on edit.
-                        // For now, I will implement a "QuestionEditor" component defined within this file or just inline logical block with local state?
-                        // Inline state for list of items is hard.
-                        // BEST APPROACH: Extract `QuestionItem` to a separate component definition OUTSIDE `CheckDataCraw` main function but in the same file for now.
-                        return (
-                            <QuestionItem
-                                key={question.id || index}
-                                index={index}
-                                initialQuestion={question}
-                                postId={props.post.id}
-                                file={props.post[props.name || 'link_data_craw_json']}
-                                onDelete={() => {
-                                    // Handle local delete from preview if needed
-                                    const newQuestions = [...previewData.questions];
-                                    newQuestions.splice(index, 1);
-                                    setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
+                    {/* Main Scroll Container */}
+                    <div
+                        id="scroll-container-questions"
+                        style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            height: '100%',
+                            padding: '20px',
+                            scrollBehavior: 'smooth',
+                            position: 'relative'
+                        }}
+                    >
+                        {previewData && previewData.questions.map((question: ANY, index: number) => {
+                            return (
+                                <div
+                                    key={question.id || index}
+                                    ref={el => questionRefs.current[index] = el}
+                                    data-index={index}
+                                    style={{ scrollMarginTop: '20px', marginBottom: '20px' }}
+                                >
+                                    <QuestionItem
+                                        index={index}
+                                        initialQuestion={question}
+                                        postId={props.post.id}
+                                        file={props.post[props.name || 'link_data_craw_json']}
+                                        onDelete={() => {
+                                            const newQuestions = [...previewData.questions];
+                                            newQuestions.splice(index, 1);
+                                            setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
+                                        }}
+                                        onCreate={() => handleCreateQuestion(question, index)}
+                                    />
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    {/* TOC Sidebar */}
+                    <div style={{
+                        width: '60px',
+                        height: '100%',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        alignItems: 'center',
+                        paddingTop: '20px',
+                        paddingBottom: '20px',
+                        borderLeft: '1px solid #ddd',
+                        backgroundColor: '#fff'
+                    }}>
+                        {previewData && previewData.questions.map((_: ANY, index: number) => (
+                            <div
+                                key={index}
+                                onClick={() => {
+                                    // Scroll inside container
+                                    const container = document.getElementById('scroll-container-questions');
+                                    const el = questionRefs.current[index];
+                                    if (container && el) {
+                                        // manual scroll calculation or just use scrollIntoView 
+                                        // but scrollIntoView might scroll parent drawer if not careful.
+                                        // Use scrollIntoView with block: 'center' usually works well.
+                                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                    setActiveQuestionIndex(index);
                                 }}
-                                onCreate={() => handleCreateQuestion(question, index)}
-                            />
-                        )
-                    })}
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    backgroundColor: activeQuestionIndex === index ? '#1976d2' : '#fff',
+                                    color: activeQuestionIndex === index ? '#fff' : '#666',
+                                    border: activeQuestionIndex === index ? 'none' : '1px solid #ddd',
+                                    fontWeight: 'bold',
+                                    transition: 'all 0.2s ease',
+                                    transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
+                                    boxShadow: activeQuestionIndex === index ? '0 4px 8px rgba(25, 118, 210, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
+                                    fontSize: '14px',
+                                    flexShrink: 0
+                                }}
+                                title={`Go to Question ${index + 1}`}
+                            >
+                                {index + 1}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </DrawerCustom>
 
@@ -682,6 +788,128 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                         </div>
                                     );
 
+                                case 'chat_suggestions':
+                                    return (
+                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                                            {/* Header */}
+                                            <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
+                                                AI CHAT
+                                            </div>
+
+                                            <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
+                                                {/* Instructions */}
+                                                {component.chatInstructions && (
+                                                    <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
+                                                )}
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                    {component.options?.map((opt: ANY, optIdx: number) => (
+                                                        <div key={optIdx} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            {/* Question / Option (Simulating user input/selection) */}
+                                                            <div style={{
+                                                                padding: '12px 16px',
+                                                                backgroundColor: '#fff',
+                                                                border: '1px solid #cfd8dc',
+                                                                borderRadius: '20px',
+                                                                color: '#37474f',
+                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                alignSelf: 'flex-end',
+                                                                maxWidth: '85%'
+                                                            }}>
+                                                                {opt.text}
+                                                            </div>
+
+                                                            {/* Response (Simulating AI response) */}
+                                                            <div style={{
+                                                                padding: '15px',
+                                                                backgroundColor: '#e1eef9',
+                                                                borderLeft: '4px solid #1976d2',
+                                                                borderRadius: '4px',
+                                                                color: '#263238',
+                                                                alignSelf: 'flex-start',
+                                                                maxWidth: '90%',
+                                                                position: 'relative'
+                                                            }}>
+                                                                <div style={{ fontSize: '0.85em', color: '#1565c0', fontWeight: 'bold', marginBottom: '5px' }}>AI Answer:</div>
+                                                                <div dangerouslySetInnerHTML={{ __html: opt.response || '(No response provided yet)' }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                case 'ai_chat':
+                                    return (
+                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                                            {/* Header */}
+                                            <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
+                                                AI CHAT (Single Q&A)
+                                            </div>
+
+                                            <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
+                                                {/* Instructions */}
+                                                {component.chatInstructions && (
+                                                    <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
+                                                )}
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                                                    {/* User Question (Default Value) */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#78909c' }}>User asks:</div>
+                                                        <div style={{
+                                                            padding: '12px 16px',
+                                                            backgroundColor: '#fff',
+                                                            border: '1px solid #cfd8dc',
+                                                            borderRadius: '20px',
+                                                            color: '#37474f',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                            maxWidth: '85%'
+                                                        }}>
+                                                            {component.inputDefaultValue || '(No question provided)'}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* AI Response */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
+                                                        {component.response ? (
+                                                            <div style={{
+                                                                padding: '15px',
+                                                                backgroundColor: '#e1eef9',
+                                                                borderLeft: '4px solid #1976d2',
+                                                                borderRadius: '4px',
+                                                                color: '#263238',
+                                                                maxWidth: '90%',
+                                                                width: '100%'
+                                                            }}>
+                                                                <div dangerouslySetInnerHTML={{ __html: component.response }} />
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{
+                                                                padding: '15px',
+                                                                backgroundColor: '#ffebee',
+                                                                border: '2px solid #d32f2f',
+                                                                borderRadius: '4px',
+                                                                color: '#c62828',
+                                                                maxWidth: '100%',
+                                                                width: '100%',
+                                                                fontWeight: 'bold',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '10px'
+                                                            }}>
+                                                                <span style={{ fontSize: '1.5em' }}>⚠️</span>
+                                                                <span>MISSING RESPONSE: This question needs an AI response!</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
                                 default:
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px', color: '#888', fontStyle: 'italic' }}>
@@ -718,14 +946,26 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
                                                         fontWeight: 'bold',
-                                                        fontSize: '13px'
+                                                        fontSize: '13px',
+                                                        flexShrink: 0
                                                     }}>
                                                         {String.fromCharCode(65 + optIndex)}
                                                     </span>
-                                                    <span style={{ flex: 1, color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
-                                                        {option.text}
-                                                    </span>
-                                                    {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold' }}>(Correct)</span>}
+                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        {option.imageUrl && (
+                                                            <img
+                                                                src={option.imageUrl}
+                                                                alt={`Option ${optIndex + 1}`}
+                                                                style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
+                                                            />
+                                                        )}
+                                                        {option.text && (
+                                                            <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
+                                                                {option.text}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
                                                 </div>
                                             ))}
                                         </div>
