@@ -12,7 +12,7 @@ import React from 'react';
 import { compareDate, dateFormat } from "helpers/date";
 import { FieldFormItemProps } from "../type";
 import { __ } from "helpers/i18n";
-import { DateRange } from "@mui/lab/DateRangePicker/RangeTypes";
+import { DateRange } from "@mui/lab";
 import SpecialNotes from "../SpecialNotes";
 
 export default function DatePickerForm({ config, post, onReview, name, inputProp, onOpen = false, ...rest }: FieldFormItemProps) {
@@ -73,7 +73,8 @@ export default function DatePickerForm({ config, post, onReview, name, inputProp
                 onChange={() => {
                     //
                 }}
-                renderInput={(startProps, endProps) => (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                renderInput={(startProps: any, endProps: any) => (
                     <>
                         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <TextField onClick={() => { if (onOpen) onOpen(); setOpenDataPicker(0); }} style={{ width: '100%' }} {...startProps} />

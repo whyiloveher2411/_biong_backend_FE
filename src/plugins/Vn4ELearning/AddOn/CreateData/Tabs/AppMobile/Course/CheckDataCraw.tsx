@@ -9,6 +9,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
+import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 
 function CheckDataCraw(props: FieldFormItemProps) {
 
@@ -910,6 +911,49 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             </div>
                                         </div>
                                     );
+                                case 'rive': {
+                                    const assetUrl = component.webAssetUrl || component.mobileAssetUrl;
+                                    const ratio = component.webRatio || component.mobileRatio || "4:3";
+                                    let paddingTopPercentage = 75; // Default 4:3
+                                    if (ratio) {
+                                        const [widthRatio, heightRatio] = ratio.split(':').map(Number);
+                                        if (widthRatio > 0 && heightRatio > 0) {
+                                            paddingTopPercentage = (heightRatio / widthRatio) * 100;
+                                        }
+                                    }
+
+                                    return (
+                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto' }}>
+                                            <div style={{
+                                                position: 'relative',
+                                                width: '100%',
+                                                paddingTop: `${paddingTopPercentage}%`,
+                                                backgroundColor: '#f0f0f0',
+                                                borderRadius: '8px',
+                                                overflow: 'hidden'
+                                            }}>
+                                                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+                                                    {assetUrl ? (
+                                                        <RivePlayer
+                                                            src={assetUrl}
+                                                            artboard={component.artboard}
+                                                            stateMachines={component.stateMachines}
+                                                            inputOnPress={component.inputOnPress}
+                                                            inputOnRelease={component.inputOnRelease}
+                                                            interactionZones={component.interactionZones}
+                                                            autoplay={true}
+                                                        />
+                                                    ) : (
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
+                                                            No Rive asset URL provided
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
                                 default:
                                     return (
                                         <div key={compIndex} style={{ marginBottom: '10px', color: '#888', fontStyle: 'italic' }}>
@@ -920,101 +964,308 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                         })}
 
                         {/* Render content field if available (e.g. select_answer, order_list) */}
-                        {question.content && !Array.isArray(question.content) && (
-                            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
-                                {question.content.type === 'select_answer' && question.content.options && (
-                                    <>
-                                        <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Select Answer Options:</Typography>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {question.content.options.map((option: ANY, optIndex: number) => (
-                                                <div key={optIndex} style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '10px',
-                                                    padding: '8px',
-                                                    borderRadius: '4px',
-                                                    backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
-                                                    border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
-                                                }}>
-                                                    <span style={{
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
-                                                        color: option.isCorrect ? '#fff' : '#666',
+                        {
+                            question.content && !Array.isArray(question.content) && (
+                                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
+                                    {question.content.type === 'select_answer' && question.content.options && (
+                                        <>
+                                            <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Select Answer Options:</Typography>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {question.content.options.map((option: ANY, optIndex: number) => (
+                                                    <div key={optIndex} style={{
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontWeight: 'bold',
-                                                        fontSize: '13px',
-                                                        flexShrink: 0
+                                                        gap: '10px',
+                                                        padding: '8px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
+                                                        border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
                                                     }}>
-                                                        {String.fromCharCode(65 + optIndex)}
-                                                    </span>
-                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                        {option.imageUrl && (
-                                                            <img
-                                                                src={option.imageUrl}
-                                                                alt={`Option ${optIndex + 1}`}
-                                                                style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
-                                                            />
-                                                        )}
-                                                        {option.text && (
-                                                            <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
-                                                                {option.text}
-                                                            </span>
-                                                        )}
+                                                        <span style={{
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
+                                                            color: option.isCorrect ? '#fff' : '#666',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '13px',
+                                                            flexShrink: 0
+                                                        }}>
+                                                            {String.fromCharCode(65 + optIndex)}
+                                                        </span>
+                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            {option.imageUrl && (
+                                                                <img
+                                                                    src={option.imageUrl}
+                                                                    alt={`Option ${optIndex + 1}`}
+                                                                    style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
+                                                                />
+                                                            )}
+                                                            {option.text && (
+                                                                <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
+                                                                    {option.text}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
                                                     </div>
-                                                    {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </>
-                                )}
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
 
-                                {question.content.type === 'order_list' && question.content.items && (
-                                    <>
-                                        <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Order List (Correct Sequence):</Typography>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {question.content.items.map((item: ANY, itemIndex: number) => (
-                                                <div key={itemIndex} style={{
-                                                    padding: '10px',
-                                                    backgroundColor: '#fff',
-                                                    border: '1px solid #ddd',
-                                                    borderRadius: '4px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '10px',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                }}>
-                                                    <span style={{
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#e3f2fd',
-                                                        color: '#1976d2',
+                                    {question.content.type === 'order_list' && question.content.items && (
+                                        <>
+                                            <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Order List (Correct Sequence):</Typography>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {question.content.items.map((item: ANY, itemIndex: number) => (
+                                                    <div key={itemIndex} style={{
+                                                        padding: '10px',
+                                                        backgroundColor: '#fff',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '4px',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontWeight: 'bold',
-                                                        fontSize: '13px',
-                                                        border: '1px solid #bbdefb'
+                                                        gap: '10px',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                     }}>
-                                                        {itemIndex + 1}
-                                                    </span>
-                                                    <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.95em' }}>
-                                                        {item.text}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </Box>
-                </Box>
-            </Box>
-        </div>
+                                                        <span style={{
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#e3f2fd',
+                                                            color: '#1976d2',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '13px',
+                                                            border: '1px solid #bbdefb'
+                                                        }}>
+                                                            {itemIndex + 1}
+                                                        </span>
+                                                        <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.95em' }}>
+                                                            {item.text}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )
+                        }
+                    </Box >
+                </Box >
+            </Box >
+        </div >
     );
 }
+
+interface InteractionZone {
+    name?: string;
+    top: string;
+    bottom: string;
+    left: string;
+    right: string;
+    width: string;
+    height: string;
+    inputOnPress?: string;
+    inputOnRelease?: string;
+}
+
+interface RivePlayerProps {
+    src: string;
+    artboard?: string;
+    stateMachines?: string | string[];
+    inputOnPress?: string;
+    inputOnRelease?: string;
+    interactionZones?: InteractionZone[];
+    autoplay?: boolean;
+}
+
+const RivePlayer = ({ src, artboard, stateMachines, inputOnPress, inputOnRelease, interactionZones, autoplay = true }: RivePlayerProps) => {
+    const { rive, RiveComponent } = useRive({
+        src: src,
+        artboard: artboard,
+        layout: new Layout({
+            fit: Fit.Cover,
+            alignment: Alignment.Center,
+        }),
+        autoplay: autoplay,
+        stateMachines: stateMachines,
+        // onLoad: () => {}, // Removed unused onLoad
+    });
+
+    const triggerInput = (inputName: string | undefined) => {
+        if (!rive || !inputName) {
+            console.log('triggerInput: rive instance or inputName missing', { rive: !!rive, inputName });
+            return;
+        }
+
+        console.log(`Attempting to trigger input: "${inputName}"`);
+
+        // Debug available properties on rive instance to help diagnosis
+        // console.log('Rive instance keys:', Object.keys(rive));
+        // console.log('Rive stateMachineNames:', rive.stateMachineNames);
+
+        // Use rive.stateMachineNames directly as it is the standard API
+        const availableStateMachines = rive.stateMachineNames || [];
+
+        if (availableStateMachines.length > 0) {
+            const stateMachineNames = Array.isArray(stateMachines) ? stateMachines : (stateMachines ? [stateMachines] : []);
+
+            // If no state machines specified in props, search ALL available state machines
+            if (stateMachineNames.length === 0) {
+                stateMachineNames.push(...availableStateMachines);
+            }
+
+            console.log('Searching in State Machines:', stateMachineNames);
+
+            let inputFound = false;
+            stateMachineNames.forEach(smName => {
+                // Check if this state machine is actually available/playing
+                if (!availableStateMachines.includes(smName)) {
+                    console.warn(`WARNING: Configured State Machine "${smName}" is not found in the Rive file. Available:`, availableStateMachines);
+                    return;
+                }
+
+                const inputs = rive.stateMachineInputs(smName);
+                if (inputs) {
+                    const input = inputs.find(i => i.name === inputName);
+                    if (input) {
+                        inputFound = true;
+                        if (input.type === 58) { // Trigger
+                            input.fire();
+                            console.log(`SUCCESS: Fired trigger: "${inputName}" on SM: "${smName}"`);
+                        } else if (input.type === 59) { // Boolean
+                            input.value = true; // Use boolean as trigger-like if needed, or toggle
+                            console.log(`SUCCESS: Set boolean true: "${inputName}" on SM: "${smName}"`);
+                        } else if (input.type === 56) { // Number
+                            console.log(`INFO: Found number input "${inputName}" on SM: "${smName}", but cannot "trigger" it.`);
+                        }
+                    } else {
+                        console.log(`Input "${inputName}" NOT FOUND in SM "${smName}". Available inputs:`, inputs.map(i => i.name));
+                    }
+                } else {
+                    console.log(`No inputs found for SM "${smName}".`);
+                }
+            });
+
+            if (!inputFound) {
+                console.warn(`WARNING: Input "${inputName}" was not found in checked State Machines: ${stateMachineNames.join(', ')}`);
+            }
+        } else {
+            console.error('No state machines found in Rive file (rive.stateMachineNames is empty).');
+            // Fallback debug to see what IS there
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const contents = rive.contents as any;
+            if (contents) {
+                console.log('Rive contents debug:', contents);
+            }
+        }
+    };
+
+    // handlePress and handleRelease removed - using Rive native Listeners instead
+
+    // Log debug info when rive instance is ready
+    React.useEffect(() => {
+        if (rive) {
+            console.log('>>> RIVE LOADED DEBUG INFO (SAFE MODE) <<<');
+            console.log('File:', src);
+
+            // Log available State Machines
+            const smNames = rive.stateMachineNames;
+            console.log('Available State Machines:', smNames);
+
+            // Attempt to log raw contents 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const contents = rive.contents as any;
+            if (contents) {
+                console.log('Raw Contents:', contents);
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any).riveInstance = rive; // Expose to window for easier debugging
+
+            // Force play to ensure State Machine is activated
+            const smToPlay = Array.isArray(stateMachines) ? stateMachines : (stateMachines ? [stateMachines] : []);
+            if (smToPlay.length > 0) {
+                console.log('Force playing state machines:', smToPlay);
+                rive.play(smToPlay);
+            } else if (smNames && smNames.length > 0) {
+                console.log('Force playing first available state machine:', smNames[0]);
+                rive.play([smNames[0]]);
+            } else {
+                console.log('Force playing default');
+                rive.play();
+            }
+
+            // Delay input logging to give SM time to fully initialize
+            setTimeout(() => {
+                console.log('>>> DELAYED INPUT CHECK <<<');
+                const currentSmNames = rive.stateMachineNames || [];
+                currentSmNames.forEach((name: string) => {
+                    const inputs = rive.stateMachineInputs(name);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    console.log(`  > State Machine "${name}" Inputs:`, inputs ? inputs.map((i: any) => `${i.name} (type: ${i.type})`) : 'None (SM may not be active)');
+                });
+            }, 500);
+        }
+    }, [rive, src, stateMachines]);
+
+    return (
+        <div
+            style={{ width: '100%', height: '100%', position: 'relative' }}
+        >
+            {/* RiveComponent handles native Listeners automatically */}
+            <RiveComponent />
+
+            {/* Render interaction zones */}
+            {interactionZones && interactionZones.map((zone, index) => (
+                <div
+                    key={index}
+                    style={{
+                        position: 'absolute',
+                        top: zone.top ? zone.top : 'unset',
+                        bottom: zone.bottom ? zone.bottom : 'unset',
+                        left: zone.left ? zone.left : 'unset',
+                        right: zone.right ? zone.right : 'unset',
+                        width: zone.width ? zone.width : 'unset',
+                        height: zone.height ? zone.height : 'unset',
+                        backgroundColor: 'rgba(255, 0, 0, 0.2)',
+                        cursor: 'pointer',
+                        // Add a subtle debug background if key 'Shift' is pressed? No, just keep transparent for now.
+                        // Or maybe adding a tiny border or color if needed for debugging.
+                        // backgroundColor: 'rgba(255, 0, 0, 0.2)', // Uncomment for debug
+                        zIndex: 10
+                    }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                        if (zone.inputOnPress) triggerInput(zone.inputOnPress);
+                    }}
+                    onMouseUp={(e) => {
+                        e.stopPropagation();
+                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
+                    }}
+                    onMouseLeave={(e) => {
+                        e.stopPropagation();
+                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
+                    }}
+                    onTouchStart={(e) => {
+                        e.stopPropagation();
+                        if (zone.inputOnPress) triggerInput(zone.inputOnPress);
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
+                    }}
+                    title={zone.name}
+                />
+            ))}
+        </div>
+    );
+};

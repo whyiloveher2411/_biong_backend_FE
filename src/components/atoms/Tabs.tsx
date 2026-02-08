@@ -506,7 +506,7 @@ function Tabs({
                             [classes.dense]: !disableDense,
                             tabItems: true,
                         })}
-                        onChange={(_e, v: number) => handleChangeTab(v)}
+                        onChange={(_e: React.SyntheticEvent, v: number) => handleChangeTab(v)}
                         style={{ flex: 1, minWidth: 0 }}
                     >
                         {tabs.map((tab, i) => (

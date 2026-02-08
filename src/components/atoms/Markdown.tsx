@@ -66,7 +66,8 @@ const useStyles = makeStyles((theme: Theme) => ({
 
 const Markdown = ({ className = '', ...rest }: { [key: string]: ANY, className?: string, children: string }) => {
 
-    const classes = useStyles()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const classes = useStyles(undefined as any)
 
     useEffect(() => {
         setTimeout(() => Prism.highlightAll(), 0)

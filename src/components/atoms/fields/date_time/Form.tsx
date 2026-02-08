@@ -45,7 +45,8 @@ export default React.memo(function DateTimeForm({ config, post, onReview, name, 
                     value={valueInital}
                     views={['year', 'month', 'day', 'hours', 'minutes', 'seconds']}
                     label={config.title}
-                    renderInput={(params) => <TextField onClick={() => setOpenDataPicker(true)} variant="outlined" {...params} />}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    renderInput={(params: any) => <TextField onClick={() => setOpenDataPicker(true)} variant="outlined" {...params} />}
                     open={openDataPicker}
                     InputAdornmentProps={{ position: "end" }}
                     onAccept={onChange}

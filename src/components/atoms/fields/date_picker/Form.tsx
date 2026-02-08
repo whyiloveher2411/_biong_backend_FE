@@ -48,7 +48,8 @@ export default React.memo(function DatePickerForm({ config, post, onReview, name
                     value={valueInital}
                     className={classes.root}
                     label={config.title}
-                    renderInput={(params) => <TextField {...params} onClick={() => setOpenDataPicker(true)} variant="outlined" />}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    renderInput={(params: any) => <TextField {...params} onClick={() => setOpenDataPicker(true)} variant="outlined" />}
                     open={openDataPicker}
                     InputAdornmentProps={{ position: "end" }}
                     onAccept={onChange}
