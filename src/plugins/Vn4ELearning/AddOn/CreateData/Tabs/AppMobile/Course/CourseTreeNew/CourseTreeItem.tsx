@@ -22,8 +22,13 @@ import {
 } from "react-beautiful-dnd";
 import useAjax from "hook/useApi";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import RestoreIcon from "@mui/icons-material/Restore";
 import IconButton from "components/atoms/IconButton";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
@@ -108,8 +113,10 @@ const CourseTreeItem = memo(function CourseTreeItem({
 }: CourseTreeItemProps) {
     const apiSetFinalTest = useAjax();
     const apiSyncCourse = useAjax();
+    const apiPermanentDelete = useAjax();
     const [open, setOpen] = React.useState(false);
     const [syncProgressDialogOpen, setSyncProgressDialogOpen] = React.useState(false);
+    const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = React.useState(false);
     const streamSync = useStreamSync();
 
     const confirmSync = useConfirmDialog({
@@ -251,6 +258,40 @@ const CourseTreeItem = memo(function CourseTreeItem({
                 if (onReloadCourses) {
                     onReloadCourses();
                 }
+            },
+        });
+    };
+
+    const handlePermanentDelete = () => {
+        const supportedTypes = ["lesson", "section", "chapter", "course", "question"];
+        if (!supportedTypes.includes(nodeType)) return;
+
+        const url = "plugin/vn4-e-learning/app-mobile/course-new/permanent-delete-post";
+
+        interface PermanentDeleteParams {
+            id: string | number | undefined;
+            type: string;
+            post_id: string | number;
+        }
+
+        const params: PermanentDeleteParams = {
+            id: postId,
+            type: nodeType,
+            post_id: node.id,
+        };
+
+        apiPermanentDelete.ajax({
+            url: url,
+            method: "POST",
+            data: params,
+            success: () => {
+                setDeleteConfirmDialogOpen(false);
+                if (onReloadCourses) {
+                    onReloadCourses();
+                }
+            },
+            error: () => {
+                apiPermanentDelete.showMessage(`Không thể xóa vĩnh viễn ${getNodeLabel(node)}`, "error");
             },
         });
     };
@@ -694,34 +735,72 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                 </>
                             )}
                             {(nodeType === "lesson" || nodeType === "section" || nodeType === "chapter" || nodeType === "course") && (
-                                <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTrashOrRestoreNode();
-                                    }}
-                                    sx={{
-                                        color: (node as Lesson | Section | Chapter | Course).status === "trash" ? "#1976d2" : "#d32f2f",
-                                        p: 0.5,
-                                    }}
-                                >
-                                    {(node as Lesson | Section | Chapter | Course).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
-                                </IconButton>
+                                <>
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleTrashOrRestoreNode();
+                                        }}
+                                        sx={{
+                                            color: (node as Lesson | Section | Chapter | Course).status === "trash" ? "#1976d2" : "#d32f2f",
+                                            p: 0.5,
+                                        }}
+                                    >
+                                        {(node as Lesson | Section | Chapter | Course).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
+                                    </IconButton>
+                                    {(node as Lesson | Section | Chapter | Course).status === "trash" && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteConfirmDialogOpen(true);
+                                            }}
+                                            disabled={apiPermanentDelete.open}
+                                            sx={{
+                                                color: "#d32f2f",
+                                                p: 0.5,
+                                            }}
+                                            title={`Xóa vĩnh viễn ${getNodeLabel(node)}`}
+                                        >
+                                            <DeleteForeverIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
+                                </>
                             )}
                             {nodeType === "question" && (
-                                <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTrashOrRestoreNode();
-                                    }}
-                                    sx={{
-                                        color: (node as Question).status === "trash" ? "#1976d2" : "#d32f2f",
-                                        p: 0.5,
-                                    }}
-                                >
-                                    {(node as Question).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
-                                </IconButton>
+                                <>
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleTrashOrRestoreNode();
+                                        }}
+                                        sx={{
+                                            color: (node as Question).status === "trash" ? "#1976d2" : "#d32f2f",
+                                            p: 0.5,
+                                        }}
+                                    >
+                                        {(node as Question).status === "trash" ? <RestoreIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
+                                    </IconButton>
+                                    {(node as Question).status === "trash" && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteConfirmDialogOpen(true);
+                                            }}
+                                            disabled={apiPermanentDelete.open}
+                                            sx={{
+                                                color: "#d32f2f",
+                                                p: 0.5,
+                                            }}
+                                            title={`Xóa vĩnh viễn ${getNodeLabel(node)}`}
+                                        >
+                                            <DeleteForeverIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
+                                </>
                             )}
                         </Box>
                     </ListItemButton>
@@ -831,6 +910,40 @@ const CourseTreeItem = memo(function CourseTreeItem({
                 totalObjects={streamSync.totalObjects}
                 completedObjects={streamSync.completedObjects}
             />
+
+            {/* Dialog xác nhận xóa vĩnh viễn */}
+            <Dialog
+                open={deleteConfirmDialogOpen}
+                onClose={() => setDeleteConfirmDialogOpen(false)}
+                maxWidth="xs"
+                fullWidth
+            >
+                <DialogTitle sx={{ color: "error.main" }}>
+                    Xác nhận xóa vĩnh viễn
+                </DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Bạn có chắc chắn muốn xóa vĩnh viễn {getNodeLabel(node)} này không?
+                        Hành động này không thể hoàn tác.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setDeleteConfirmDialogOpen(false)}
+                        disabled={apiPermanentDelete.open}
+                    >
+                        Hủy
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        onClick={handlePermanentDelete}
+                        disabled={apiPermanentDelete.open}
+                    >
+                        {apiPermanentDelete.open ? "Đang xóa..." : "Xóa vĩnh viễn"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 });

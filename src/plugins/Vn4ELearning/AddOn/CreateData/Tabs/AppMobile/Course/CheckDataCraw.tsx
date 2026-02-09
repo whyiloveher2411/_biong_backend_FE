@@ -845,7 +845,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                         <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
                                             {/* Header */}
                                             <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
-                                                AI CHAT (Single Q&A)
+                                                AI CHAT
                                             </div>
 
                                             <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
@@ -854,28 +854,146 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                     <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
                                                 )}
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
 
-                                                    {/* User Question (Default Value) */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
-                                                        <div style={{ fontSize: '0.8rem', color: '#78909c' }}>User asks:</div>
-                                                        <div style={{
-                                                            padding: '12px 16px',
-                                                            backgroundColor: '#fff',
-                                                            border: '1px solid #cfd8dc',
-                                                            borderRadius: '20px',
-                                                            color: '#37474f',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                            maxWidth: '85%'
+                                                    {/* Messages from messages array */}
+                                                    {component.messages && component.messages.length > 0 && (
+                                                        component.messages.map((msg: ANY, msgIdx: number) => (
+                                                            <div key={msgIdx} style={{
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '5px',
+                                                                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                                                width: '100%'
+                                                            }}>
+                                                                {msg.role === 'user' ? (
+                                                                    // User message - styled as a persona/system message
+                                                                    <div style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'flex-start',
+                                                                        gap: '10px',
+                                                                        maxWidth: '95%',
+                                                                        width: '100%'
+                                                                    }}>
+                                                                        {/* AI/Persona Icon */}
+                                                                        <div style={{
+                                                                            width: '32px',
+                                                                            height: '32px',
+                                                                            borderRadius: '50%',
+                                                                            background: 'linear-gradient(135deg, #1976d2, #d32f2f)',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            flexShrink: 0
+                                                                        }}>
+                                                                            <span style={{ fontSize: '16px' }}>🇫🇷</span>
+                                                                        </div>
+                                                                        <div style={{
+                                                                            padding: '15px',
+                                                                            backgroundColor: '#fff',
+                                                                            border: '1px solid #e0e0e0',
+                                                                            borderRadius: '12px',
+                                                                            color: '#37474f',
+                                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                                                            flex: 1,
+                                                                            whiteSpace: 'pre-wrap',
+                                                                            lineHeight: '1.6',
+                                                                            fontSize: '0.95em'
+                                                                        }}>
+                                                                            {msg.content}
+                                                                            {/* Copy button */}
+                                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                                                                <button style={{
+                                                                                    background: 'none',
+                                                                                    border: 'none',
+                                                                                    cursor: 'pointer',
+                                                                                    color: '#90a4ae',
+                                                                                    padding: '4px'
+                                                                                }}>
+                                                                                    📋
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    // Assistant message
+                                                                    <div style={{
+                                                                        padding: '15px',
+                                                                        backgroundColor: '#e1eef9',
+                                                                        borderLeft: '4px solid #1976d2',
+                                                                        borderRadius: '4px',
+                                                                        color: '#263238',
+                                                                        maxWidth: '90%',
+                                                                        width: '100%',
+                                                                        whiteSpace: 'pre-wrap'
+                                                                    }}>
+                                                                        <div style={{ fontSize: '0.8rem', color: '#1565c0', marginBottom: '8px', fontWeight: 'bold' }}>AI:</div>
+                                                                        {msg.content}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))
+                                                    )}
+
+                                                    {/* Input field with default value */}
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '10px',
+                                                        marginTop: '10px'
+                                                    }}>
+                                                        {/* Refresh icon */}
+                                                        <button style={{
+                                                            width: '36px',
+                                                            height: '36px',
+                                                            borderRadius: '50%',
+                                                            border: 'none',
+                                                            background: 'none',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#90a4ae'
                                                         }}>
-                                                            {component.inputDefaultValue || '(No question provided)'}
+                                                            🔄
+                                                        </button>
+                                                        {/* Input field */}
+                                                        <div style={{
+                                                            flex: 1,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            backgroundColor: '#fff',
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: '24px',
+                                                            padding: '10px 16px',
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                                                        }}>
+                                                            <span style={{ flex: 1, color: '#37474f', fontSize: '0.95em' }}>
+                                                                {component.inputDefaultValue || 'Type your message...'}
+                                                            </span>
+                                                            {/* Send button */}
+                                                            <button style={{
+                                                                width: '32px',
+                                                                height: '32px',
+                                                                borderRadius: '50%',
+                                                                border: 'none',
+                                                                backgroundColor: '#2196f3',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                color: '#fff',
+                                                                marginLeft: '10px'
+                                                            }}>
+                                                                ↑
+                                                            </button>
                                                         </div>
                                                     </div>
 
-                                                    {/* AI Response */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
-                                                        <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
-                                                        {component.response ? (
+                                                    {/* Response (if any) */}
+                                                    {component.response && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
+                                                            <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
                                                             <div style={{
                                                                 padding: '15px',
                                                                 backgroundColor: '#e1eef9',
@@ -887,25 +1005,8 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                             }}>
                                                                 <div dangerouslySetInnerHTML={{ __html: component.response }} />
                                                             </div>
-                                                        ) : (
-                                                            <div style={{
-                                                                padding: '15px',
-                                                                backgroundColor: '#ffebee',
-                                                                border: '2px solid #d32f2f',
-                                                                borderRadius: '4px',
-                                                                color: '#c62828',
-                                                                maxWidth: '100%',
-                                                                width: '100%',
-                                                                fontWeight: 'bold',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '10px'
-                                                            }}>
-                                                                <span style={{ fontSize: '1.5em' }}>⚠️</span>
-                                                                <span>MISSING RESPONSE: This question needs an AI response!</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                        </div>
+                                                    )}
 
                                                 </div>
                                             </div>
