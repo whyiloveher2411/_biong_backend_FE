@@ -138,7 +138,10 @@ export const getChildType = (type: string): string | null => {
 export const getNodeKey = (node: TreeNode): string => {
     const type = getNodeType(node);
     if (type === "question") return `question-${node.id}`;
-    return (node as Course | Section | Chapter | Lesson).key || `${type}-${node.id}`;
+    const nodeKey = (node as Course | Section | Chapter | Lesson).key;
+    // Thêm type vào key để tránh xung đột giữa các loại node khác nhau có cùng key
+    if (nodeKey) return `${type}-${nodeKey}`;
+    return `${type}-${node.id}`;
 };
 
 export const getNodeObjectType = (type: string): string => {
