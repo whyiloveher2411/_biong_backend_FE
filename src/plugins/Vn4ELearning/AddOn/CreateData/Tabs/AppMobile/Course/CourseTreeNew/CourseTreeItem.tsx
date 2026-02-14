@@ -29,6 +29,12 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import Menu from "components/atoms/Menu";
+import MenuItem from "components/atoms/MenuItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
@@ -51,6 +57,7 @@ import useConfirmDialog from "hook/useConfirmDialog";
 
 export interface ParentContext {
     courseId?: string | number;
+    courseKey?: string;
     sectionId?: string | number;
     chapterId?: string | number;
 }
@@ -126,6 +133,65 @@ const CourseTreeItem = memo(function CourseTreeItem({
 
     const nodeType = getNodeType(node);
 
+    const [anchorElApi, setAnchorElApi] = React.useState<null | HTMLElement>(null);
+    const openMenuApi = Boolean(anchorElApi);
+
+    const handleOpenMenuApi = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        setAnchorElApi(event.currentTarget);
+    };
+
+    const handleCloseMenuApi = () => {
+        setAnchorElApi(null);
+    };
+
+    const prefixLink = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com/uploads/course_data/courses';
+    const courseKey = (nodeType === 'course' ? (node as Course).key : parentContext?.courseKey) || '';
+
+    const apiLinks = React.useMemo(() => {
+        if (!courseKey) return [];
+        const links: { title: string; url: string; flag?: string }[] = [];
+
+        if (nodeType === 'course') {
+            links.push({
+                title: 'Config khóa học',
+                url: `${prefixLink}/${courseKey}/info.json`
+            });
+
+            languages?.forEach(lang => {
+                links.push({
+                    title: `Cấu trúc (${lang.title})`,
+                    url: `${prefixLink}/${courseKey}/translate/${lang.code}/info.json`,
+                    flag: lang.flag_code
+                });
+                links.push({
+                    title: `Flash card (${lang.title})`,
+                    url: `${prefixLink}/${courseKey}/translate/${lang.code}/flash_card.json`,
+                    flag: lang.flag_code
+                });
+            });
+        } else if (nodeType === 'lesson') {
+            const lessonKey = (node as Lesson).key || '';
+            if (lessonKey) {
+                languages?.forEach(lang => {
+                    links.push({
+                        title: `Nội dung bài học (${lang.title})`,
+                        url: `${prefixLink}/${courseKey}/translate/${lang.code}/lessons/lesson_${lessonKey}/info.json`,
+                        flag: lang.flag_code
+                    });
+                    links.push({
+                        title: `Flash card bài học (${lang.title})`,
+                        url: `${prefixLink}/${courseKey}/translate/${lang.code}/lessons/lesson_${lessonKey}/flash_card.json`,
+                        flag: lang.flag_code
+                    });
+                });
+            }
+        }
+
+        return links;
+    }, [nodeType, node, courseKey, languages]);
+
+
     const handleSyncCourseToFirebase = () => {
         if (nodeType !== "course" || !postId) {
             return;
@@ -190,11 +256,14 @@ const CourseTreeItem = memo(function CourseTreeItem({
     // Calculate context for children
     const childContext: ParentContext = React.useMemo(() => {
         const ctx: ParentContext = { ...parentContext };
-        if (nodeType === 'course') ctx.courseId = node.id;
+        if (nodeType === 'course') {
+            ctx.courseId = node.id;
+            ctx.courseKey = (node as Course).key;
+        }
         if (nodeType === 'section') ctx.sectionId = node.id;
         if (nodeType === 'chapter') ctx.chapterId = node.id;
         return ctx;
-    }, [node.id, nodeType, parentContext]);
+    }, [node.id, nodeType, parentContext, (node as Course).key]);
 
     const isFinalTestLesson = nodeType === "lesson" && Boolean((node as Lesson).is_final_test);
 
@@ -736,6 +805,16 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             )}
                             {(nodeType === "lesson" || nodeType === "section" || nodeType === "chapter" || nodeType === "course") && (
                                 <>
+                                    {apiLinks.length > 0 && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleOpenMenuApi}
+                                            sx={{ color: "text.secondary", p: 0.5 }}
+                                            title="API Links"
+                                        >
+                                            <MoreVertIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
                                     <IconButton
                                         size="small"
                                         onClick={(e) => {
@@ -770,6 +849,16 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             )}
                             {nodeType === "question" && (
                                 <>
+                                    {apiLinks.length > 0 && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleOpenMenuApi}
+                                            sx={{ color: "text.secondary", p: 0.5 }}
+                                            title="API Links"
+                                        >
+                                            <MoreVertIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
                                     <IconButton
                                         size="small"
                                         onClick={(e) => {
@@ -944,6 +1033,39 @@ const CourseTreeItem = memo(function CourseTreeItem({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <Menu
+                anchorEl={anchorElApi}
+                open={openMenuApi}
+                onClose={handleCloseMenuApi}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+            >
+                {apiLinks.map((link, idx) => (
+                    <MenuItem
+                        key={idx}
+                        onClick={() => {
+                            window.open(link.url, '_blank');
+                            handleCloseMenuApi();
+                        }}
+                    >
+                        {link.flag && (
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                                <img
+                                    src={`https://flagcdn.com/w20/${link.flag}.png`}
+                                    alt=""
+                                    style={{ width: 20, height: 15, objectFit: "cover" }}
+                                />
+                            </ListItemIcon>
+                        )}
+                        <ListItemText
+                            primary={link.title}
+                            primaryTypographyProps={{ variant: 'body2' }}
+                        />
+                        <OpenInNewIcon sx={{ fontSize: 14, ml: 1, color: 'text.disabled' }} />
+                    </MenuItem>
+                ))}
+            </Menu>
         </Box>
     );
 });
