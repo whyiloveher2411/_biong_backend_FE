@@ -39,6 +39,11 @@ import {
 import CourseTreeItem from "./CourseTreeItem";
 import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
 import GolfCourseIcon from "@mui/icons-material/GolfCourse";
+import CheckDataCraw from "../CheckDataCraw";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import CloseIcon from "@mui/icons-material/Close";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -66,6 +71,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [syncDialogTitle, setSyncDialogTitle] = React.useState<string>("");
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const openMenu = Boolean(anchorEl);
+
+    const [previewNode, setPreviewNode] = React.useState<Lesson | null>(null);
 
     const confirmSync = useConfirmDialog({
         title: "Xác nhận đồng bộ Courses",
@@ -751,6 +758,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                 onSelectCourseForEdit={handleSelectCourseForEdit}
                                                 onBackToCourseList={handleBackToCourseList}
                                                 selectedCourseId={selectedCourseId}
+                                                onPreviewLesson={setPreviewNode}
                                             />
                                         </div>
                                     )}
@@ -798,6 +806,36 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             {confirmImport.component}
             {confirmExport.component}
             {confirmImportJson.component}
+
+            <Dialog
+                open={Boolean(previewNode)}
+                onClose={() => setPreviewNode(null)}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#3f51b5', color: '#fff' }}>
+                    <Typography variant="h6" component="div" sx={{ color: 'inherit' }}>Preview Questions: {previewNode?.title}</Typography>
+                    <IconButton
+                        aria-label="close"
+                        onClick={() => setPreviewNode(null)}
+                        sx={{ color: 'inherit' }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0 }}>
+                    {previewNode && (
+                        <CheckDataCraw
+                            post={previewNode}
+                            config={{ title: 'Preview Questions' }}
+                            name="link_data_craw_json"
+                            onReview={() => { /* review */ }}
+                            component="check_data_craw"
+                            autoPreview={true}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
             {confirmSyncConfig.component}
 
             <SyncProgressDialog

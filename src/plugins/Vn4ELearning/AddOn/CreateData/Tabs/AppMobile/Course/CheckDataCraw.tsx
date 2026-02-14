@@ -10,8 +10,9 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
+import useLanguages from "../hooks/useLanguages";
 
-function CheckDataCraw(props: FieldFormItemProps) {
+function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
     const ajaxUseApi = useAjax();
 
@@ -20,6 +21,7 @@ function CheckDataCraw(props: FieldFormItemProps) {
 
     const [previewData, setPreviewData] = React.useState<ANY>(null);
     const [openPreview, setOpenPreview] = React.useState(false);
+    const { languages } = useLanguages();
 
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawerEditPost, setOpenDrawerEditPost] = React.useState(false);
@@ -170,8 +172,8 @@ function CheckDataCraw(props: FieldFormItemProps) {
                 id: props.post.id,
             },
             success: (result) => {
-                if (result.success && result.data && result.data.chapters) {
-                    setChapters(result.data.chapters);
+                if (result.success && result.data) {
+                    if (result.data.chapters) setChapters(result.data.chapters);
                 }
                 setLoading(false);
             },
@@ -226,6 +228,12 @@ function CheckDataCraw(props: FieldFormItemProps) {
         }
     }, [props.post.id]);
 
+    React.useEffect(() => {
+        if (props.autoPreview && props.post.id) {
+            handlePreviewDataFromJson();
+        }
+    }, [props.autoPreview, props.post.id]);
+
     const value = props.post?.[props.name || 'link_data_craw_json'] || '';
 
     const handleChange = (event: ANY) => {
@@ -234,6 +242,151 @@ function CheckDataCraw(props: FieldFormItemProps) {
 
     if (loading && chapters.length === 0) {
         return <CircularProgress size={20} />;
+    }
+
+    const previewContent = (
+        <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+
+            {/* Main Scroll Container */}
+            <div
+                id="scroll-container-questions"
+                style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    height: '100%',
+                    padding: '20px',
+                    scrollBehavior: 'smooth',
+                    position: 'relative'
+                }}
+            >
+                {previewData && previewData.questions.map((question: ANY, index: number) => {
+                    return (
+                        <div
+                            key={question.id || index}
+                            ref={el => questionRefs.current[index] = el}
+                            data-index={index}
+                            style={{ scrollMarginTop: '20px', marginBottom: '20px' }}
+                        >
+                            <QuestionItem
+                                index={index}
+                                initialQuestion={question}
+                                postId={props.post.id}
+                                file={props.post[props.name || 'link_data_craw_json']}
+                                languages={languages}
+                                onDelete={() => {
+                                    const newQuestions = [...previewData.questions];
+                                    newQuestions.splice(index, 1);
+                                    setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
+                                }}
+                                onCreate={() => handleCreateQuestion(question, index)}
+                            />
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* TOC Sidebar */}
+            <div style={{
+                width: '60px',
+                height: '100%',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                alignItems: 'center',
+                paddingTop: '20px',
+                paddingBottom: '20px',
+                borderLeft: '1px solid #ddd',
+                backgroundColor: '#fff'
+            }}>
+                {previewData && previewData.questions.map((_: ANY, index: number) => (
+                    <div
+                        key={index}
+                        onClick={() => {
+                            // Scroll inside container
+                            const container = document.getElementById('scroll-container-questions');
+                            const el = questionRefs.current[index];
+                            if (container && el) {
+                                // manual scroll calculation or just use scrollIntoView
+                                // but scrollIntoView might scroll parent drawer if not careful.
+                                // Use scrollIntoView with block: 'center' usually works well.
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                            setActiveQuestionIndex(index);
+                        }}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            backgroundColor: activeQuestionIndex === index ? '#1976d2' : '#fff',
+                            color: activeQuestionIndex === index ? '#fff' : '#666',
+                            border: activeQuestionIndex === index ? 'none' : '1px solid #ddd',
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s ease',
+                            transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
+                            boxShadow: activeQuestionIndex === index ? '0 4px 8px rgba(25, 118, 210, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
+                            fontSize: '14px',
+                            flexShrink: 0
+                        }}
+                        title={`Go to Question ${index + 1}`}
+                    >
+                        {index + 1}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
+    if (props.autoPreview) {
+        if (loading && !previewData) {
+            return (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+                    <CircularProgress />
+                </Box>
+            );
+        }
+        return (
+            <Box sx={{ height: 'calc(80vh - 64px)', bgcolor: '#f5f5f5' }}>
+                {previewData && previewContent}
+                {/* Drawer for creating/editing the question using standard form */}
+                {openDrawerEditPost && drawerData && (
+                    <DrawerEditPost
+                        open={openDrawerEditPost}
+                        openLoading={ajaxUseApi.open}
+                        setData={setDrawerData}
+                        handleSubmit={() => {
+                            if (drawerData) {
+                                ajaxUseApi.ajax({
+                                    url: "post-type/post/" + drawerData.type,
+                                    method: "POST",
+                                    data: {
+                                        ...drawerData.post,
+                                        _action: drawerData.action,
+                                    },
+                                    success: () => {
+                                        setOpenDrawerEditPost(false);
+                                        // Optionally remove form preview list?
+                                        handlePreviewDataFromJson();
+                                    },
+                                });
+                            }
+                        }}
+                        onClose={() => {
+                            setOpenDrawerEditPost(false);
+                        }}
+                        data={drawerData}
+                        handleAfterDelete={() => {
+                            setOpenDrawerEditPost(false);
+                            handlePreviewDataFromJson();
+                        }}
+                    />
+                )}
+            </Box>
+        );
     }
 
     return (
@@ -309,99 +462,7 @@ function CheckDataCraw(props: FieldFormItemProps) {
                     }
                 }}
             >
-                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-
-                    {/* Main Scroll Container */}
-                    <div
-                        id="scroll-container-questions"
-                        style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            height: '100%',
-                            padding: '20px',
-                            scrollBehavior: 'smooth',
-                            position: 'relative'
-                        }}
-                    >
-                        {previewData && previewData.questions.map((question: ANY, index: number) => {
-                            return (
-                                <div
-                                    key={question.id || index}
-                                    ref={el => questionRefs.current[index] = el}
-                                    data-index={index}
-                                    style={{ scrollMarginTop: '20px', marginBottom: '20px' }}
-                                >
-                                    <QuestionItem
-                                        index={index}
-                                        initialQuestion={question}
-                                        postId={props.post.id}
-                                        file={props.post[props.name || 'link_data_craw_json']}
-                                        onDelete={() => {
-                                            const newQuestions = [...previewData.questions];
-                                            newQuestions.splice(index, 1);
-                                            setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
-                                        }}
-                                        onCreate={() => handleCreateQuestion(question, index)}
-                                    />
-                                </div>
-                            )
-                        })}
-                    </div>
-
-                    {/* TOC Sidebar */}
-                    <div style={{
-                        width: '60px',
-                        height: '100%',
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px',
-                        alignItems: 'center',
-                        paddingTop: '20px',
-                        paddingBottom: '20px',
-                        borderLeft: '1px solid #ddd',
-                        backgroundColor: '#fff'
-                    }}>
-                        {previewData && previewData.questions.map((_: ANY, index: number) => (
-                            <div
-                                key={index}
-                                onClick={() => {
-                                    // Scroll inside container
-                                    const container = document.getElementById('scroll-container-questions');
-                                    const el = questionRefs.current[index];
-                                    if (container && el) {
-                                        // manual scroll calculation or just use scrollIntoView 
-                                        // but scrollIntoView might scroll parent drawer if not careful.
-                                        // Use scrollIntoView with block: 'center' usually works well.
-                                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    }
-                                    setActiveQuestionIndex(index);
-                                }}
-                                style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    backgroundColor: activeQuestionIndex === index ? '#1976d2' : '#fff',
-                                    color: activeQuestionIndex === index ? '#fff' : '#666',
-                                    border: activeQuestionIndex === index ? 'none' : '1px solid #ddd',
-                                    fontWeight: 'bold',
-                                    transition: 'all 0.2s ease',
-                                    transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
-                                    boxShadow: activeQuestionIndex === index ? '0 4px 8px rgba(25, 118, 210, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
-                                    fontSize: '14px',
-                                    flexShrink: 0
-                                }}
-                                title={`Go to Question ${index + 1}`}
-                            >
-                                {index + 1}
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                {previewContent}
             </DrawerCustom>
 
             {/* Drawer for creating/editing the question using standard form */}
@@ -444,12 +505,12 @@ function CheckDataCraw(props: FieldFormItemProps) {
 
 export default CheckDataCraw;
 
-function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void }) {
-    // const ajaxUseApi = useAjax(); // No longer needed
+function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, languages: ANY[] }) {
+    const ajaxUseApi = useAjax();
     const [question, setQuestion] = React.useState(initialQuestion);
     const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body, null, 2));
     const [jsonContent, setJsonContent] = React.useState(initialQuestion.content ? JSON.stringify(initialQuestion.content, null, 2) : '');
-    // const [loading, setLoading] = React.useState(false); // Managed by parent
+    const [loadingTranslate, setLoadingTranslate] = React.useState<string | false>(false);
     const [error, setError] = React.useState<string | null>(null);
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -479,6 +540,29 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
         setQuestion({ ...question, title: e.target.value });
     };
 
+    const handleTranslate = (lang: string) => {
+        setLoadingTranslate(lang);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/translate-question-by-ai",
+            method: "POST",
+            data: { id: initialQuestion.post_id, lang: lang },
+            success: (result: ANY) => {
+                if (result.success && result.data) {
+                    const updatedQuestion = { ...question, ...result.data };
+                    setQuestion(updatedQuestion);
+                    setJsonBody(JSON.stringify(updatedQuestion.body, null, 2));
+                    if (updatedQuestion.content) {
+                        setJsonContent(JSON.stringify(updatedQuestion.content, null, 2));
+                    }
+                }
+                setLoadingTranslate(false);
+            },
+            error: () => {
+                setLoadingTranslate(false);
+            }
+        });
+    };
+
     // Modified to call parent's onCreate which opens DrawerEditPost
     const handleCreateQuestion = () => {
         // Pass the potentially edited question back to parent
@@ -498,6 +582,25 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                     Question {index + 1}
                 </Typography>
                 <div>
+                    {initialQuestion.post_id && languages.filter(l => l.code !== 'en').map((lang) => (
+                        <LoadingButton
+                            key={lang.code}
+                            variant="outlined"
+                            size="small"
+                            loading={loadingTranslate === lang.code}
+                            disabled={loadingTranslate !== false && loadingTranslate !== lang.code}
+                            onClick={() => handleTranslate(lang.code)}
+                            startIcon={lang.icon_url ? (
+                                <img src={lang.icon_url} alt={lang.name || lang.title} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: '2px', display: 'block' }} />
+                            ) : (
+                                <img src={`https://flagcdn.com/w20/${lang.flag_code}.png`} alt={lang.name || lang.title} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: '2px', display: 'block' }} />
+                            )}
+                            sx={{ mr: 1, mb: 1 }}
+                            color="info"
+                        >
+                            Dịch {lang.name || lang.title}
+                        </LoadingButton>
+                    ))}
                     <LoadingButton
                         variant="contained"
                         size="small"
@@ -1198,7 +1301,7 @@ const RivePlayer = ({ src, artboard, stateMachines, inputOnPress, inputOnRelease
         }),
         autoplay: autoplay,
         stateMachines: stateMachines,
-        // onLoad: () => {}, // Removed unused onLoad
+        // onLoad: () => { }, // Removed unused onLoad
     });
 
     const triggerInput = (inputName: string | undefined) => {

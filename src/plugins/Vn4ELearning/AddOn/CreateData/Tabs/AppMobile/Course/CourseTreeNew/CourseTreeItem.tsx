@@ -11,6 +11,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import AddIcon from "@mui/icons-material/Add";
+import SyncIcon from "@mui/icons-material/Sync";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import Checkbox from "components/atoms/Checkbox";
 import {
@@ -35,6 +36,7 @@ import MenuItem from "components/atoms/MenuItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import FactCheckIcon from "@mui/icons-material/FactCheck";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
@@ -93,6 +95,7 @@ interface CourseTreeItemProps {
     postId?: string | number;
     onReloadCourses?: () => void;
     onUpdateLessonStatus?: (lessonId: string | number, isFinalTest: boolean) => void;
+    onPreviewLesson?: (node: Lesson) => void;
 }
 
 const CourseTreeItem = memo(function CourseTreeItem({
@@ -117,6 +120,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
     postId,
     onReloadCourses,
     onUpdateLessonStatus,
+    onPreviewLesson,
 }: CourseTreeItemProps) {
     const apiSetFinalTest = useAjax();
     const apiSyncCourse = useAjax();
@@ -798,10 +802,37 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                             py: 0.5,
                                             mr: 1
                                         }}
+                                        endIcon={<SyncIcon />}
                                     >
                                         {streamSync.isSyncing ? "Syncing..." : "Sync to Firebase"}
                                     </Button>
                                 </>
+                            )}
+                            {nodeType === "lesson" && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<FactCheckIcon sx={{ fontSize: 16 }} />}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onPreviewLesson) onPreviewLesson(node as Lesson);
+                                    }}
+                                    sx={{
+                                        textTransform: "none",
+                                        fontSize: "0.75rem",
+                                        py: 0.5,
+                                        mr: 1,
+                                        whiteSpace: "nowrap",
+                                        borderColor: "success.main",
+                                        color: "success.main",
+                                        '&:hover': {
+                                            borderColor: "success.dark",
+                                            backgroundColor: "success.light",
+                                        }
+                                    }}
+                                >
+                                    Preview
+                                </Button>
                             )}
                             {(nodeType === "lesson" || nodeType === "section" || nodeType === "chapter" || nodeType === "course") && (
                                 <>
@@ -970,6 +1001,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                                                     onBackToCourseList={onBackToCourseList}
                                                                     selectedCourseId={selectedCourseId}
                                                                     index={validIndex}
+                                                                    onPreviewLesson={onPreviewLesson}
                                                                 />
                                                             </div>
                                                         )}
