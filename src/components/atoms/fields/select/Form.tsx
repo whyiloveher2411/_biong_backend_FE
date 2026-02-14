@@ -10,6 +10,9 @@ import React from 'react';
 import { FieldFormItemProps } from '../type';
 import SpecialNotes from '../SpecialNotes';
 
+import ToggleButton from 'components/atoms/ToggleButton';
+import ToggleButtonGroup from 'components/atoms/ToggleButtonGroup';
+
 const useStyles = makeCSS({
     selectItem: {
         whiteSpace: 'unset'
@@ -44,12 +47,7 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
 
     const [, setRender] = React.useState(0);
 
-    const [listOption, setListOption] = React.useState<{
-        _key: string,
-        title: string,
-        description?: string,
-        color?: string
-    }[]>([]);
+    const [listOption, setListOption] = React.useState<Option[]>([]);
 
     React.useEffect(() => {
 
@@ -88,6 +86,106 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
         onReview(valueUpdate, name);
         setRender(prev => prev + 1);
 
+    }
+
+    const handleToggleChange = (_event: React.MouseEvent<HTMLElement>, newValue: string | null) => {
+        if (newValue !== null || !config.disableClearable) { // Assuming we might want to allow clearing if not disabled, but Autocomplete has disableClearable default true-ish logic usually.
+            // However, for consistency with existing logic which defaults to defaultValue or empty string if value is null
+            let valueUpdate = newValue;
+            if (!valueUpdate) {
+                valueUpdate = config.defaultValue ? config.defaultValue : '';
+            }
+            onReview(valueUpdate, name);
+            setRender(prev => prev + 1);
+        }
+    };
+
+    if (config.layout === 'button') {
+        return (
+            <FormControl fullWidth component="fieldset">
+                {config.title && <Typography variant="caption" color="textSecondary" gutterBottom>{config.title}</Typography>}
+                <ToggleButtonGroup
+                    value={valueInital ? valueInital._key : null}
+                    exclusive
+                    onChange={handleToggleChange}
+                    aria-label={config.title}
+                    size={config.size ?? 'medium'}
+                    {...config.inputProps}
+                    sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 0.5 }}
+                >
+                    {listOption.map((option) => (
+                        <ToggleButton
+                            key={option._key}
+                            value={option._key}
+                            aria-label={option.title}
+                            sx={{
+                                textTransform: 'none',
+                                border: '1px solid rgba(0, 0, 0, 0.1) !important',
+                                borderRadius: '8px !important',
+                                px: 2,
+                                py: 1,
+                                height: 'auto',
+                                minWidth: 100,
+                                justifyContent: 'flex-start',
+                                backgroundColor: 'rgba(0,0,0,0.04)',
+                                color: 'text.secondary',
+                                '&.Mui-selected': {
+                                    backgroundColor: 'primary.main',
+                                    color: 'common.white',
+                                    borderColor: 'primary.main !important',
+                                    '&:hover': {
+                                        backgroundColor: 'primary.dark',
+                                    },
+                                    '& .MuiTypography-root': {
+                                        color: 'inherit'
+                                    }
+                                },
+                                '&:hover': {
+                                    backgroundColor: 'rgba(0,0,0,0.08)',
+                                }
+                            }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                {
+                                    Boolean(option.color) &&
+                                    <span
+                                        className={classes.pointSelect}
+                                        style={{ ['--bg' as string]: option.color, marginRight: 10 }}
+                                    >
+                                    </span>
+                                }
+                                {
+                                    Boolean(option.image) &&
+                                    <img
+                                        style={{
+                                            ['--width' as string]: option.width ? option.width : '20px',
+                                            marginRight: 10
+                                        }}
+                                        className={classes.image}
+                                        alt='select option'
+                                        src={option.image}
+                                    />
+                                }
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
+                                    {option.title}
+                                </Typography>
+                            </Box>
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+                {
+                    Boolean(config.note) &&
+                    <FormHelperText sx={{ mt: 1 }}><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                }
+                <SpecialNotes specialNotes={config.special_notes} />
+                {
+                    Boolean(valueInital && valueInital.description && !config.disableAlert) &&
+                    <Alert severity="info" sx={{ marginTop: 0.5 }}>
+                        <Typography variant="body2">{valueInital?.description}</Typography>
+                    </Alert>
+                }
+            </FormControl>
+        );
     }
 
     return (
@@ -177,7 +275,6 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
                 {...config.inputProps}
             />
         </FormControl>
-
     );
 
 }, (props1, props2) => {

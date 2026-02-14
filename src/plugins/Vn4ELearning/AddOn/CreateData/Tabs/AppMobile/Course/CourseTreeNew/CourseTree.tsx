@@ -170,8 +170,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     id: data.post.id,
                 },
                 success: (result: { message?: string }) => {
-                    const message = result?.message || "Đồng bộ cấu hình thành công";
-                    apiSyncCourses.showMessage(message, "success");
                     loadData();
                 },
             });
