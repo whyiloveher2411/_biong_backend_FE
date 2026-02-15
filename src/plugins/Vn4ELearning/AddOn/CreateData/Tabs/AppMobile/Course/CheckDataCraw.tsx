@@ -510,7 +510,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     const [question, setQuestion] = React.useState(initialQuestion);
     const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body, null, 2));
     const [jsonContent, setJsonContent] = React.useState(initialQuestion.content ? JSON.stringify(initialQuestion.content, null, 2) : '');
-    const [loadingTranslate, setLoadingTranslate] = React.useState<string | false>(false);
+    const [loadingTranslate, setLoadingTranslate] = React.useState<string | number | boolean>(false);
     const [error, setError] = React.useState<string | null>(null);
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -540,7 +540,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
         setQuestion({ ...question, title: e.target.value });
     };
 
-    const handleTranslate = (lang: string) => {
+    const handleTranslate = (lang: string | number) => {
         setLoadingTranslate(lang);
         ajaxUseApi.ajax({
             url: "plugin/vn4-e-learning/app-mobile/course-new/translate-question-by-ai",
@@ -587,15 +587,15 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                             key={lang.code}
                             variant="outlined"
                             size="small"
-                            loading={loadingTranslate === lang.code}
-                            disabled={loadingTranslate !== false && loadingTranslate !== lang.code}
-                            onClick={() => handleTranslate(lang.code)}
+                            loading={loadingTranslate === lang.id}
+                            disabled={loadingTranslate !== false && loadingTranslate !== lang.id}
+                            onClick={() => handleTranslate(lang.id)}
                             startIcon={lang.icon_url ? (
                                 <img src={lang.icon_url} alt={lang.name || lang.title} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: '2px', display: 'block' }} />
                             ) : (
                                 <img src={`https://flagcdn.com/w20/${lang.flag_code}.png`} alt={lang.name || lang.title} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: '2px', display: 'block' }} />
                             )}
-                            sx={{ mr: 1, mb: 1 }}
+                            sx={{ mr: 1 }}
                             color="info"
                         >
                             Dịch {lang.name || lang.title}

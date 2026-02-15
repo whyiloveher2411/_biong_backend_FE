@@ -2,6 +2,7 @@ import React from 'react';
 import useAjax from 'hook/useApi';
 
 export interface Language {
+    id?: number | string;
     code: string;
     name: string;
     flag_code: string;
