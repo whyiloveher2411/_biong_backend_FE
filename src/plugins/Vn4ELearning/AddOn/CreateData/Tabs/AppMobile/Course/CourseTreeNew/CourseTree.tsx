@@ -40,10 +40,7 @@ import CourseTreeItem from "./CourseTreeItem";
 import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
 import GolfCourseIcon from "@mui/icons-material/GolfCourse";
 import CheckDataCraw from "../CheckDataCraw";
-import Dialog from "@mui/material/Dialog";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import CloseIcon from "@mui/icons-material/Close";
+import DrawerCustom from "components/molecules/DrawerCustom";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -807,35 +804,24 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             {confirmExport.component}
             {confirmImportJson.component}
 
-            <Dialog
+            <DrawerCustom
                 open={Boolean(previewNode)}
                 onClose={() => setPreviewNode(null)}
-                maxWidth="lg"
-                fullWidth
+                activeOnClose
+                width={1300}
+                title="Preview Questions"
             >
-                <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#3f51b5', color: '#fff' }}>
-                    <Typography variant="h6" component="div" sx={{ color: 'inherit' }}>Preview Questions: {previewNode?.title}</Typography>
-                    <IconButton
-                        aria-label="close"
-                        onClick={() => setPreviewNode(null)}
-                        sx={{ color: 'inherit' }}
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent dividers sx={{ p: 0 }}>
-                    {previewNode && (
-                        <CheckDataCraw
-                            post={previewNode}
-                            config={{ title: 'Preview Questions' }}
-                            name="link_data_craw_json"
-                            onReview={() => { /* review */ }}
-                            component="check_data_craw"
-                            autoPreview={true}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+                {previewNode && (
+                    <CheckDataCraw
+                        post={previewNode}
+                        config={{ title: 'Preview Questions' }}
+                        name="link_data_craw_json"
+                        onReview={() => { /* review */ }}
+                        component="check_data_craw"
+                        autoPreview={true}
+                    />
+                )}
+            </DrawerCustom>
             {confirmSyncConfig.component}
 
             <SyncProgressDialog

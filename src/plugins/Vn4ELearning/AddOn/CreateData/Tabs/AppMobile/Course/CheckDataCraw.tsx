@@ -350,7 +350,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
             );
         }
         return (
-            <Box sx={{ height: 'calc(80vh - 64px)', bgcolor: '#f5f5f5' }}>
+            <Box sx={{ bgcolor: '#f5f5f5' }}>
                 {previewData && previewContent}
                 {/* Drawer for creating/editing the question using standard form */}
                 {openDrawerEditPost && drawerData && (
