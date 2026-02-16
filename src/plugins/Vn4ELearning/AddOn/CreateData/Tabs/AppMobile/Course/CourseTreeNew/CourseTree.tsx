@@ -808,8 +808,17 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 open={Boolean(previewNode)}
                 onClose={() => setPreviewNode(null)}
                 activeOnClose
-                width={1300}
+                width={1900}
                 title="Preview Questions"
+                restDialogContent={{
+                    sx: {
+                        padding: 0,
+                        overflow: 'hidden',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }
+                }}
             >
                 {previewNode && (
                     <CheckDataCraw

@@ -10,6 +10,7 @@ export interface Question {
     body?: string; // JSON
     content?: string; // JSON
     verify?: boolean;
+    isPublished?: boolean;
 }
 
 export interface Lesson {
@@ -30,6 +31,7 @@ export interface Lesson {
         [key: string]: unknown;
     };
     count_app_course_flashcard?: number;
+    isPublished?: boolean;
 }
 
 export interface Chapter {
@@ -46,6 +48,7 @@ export interface Chapter {
         shortDescription?: string;
         [key: string]: unknown;
     };
+    isPublished?: boolean;
 }
 
 export interface Section {
@@ -56,6 +59,7 @@ export interface Section {
     chapters?: Chapter[];
     status?: string;
     order?: number;
+    isPublished?: boolean;
 }
 
 export interface Course {
@@ -75,6 +79,7 @@ export interface Course {
         count_question?: number;
     };
     count_app_course_flashcard?: number;
+    isPublished?: boolean;
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;

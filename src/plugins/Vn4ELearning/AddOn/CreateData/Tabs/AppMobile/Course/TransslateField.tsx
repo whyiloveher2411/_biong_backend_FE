@@ -5,12 +5,17 @@ import { FormLabel, Tooltip, IconButton } from '@mui/material'
 import FieldForm from 'components/atoms/fields/FieldForm'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import useLanguages from '../hooks/useLanguages';
+import useAjax from 'hook/useApi';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { CircularProgress } from '@mui/material';
 
 function TransslateField(props: FieldFormItemProps) {
 
     const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
     const refLangCodeCurrent = React.useRef(langCodeCurrent);
     const { languages } = useLanguages();
+    const useApi = useAjax();
+    const [loadingTranslate, setLoadingTranslate] = React.useState<boolean>(false);
 
 
     let valueInital: { [key: string]: ANY } = {};
@@ -30,6 +35,39 @@ function TransslateField(props: FieldFormItemProps) {
     }
 
     props.post[props.name] = valueInital;
+
+    const handleTranslate = () => {
+
+        if (!props.post?.id) return;
+
+        setLoadingTranslate(true);
+
+        const lang = languages.find(l => l.code === langCodeCurrent);
+
+        if (lang) {
+            useApi.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/translate-word",
+                method: "POST",
+                data: {
+                    text: props.post[props.name]?.[refLangCodeCurrent.current === 'en' ? 'en' : 'en'] || props.post[props.name]?.['en'], // Fallback to 'en' source
+                    lang_source: 'en', // Assuming 'en' is always the source for now
+                    lang_target: lang.code // API expects code or id? User said "data: text, lang_source, lang_target". Usually codes. Let's try code first as it's more standard for these params. 
+                },
+                success: (result: ANY) => {
+                    if (result.text) {
+                        props.onReview({
+                            ...props.post[props.name],
+                            [langCodeCurrent]: result.text
+                        }, props.name);
+                    }
+                    setLoadingTranslate(false);
+                },
+                error: () => {
+                    setLoadingTranslate(false);
+                }
+            });
+        }
+    }
 
     return (
         <Box sx={{
@@ -105,7 +143,18 @@ function TransslateField(props: FieldFormItemProps) {
             </Box>
             <FieldForm
                 component={props.config.primary_view}
-                config={{ ...props.config, title: false }}
+                config={{
+                    ...props.config, title: false,
+                    inputProps: {
+                        endAdornment: <IconButton
+                            size="small"
+                            onClick={handleTranslate}
+                            disabled={loadingTranslate}
+                        >
+                            {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
+                        </IconButton>
+                    }
+                }}
                 post={{ value: props.post[props.name]?.[refLangCodeCurrent.current] }}
                 name={'value'}
                 onReview={(value) => {

@@ -1,4 +1,4 @@
-import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton } from "@mui/material";
+import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton, Chip } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
 import React from "react";
@@ -278,6 +278,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                                     newQuestions.splice(index, 1);
                                     setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
                                 }}
+                                onTranslated={handlePreviewDataFromJson}
                                 onCreate={() => handleCreateQuestion(question, index)}
                             />
                         </div>
@@ -299,7 +300,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 borderLeft: '1px solid #ddd',
                 backgroundColor: '#fff'
             }}>
-                {previewData && previewData.questions.map((_: ANY, index: number) => (
+                {previewData && previewData.questions.map((question: ANY, index: number) => (
                     <div
                         key={index}
                         onClick={() => {
@@ -330,7 +331,8 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                             transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
                             boxShadow: activeQuestionIndex === index ? '0 4px 8px rgba(25, 118, 210, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
                             fontSize: '14px',
-                            flexShrink: 0
+                            flexShrink: 0,
+                            ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
                         }}
                         title={`Go to Question ${index + 1}`}
                     >
@@ -350,7 +352,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
             );
         }
         return (
-            <Box sx={{ bgcolor: '#f5f5f5' }}>
+            <Box sx={{ bgcolor: '#f5f5f5', height: '100%' }}>
                 {previewData && previewContent}
                 {/* Drawer for creating/editing the question using standard form */}
                 {openDrawerEditPost && drawerData && (
@@ -453,7 +455,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 open={openPreview}
                 onClose={handleClosePreview}
                 title={`Preview Questions (${previewData?.count || 0})`}
-                width={1300}
+                width={1900}
                 restDialogContent={{
                     sx: {
                         backgroundColor: '#f5f5f5',
@@ -505,13 +507,34 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
 export default CheckDataCraw;
 
-function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, languages: ANY[] }) {
+function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, onTranslated, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, onTranslated?: () => void, languages: ANY[] }) {
     const ajaxUseApi = useAjax();
     const [question, setQuestion] = React.useState(initialQuestion);
-    const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body, null, 2));
-    const [jsonContent, setJsonContent] = React.useState(initialQuestion.content ? JSON.stringify(initialQuestion.content, null, 2) : '');
+    const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
+    const [jsonContent, setJsonContent] = React.useState(initialQuestion.content_post || initialQuestion.content ? JSON.stringify(initialQuestion.content_post || initialQuestion.content, null, 2) : '');
     const [loadingTranslate, setLoadingTranslate] = React.useState<string | number | boolean>(false);
     const [error, setError] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        setQuestion(initialQuestion);
+        setJsonBody(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
+        setJsonContent(initialQuestion.content_post || initialQuestion.content ? JSON.stringify(initialQuestion.content_post || initialQuestion.content, null, 2) : '');
+    }, [initialQuestion]);
+
+    const availableLangs = React.useMemo(() => {
+        const langs: string[] = ['en'];
+        const langCodes = languages.map(l => l.code);
+
+        [question.body_post, question.content_post, question.body, question.content].forEach(field => {
+            if (typeof field === 'object' && field !== null && !Array.isArray(field)) {
+                Object.keys(field).forEach(key => {
+                    if (langCodes.includes(key) && !langs.includes(key)) langs.push(key);
+                });
+            }
+        });
+
+        return langs;
+    }, [question, languages]);
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newVal = e.target.value;
@@ -547,12 +570,25 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
             method: "POST",
             data: { id: initialQuestion.post_id, lang: lang },
             success: (result: ANY) => {
-                if (result.success && result.data) {
-                    const updatedQuestion = { ...question, ...result.data };
+                if (result.success && (result.post || result.data)) {
+                    const data = result.post || result.data;
+
+                    // Parse body/content if strings
+                    if (typeof data.body === 'string') {
+                        try { data.body = JSON.parse(data.body); } catch (e) { console.error("Parse body error", e); }
+                    }
+                    if (typeof data.content === 'string') {
+                        try { data.content = JSON.parse(data.content); } catch (e) { console.error("Parse content error", e); }
+                    }
+
+                    const updatedQuestion = { ...question, ...data };
                     setQuestion(updatedQuestion);
-                    setJsonBody(JSON.stringify(updatedQuestion.body, null, 2));
-                    if (updatedQuestion.content) {
-                        setJsonContent(JSON.stringify(updatedQuestion.content, null, 2));
+                    setJsonBody(JSON.stringify(updatedQuestion.body_post || updatedQuestion.body, null, 2));
+                    if (updatedQuestion.content_post || updatedQuestion.content) {
+                        setJsonContent(JSON.stringify(updatedQuestion.content_post || updatedQuestion.content, null, 2));
+                    }
+                    if (onTranslated) {
+                        onTranslated();
                     }
                 }
                 setLoadingTranslate(false);
@@ -579,7 +615,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #eee' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
                 <Typography variant="subtitle1" style={{ fontWeight: 'bold' }}>
-                    Question {index + 1}
+                    Question {index + 1} {initialQuestion.post_id ? (initialQuestion.status === 'trash' ? <Chip label="Deleted" color="error" /> : '') : <></>}
                 </Typography>
                 <div>
                     {initialQuestion.post_id && languages.filter(l => l.code !== 'en').map((lang) => (
@@ -704,564 +740,647 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             <CheckCircleIcon color="success" sx={{ fontSize: 200, opacity: 0.4, bgcolor: 'white', borderRadius: '50%', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
                                         </Box>
                                     )}
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                        <Typography variant="caption" sx={{ color: '#666' }}>Preview:</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, borderBottom: '1px solid #eee', pb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ color: '#666', fontWeight: 'bold' }}>Preview All Languages:</Typography>
                                     </Box>
                                 </>
                             );
                         })()}
-                        {question.body?.map((component: ANY, compIndex: number) => {
-                            switch (component.type) {
-                                case 'text':
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px' }} dangerouslySetInnerHTML={{ __html: component.text }} />
-                                    );
-                                case 'code':
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px', backgroundColor: '#282c34', color: '#abb2bf', padding: '10px', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                                            {component.code}
-                                        </div>
-                                    );
-                                case 'image':
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px', textAlign: 'center' }}>
-                                            <img src={component.image?.link} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', borderRadius: '4px' }} />
-                                            {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>{component.description}</div>}
-                                        </div>
-                                    );
-                                case 'info':
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', color: '#0d47a1', borderRadius: '4px', borderLeft: '4px solid #1976d2' }} dangerouslySetInnerHTML={{ __html: component.info }} />
-                                    );
-                                case 'parts': {
-                                    let secretIndexCounter = 0;
-                                    const isKeyboard = component.input_method === 'keyboard';
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px' }}>
-                                            {isKeyboard && (
-                                                <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#666', mb: 1, fontStyle: 'italic', bgcolor: '#f0f0f0', p: '2px 6px', borderRadius: '4px', width: 'fit-content' }}>
-                                                    <span style={{ fontSize: '14px' }}>⌨️</span> Keyboard Input
-                                                </Typography>
+                        <Box sx={{
+                            display: 'flex',
+                            gap: '20px',
+                            overflowX: 'auto',
+                            pb: 1,
+                            '&::-webkit-scrollbar': { height: '8px' },
+                            '&::-webkit-scrollbar-thumb': { backgroundColor: '#ccc', borderRadius: '4px' }
+                        }}>
+                            {availableLangs.map((langCode) => {
+                                const langInfo = languages.find(l => l.code === langCode);
+                                return (
+                                    <Box
+                                        key={langCode}
+                                        sx={{
+                                            minWidth: availableLangs.length > 1 ? '500px' : '100%',
+                                            flex: availableLangs.length > 1 ? '0 0 500px' : '1',
+                                            bgcolor: 'white',
+                                            p: 2,
+                                            borderRadius: '4px',
+                                            border: '1px solid #eee',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, pb: 0.5, borderBottom: '1px dashed #ddd' }}>
+                                            {langInfo?.icon_url ? (
+                                                <img src={langInfo.icon_url} style={{ width: 18, height: 12, borderRadius: '2px', objectFit: 'cover' }} />
+                                            ) : langInfo?.flag_code ? (
+                                                <img src={`https://flagcdn.com/w20/${langInfo.flag_code}.png`} style={{ width: 18, height: 12, borderRadius: '2px', objectFit: 'cover' }} />
+                                            ) : (
+                                                <span style={{ fontSize: '12px' }}>🌐</span>
                                             )}
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
-                                                {component.parts?.map((part: ANY, partIndex: number) => {
-                                                    if (!part.isASecret) {
-                                                        if (part.content === '\n') {
-                                                            return <div key={partIndex} style={{ flexBasis: '100%', height: 0 }} />;
-                                                        }
-                                                        return <span key={partIndex}>{part.content}</span>;
-                                                    } else {
-                                                        const currentSecretIndex = secretIndexCounter++;
-                                                        const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
+                                            <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                                                {langInfo?.name || langCode.toUpperCase()}
+                                            </Typography>
+                                        </Box>
 
-                                                        if (isKeyboard) {
-                                                            const widthStyle = part.maxLength ? { minWidth: `${Math.max(30, part.maxLength * 9)}px` } : { minWidth: '40px' };
-                                                            return (
-                                                                <span key={partIndex} style={{
-                                                                    display: 'inline-block',
-                                                                    ...widthStyle,
-                                                                    padding: '2px 8px',
-                                                                    backgroundColor: '#fff',
-                                                                    border: '1px solid #ccc',
-                                                                    borderRadius: '4px',
-                                                                    textAlign: 'center',
-                                                                    color: matchingAnswer ? '#333' : '#ccc',
-                                                                    fontFamily: 'monospace',
-                                                                    fontWeight: 'bold',
-                                                                    fontSize: '0.95em',
-                                                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
-                                                                }}>
-                                                                    {matchingAnswer ? matchingAnswer.text : ''}
-                                                                </span>
-                                                            );
-                                                        }
+                                        {(() => {
+                                            let questionData = { ...question };
+                                            const langCodes = languages.map(l => l.code);
 
-                                                        return (
-                                                            <span key={partIndex} style={{
-                                                                display: 'inline-block',
-                                                                minWidth: '30px',
-                                                                padding: '2px 5px',
-                                                                backgroundColor: matchingAnswer ? '#e8f5e9' : '#e0e0e0',
-                                                                borderBottom: `2px solid ${matchingAnswer ? '#4caf50' : '#999'}`,
-                                                                borderRadius: '2px',
-                                                                textAlign: 'center',
-                                                                color: matchingAnswer ? '#2e7d32' : '#555',
-                                                                fontWeight: matchingAnswer ? 'bold' : 'normal',
-                                                                fontSize: '0.9em'
-                                                            }}>
-                                                                {matchingAnswer ? matchingAnswer.text : (part.content || '[...]')}
-                                                            </span>
-                                                        );
+                                            const body = question.body_post || question.body;
+                                            if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+                                                const isLocalized = Object.keys(body).some(key => langCodes.includes(key));
+                                                if (isLocalized) {
+                                                    const jsonStr = body[langCode] || body['en'] || Object.values(body)[0];
+                                                    if (typeof jsonStr === 'string') {
+                                                        try {
+                                                            questionData.body = JSON.parse(jsonStr);
+                                                        } catch (e) {
+                                                            console.error("Failed to parse body JSON", e);
+                                                        }
+                                                    } else if (Array.isArray(jsonStr)) {
+                                                        questionData.body = jsonStr;
                                                     }
-                                                })}
-                                            </div>
-                                            {/* Render Answers/Options (Distractors only) */}
-                                            {component.answer && component.answer.some((a: ANY) => a.index_correct === -1) && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '10px' }}>
-                                                    {component.answer.filter((a: ANY) => a.index_correct === -1).map((answer: ANY, ansIndex: number) => (
-                                                        <div key={ansIndex} style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '8px',
-                                                            color: 'inherit'
-                                                        }}>
-                                                            <span style={{
-                                                                width: '20px',
-                                                                height: '20px',
-                                                                borderRadius: '50%',
-                                                                border: '1px solid #ccc',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                fontSize: '12px'
-                                                            }}>
-                                                                {String.fromCharCode(65 + ansIndex)}
-                                                            </span>
-                                                            <span>{answer.text}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                }
-                                case 'run_code':
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
-                                            <div style={{
-                                                backgroundColor: '#f5f5f5',
-                                                padding: '8px 12px',
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                borderBottom: '1px solid #ddd'
-                                            }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
-                                                    {component.language || 'Code'} Playground
-                                                </Typography>
-                                                <LoadingButton
-                                                    size="small"
-                                                    variant="contained"
-                                                    color="success"
-                                                    startIcon={<PlayArrowIcon fontSize="small" />}
-                                                    sx={{ textTransform: 'none', py: 0.5, minWidth: 'auto', fontSize: '0.75rem', height: 24 }}
-                                                >
-                                                    Run
-                                                </LoadingButton>
-                                            </div>
-                                            <div style={{
-                                                padding: '12px',
-                                                backgroundColor: '#282c34',
-                                                color: '#abb2bf',
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.9rem',
-                                                whiteSpace: 'pre-wrap',
-                                                overflowX: 'auto'
-                                            }}>
-                                                {component.code}
-                                            </div>
-                                            {component.testCases && component.testCases.length > 0 && (
-                                                <div style={{ borderTop: '1px solid #ddd', backgroundColor: '#fff', padding: '10px' }}>
-                                                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', display: 'block', mb: 1 }}>Test Cases:</Typography>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        {component.testCases.map((testCase: ANY, tcIndex: number) => (
-                                                            <div key={tcIndex} style={{
-                                                                backgroundColor: '#f9f9f9',
-                                                                padding: '8px',
-                                                                borderRadius: '4px',
-                                                                border: '1px solid #eee',
-                                                                fontSize: '0.85rem'
-                                                            }}>
-                                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                                    <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Input:</span>
-                                                                    <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
-                                                                        {testCase.input || '(empty)'}
-                                                                    </code>
-                                                                </div>
-                                                                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                                                                    <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Output:</span>
-                                                                    <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
-                                                                        {testCase.output}
-                                                                    </code>
-                                                                </div>
+                                                }
+                                            }
+
+                                            return questionData.body?.map((component: ANY, compIndex: number) => {
+                                                switch (component.type) {
+                                                    case 'text':
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px' }} dangerouslySetInnerHTML={{ __html: component.text }} />
+                                                        );
+                                                    case 'code':
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px', backgroundColor: '#282c34', color: '#abb2bf', padding: '10px', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                                                                {component.code}
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-
-                                case 'chat_suggestions':
-                                    return (
-                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
-                                            {/* Header */}
-                                            <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
-                                                AI CHAT
-                                            </div>
-
-                                            <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
-                                                {/* Instructions */}
-                                                {component.chatInstructions && (
-                                                    <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
-                                                )}
-
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                    {component.options?.map((opt: ANY, optIdx: number) => (
-                                                        <div key={optIdx} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                            {/* Question / Option (Simulating user input/selection) */}
-                                                            <div style={{
-                                                                padding: '12px 16px',
-                                                                backgroundColor: '#fff',
-                                                                border: '1px solid #cfd8dc',
-                                                                borderRadius: '20px',
-                                                                color: '#37474f',
-                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                alignSelf: 'flex-end',
-                                                                maxWidth: '85%'
-                                                            }}>
-                                                                {opt.text}
+                                                        );
+                                                    case 'image':
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px', textAlign: 'center' }}>
+                                                                <img src={component.image?.link} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', borderRadius: '4px' }} />
+                                                                {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>{component.description}</div>}
                                                             </div>
+                                                        );
+                                                    case 'info':
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', color: '#0d47a1', borderRadius: '4px', borderLeft: '4px solid #1976d2' }} dangerouslySetInnerHTML={{ __html: component.info }} />
+                                                        );
+                                                    case 'parts': {
+                                                        let secretIndexCounter = 0;
+                                                        const isKeyboard = component.input_method === 'keyboard';
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px' }}>
+                                                                {isKeyboard && (
+                                                                    <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#666', mb: 1, fontStyle: 'italic', bgcolor: '#f0f0f0', p: '2px 6px', borderRadius: '4px', width: 'fit-content' }}>
+                                                                        <span style={{ fontSize: '14px' }}>⌨️</span> Keyboard Input
+                                                                    </Typography>
+                                                                )}
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
+                                                                    {component.parts?.map((part: ANY, partIndex: number) => {
+                                                                        if (!part.isASecret) {
+                                                                            if (part.content === '\n') {
+                                                                                return <div key={partIndex} style={{ flexBasis: '100%', height: 0 }} />;
+                                                                            }
+                                                                            return <span key={partIndex}>{part.content}</span>;
+                                                                        } else {
+                                                                            const currentSecretIndex = secretIndexCounter++;
+                                                                            const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
 
-                                                            {/* Response (Simulating AI response) */}
-                                                            <div style={{
-                                                                padding: '15px',
-                                                                backgroundColor: '#e1eef9',
-                                                                borderLeft: '4px solid #1976d2',
-                                                                borderRadius: '4px',
-                                                                color: '#263238',
-                                                                alignSelf: 'flex-start',
-                                                                maxWidth: '90%',
-                                                                position: 'relative'
-                                                            }}>
-                                                                <div style={{ fontSize: '0.85em', color: '#1565c0', fontWeight: 'bold', marginBottom: '5px' }}>AI Answer:</div>
-                                                                <div dangerouslySetInnerHTML={{ __html: opt.response || '(No response provided yet)' }} />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                case 'ai_chat':
-                                    return (
-                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
-                                            {/* Header */}
-                                            <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
-                                                AI CHAT
-                                            </div>
+                                                                            if (isKeyboard) {
+                                                                                const widthStyle = part.maxLength ? { minWidth: `${Math.max(30, part.maxLength * 9)}px` } : { minWidth: '40px' };
+                                                                                return (
+                                                                                    <span key={partIndex} style={{
+                                                                                        display: 'inline-block',
+                                                                                        ...widthStyle,
+                                                                                        padding: '2px 8px',
+                                                                                        backgroundColor: '#fff',
+                                                                                        border: '1px solid #ccc',
+                                                                                        borderRadius: '4px',
+                                                                                        textAlign: 'center',
+                                                                                        color: matchingAnswer ? '#333' : '#ccc',
+                                                                                        fontFamily: 'monospace',
+                                                                                        fontWeight: 'bold',
+                                                                                        fontSize: '0.95em',
+                                                                                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+                                                                                    }}>
+                                                                                        {matchingAnswer ? matchingAnswer.text : ''}
+                                                                                    </span>
+                                                                                );
+                                                                            }
 
-                                            <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
-                                                {/* Instructions */}
-                                                {component.chatInstructions && (
-                                                    <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
-                                                )}
-
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-
-                                                    {/* Messages from messages array */}
-                                                    {component.messages && component.messages.length > 0 && (
-                                                        component.messages.map((msg: ANY, msgIdx: number) => (
-                                                            <div key={msgIdx} style={{
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                gap: '5px',
-                                                                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                                                width: '100%'
-                                                            }}>
-                                                                {msg.role === 'user' ? (
-                                                                    // User message - styled as a persona/system message
-                                                                    <div style={{
-                                                                        display: 'flex',
-                                                                        alignItems: 'flex-start',
-                                                                        gap: '10px',
-                                                                        maxWidth: '95%',
-                                                                        width: '100%'
-                                                                    }}>
-                                                                        {/* AI/Persona Icon */}
-                                                                        <div style={{
-                                                                            width: '32px',
-                                                                            height: '32px',
-                                                                            borderRadius: '50%',
-                                                                            background: 'linear-gradient(135deg, #1976d2, #d32f2f)',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            flexShrink: 0
-                                                                        }}>
-                                                                            <span style={{ fontSize: '16px' }}>🇫🇷</span>
-                                                                        </div>
-                                                                        <div style={{
-                                                                            padding: '15px',
-                                                                            backgroundColor: '#fff',
-                                                                            border: '1px solid #e0e0e0',
-                                                                            borderRadius: '12px',
-                                                                            color: '#37474f',
-                                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                                                                            flex: 1,
-                                                                            whiteSpace: 'pre-wrap',
-                                                                            lineHeight: '1.6',
-                                                                            fontSize: '0.95em'
-                                                                        }}>
-                                                                            {msg.content}
-                                                                            {/* Copy button */}
-                                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                                                                                <button style={{
-                                                                                    background: 'none',
-                                                                                    border: 'none',
-                                                                                    cursor: 'pointer',
-                                                                                    color: '#90a4ae',
-                                                                                    padding: '4px'
+                                                                            return (
+                                                                                <span key={partIndex} style={{
+                                                                                    display: 'inline-block',
+                                                                                    minWidth: '30px',
+                                                                                    padding: '2px 5px',
+                                                                                    backgroundColor: matchingAnswer ? '#e8f5e9' : '#e0e0e0',
+                                                                                    borderBottom: `2px solid ${matchingAnswer ? '#4caf50' : '#999'}`,
+                                                                                    borderRadius: '2px',
+                                                                                    textAlign: 'center',
+                                                                                    color: matchingAnswer ? '#2e7d32' : '#555',
+                                                                                    fontWeight: matchingAnswer ? 'bold' : 'normal',
+                                                                                    fontSize: '0.9em'
                                                                                 }}>
-                                                                                    📋
-                                                                                </button>
+                                                                                    {matchingAnswer ? matchingAnswer.text : (part.content || '[...]')}
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                    })}
+                                                                </div>
+                                                                {/* Render Answers/Options (Distractors only) */}
+                                                                {component.answer && component.answer.some((a: ANY) => a.index_correct === -1) && (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '10px' }}>
+                                                                        {component.answer.filter((a: ANY) => a.index_correct === -1).map((answer: ANY, ansIndex: number) => (
+                                                                            <div key={ansIndex} style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '8px',
+                                                                                color: 'inherit'
+                                                                            }}>
+                                                                                <span style={{
+                                                                                    width: '20px',
+                                                                                    height: '20px',
+                                                                                    borderRadius: '50%',
+                                                                                    border: '1px solid #ccc',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    fontSize: '12px'
+                                                                                }}>
+                                                                                    {String.fromCharCode(65 + ansIndex)}
+                                                                                </span>
+                                                                                <span>{answer.text}</span>
                                                                             </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    // Assistant message
-                                                                    <div style={{
-                                                                        padding: '15px',
-                                                                        backgroundColor: '#e1eef9',
-                                                                        borderLeft: '4px solid #1976d2',
-                                                                        borderRadius: '4px',
-                                                                        color: '#263238',
-                                                                        maxWidth: '90%',
-                                                                        width: '100%',
-                                                                        whiteSpace: 'pre-wrap'
-                                                                    }}>
-                                                                        <div style={{ fontSize: '0.8rem', color: '#1565c0', marginBottom: '8px', fontWeight: 'bold' }}>AI:</div>
-                                                                        {msg.content}
+                                                                        ))}
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                        ))
-                                                    )}
-
-                                                    {/* Input field with default value */}
-                                                    <div style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        marginTop: '10px'
-                                                    }}>
-                                                        {/* Refresh icon */}
-                                                        <button style={{
-                                                            width: '36px',
-                                                            height: '36px',
-                                                            borderRadius: '50%',
-                                                            border: 'none',
-                                                            background: 'none',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            color: '#90a4ae'
-                                                        }}>
-                                                            🔄
-                                                        </button>
-                                                        {/* Input field */}
-                                                        <div style={{
-                                                            flex: 1,
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            backgroundColor: '#fff',
-                                                            border: '1px solid #e0e0e0',
-                                                            borderRadius: '24px',
-                                                            padding: '10px 16px',
-                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
-                                                        }}>
-                                                            <span style={{ flex: 1, color: '#37474f', fontSize: '0.95em' }}>
-                                                                {component.inputDefaultValue || 'Type your message...'}
-                                                            </span>
-                                                            {/* Send button */}
-                                                            <button style={{
-                                                                width: '32px',
-                                                                height: '32px',
-                                                                borderRadius: '50%',
-                                                                border: 'none',
-                                                                backgroundColor: '#2196f3',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                color: '#fff',
-                                                                marginLeft: '10px'
-                                                            }}>
-                                                                ↑
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Response (if any) */}
-                                                    {component.response && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
-                                                            <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
-                                                            <div style={{
-                                                                padding: '15px',
-                                                                backgroundColor: '#e1eef9',
-                                                                borderLeft: '4px solid #1976d2',
-                                                                borderRadius: '4px',
-                                                                color: '#263238',
-                                                                maxWidth: '90%',
-                                                                width: '100%'
-                                                            }}>
-                                                                <div dangerouslySetInnerHTML={{ __html: component.response }} />
+                                                        );
+                                                    }
+                                                    case 'run_code':
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
+                                                                <div style={{
+                                                                    backgroundColor: '#f5f5f5',
+                                                                    padding: '8px 12px',
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    borderBottom: '1px solid #ddd'
+                                                                }}>
+                                                                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
+                                                                        {component.language || 'Code'} Playground
+                                                                    </Typography>
+                                                                    <LoadingButton
+                                                                        size="small"
+                                                                        variant="contained"
+                                                                        color="success"
+                                                                        startIcon={<PlayArrowIcon fontSize="small" />}
+                                                                        sx={{ textTransform: 'none', py: 0.5, minWidth: 'auto', fontSize: '0.75rem', height: 24 }}
+                                                                    >
+                                                                        Run
+                                                                    </LoadingButton>
+                                                                </div>
+                                                                <div style={{
+                                                                    padding: '12px',
+                                                                    backgroundColor: '#282c34',
+                                                                    color: '#abb2bf',
+                                                                    fontFamily: 'monospace',
+                                                                    fontSize: '0.9rem',
+                                                                    whiteSpace: 'pre-wrap',
+                                                                    overflowX: 'auto'
+                                                                }}>
+                                                                    {component.code}
+                                                                </div>
+                                                                {component.testCases && component.testCases.length > 0 && (
+                                                                    <div style={{ borderTop: '1px solid #ddd', backgroundColor: '#fff', padding: '10px' }}>
+                                                                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', display: 'block', mb: 1 }}>Test Cases:</Typography>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                            {component.testCases.map((testCase: ANY, tcIndex: number) => (
+                                                                                <div key={tcIndex} style={{
+                                                                                    backgroundColor: '#f9f9f9',
+                                                                                    padding: '8px',
+                                                                                    borderRadius: '4px',
+                                                                                    border: '1px solid #eee',
+                                                                                    fontSize: '0.85rem'
+                                                                                }}>
+                                                                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                                                                        <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Input:</span>
+                                                                                        <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
+                                                                                            {testCase.input || '(empty)'}
+                                                                                        </code>
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                                                                                        <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Output:</span>
+                                                                                        <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
+                                                                                            {testCase.output}
+                                                                                        </code>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        );
 
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                case 'rive': {
-                                    const assetUrl = component.webAssetUrl || component.mobileAssetUrl;
-                                    const ratio = component.webRatio || component.mobileRatio || "4:3";
-                                    let paddingTopPercentage = 75; // Default 4:3
-                                    if (ratio) {
-                                        const [widthRatio, heightRatio] = ratio.split(':').map(Number);
-                                        if (widthRatio > 0 && heightRatio > 0) {
-                                            paddingTopPercentage = (heightRatio / widthRatio) * 100;
+                                                    case 'chat_suggestions':
+                                                        return (
+                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                                                                {/* Header */}
+                                                                <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
+                                                                    AI CHAT
+                                                                </div>
+
+                                                                <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
+                                                                    {/* Instructions */}
+                                                                    {component.chatInstructions && (
+                                                                        <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
+                                                                    )}
+
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                                        {component.options?.map((opt: ANY, optIdx: number) => (
+                                                                            <div key={optIdx} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                                                {/* Question / Option (Simulating user input/selection) */}
+                                                                                <div style={{
+                                                                                    padding: '12px 16px',
+                                                                                    backgroundColor: '#fff',
+                                                                                    border: '1px solid #cfd8dc',
+                                                                                    borderRadius: '20px',
+                                                                                    color: '#37474f',
+                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                                    alignSelf: 'flex-end',
+                                                                                    maxWidth: '85%'
+                                                                                }}>
+                                                                                    {opt.text}
+                                                                                </div>
+
+                                                                                {/* Response (Simulating AI response) */}
+                                                                                <div style={{
+                                                                                    padding: '15px',
+                                                                                    backgroundColor: '#e1eef9',
+                                                                                    borderLeft: '4px solid #1976d2',
+                                                                                    borderRadius: '4px',
+                                                                                    color: '#263238',
+                                                                                    alignSelf: 'flex-start',
+                                                                                    maxWidth: '90%',
+                                                                                    position: 'relative'
+                                                                                }}>
+                                                                                    <div style={{ fontSize: '0.85em', color: '#1565c0', fontWeight: 'bold', marginBottom: '5px' }}>AI Answer:</div>
+                                                                                    <div dangerouslySetInnerHTML={{ __html: opt.response || '(No response provided yet)' }} />
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    case 'ai_chat':
+                                                        return (
+                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                                                                {/* Header */}
+                                                                <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
+                                                                    AI CHAT
+                                                                </div>
+
+                                                                <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
+                                                                    {/* Instructions */}
+                                                                    {component.chatInstructions && (
+                                                                        <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
+                                                                    )}
+
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+
+                                                                        {/* Messages from messages array */}
+                                                                        {component.messages && component.messages.length > 0 && (
+                                                                            component.messages.map((msg: ANY, msgIdx: number) => (
+                                                                                <div key={msgIdx} style={{
+                                                                                    display: 'flex',
+                                                                                    flexDirection: 'column',
+                                                                                    gap: '5px',
+                                                                                    alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                                                                    width: '100%'
+                                                                                }}>
+                                                                                    {msg.role === 'user' ? (
+                                                                                        // User message - styled as a persona/system message
+                                                                                        <div style={{
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'flex-start',
+                                                                                            gap: '10px',
+                                                                                            maxWidth: '95%',
+                                                                                            width: '100%'
+                                                                                        }}>
+                                                                                            {/* AI/Persona Icon */}
+                                                                                            <div style={{
+                                                                                                width: '32px',
+                                                                                                height: '32px',
+                                                                                                borderRadius: '50%',
+                                                                                                background: 'linear-gradient(135deg, #1976d2, #d32f2f)',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                flexShrink: 0
+                                                                                            }}>
+                                                                                                <span style={{ fontSize: '16px' }}>🇫🇷</span>
+                                                                                            </div>
+                                                                                            <div style={{
+                                                                                                padding: '15px',
+                                                                                                backgroundColor: '#fff',
+                                                                                                border: '1px solid #e0e0e0',
+                                                                                                borderRadius: '12px',
+                                                                                                color: '#37474f',
+                                                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                                                                                flex: 1,
+                                                                                                whiteSpace: 'pre-wrap',
+                                                                                                lineHeight: '1.6',
+                                                                                                fontSize: '0.95em'
+                                                                                            }}>
+                                                                                                {msg.content}
+                                                                                                {/* Copy button */}
+                                                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                                                                                    <button style={{
+                                                                                                        background: 'none',
+                                                                                                        border: 'none',
+                                                                                                        cursor: 'pointer',
+                                                                                                        color: '#90a4ae',
+                                                                                                        padding: '4px'
+                                                                                                    }}>
+                                                                                                        📋
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        // Assistant message
+                                                                                        <div style={{
+                                                                                            padding: '15px',
+                                                                                            backgroundColor: '#e1eef9',
+                                                                                            borderLeft: '4px solid #1976d2',
+                                                                                            borderRadius: '4px',
+                                                                                            color: '#263238',
+                                                                                            maxWidth: '90%',
+                                                                                            width: '100%',
+                                                                                            whiteSpace: 'pre-wrap'
+                                                                                        }}>
+                                                                                            <div style={{ fontSize: '0.8rem', color: '#1565c0', marginBottom: '8px', fontWeight: 'bold' }}>AI:</div>
+                                                                                            {msg.content}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ))
+                                                                        )}
+
+                                                                        {/* Input field with default value */}
+                                                                        <div style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '10px',
+                                                                            marginTop: '10px'
+                                                                        }}>
+                                                                            {/* Refresh icon */}
+                                                                            <button style={{
+                                                                                width: '36px',
+                                                                                height: '36px',
+                                                                                borderRadius: '50%',
+                                                                                border: 'none',
+                                                                                background: 'none',
+                                                                                cursor: 'pointer',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                color: '#90a4ae'
+                                                                            }}>
+                                                                                🔄
+                                                                            </button>
+                                                                            {/* Input field */}
+                                                                            <div style={{
+                                                                                flex: 1,
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                backgroundColor: '#fff',
+                                                                                border: '1px solid #e0e0e0',
+                                                                                borderRadius: '24px',
+                                                                                padding: '10px 16px',
+                                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                                                                            }}>
+                                                                                <span style={{ flex: 1, color: '#37474f', fontSize: '0.95em' }}>
+                                                                                    {component.inputDefaultValue || 'Type your message...'}
+                                                                                </span>
+                                                                                {/* Send button */}
+                                                                                <button style={{
+                                                                                    width: '32px',
+                                                                                    height: '32px',
+                                                                                    borderRadius: '50%',
+                                                                                    border: 'none',
+                                                                                    backgroundColor: '#2196f3',
+                                                                                    cursor: 'pointer',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    color: '#fff',
+                                                                                    marginLeft: '10px'
+                                                                                }}>
+                                                                                    ↑
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Response (if any) */}
+                                                                        {component.response && (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
+                                                                                <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
+                                                                                <div style={{
+                                                                                    padding: '15px',
+                                                                                    backgroundColor: '#e1eef9',
+                                                                                    borderLeft: '4px solid #1976d2',
+                                                                                    borderRadius: '4px',
+                                                                                    color: '#263238',
+                                                                                    maxWidth: '90%',
+                                                                                    width: '100%'
+                                                                                }}>
+                                                                                    <div dangerouslySetInnerHTML={{ __html: component.response }} />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    case 'rive': {
+                                                        const assetUrl = component.webAssetUrl || component.mobileAssetUrl;
+                                                        const ratio = component.webRatio || component.mobileRatio || "4:3";
+                                                        let paddingTopPercentage = 75; // Default 4:3
+                                                        if (ratio) {
+                                                            const [widthRatio, heightRatio] = ratio.split(':').map(Number);
+                                                            if (widthRatio > 0 && heightRatio > 0) {
+                                                                paddingTopPercentage = (heightRatio / widthRatio) * 100;
+                                                            }
+                                                        }
+
+                                                        return (
+                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto' }}>
+                                                                <div style={{
+                                                                    position: 'relative',
+                                                                    width: '100%',
+                                                                    paddingTop: `${paddingTopPercentage}%`,
+                                                                    backgroundColor: '#f0f0f0',
+                                                                    borderRadius: '8px',
+                                                                    overflow: 'hidden'
+                                                                }}>
+                                                                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+                                                                        {assetUrl ? (
+                                                                            <RivePlayer
+                                                                                src={assetUrl}
+                                                                                artboard={component.artboard}
+                                                                                stateMachines={component.stateMachines}
+                                                                                inputOnPress={component.inputOnPress}
+                                                                                inputOnRelease={component.inputOnRelease}
+                                                                                interactionZones={component.interactionZones}
+                                                                                autoplay={true}
+                                                                            />
+                                                                        ) : (
+                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
+                                                                                No Rive asset URL provided
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    default:
+                                                        return (
+                                                            <div key={compIndex} style={{ marginBottom: '10px', color: '#888', fontStyle: 'italic' }}>
+                                                                [Unsupported component type: {component.type}]
+                                                            </div>
+                                                        );
+                                                }
+                                            })
+                                        })()
                                         }
-                                    }
+                                        {/* Render content field if available (e.g. select_answer, order_list) */}
+                                        {
 
-                                    return (
-                                        <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto' }}>
-                                            <div style={{
-                                                position: 'relative',
-                                                width: '100%',
-                                                paddingTop: `${paddingTopPercentage}%`,
-                                                backgroundColor: '#f0f0f0',
-                                                borderRadius: '8px',
-                                                overflow: 'hidden'
-                                            }}>
-                                                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                                                    {assetUrl ? (
-                                                        <RivePlayer
-                                                            src={assetUrl}
-                                                            artboard={component.artboard}
-                                                            stateMachines={component.stateMachines}
-                                                            inputOnPress={component.inputOnPress}
-                                                            inputOnRelease={component.inputOnRelease}
-                                                            interactionZones={component.interactionZones}
-                                                            autoplay={true}
-                                                        />
-                                                    ) : (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
-                                                            No Rive asset URL provided
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
+                                            (() => {
+                                                let questionData = { ...question };
+                                                const langCodes = languages.map(l => l.code);
 
-                                default:
-                                    return (
-                                        <div key={compIndex} style={{ marginBottom: '10px', color: '#888', fontStyle: 'italic' }}>
-                                            [Unsupported component type: {component.type}]
-                                        </div>
-                                    );
-                            }
-                        })}
+                                                const content = question.content_post || question.content;
+                                                if (typeof content === 'object' && content !== null && !Array.isArray(content)) {
+                                                    const isLocalized = Object.keys(content).some(key => langCodes.includes(key));
+                                                    if (isLocalized) {
+                                                        const jsonStr = content[langCode] || content['en'] || Object.values(content)[0];
+                                                        if (typeof jsonStr === 'string') {
+                                                            try {
+                                                                questionData.content = JSON.parse(jsonStr);
+                                                            } catch (e) {
+                                                                console.error("Failed to parse content JSON", e);
+                                                            }
+                                                        } else if (typeof jsonStr === 'object') {
+                                                            questionData.content = jsonStr;
+                                                        }
+                                                    }
+                                                }
 
-                        {/* Render content field if available (e.g. select_answer, order_list) */}
-                        {
-                            question.content && !Array.isArray(question.content) && (
-                                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
-                                    {question.content.type === 'select_answer' && question.content.options && (
-                                        <>
-                                            <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Select Answer Options:</Typography>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {question.content.options.map((option: ANY, optIndex: number) => (
-                                                    <div key={optIndex} style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        padding: '8px',
-                                                        borderRadius: '4px',
-                                                        backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
-                                                        border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
-                                                    }}>
-                                                        <span style={{
-                                                            width: '24px',
-                                                            height: '24px',
-                                                            borderRadius: '50%',
-                                                            backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
-                                                            color: option.isCorrect ? '#fff' : '#666',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            fontWeight: 'bold',
-                                                            fontSize: '13px',
-                                                            flexShrink: 0
-                                                        }}>
-                                                            {String.fromCharCode(65 + optIndex)}
-                                                        </span>
-                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                            {option.imageUrl && (
-                                                                <img
-                                                                    src={option.imageUrl}
-                                                                    alt={`Option ${optIndex + 1}`}
-                                                                    style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
-                                                                />
-                                                            )}
-                                                            {option.text && (
-                                                                <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
-                                                                    {option.text}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
+                                                return questionData.content && !Array.isArray(question.content) && (
+                                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
+                                                        {questionData.content.type === 'select_answer' && questionData.content.options && (
+                                                            <>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                    {questionData.content.options.map((option: ANY, optIndex: number) => (
+                                                                        <div key={optIndex} style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '10px',
+                                                                            padding: '8px',
+                                                                            borderRadius: '4px',
+                                                                            backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
+                                                                            border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
+                                                                        }}>
+                                                                            <span style={{
+                                                                                width: '24px',
+                                                                                height: '24px',
+                                                                                borderRadius: '50%',
+                                                                                backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
+                                                                                color: option.isCorrect ? '#fff' : '#666',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                fontWeight: 'bold',
+                                                                                fontSize: '13px',
+                                                                                flexShrink: 0
+                                                                            }}>
+                                                                                {String.fromCharCode(65 + optIndex)}
+                                                                            </span>
+                                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                                {option.imageUrl && (
+                                                                                    <img
+                                                                                        src={option.imageUrl}
+                                                                                        alt={`Option ${optIndex + 1}`}
+                                                                                        style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
+                                                                                    />
+                                                                                )}
+                                                                                {option.text && (
+                                                                                    <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
+                                                                                        {option.text}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+
+                                                        {questionData.content.type === 'order_list' && questionData.content.items && (
+                                                            <>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                    {questionData.content.items.map((item: ANY, itemIndex: number) => (
+                                                                        <div key={itemIndex} style={{
+                                                                            padding: '10px',
+                                                                            backgroundColor: '#fff',
+                                                                            border: '1px solid #ddd',
+                                                                            borderRadius: '4px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '10px',
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                        }}>
+                                                                            <span style={{
+                                                                                width: '24px',
+                                                                                height: '24px',
+                                                                                borderRadius: '50%',
+                                                                                backgroundColor: '#e3f2fd',
+                                                                                color: '#1976d2',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                fontWeight: 'bold',
+                                                                                fontSize: '13px',
+                                                                                border: '1px solid #bbdefb'
+                                                                            }}>
+                                                                                {itemIndex + 1}
+                                                                            </span>
+                                                                            <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.95em' }}>
+                                                                                {item.text}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {question.content.type === 'order_list' && question.content.items && (
-                                        <>
-                                            <Typography variant="subtitle2" sx={{ mb: 1, color: '#444' }}>Order List (Correct Sequence):</Typography>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {question.content.items.map((item: ANY, itemIndex: number) => (
-                                                    <div key={itemIndex} style={{
-                                                        padding: '10px',
-                                                        backgroundColor: '#fff',
-                                                        border: '1px solid #ddd',
-                                                        borderRadius: '4px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                    }}>
-                                                        <span style={{
-                                                            width: '24px',
-                                                            height: '24px',
-                                                            borderRadius: '50%',
-                                                            backgroundColor: '#e3f2fd',
-                                                            color: '#1976d2',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            fontWeight: 'bold',
-                                                            fontSize: '13px',
-                                                            border: '1px solid #bbdefb'
-                                                        }}>
-                                                            {itemIndex + 1}
-                                                        </span>
-                                                        <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.95em' }}>
-                                                            {item.text}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            )
-                        }
+                                                )
+                                            })()
+                                        }
+                                    </Box>
+                                )
+                            })}
+                        </Box>
                     </Box >
                 </Box >
             </Box >

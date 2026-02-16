@@ -554,6 +554,21 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         }}
                                     />
 
+                                    {Boolean((node as ANY).isPublished) && (
+                                        <Chip
+                                            label="Published"
+                                            size="small"
+                                            sx={{
+                                                height: 16,
+                                                fontSize: "0.625rem",
+                                                backgroundColor: "success.main",
+                                                color: "white",
+                                                fontWeight: 600,
+                                                cursor: "default",
+                                            }}
+                                        />
+                                    )}
+
                                     {nodeType === "lesson" && ((node as Lesson).special?.active) && (
                                         <Box
                                             sx={{
