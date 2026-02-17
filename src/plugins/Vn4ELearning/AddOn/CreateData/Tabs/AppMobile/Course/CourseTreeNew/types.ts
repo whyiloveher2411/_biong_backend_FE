@@ -81,6 +81,7 @@ export interface Course {
     };
     count_app_course_flashcard?: number;
     isPublished?: boolean;
+    is_completed?: boolean;
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;
