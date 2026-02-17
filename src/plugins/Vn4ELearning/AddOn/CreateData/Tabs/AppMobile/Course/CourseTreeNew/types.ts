@@ -32,6 +32,7 @@ export interface Lesson {
     };
     count_app_course_flashcard?: number;
     isPublished?: boolean;
+    is_completed?: boolean;
 }
 
 export interface Chapter {

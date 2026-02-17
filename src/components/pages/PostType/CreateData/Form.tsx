@@ -118,7 +118,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
 
             return prev;
         });
-        
+
     };
 
     let listFieldInTabs: string[] = [],
@@ -248,7 +248,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
             }
             {
                 data?.config?.actions ? data.config.actions.map((item, index) =>
-                    <ButtonAction 
+                    <ButtonAction
                         title={item.title}
                         link={item.link_api}
                         id={data.post.id}

@@ -248,7 +248,8 @@ const CourseTreeItem = memo(function CourseTreeItem({
     const nodeColor = getNodeColor(node);
     const isMissingReward = nodeType === "lesson" && typeof index === 'number' && (index + 1) % 5 === 4;
     const isTrash = (node as { status?: string }).status === 'trash';
-    const backgroundColor = isTrash ? "#ffebee" : (isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth));
+    const isCompleted = nodeType === 'lesson' && (node as Lesson).is_completed;
+    const backgroundColor = isTrash ? "#ffebee" : (isCompleted ? "#e8f5e9" : (isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth)));
     const indentSize = 5;
     const basePadding = nodeType === "question" ? 8 : 2;
     const paddingLeft = depth > 0 ? depth * indentSize + basePadding : basePadding;
