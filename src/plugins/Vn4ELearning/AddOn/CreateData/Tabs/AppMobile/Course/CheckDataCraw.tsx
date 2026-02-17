@@ -840,6 +840,10 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                                                     {component.parts?.map((part: ANY, partIndex: number) => {
                                                                         if (!part.isASecret) {
                                                                             if (part.content === '\n') {
+                                                                                return <div key={partIndex} style={{ flexBasis: '100%', height: 20, color: 'red', fontSize: '12px' }} >"\n" Cần update data</div>;
+                                                                            }
+
+                                                                            if (part.type === 'new_line') {
                                                                                 return <div key={partIndex} style={{ flexBasis: '100%', height: 0 }} />;
                                                                             }
                                                                             return <span key={partIndex}>{part.content}</span>;
