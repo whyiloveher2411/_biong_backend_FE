@@ -1,16 +1,18 @@
-import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton, Chip } from "@mui/material";
+import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton, Chip, Tooltip } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
 import React from "react";
 import { LoadingButton } from "@mui/lab";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import DeleteIcon from "@mui/icons-material/Delete";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import RestoreIcon from "@mui/icons-material/Restore";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
-import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 import useLanguages from "../hooks/useLanguages";
+import useConfirmDialog from "hook/useConfirmDialog";
+import QuestionPreview from "./Common/QuestionPreview";
 
 function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
@@ -515,6 +517,18 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     const [loadingTranslate, setLoadingTranslate] = React.useState<string | number | boolean>(false);
     const [error, setError] = React.useState<string | null>(null);
 
+    const [loadingAction, setLoadingAction] = React.useState(false);
+
+    const deleteConfirm = useConfirmDialog({
+        title: "Xác nhận xóa câu hỏi",
+        message: "Bạn có chắc chắn muốn xóa câu hỏi này?",
+    });
+
+    const permanentDeleteConfirm = useConfirmDialog({
+        title: "Xác nhận xóa vĩnh viễn",
+        message: "Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa vĩnh viễn câu hỏi này?",
+    });
+
     React.useEffect(() => {
         setQuestion(initialQuestion);
         setJsonBody(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
@@ -611,11 +625,67 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
         onCreate(question);
     };
 
+    const handleTrashOrRestore = () => {
+        const performAction = () => {
+            setLoadingAction(true);
+            const isTrash = question.status === 'trash';
+            ajaxUseApi.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/trash-post",
+                method: "POST",
+                data: {
+                    id: postId,
+                    action: isTrash ? "restore" : "trash",
+                    type: "question",
+                    post_id: initialQuestion.post_id
+                },
+                success: () => {
+                    setLoadingAction(false);
+                    if (onTranslated) onTranslated();
+                },
+                error: () => {
+                    setLoadingAction(false);
+                }
+            });
+        };
+
+        if (question.status === 'trash') {
+            performAction(); // Restore doesn't need confirmation usually, or maybe it does? CourseTree doesn't seem to ask.
+        } else {
+            deleteConfirm.onConfirm(performAction);
+            deleteConfirm.setOpen(true);
+        }
+    };
+
+    const handlePermanentDelete = () => {
+        permanentDeleteConfirm.onConfirm(() => {
+            setLoadingAction(true);
+            ajaxUseApi.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/permanent-delete-post",
+                method: "POST",
+                data: {
+                    id: postId,
+                    type: "question",
+                    post_id: initialQuestion.post_id
+                },
+                success: () => {
+                    setLoadingAction(false);
+                    if (onTranslated) onTranslated();
+                },
+                error: () => {
+                    setLoadingAction(false);
+                }
+            });
+        });
+        permanentDeleteConfirm.setOpen(true);
+    };
+
+    const isTrash = question.status === 'trash';
+
     return (
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #eee' }}>
+        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: isTrash ? '#ffebee' : 'white', borderRadius: '4px', border: '1px solid #eee' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
                 <Typography variant="subtitle1" style={{ fontWeight: 'bold' }}>
-                    Question {index + 1} {initialQuestion.post_id ? (initialQuestion.status === 'trash' ? <Chip label="Deleted" color="error" /> : '') : <></>}
+                    Question {index + 1} {initialQuestion.post_id ? (isTrash ? <Chip label="Deleted" color="error" size="small" /> : '') : <></>}
                 </Typography>
                 <div>
                     {initialQuestion.post_id && languages.filter(l => l.code !== 'en').map((lang) => (
@@ -647,11 +717,46 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                     >
                         {initialQuestion.post_id ? "Edit Question" : "Create Question"}
                     </LoadingButton>
-                    <IconButton size="small" onClick={onDelete} color="error">
-                        <DeleteIcon />
-                    </IconButton>
+
+                    {initialQuestion.post_id ? (
+                        <>
+                            {isTrash ? (
+                                <>
+                                    <Tooltip title="Restore">
+                                        <span>
+                                            <IconButton size="small" onClick={handleTrashOrRestore} color="primary" disabled={loadingAction}>
+                                                <RestoreIcon />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                    <Tooltip title="Delete Permanently">
+                                        <span>
+                                            <IconButton size="small" onClick={handlePermanentDelete} color="error" disabled={loadingAction}>
+                                                <DeleteForeverIcon />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                </>
+                            ) : (
+                                <Tooltip title="Delete">
+                                    <span>
+                                        <IconButton size="small" onClick={handleTrashOrRestore} color="error" disabled={loadingAction}>
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            )}
+                        </>
+                    ) : (
+                        // Local preview delete (no post_id yet)
+                        <IconButton size="small" onClick={onDelete} color="error">
+                            <DeleteIcon />
+                        </IconButton>
+                    )}
                 </div>
             </div>
+            {deleteConfirm.component}
+            {permanentDeleteConfirm.component}
 
             <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
                 <TextField
@@ -782,605 +887,11 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             </Typography>
                                         </Box>
 
-                                        {(() => {
-                                            let questionData = { ...question };
-                                            const langCodes = languages.map(l => l.code);
-
-                                            const body = question.body_post || question.body;
-                                            if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
-                                                const isLocalized = Object.keys(body).some(key => langCodes.includes(key));
-                                                if (isLocalized) {
-                                                    const jsonStr = body[langCode] || body['en'] || Object.values(body)[0];
-                                                    if (typeof jsonStr === 'string') {
-                                                        try {
-                                                            questionData.body = JSON.parse(jsonStr);
-                                                        } catch (e) {
-                                                            console.error("Failed to parse body JSON", e);
-                                                        }
-                                                    } else if (Array.isArray(jsonStr)) {
-                                                        questionData.body = jsonStr;
-                                                    }
-                                                }
-                                            }
-
-                                            return questionData.body?.map((component: ANY, compIndex: number) => {
-                                                switch (component.type) {
-                                                    case 'text':
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px' }} dangerouslySetInnerHTML={{ __html: component.text }} />
-                                                        );
-                                                    case 'code':
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px', backgroundColor: '#282c34', color: '#abb2bf', padding: '10px', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                                                                {component.code}
-                                                            </div>
-                                                        );
-                                                    case 'image':
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px', textAlign: 'center' }}>
-                                                                <img src={component.image?.link} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', borderRadius: '4px' }} />
-                                                                {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>{component.description}</div>}
-                                                            </div>
-                                                        );
-                                                    case 'info':
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', color: '#0d47a1', borderRadius: '4px', borderLeft: '4px solid #1976d2' }} dangerouslySetInnerHTML={{ __html: component.info }} />
-                                                        );
-                                                    case 'parts': {
-                                                        let secretIndexCounter = 0;
-                                                        const isKeyboard = component.input_method === 'keyboard';
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px' }}>
-                                                                {isKeyboard && (
-                                                                    <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#666', mb: 1, fontStyle: 'italic', bgcolor: '#f0f0f0', p: '2px 6px', borderRadius: '4px', width: 'fit-content' }}>
-                                                                        <span style={{ fontSize: '14px' }}>⌨️</span> Keyboard Input
-                                                                    </Typography>
-                                                                )}
-                                                                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
-                                                                    {component.parts?.map((part: ANY, partIndex: number) => {
-                                                                        if (!part.isASecret) {
-                                                                            if (part.content === '\n') {
-                                                                                return <div key={partIndex} style={{ flexBasis: '100%', height: 20, color: 'red', fontSize: '12px' }} >"\n" Cần update data</div>;
-                                                                            }
-
-                                                                            if (part.type === 'new_line') {
-                                                                                return <div key={partIndex} style={{ flexBasis: '100%', height: 0 }} />;
-                                                                            }
-                                                                            return <span key={partIndex}>{part.content}</span>;
-                                                                        } else {
-                                                                            const currentSecretIndex = secretIndexCounter++;
-                                                                            const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
-
-                                                                            if (isKeyboard) {
-                                                                                const widthStyle = part.maxLength ? { minWidth: `${Math.max(30, part.maxLength * 9)}px` } : { minWidth: '40px' };
-                                                                                return (
-                                                                                    <span key={partIndex} style={{
-                                                                                        display: 'inline-block',
-                                                                                        ...widthStyle,
-                                                                                        padding: '2px 8px',
-                                                                                        backgroundColor: '#fff',
-                                                                                        border: '1px solid #ccc',
-                                                                                        borderRadius: '4px',
-                                                                                        textAlign: 'center',
-                                                                                        color: matchingAnswer ? '#333' : '#ccc',
-                                                                                        fontFamily: 'monospace',
-                                                                                        fontWeight: 'bold',
-                                                                                        fontSize: '0.95em',
-                                                                                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
-                                                                                    }}>
-                                                                                        {matchingAnswer ? matchingAnswer.text : ''}
-                                                                                    </span>
-                                                                                );
-                                                                            }
-
-                                                                            return (
-                                                                                <span key={partIndex} style={{
-                                                                                    display: 'inline-block',
-                                                                                    minWidth: '30px',
-                                                                                    padding: '2px 5px',
-                                                                                    backgroundColor: matchingAnswer ? '#e8f5e9' : '#e0e0e0',
-                                                                                    borderBottom: `2px solid ${matchingAnswer ? '#4caf50' : '#999'}`,
-                                                                                    borderRadius: '2px',
-                                                                                    textAlign: 'center',
-                                                                                    color: matchingAnswer ? '#2e7d32' : '#555',
-                                                                                    fontWeight: matchingAnswer ? 'bold' : 'normal',
-                                                                                    fontSize: '0.9em'
-                                                                                }}>
-                                                                                    {matchingAnswer ? matchingAnswer.text : (part.content || '[...]')}
-                                                                                </span>
-                                                                            );
-                                                                        }
-                                                                    })}
-                                                                </div>
-                                                                {/* Render Answers/Options (Distractors only) */}
-                                                                {component.answer && component.answer.some((a: ANY) => a.index_correct === -1) && (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '10px' }}>
-                                                                        {component.answer.filter((a: ANY) => a.index_correct === -1).map((answer: ANY, ansIndex: number) => (
-                                                                            <div key={ansIndex} style={{
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '8px',
-                                                                                color: 'inherit'
-                                                                            }}>
-                                                                                <span style={{
-                                                                                    width: '20px',
-                                                                                    height: '20px',
-                                                                                    borderRadius: '50%',
-                                                                                    border: '1px solid #ccc',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    justifyContent: 'center',
-                                                                                    fontSize: '12px'
-                                                                                }}>
-                                                                                    {String.fromCharCode(65 + ansIndex)}
-                                                                                </span>
-                                                                                <span>{answer.text}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    }
-                                                    case 'run_code':
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
-                                                                <div style={{
-                                                                    backgroundColor: '#f5f5f5',
-                                                                    padding: '8px 12px',
-                                                                    display: 'flex',
-                                                                    justifyContent: 'space-between',
-                                                                    alignItems: 'center',
-                                                                    borderBottom: '1px solid #ddd'
-                                                                }}>
-                                                                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
-                                                                        {component.language || 'Code'} Playground
-                                                                    </Typography>
-                                                                    <LoadingButton
-                                                                        size="small"
-                                                                        variant="contained"
-                                                                        color="success"
-                                                                        startIcon={<PlayArrowIcon fontSize="small" />}
-                                                                        sx={{ textTransform: 'none', py: 0.5, minWidth: 'auto', fontSize: '0.75rem', height: 24 }}
-                                                                    >
-                                                                        Run
-                                                                    </LoadingButton>
-                                                                </div>
-                                                                <div style={{
-                                                                    padding: '12px',
-                                                                    backgroundColor: '#282c34',
-                                                                    color: '#abb2bf',
-                                                                    fontFamily: 'monospace',
-                                                                    fontSize: '0.9rem',
-                                                                    whiteSpace: 'pre-wrap',
-                                                                    overflowX: 'auto'
-                                                                }}>
-                                                                    {component.code}
-                                                                </div>
-                                                                {component.testCases && component.testCases.length > 0 && (
-                                                                    <div style={{ borderTop: '1px solid #ddd', backgroundColor: '#fff', padding: '10px' }}>
-                                                                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', display: 'block', mb: 1 }}>Test Cases:</Typography>
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                            {component.testCases.map((testCase: ANY, tcIndex: number) => (
-                                                                                <div key={tcIndex} style={{
-                                                                                    backgroundColor: '#f9f9f9',
-                                                                                    padding: '8px',
-                                                                                    borderRadius: '4px',
-                                                                                    border: '1px solid #eee',
-                                                                                    fontSize: '0.85rem'
-                                                                                }}>
-                                                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                                                        <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Input:</span>
-                                                                                        <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
-                                                                                            {testCase.input || '(empty)'}
-                                                                                        </code>
-                                                                                    </div>
-                                                                                    <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                                                                                        <span style={{ fontWeight: 'bold', minWidth: '50px', color: '#555' }}>Output:</span>
-                                                                                        <code style={{ backgroundColor: '#eee', padding: '2px 4px', borderRadius: '3px', flex: 1, color: '#333', fontFamily: 'monospace' }}>
-                                                                                            {testCase.output}
-                                                                                        </code>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-
-                                                    case 'chat_suggestions':
-                                                        return (
-                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
-                                                                {/* Header */}
-                                                                <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
-                                                                    AI CHAT
-                                                                </div>
-
-                                                                <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
-                                                                    {/* Instructions */}
-                                                                    {component.chatInstructions && (
-                                                                        <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
-                                                                    )}
-
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                                        {component.options?.map((opt: ANY, optIdx: number) => (
-                                                                            <div key={optIdx} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                                                {/* Question / Option (Simulating user input/selection) */}
-                                                                                <div style={{
-                                                                                    padding: '12px 16px',
-                                                                                    backgroundColor: '#fff',
-                                                                                    border: '1px solid #cfd8dc',
-                                                                                    borderRadius: '20px',
-                                                                                    color: '#37474f',
-                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                                    alignSelf: 'flex-end',
-                                                                                    maxWidth: '85%'
-                                                                                }}>
-                                                                                    {opt.text}
-                                                                                </div>
-
-                                                                                {/* Response (Simulating AI response) */}
-                                                                                <div style={{
-                                                                                    padding: '15px',
-                                                                                    backgroundColor: '#e1eef9',
-                                                                                    borderLeft: '4px solid #1976d2',
-                                                                                    borderRadius: '4px',
-                                                                                    color: '#263238',
-                                                                                    alignSelf: 'flex-start',
-                                                                                    maxWidth: '90%',
-                                                                                    position: 'relative'
-                                                                                }}>
-                                                                                    <div style={{ fontSize: '0.85em', color: '#1565c0', fontWeight: 'bold', marginBottom: '5px' }}>AI Answer:</div>
-                                                                                    <div dangerouslySetInnerHTML={{ __html: opt.response || '(No response provided yet)' }} />
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    case 'ai_chat':
-                                                        return (
-                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto', fontFamily: 'Arial, sans-serif', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
-                                                                {/* Header */}
-                                                                <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
-                                                                    AI CHAT
-                                                                </div>
-
-                                                                <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
-                                                                    {/* Instructions */}
-                                                                    {component.chatInstructions && (
-                                                                        <div style={{ marginBottom: '15px', color: '#546e7a', fontSize: '1.1em' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />
-                                                                    )}
-
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-
-                                                                        {/* Messages from messages array */}
-                                                                        {component.messages && component.messages.length > 0 && (
-                                                                            component.messages.map((msg: ANY, msgIdx: number) => (
-                                                                                <div key={msgIdx} style={{
-                                                                                    display: 'flex',
-                                                                                    flexDirection: 'column',
-                                                                                    gap: '5px',
-                                                                                    alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                                                                    width: '100%'
-                                                                                }}>
-                                                                                    {msg.role === 'user' ? (
-                                                                                        // User message - styled as a persona/system message
-                                                                                        <div style={{
-                                                                                            display: 'flex',
-                                                                                            alignItems: 'flex-start',
-                                                                                            gap: '10px',
-                                                                                            maxWidth: '95%',
-                                                                                            width: '100%'
-                                                                                        }}>
-                                                                                            {/* AI/Persona Icon */}
-                                                                                            <div style={{
-                                                                                                width: '32px',
-                                                                                                height: '32px',
-                                                                                                borderRadius: '50%',
-                                                                                                background: 'linear-gradient(135deg, #1976d2, #d32f2f)',
-                                                                                                display: 'flex',
-                                                                                                alignItems: 'center',
-                                                                                                justifyContent: 'center',
-                                                                                                flexShrink: 0
-                                                                                            }}>
-                                                                                                <span style={{ fontSize: '16px' }}>🇫🇷</span>
-                                                                                            </div>
-                                                                                            <div style={{
-                                                                                                padding: '15px',
-                                                                                                backgroundColor: '#fff',
-                                                                                                border: '1px solid #e0e0e0',
-                                                                                                borderRadius: '12px',
-                                                                                                color: '#37474f',
-                                                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                                                                                                flex: 1,
-                                                                                                whiteSpace: 'pre-wrap',
-                                                                                                lineHeight: '1.6',
-                                                                                                fontSize: '0.95em'
-                                                                                            }}>
-                                                                                                {msg.content}
-                                                                                                {/* Copy button */}
-                                                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                                                                                                    <button style={{
-                                                                                                        background: 'none',
-                                                                                                        border: 'none',
-                                                                                                        cursor: 'pointer',
-                                                                                                        color: '#90a4ae',
-                                                                                                        padding: '4px'
-                                                                                                    }}>
-                                                                                                        📋
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        // Assistant message
-                                                                                        <div style={{
-                                                                                            padding: '15px',
-                                                                                            backgroundColor: '#e1eef9',
-                                                                                            borderLeft: '4px solid #1976d2',
-                                                                                            borderRadius: '4px',
-                                                                                            color: '#263238',
-                                                                                            maxWidth: '90%',
-                                                                                            width: '100%',
-                                                                                            whiteSpace: 'pre-wrap'
-                                                                                        }}>
-                                                                                            <div style={{ fontSize: '0.8rem', color: '#1565c0', marginBottom: '8px', fontWeight: 'bold' }}>AI:</div>
-                                                                                            {msg.content}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            ))
-                                                                        )}
-
-                                                                        {/* Input field with default value */}
-                                                                        <div style={{
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '10px',
-                                                                            marginTop: '10px'
-                                                                        }}>
-                                                                            {/* Refresh icon */}
-                                                                            <button style={{
-                                                                                width: '36px',
-                                                                                height: '36px',
-                                                                                borderRadius: '50%',
-                                                                                border: 'none',
-                                                                                background: 'none',
-                                                                                cursor: 'pointer',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                color: '#90a4ae'
-                                                                            }}>
-                                                                                🔄
-                                                                            </button>
-                                                                            {/* Input field */}
-                                                                            <div style={{
-                                                                                flex: 1,
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                backgroundColor: '#fff',
-                                                                                border: '1px solid #e0e0e0',
-                                                                                borderRadius: '24px',
-                                                                                padding: '10px 16px',
-                                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
-                                                                            }}>
-                                                                                <span style={{ flex: 1, color: '#37474f', fontSize: '0.95em' }}>
-                                                                                    {component.inputDefaultValue || 'Type your message...'}
-                                                                                </span>
-                                                                                {/* Send button */}
-                                                                                <button style={{
-                                                                                    width: '32px',
-                                                                                    height: '32px',
-                                                                                    borderRadius: '50%',
-                                                                                    border: 'none',
-                                                                                    backgroundColor: '#2196f3',
-                                                                                    cursor: 'pointer',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    justifyContent: 'center',
-                                                                                    color: '#fff',
-                                                                                    marginLeft: '10px'
-                                                                                }}>
-                                                                                    ↑
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Response (if any) */}
-                                                                        {component.response && (
-                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start', width: '100%' }}>
-                                                                                <div style={{ fontSize: '0.8rem', color: '#1565c0' }}>AI responds:</div>
-                                                                                <div style={{
-                                                                                    padding: '15px',
-                                                                                    backgroundColor: '#e1eef9',
-                                                                                    borderLeft: '4px solid #1976d2',
-                                                                                    borderRadius: '4px',
-                                                                                    color: '#263238',
-                                                                                    maxWidth: '90%',
-                                                                                    width: '100%'
-                                                                                }}>
-                                                                                    <div dangerouslySetInnerHTML={{ __html: component.response }} />
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    case 'rive': {
-                                                        const assetUrl = component.webAssetUrl || component.mobileAssetUrl;
-                                                        const ratio = component.webRatio || component.mobileRatio || "4:3";
-                                                        let paddingTopPercentage = 75; // Default 4:3
-                                                        if (ratio) {
-                                                            const [widthRatio, heightRatio] = ratio.split(':').map(Number);
-                                                            if (widthRatio > 0 && heightRatio > 0) {
-                                                                paddingTopPercentage = (heightRatio / widthRatio) * 100;
-                                                            }
-                                                        }
-
-                                                        return (
-                                                            <div key={compIndex} style={{ width: '100%', maxWidth: '600px', margin: '20px auto' }}>
-                                                                <div style={{
-                                                                    position: 'relative',
-                                                                    width: '100%',
-                                                                    paddingTop: `${paddingTopPercentage}%`,
-                                                                    backgroundColor: '#f0f0f0',
-                                                                    borderRadius: '8px',
-                                                                    overflow: 'hidden'
-                                                                }}>
-                                                                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                                                                        {assetUrl ? (
-                                                                            <RivePlayer
-                                                                                src={assetUrl}
-                                                                                artboard={component.artboard}
-                                                                                stateMachines={component.stateMachines}
-                                                                                inputOnPress={component.inputOnPress}
-                                                                                inputOnRelease={component.inputOnRelease}
-                                                                                interactionZones={component.interactionZones}
-                                                                                autoplay={true}
-                                                                            />
-                                                                        ) : (
-                                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
-                                                                                No Rive asset URL provided
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    }
-
-                                                    default:
-                                                        return (
-                                                            <div key={compIndex} style={{ marginBottom: '10px', color: '#888', fontStyle: 'italic' }}>
-                                                                [Unsupported component type: {component.type}]
-                                                            </div>
-                                                        );
-                                                }
-                                            })
-                                        })()
-                                        }
-                                        {/* Render content field if available (e.g. select_answer, order_list) */}
-                                        {
-
-                                            (() => {
-                                                let questionData = { ...question };
-                                                const langCodes = languages.map(l => l.code);
-
-                                                const content = question.content_post || question.content;
-                                                if (typeof content === 'object' && content !== null && !Array.isArray(content)) {
-                                                    const isLocalized = Object.keys(content).some(key => langCodes.includes(key));
-                                                    if (isLocalized) {
-                                                        const jsonStr = content[langCode] || content['en'] || Object.values(content)[0];
-                                                        if (typeof jsonStr === 'string') {
-                                                            try {
-                                                                questionData.content = JSON.parse(jsonStr);
-                                                            } catch (e) {
-                                                                console.error("Failed to parse content JSON", e);
-                                                            }
-                                                        } else if (typeof jsonStr === 'object') {
-                                                            questionData.content = jsonStr;
-                                                        }
-                                                    }
-                                                }
-
-                                                return questionData.content && !Array.isArray(question.content) && (
-                                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #eee' }}>
-                                                        {questionData.content.type === 'select_answer' && questionData.content.options && (
-                                                            <>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                    {questionData.content.options.map((option: ANY, optIndex: number) => (
-                                                                        <div key={optIndex} style={{
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '10px',
-                                                                            padding: '8px',
-                                                                            borderRadius: '4px',
-                                                                            backgroundColor: option.isCorrect ? '#e8f5e9' : '#fff',
-                                                                            border: `1px solid ${option.isCorrect ? '#a5d6a7' : '#eee'}`
-                                                                        }}>
-                                                                            <span style={{
-                                                                                width: '24px',
-                                                                                height: '24px',
-                                                                                borderRadius: '50%',
-                                                                                backgroundColor: option.isCorrect ? '#4caf50' : '#eee',
-                                                                                color: option.isCorrect ? '#fff' : '#666',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                fontWeight: 'bold',
-                                                                                fontSize: '13px',
-                                                                                flexShrink: 0
-                                                                            }}>
-                                                                                {String.fromCharCode(65 + optIndex)}
-                                                                            </span>
-                                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                                {option.imageUrl && (
-                                                                                    <img
-                                                                                        src={option.imageUrl}
-                                                                                        alt={`Option ${optIndex + 1}`}
-                                                                                        style={{ maxWidth: '100%', maxHeight: '200px', width: 'fit-content', borderRadius: '4px', objectFit: 'contain' }}
-                                                                                    />
-                                                                                )}
-                                                                                {option.text && (
-                                                                                    <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>
-                                                                                        {option.text}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold', whiteSpace: 'nowrap' }}>(Correct)</span>}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </>
-                                                        )}
-
-                                                        {questionData.content.type === 'order_list' && questionData.content.items && (
-                                                            <>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                    {questionData.content.items.map((item: ANY, itemIndex: number) => (
-                                                                        <div key={itemIndex} style={{
-                                                                            padding: '10px',
-                                                                            backgroundColor: '#fff',
-                                                                            border: '1px solid #ddd',
-                                                                            borderRadius: '4px',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '10px',
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                        }}>
-                                                                            <span style={{
-                                                                                width: '24px',
-                                                                                height: '24px',
-                                                                                borderRadius: '50%',
-                                                                                backgroundColor: '#e3f2fd',
-                                                                                color: '#1976d2',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                fontWeight: 'bold',
-                                                                                fontSize: '13px',
-                                                                                border: '1px solid #bbdefb'
-                                                                            }}>
-                                                                                {itemIndex + 1}
-                                                                            </span>
-                                                                            <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.95em' }}>
-                                                                                {item.text}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )
-                                            })()
-                                        }
+                                        <QuestionPreview
+                                            question={question}
+                                            langCode={langCode}
+                                            languages={languages}
+                                        />
                                     </Box>
                                 )
                             })}
@@ -1392,207 +903,3 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     );
 }
 
-interface InteractionZone {
-    name?: string;
-    top: string;
-    bottom: string;
-    left: string;
-    right: string;
-    width: string;
-    height: string;
-    inputOnPress?: string;
-    inputOnRelease?: string;
-}
-
-interface RivePlayerProps {
-    src: string;
-    artboard?: string;
-    stateMachines?: string | string[];
-    inputOnPress?: string;
-    inputOnRelease?: string;
-    interactionZones?: InteractionZone[];
-    autoplay?: boolean;
-}
-
-const RivePlayer = ({ src, artboard, stateMachines, inputOnPress, inputOnRelease, interactionZones, autoplay = true }: RivePlayerProps) => {
-    const { rive, RiveComponent } = useRive({
-        src: src,
-        artboard: artboard,
-        layout: new Layout({
-            fit: Fit.Cover,
-            alignment: Alignment.Center,
-        }),
-        autoplay: autoplay,
-        stateMachines: stateMachines,
-        // onLoad: () => { }, // Removed unused onLoad
-    });
-
-    const triggerInput = (inputName: string | undefined) => {
-        if (!rive || !inputName) {
-            console.log('triggerInput: rive instance or inputName missing', { rive: !!rive, inputName });
-            return;
-        }
-
-        console.log(`Attempting to trigger input: "${inputName}"`);
-
-        // Debug available properties on rive instance to help diagnosis
-        // console.log('Rive instance keys:', Object.keys(rive));
-        // console.log('Rive stateMachineNames:', rive.stateMachineNames);
-
-        // Use rive.stateMachineNames directly as it is the standard API
-        const availableStateMachines = rive.stateMachineNames || [];
-
-        if (availableStateMachines.length > 0) {
-            const stateMachineNames = Array.isArray(stateMachines) ? stateMachines : (stateMachines ? [stateMachines] : []);
-
-            // If no state machines specified in props, search ALL available state machines
-            if (stateMachineNames.length === 0) {
-                stateMachineNames.push(...availableStateMachines);
-            }
-
-            console.log('Searching in State Machines:', stateMachineNames);
-
-            let inputFound = false;
-            stateMachineNames.forEach(smName => {
-                // Check if this state machine is actually available/playing
-                if (!availableStateMachines.includes(smName)) {
-                    console.warn(`WARNING: Configured State Machine "${smName}" is not found in the Rive file. Available:`, availableStateMachines);
-                    return;
-                }
-
-                const inputs = rive.stateMachineInputs(smName);
-                if (inputs) {
-                    const input = inputs.find(i => i.name === inputName);
-                    if (input) {
-                        inputFound = true;
-                        if (input.type === 58) { // Trigger
-                            input.fire();
-                            console.log(`SUCCESS: Fired trigger: "${inputName}" on SM: "${smName}"`);
-                        } else if (input.type === 59) { // Boolean
-                            input.value = true; // Use boolean as trigger-like if needed, or toggle
-                            console.log(`SUCCESS: Set boolean true: "${inputName}" on SM: "${smName}"`);
-                        } else if (input.type === 56) { // Number
-                            console.log(`INFO: Found number input "${inputName}" on SM: "${smName}", but cannot "trigger" it.`);
-                        }
-                    } else {
-                        console.log(`Input "${inputName}" NOT FOUND in SM "${smName}". Available inputs:`, inputs.map(i => i.name));
-                    }
-                } else {
-                    console.log(`No inputs found for SM "${smName}".`);
-                }
-            });
-
-            if (!inputFound) {
-                console.warn(`WARNING: Input "${inputName}" was not found in checked State Machines: ${stateMachineNames.join(', ')}`);
-            }
-        } else {
-            console.error('No state machines found in Rive file (rive.stateMachineNames is empty).');
-            // Fallback debug to see what IS there
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contents = rive.contents as any;
-            if (contents) {
-                console.log('Rive contents debug:', contents);
-            }
-        }
-    };
-
-    // handlePress and handleRelease removed - using Rive native Listeners instead
-
-    // Log debug info when rive instance is ready
-    React.useEffect(() => {
-        if (rive) {
-            console.log('>>> RIVE LOADED DEBUG INFO (SAFE MODE) <<<');
-            console.log('File:', src);
-
-            // Log available State Machines
-            const smNames = rive.stateMachineNames;
-            console.log('Available State Machines:', smNames);
-
-            // Attempt to log raw contents 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contents = rive.contents as any;
-            if (contents) {
-                console.log('Raw Contents:', contents);
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).riveInstance = rive; // Expose to window for easier debugging
-
-            // Force play to ensure State Machine is activated
-            const smToPlay = Array.isArray(stateMachines) ? stateMachines : (stateMachines ? [stateMachines] : []);
-            if (smToPlay.length > 0) {
-                console.log('Force playing state machines:', smToPlay);
-                rive.play(smToPlay);
-            } else if (smNames && smNames.length > 0) {
-                console.log('Force playing first available state machine:', smNames[0]);
-                rive.play([smNames[0]]);
-            } else {
-                console.log('Force playing default');
-                rive.play();
-            }
-
-            // Delay input logging to give SM time to fully initialize
-            setTimeout(() => {
-                console.log('>>> DELAYED INPUT CHECK <<<');
-                const currentSmNames = rive.stateMachineNames || [];
-                currentSmNames.forEach((name: string) => {
-                    const inputs = rive.stateMachineInputs(name);
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    console.log(`  > State Machine "${name}" Inputs:`, inputs ? inputs.map((i: any) => `${i.name} (type: ${i.type})`) : 'None (SM may not be active)');
-                });
-            }, 500);
-        }
-    }, [rive, src, stateMachines]);
-
-    return (
-        <div
-            style={{ width: '100%', height: '100%', position: 'relative' }}
-        >
-            {/* RiveComponent handles native Listeners automatically */}
-            <RiveComponent />
-
-            {/* Render interaction zones */}
-            {interactionZones && interactionZones.map((zone, index) => (
-                <div
-                    key={index}
-                    style={{
-                        position: 'absolute',
-                        top: zone.top ? zone.top : 'unset',
-                        bottom: zone.bottom ? zone.bottom : 'unset',
-                        left: zone.left ? zone.left : 'unset',
-                        right: zone.right ? zone.right : 'unset',
-                        width: zone.width ? zone.width : 'unset',
-                        height: zone.height ? zone.height : 'unset',
-                        backgroundColor: 'rgba(255, 0, 0, 0.2)',
-                        cursor: 'pointer',
-                        // Add a subtle debug background if key 'Shift' is pressed? No, just keep transparent for now.
-                        // Or maybe adding a tiny border or color if needed for debugging.
-                        // backgroundColor: 'rgba(255, 0, 0, 0.2)', // Uncomment for debug
-                        zIndex: 10
-                    }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        if (zone.inputOnPress) triggerInput(zone.inputOnPress);
-                    }}
-                    onMouseUp={(e) => {
-                        e.stopPropagation();
-                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
-                    }}
-                    onMouseLeave={(e) => {
-                        e.stopPropagation();
-                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
-                    }}
-                    onTouchStart={(e) => {
-                        e.stopPropagation();
-                        if (zone.inputOnPress) triggerInput(zone.inputOnPress);
-                    }}
-                    onTouchEnd={(e) => {
-                        e.stopPropagation();
-                        if (zone.inputOnRelease) triggerInput(zone.inputOnRelease);
-                    }}
-                    title={zone.name}
-                />
-            ))}
-        </div>
-    );
-};

@@ -1,8 +1,10 @@
+import DrawerCustom from "components/molecules/DrawerCustom";
 import { LoadingButton } from "@mui/lab";
-import { Box, CircularProgress, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import { Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
-import React from "react";
+import React, { useState } from "react";
+import SuggestContentAi from "./SuggestContentAi";
 
 function ChecCourseStructure(props: FieldFormItemProps) {
 
@@ -10,6 +12,7 @@ function ChecCourseStructure(props: FieldFormItemProps) {
 
     const [courses, setCourses] = React.useState<ANY[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [openSuggestAi, setOpenSuggestAi] = useState(false);
 
     const handleCheckDataCraw = () => {
         setLoading(true);
@@ -102,6 +105,18 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             </Select>
         </FormControl>
         <LoadingButton loading={loading} sx={{ mt: 2 }} variant="contained" onClick={handleAddDataFromJson}>Add course from json</LoadingButton>
+        <br />
+        <Button sx={{ mt: 2 }} variant="contained" color="success" onClick={() => setOpenSuggestAi(true)}>Gợi ý nội dung bằng ai</Button>
+
+        <DrawerCustom
+            open={openSuggestAi}
+            onClose={() => setOpenSuggestAi(false)}
+            title="Gợi ý nội dung bằng AI"
+            width={2000}
+            restDialogContent={{}}
+        >
+            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} />
+        </DrawerCustom>
     </Box>
     );
 }
