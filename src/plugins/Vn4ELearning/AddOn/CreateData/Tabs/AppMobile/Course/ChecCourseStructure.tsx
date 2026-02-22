@@ -13,6 +13,9 @@ function ChecCourseStructure(props: FieldFormItemProps) {
     const [courses, setCourses] = React.useState<ANY[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [openSuggestAi, setOpenSuggestAi] = useState(false);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [savingStep, setSavingStep] = useState(false);
+
 
     const handleCheckDataCraw = () => {
         setLoading(true);
@@ -46,6 +49,30 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             },
         });
     }
+
+    const handleSetStepCurrent = () => {
+        setSavingStep(true);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/ai/set-step-current",
+            method: "POST",
+            data: {
+                id: props.post.id,
+                step: currentStep + 1,
+                step_temp: currentStep + 1
+            },
+
+            success: (result) => {
+                setSavingStep(false);
+            },
+            error: () => {
+                setSavingStep(false);
+            }
+        });
+    }
+
+
+
+
 
     React.useEffect(() => {
         if (props.post.id) {
@@ -114,9 +141,15 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             title="Gợi ý nội dung bằng AI"
             width={2000}
             restDialogContent={{}}
+            headerAction={<LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>}
         >
-            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} />
+            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} onStepChange={(step) => {
+                setCurrentStep(step);
+            }} onFinish={() => setOpenSuggestAi(false)} />
         </DrawerCustom>
+
+
+
     </Box>
     );
 }

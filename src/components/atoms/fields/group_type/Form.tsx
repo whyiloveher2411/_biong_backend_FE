@@ -135,7 +135,7 @@ export default React.memo(
 
         post[name] = valueInital;
 
-        let configKey = Object.keys(config.templates[type].sub_fields);
+        let configKey = Object.keys(config.templates[type]?.sub_fields ?? {}) ?? [];
 
         const onChangeInputRepeater = (value: ANY, key: ANY) => {
             try {

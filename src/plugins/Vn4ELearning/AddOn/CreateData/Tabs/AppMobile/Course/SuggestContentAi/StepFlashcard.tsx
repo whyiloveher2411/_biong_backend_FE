@@ -32,6 +32,7 @@ export default function StepFlashcard({
     const [generating, setGenerating] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [drawerData, setDrawerData] = useState<{ open: boolean, title: string, content: string }>({ open: false, title: '', content: '' });
+    const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
     const postRef = useRef(post);
     useEffect(() => {
@@ -92,7 +93,8 @@ export default function StepFlashcard({
                 title: lesson.title,
                 chapter_index: cIndex,
                 lesson_index: lIndex,
-                index: lIndex
+                index: lIndex,
+                number_of_flashcards: lesson.number_of_flashcards || 'Không giới hạn'
             },
             success: (result: ANY) => {
                 setGenerating(null);
@@ -291,6 +293,9 @@ export default function StepFlashcard({
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
                                     {chapter.title}
                                 </Typography>
+                                <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
+                                    <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
+                                </IconButton>
                             </Box>
 
                             <Box sx={{ pl: 2 }}>
@@ -368,42 +373,71 @@ export default function StepFlashcard({
                                                         })()}
                                                     </Box>
                                                 </Box>
-                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                    <Tooltip title="Xem nội dung bài học">
-                                                        <IconButton
-                                                            size="small"
-                                                            color="primary"
-                                                            onClick={(e) => { e.stopPropagation(); handleViewContent(cIndex, lIndex, lesson.title); }}
-                                                        >
-                                                            <VisibilityIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Xem Flashcard">
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={(e) => { e.stopPropagation(); handleToggleExpand(cIndex, lIndex); }}
-                                                            color={hasFlashcards ? 'primary' : 'default'}
-                                                        >
-                                                            {expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Sinh flashcard bằng AI">
-                                                        <IconButton
-                                                            size="small"
-                                                            color="primary"
-                                                            onClick={(e) => { e.stopPropagation(); handleGenerateFlashcards(cIndex, lIndex, lesson); }}
-                                                            disabled={generating?.cIndex === cIndex && generating?.lIndex === lIndex}
-                                                        >
-                                                            {generating?.cIndex === cIndex && generating?.lIndex === lIndex ?
-                                                                <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />
-                                                            }
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                </Box>
+                                                {(() => {
+                                                    const lessonData = post.content?.[cIndex]?.[lIndex] || {};
+                                                    const lessonContent = lesson.content || lessonData.content;
+
+                                                    return (
+                                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                            <Tooltip title="Xem nội dung bài học">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color={lessonContent ? 'primary' : 'inherit'}
+                                                                    onClick={(e) => { e.stopPropagation(); handleViewContent(cIndex, lIndex, lesson.title); }}
+                                                                >
+                                                                    <VisibilityIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Xem Flashcard">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={(e) => { e.stopPropagation(); handleToggleExpand(cIndex, lIndex); }}
+                                                                    color={hasFlashcards ? 'primary' : 'default'}
+                                                                >
+                                                                    {expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </Box>
+                                                    );
+                                                })()}
                                             </Box>
 
                                             {expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex && (
-                                                <Box sx={{ mt: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid #eee' }}>
+                                                <Box sx={{ mt: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                    <Box sx={{ mb: 3 }}>
+                                                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Thông số bài giảng:</Typography>
+                                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                                                            <TextField
+                                                                fullWidth
+                                                                label="Số lượng flashcards"
+                                                                type="text"
+                                                                size="small"
+                                                                value={lesson.number_of_flashcards || 'Không giới hạn'}
+                                                                onChange={(e: ANY) => {
+                                                                    const currentPost = postRef.current;
+                                                                    const newOutline = [...(currentPost.outline || [])];
+                                                                    newOutline[cIndex] = { ...newOutline[cIndex] };
+                                                                    newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
+                                                                    newOutline[cIndex].lessons[lIndex] = {
+                                                                        ...newOutline[cIndex].lessons[lIndex],
+                                                                        number_of_flashcards: e.target.value
+                                                                    };
+                                                                    onReview(newOutline, 'outline');
+                                                                }}
+                                                                placeholder="Nhập số lượng flashcards (ví dụ: 10)"
+                                                            />
+                                                            <Button
+                                                                variant="contained"
+                                                                startIcon={generating?.cIndex === cIndex && generating?.lIndex === lIndex ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
+                                                                onClick={() => handleGenerateFlashcards(cIndex, lIndex, lesson)}
+                                                                disabled={generating?.cIndex === cIndex && generating?.lIndex === lIndex}
+                                                                sx={{ height: 40, whiteSpace: 'nowrap', px: 2, minWidth: 'unset' }}
+                                                            >
+                                                                {generating?.cIndex === cIndex && generating?.lIndex === lIndex ? 'Đang tạo...' : 'Tạo nội dung Flashcard'}
+                                                            </Button>
+                                                        </Box>
+                                                    </Box>
+
                                                     {editing?.type === 'flashcards' && editing.cIndex === cIndex && editing.lIndex === lIndex ? (
                                                         <Box>
                                                             <TextField
@@ -503,6 +537,31 @@ export default function StepFlashcard({
                     '& blockquote': { borderLeft: '4px solid #ccc', pl: 2, color: 'text.secondary', fontStyle: 'italic', my: 2 }
                 }}>
                     <ReactMarkdown>{drawerData.content}</ReactMarkdown>
+                </Box>
+            </DrawerCustom>
+
+            <DrawerCustom
+                activeOnClose
+                open={openChapterDrawer !== null}
+                onClose={() => setOpenChapterDrawer(null)}
+                title={openChapterDrawer !== null ? `Nội dung chương: ${outline[openChapterDrawer].title}` : ''}
+                width={1000}
+            >
+                <Box sx={{ p: 3 }}>
+                    <Box
+                        sx={{
+                            minHeight: '200px',
+                            p: 2,
+                            border: '1px solid #eee',
+                            borderRadius: 1,
+                            '& h1, & h2, & h3': { mt: 2, mb: 1 },
+                            '& p': { mb: 1.5, lineHeight: 1.6 }
+                        }}
+                    >
+                        <ReactMarkdown>
+                            {post.chapters?.[openChapterDrawer || 0] || '*Chưa có nội dung chương.*'}
+                        </ReactMarkdown>
+                    </Box>
                 </Box>
             </DrawerCustom>
         </Box>

@@ -35,6 +35,7 @@ export default function StepAssessment({
     const [loadingExtra, setLoadingExtra] = useState<{ [key: string]: boolean }>({});
     const [updateKey, setUpdateKey] = useState(0);
     const [submitting, setSubmitting] = useState(false);
+    const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
     const postRef = useRef(post);
     useEffect(() => {
@@ -430,6 +431,9 @@ export default function StepAssessment({
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
                                     {chapter.title}
                                 </Typography>
+                                <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
+                                    <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
+                                </IconButton>
                             </Box>
 
                             <Box sx={{ pl: 2 }}>
@@ -517,7 +521,7 @@ export default function StepAssessment({
                                                     <Tooltip title="Xem nội dung bài học">
                                                         <IconButton
                                                             size="small"
-                                                            color="primary"
+                                                            color={lessonContent ? 'primary' : 'inherit'}
                                                             onClick={(e) => { e.stopPropagation(); handleViewContent(cIndex, lIndex, lesson.title); }}
                                                         >
                                                             <VisibilityIcon fontSize="small" />
@@ -743,6 +747,31 @@ export default function StepAssessment({
                     '& blockquote': { borderLeft: '4px solid #ccc', pl: 2, color: 'text.secondary', fontStyle: 'italic', my: 2 }
                 }}>
                     <ReactMarkdown>{drawerData.content}</ReactMarkdown>
+                </Box>
+            </DrawerCustom>
+
+            <DrawerCustom
+                activeOnClose
+                open={openChapterDrawer !== null}
+                onClose={() => setOpenChapterDrawer(null)}
+                title={openChapterDrawer !== null ? `Nội dung chương: ${outline[openChapterDrawer].title}` : ''}
+                width={1000}
+            >
+                <Box sx={{ p: 3 }}>
+                    <Box
+                        sx={{
+                            minHeight: '200px',
+                            p: 2,
+                            border: '1px solid #eee',
+                            borderRadius: 1,
+                            '& h1, & h2, & h3': { mt: 2, mb: 1 },
+                            '& p': { mb: 1.5, lineHeight: 1.6 }
+                        }}
+                    >
+                        <ReactMarkdown>
+                            {post.chapters?.[openChapterDrawer || 0] || '*Chưa có nội dung chương.*'}
+                        </ReactMarkdown>
+                    </Box>
                 </Box>
             </DrawerCustom>
         </Box>

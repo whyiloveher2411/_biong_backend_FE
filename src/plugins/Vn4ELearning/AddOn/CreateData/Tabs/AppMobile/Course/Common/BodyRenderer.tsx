@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Button } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 import useAjax from 'hook/useApi';
 
@@ -115,6 +116,8 @@ const imageCache: Record<string | number, string> = {};
 const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRendererProps) => {
     const { ajax } = useAjax();
     const [loading, setLoading] = React.useState(false);
+    const [showPrompt, setShowPrompt] = React.useState(false);
+    const [copied, setCopied] = React.useState(false);
     const hasFetchedId = React.useRef<string | number | null>(null);
 
     const handleProcessImageResult = (imageUrl: string) => {
@@ -284,17 +287,97 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
 
             return (
                 <div style={{ marginBottom: '10px', textAlign: 'center' }}>
-                    <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
-                        <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', borderRadius: '4px' }} />
+                    <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', borderRadius: '4px', overflow: 'hidden' }}>
+                        <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', display: 'block' }} />
+
+                        {showPrompt && component.prompt && (
+                            <Box sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                bgcolor: 'rgba(0,0,0,0.7)',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                p: 3,
+                                boxSizing: 'border-box',
+                                zIndex: 1,
+                                color: 'white'
+                            }}>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 'bold', display: 'block', mb: 1 }}>
+                                    IMAGE PROMPT:
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'white', fontSize: '1rem', lineHeight: 1.6, textAlign: 'center', mb: 2 }}>
+                                    {component.prompt}
+                                </Typography>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    disabled={copied}
+                                    startIcon={<ContentCopyIcon fontSize="small" />}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(component.prompt || '');
+                                        setCopied(true);
+                                        setTimeout(() => setCopied(false), 2000);
+                                    }}
+                                    sx={{
+                                        color: 'white',
+                                        borderColor: 'rgba(255,255,255,0.5)',
+                                        textTransform: 'none',
+                                        '&.Mui-disabled': {
+                                            color: 'rgba(255,255,255,0.5)',
+                                            borderColor: 'rgba(255,255,255,0.3)',
+                                        },
+                                        '&:hover': {
+                                            borderColor: 'white',
+                                            bgcolor: 'rgba(255,255,255,0.1)'
+                                        }
+                                    }}
+                                >
+                                    {copied ? 'Đã copy!' : 'Copy Prompt'}
+                                </Button>
+                            </Box>
+                        )}
+
                         {component.prompt && (
                             <Box sx={{
                                 position: 'absolute',
                                 bottom: 8,
                                 right: 8,
-                                opacity: 0.7,
+                                display: 'flex',
+                                gap: 1,
+                                opacity: 0.8,
                                 transition: 'opacity 0.2s',
+                                zIndex: 2,
                                 '&:hover': { opacity: 1 }
                             }}>
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        setShowPrompt(!showPrompt);
+                                    }}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontSize: '0.7rem',
+                                        py: 0.2,
+                                        px: 1,
+                                        minWidth: 'auto',
+                                        borderRadius: 5,
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                        bgcolor: showPrompt ? 'secondary.main' : 'rgba(0,0,0,0.8)',
+                                        color: 'white',
+                                        '&:hover': { bgcolor: showPrompt ? 'secondary.dark' : 'rgba(0,0,0,0.9)' }
+                                    }}
+                                >
+                                    {showPrompt ? 'Hide Prompt' : 'Show Prompt'}
+                                </Button>
                                 <LoadingButton
                                     loading={loading}
                                     variant="contained"
@@ -314,8 +397,8 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                         minWidth: 'auto',
                                         borderRadius: 5,
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                        bgcolor: 'rgba(0,0,0,0.6)',
-                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' }
+                                        bgcolor: 'rgba(0,0,0,0.8)',
+                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.9)' }
                                     }}
                                 >
                                     Re-generate
@@ -323,7 +406,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             </Box>
                         )}
                     </div>
-                    {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }}>{component.description}</div>}
+                    {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }} dangerouslySetInnerHTML={{ __html: stripBlockTags(component.description) }} />}
                 </div>
             );
         }

@@ -4,9 +4,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import React, { useState, useRef, useEffect } from 'react';
 import useAjax from 'hook/useApi';
 import ReactMarkdown from 'react-markdown';
+import DrawerCustom from 'components/molecules/DrawerCustom';
 
 interface StepContentProps {
     post: ANY;
@@ -35,7 +37,9 @@ export default function StepContent({
     const [editValue, setEditValue] = useState('');
     const { ajax } = useAjax();
     const [generating, setGenerating] = useState<{ cIndex: number, lIndex: number } | null>(null);
+    const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
+    const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
     const postRef = useRef(post);
     useEffect(() => {
@@ -223,6 +227,39 @@ export default function StepContent({
         });
     };
 
+    const handleGenerateChapterContent = (cIndex: number) => {
+        setGeneratingChapter(cIndex);
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-generate-content-chapter',
+            method: 'POST',
+            data: {
+                id: post.id,
+                chapter_index: cIndex,
+                index: cIndex
+            },
+            success: (result: ANY) => {
+                setGeneratingChapter(null);
+                if (result.success) {
+                    if (result.spacedev_course_ai_suggest) {
+                        onSyncAiData(result.spacedev_course_ai_suggest);
+                        refresh();
+                        return;
+                    }
+
+                    const newChapters = Array.isArray(post.chapters) ? [...post.chapters] : [];
+                    newChapters[cIndex] = result.content;
+                    onReview(newChapters, 'chapters');
+                    refresh();
+                } else {
+                    if (result.message) alert(result.message);
+                }
+            },
+            error: () => {
+                setGeneratingChapter(null);
+            }
+        });
+    };
+
     const handleToggleExpand = (cIndex: number, lIndex: number) => {
         if (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) {
             setExpandedLesson(null);
@@ -286,6 +323,9 @@ export default function StepContent({
                                         <Box>
                                             <IconButton size="small" onClick={() => handleEditStart('chapter', cIndex, undefined, chapter.title)}>
                                                 <EditIcon fontSize="small" />
+                                            </IconButton>
+                                            <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
+                                                <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
                                             </IconButton>
                                             <IconButton size="small" onClick={() => { handleDelete('chapter', cIndex); refresh(); }}>
                                                 <DeleteIcon fontSize="small" />
@@ -568,6 +608,76 @@ export default function StepContent({
                     ))
                 )}
             </Box>
+
+            <DrawerCustom
+                anchor="right"
+                open={openChapterDrawer !== null}
+                onClose={() => setOpenChapterDrawer(null)}
+                activeOnClose
+                width={1300}
+                headerAction={
+                    <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<AutoAwesomeIcon />}
+                        onClick={() => openChapterDrawer !== null && handleGenerateChapterContent(openChapterDrawer)}
+                        disabled={generatingChapter === openChapterDrawer}
+                    >
+                        {generatingChapter === openChapterDrawer ? <CircularProgress size={20} /> : 'Generate AI'}
+                    </Button>
+                }
+                title={`Nội dung chương: ${openChapterDrawer !== null ? outline[openChapterDrawer]?.title : ''}`}
+            >
+                {openChapterDrawer !== null && (
+                    <Box sx={{ height: '100%', pt: 3, display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                            {editing?.type === 'chapter' && editing.cIndex === openChapterDrawer ? (
+                                <Box>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        minRows={15}
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        placeholder="Nhập nội dung chương (Markdown)..."
+                                        sx={{ mb: 1, bgcolor: 'white' }}
+                                    />
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Button variant="contained" size="small" onClick={() => {
+                                            const newChapters = Array.isArray(post.chapters) ? [...post.chapters] : [];
+                                            newChapters[openChapterDrawer] = editValue;
+                                            onReview(newChapters, 'chapters');
+                                            setEditing(null);
+                                            refresh();
+                                        }}>Lưu</Button>
+                                        <Button size="small" onClick={() => setEditing(null)}>Hủy</Button>
+                                    </Box>
+                                </Box>
+                            ) : (
+                                <Box
+                                    onClick={() => {
+                                        setEditing({ type: 'chapter', cIndex: openChapterDrawer });
+                                        setEditValue(post.chapters?.[openChapterDrawer] || '');
+                                    }}
+                                    sx={{
+                                        cursor: 'text',
+                                        minHeight: '200px',
+                                        p: 2,
+                                        border: '1px solid #eee',
+                                        borderRadius: 1,
+                                        '& h1, & h2, & h3': { mt: 2, mb: 1 },
+                                        '& p': { mb: 1.5, lineHeight: 1.6 }
+                                    }}
+                                >
+                                    <ReactMarkdown>
+                                        {post.chapters?.[openChapterDrawer] || '*Chưa có nội dung chương. Nhấn Generate để tạo nội dung bằng AI hoặc nhấn vào đây để tự viết.*'}
+                                    </ReactMarkdown>
+                                </Box>
+                            )}
+                        </Box>
+                    </Box>
+                )}
+            </DrawerCustom>
 
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', pt: 2, borderTop: '1px solid #eee' }}>
                 <Button onClick={onBack} disabled={transitionLoading}>Quay lại</Button>

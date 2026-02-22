@@ -21,10 +21,24 @@ const steps = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ANY = any;
 
-export default function SuggestContentAi({ post, onReview, courses }: { post: ANY, onReview: ANY, courses?: ANY[] }) {
+export default function SuggestContentAi({ post, onReview, courses, onStepChange, onFinish }: { post: ANY, onReview: ANY, courses?: ANY[], onStepChange?: (step: number) => void, onFinish?: () => void }) {
     const [activeStep, setActiveStep] = React.useState(0);
-    const [content, setContent] = React.useState('');
+
     const [addAssessment, setAddAssessment] = React.useState('no');
+    const [content, setContent] = React.useState('');
+    const isInitialMount = React.useRef(true);
+    const [isDataLoaded, setIsDataLoaded] = React.useState(false);
+
+
+    React.useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        if (onStepChange && isDataLoaded) {
+            onStepChange(activeStep);
+        }
+    }, [activeStep, isDataLoaded]);
 
     const [maxStep, setMaxStep] = React.useState(0);
 
@@ -52,7 +66,8 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
             visuals: post.visuals || '',
             course_identity_profile: post.course_identity_profile || {},
             outline: post.outline || [],
-            content: post.content || []
+            content: post.content || [],
+            chapters: post.chapters || []
         };
 
         if (post.input_identity) {
@@ -285,6 +300,28 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
                 } catch (e) { console.error("Error parsing content", e); }
             }
 
+            if (aiSuggest.chapters) {
+                try {
+                    let chapters = aiSuggest.chapters;
+                    if (typeof chapters === 'string') chapters = JSON.parse(chapters);
+                    if (chapters) {
+                        const newChapters = Array.isArray(newSuggestionData.chapters) ? [...newSuggestionData.chapters] : [];
+                        if (Array.isArray(chapters)) {
+                            chapters.forEach((chapterContent, idx) => {
+                                if (chapterContent) newChapters[idx] = chapterContent;
+                            });
+                        } else {
+                            Object.keys(chapters).forEach(key => {
+                                const idx = parseInt(key);
+                                if (!isNaN(idx)) newChapters[idx] = chapters[key];
+                            });
+                        }
+                        newSuggestionData.chapters = newChapters;
+                        hasUpdates = true;
+                    }
+                } catch (e) { console.error("Error parsing chapters", e); }
+            }
+
             if (hasUpdates) return newSuggestionData;
             return prev;
         });
@@ -346,6 +383,21 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
                 return { ...prevValue, content: newContent, _user_edited_content: true };
             }
 
+            if (key === 'chapters') {
+                const newChapters = Array.isArray(prevValue.chapters) ? [...prevValue.chapters] : [];
+                if (Array.isArray(value)) {
+                    value.forEach((chap, idx) => {
+                        if (chap !== undefined) newChapters[idx] = chap;
+                    });
+                } else if (typeof value === 'object' && value !== null) {
+                    Object.keys(value).forEach(k => {
+                        const idx = parseInt(k);
+                        if (!isNaN(idx)) newChapters[idx] = value[k];
+                    });
+                }
+                return { ...prevValue, chapters: newChapters, _user_edited_chapters: true };
+            }
+
             let updates: ANY = {};
             if (key && typeof key === 'string') {
                 updates = { [key]: value, [`_user_edited_${key}`]: true };
@@ -359,7 +411,6 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
             }
             return { ...prevValue, ...updates };
         });
-        setKeyRefresh(prev => prev + 1);
     };
 
     React.useEffect(() => {
@@ -371,16 +422,24 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
                 success: (result: ANY) => {
                     if (result.spacedev_course_ai_suggest) {
                         syncFromAiSuggest(result.spacedev_course_ai_suggest);
-                        if (result.spacedev_course_ai_suggest.step_current) {
-                            const step = parseInt(result.spacedev_course_ai_suggest.step_current);
-                            if (!isNaN(step) && step > 0) {
-                                setActiveStep(step - 1);
-                                setMaxStep(step - 1);
-                            }
+                        const stepTemp = parseInt(result.spacedev_course_ai_suggest.step_temp);
+                        const stepCurrent = parseInt(result.spacedev_course_ai_suggest.step_current);
+
+                        if (!isNaN(stepTemp) && stepTemp > 0) {
+                            setActiveStep(stepTemp - 1);
+                        } else if (!isNaN(stepCurrent) && stepCurrent > 0) {
+                            setActiveStep(stepCurrent - 1);
                         }
+
+                        if (!isNaN(stepCurrent) && stepCurrent > 0) {
+                            setMaxStep(stepCurrent - 1);
+                        }
+
+                        setIsDataLoaded(true);
                     }
                 }
             });
+
         }
     }, [post?.id]);
 
@@ -464,6 +523,7 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
                     <StepExport
                         post={suggestionData}
                         onBack={handleBack}
+                        onFinish={onFinish}
                     />
                 );
             default:
@@ -477,10 +537,48 @@ export default function SuggestContentAi({ post, onReview, courses }: { post: AN
             <Box sx={{ width: 250, minWidth: 250, borderRight: '1px solid #divider', pr: 3 }}>
                 <Stepper activeStep={activeStep} orientation="vertical">
                     {steps.map((step, index) => (
-                        <Step key={step.label}>
+                        <Step key={step.label} completed={index < maxStep}>
                             <StepLabel
+                                onClick={() => index <= maxStep && setActiveStep(index)}
+                                sx={{
+                                    cursor: index <= maxStep ? 'pointer !important' : 'default',
+                                    '& *': {
+                                        cursor: index <= maxStep ? 'pointer !important' : 'default',
+                                    },
+                                    '& .MuiStepLabel-label': {
+                                        fontWeight: index === activeStep ? 'bold' : 'normal',
+                                        color: index > maxStep
+                                            ? 'text.disabled'
+                                            : (index > activeStep ? 'primary.light' : 'primary.main'),
+                                        opacity: (index > activeStep && index <= maxStep) ? 0.6 : 1,
+                                    },
+                                    '& .MuiStepIcon-root': {
+                                        color: index > maxStep
+                                            ? 'text.disabled'
+                                            : (index > activeStep ? 'primary.light' : 'primary.main'),
+                                        opacity: (index > activeStep && index <= maxStep) ? 0.6 : 1,
+                                        '&.Mui-active': {
+                                            color: 'primary.main',
+                                            opacity: 1,
+                                        },
+                                        '&.Mui-completed': {
+                                            color: index > activeStep ? 'primary.light' : 'primary.main',
+                                            opacity: (index > activeStep && index <= maxStep) ? 0.7 : 1,
+                                        }
+                                    },
+                                    '&:hover': index <= maxStep ? {
+                                        '& .MuiStepLabel-labelContainer': {
+                                            opacity: 0.8
+                                        }
+                                    } : {}
+                                }}
                                 optional={
-                                    <Typography variant="caption">{step.description}</Typography>
+                                    <Typography variant="caption" sx={{
+                                        color: index > maxStep ? 'text.disabled' : (index > activeStep ? 'primary.light' : 'text.secondary'),
+                                        opacity: (index > activeStep && index <= maxStep) ? 0.6 : 1,
+                                    }}>
+                                        {step.description}
+                                    </Typography>
                                 }
                             >
                                 {step.label}
