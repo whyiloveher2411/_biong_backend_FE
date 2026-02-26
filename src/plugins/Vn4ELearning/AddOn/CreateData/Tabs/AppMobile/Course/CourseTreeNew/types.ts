@@ -93,3 +93,13 @@ export interface Language {
     is_default: number;
     flag_code: string;
 }
+
+export interface FlatNode {
+    node: TreeNode;
+    depth: number;
+    index: number;
+    parentContext: { courseId?: string | number, sectionId?: string | number, chapterId?: string | number };
+    nodeKey: string;
+    parentId: string | number;
+    parentType: string;
+}

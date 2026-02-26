@@ -73,6 +73,7 @@ interface CourseTreeItemProps {
     onBackToCourseList?: () => void;
     selectedCourseId?: string | number | null;
     index?: number;
+    isFlatMode?: boolean;
     onAddChild?: (
         parentId: string | number,
         parentType: string,
@@ -121,6 +122,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
     onReloadCourses,
     onUpdateLessonStatus,
     onPreviewLesson,
+    isFlatMode = false,
 }: CourseTreeItemProps) {
     const apiSetFinalTest = useAjax();
     const apiSyncCourse = useAjax();
@@ -943,7 +945,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                 </Box>
             </ListItem>
 
-            {nodeHasChildren && (
+            {nodeHasChildren && !isFlatMode && (
                 <Collapse in={open} timeout="auto" unmountOnExit>
                     <Box sx={{ position: "relative" }}>
                         <Box

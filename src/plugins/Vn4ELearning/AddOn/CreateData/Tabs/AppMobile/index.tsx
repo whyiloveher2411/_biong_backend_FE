@@ -10,6 +10,7 @@ import PushNotification from './PushNotification';
 import Modules from './Modules';
 import Course from './Course';
 import Content from './Content';
+import Marketing from './Marketing';
 
 
 
@@ -53,6 +54,11 @@ export default function (props: CreatePostTypeData) {
             pushNotification: {
                 title: __p('Push Notification', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <PushNotification data={props.data} />,
+                priority: 3,
+            },
+            marketing: {
+                title: __p('Marketing', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <Marketing data={props.data} />,
                 priority: 3,
             },
             // analytics: {

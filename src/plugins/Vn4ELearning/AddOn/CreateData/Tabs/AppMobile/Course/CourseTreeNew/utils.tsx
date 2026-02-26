@@ -2,7 +2,7 @@ import React from "react";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { TreeNode, Course, Section, Chapter, Lesson, Language } from "./types";
+import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode } from "./types";
 
 const MULTILANG_FIELDS: { [key: string]: string[] } = {
     course: ["title", "shortDescription", "description"],
@@ -387,4 +387,44 @@ export const calculateTotalLessonFlashcards = (course: Course): number => {
         });
     }
     return total;
+};
+
+export const flattenTree = (
+    nodes: TreeNode[],
+    expandedNodes: Set<string>,
+    depth = 0,
+    parentContext: { courseId?: string | number, sectionId?: string | number, chapterId?: string | number } = {},
+    parentId: string | number = "root",
+    parentType: string = "app_mobile"
+): FlatNode[] => {
+    let flatList: FlatNode[] = [];
+
+    nodes.forEach((node, index) => {
+        const nodeType = getNodeType(node);
+        const nodeKey = getNodeKey(node);
+
+        const currentContext = { ...parentContext };
+        if (nodeType === 'course') currentContext.courseId = node.id;
+        if (nodeType === 'section') currentContext.sectionId = node.id;
+        if (nodeType === 'chapter') currentContext.chapterId = node.id;
+
+        flatList.push({
+            node,
+            depth,
+            index,
+            parentContext: currentContext,
+            nodeKey,
+            parentId,
+            parentType
+        });
+
+        if (expandedNodes.has(nodeKey)) {
+            const children = getChildren(node);
+            if (children.length > 0) {
+                flatList = flatList.concat(flattenTree(children, expandedNodes, depth + 1, currentContext, node.id, nodeType));
+            }
+        }
+    });
+
+    return flatList;
 };

@@ -131,7 +131,7 @@ export default React.memo(function GroupForm(props: FieldFormItemProps) {
 
     post[name] = valueInital;
 
-    let configKey = Object.keys(config.sub_fields);
+    let configKey = Object.keys(config.sub_fields ?? {}) ?? [];
 
     const onChangeInputRepeater = (value: ANY, key: ANY) => {
 

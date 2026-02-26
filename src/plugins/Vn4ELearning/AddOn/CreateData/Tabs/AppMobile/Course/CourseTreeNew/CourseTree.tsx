@@ -2,7 +2,6 @@ import { CreatePostTypeData } from "components/pages/PostType/CreateData";
 import React from "react";
 import useAjax from "hook/useApi";
 import Box from "components/atoms/Box";
-import List from "components/atoms/List";
 import Typography from "components/atoms/Typography";
 import Skeleton from "components/atoms/Skeleton";
 import Button from "components/atoms/Button";
@@ -23,7 +22,7 @@ import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import Menu from "components/atoms/Menu";
 import MenuItem from "components/atoms/MenuItem";
 import { useNavigate, useLocation } from "react-router-dom";
-import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvided, DroppableProvided } from "react-beautiful-dnd";
+import { DragDropContext, Droppable, Draggable, DropResult } from "react-beautiful-dnd";
 import { Course, Language, TreeNode, Section, Chapter, Lesson, Question } from "./types";
 import {
     getNodeObjectType,
@@ -41,6 +40,8 @@ import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } fro
 import GolfCourseIcon from "@mui/icons-material/GolfCourse";
 import CheckDataCraw from "../CheckDataCraw";
 import DrawerCustom from "components/molecules/DrawerCustom";
+import { Virtuoso } from "react-virtuoso";
+import { flattenTree } from "./utils";
 
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
@@ -506,32 +507,49 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         if (destination.index === source.index) return;
         if (!courses) return;
 
-        const newCourses = [...courses];
-        const [movedCourse] = newCourses.splice(source.index, 1);
-        newCourses.splice(destination.index, 0, movedCourse);
-        setCourses(newCourses);
+        const sourceNode = flatNodes[source.index];
+        const destNode = flatNodes[destination.index];
 
-        const courseIds = newCourses.map(c => c.id);
+        if (!sourceNode || !destNode) return;
 
-        api.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/update-order",
-            method: "POST",
-            data: {
-                id: data.post.id,
-                parent_id: data.post.id,
-                parent_type: "app_mobile",
-                child_type: "course",
-                child_object_type: "spacedev_course",
-                order: courseIds,
-            },
-            success: () => {
-                console.log("Update root courses order success");
-            },
-            error: () => {
-                api.showMessage("Có lỗi xảy ra khi cập nhật thứ tự", "error");
-                loadData();
-            }
-        });
+        // Only allow dragging between siblings (same parent)
+        if (sourceNode.parentId !== destNode.parentId) {
+            api.showMessage("Chỉ có thể thay đổi thứ tự giữa các mục cùng cấp", "warning");
+            return;
+        }
+
+        if (sourceNode.parentId === "root") {
+            // Root level: Courses
+            const newCourses = [...(displayCourses || [])];
+            const [movedCourse] = newCourses.splice(sourceNode.index, 1);
+            newCourses.splice(destNode.index, 0, movedCourse);
+
+            // To update the main courses state, we need to merge this back
+            const courseIds = newCourses.map(c => c.id);
+
+            api.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/update-order",
+                method: "POST",
+                data: {
+                    id: data.post.id,
+                    parent_id: data.post.id,
+                    parent_type: "app_mobile",
+                    child_type: "course",
+                    child_object_type: "spacedev_course",
+                    order: courseIds,
+                },
+                success: () => {
+                    loadData();
+                },
+                error: () => {
+                    api.showMessage("Có lỗi xảy ra khi cập nhật thứ tự", "error");
+                    loadData();
+                }
+            });
+        } else {
+            // Sub-level nodes (Sections, Chapters, Lessons, Questions)
+            handleUpdateOrder(sourceNode.parentId, sourceNode.parentType, sourceNode.index, destNode.index);
+        }
     };
 
     const handleExpandAll = (nodeKey: string) => {
@@ -550,14 +568,30 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             const newSet = new Set(prev);
             if (allChildrenExpanded) {
                 // Close all
-                allKeys.forEach(key => newSet.delete(key));
+                allKeys.forEach((key: string) => newSet.delete(key));
             } else {
                 // Open all
-                allKeys.forEach(key => newSet.add(key));
+                allKeys.forEach((key: string) => newSet.add(key));
             }
             return newSet;
         });
     };
+
+    const handleRefresh = () => {
+        handleCloseMenu();
+        loadData();
+    };
+
+    const displayCourses = React.useMemo(() => {
+        return selectedCourseId
+            ? courses?.filter(c => String(c.id) === String(selectedCourseId))
+            : courses;
+    }, [selectedCourseId, courses]);
+
+    const flatNodes = React.useMemo(() => {
+        if (!courses) return [];
+        return flattenTree(displayCourses || [], expandedNodes);
+    }, [displayCourses, expandedNodes, courses]);
 
     if (loading) {
         return (
@@ -569,15 +603,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             </Box>
         );
     }
-
-    const handleRefresh = () => {
-        handleCloseMenu();
-        loadData();
-    };
-
-    const displayCourses = selectedCourseId
-        ? courses?.filter(c => String(c.id) === String(selectedCourseId))
-        : courses;
 
     return (
         <Box sx={{ p: 2, backgroundColor: "#f5f5f7", minHeight: "100vh" }}>
@@ -714,55 +739,77 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             </Box>
 
             <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="root" type="course">
-                    {(provided: DroppableProvided) => (
-                        <List
-                            {...provided.droppableProps}
+                <Droppable droppableId="flat-tree-virtuoso" type="FLAT_NODE">
+                    {(provided) => (
+                        <Box
                             ref={provided.innerRef}
-                            sx={{ width: "100%", bgcolor: "background.paper" }}
+                            {...provided.droppableProps}
+                            sx={{
+                                mt: 2,
+                                backgroundColor: "transparent",
+                                // Cho phép Virtuoso chiếm chiều cao và tự scroll
+                                height: "calc(100vh - 180px)",
+                            }}
                         >
-                            {displayCourses?.map((course, index) => (
-                                <Draggable
-                                    key={String(course.id)}
-                                    draggableId={String(course.id)}
-                                    index={index}
-                                >
-                                    {(provided: DraggableProvided) => (
-                                        <div
-                                            ref={provided.innerRef}
-                                            {...provided.draggableProps}
+                            <Virtuoso
+                                style={{ height: "100%" }}
+                                data={flatNodes}
+                                totalCount={flatNodes.length}
+                                itemContent={(index, flatNode) => {
+                                    const { node, depth, parentContext, nodeKey } = flatNode;
+                                    return (
+                                        <Draggable
+                                            key={nodeKey}
+                                            draggableId={nodeKey}
+                                            index={index}
                                         >
-                                            <CourseTreeItem
-                                                node={course}
-                                                depth={0}
-                                                onEditNode={handleEditNode}
-                                                onAddChild={handleAddChild}
-                                                onUpdateOrder={handleUpdateOrder}
-                                                dragHandleProps={provided.dragHandleProps}
-                                                currentLanguageCode={currentLanguageCode}
-                                                languages={languages}
-                                                postId={data.post.id}
-                                                onReloadCourses={loadData}
-                                                onUpdateLessonStatus={handleUpdateLessonStatus}
-                                                expandedNodes={expandedNodes}
-                                                onExpandAll={handleExpandAll}
-                                                onExpandNode={(key) => setExpandedNodes(prev => new Set(prev).add(key))}
-                                                onCollapse={(key) => setExpandedNodes(prev => {
-                                                    const next = new Set(prev);
-                                                    next.delete(key);
-                                                    return next;
-                                                })}
-                                                onSelectCourseForEdit={handleSelectCourseForEdit}
-                                                onBackToCourseList={handleBackToCourseList}
-                                                selectedCourseId={selectedCourseId}
-                                                onPreviewLesson={setPreviewNode}
-                                            />
-                                        </div>
-                                    )}
-                                </Draggable>
-                            ))}
-                            {provided.placeholder}
-                        </List>
+                                            {(dragProvided) => (
+                                                <div
+                                                    ref={dragProvided.innerRef}
+                                                    {...dragProvided.draggableProps}
+                                                    style={{
+                                                        ...dragProvided.draggableProps.style,
+                                                        marginBottom: 4
+                                                    }}
+                                                >
+                                                    <CourseTreeItem
+                                                        node={node}
+                                                        depth={depth}
+                                                        onEditNode={handleEditNode}
+                                                        onAddChild={handleAddChild}
+                                                        onUpdateOrder={handleUpdateOrder}
+                                                        dragHandleProps={dragProvided.dragHandleProps}
+                                                        currentLanguageCode={currentLanguageCode}
+                                                        languages={languages}
+                                                        postId={data.post.id}
+                                                        onReloadCourses={loadData}
+                                                        onUpdateLessonStatus={handleUpdateLessonStatus}
+                                                        expandedNodes={expandedNodes}
+                                                        onExpandAll={handleExpandAll}
+                                                        onExpandNode={(key: string) => setExpandedNodes(prev => new Set(prev).add(key))}
+                                                        onCollapse={(key: string) => setExpandedNodes(prev => {
+                                                            const next = new Set(prev);
+                                                            next.delete(key);
+                                                            return next;
+                                                        })}
+                                                        onSelectCourseForEdit={handleSelectCourseForEdit}
+                                                        onBackToCourseList={handleBackToCourseList}
+                                                        selectedCourseId={selectedCourseId}
+                                                        onPreviewLesson={setPreviewNode}
+                                                        parentContext={parentContext}
+                                                        isFlatMode={true}
+                                                        index={flatNode.index}
+                                                    />
+                                                </div>
+                                            )}
+                                        </Draggable>
+                                    );
+                                }}
+                                components={{
+                                    Footer: () => <Box sx={{ height: 1 }}>{provided.placeholder}</Box>
+                                }}
+                            />
+                        </Box>
                     )}
                 </Droppable>
             </DragDropContext>
