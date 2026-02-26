@@ -63,6 +63,20 @@ export interface Section {
     isPublished?: boolean;
 }
 
+export interface CourseLabel {
+    open?: boolean;
+    confirmDelete?: boolean;
+    delete?: number;
+    title: string;
+    color?: string;
+    background_color?: string;
+    [key: string]: unknown;
+}
+
+export type CourseLabelsByLang = {
+    [langCode: string]: CourseLabel[];
+};
+
 export interface Course {
     id: string | number;
     title: string; // JSON
@@ -82,6 +96,7 @@ export interface Course {
     count_app_course_flashcard?: number;
     isPublished?: boolean;
     is_completed?: boolean;
+    labels?: string | CourseLabelsByLang;
 }
 
 export type TreeNode = Course | Section | Chapter | Lesson | Question;

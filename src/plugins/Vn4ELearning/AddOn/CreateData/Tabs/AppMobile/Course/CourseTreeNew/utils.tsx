@@ -2,7 +2,7 @@ import React from "react";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode } from "./types";
+import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode, CourseLabel, CourseLabelsByLang } from "./types";
 
 const MULTILANG_FIELDS: { [key: string]: string[] } = {
     course: ["title", "shortDescription", "description"],
@@ -283,6 +283,33 @@ export const parseJsonTitle = (title: string, langCode: string): string => {
     }
 };
 
+export const getCourseLabelsViOrEn = (course: Course): CourseLabel[] => {
+    const raw = (course as ANY).labels as string | CourseLabelsByLang | undefined;
+    if (!raw) return [];
+
+    let parsed: CourseLabelsByLang | null = null;
+
+    if (typeof raw === "string") {
+        try {
+            parsed = JSON.parse(raw) as CourseLabelsByLang;
+        } catch (e) {
+            return [];
+        }
+    } else if (typeof raw === "object") {
+        parsed = raw as CourseLabelsByLang;
+    }
+
+    if (!parsed) return [];
+
+    const vi = Array.isArray(parsed["vi"]) ? parsed["vi"] : [];
+    const en = Array.isArray(parsed["en"]) ? parsed["en"] : [];
+
+    if (vi.length > 0) return vi;
+    if (en.length > 0) return en;
+
+    return [];
+};
+
 export const arePropsEqual = (prev: ANY, next: ANY, keysToIgnore: string[] = []): boolean => {
     const prevKeys = Object.keys(prev).filter(k => !keysToIgnore.includes(k));
     const nextKeys = Object.keys(next).filter(k => !keysToIgnore.includes(k));
@@ -395,7 +422,7 @@ export const flattenTree = (
     depth = 0,
     parentContext: { courseId?: string | number, sectionId?: string | number, chapterId?: string | number } = {},
     parentId: string | number = "root",
-    parentType: string = "app_mobile"
+    parentType = "app_mobile"
 ): FlatNode[] => {
     let flatList: FlatNode[] = [];
 

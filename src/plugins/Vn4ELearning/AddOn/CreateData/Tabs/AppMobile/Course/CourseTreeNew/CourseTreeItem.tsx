@@ -52,6 +52,7 @@ import {
     parseJsonTitle,
     calculateNodeProgress,
     calculateTotalLessonFlashcards,
+    getCourseLabelsViOrEn,
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
@@ -515,7 +516,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                 />
                             )}
                             <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                     <Typography
                                         variant="body2"
                                         onClick={(e) => {
@@ -539,6 +540,35 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         {title || `Untitled ${getNodeLabel(node)}`}
                                         {(node as ANY).status === 'trash' && " - Deleted"}
                                     </Typography>
+
+                                    {nodeType === "course" && (() => {
+                                        const labels = getCourseLabelsViOrEn(node as Course);
+                                        if (!labels.length) return null;
+                                        return (
+                                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                                                {labels.map((label, idx) => (
+                                                    <Box
+                                                        key={idx}
+                                                        sx={{
+                                                            px: 0.75,
+                                                            py: 0.25,
+                                                            borderRadius: 16,
+                                                            fontSize: "0.7rem",
+                                                            fontWeight: 600,
+                                                            color: label.color || "#ffffff",
+                                                            backgroundColor: label.background_color || "#1976d2",
+                                                            maxWidth: 160,
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {label.title}
+                                                    </Box>
+                                                ))}
+                                            </Box>
+                                        );
+                                    })()}
 
                                     <Chip
                                         label={getNodeLabel(node)}

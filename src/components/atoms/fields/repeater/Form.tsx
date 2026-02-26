@@ -32,6 +32,29 @@ import SpecialNotes from '../SpecialNotes';
 import { FieldFormItemProps } from '../type';
 import useConfirmDialog from 'hook/useConfirmDialog';
 
+const safeStringify = (value: ANY) => {
+    const seen = new WeakSet();
+
+    return JSON.stringify(value, (key, val) => {
+        if (typeof val === 'function') {
+            return undefined;
+        }
+
+        if (typeof HTMLElement !== 'undefined' && val instanceof HTMLElement) {
+            return undefined;
+        }
+
+        if (val && typeof val === 'object') {
+            if (seen.has(val)) {
+                return undefined;
+            }
+            seen.add(val);
+        }
+
+        return val;
+    });
+};
+
 const useStyles = makeStyles((theme: Theme) => ({
     root: {
         width: '100%',
@@ -305,7 +328,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
     const handleCopyToClipboard = () => {
         if (indexOfAction !== false) {
             let item = { config: config, value: copyArray(valueInital[indexOfAction]) };
-            navigator.clipboard.writeText(JSON.stringify(item));
+            navigator.clipboard.writeText(safeStringify(item));
             showMessage(__('Copied to clipboard.'), 'info');
             setIndexOfAction(false);
         }
@@ -360,7 +383,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
 
     const handleCopyAll = () => {
         let item = { config: config, value: copyArray(valueInital) };
-        navigator.clipboard.writeText(JSON.stringify(item));
+        navigator.clipboard.writeText(safeStringify(item));
         showMessage(__('Copied to clipboard.'), 'info');
         setIndexOfAction(false);
     }
@@ -372,7 +395,7 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
             .then(text => {
                 let itemFromclipboard = JSON.parse(text);
                 console.log(itemFromclipboard);
-                if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
+                if (safeStringify(itemFromclipboard.config) === safeStringify(config)) {
                     if (itemFromclipboard.value) {
                         items = [...itemFromclipboard.value];
                         post[name] = items;
