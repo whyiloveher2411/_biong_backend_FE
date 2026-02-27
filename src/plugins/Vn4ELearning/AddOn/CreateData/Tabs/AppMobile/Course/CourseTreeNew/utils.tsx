@@ -420,7 +420,7 @@ export const flattenTree = (
     nodes: TreeNode[],
     expandedNodes: Set<string>,
     depth = 0,
-    parentContext: { courseId?: string | number, sectionId?: string | number, chapterId?: string | number } = {},
+    parentContext: { courseId?: string | number, courseKey?: string, sectionId?: string | number, chapterId?: string | number } = {},
     parentId: string | number = "root",
     parentType = "app_mobile"
 ): FlatNode[] => {
@@ -431,7 +431,10 @@ export const flattenTree = (
         const nodeKey = getNodeKey(node);
 
         const currentContext = { ...parentContext };
-        if (nodeType === 'course') currentContext.courseId = node.id;
+        if (nodeType === 'course') {
+            currentContext.courseId = node.id;
+            currentContext.courseKey = (node as Course).key;
+        }
         if (nodeType === 'section') currentContext.sectionId = node.id;
         if (nodeType === 'chapter') currentContext.chapterId = node.id;
 
