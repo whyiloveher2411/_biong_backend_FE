@@ -153,6 +153,8 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
 
     const [indexOfAction, setIndexOfAction] = React.useState<number | false>(false);
 
+    const [anchorElSampleData, setAnchorElSampleData] = React.useState<HTMLElement | null>(null);
+
     let { showMessage } = useFloatingMessages();
 
     let valueInital: Array<{ [key: string]: ANY }> = [];
@@ -381,6 +383,35 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
         setRender(prev => prev + 1);
     };
 
+    const handleOpenSampleDataMenu = (event: React.MouseEvent<HTMLElement>) => {
+        setAnchorElSampleData(event.currentTarget);
+    };
+
+    const handleCloseSampleDataMenu = () => {
+        setAnchorElSampleData(null);
+    };
+
+    const handleSelectSampleData = (sampleData: { [key: string]: ANY }) => {
+        let items: Array<{ [key: string]: ANY }> = [];
+
+        if (valueInital && typeof valueInital === 'object') {
+            items = copyArray(valueInital);
+        }
+
+        const newItem = {
+            open: true,
+            confirmDelete: false,
+            delete: 0,
+            ...copyArray(sampleData),
+        };
+
+        items.push(newItem);
+        post[name] = items;
+        onReview(post[name]);
+        setRender(prev => prev + 1);
+        setAnchorElSampleData(null);
+    };
+
     const handleCopyAll = () => {
         let item = { config: config, value: copyArray(valueInital) };
         navigator.clipboard.writeText(safeStringify(item));
@@ -437,6 +468,12 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                 <FormLabel component="legend">{config.title}</FormLabel>
                 <Box>
                     <Button color="inherit" onClick={handleCopyAll}>Copy</Button>
+                    {
+                        Array.isArray(config.date_default_value) && config.date_default_value.length > 0 &&
+                        <Button sx={{ ml: 1 }} variant='outlined' onClick={handleOpenSampleDataMenu}>
+                            Data mẫu
+                        </Button>
+                    }
                     <Button sx={{ ml: 1, }} variant='outlined' onClick={handlePasteAll}>Paste</Button>
                     <Button sx={{ ml: 1, }} variant='outlined' color='error' onClick={() => {
                         confirmDelete.onConfirm(() => {
@@ -447,6 +484,38 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
                     }}>Delete All</Button>
                     {confirmDelete.component}
                 </Box>
+                {
+                    Array.isArray(config.date_default_value) && config.date_default_value.length > 0 &&
+                    <Menu
+                        anchorEl={anchorElSampleData}
+                        open={Boolean(anchorElSampleData)}
+                        onClose={handleCloseSampleDataMenu}
+                        PaperProps={{
+                            style: {
+                                minWidth: '20ch',
+                            },
+                        }}
+                        anchorOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'center',
+                        }}
+                        transformOrigin={{
+                            vertical: 'top',
+                            horizontal: 'center',
+                        }}
+                    >
+                        {
+                            config.date_default_value.map((sample: { [key: string]: ANY }, index: number) => {
+                                const label = sample?.title || sample?.label || sample?.name || `${__('Sample')} ${index + 1}`;
+                                return (
+                                    <MenuItem key={index} onClick={() => handleSelectSampleData(sample)}>
+                                        <ListItemText disableTypography primary={label} />
+                                    </MenuItem>
+                                );
+                            })
+                        }
+                    </Menu>
+                }
             </Box>
             {
                 Boolean(config.note) &&
