@@ -15,6 +15,8 @@ import InstagramIcon from '@mui/icons-material/Instagram';
 import YouTubeIcon from '@mui/icons-material/YouTube';
 import TwitterIcon from '@mui/icons-material/Twitter';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
+import LanguageIcon from '@mui/icons-material/Language';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 
 const localizer = momentLocalizer(moment);
 
@@ -25,6 +27,8 @@ const TikTokIcon = (props: ANY) => (
 );
 
 const PLATFORM_ICONS: Record<string, React.ReactNode> = {
+    'Website': <LanguageIcon fontSize="small" sx={{ color: '#2196F3' }} />,
+    'App Mobile': <PhoneAndroidIcon fontSize="small" sx={{ color: '#4CAF50' }} />,
     'Facebook': <FacebookIcon fontSize="small" sx={{ color: '#1877F2' }} />,
     'Instagram': <InstagramIcon fontSize="small" sx={{ color: '#E4405F' }} />,
     'TikTok': <TikTokIcon fontSize="small" sx={{ color: '#000000' }} />,
@@ -43,6 +47,8 @@ const normalizePlatform = (p: string): string => {
     if (lower.includes('twitter') || lower === 'x') return 'X';
     if (lower.includes('linkedin')) return 'LinkedIn';
     if (lower.includes('threads')) return 'Threads';
+    if (lower === 'website') return 'Website';
+    if (lower === 'app_mobile') return 'App Mobile';
     return p;
 };
 

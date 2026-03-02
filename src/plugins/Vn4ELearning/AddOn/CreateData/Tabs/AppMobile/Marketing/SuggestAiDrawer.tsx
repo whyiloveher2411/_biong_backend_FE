@@ -45,6 +45,8 @@ const audienceOptions = [
 ];
 
 const platformOptions = [
+    "Website",
+    "App Mobile",
     "Facebook",
     "Instagram",
     "TikTok",

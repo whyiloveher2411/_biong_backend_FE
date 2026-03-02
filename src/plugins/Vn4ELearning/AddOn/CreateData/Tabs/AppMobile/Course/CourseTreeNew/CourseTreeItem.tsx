@@ -541,6 +541,21 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                         {(node as ANY).status === 'trash' && " - Deleted"}
                                     </Typography>
 
+                                    {nodeType === "course" && (node as Course).isComingSoon ? (
+                                        <Chip
+                                            label="Coming Soon"
+                                            size="small"
+                                            sx={{
+                                                height: 16,
+                                                fontSize: "0.625rem",
+                                                backgroundColor: "warning.main",
+                                                color: "white",
+                                                fontWeight: 600,
+                                                cursor: "default",
+                                            }}
+                                        />
+                                    ) : null}
+
                                     {nodeType === "course" && (() => {
                                         const labels = getCourseLabelsViOrEn(node as Course);
                                         if (!labels.length) return null;

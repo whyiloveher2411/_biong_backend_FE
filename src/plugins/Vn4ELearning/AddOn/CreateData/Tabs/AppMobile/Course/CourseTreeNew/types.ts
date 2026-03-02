@@ -81,6 +81,7 @@ export interface Course {
     id: string | number;
     title: string; // JSON
     key?: string;
+    isComingSoon?: boolean;
     shortDescription?: string; // JSON
     description?: string; // JSON
     sections?: Section[];
