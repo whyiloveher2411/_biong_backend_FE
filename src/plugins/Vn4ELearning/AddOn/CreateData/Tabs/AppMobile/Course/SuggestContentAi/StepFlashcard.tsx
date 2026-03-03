@@ -229,6 +229,13 @@ export default function StepFlashcard({
         }
     };
 
+    // Bỏ số thứ tự có sẵn trong title để hiển thị theo index
+    const stripLeadingNumber = (s: string) => {
+        if (!s || typeof s !== 'string') return s || '';
+        const m = s.match(/^\d+\.\s*(.*)$/);
+        return m ? m[1].trim() : s;
+    };
+
     const extractContent = (data: ANY): string => {
         if (data === null || data === undefined) return '';
         if (typeof data === 'object' && !Array.isArray(data) && data !== null && 'content' in data && typeof data.content === 'string') {
@@ -291,7 +298,7 @@ export default function StepFlashcard({
                         <Paper key={cIndex} sx={{ mb: 3, p: 2, borderRadius: 2, border: '1px solid #e0e0e0' }} elevation={0}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
-                                    {chapter.title}
+                                    {cIndex + 1}. {chapter.title}
                                 </Typography>
                                 <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
                                     <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
@@ -339,7 +346,7 @@ export default function StepFlashcard({
                                                         variant="body2"
                                                         sx={{ fontWeight: (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) ? 'bold' : 'normal' }}
                                                     >
-                                                        {lIndex + 1}. {lesson.title}
+                                                        {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
                                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                         {(() => {
@@ -544,7 +551,7 @@ export default function StepFlashcard({
                 activeOnClose
                 open={openChapterDrawer !== null}
                 onClose={() => setOpenChapterDrawer(null)}
-                title={openChapterDrawer !== null ? `Nội dung chương: ${outline[openChapterDrawer].title}` : ''}
+                title={openChapterDrawer !== null ? `Nội dung chương ${openChapterDrawer + 1}: ${outline[openChapterDrawer].title}` : ''}
                 width={1000}
             >
                 <Box sx={{ p: 3 }}>

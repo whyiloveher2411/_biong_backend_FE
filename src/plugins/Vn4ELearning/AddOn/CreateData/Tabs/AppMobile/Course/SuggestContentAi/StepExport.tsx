@@ -20,6 +20,13 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
     const [previewDrawer, setPreviewDrawer] = useState<{ open: boolean, title: string, cIndex: number, lIndex: number, filter?: 'questions' | 'flashcards' | 'content' | 'all' } | null>(null);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
+    // Bỏ số thứ tự có sẵn trong title để hiển thị theo index
+    const stripLeadingNumber = (s: string) => {
+        if (!s || typeof s !== 'string') return s || '';
+        const m = s.match(/^\d+\.\s*(.*)$/);
+        return m ? m[1].trim() : s;
+    };
+
     const extractContent = (data: ANY): string => {
         if (data === null || data === undefined) return '';
         if (typeof data === 'object' && !Array.isArray(data) && data !== null && 'content' in data && typeof data.content === 'string') {
@@ -155,7 +162,7 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                    {chapter.title}
+                                    {cIndex + 1}. {chapter.title}
                                 </Typography>
                                 {(() => {
                                     const percentage = getChapterCompletion(cIndex);
@@ -205,7 +212,7 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                                             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                                                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                                        {lIndex + 1}. {lesson.title}
+                                                        {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
                                                     <Box sx={{
                                                         bgcolor: isCompleted ? 'success.main' : 'warning.main',
@@ -420,7 +427,7 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                 activeOnClose
                 open={openChapterDrawer !== null}
                 onClose={() => setOpenChapterDrawer(null)}
-                title={openChapterDrawer !== null ? `Nội dung chương: ${outline[openChapterDrawer].title}` : ''}
+                title={openChapterDrawer !== null ? `Nội dung chương ${openChapterDrawer + 1}: ${outline[openChapterDrawer].title}` : ''}
                 width={1000}
             >
                 <Box sx={{ p: 3 }}>

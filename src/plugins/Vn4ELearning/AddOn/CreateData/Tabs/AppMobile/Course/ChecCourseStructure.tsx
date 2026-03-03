@@ -86,6 +86,10 @@ function ChecCourseStructure(props: FieldFormItemProps) {
         props.onReview(event.target.value, props.name || 'link_data_craw_json');
     };
 
+    const drawerTitleValue = typeof props.post?.title === 'string'
+        ? props.post.title
+        : (props.post?.title?.vi || props.post?.title?.en || 'Gợi ý nội dung bằng AI');
+
     if (loading && courses.length === 0) {
         return <CircularProgress size={20} />;
     }
@@ -138,7 +142,7 @@ function ChecCourseStructure(props: FieldFormItemProps) {
         <DrawerCustom
             open={openSuggestAi}
             onClose={() => setOpenSuggestAi(false)}
-            title="Gợi ý nội dung bằng AI"
+            title={drawerTitleValue || 'Gợi ý nội dung bằng AI'}
             width={2000}
             restDialogContent={{}}
             headerAction={<LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>}

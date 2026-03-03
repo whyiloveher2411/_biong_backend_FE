@@ -53,6 +53,13 @@ export default function StepContent({
     const [, forceUpdate] = useState(0);
     const refresh = () => forceUpdate(prev => prev + 1);
 
+    // Bỏ số thứ tự có sẵn trong title để hiển thị theo index
+    const stripLeadingNumber = (s: string) => {
+        if (!s || typeof s !== 'string') return s || '';
+        const m = s.match(/^\d+\.\s*(.*)$/);
+        return m ? m[1].trim() : s;
+    };
+
     const handleEditStart = (type: 'chapter' | 'lesson' | 'lesson-content', cIndex: number, lIndex?: number, currentValue?: string) => {
         setEditing({ type, cIndex, lIndex });
         setEditValue(currentValue || '');
@@ -318,7 +325,7 @@ export default function StepContent({
                                 ) : (
                                     <>
                                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
-                                            {chapter.title}
+                                            {cIndex + 1}. {chapter.title}
                                         </Typography>
                                         <Box>
                                             <IconButton size="small" onClick={() => handleEditStart('chapter', cIndex, undefined, chapter.title)}>
@@ -384,7 +391,7 @@ export default function StepContent({
                                                                 variant="body2"
                                                                 sx={{ fontWeight: (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) ? 'bold' : 'normal' }}
                                                             >
-                                                                {lIndex + 1}. {lesson.title}
+                                                                {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                             </Typography>
                                                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                                 {(() => {
@@ -626,7 +633,7 @@ export default function StepContent({
                         {generatingChapter === openChapterDrawer ? <CircularProgress size={20} /> : 'Generate AI'}
                     </Button>
                 }
-                title={`Nội dung chương: ${openChapterDrawer !== null ? outline[openChapterDrawer]?.title : ''}`}
+                title={`Nội dung chương ${openChapterDrawer !== null ? (openChapterDrawer + 1) : ''}: ${openChapterDrawer !== null ? outline[openChapterDrawer]?.title : ''}`}
             >
                 {openChapterDrawer !== null && (
                     <Box sx={{ height: '100%', pt: 3, display: 'flex', flexDirection: 'column' }}>
