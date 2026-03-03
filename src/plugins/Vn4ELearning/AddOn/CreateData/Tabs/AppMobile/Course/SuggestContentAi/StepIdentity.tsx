@@ -65,6 +65,7 @@ export default function StepIdentity({ post, onReview, onNext, maxStep, onSyncAi
             description: post.description,
             audience: post.audience,
             learning_outcome: post.learning_outcome,
+            content_requirements: post.content_requirements || 'Hãy tưởng tượng là đang giảng dạy cho học viên có chỉ số IQ dưới mức trung bình',
             prerequisites: post.prerequisites,
             knowledge_base: post.knowledge_base,
             response_language: post.response_language,
@@ -186,6 +187,21 @@ export default function StepIdentity({ post, onReview, onNext, maxStep, onSyncAi
                                 title: false,
                                 note: "\"Sau khóa học này, học viên sẽ nắm vững...\"",
                                 rows: 5
+                            }}
+                        />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'text.primary' }}>Yêu cầu nội dung (Content Requirements)</Typography>
+                        <FieldForm
+                            post={post}
+                            name="content_requirements"
+                            onReview={(value) => onReview(value, "content_requirements")}
+                            component="textarea"
+                            config={{
+                                title: false,
+                                note: "Thêm hướng dẫn đặc biệt cho AI. VD: Tưởng tượng đang hướng dẫn cho người có chỉ số IQ dưới trung bình (để AI tạo nội dung dễ hiểu hơn).",
+                                placeholder: "VD: Giải thích như đang nói chuyện với người mới bắt đầu, dùng ví dụ đời thường...",
+                                rows: 3
                             }}
                         />
                     </Grid>

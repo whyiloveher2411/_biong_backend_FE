@@ -57,6 +57,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             description: getStr(post.description),
             audience: post.audience || [],
             learning_outcome: post.learning_outcome || '',
+            content_requirements: post.content_requirements || '',
             prerequisites: post.prerequisites || '',
             knowledge_base: post.knowledge_base || '',
             response_language: post.response_language || '',
@@ -86,6 +87,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                         initial.audience = Array.isArray(identity.audience) ? identity.audience : (typeof identity.audience === 'string' ? identity.audience.split(',').map((s: string) => s.trim()) : []);
                     }
                     if (identity.learning_outcome) initial.learning_outcome = identity.learning_outcome;
+                    if (identity.content_requirements !== undefined) initial.content_requirements = identity.content_requirements;
                     if (identity.prerequisites) initial.prerequisites = identity.prerequisites;
                     if (identity.response_language) initial.response_language = identity.response_language;
 
@@ -182,6 +184,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             if (aiSuggest.description && !prev._user_edited_description) { newSuggestionData.description = aiSuggest.description; hasUpdates = true; }
             if (aiSuggest.audience && !prev._user_edited_audience) { newSuggestionData.audience = aiSuggest.audience; hasUpdates = true; }
             if (aiSuggest.learning_outcome && !prev._user_edited_learning_outcome) { newSuggestionData.learning_outcome = aiSuggest.learning_outcome; hasUpdates = true; }
+            if (aiSuggest.content_requirements !== undefined) { newSuggestionData.content_requirements = aiSuggest.content_requirements; hasUpdates = true; }
             if (aiSuggest.prerequisites && !prev._user_edited_prerequisites) { newSuggestionData.prerequisites = aiSuggest.prerequisites; hasUpdates = true; }
             if (aiSuggest.response_language) { newSuggestionData.response_language = aiSuggest.response_language; hasUpdates = true; }
             if (aiSuggest.style) { newSuggestionData.style = aiSuggest.style; hasUpdates = true; }
@@ -198,6 +201,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                         else if (identity.title) { if (typeof newSuggestionData.title === 'string' || !newSuggestionData.title) newSuggestionData.title = identity.title; }
                         if (identity.audience) newSuggestionData.audience = Array.isArray(identity.audience) ? identity.audience : (typeof identity.audience === 'string' ? identity.audience.split(',').map((s: string) => s.trim()) : []);
                         if (identity.learning_outcome) newSuggestionData.learning_outcome = identity.learning_outcome;
+                        if (identity.content_requirements !== undefined) newSuggestionData.content_requirements = identity.content_requirements;
                         if (identity.prerequisites) newSuggestionData.prerequisites = identity.prerequisites;
                         if (identity.description !== undefined) newSuggestionData.description = identity.description;
                         if (identity.response_language) newSuggestionData.response_language = identity.response_language;
