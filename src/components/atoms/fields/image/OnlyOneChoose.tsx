@@ -25,6 +25,7 @@ import { useSnackbar } from 'notistack';
 import React from 'react';
 import { FieldFormItemProps } from '../type';
 import GoogleDrive, { FileProps } from './GoogleDrive';
+import GenerateImageAiDrawer from './GenerateImageAiDrawer';
 import InstructionNotes from './InstructionNotes';
 
 
@@ -69,6 +70,7 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
 
     const [openSourDialog, setOpenSourDialog] = React.useState(false);
     const [openFilemanagerDialog, setOpenFilemanagerDialog] = React.useState(false);
+    const [openAiDrawer, setOpenAiDrawer] = React.useState(false);
 
     const { enqueueSnackbar } = useSnackbar();
     const { ajax } = useAjax();
@@ -264,6 +266,19 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
 
     };
 
+    const handleAiImageSuccess = (result: ImageObjectProps) => {
+        if (result?.link) {
+            const src = validURL(result.link) ? result.link : convertToURL(process.env.REACT_APP_BASE_URL, result.link);
+            validateImage(src, (validated?: ImageObjectProps) => {
+                if (validated?.link) {
+                    post[name] = validated;
+                    onReview(validated);
+                    setRender((r) => r + 1);
+                }
+            });
+        }
+    };
+
     React.useEffect(() => {
 
         if (render > 0) {
@@ -328,28 +343,46 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
                                                 handleClickOpenSourceDialog={handleClickOpenSourceDialog}
                                                 name={name}
                                             />
-                                            <Typography onClick={handleClickOpenSourceDialog} variant="body1" color="primary" style={{ cursor: 'pointer' }}>{__('Change image')}</Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                                <Typography onClick={handleClickOpenSourceDialog} variant="body1" color="primary" style={{ cursor: 'pointer' }}>{__('Change image')}</Typography>
+                                                {!config.disableGenerateAi && (
+                                                    <IconButton size="small" onClick={() => setOpenAiDrawer(true)} aria-label="Tạo ảnh bằng AI" color="primary">
+                                                        <Icon icon="AutoAwesomeRounded" fontSize="small" />
+                                                    </IconButton>
+                                                )}
+                                            </Box>
                                         </Box>
                                         :
-                                        <Box
-                                            onClick={handleClickOpenSourceDialog}
-                                            sx={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                padding: 2
-                                            }}
-                                            className={classes.uploadArea} >
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gridGap: 4 }}>
                                             <Box
+                                                onClick={handleClickOpenSourceDialog}
                                                 sx={{
                                                     display: "flex",
-                                                    flexDirection: "column",
-                                                    gridGap: 4,
-                                                    alignItems: "center"
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    padding: 2
                                                 }}
+                                                className={classes.uploadArea}
                                             >
-                                                <Icon icon="CloudUpload" className={classes.uploadIcon} fontSize="large" />
-                                                <Button color="primary">{__('Choose image')}</Button>
+                                                <Box
+                                                    sx={{
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gridGap: 4,
+                                                        alignItems: "center"
+                                                    }}
+                                                >
+                                                    <Icon icon="CloudUpload" className={classes.uploadIcon} fontSize="large" />
+                                                    <Button color="primary">{__('Choose image')}</Button>
+                                                </Box>
+                                            </Box>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography onClick={handleClickOpenSourceDialog} variant="body1" color="primary" style={{ cursor: 'pointer' }}>{__('Choose image')}</Typography>
+                                                {!config.disableGenerateAi && (
+                                                    <IconButton size="small" onClick={() => setOpenAiDrawer(true)} aria-label="Tạo ảnh bằng AI" color="primary">
+                                                        <Icon icon="AutoAwesomeRounded" fontSize="small" />
+                                                    </IconButton>
+                                                )}
                                             </Box>
                                         </Box>
                                 }
@@ -423,6 +456,15 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
                     config={config}
                 />
             </DrawerCustom>
+
+            {!config.disableGenerateAi && (
+                <GenerateImageAiDrawer
+                    open={openAiDrawer}
+                    onClose={() => setOpenAiDrawer(false)}
+                    onSuccess={handleAiImageSuccess}
+                    apiUrl={config.generateAiUrl}
+                />
+            )}
         </>
     )
 }, (props1, props2) => {
