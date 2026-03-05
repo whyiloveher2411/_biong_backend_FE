@@ -77,10 +77,19 @@ export type CourseLabelsByLang = {
     [langCode: string]: CourseLabel[];
 };
 
+export interface CourseLogo {
+    link?: string;
+    type_link?: string;
+    ext?: string;
+    width?: number;
+    height?: number;
+}
+
 export interface Course {
     id: string | number;
     title: string; // JSON
     key?: string;
+    logo?: string | CourseLogo; // JSON string hoặc object
     isComingSoon?: boolean;
     shortDescription?: string; // JSON
     description?: string; // JSON

@@ -2,7 +2,18 @@ import React from "react";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode, CourseLabel, CourseLabelsByLang } from "./types";
+import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode, CourseLabel, CourseLabelsByLang, CourseLogo } from "./types";
+
+/** Parse logo từ course (JSON string hoặc object) và trả về URL nếu có */
+export const parseCourseLogoUrl = (logo: string | CourseLogo | undefined): string | null => {
+    if (!logo) return null;
+    try {
+        const parsed = typeof logo === "string" ? (JSON.parse(logo) as CourseLogo) : logo;
+        return parsed?.link || null;
+    } catch {
+        return null;
+    }
+};
 
 const MULTILANG_FIELDS: { [key: string]: string[] } = {
     course: ["title", "shortDescription", "description"],

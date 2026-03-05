@@ -50,6 +50,7 @@ import {
     hasChildren,
     getChildren,
     parseJsonTitle,
+    parseCourseLogoUrl,
     calculateNodeProgress,
     calculateTotalLessonFlashcards,
     getCourseLabelsViOrEn,
@@ -504,6 +505,24 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             <Box sx={{ color: nodeHasChildren ? nodeColor : "text.secondary", display: 'flex' }}>
                                 {getFolderIcon(nodeHasChildren, open)}
                             </Box>
+                            {nodeType === "course" && (() => {
+                                const logoUrl = parseCourseLogoUrl((node as Course).logo);
+                                if (!logoUrl) return null;
+                                return (
+                                    <Box
+                                        component="img"
+                                        src={logoUrl}
+                                        alt=""
+                                        sx={{
+                                            width: 32,
+                                            height: 32,
+                                            objectFit: "cover",
+                                            borderRadius: 1.5,
+                                            flexShrink: 0,
+                                        }}
+                                    />
+                                );
+                            })()}
                             {nodeType === "lesson" && (
                                 <Checkbox
                                     size="small"

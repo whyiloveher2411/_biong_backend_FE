@@ -644,6 +644,7 @@ export default function StepAssessment({
                                                                                                 <MenuItem value="code">Mã nguồn (Code)</MenuItem>
                                                                                                 <MenuItem value="parts">Điền chỗ trống (Parts)</MenuItem>
                                                                                                 <MenuItem value="select_answer">Trắc nghiệm (Select Answer)</MenuItem>
+                                                                                                <MenuItem value="select_answer_multi_choice">Trắc nghiệm (Select Answer Multi Choice)</MenuItem>
                                                                                                 <MenuItem value="order_list">Sắp xếp (Order List)</MenuItem>
                                                                                                 <MenuItem value="connect_block">Nối cặp (Connect Block)</MenuItem>
                                                                                             </Select>
