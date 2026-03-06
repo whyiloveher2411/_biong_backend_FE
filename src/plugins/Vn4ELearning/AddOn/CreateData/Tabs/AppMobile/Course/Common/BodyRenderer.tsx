@@ -3,7 +3,9 @@ import { Box, Typography, Button } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import EditIcon from '@mui/icons-material/Edit';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CourseEditImageDrawer from './CourseEditImageDrawer';
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 import useAjax from 'hook/useApi';
 
@@ -118,6 +120,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     const [loading, setLoading] = React.useState(false);
     const [showPrompt, setShowPrompt] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
+    const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
     const hasFetchedId = React.useRef<string | number | null>(null);
 
     const handleProcessImageResult = (imageUrl: string) => {
@@ -268,19 +271,41 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                         <Typography variant="body2" sx={{ mb: 2, color: '#1976d2', fontStyle: 'italic', maxWidth: '80%' }}>
                             <strong>Image Prompt:</strong> {component.prompt}
                         </Typography>
-                        <LoadingButton
-                            loading={loading}
-                            variant="contained"
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleGenerateImage(component.prompt || '', component.description || '', component.image_id);
-                            }}
-                            startIcon={<AutoFixHighIcon fontSize="small" />}
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Generate Image
-                        </LoadingButton>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <LoadingButton
+                                loading={loading}
+                                variant="contained"
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleGenerateImage(component.prompt || '', component.description || '', component.image_id);
+                                }}
+                                startIcon={<AutoFixHighIcon fontSize="small" />}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Generate Image
+                            </LoadingButton>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenEditDrawer(true);
+                                }}
+                                startIcon={<EditIcon fontSize="small" />}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Edit
+                            </Button>
+                        </Box>
+                        <CourseEditImageDrawer
+                            open={openEditDrawer}
+                            onClose={() => setOpenEditDrawer(false)}
+                            onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
+                            initialPrompt={component.prompt || ''}
+                            initialDescription={component.description || ''}
+                            imageId={component.image_id}
+                        />
                     </Box>
                 );
             }
@@ -378,6 +403,28 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                 >
                                     {showPrompt ? 'Hide Prompt' : 'Show Prompt'}
                                 </Button>
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenEditDrawer(true);
+                                    }}
+                                    startIcon={<EditIcon fontSize="small" />}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontSize: '0.7rem',
+                                        py: 0.2,
+                                        px: 1,
+                                        minWidth: 'auto',
+                                        borderRadius: 5,
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                        bgcolor: 'rgba(0,0,0,0.8)',
+                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.9)' }
+                                    }}
+                                >
+                                    Edit
+                                </Button>
                                 <LoadingButton
                                     loading={loading}
                                     variant="contained"
@@ -405,6 +452,14 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                 </LoadingButton>
                             </Box>
                         )}
+                        <CourseEditImageDrawer
+                            open={openEditDrawer}
+                            onClose={() => setOpenEditDrawer(false)}
+                            onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
+                            initialPrompt={component.prompt || ''}
+                            initialDescription={component.description || ''}
+                            imageId={component.image_id}
+                        />
                     </div>
                     {component.description && <div style={{ fontSize: '0.8em', color: '#666', marginTop: '5px' }} dangerouslySetInnerHTML={{ __html: stripBlockTags(component.description) }} />}
                 </div>
