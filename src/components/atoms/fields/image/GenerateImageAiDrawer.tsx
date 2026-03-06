@@ -397,6 +397,12 @@ const NEGATIVE_PROMPT_OPTIONS = [
     { value: 'oversaturated', label: 'Bão hòa quá (Oversaturated)' },
 ];
 
+// Model AI
+const MODEL_ID_OPTIONS = [
+    { value: 'z-image', label: 'Z-Image' },
+    { value: 'stable-diffusion-3.5-large-turbo', label: 'Stable Diffusion 3.5 Large Turbo' },
+];
+
 const QUALITY_KEYWORDS: Record<string, string> = {
     '128': '128x128, sharp focus',
     '256': '256x256, sharp focus',
@@ -476,6 +482,7 @@ function buildPrompt(
 
 export default function GenerateImageAiDrawer({ open, onClose, onSuccess, apiUrl = 'post-type/generate-image' }: GenerateImageAiDrawerProps) {
     const api = useAjax();
+    const [modelId, setModelId] = useState('z-image');
     const [prompt, setPrompt] = useState('');
     const [imageType, setImageType] = useState('general_art');
     const [artStyle, setArtStyle] = useState('');
@@ -564,6 +571,7 @@ export default function GenerateImageAiDrawer({ open, onClose, onSuccess, apiUrl
             url: apiUrl,
             method: 'POST',
             data: {
+                model_id: modelId,
                 prompt: fullPrompt,
                 negative_prompt: negativePrompt,
                 aspect_ratio: aspectRatio,
@@ -618,6 +626,7 @@ export default function GenerateImageAiDrawer({ open, onClose, onSuccess, apiUrl
 
     const handleReset = () => {
         setSelectedPreset('');
+        setModelId('z-image');
         setReferenceImagePost({ reference_image: null });
         setPrompt('');
         setImageType('general_art');
@@ -639,7 +648,27 @@ export default function GenerateImageAiDrawer({ open, onClose, onSuccess, apiUrl
     };
 
     return (
-        <DrawerCustom title="Tạo hình ảnh bằng AI" open={open} onClose={onClose} width={700}>
+        <DrawerCustom
+            title="Tạo hình ảnh bằng AI"
+            open={open}
+            onClose={onClose}
+            width={700}
+            headerAction={
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                    <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Model</InputLabel>
+                    <Select
+                        value={modelId}
+                        label="Model"
+                        onChange={(e: SelectChangeEvent<string>) => setModelId(e.target.value)}
+                        sx={{ color: 'inherit', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '& .MuiSvgIcon-root': { color: 'inherit' } }}
+                    >
+                        {MODEL_ID_OPTIONS.map((opt) => (
+                            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+            }
+        >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pb: 2, pt: 3 }}>
                 {/* 0. Chọn nhanh style */}
                 <FormControl fullWidth size="small">

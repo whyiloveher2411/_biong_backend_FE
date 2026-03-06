@@ -353,7 +353,14 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
                                             </Box>
                                         </Box>
                                         :
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gridGap: 4 }}>
+                                        <Box
+                                            style={{ width: 160 }}
+                                            sx={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gridGap: 4
+                                            }}
+                                        >
                                             <Box
                                                 onClick={handleClickOpenSourceDialog}
                                                 sx={{
@@ -376,7 +383,7 @@ export default React.memo(function ImageForm(props: FieldFormItemProps) {
                                                     <Button color="primary">{__('Choose image')}</Button>
                                                 </Box>
                                             </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                                                 <Typography onClick={handleClickOpenSourceDialog} variant="body1" color="primary" style={{ cursor: 'pointer' }}>{__('Choose image')}</Typography>
                                                 {!config.disableGenerateAi && (
                                                     <IconButton size="small" onClick={() => setOpenAiDrawer(true)} aria-label="Tạo ảnh bằng AI" color="primary">
