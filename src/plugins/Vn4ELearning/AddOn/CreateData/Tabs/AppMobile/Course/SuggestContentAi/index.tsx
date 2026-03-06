@@ -6,6 +6,7 @@ import StepContent from './StepContent';
 import StepAssessment from './StepAssessment';
 import StepFlashcard from './StepFlashcard';
 import StepExport from './StepExport';
+import { clearImageCache } from '../Common/BodyRenderer';
 import useAjax from 'hook/useApi';
 
 const steps = [
@@ -21,7 +22,7 @@ const steps = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ANY = any;
 
-export default function SuggestContentAi({ post, onReview, courses, onStepChange, onFinish }: { post: ANY, onReview: ANY, courses?: ANY[], onStepChange?: (step: number) => void, onFinish?: () => void }) {
+export default function SuggestContentAi({ post, onReview, courses, onStepChange, onFinish, refreshTrigger }: { post: ANY, onReview: ANY, courses?: ANY[], onStepChange?: (step: number) => void, onFinish?: () => void, refreshTrigger?: number }) {
     const [activeStep, setActiveStep] = React.useState(0);
 
     const [addAssessment, setAddAssessment] = React.useState('no');
@@ -417,35 +418,41 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
         });
     };
 
-    React.useEffect(() => {
-        if (post?.id) {
-            ajax({
-                url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step0',
-                method: 'POST',
-                data: { id: post.id },
-                success: (result: ANY) => {
-                    if (result.spacedev_course_ai_suggest) {
-                        syncFromAiSuggest(result.spacedev_course_ai_suggest);
+    const fetchStep0Data = React.useCallback((options?: { keepStepPosition?: boolean }) => {
+        if (!post?.id) return;
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step0',
+            method: 'POST',
+            data: { id: post.id },
+            success: (result: ANY) => {
+                if (result.spacedev_course_ai_suggest) {
+                    syncFromAiSuggest(result.spacedev_course_ai_suggest);
+                    if (!options?.keepStepPosition) {
                         const stepTemp = parseInt(result.spacedev_course_ai_suggest.step_temp);
                         const stepCurrent = parseInt(result.spacedev_course_ai_suggest.step_current);
-
-                        if (!isNaN(stepTemp) && stepTemp > 0) {
-                            setActiveStep(stepTemp - 1);
-                        } else if (!isNaN(stepCurrent) && stepCurrent > 0) {
-                            setActiveStep(stepCurrent - 1);
-                        }
-
-                        if (!isNaN(stepCurrent) && stepCurrent > 0) {
-                            setMaxStep(stepCurrent - 1);
-                        }
-
-                        setIsDataLoaded(true);
+                        if (!isNaN(stepTemp) && stepTemp > 0) setActiveStep(stepTemp - 1);
+                        else if (!isNaN(stepCurrent) && stepCurrent > 0) setActiveStep(stepCurrent - 1);
+                        if (!isNaN(stepCurrent) && stepCurrent > 0) setMaxStep(stepCurrent - 1);
                     }
+                    setIsDataLoaded(true);
                 }
-            });
+            }
+        });
+    }, [post?.id]);
 
+    React.useEffect(() => {
+        if (post?.id) {
+            fetchStep0Data();
         }
     }, [post?.id]);
+
+    React.useEffect(() => {
+        if (refreshTrigger != null && refreshTrigger > 0) {
+            clearImageCache();
+            setKeyRefresh((prev) => prev + 1);
+            fetchStep0Data({ keepStepPosition: true });
+        }
+    }, [refreshTrigger]);
 
     const handleNext = () => {
         // Validation removed for Step 2 as requested
@@ -490,6 +497,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             case 2: // Content
                 return (
                     <StepContent
+                        key={keyRefresh}
                         post={suggestionData}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}
@@ -505,6 +513,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             case 3: // Assessment
                 return (
                     <StepAssessment
+                        key={keyRefresh}
                         post={suggestionData}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}
@@ -515,6 +524,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             case 4: // Flashcard
                 return (
                     <StepFlashcard
+                        key={keyRefresh}
                         post={suggestionData}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}

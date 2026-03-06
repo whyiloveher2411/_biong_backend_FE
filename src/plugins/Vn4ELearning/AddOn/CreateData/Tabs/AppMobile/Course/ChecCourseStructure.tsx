@@ -1,6 +1,8 @@
 import DrawerCustom from "components/molecules/DrawerCustom";
+import Icon from "components/atoms/Icon";
+import IconButton from "components/atoms/IconButton";
 import { LoadingButton } from "@mui/lab";
-import { Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import { Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select, Tooltip } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
 import React, { useState } from "react";
@@ -15,6 +17,7 @@ function ChecCourseStructure(props: FieldFormItemProps) {
     const [openSuggestAi, setOpenSuggestAi] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [savingStep, setSavingStep] = useState(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
 
     const handleCheckDataCraw = () => {
@@ -145,9 +148,27 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             title={drawerTitleValue || 'Gợi ý nội dung bằng AI'}
             width={2000}
             restDialogContent={{}}
-            headerAction={<LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>}
+            headerAction={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Tooltip title="Làm mới dữ liệu (giữ nguyên vị trí và trạng thái)">
+                        <span>
+                            <IconButton
+                                onClick={() => {
+                                    handleCheckDataCraw();
+                                    setRefreshTrigger((prev) => prev + 1);
+                                }}
+                                aria-label="Làm mới"
+                                sx={{ color: 'white' }}
+                            >
+                                <Icon icon="Refresh" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                    <LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>
+                </Box>
+            }
         >
-            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} onStepChange={(step) => {
+            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} refreshTrigger={refreshTrigger} onStepChange={(step) => {
                 setCurrentStep(step);
             }} onFinish={() => setOpenSuggestAi(false)} />
         </DrawerCustom>

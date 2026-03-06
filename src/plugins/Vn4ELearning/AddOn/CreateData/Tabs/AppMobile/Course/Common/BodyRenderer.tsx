@@ -114,6 +114,12 @@ export const parseImgSrc = (src: ANY): string => {
     return typeof src === 'string' ? src : '';
 };
 const imageCache: Record<string | number, string> = {};
+const fetchedIds = new Set<string | number>();
+
+export const clearImageCache = () => {
+    Object.keys(imageCache).forEach((k) => delete imageCache[k as keyof typeof imageCache]);
+    fetchedIds.clear();
+};
 
 const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRendererProps) => {
     const { ajax } = useAjax();
@@ -121,7 +127,6 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     const [showPrompt, setShowPrompt] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
-    const hasFetchedId = React.useRef<string | number | null>(null);
 
     const handleProcessImageResult = (imageUrl: string) => {
         const updateUiAndProceed = () => {
@@ -193,9 +198,8 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
 
     const handleGetImageAi = (imageId: number | string) => {
         if (imageCache[imageId]) return;
-
-        if (hasFetchedId.current === imageId) return;
-        hasFetchedId.current = imageId;
+        if (fetchedIds.has(imageId)) return;
+        fetchedIds.add(imageId);
 
         setLoading(true);
         ajax({
@@ -205,14 +209,11 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                 image_id: imageId
             },
             success: (result: ANY) => {
-                // Ưu tiên data.src theo yêu cầu của user
                 const imageUrl = result.data?.src || result.image_url || result.src || result.data?.image_url;
-
                 if (imageUrl) {
                     imageCache[imageId] = imageUrl;
                     handleProcessImageResult(imageUrl);
                 } else {
-                    // Nếu không có src, dừng loading và vẫn giữ button (không làm gì thêm)
                     setLoading(false);
                 }
             },
@@ -227,7 +228,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     if (!component.type) {
         if (component.text) component.type = 'text';
         else if (component.code) component.type = 'code';
-        else if (component.image || component.image_link) component.type = 'image';
+        else if (component.image || component.image_link || component.image_id) component.type = 'image';
         else if (component.parts) component.type = 'parts';
         else if (component.info) component.type = 'info';
     }
@@ -312,7 +313,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
 
             return (
                 <div style={{ marginBottom: '10px', textAlign: 'center' }}>
-                    <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ position: 'relative', display: 'inline-block', maxWidth: 400, borderRadius: '4px', overflow: 'hidden' }}>
                         <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', display: 'block' }} />
 
                         {showPrompt && component.prompt && (
