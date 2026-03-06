@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography, Button, CircularProgress } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
@@ -127,6 +127,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     const [showPrompt, setShowPrompt] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
+    const [imageInJob, setImageInJob] = React.useState(false);
 
     const handleProcessImageResult = (imageUrl: string) => {
         const updateUiAndProceed = () => {
@@ -186,6 +187,10 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                 if (result.success && imageUrl) {
                     if (imageId) imageCache[imageId] = imageUrl;
                     handleProcessImageResult(imageUrl);
+                } else if (result.job_id != null) {
+                    // API dùng queue: hiển thị overlay loading
+                    setImageInJob(true);
+                    setLoading(false);
                 } else {
                     setLoading(false);
                 }
@@ -235,11 +240,39 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
 
     const imgSrc = parseImgSrc(component.image) || parseImgSrc(component.image_link) || (component.image_id ? parseImgSrc(imageCache[component.image_id]) : '');
 
+    const lastPolledSrcRef = React.useRef<string>('');
+
     React.useEffect(() => {
         if (component.type === 'image' && component.image_id && !imgSrc && !loading) {
             handleGetImageAi(component.image_id);
         }
     }, [component.image_id, component.type, imgSrc, loading]);
+
+    // Poll khi hình ảnh đang trong job queue - chỉ dừng khi src mới khác src cũ
+    React.useEffect(() => {
+        if (!imageInJob || component.type !== 'image' || !component.image_id) return;
+        lastPolledSrcRef.current = imgSrc; // Khởi tạo src cũ (parsed URL) khi bắt đầu poll
+        const interval = setInterval(() => {
+            ajax({
+                url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/get-image-ai',
+                method: 'POST',
+                data: { image_id: component.image_id },
+                success: (result: ANY) => {
+                    const newSrcRaw = result.data?.src || result.image_url || result.src || result.data?.image_url || '';
+                    const newSrcNormalized = parseImgSrc(newSrcRaw);
+                    const oldSrcNormalized = parseImgSrc(lastPolledSrcRef.current);
+                    lastPolledSrcRef.current = newSrcRaw; // Lưu raw cho lần so sánh tiếp theo
+                    // Chỉ cập nhật khi link thực tế khác nhau (hình đã được tạo mới xong)
+                    if (newSrcNormalized && newSrcNormalized !== oldSrcNormalized) {
+                        setImageInJob(false);
+                        imageCache[component.image_id] = newSrcRaw;
+                        handleProcessImageResult(newSrcNormalized);
+                    }
+                },
+            });
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [imageInJob, component.type, component.image_id, imgSrc]);
 
     switch (component.type) {
         case 'text':
@@ -267,8 +300,29 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        position: 'relative',
+                        minHeight: 120
                     }}>
+                        {imageInJob && (
+                            <Box sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                borderRadius: 2,
+                                zIndex: 10
+                            }}>
+                                <CircularProgress size={40} sx={{ mb: 1 }} />
+                                <Typography variant="body2" color="text.secondary">Đang xử lý trong hàng đợi...</Typography>
+                            </Box>
+                        )}
                         <Typography variant="body2" sx={{ mb: 2, color: '#1976d2', fontStyle: 'italic', maxWidth: '80%' }}>
                             <strong>Image Prompt:</strong> {component.prompt}
                         </Typography>
@@ -303,6 +357,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             open={openEditDrawer}
                             onClose={() => setOpenEditDrawer(false)}
                             onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
+                            onJobQueued={() => setImageInJob(true)}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
                             imageId={component.image_id}
@@ -314,6 +369,24 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
             return (
                 <div style={{ marginBottom: '10px', textAlign: 'center' }}>
                     <div style={{ position: 'relative', display: 'inline-block', maxWidth: 400, borderRadius: '4px', overflow: 'hidden' }}>
+                        {imageInJob && (
+                            <Box sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                zIndex: 10
+                            }}>
+                                <CircularProgress size={40} sx={{ mb: 1 }} />
+                                <Typography variant="body2" color="text.secondary">Đang xử lý trong hàng đợi...</Typography>
+                            </Box>
+                        )}
                         <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', display: 'block' }} />
 
                         {showPrompt && component.prompt && (
@@ -457,6 +530,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             open={openEditDrawer}
                             onClose={() => setOpenEditDrawer(false)}
                             onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
+                            onJobQueued={() => setImageInJob(true)}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
                             imageId={component.image_id}

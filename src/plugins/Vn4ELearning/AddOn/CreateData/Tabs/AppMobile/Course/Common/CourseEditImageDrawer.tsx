@@ -53,6 +53,7 @@ interface CourseEditImageDrawerProps {
     open: boolean;
     onClose: () => void;
     onSuccess: (imageUrl: string) => void;
+    onJobQueued?: (jobId: number) => void;
     initialPrompt?: string;
     initialDescription?: string;
     imageId?: number | string;
@@ -64,6 +65,7 @@ export default function CourseEditImageDrawer({
     open,
     onClose,
     onSuccess,
+    onJobQueued,
     initialPrompt = '',
     initialDescription = '',
     imageId,
@@ -187,6 +189,12 @@ export default function CourseEditImageDrawer({
             },
             success: (result: ANY) => {
                 setLoading(false);
+                // API dùng queue: trả về job_id, không có image_url
+                if (result.job_id != null) {
+                    onJobQueued?.(Number(result.job_id));
+                    onClose();
+                    return;
+                }
                 const imageUrl = result.image_url || result.src || result.data?.src || result.data?.image_url || result.link;
                 if (imageUrl) {
                     let link = imageUrl;
