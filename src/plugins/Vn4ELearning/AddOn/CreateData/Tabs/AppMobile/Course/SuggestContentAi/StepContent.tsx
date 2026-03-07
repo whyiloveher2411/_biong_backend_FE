@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Paper, IconButton, TextField, CircularProgress, Tooltip } from '@mui/material';
+import { Box, Button, Chip, Typography, Paper, IconButton, TextField, CircularProgress, Tooltip } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -189,7 +189,7 @@ export default function StepContent({
             setExpandedLesson({ cIndex, lIndex });
             refresh();
         } else {
-            alert('AI không trả về nội dung nào.');
+            // alert('AI không trả về nội dung nào.');
         }
     };
 
@@ -214,7 +214,6 @@ export default function StepContent({
                             cancelPollRef.current = null;
                             setGenerating(null);
                             setCompletedLessonJobs(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
-                            onRefresh?.();
                         },
                         onFailed: () => {
                             cancelPollRef.current = null;
@@ -267,7 +266,6 @@ export default function StepContent({
                             cancelPollRef.current = null;
                             setGeneratingChapter(null);
                             setCompletedChapterJobs(prev => new Set(prev).add(cIndex));
-                            onRefresh?.();
                         },
                         onFailed: () => {
                             cancelPollRef.current = null;
@@ -346,9 +344,20 @@ export default function StepContent({
                                     </Box>
                                 ) : (
                                     <>
-                                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
-                                            {cIndex + 1}. {chapter.title}
-                                        </Typography>
+                                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                                {cIndex + 1}. {chapter.title}
+                                            </Typography>
+                                            {completedChapterJobs.has(cIndex) && (
+                                                <Chip
+                                                    label="Queue hoàn thành - Bấm để cập nhật"
+                                                    color="success"
+                                                    size="small"
+                                                    onClick={(e) => { e.stopPropagation(); onRefresh?.(); }}
+                                                    sx={{ fontWeight: 500, cursor: 'pointer' }}
+                                                />
+                                            )}
+                                        </Box>
                                         <Box>
                                             <IconButton size="small" onClick={() => handleEditStart('chapter', cIndex, undefined, chapter.title)}>
                                                 <EditIcon fontSize="small" />
@@ -416,9 +425,13 @@ export default function StepContent({
                                                                 {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                             </Typography>
                                                             {completedLessonJobs.has(`${cIndex}-${lIndex}`) && (
-                                                                <Box component="span" sx={{ fontSize: '0.7rem', color: 'success.main', fontWeight: 500 }}>
-                                                                    (Job đã hoàn thành)
-                                                                </Box>
+                                                                <Chip
+                                                                    label="Queue hoàn thành - Bấm để cập nhật"
+                                                                    color="success"
+                                                                    size="small"
+                                                                    onClick={(e) => { e.stopPropagation(); onRefresh?.(); }}
+                                                                    sx={{ fontWeight: 500, cursor: 'pointer', height: 20 }}
+                                                                />
                                                             )}
                                                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                                 {(() => {

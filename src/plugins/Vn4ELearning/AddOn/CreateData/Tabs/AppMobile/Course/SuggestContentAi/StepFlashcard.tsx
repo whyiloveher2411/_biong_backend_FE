@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Paper, IconButton, TextField, CircularProgress, Tooltip } from '@mui/material';
+import { Box, Button, Chip, Typography, Paper, IconButton, TextField, CircularProgress, Tooltip } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -8,6 +8,8 @@ import useAjax from 'hook/useApi';
 import ReactMarkdown from 'react-markdown';
 import DrawerCustom from "components/molecules/DrawerCustom";
 import QuestionPreview from '../Common/QuestionPreview';
+import { pollCheckQueue } from '../Common/checkQueue';
+import { STEP_CONTENT } from '.';
 
 interface StepFlashcardProps {
     post: ANY;
@@ -15,6 +17,8 @@ interface StepFlashcardProps {
     onSyncAiData: (aiSuggest: ANY) => void;
     onNext: () => void;
     onBack: () => void;
+    setActiveStep?: (step: number) => void;
+    onRefresh?: () => void;
 }
 
 export default function StepFlashcard({
@@ -22,7 +26,9 @@ export default function StepFlashcard({
     onReview,
     onSyncAiData,
     onNext,
-    onBack
+    onBack,
+    setActiveStep,
+    onRefresh
 }: StepFlashcardProps) {
 
     const outline = post.outline || [];
@@ -33,8 +39,10 @@ export default function StepFlashcard({
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [drawerData, setDrawerData] = useState<{ open: boolean, title: string, content: string }>({ open: false, title: '', content: '' });
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
+    const [queueCompletedForLessons, setQueueCompletedForLessons] = useState<Set<string>>(new Set());
 
     const postRef = useRef(post);
+    const cancelPollRefs = useRef<Record<string, () => void>>({});
     useEffect(() => {
         postRef.current = post;
     }, [post]);
@@ -83,8 +91,93 @@ export default function StepFlashcard({
         setEditValue('');
     };
 
+    const processStep5Result = (result: ANY, cIndex: number, lIndex: number) => {
+        if (!result.success) {
+            if (result.message) alert(result.message);
+            return;
+        }
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            setExpandedLesson({ cIndex, lIndex });
+            refresh();
+            return;
+        }
+
+        let newFlashcards = result.flashcards || result.content;
+
+        if (newFlashcards) {
+            const contentKey = `${cIndex}-${lIndex}`;
+            setUpdatedFlashcards(prev => ({ ...prev, [contentKey]: newFlashcards }));
+
+            const currentPost = postRef.current;
+
+            const newOutline: ANY[] = Array.isArray(currentPost.outline) ? [...currentPost.outline] : [];
+            if (!Array.isArray(currentPost.outline) && currentPost.outline && typeof currentPost.outline === 'object') {
+                Object.keys(currentPost.outline).forEach(k => {
+                    const idx = parseInt(k);
+                    if (!isNaN(idx)) newOutline[idx] = currentPost.outline[k];
+                });
+            }
+
+            if (newOutline[cIndex]) {
+                newOutline[cIndex] = { ...newOutline[cIndex] };
+                if (newOutline[cIndex].lessons) {
+                    let currentLessons: ANY[] = Array.isArray(newOutline[cIndex].lessons) ? [...newOutline[cIndex].lessons] : [];
+                    if (!Array.isArray(newOutline[cIndex].lessons) && typeof newOutline[cIndex].lessons === 'object' && newOutline[cIndex].lessons !== null) {
+                        Object.keys(newOutline[cIndex].lessons).forEach(k => {
+                            const idx = parseInt(k);
+                            if (!isNaN(idx)) currentLessons[idx] = newOutline[cIndex].lessons[k];
+                        });
+                    }
+                    newOutline[cIndex].lessons = currentLessons;
+
+                    if (newOutline[cIndex].lessons[lIndex]) {
+                        newOutline[cIndex].lessons[lIndex] = {
+                            ...newOutline[cIndex].lessons[lIndex],
+                            flashcards: newFlashcards
+                        };
+                    }
+                }
+            }
+            onReview(newOutline, 'outline');
+
+            const newContentStructure: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
+            if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
+                Object.keys(currentPost.content).forEach(k => {
+                    const idx = parseInt(k);
+                    if (!isNaN(idx)) newContentStructure[idx] = currentPost.content[k];
+                });
+            }
+
+            if (!newContentStructure[cIndex]) newContentStructure[cIndex] = [];
+
+            let currentChapterContent: ANY[] = Array.isArray(newContentStructure[cIndex]) ? [...newContentStructure[cIndex]] : [];
+            if (!Array.isArray(newContentStructure[cIndex]) && typeof newContentStructure[cIndex] === 'object' && newContentStructure[cIndex] !== null) {
+                Object.keys(newContentStructure[cIndex]).forEach(k => {
+                    const idx = parseInt(k);
+                    if (!isNaN(idx)) currentChapterContent[idx] = newContentStructure[cIndex][k];
+                });
+            }
+            newContentStructure[cIndex] = currentChapterContent;
+
+            const currentLessonContentObj = newContentStructure[cIndex][lIndex] || {};
+            newContentStructure[cIndex][lIndex] = {
+                ...currentLessonContentObj,
+                flashcards: newFlashcards
+            };
+            onReview(newContentStructure, 'content');
+
+            setExpandedLesson({ cIndex, lIndex });
+            refresh();
+        } else {
+            // alert('AI không trả về nội dung nào.');
+        }
+    };
+
     const handleGenerateFlashcards = (cIndex: number, lIndex: number, lesson: ANY) => {
+        const pollKey = `step5-${cIndex}-${lIndex}`;
         setGenerating({ cIndex, lIndex });
+
         ajax({
             url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step5',
             method: 'POST',
@@ -97,92 +190,24 @@ export default function StepFlashcard({
                 number_of_flashcards: lesson.number_of_flashcards || 'Không giới hạn'
             },
             success: (result: ANY) => {
-                setGenerating(null);
-                if (result.success) {
-                    if (result.spacedev_course_ai_suggest) {
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        setExpandedLesson({ cIndex, lIndex });
-                        refresh();
-                        return;
-                    }
-
-                    // Fallback to manual update if sync doesn't happen automatically
-                    let newFlashcards = result.flashcards || result.content;
-
-                    if (newFlashcards) {
-                        const contentKey = `${cIndex}-${lIndex}`;
-                        setUpdatedFlashcards(prev => ({ ...prev, [contentKey]: newFlashcards }));
-
-                        const currentPost = postRef.current;
-
-                        // Safe construction of newOutline array
-                        const newOutline: ANY[] = Array.isArray(currentPost.outline) ? [...currentPost.outline] : [];
-                        if (!Array.isArray(currentPost.outline) && currentPost.outline && typeof currentPost.outline === 'object') {
-                            Object.keys(currentPost.outline).forEach(k => {
-                                const idx = parseInt(k);
-                                if (!isNaN(idx)) newOutline[idx] = currentPost.outline[k];
-                            });
+                if (result.job_id != null) {
+                    cancelPollRefs.current[pollKey]?.();
+                    cancelPollRefs.current[pollKey] = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: (pollResult: ANY) => {
+                            delete cancelPollRefs.current[pollKey];
+                            setGenerating(null);
+                            setQueueCompletedForLessons(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
+                            processStep5Result(pollResult, cIndex, lIndex);
+                        },
+                        onFailed: () => {
+                            delete cancelPollRefs.current[pollKey];
+                            setGenerating(null);
                         }
-
-                        if (newOutline[cIndex]) {
-                            newOutline[cIndex] = { ...newOutline[cIndex] };
-                            if (newOutline[cIndex].lessons) {
-                                // Safe construction of lessons array
-                                let currentLessons: ANY[] = Array.isArray(newOutline[cIndex].lessons) ? [...newOutline[cIndex].lessons] : [];
-                                if (!Array.isArray(newOutline[cIndex].lessons) && typeof newOutline[cIndex].lessons === 'object' && newOutline[cIndex].lessons !== null) {
-                                    Object.keys(newOutline[cIndex].lessons).forEach(k => {
-                                        const idx = parseInt(k);
-                                        if (!isNaN(idx)) currentLessons[idx] = newOutline[cIndex].lessons[k];
-                                    });
-                                }
-                                newOutline[cIndex].lessons = currentLessons;
-
-                                if (newOutline[cIndex].lessons[lIndex]) {
-                                    newOutline[cIndex].lessons[lIndex] = {
-                                        ...newOutline[cIndex].lessons[lIndex],
-                                        flashcards: newFlashcards
-                                    };
-                                }
-                            }
-                        }
-                        onReview(newOutline, 'outline');
-
-                        // Safe construction of newContent array
-                        const newContentStructure: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
-                        if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
-                            Object.keys(currentPost.content).forEach(k => {
-                                const idx = parseInt(k);
-                                if (!isNaN(idx)) newContentStructure[idx] = currentPost.content[k];
-                            });
-                        }
-
-                        if (!newContentStructure[cIndex]) newContentStructure[cIndex] = [];
-
-                        // Safe construction of chapter content array
-                        let currentChapterContent: ANY[] = Array.isArray(newContentStructure[cIndex]) ? [...newContentStructure[cIndex]] : [];
-                        if (!Array.isArray(newContentStructure[cIndex]) && typeof newContentStructure[cIndex] === 'object' && newContentStructure[cIndex] !== null) {
-                            Object.keys(newContentStructure[cIndex]).forEach(k => {
-                                const idx = parseInt(k);
-                                if (!isNaN(idx)) currentChapterContent[idx] = newContentStructure[cIndex][k];
-                            });
-                        }
-                        newContentStructure[cIndex] = currentChapterContent;
-
-                        const currentLessonContentObj = newContentStructure[cIndex][lIndex] || {};
-                        newContentStructure[cIndex][lIndex] = {
-                            ...currentLessonContentObj,
-                            flashcards: newFlashcards
-                        };
-                        onReview(newContentStructure, 'content');
-
-                        setExpandedLesson({ cIndex, lIndex });
-                        refresh();
-                    } else {
-                        alert('AI không trả về nội dung nào.');
-                    }
-                } else {
-                    if (result.message) alert(result.message);
+                    });
+                    return;
                 }
+                setGenerating(null);
+                processStep5Result(result, cIndex, lIndex);
             },
             error: () => {
                 setGenerating(null);
@@ -241,7 +266,25 @@ export default function StepFlashcard({
         if (typeof data === 'object' && !Array.isArray(data) && data !== null && 'content' in data && typeof data.content === 'string') {
             return data.content;
         }
-        if (typeof data === 'string') return data;
+        if (typeof data === 'string') {
+            const trimmed = data.trim();
+            if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(data);
+                    const extracted = extractContent(parsed);
+                    if (extracted) return extracted;
+                } catch (e) {
+                    return data;
+                }
+            }
+            return data;
+        }
+        if (Array.isArray(data)) {
+            if (data.length > 0) {
+                return extractContent(data[0]);
+            }
+            return '';
+        }
         return '';
     };
 
@@ -307,6 +350,8 @@ export default function StepFlashcard({
 
                             <Box sx={{ pl: 2 }}>
                                 {chapter.lessons?.map((lesson: ANY, lIndex: number) => {
+                                    const lessonContent = lesson.content || (post.content?.[cIndex]?.[lIndex]?.content);
+                                    const hasLessonContent = !!extractContent(lessonContent);
                                     const hasFlashcards = (() => {
                                         let flashcards = updatedFlashcards[`${cIndex}-${lIndex}`] !== undefined
                                             ? updatedFlashcards[`${cIndex}-${lIndex}`]
@@ -348,6 +393,15 @@ export default function StepFlashcard({
                                                     >
                                                         {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
+                                                    {queueCompletedForLessons.has(`${cIndex}-${lIndex}`) && (
+                                                        <Chip
+                                                            label="Queue hoàn thành - Bấm để cập nhật"
+                                                            color="success"
+                                                            size="small"
+                                                            onClick={(e) => { e.stopPropagation(); onRefresh?.(); }}
+                                                            sx={{ fontWeight: 500, cursor: 'pointer', height: 20 }}
+                                                        />
+                                                    )}
                                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                         {(() => {
                                                             const lessonData = post.content?.[cIndex]?.[lIndex] || {};
@@ -411,6 +465,17 @@ export default function StepFlashcard({
 
                                             {expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex && (
                                                 <Box sx={{ mt: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                    {!hasLessonContent ? (
+                                                        <Box sx={{ p: 2, bgcolor: '#fff8e1', borderRadius: 1, border: '1px solid #ed6c02' }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#3e2723' }}>
+                                                                Bài học chưa có nội dung, hãy quay lại bước tạo nội dung lesson để tạo nội dung rồi hãy quay lại.
+                                                            </Typography>
+                                                            <Button variant="contained" color="primary" size="small" onClick={() => setActiveStep?.(STEP_CONTENT) ?? onBack()}>
+                                                                Quay lại bước tạo nội dung
+                                                            </Button>
+                                                        </Box>
+                                                    ) : (
+                                                        <>
                                                     <Box sx={{ mb: 3 }}>
                                                         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Thông số bài giảng:</Typography>
                                                         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
@@ -500,6 +565,8 @@ export default function StepFlashcard({
                                                                 );
                                                             })()}
                                                         </Box>
+                                                    )}
+                                                        </>
                                                     )}
                                                 </Box>
                                             )}

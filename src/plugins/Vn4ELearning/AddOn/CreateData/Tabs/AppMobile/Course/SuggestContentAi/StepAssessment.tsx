@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Paper, IconButton, Tooltip, TextField, CircularProgress, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Box, Button, Chip, Typography, Paper, IconButton, Tooltip, TextField, CircularProgress, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 import React, { useState, useRef, useEffect } from 'react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import DrawerCustom from "components/molecules/DrawerCustom";
 import useAjax from 'hook/useApi';
 import QuestionPreview from '../Common/QuestionPreview';
+import { pollCheckQueue } from '../Common/checkQueue';
+import { STEP_CONTENT } from '.';
 
 interface StepAssessmentProps {
     post: ANY;
@@ -16,6 +18,8 @@ interface StepAssessmentProps {
     onSyncAiData: (aiSuggest: ANY) => void;
     onNext: () => void;
     onBack: () => void;
+    setActiveStep?: (step: number) => void;
+    onRefresh?: () => void;
 }
 
 export default function StepAssessment({
@@ -23,7 +27,9 @@ export default function StepAssessment({
     onReview,
     onSyncAiData,
     onNext,
-    onBack
+    onBack,
+    setActiveStep,
+    onRefresh
 }: StepAssessmentProps) {
 
     const { ajax } = useAjax();
@@ -36,8 +42,10 @@ export default function StepAssessment({
     const [updateKey, setUpdateKey] = useState(0);
     const [submitting, setSubmitting] = useState(false);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
+    const [queueCompletedForLessons, setQueueCompletedForLessons] = useState<Set<string>>(new Set());
 
     const postRef = useRef(post);
+    const cancelPollRefs = useRef<Record<string, () => void>>({});
     useEffect(() => {
         postRef.current = post;
     }, [post]);
@@ -94,9 +102,75 @@ export default function StepAssessment({
         });
     };
 
+    const processStep4Result = (result: ANY, cIndex: number, lIndex: number) => {
+        if (!result.success) {
+            if (result.message) alert(result.message);
+            return;
+        }
+        let newAssessment = '';
+        let newQuestions: ANY[] = [];
+
+        if (result.spacedev_course_ai_suggest) {
+            if (result.spacedev_course_ai_suggest.assessment) {
+                newAssessment = result.spacedev_course_ai_suggest.assessment;
+            }
+            if (result.spacedev_course_ai_suggest.questions) {
+                newQuestions = result.spacedev_course_ai_suggest.questions;
+            }
+        }
+
+        if (!newAssessment && result.assessment) {
+            newAssessment = result.assessment;
+        }
+        if (newQuestions.length === 0 && result.questions) {
+            newQuestions = result.questions;
+        }
+
+        newQuestions = newQuestions.map((q: ANY) => {
+            if (typeof q === 'string') return { idea: q, answer: '', type: 'select_answer' };
+            return {
+                idea: q.idea || q.title || '',
+                answer: q.answer || '',
+                type: q.type || 'select_answer',
+                content: q.content || '',
+                question_detail: q.question_detail || null
+            };
+        });
+
+        if (newAssessment) {
+            const currentPost = postRef.current;
+            const newOutline = [...(currentPost.outline || [])];
+            newOutline[cIndex] = { ...newOutline[cIndex] };
+            newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
+            newOutline[cIndex].lessons[lIndex] = {
+                ...newOutline[cIndex].lessons[lIndex],
+                assessment: newAssessment
+            };
+            onReview(newOutline, 'outline');
+        }
+
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            setUpdateKey(prev => prev + 1);
+        } else if (newQuestions && Array.isArray(newQuestions)) {
+            const currentPost = postRef.current;
+            const newContent = currentPost.content ? [...currentPost.content] : [];
+            if (!newContent[cIndex]) newContent[cIndex] = [];
+            else newContent[cIndex] = [...newContent[cIndex]];
+
+            newContent[cIndex][lIndex] = {
+                ...(newContent[cIndex][lIndex] || {}),
+                questions: newQuestions
+            };
+            onReview(newContent, 'content');
+            setUpdateKey(prev => prev + 1);
+        }
+    };
+
     const handleGenerateAssessment = (cIndex: number, lIndex: number) => {
         const lesson = outline[cIndex].lessons[lIndex];
         const contentKey = `${cIndex}-${lIndex}`;
+        const pollKey = `step4-${contentKey}`;
 
         setLoadingAssessments(prev => ({ ...prev, [contentKey]: true }));
 
@@ -112,72 +186,24 @@ export default function StepAssessment({
                 lesson_content: lesson.content || (post.content?.[cIndex]?.[lIndex]?.content),
             },
             success: (result: ANY) => {
-                console.log(`[DEBUG] handleGenerateAssessment success at ${new Date().toLocaleTimeString()}:`, result);
-                setLoadingAssessments(prev => ({ ...prev, [contentKey]: false }));
-                if (result.success) {
-                    let newAssessment = '';
-                    let newQuestions: ANY[] = [];
-
-                    if (result.spacedev_course_ai_suggest) {
-                        if (result.spacedev_course_ai_suggest.assessment) {
-                            newAssessment = result.spacedev_course_ai_suggest.assessment;
+                if (result.job_id != null) {
+                    cancelPollRefs.current[pollKey]?.();
+                    cancelPollRefs.current[pollKey] = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: (pollResult: ANY) => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingAssessments(prev => ({ ...prev, [contentKey]: false }));
+                            setQueueCompletedForLessons(prev => new Set(prev).add(contentKey));
+                            processStep4Result(pollResult, cIndex, lIndex);
+                        },
+                        onFailed: () => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingAssessments(prev => ({ ...prev, [contentKey]: false }));
                         }
-                        if (result.spacedev_course_ai_suggest.questions) {
-                            newQuestions = result.spacedev_course_ai_suggest.questions;
-                        }
-                    }
-
-                    if (!newAssessment && result.assessment) {
-                        newAssessment = result.assessment;
-                    }
-                    if (newQuestions.length === 0 && result.questions) {
-                        newQuestions = result.questions;
-                    }
-
-                    // Convert string questions to objects or ensure proper structure
-                    newQuestions = newQuestions.map((q: ANY) => {
-                        if (typeof q === 'string') return { idea: q, answer: '', type: 'select_answer' };
-                        return {
-                            idea: q.idea || q.title || '',
-                            answer: q.answer || '',
-                            type: q.type || 'select_answer',
-                            content: q.content || '',
-                            question_detail: q.question_detail || null
-                        };
                     });
-
-                    // Update Outline for backward compatibility/summary if needed
-                    if (newAssessment) {
-                        const currentPost = postRef.current;
-                        const newOutline = [...(currentPost.outline || [])];
-                        newOutline[cIndex] = { ...newOutline[cIndex] };
-                        newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
-                        newOutline[cIndex].lessons[lIndex] = {
-                            ...newOutline[cIndex].lessons[lIndex],
-                            assessment: newAssessment
-                        };
-                        onReview(newOutline, 'outline');
-                    }
-
-                    if (result.spacedev_course_ai_suggest) {
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        setUpdateKey(prev => prev + 1);
-                    } else if (newQuestions && Array.isArray(newQuestions)) {
-                        const currentPost = postRef.current;
-                        const newContent = currentPost.content ? [...currentPost.content] : [];
-                        if (!newContent[cIndex]) newContent[cIndex] = [];
-                        else newContent[cIndex] = [...newContent[cIndex]];
-
-                        newContent[cIndex][lIndex] = {
-                            ...(newContent[cIndex][lIndex] || {}),
-                            questions: newQuestions
-                        };
-                        onReview(newContent, 'content');
-                        setUpdateKey(prev => prev + 1);
-                    }
-                } else {
-                    if (result.message) alert(result.message);
+                    return;
                 }
+                setLoadingAssessments(prev => ({ ...prev, [contentKey]: false }));
+                processStep4Result(result, cIndex, lIndex);
             },
             error: () => {
                 setLoadingAssessments(prev => ({ ...prev, [contentKey]: false }));
@@ -185,8 +211,47 @@ export default function StepAssessment({
         });
     };
 
+    const processStep4_3Result = (result: ANY, cIndex: number, lIndex: number, type: 'welcom_content' | 'recap_content') => {
+        if (!result.success) {
+            if (result.message) alert(result.message);
+            return;
+        }
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            setUpdateKey(prev => prev + 1);
+        } else if (result.content) {
+            const currentPost = postRef.current;
+            const newContent: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
+            if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
+                Object.keys(currentPost.content).forEach(k => {
+                    const idx = parseInt(k);
+                    if (!isNaN(idx)) newContent[idx] = currentPost.content[k];
+                });
+            }
+
+            if (!newContent[cIndex]) newContent[cIndex] = [];
+
+            let currentChapter: ANY[] = Array.isArray(newContent[cIndex]) ? [...newContent[cIndex]] : [];
+            if (!Array.isArray(newContent[cIndex]) && typeof newContent[cIndex] === 'object' && newContent[cIndex] !== null) {
+                Object.keys(newContent[cIndex] || {}).forEach(k => {
+                    const idx = parseInt(k);
+                    if (!isNaN(idx)) currentChapter[idx] = newContent[cIndex][k];
+                });
+            }
+            newContent[cIndex] = currentChapter;
+
+            newContent[cIndex][lIndex] = {
+                ...(newContent[cIndex][lIndex] || {}),
+                [type]: result.content
+            };
+            onReview(newContent, 'content');
+            setUpdateKey(prev => prev + 1);
+        }
+    };
+
     const handleGenerateExtraContent = (cIndex: number, lIndex: number, type: 'welcom_content' | 'recap_content') => {
         const extraKey = `${cIndex}-${lIndex}-${type}`;
+        const pollKey = `step4-3-${extraKey}`;
         setLoadingExtra(prev => ({ ...prev, [extraKey]: true }));
 
         ajax({
@@ -199,50 +264,88 @@ export default function StepAssessment({
                 type: type === 'welcom_content' ? 'welcome' : 'recap',
             },
             success: (result: ANY) => {
-                console.log(`[DEBUG] handleGenerateExtraContent (${type}) success:`, result);
-                setLoadingExtra(prev => ({ ...prev, [extraKey]: false }));
-                if (result.success) {
-                    if (result.spacedev_course_ai_suggest) {
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        setUpdateKey(prev => prev + 1);
-                    } else if (result.content) {
-                        const currentPost = postRef.current;
-                        // Safe construction of newContent array
-                        const newContent: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
-                        if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
-                            Object.keys(currentPost.content).forEach(k => {
-                                const idx = parseInt(k);
-                                if (!isNaN(idx)) newContent[idx] = currentPost.content[k];
-                            });
+                if (result.job_id != null) {
+                    cancelPollRefs.current[pollKey]?.();
+                    cancelPollRefs.current[pollKey] = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: (pollResult: ANY) => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingExtra(prev => ({ ...prev, [extraKey]: false }));
+                            setQueueCompletedForLessons(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
+                            processStep4_3Result(pollResult, cIndex, lIndex, type);
+                        },
+                        onFailed: () => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingExtra(prev => ({ ...prev, [extraKey]: false }));
                         }
-
-                        if (!newContent[cIndex]) newContent[cIndex] = [];
-
-                        // Safe construction of chapter array
-                        let currentChapter: ANY[] = Array.isArray(newContent[cIndex]) ? [...newContent[cIndex]] : [];
-                        if (!Array.isArray(newContent[cIndex]) && typeof newContent[cIndex] === 'object' && newContent[cIndex] !== null) {
-                            Object.keys(newContent[cIndex] || {}).forEach(k => {
-                                const idx = parseInt(k);
-                                if (!isNaN(idx)) currentChapter[idx] = newContent[cIndex][k];
-                            });
-                        }
-                        newContent[cIndex] = currentChapter;
-
-                        newContent[cIndex][lIndex] = {
-                            ...(newContent[cIndex][lIndex] || {}),
-                            [type]: result.content
-                        };
-                        onReview(newContent, 'content');
-                        setUpdateKey(prev => prev + 1);
-                    }
-                } else if (result.message) {
-                    alert(result.message);
+                    });
+                    return;
                 }
+                setLoadingExtra(prev => ({ ...prev, [extraKey]: false }));
+                processStep4_3Result(result, cIndex, lIndex, type);
             },
             error: () => {
                 setLoadingExtra(prev => ({ ...prev, [extraKey]: false }));
             }
         });
+    };
+
+    const processStep4_2Result = (result: ANY, cIndex: number, lIndex: number, qIndex: number, question: ANY) => {
+        if (!result.success) {
+            if (result.message) alert(result.message);
+            return;
+        }
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            setUpdateKey(prev => prev + 1);
+        } else {
+            const newQuestionsContent = result.content || result.spacedev_course_ai_suggest?.content;
+            const questionDetail = result.question_detail || result.spacedev_course_ai_suggest?.question_detail;
+
+            if (newQuestionsContent || questionDetail || result.idea || result.answer) {
+                const currentPost = postRef.current;
+                const lessonData = currentPost.content?.[cIndex]?.[lIndex] || {};
+                const currentQuestions = [...(lessonData.questions || [])];
+
+                const newContent: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
+                if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
+                    Object.keys(currentPost.content).forEach(k => {
+                        const idx = parseInt(k);
+                        if (!isNaN(idx)) newContent[idx] = currentPost.content[k];
+                    });
+                }
+
+                if (!newContent[cIndex]) newContent[cIndex] = [];
+
+                let currentChapter: ANY[] = Array.isArray(newContent[cIndex]) ? [...newContent[cIndex]] : [];
+                if (!Array.isArray(newContent[cIndex]) && typeof newContent[cIndex] === 'object' && newContent[cIndex] !== null) {
+                    Object.keys(newContent[cIndex] || {}).forEach(k => {
+                        const idx = parseInt(k);
+                        if (!isNaN(idx)) currentChapter[idx] = newContent[cIndex][k];
+                    });
+                }
+                newContent[cIndex] = currentChapter;
+
+                newContent[cIndex][lIndex] = {
+                    ...newContent[cIndex][lIndex],
+                    questions: currentQuestions.map((q, idx) => {
+                        if (idx === qIndex) {
+                            const normalizedQ = typeof q === 'string' ? { idea: q, answer: '', type: 'select_answer', content: '', question_detail: null } : { ...q };
+                            return {
+                                ...normalizedQ,
+                                idea: result.idea || normalizedQ.idea,
+                                answer: result.answer || normalizedQ.answer,
+                                type: result.type || normalizedQ.type || question.type,
+                                content: newQuestionsContent || normalizedQ.content,
+                                question_detail: questionDetail || normalizedQ.question_detail
+                            };
+                        }
+                        return q;
+                    })
+                };
+                onReview(newContent, 'content');
+                setUpdateKey(prev => prev + 1);
+            }
+        }
     };
 
     const handleGenerateQuestionContent = (cIndex: number, lIndex: number, qIndex: number) => {
@@ -260,6 +363,7 @@ export default function StepAssessment({
         }
 
         const qKey = `${cIndex}-${lIndex}-${qIndex}`;
+        const pollKey = `step4-2-${qKey}`;
 
         setLoadingQuestions(prev => ({ ...prev, [qKey]: true }));
 
@@ -274,70 +378,24 @@ export default function StepAssessment({
                 question_type: question.type,
             },
             success: (result: ANY) => {
-                console.log(`[DEBUG] handleGenerateQuestionContent success at ${new Date().toLocaleTimeString()}:`, result);
-                setLoadingQuestions(prev => ({ ...prev, [qKey]: false }));
-                if (result.success) {
-                    if (result.spacedev_course_ai_suggest) {
-                        console.log(`[${new Date().toLocaleTimeString()}] AI Global Sync Assessment:`, result.spacedev_course_ai_suggest);
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        setUpdateKey(prev => prev + 1);
-                    } else {
-                        const newQuestionsContent = result.content || result.spacedev_course_ai_suggest?.content;
-                        const questionDetail = result.question_detail || result.spacedev_course_ai_suggest?.question_detail;
-
-                        if (newQuestionsContent || questionDetail || result.idea || result.answer) {
-                            console.log(`[${new Date().toLocaleTimeString()}] AI Fallback Sync Assessment:`, result);
-                            const currentPost = postRef.current;
-                            const lessonData = currentPost.content?.[cIndex]?.[lIndex] || {};
-                            const currentQuestions = [...(lessonData.questions || [])];
-
-                            // Safe construction of newContent array
-                            const newContent: ANY[] = Array.isArray(currentPost.content) ? [...currentPost.content] : [];
-                            if (!Array.isArray(currentPost.content) && currentPost.content && typeof currentPost.content === 'object') {
-                                Object.keys(currentPost.content).forEach(k => {
-                                    const idx = parseInt(k);
-                                    if (!isNaN(idx)) newContent[idx] = currentPost.content[k];
-                                });
-                            }
-
-                            if (!newContent[cIndex]) newContent[cIndex] = [];
-
-                            // Safe construction of chapter array
-                            let currentChapter: ANY[] = Array.isArray(newContent[cIndex]) ? [...newContent[cIndex]] : [];
-                            if (!Array.isArray(newContent[cIndex]) && typeof newContent[cIndex] === 'object' && newContent[cIndex] !== null) {
-                                Object.keys(newContent[cIndex] || {}).forEach(k => {
-                                    const idx = parseInt(k);
-                                    if (!isNaN(idx)) currentChapter[idx] = newContent[cIndex][k];
-                                });
-                            }
-                            newContent[cIndex] = currentChapter;
-
-                            newContent[cIndex][lIndex] = {
-                                ...newContent[cIndex][lIndex],
-                                questions: currentQuestions.map((q, idx) => {
-                                    if (idx === qIndex) {
-                                        const normalizedQ = typeof q === 'string' ? { idea: q, answer: '', type: 'select_answer', content: '', question_detail: null } : { ...q };
-                                        const updatedQ = {
-                                            ...normalizedQ,
-                                            idea: result.idea || normalizedQ.idea,
-                                            answer: result.answer || normalizedQ.answer,
-                                            type: result.type || normalizedQ.type || question.type,
-                                            content: newQuestionsContent || normalizedQ.content,
-                                            question_detail: questionDetail || normalizedQ.question_detail
-                                        };
-                                        return updatedQ;
-                                    }
-                                    return q;
-                                })
-                            };
-                            console.log(`[DEBUG] StepAssessment onReview content (questions)`, newContent[cIndex][lIndex].questions[qIndex]);
-                            onReview(newContent, 'content');
-                            setUpdateKey(prev => prev + 1);
+                if (result.job_id != null) {
+                    cancelPollRefs.current[pollKey]?.();
+                    cancelPollRefs.current[pollKey] = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: (pollResult: ANY) => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingQuestions(prev => ({ ...prev, [qKey]: false }));
+                            setQueueCompletedForLessons(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
+                            processStep4_2Result(pollResult, cIndex, lIndex, qIndex, question);
+                        },
+                        onFailed: () => {
+                            delete cancelPollRefs.current[pollKey];
+                            setLoadingQuestions(prev => ({ ...prev, [qKey]: false }));
                         }
-                    }
-                } else {
-                    if (result.message) alert(result.message);
+                    });
+                    return;
                 }
+                setLoadingQuestions(prev => ({ ...prev, [qKey]: false }));
+                processStep4_2Result(result, cIndex, lIndex, qIndex, question);
             },
             error: () => {
                 setLoadingQuestions(prev => ({ ...prev, [qKey]: false }));
@@ -470,6 +528,7 @@ export default function StepAssessment({
                                         };
                                     });
                                     const lessonContent = lesson.content || (post.content?.[cIndex]?.[lIndex]?.content);
+                                    const hasLessonContent = !!extractContent(lessonContent);
                                     const hasAssessment = !!lesson.assessment || questions.length > 0 || !!lessonContent;
                                     const contentKey = `${cIndex}-${lIndex}`;
                                     const isGenerating = loadingAssessments[contentKey];
@@ -500,6 +559,15 @@ export default function StepAssessment({
                                                     >
                                                         {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
+                                                    {queueCompletedForLessons.has(contentKey) && (
+                                                        <Chip
+                                                            label="Queue hoàn thành - Bấm để cập nhật"
+                                                            color="success"
+                                                            size="small"
+                                                            onClick={(e) => { e.stopPropagation(); onRefresh?.(); }}
+                                                            sx={{ fontWeight: 500, cursor: 'pointer', height: 20 }}
+                                                        />
+                                                    )}
                                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                         {questions.length > 0 && (
                                                             <Tooltip title={`${questions.length} câu hỏi`}>
@@ -547,40 +615,51 @@ export default function StepAssessment({
 
                                             {expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex && (
                                                 <Box sx={{ mt: 1, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
-                                                    <Box>
-                                                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Thông số bài giảng:</Typography>
-                                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                                                            <TextField
-                                                                fullWidth
-                                                                label="Số lượng câu hỏi"
-                                                                type="text"
-                                                                size="small"
-                                                                value={lesson.number_of_questions || 'Không giới hạn (yêu cầu đầy dủ nội dung bài học)'}
-                                                                onChange={(e: ANY) => {
-                                                                    const currentPost = postRef.current;
-                                                                    const newOutline = [...(currentPost.outline || [])];
-                                                                    newOutline[cIndex] = { ...newOutline[cIndex] };
-                                                                    newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
-                                                                    newOutline[cIndex].lessons[lIndex] = {
-                                                                        ...newOutline[cIndex].lessons[lIndex],
-                                                                        number_of_questions: e.target.value
-                                                                    };
-                                                                    onReview(newOutline, 'outline');
-                                                                }}
-                                                                placeholder="Nhập số lượng câu hỏi (ví dụ: 10)"
-                                                                InputProps={{ inputProps: { min: 1, max: 20 } }}
-                                                            />
-                                                            <Button
-                                                                variant="contained"
-                                                                startIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}
-                                                                onClick={() => handleGenerateAssessment(cIndex, lIndex)}
-                                                                disabled={isGenerating}
-                                                                sx={{ height: 40, whiteSpace: 'nowrap', px: 2, minWidth: 'unset' }}
-                                                            >
-                                                                {isGenerating ? 'Đang tạo...' : 'Tạo outline câu hỏi'}
+                                                    {!hasLessonContent ? (
+                                                        <Box sx={{ p: 2, bgcolor: '#fff8e1', borderRadius: 1, border: '1px solid #ed6c02' }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#3e2723' }}>
+                                                                Bài học chưa có nội dung, hãy quay lại bước tạo nội dung lesson để tạo nội dung rồi hãy quay lại.
+                                                            </Typography>
+                                                            <Button variant="contained" color="primary" size="small" onClick={() => setActiveStep?.(STEP_CONTENT) ?? onBack()}>
+                                                                Quay lại bước tạo nội dung
                                                             </Button>
                                                         </Box>
-                                                    </Box>
+                                                    ) : (
+                                                        <Box>
+                                                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Thông số bài giảng:</Typography>
+                                                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                                                                <TextField
+                                                                    fullWidth
+                                                                    label="Số lượng câu hỏi"
+                                                                    type="text"
+                                                                    size="small"
+                                                                    value={lesson.number_of_questions || 'Không giới hạn (yêu cầu đầy dủ nội dung bài học)'}
+                                                                    onChange={(e: ANY) => {
+                                                                        const currentPost = postRef.current;
+                                                                        const newOutline = [...(currentPost.outline || [])];
+                                                                        newOutline[cIndex] = { ...newOutline[cIndex] };
+                                                                        newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
+                                                                        newOutline[cIndex].lessons[lIndex] = {
+                                                                            ...newOutline[cIndex].lessons[lIndex],
+                                                                            number_of_questions: e.target.value
+                                                                        };
+                                                                        onReview(newOutline, 'outline');
+                                                                    }}
+                                                                    placeholder="Nhập số lượng câu hỏi (ví dụ: 10)"
+                                                                    InputProps={{ inputProps: { min: 1, max: 20 } }}
+                                                                />
+                                                                <Button
+                                                                    variant="contained"
+                                                                    startIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}
+                                                                    onClick={() => handleGenerateAssessment(cIndex, lIndex)}
+                                                                    disabled={isGenerating}
+                                                                    sx={{ height: 40, whiteSpace: 'nowrap', px: 2, minWidth: 'unset' }}
+                                                                >
+                                                                    {isGenerating ? 'Đang tạo...' : 'Tạo outline câu hỏi'}
+                                                                </Button>
+                                                            </Box>
+                                                        </Box>
+                                                    )}
 
                                                     {(lesson.assessment || questions.length > 0) && (
                                                         <Box sx={{ mt: 3, p: 1.5, bgcolor: '#dcdcdcff', borderRadius: 1, border: '1px dashed #ccc' }}>

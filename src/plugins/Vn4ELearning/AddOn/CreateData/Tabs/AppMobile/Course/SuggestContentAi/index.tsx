@@ -520,6 +520,8 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                         onSyncAiData={syncFromAiSuggest}
                         onNext={handleNext}
                         onBack={handleBack}
+                        setActiveStep={setActiveStep}
+                        onRefresh={() => fetchStep0Data({ keepStepPosition: true })}
                     />
                 );
             case 4: // Flashcard
@@ -531,6 +533,8 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                         onSyncAiData={syncFromAiSuggest}
                         onNext={handleNext}
                         onBack={handleBack}
+                        setActiveStep={setActiveStep}
+                        onRefresh={() => fetchStep0Data({ keepStepPosition: true })}
                     />
                 );
             case 5: // Export
@@ -612,3 +616,6 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
         </Box>
     );
 }
+
+
+export const STEP_CONTENT = 3; // Bước tạo nội dung lesson
