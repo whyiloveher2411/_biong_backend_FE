@@ -19,6 +19,7 @@ interface StepFlashcardProps {
     onBack: () => void;
     setActiveStep?: (step: number) => void;
     onRefresh?: () => void;
+    dataVersion?: number;
 }
 
 export default function StepFlashcard({
@@ -28,7 +29,8 @@ export default function StepFlashcard({
     onNext,
     onBack,
     setActiveStep,
-    onRefresh
+    onRefresh,
+    dataVersion = 0
 }: StepFlashcardProps) {
 
     const outline = post.outline || [];
@@ -46,6 +48,13 @@ export default function StepFlashcard({
     useEffect(() => {
         postRef.current = post;
     }, [post]);
+
+    useEffect(() => {
+        if (dataVersion > 0) {
+            setUpdatedFlashcards({});
+            setQueueCompletedForLessons(new Set());
+        }
+    }, [dataVersion]);
 
     const [updatedFlashcards, setUpdatedFlashcards] = useState<{ [key: string]: string }>({});
 
@@ -353,13 +362,10 @@ export default function StepFlashcard({
                                     const lessonContent = lesson.content || (post.content?.[cIndex]?.[lIndex]?.content);
                                     const hasLessonContent = !!extractContent(lessonContent);
                                     const hasFlashcards = (() => {
+                                        const fromContent = post.content?.[cIndex]?.[lIndex]?.flashcards;
                                         let flashcards = updatedFlashcards[`${cIndex}-${lIndex}`] !== undefined
                                             ? updatedFlashcards[`${cIndex}-${lIndex}`]
-                                            : lesson.flashcards;
-
-                                        if (!flashcards && post.content && Array.isArray(post.content) && post.content[cIndex] && post.content[cIndex][lIndex]) {
-                                            flashcards = post.content[cIndex][lIndex]?.flashcards;
-                                        }
+                                            : (fromContent ?? lesson.flashcards);
 
                                         const hasAssessment = !!lesson.assessment || (post.content?.[cIndex]?.[lIndex]?.questions?.length > 0);
                                         const hasLessonContent = !!lesson.content || !!(post.content?.[cIndex]?.[lIndex]?.content);
@@ -419,7 +425,7 @@ export default function StepFlashcard({
                                                             const lessonData = post.content?.[cIndex]?.[lIndex] || {};
                                                             const flashcards = updatedFlashcards[`${cIndex}-${lIndex}`] !== undefined
                                                                 ? updatedFlashcards[`${cIndex}-${lIndex}`]
-                                                                : (lessonData.flashcards || lesson.flashcards);
+                                                                : (lessonData.flashcards ?? lesson.flashcards);
                                                             let fCount = 0;
                                                             if (Array.isArray(flashcards)) fCount = flashcards.length;
                                                             else if (flashcards && typeof flashcards === 'string') fCount = 1;
@@ -533,19 +539,17 @@ export default function StepFlashcard({
                                                             color: 'text.primary',
                                                         }}>
                                                             {(() => {
-                                                                let flashcards = updatedFlashcards[`${cIndex}-${lIndex}`] !== undefined
+                                                                const fromContent = post.content?.[cIndex]?.[lIndex]?.flashcards;
+                                                                const flashcards = updatedFlashcards[`${cIndex}-${lIndex}`] !== undefined
                                                                     ? updatedFlashcards[`${cIndex}-${lIndex}`]
-                                                                    : lesson.flashcards;
-
-                                                                if (!flashcards && post.content && Array.isArray(post.content) && post.content[cIndex] && post.content[cIndex][lIndex]) {
-                                                                    flashcards = post.content[cIndex][lIndex]?.flashcards;
-                                                                }
+                                                                    : (fromContent ?? lesson.flashcards);
 
                                                                 if (!flashcards) return <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>*Chưa có flashcard.*</Typography>;
 
                                                                 return (
-                                                                    <Box onClick={(e) => e.stopPropagation()}>
+                                                                    <Box onClick={(e) => e.stopPropagation()} key={`fc-${cIndex}-${lIndex}-${dataVersion}`}>
                                                                         <QuestionPreview
+                                                                            key={`qp-${cIndex}-${lIndex}-${dataVersion}`}
                                                                             question={{
                                                                                 flashcards: flashcards
                                                                             }}

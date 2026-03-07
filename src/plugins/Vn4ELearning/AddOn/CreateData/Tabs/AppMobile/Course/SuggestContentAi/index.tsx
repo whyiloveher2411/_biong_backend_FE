@@ -119,6 +119,8 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
 
     const { ajax } = useAjax();
     const [keyRefresh, setKeyRefresh] = React.useState(0);
+    /** Tăng khi fetch xong - các step dùng làm dataVersion để reset state local và hiển thị data mới */
+    const [dataVersion, setDataVersion] = React.useState(0);
 
     // Sync from post prop if it updates (e.g. data arrives late)
     // ONLY sync title from post to support multi-language editing
@@ -265,8 +267,10 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
 
                             // Deep merge questions
                             mergedLessonData.questions = mergeDeepItems(prevLessonData.questions, lessonContent.questions);
-                            // Deep merge flashcards
-                            mergedLessonData.flashcards = mergeDeepItems(prevLessonData.flashcards, lessonContent.flashcards);
+                            // Flashcards: ưu tiên thay thế bằng data mới từ server (không merge để tránh dùng data cũ)
+                            mergedLessonData.flashcards = (lessonContent.flashcards !== undefined && lessonContent.flashcards !== null)
+                                ? lessonContent.flashcards
+                                : mergeDeepItems(prevLessonData.flashcards, lessonContent.flashcards);
 
                             newContent[cIdx][lIdx] = mergedLessonData;
                         };
@@ -427,6 +431,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             success: (result: ANY) => {
                 if (result.spacedev_course_ai_suggest) {
                     syncFromAiSuggest(result.spacedev_course_ai_suggest);
+                    setDataVersion(prev => prev + 1);
                     if (!options?.keepStepPosition) {
                         const stepTemp = parseInt(result.spacedev_course_ai_suggest.step_temp);
                         const stepCurrent = parseInt(result.spacedev_course_ai_suggest.step_current);
@@ -499,6 +504,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                     <StepContent
                         key={keyRefresh}
                         post={suggestionData}
+                        dataVersion={dataVersion}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}
                         content={content}
@@ -516,6 +522,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                     <StepAssessment
                         key={keyRefresh}
                         post={suggestionData}
+                        dataVersion={dataVersion}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}
                         onNext={handleNext}
@@ -529,6 +536,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                     <StepFlashcard
                         key={keyRefresh}
                         post={suggestionData}
+                        dataVersion={dataVersion}
                         onReview={handleSuggestionReview}
                         onSyncAiData={syncFromAiSuggest}
                         onNext={handleNext}

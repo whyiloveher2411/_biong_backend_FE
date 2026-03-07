@@ -20,6 +20,7 @@ interface StepAssessmentProps {
     onBack: () => void;
     setActiveStep?: (step: number) => void;
     onRefresh?: () => void;
+    dataVersion?: number;
 }
 
 export default function StepAssessment({
@@ -29,7 +30,8 @@ export default function StepAssessment({
     onNext,
     onBack,
     setActiveStep,
-    onRefresh
+    onRefresh,
+    dataVersion = 0
 }: StepAssessmentProps) {
 
     const { ajax } = useAjax();
@@ -49,6 +51,13 @@ export default function StepAssessment({
     useEffect(() => {
         postRef.current = post;
     }, [post]);
+
+    useEffect(() => {
+        if (dataVersion > 0) {
+            setQueueCompletedForLessons(new Set());
+            setUpdateKey(prev => prev + 1);
+        }
+    }, [dataVersion]);
 
     const handleToggleExpand = (cIndex: number, lIndex: number) => {
         if (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) {

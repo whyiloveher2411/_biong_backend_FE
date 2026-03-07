@@ -6,6 +6,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import EditIcon from '@mui/icons-material/Edit';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CourseEditImageDrawer from './CourseEditImageDrawer';
+import { IMAGE_TYPE_OPTIONS, getOptionLabel } from 'components/atoms/fields/image/GenerateImageAiDrawer';
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 import useAjax from 'hook/useApi';
 import { pollCheckQueue } from './checkQueue';
@@ -175,16 +176,14 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
         }
     };
 
-    const handleGenerateImage = (prompt: string, description: string, imageId?: number | string) => {
+    const handleGenerateImage = (prompt: string, description: string, imageId?: number | string, imageType?: string) => {
         setLoading(true);
+        const data: ANY = { prompt, description, image_id: imageId };
+        if (imageType) data.image_type = imageType;
         ajax({
             url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/generate-image',
             method: 'POST',
-            data: {
-                prompt,
-                description,
-                image_id: imageId
-            },
+            data,
             success: (result: ANY) => {
                 const imageUrl = result.image_url || result.src || result.data?.src || result.data?.image_url;
                 if (result.success && imageUrl) {
@@ -347,6 +346,11 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                         <Typography variant="body2" sx={{ mb: 2, color: '#1976d2', fontStyle: 'italic', maxWidth: '80%' }}>
                             <strong>Image Prompt:</strong> {component.prompt}
                         </Typography>
+                        {component.image_type && (
+                            <Typography variant="caption" sx={{ mb: 2, color: '#1976d2', opacity: 0.9 }}>
+                                <strong>Image Type:</strong> {getOptionLabel(IMAGE_TYPE_OPTIONS, component.image_type) || component.image_type}
+                            </Typography>
+                        )}
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
                             <LoadingButton
                                 loading={loading}
@@ -354,7 +358,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                 size="small"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    handleGenerateImage(component.prompt || '', component.description || '', component.image_id);
+                                    handleGenerateImage(component.prompt || '', component.description || '', component.image_id, component.image_type);
                                 }}
                                 startIcon={<AutoFixHighIcon fontSize="small" />}
                                 sx={{ textTransform: 'none' }}
@@ -381,6 +385,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             onJobQueued={handleJobQueued}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
+                            initialImageType={component.image_type}
                             imageId={component.image_id}
                         />
                     </Box>
@@ -431,9 +436,14 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 'bold', display: 'block', mb: 1 }}>
                                     IMAGE PROMPT:
                                 </Typography>
-                                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'white', fontSize: '1rem', lineHeight: 1.6, textAlign: 'center', mb: 2 }}>
+                                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'white', fontSize: '1rem', lineHeight: 1.6, textAlign: 'center', mb: component.image_type ? 1 : 2 }}>
                                     {component.prompt}
                                 </Typography>
+                                {component.image_type && (
+                                    <Typography variant="caption" sx={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', display: 'block', mb: 2 }}>
+                                        <strong>Image Type:</strong> {getOptionLabel(IMAGE_TYPE_OPTIONS, component.image_type) || component.image_type}
+                                    </Typography>
+                                )}
                                 <Button
                                     variant="outlined"
                                     size="small"
@@ -528,7 +538,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (component.image_id) delete imageCache[component.image_id];
-                                        handleGenerateImage(component.prompt || '', component.description || '', component.image_id);
+                                        handleGenerateImage(component.prompt || '', component.description || '', component.image_id, component.image_type);
                                     }}
                                     startIcon={<AutoFixHighIcon fontSize="small" />}
                                     sx={{
@@ -554,6 +564,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             onJobQueued={handleJobQueued}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
+                            initialImageType={component.image_type}
                             imageId={component.image_id}
                         />
                     </div>

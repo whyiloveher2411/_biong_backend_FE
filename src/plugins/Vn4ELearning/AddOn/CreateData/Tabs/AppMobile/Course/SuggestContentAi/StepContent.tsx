@@ -23,6 +23,7 @@ interface StepContentProps {
     onBack: () => void;
     setActiveStep: (step: number) => void;
     onRefresh?: () => void;
+    dataVersion?: number;
 }
 
 export default function StepContent({
@@ -32,7 +33,8 @@ export default function StepContent({
     onNext,
     onBack,
     setActiveStep,
-    onRefresh
+    onRefresh,
+    dataVersion = 0
 }: StepContentProps) {
 
     const outline = post.outline || [];
@@ -56,6 +58,14 @@ export default function StepContent({
     useEffect(() => () => { cancelPollRef.current?.(); }, []);
 
     const [updatedLessons, setUpdatedLessons] = useState<{ [key: string]: string }>({});
+
+    useEffect(() => {
+        if (dataVersion > 0) {
+            setUpdatedLessons({});
+            setCompletedLessonJobs(new Set());
+            setCompletedChapterJobs(new Set());
+        }
+    }, [dataVersion]);
 
     // Simple force update
     const [, forceUpdate] = useState(0);

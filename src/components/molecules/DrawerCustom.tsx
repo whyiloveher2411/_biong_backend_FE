@@ -45,6 +45,10 @@ function DrawerCustom({ title, content, activeOnClose, headerAction = false, act
 
     const classes = useStyles();
 
+    const { ModalProps: restModalProps, ...restWithoutModal } = rest;
+
+    const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+
     return (
         <Drawer
             anchor="right"
@@ -52,7 +56,18 @@ function DrawerCustom({ title, content, activeOnClose, headerAction = false, act
             disableEnforceFocus
             open={open}
             variant="temporary"
-            {...rest}
+            ModalProps={{
+                ...restModalProps,
+                onClick: (e: React.MouseEvent) => {
+                    stopPropagation(e);
+                    restModalProps?.onClick?.(e);
+                },
+                onMouseDown: (e: React.MouseEvent) => {
+                    stopPropagation(e);
+                    restModalProps?.onMouseDown?.(e);
+                },
+            }}
+            {...restWithoutModal}
         >
             <DialogTitle className={classes.header}>
                 <Box

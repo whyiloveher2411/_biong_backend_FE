@@ -56,6 +56,7 @@ interface CourseEditImageDrawerProps {
     onJobQueued?: (jobId: number) => void;
     initialPrompt?: string;
     initialDescription?: string;
+    initialImageType?: string;
     imageId?: number | string;
 }
 
@@ -68,6 +69,7 @@ export default function CourseEditImageDrawer({
     onJobQueued,
     initialPrompt = '',
     initialDescription = '',
+    initialImageType,
     imageId,
 }: CourseEditImageDrawerProps) {
     const api = useAjax();
@@ -98,9 +100,36 @@ export default function CourseEditImageDrawer({
     useEffect(() => {
         if (open) {
             setPrompt(initialPrompt || '');
-            setSelectedPreset('');
+            if (initialImageType) {
+                const matchingPreset = STYLE_PRESETS.find((p) => p.values.imageType === initialImageType);
+                if (matchingPreset) {
+                    const v = matchingPreset.values;
+                    setSelectedPreset(matchingPreset.id);
+                    setImageType(v.imageType);
+                    setArtStyle(v.artStyle);
+                    setLighting(v.lighting);
+                    setMood(v.mood);
+                    setCameraAngle(v.cameraAngle);
+                    setLens(v.lens);
+                    setColorPalette(v.colorPalette);
+                    setSubject(v.subject);
+                    setEra(v.era);
+                    setBackground(v.background);
+                    setInfographicLayout(v.infographicLayout);
+                    setInfographicStructure(v.infographicStructure);
+                    setInfographicColor(v.infographicColor);
+                    setAspectRatio(v.aspectRatio);
+                    setQuality(v.quality);
+                    setNegativePrompts(v.negativePrompts ?? []);
+                } else {
+                    setSelectedPreset('');
+                    setImageType(initialImageType);
+                }
+            } else {
+                setSelectedPreset('');
+            }
         }
-    }, [open, initialPrompt]);
+    }, [open, initialPrompt, initialImageType]);
 
     const handleApplyPreset = (presetId: string) => {
         setSelectedPreset(presetId);
