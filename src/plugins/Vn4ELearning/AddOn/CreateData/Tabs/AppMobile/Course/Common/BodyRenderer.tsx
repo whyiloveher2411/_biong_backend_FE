@@ -8,6 +8,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CourseEditImageDrawer from './CourseEditImageDrawer';
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
 import useAjax from 'hook/useApi';
+import { pollCheckQueue } from './checkQueue';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ANY = any;
@@ -128,6 +129,8 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     const [copied, setCopied] = React.useState(false);
     const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
     const [imageInJob, setImageInJob] = React.useState(false);
+    const pendingJobIdRef = React.useRef<number | null>(null);
+    const cancelPollRef = React.useRef<(() => void) | null>(null);
 
     const handleProcessImageResult = (imageUrl: string) => {
         const updateUiAndProceed = () => {
@@ -188,7 +191,8 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                     if (imageId) imageCache[imageId] = imageUrl;
                     handleProcessImageResult(imageUrl);
                 } else if (result.job_id != null) {
-                    // API dùng queue: hiển thị overlay loading
+                    // API dùng queue: hiển thị overlay loading, poll check-queue
+                    pendingJobIdRef.current = Number(result.job_id);
                     setImageInJob(true);
                     setLoading(false);
                 } else {
@@ -240,7 +244,10 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
 
     const imgSrc = parseImgSrc(component.image) || parseImgSrc(component.image_link) || (component.image_id ? parseImgSrc(imageCache[component.image_id]) : '');
 
-    const lastPolledSrcRef = React.useRef<string>('');
+    const handleJobQueued = React.useCallback((jobId: number) => {
+        pendingJobIdRef.current = jobId;
+        setImageInJob(true);
+    }, []);
 
     React.useEffect(() => {
         if (component.type === 'image' && component.image_id && !imgSrc && !loading) {
@@ -248,31 +255,45 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
         }
     }, [component.image_id, component.type, imgSrc, loading]);
 
-    // Poll khi hình ảnh đang trong job queue - chỉ dừng khi src mới khác src cũ
+    // Poll check-queue khi hình ảnh đang trong job
     React.useEffect(() => {
         if (!imageInJob || component.type !== 'image' || !component.image_id) return;
-        lastPolledSrcRef.current = imgSrc; // Khởi tạo src cũ (parsed URL) khi bắt đầu poll
-        const interval = setInterval(() => {
-            ajax({
-                url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/get-image-ai',
-                method: 'POST',
-                data: { image_id: component.image_id },
-                success: (result: ANY) => {
-                    const newSrcRaw = result.data?.src || result.image_url || result.src || result.data?.image_url || '';
-                    const newSrcNormalized = parseImgSrc(newSrcRaw);
-                    const oldSrcNormalized = parseImgSrc(lastPolledSrcRef.current);
-                    lastPolledSrcRef.current = newSrcRaw; // Lưu raw cho lần so sánh tiếp theo
-                    // Chỉ cập nhật khi link thực tế khác nhau (hình đã được tạo mới xong)
-                    if (newSrcNormalized && newSrcNormalized !== oldSrcNormalized) {
-                        setImageInJob(false);
-                        imageCache[component.image_id] = newSrcRaw;
-                        handleProcessImageResult(newSrcNormalized);
-                    }
-                },
-            });
-        }, 5000);
-        return () => clearInterval(interval);
-    }, [imageInJob, component.type, component.image_id, imgSrc]);
+        const jobId = pendingJobIdRef.current;
+        if (jobId == null) return;
+
+        cancelPollRef.current?.();
+        cancelPollRef.current = pollCheckQueue(ajax, jobId, {
+            onCompleted: () => {
+                cancelPollRef.current = null;
+                pendingJobIdRef.current = null;
+                // Job hoàn thành: gọi get-image-ai để lấy ảnh
+                ajax({
+                    url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/get-image-ai',
+                    method: 'POST',
+                    data: { image_id: component.image_id },
+                    success: (result: ANY) => {
+                        const newSrcRaw = result.data?.src || result.image_url || result.src || result.data?.image_url || '';
+                        const newSrcNormalized = parseImgSrc(newSrcRaw);
+                        if (newSrcNormalized) {
+                            setImageInJob(false);
+                            imageCache[component.image_id] = newSrcRaw;
+                            handleProcessImageResult(newSrcNormalized);
+                        } else {
+                            setImageInJob(false);
+                        }
+                    },
+                    error: () => setImageInJob(false)
+                });
+            },
+            onFailed: () => {
+                cancelPollRef.current = null;
+                pendingJobIdRef.current = null;
+                setImageInJob(false);
+            }
+        });
+
+        return () => { cancelPollRef.current?.(); };
+    }, [imageInJob, component.type, component.image_id]);
 
     switch (component.type) {
         case 'text':
@@ -357,7 +378,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             open={openEditDrawer}
                             onClose={() => setOpenEditDrawer(false)}
                             onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
-                            onJobQueued={() => setImageInJob(true)}
+                            onJobQueued={handleJobQueued}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
                             imageId={component.image_id}
@@ -530,7 +551,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             open={openEditDrawer}
                             onClose={() => setOpenEditDrawer(false)}
                             onSuccess={(imageUrl) => handleProcessImageResult(imageUrl)}
-                            onJobQueued={() => setImageInJob(true)}
+                            onJobQueued={handleJobQueued}
                             initialPrompt={component.prompt || ''}
                             initialDescription={component.description || ''}
                             imageId={component.image_id}

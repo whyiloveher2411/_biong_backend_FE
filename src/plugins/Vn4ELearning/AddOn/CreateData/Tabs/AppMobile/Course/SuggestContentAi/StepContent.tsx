@@ -9,6 +9,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import useAjax from 'hook/useApi';
 import ReactMarkdown from 'react-markdown';
 import DrawerCustom from 'components/molecules/DrawerCustom';
+import { pollCheckQueue } from '../Common/checkQueue';
 
 interface StepContentProps {
     post: ANY;
@@ -21,6 +22,7 @@ interface StepContentProps {
     onNext: () => void;
     onBack: () => void;
     setActiveStep: (step: number) => void;
+    onRefresh?: () => void;
 }
 
 export default function StepContent({
@@ -29,7 +31,8 @@ export default function StepContent({
     onSyncAiData,
     onNext,
     onBack,
-    setActiveStep
+    setActiveStep,
+    onRefresh
 }: StepContentProps) {
 
     const outline = post.outline || [];
@@ -38,16 +41,21 @@ export default function StepContent({
     const { ajax } = useAjax();
     const [generating, setGenerating] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
+    const [completedLessonJobs, setCompletedLessonJobs] = useState<Set<string>>(new Set());
+    const [completedChapterJobs, setCompletedChapterJobs] = useState<Set<number>>(new Set());
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
     const postRef = useRef(post);
+    const cancelPollRef = useRef<(() => void) | null>(null);
+
     useEffect(() => {
         postRef.current = post;
     }, [post]);
 
+    useEffect(() => () => { cancelPollRef.current?.(); }, []);
+
     const [updatedLessons, setUpdatedLessons] = useState<{ [key: string]: string }>({});
-    const [, setRefreshCount] = useState(0);
 
     // Simple force update
     const [, forceUpdate] = useState(0);
@@ -120,6 +128,71 @@ export default function StepContent({
         refresh();
     };
 
+    const processStep3Result = (result: ANY, cIndex: number, lIndex: number) => {
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            setExpandedLesson({ cIndex, lIndex });
+            refresh();
+            return;
+        }
+
+        let newContent = result.content;
+
+        if (result.spacedev_course_ai_suggest && result.spacedev_course_ai_suggest.content) {
+            let fullContent = result.spacedev_course_ai_suggest.content;
+            if (typeof fullContent === 'string' && (fullContent.trim().startsWith('[') || fullContent.trim().startsWith('{'))) {
+                try {
+                    fullContent = JSON.parse(fullContent);
+                } catch (e) {
+                    console.error("Error parsing spacedev_course_ai_suggest.content", e);
+                }
+            }
+            if (Array.isArray(fullContent) && fullContent[cIndex] !== undefined) {
+                if (Array.isArray(fullContent[cIndex]) && fullContent[cIndex][lIndex] !== undefined) {
+                    newContent = fullContent[cIndex][lIndex];
+                } else {
+                    newContent = fullContent[cIndex];
+                }
+            } else {
+                newContent = fullContent;
+            }
+        }
+
+        if (newContent) {
+            const contentKey = `${cIndex}-${lIndex}`;
+            setUpdatedLessons(prev => ({ ...prev, [contentKey]: newContent }));
+
+            const currentPost = postRef.current;
+            const newOutline = [...(currentPost.outline || [])];
+            if (newOutline[cIndex]) {
+                newOutline[cIndex] = { ...newOutline[cIndex] };
+                if (newOutline[cIndex].lessons) {
+                    newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
+                    if (newOutline[cIndex].lessons[lIndex]) {
+                        newOutline[cIndex].lessons[lIndex] = {
+                            ...newOutline[cIndex].lessons[lIndex],
+                            content: newContent
+                        };
+                    }
+                }
+            }
+            onReview(newOutline, 'outline');
+
+            let currentContent = currentPost.content || [];
+            if (!Array.isArray(currentContent)) currentContent = [];
+            const newContentStructure = [...currentContent];
+            if (!newContentStructure[cIndex]) newContentStructure[cIndex] = [];
+            if (!Array.isArray(newContentStructure[cIndex])) newContentStructure[cIndex] = [];
+            const currentLessonContentObj = newContentStructure[cIndex][lIndex] || {};
+            newContentStructure[cIndex][lIndex] = { ...currentLessonContentObj, content: newContent };
+            onReview(newContentStructure, 'content');
+            setExpandedLesson({ cIndex, lIndex });
+            refresh();
+        } else {
+            alert('AI không trả về nội dung nào.');
+        }
+    };
+
     const handleGenerateContent = (cIndex: number, lIndex: number, lesson: ANY) => {
         setGenerating({ cIndex, lIndex });
         ajax({
@@ -133,97 +206,26 @@ export default function StepContent({
                 index: lIndex
             },
             success: (result: ANY) => {
+                if (result.job_id != null) {
+                    // API dùng queue: poll check-queue
+                    cancelPollRef.current?.();
+                    cancelPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: () => {
+                            cancelPollRef.current = null;
+                            setGenerating(null);
+                            setCompletedLessonJobs(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
+                            onRefresh?.();
+                        },
+                        onFailed: () => {
+                            cancelPollRef.current = null;
+                            setGenerating(null);
+                        }
+                    });
+                    return;
+                }
                 setGenerating(null);
                 if (result.success) {
-                    if (result.spacedev_course_ai_suggest) {
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        setRefreshCount(prev => prev + 1);
-                        setExpandedLesson({ cIndex, lIndex });
-                        refresh();
-                        return;
-                    }
-
-                    let newContent = result.content;
-
-                    if (result.spacedev_course_ai_suggest && result.spacedev_course_ai_suggest.content) {
-                        let fullContent = result.spacedev_course_ai_suggest.content;
-
-                        // Parse if it's a string
-                        if (typeof fullContent === 'string' && (fullContent.trim().startsWith('[') || fullContent.trim().startsWith('{'))) {
-                            try {
-                                fullContent = JSON.parse(fullContent);
-                            } catch (e) {
-                                console.error("Error parsing spacedev_course_ai_suggest.content", e);
-                            }
-                        }
-
-                        // If it's the full 2D array, extract the specific lesson
-                        if (Array.isArray(fullContent) && fullContent[cIndex] !== undefined) {
-                            if (Array.isArray(fullContent[cIndex]) && fullContent[cIndex][lIndex] !== undefined) {
-                                newContent = fullContent[cIndex][lIndex];
-                            } else if (lIndex === undefined || lIndex === null) {
-                                // Should not happen for lesson content
-                                newContent = fullContent[cIndex];
-                            }
-                        } else {
-                            // If it's just the content for this lesson or some other format
-                            newContent = fullContent;
-                        }
-                    }
-
-                    // Update content
-                    if (newContent) {
-
-                        // 1. Update local state explicitly to force re-render
-                        const contentKey = `${cIndex}-${lIndex}`;
-                        setUpdatedLessons(prev => ({ ...prev, [contentKey]: newContent }));
-
-                        // 2. Immutable update for outline
-                        const currentPost = postRef.current;
-                        const newOutline = [...(currentPost.outline || [])];
-                        if (newOutline[cIndex]) {
-                            newOutline[cIndex] = { ...newOutline[cIndex] };
-                            if (newOutline[cIndex].lessons) {
-                                newOutline[cIndex].lessons = [...newOutline[cIndex].lessons];
-                                if (newOutline[cIndex].lessons[lIndex]) {
-                                    newOutline[cIndex].lessons[lIndex] = {
-                                        ...newOutline[cIndex].lessons[lIndex],
-                                        content: newContent
-                                    };
-                                }
-                            }
-                        }
-                        // post.outline = newOutline; // Don't mutate prop directly if possible
-                        onReview(newOutline, 'outline');
-
-                        // 3. Update post.content structure for persistence/fallback
-                        let currentContent = currentPost.content || [];
-                        if (!Array.isArray(currentContent)) currentContent = [];
-
-                        const newContentStructure = [...currentContent];
-                        if (!newContentStructure[cIndex]) newContentStructure[cIndex] = [];
-                        if (!Array.isArray(newContentStructure[cIndex])) newContentStructure[cIndex] = [];
-
-                        const currentLessonContentObj = newContentStructure[cIndex][lIndex] || {};
-                        newContentStructure[cIndex][lIndex] = {
-                            ...currentLessonContentObj,
-                            content: newContent
-                        };
-                        // post.content = newContentStructure; // Don't mutate prop directly
-                        onReview(newContentStructure, 'content');
-                        setRefreshCount(prev => prev + 1);
-
-                        // 4. Auto expand
-                        setExpandedLesson({ cIndex, lIndex });
-
-                        console.log('Content updated for lesson', cIndex, lIndex, newContent);
-
-                        // 5. Force Update via separate state to ensure memoized components re-render if any
-                        refresh();
-
-                    } else {
-                        alert('AI không trả về nội dung nào.');
-                    }
+                    processStep3Result(result, cIndex, lIndex);
                 } else {
                     if (result.message) alert(result.message);
                 }
@@ -232,6 +234,18 @@ export default function StepContent({
                 setGenerating(null);
             }
         });
+    };
+
+    const processChapterResult = (result: ANY, cIndex: number) => {
+        if (result.spacedev_course_ai_suggest) {
+            onSyncAiData(result.spacedev_course_ai_suggest);
+            refresh();
+            return;
+        }
+        const newChapters = Array.isArray(post.chapters) ? [...post.chapters] : [];
+        newChapters[cIndex] = result.content;
+        onReview(newChapters, 'chapters');
+        refresh();
     };
 
     const handleGenerateChapterContent = (cIndex: number) => {
@@ -245,18 +259,26 @@ export default function StepContent({
                 index: cIndex
             },
             success: (result: ANY) => {
+                if (result.job_id != null) {
+                    // API dùng queue: poll check-queue
+                    cancelPollRef.current?.();
+                    cancelPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: () => {
+                            cancelPollRef.current = null;
+                            setGeneratingChapter(null);
+                            setCompletedChapterJobs(prev => new Set(prev).add(cIndex));
+                            onRefresh?.();
+                        },
+                        onFailed: () => {
+                            cancelPollRef.current = null;
+                            setGeneratingChapter(null);
+                        }
+                    });
+                    return;
+                }
                 setGeneratingChapter(null);
                 if (result.success) {
-                    if (result.spacedev_course_ai_suggest) {
-                        onSyncAiData(result.spacedev_course_ai_suggest);
-                        refresh();
-                        return;
-                    }
-
-                    const newChapters = Array.isArray(post.chapters) ? [...post.chapters] : [];
-                    newChapters[cIndex] = result.content;
-                    onReview(newChapters, 'chapters');
-                    refresh();
+                    processChapterResult(result, cIndex);
                 } else {
                     if (result.message) alert(result.message);
                 }
@@ -393,6 +415,11 @@ export default function StepContent({
                                                             >
                                                                 {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                             </Typography>
+                                                            {completedLessonJobs.has(`${cIndex}-${lIndex}`) && (
+                                                                <Box component="span" sx={{ fontSize: '0.7rem', color: 'success.main', fontWeight: 500 }}>
+                                                                    (Job đã hoàn thành)
+                                                                </Box>
+                                                            )}
                                                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                                 {(() => {
                                                                     const lessonData = post.content?.[cIndex]?.[lIndex] || {};
@@ -633,7 +660,11 @@ export default function StepContent({
                         {generatingChapter === openChapterDrawer ? <CircularProgress size={20} /> : 'Generate AI'}
                     </Button>
                 }
-                title={`Nội dung chương ${openChapterDrawer !== null ? (openChapterDrawer + 1) : ''}: ${openChapterDrawer !== null ? outline[openChapterDrawer]?.title : ''}`}
+                title={
+                    openChapterDrawer !== null
+                        ? `Nội dung chương ${openChapterDrawer + 1}: ${outline[openChapterDrawer]?.title || ''}${completedChapterJobs.has(openChapterDrawer) ? ' (Job đã hoàn thành)' : ''}`
+                        : ''
+                }
             >
                 {openChapterDrawer !== null && (
                     <Box sx={{ height: '100%', pt: 3, display: 'flex', flexDirection: 'column' }}>

@@ -508,6 +508,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                         onNext={handleNext}
                         onBack={handleBack}
                         setActiveStep={setActiveStep}
+                        onRefresh={() => fetchStep0Data({ keepStepPosition: true })}
                     />
                 );
             case 3: // Assessment

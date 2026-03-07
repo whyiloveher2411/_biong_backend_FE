@@ -188,6 +188,15 @@ function Tools() {
                     // 
                 },
                 disable: false,
+            },
+            {
+                title: 'Queue Job',
+                icon: 'QueueOutlined',
+                href: '/post-type/queue_job/list',
+                onClick: () => {
+                    // 
+                },
+                disable: false,
             }
         ]
     ];
