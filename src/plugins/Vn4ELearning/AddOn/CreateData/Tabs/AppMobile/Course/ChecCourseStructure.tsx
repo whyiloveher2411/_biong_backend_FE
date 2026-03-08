@@ -5,6 +5,7 @@ import { LoadingButton } from "@mui/lab";
 import { Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select, Tooltip } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
+import useConfirmDialog from "hook/useConfirmDialog";
 import React, { useState } from "react";
 import SuggestContentAi from "./SuggestContentAi";
 
@@ -17,7 +18,13 @@ function ChecCourseStructure(props: FieldFormItemProps) {
     const [openSuggestAi, setOpenSuggestAi] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [savingStep, setSavingStep] = useState(false);
+    const [clearingData, setClearingData] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    const confirmClearData = useConfirmDialog({
+        title: "Xác nhận xóa dữ liệu",
+        message: "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu gợi ý AI? Hành động này không thể hoàn tác.",
+    });
 
 
     const handleCheckDataCraw = () => {
@@ -69,6 +76,23 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             },
             error: () => {
                 setSavingStep(false);
+            }
+        });
+    }
+
+    const handleClearDataSuggest = () => {
+        setClearingData(true);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/ai/clear-data-suggest",
+            method: "POST",
+            data: { id: props.post.id },
+            success: () => {
+                setClearingData(false);
+                setRefreshTrigger((prev) => prev + 1);
+                handleCheckDataCraw();
+            },
+            error: () => {
+                setClearingData(false);
             }
         });
     }
@@ -165,9 +189,11 @@ function ChecCourseStructure(props: FieldFormItemProps) {
                         </span>
                     </Tooltip>
                     <LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>
+                    <LoadingButton loading={clearingData} size="small" variant="contained" color="error" onClick={() => confirmClearData.onConfirm(handleClearDataSuggest)}>Clear Data</LoadingButton>
                 </Box>
             }
         >
+            {confirmClearData.component}
             <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} refreshTrigger={refreshTrigger} onStepChange={(step) => {
                 setCurrentStep(step);
             }} onFinish={() => setOpenSuggestAi(false)} />

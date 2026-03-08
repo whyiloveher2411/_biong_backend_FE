@@ -5,6 +5,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import AddIcon from '@mui/icons-material/Add';
 import React, { useState, useRef, useEffect } from 'react';
 import useAjax from 'hook/useApi';
 import ReactMarkdown from 'react-markdown';
@@ -41,21 +42,35 @@ export default function StepContent({
     const [editing, setEditing] = useState<{ type: 'chapter' | 'lesson' | 'lesson-content', cIndex: number, lIndex?: number } | null>(null);
     const [editValue, setEditValue] = useState('');
     const { ajax } = useAjax();
-    const [generating, setGenerating] = useState<{ cIndex: number, lIndex: number } | null>(null);
+    const [generatingLessons, setGeneratingLessons] = useState<Set<string>>(new Set());
     const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
+    const [generatingAllLessons, setGeneratingAllLessons] = useState<Set<number>>(new Set());
     const [completedLessonJobs, setCompletedLessonJobs] = useState<Set<string>>(new Set());
     const [completedChapterJobs, setCompletedChapterJobs] = useState<Set<number>>(new Set());
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
+    const [addLessonAt, setAddLessonAt] = useState<{ cIndex: number, insertAfter: number } | null>(null);
+    const [newLessonTitle, setNewLessonTitle] = useState('');
+    const [addingLesson, setAddingLesson] = useState(false);
+    const [savingChapterTitle, setSavingChapterTitle] = useState(false);
+    const [savingLessonTitle, setSavingLessonTitle] = useState(false);
 
     const postRef = useRef(post);
-    const cancelPollRef = useRef<(() => void) | null>(null);
+    const cancelPollsRef = useRef<Map<string, () => void>>(new Map());
+    const cancelChapterPollRef = useRef<(() => void) | null>(null);
+    const cancelAllLessonsPollsRef = useRef<Map<number, () => void>>(new Map());
 
     useEffect(() => {
         postRef.current = post;
     }, [post]);
 
-    useEffect(() => () => { cancelPollRef.current?.(); }, []);
+    useEffect(() => () => {
+        cancelPollsRef.current.forEach((cancel) => cancel());
+        cancelPollsRef.current.clear();
+        cancelChapterPollRef.current?.();
+        cancelAllLessonsPollsRef.current.forEach((cancel) => cancel());
+        cancelAllLessonsPollsRef.current.clear();
+    }, []);
 
     const [updatedLessons, setUpdatedLessons] = useState<{ [key: string]: string }>({});
 
@@ -86,26 +101,96 @@ export default function StepContent({
     const handleEditSave = () => {
         if (!editing) return;
 
-        const newOutline = outline.map((chapter: ANY, index: number) => {
-            if (index === editing.cIndex) {
-                const newChapter = { ...chapter };
-                if (editing.type === 'chapter') {
-                    newChapter.title = editValue;
-                } else if (typeof editing.lIndex === 'number') {
-                    newChapter.lessons = chapter.lessons.map((lesson: ANY, lIdx: number) => {
-                        if (lIdx === editing.lIndex) {
-                            const newLesson = { ...lesson };
-                            if (editing.type === 'lesson') {
-                                newLesson.title = editValue;
-                            } else if (editing.type === 'lesson-content') {
-                                newLesson.content = editValue;
-                                setUpdatedLessons(prev => ({ ...prev, [`${editing.cIndex}-${editing.lIndex}`]: editValue }));
+        if (editing.type === 'chapter') {
+            setSavingChapterTitle(true);
+            ajax({
+                url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-edit-title-chapter',
+                method: 'POST',
+                data: {
+                    id: post.id,
+                    chapter_index: editing.cIndex,
+                    title: editValue,
+                },
+                success: (result: ANY) => {
+                    setSavingChapterTitle(false);
+                    if (result.spacedev_course_ai_suggest) {
+                        onSyncAiData(result.spacedev_course_ai_suggest);
+                    } else {
+                        const newOutline = outline.map((chapter: ANY, index: number) => {
+                            if (index === editing.cIndex) {
+                                return { ...chapter, title: editValue };
                             }
-                            return newLesson;
-                        }
-                        return lesson;
-                    });
+                            return chapter;
+                        });
+                        onReview(newOutline, 'outline');
+                    }
+                    setEditing(null);
+                    setEditValue('');
+                    refresh();
+                },
+                error: () => {
+                    setSavingChapterTitle(false);
                 }
+            });
+            return;
+        }
+
+        if (editing.type === 'lesson' && typeof editing.lIndex === 'number') {
+            setSavingLessonTitle(true);
+            ajax({
+                url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-edit-lesson',
+                method: 'POST',
+                data: {
+                    id: post.id,
+                    chapter_index: editing.cIndex,
+                    lesson_index: editing.lIndex,
+                    title: editValue,
+                },
+                success: (result: ANY) => {
+                    setSavingLessonTitle(false);
+                    if (result.spacedev_course_ai_suggest) {
+                        onSyncAiData(result.spacedev_course_ai_suggest);
+                    } else {
+                        const newOutline = outline.map((chapter: ANY, index: number) => {
+                            if (index === editing.cIndex) {
+                                const newChapter = { ...chapter };
+                                newChapter.lessons = chapter.lessons.map((lesson: ANY, lIdx: number) => {
+                                    if (lIdx === editing.lIndex) {
+                                        return { ...lesson, title: editValue };
+                                    }
+                                    return lesson;
+                                });
+                                return newChapter;
+                            }
+                            return chapter;
+                        });
+                        onReview(newOutline, 'outline');
+                    }
+                    setEditing(null);
+                    setEditValue('');
+                    refresh();
+                },
+                error: () => {
+                    setSavingLessonTitle(false);
+                }
+            });
+            return;
+        }
+
+        const newOutline = outline.map((chapter: ANY, index: number) => {
+            if (index === editing.cIndex && typeof editing.lIndex === 'number') {
+                const newChapter = { ...chapter };
+                newChapter.lessons = chapter.lessons.map((lesson: ANY, lIdx: number) => {
+                    if (lIdx === editing.lIndex) {
+                        const newLesson = { ...lesson };
+                        if (editing.type === 'lesson-content') {
+                            newLesson.content = editValue;
+                            setUpdatedLessons(prev => ({ ...prev, [`${editing.cIndex}-${editing.lIndex}`]: editValue }));
+                        }
+                        return newLesson;
+                    }
+                    return lesson;
+                });
                 return newChapter;
             }
             return chapter;
@@ -204,7 +289,8 @@ export default function StepContent({
     };
 
     const handleGenerateContent = (cIndex: number, lIndex: number, lesson: ANY) => {
-        setGenerating({ cIndex, lIndex });
+        const key = `${cIndex}-${lIndex}`;
+        setGeneratingLessons(prev => new Set(prev).add(key));
         ajax({
             url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3',
             method: 'POST',
@@ -217,22 +303,33 @@ export default function StepContent({
             },
             success: (result: ANY) => {
                 if (result.job_id != null) {
-                    // API dùng queue: poll check-queue
-                    cancelPollRef.current?.();
-                    cancelPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
+                    const cancel = pollCheckQueue(ajax, Number(result.job_id), {
                         onCompleted: () => {
-                            cancelPollRef.current = null;
-                            setGenerating(null);
-                            setCompletedLessonJobs(prev => new Set(prev).add(`${cIndex}-${lIndex}`));
+                            cancelPollsRef.current.delete(key);
+                            setGeneratingLessons(prev => {
+                                const next = new Set(prev);
+                                next.delete(key);
+                                return next;
+                            });
+                            setCompletedLessonJobs(prev => new Set(prev).add(key));
                         },
                         onFailed: () => {
-                            cancelPollRef.current = null;
-                            setGenerating(null);
+                            cancelPollsRef.current.delete(key);
+                            setGeneratingLessons(prev => {
+                                const next = new Set(prev);
+                                next.delete(key);
+                                return next;
+                            });
                         }
                     });
+                    cancelPollsRef.current.set(key, cancel);
                     return;
                 }
-                setGenerating(null);
+                setGeneratingLessons(prev => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
                 if (result.success) {
                     processStep3Result(result, cIndex, lIndex);
                 } else {
@@ -240,7 +337,11 @@ export default function StepContent({
                 }
             },
             error: () => {
-                setGenerating(null);
+                setGeneratingLessons(prev => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
             }
         });
     };
@@ -269,16 +370,15 @@ export default function StepContent({
             },
             success: (result: ANY) => {
                 if (result.job_id != null) {
-                    // API dùng queue: poll check-queue
-                    cancelPollRef.current?.();
-                    cancelPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
+                    cancelChapterPollRef.current?.();
+                    cancelChapterPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
                         onCompleted: () => {
-                            cancelPollRef.current = null;
+                            cancelChapterPollRef.current = null;
                             setGeneratingChapter(null);
                             setCompletedChapterJobs(prev => new Set(prev).add(cIndex));
                         },
                         onFailed: () => {
-                            cancelPollRef.current = null;
+                            cancelChapterPollRef.current = null;
                             setGeneratingChapter(null);
                         }
                     });
@@ -297,12 +397,118 @@ export default function StepContent({
         });
     };
 
+    const handleGenerateAllLessonsContent = (cIndex: number) => {
+        setGeneratingAllLessons(prev => new Set(prev).add(cIndex));
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-generate-content-all-lessons',
+            method: 'POST',
+            data: {
+                id: post.id,
+                chapter_index: cIndex,
+            },
+            success: (result: ANY) => {
+                if (result.job_id != null) {
+                    const cancel = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: () => {
+                            cancelAllLessonsPollsRef.current.delete(cIndex);
+                            setGeneratingAllLessons(prev => {
+                                const next = new Set(prev);
+                                next.delete(cIndex);
+                                return next;
+                            });
+                            const chapter = outline[cIndex];
+                            const lessonCount = chapter?.lessons?.length ?? 0;
+                            setCompletedLessonJobs(prev => {
+                                const next = new Set(prev);
+                                for (let i = 0; i < lessonCount; i++) next.add(`${cIndex}-${i}`);
+                                return next;
+                            });
+                            if (result.spacedev_course_ai_suggest) onSyncAiData(result.spacedev_course_ai_suggest);
+                            refresh();
+                        },
+                        onFailed: () => {
+                            cancelAllLessonsPollsRef.current.delete(cIndex);
+                            setGeneratingAllLessons(prev => {
+                                const next = new Set(prev);
+                                next.delete(cIndex);
+                                return next;
+                            });
+                        }
+                    });
+                    cancelAllLessonsPollsRef.current.set(cIndex, cancel);
+                    return;
+                }
+                setGeneratingAllLessons(prev => {
+                    const next = new Set(prev);
+                    next.delete(cIndex);
+                    return next;
+                });
+                if (result.spacedev_course_ai_suggest) {
+                    onSyncAiData(result.spacedev_course_ai_suggest);
+                }
+                refresh();
+            },
+            error: () => {
+                setGeneratingAllLessons(prev => {
+                    const next = new Set(prev);
+                    next.delete(cIndex);
+                    return next;
+                });
+            }
+        });
+    };
+
     const handleToggleExpand = (cIndex: number, lIndex: number) => {
         if (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) {
             setExpandedLesson(null);
         } else {
             setExpandedLesson({ cIndex, lIndex });
         }
+    };
+
+    const handleAddLessonConfirm = () => {
+        if (!addLessonAt || !newLessonTitle.trim()) return;
+        const { cIndex, insertAfter } = addLessonAt;
+        const chapter = outline[cIndex];
+        const lessons = chapter?.lessons || [];
+        const insertIndex = insertAfter + 1;
+
+        const newLesson = { title: newLessonTitle.trim(), content: '' };
+        const newLessons = [...lessons];
+        newLessons.splice(insertIndex, 0, newLesson);
+
+        const titles = newLessons.map((l: ANY) => l.title || '');
+
+        setAddingLesson(true);
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-add-lesson',
+            method: 'POST',
+            data: {
+                id: post.id,
+                chapter_index: cIndex,
+                titles,
+            },
+            success: (result: ANY) => {
+                setAddingLesson(false);
+                setAddLessonAt(null);
+                setNewLessonTitle('');
+                if (result.spacedev_course_ai_suggest) {
+                    onSyncAiData(result.spacedev_course_ai_suggest);
+                } else {
+                    const newOutline = outline.map((ch: ANY, idx: number) => {
+                        if (idx === cIndex) {
+                            return { ...ch, lessons: newLessons };
+                        }
+                        return ch;
+                    });
+                    onReview(newOutline, 'outline');
+                }
+                refresh();
+            },
+            error: () => {
+                setAddingLesson(false);
+            }
+        });
     };
 
     const [transitionLoading, setTransitionLoading] = useState(false);
@@ -349,8 +555,10 @@ export default function StepContent({
                                             value={editValue}
                                             onChange={(e) => setEditValue(e.target.value)}
                                         />
-                                        <Button variant="contained" size="small" onClick={() => { handleEditSave(); refresh(); }}>Save</Button>
-                                        <Button size="small" onClick={() => setEditing(null)}>Cancel</Button>
+                                        <Button variant="contained" size="small" onClick={() => { handleEditSave(); refresh(); }} disabled={savingChapterTitle}>
+                                            {savingChapterTitle ? <CircularProgress size={20} /> : 'Save'}
+                                        </Button>
+                                        <Button size="small" onClick={() => setEditing(null)} disabled={savingChapterTitle}>Cancel</Button>
                                     </Box>
                                 ) : (
                                     <>
@@ -368,13 +576,43 @@ export default function StepContent({
                                                 />
                                             )}
                                         </Box>
-                                        <Box>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                            <Tooltip title="Sinh nội dung tất cả bài học trong chương">
+                                                <span>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="primary"
+                                                        startIcon={generatingAllLessons.has(cIndex) ? <CircularProgress size={16} /> : <AutoAwesomeIcon fontSize="small" />}
+                                                        onClick={() => handleGenerateAllLessonsContent(cIndex)}
+                                                        disabled={generatingAllLessons.has(cIndex) || !chapter.lessons?.length}
+                                                        sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                                                    >
+                                                        {generatingAllLessons.has(cIndex) ? 'Đang...' : 'Generate tất cả bài học'}
+                                                    </Button>
+                                                </span>
+                                            </Tooltip>
                                             <IconButton size="small" onClick={() => handleEditStart('chapter', cIndex, undefined, chapter.title)}>
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
-                                            <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
-                                                <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
-                                            </IconButton>
+                                            {post.chapters?.[cIndex] ? (
+                                                <Tooltip title="Xem nội dung chương">
+                                                    <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
+                                                        <VisibilityIcon fontSize="small" color="primary" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            ) : (
+                                                <Tooltip title="Sinh nội dung chương bằng AI">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="primary"
+                                                        onClick={() => handleGenerateChapterContent(cIndex)}
+                                                        disabled={generatingChapter === cIndex}
+                                                    >
+                                                        {generatingChapter === cIndex ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             <IconButton size="small" onClick={() => { handleDelete('chapter', cIndex); refresh(); }}>
                                                 <DeleteIcon fontSize="small" />
                                             </IconButton>
@@ -384,7 +622,81 @@ export default function StepContent({
                             </Box>
 
                             <Box sx={{ pl: 2 }}>
-                                {chapter.lessons?.map((lesson: ANY, lIndex: number) => {
+                                {(() => {
+                                    const isAddActive = (insertAfter: number) =>
+                                        addLessonAt?.cIndex === cIndex && addLessonAt?.insertAfter === insertAfter;
+                                    const renderAddSlot = (insertAfter: number) => (
+                                        <Box key={`add-${insertAfter}`} sx={{ mb: 0 }} onClick={(e) => e.stopPropagation()}>
+                                            {isAddActive(insertAfter) ? (
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'rgba(25, 118, 210, 0.08)', borderRadius: 1, border: '1px dashed #1976d2' }}>
+                                                    <TextField
+                                                        size="small"
+                                                        placeholder="Nhập tiêu đề bài học..."
+                                                        value={newLessonTitle}
+                                                        onChange={(e) => setNewLessonTitle(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleAddLessonConfirm()}
+                                                        sx={{ flex: 1, minWidth: 200 }}
+                                                        autoFocus
+                                                    />
+                                                    <Button
+                                                        variant="contained"
+                                                        size="small"
+                                                        onClick={handleAddLessonConfirm}
+                                                        disabled={addingLesson || !newLessonTitle.trim()}
+                                                    >
+                                                        {addingLesson ? <CircularProgress size={20} /> : 'Xác nhận'}
+                                                    </Button>
+                                                    <Button size="small" onClick={() => { setAddLessonAt(null); setNewLessonTitle(''); }}>
+                                                        Hủy
+                                                    </Button>
+                                                </Box>
+                                            ) : (
+                                                <Tooltip title="Thêm bài học">
+                                                    <Box
+                                                        component="button"
+                                                        type="button"
+                                                        onClick={() => { setAddLessonAt({ cIndex, insertAfter }); setNewLessonTitle(''); }}
+                                                        sx={{
+                                                            width: '100%',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 0,
+                                                            py: 0,
+                                                            minHeight: 4,
+                                                            border: 'none',
+                                                            bgcolor: 'transparent',
+                                                            cursor: 'pointer',
+                                                            opacity: 0,
+                                                            transition: 'opacity 0.2s ease',
+                                                            '&:hover': { opacity: 1 },
+                                                            '& .line': {
+                                                                flex: 1,
+                                                                minHeight: 1,
+                                                                borderTop: '1px dashed',
+                                                                borderColor: 'primary.main',
+                                                                transition: 'opacity 0.2s ease',
+                                                            },
+                                                            '& .plus': {
+                                                                px: 1,
+                                                                color: 'primary.main',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <Box className="line" />
+                                                        <Box className="plus"><AddIcon sx={{ fontSize: 14 }} /></Box>
+                                                        <Box className="line" />
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </Box>
+                                    );
+                                    return (
+                                        <>
+                                            {renderAddSlot(-1)}
+                                            {chapter.lessons?.map((lesson: ANY, lIndex: number) => {
                                     const hasContent = (() => {
                                         let content = updatedLessons[`${cIndex}-${lIndex}`] !== undefined
                                             ? updatedLessons[`${cIndex}-${lIndex}`]
@@ -397,8 +709,9 @@ export default function StepContent({
                                     })();
 
                                     return (
-                                        <Box key={lIndex} sx={{
-                                            mb: 1,
+                                        <React.Fragment key={lIndex}>
+                                        <Box sx={{
+                                            mb: 0.5,
                                             p: 1.5,
                                             bgcolor: hasContent ? 'rgba(45, 206, 13, 0.08)' : 'background.default',
                                             borderRadius: 1,
@@ -416,14 +729,16 @@ export default function StepContent({
                                             }}
                                             >
                                                 {editing?.type === 'lesson' && editing.cIndex === cIndex && editing.lIndex === lIndex ? (
-                                                    <Box sx={{ display: 'flex', flex: 1, gap: 1 }}>
+                                                    <Box sx={{ display: 'flex', flex: 1, gap: 1 }} onClick={(e) => e.stopPropagation()}>
                                                         <TextField
                                                             fullWidth size="small"
                                                             value={editValue}
                                                             onChange={(e) => setEditValue(e.target.value)}
                                                         />
-                                                        <Button variant="contained" size="small" onClick={() => { handleEditSave(); refresh(); }}>Save</Button>
-                                                        <Button size="small" onClick={() => setEditing(null)}>Cancel</Button>
+                                                        <Button variant="contained" size="small" onClick={(e) => { e.stopPropagation(); handleEditSave(); refresh(); }} disabled={savingLessonTitle}>
+                                                            {savingLessonTitle ? <CircularProgress size={20} /> : 'Save'}
+                                                        </Button>
+                                                        <Button size="small" onClick={(e) => { e.stopPropagation(); setEditing(null); }} disabled={savingLessonTitle}>Cancel</Button>
                                                     </Box>
                                                 ) : (
                                                     <>
@@ -509,9 +824,9 @@ export default function StepContent({
                                                                     size="small"
                                                                     color="primary"
                                                                     onClick={(e) => { e.stopPropagation(); handleGenerateContent(cIndex, lIndex, lesson); }}
-                                                                    disabled={generating?.cIndex === cIndex && generating?.lIndex === lIndex}
+                                                                    disabled={generatingLessons.has(`${cIndex}-${lIndex}`)}
                                                                 >
-                                                                    {generating?.cIndex === cIndex && generating?.lIndex === lIndex ?
+                                                                    {generatingLessons.has(`${cIndex}-${lIndex}`) ?
                                                                         <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />
                                                                     }
                                                                 </IconButton>
@@ -658,8 +973,13 @@ export default function StepContent({
                                                 </Box>
                                             )}
                                         </Box>
+                                        {renderAddSlot(lIndex)}
+                                        </React.Fragment>
                                     );
                                 })}
+                                            </>
+                                        );
+                                    })()}
                             </Box>
                         </Paper>
                     ))

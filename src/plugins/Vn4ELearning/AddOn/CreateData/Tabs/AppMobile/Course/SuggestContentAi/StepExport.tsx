@@ -1,7 +1,8 @@
 import { Box, Button, Typography, Paper, IconButton, Divider, Tooltip } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import ImageNotSupportedIcon from '@mui/icons-material/ImageNotSupported';
 import DrawerCustom from "components/molecules/DrawerCustom";
 import QuestionPreview from '../Common/QuestionPreview';
 import ReactMarkdown from 'react-markdown';
@@ -53,6 +54,145 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
         }
         return '';
     };
+
+    type ImageItem = { cIndex: number; lIndex: number; source: string; location: string; prompt: string; image_id?: number | string };
+    const [imageStatusMap, setImageStatusMap] = useState<Record<string, boolean>>({});
+
+    const collectAllImageItems = (): ImageItem[] => {
+        const result: ImageItem[] = [];
+        const scanComponents = (arr: ANY[], location: string, cIndex: number, lIndex: number, source: string) => {
+            if (!Array.isArray(arr)) return;
+            arr.forEach((comp: ANY, i: number) => {
+                if (!comp || typeof comp !== 'object') return;
+                if (comp.type === 'image' && comp.prompt) {
+                    result.push({
+                        cIndex, lIndex, source, location: `${location}[${i}]`, prompt: comp.prompt,
+                        image_id: comp.image_id
+                    });
+                }
+                if (Array.isArray(comp.parts)) scanComponents(comp.parts, `${location}[${i}].parts`, cIndex, lIndex, source);
+            });
+        };
+
+        outline.forEach((chapter: ANY, cIndex: number) => {
+            chapter.lessons?.forEach((_: ANY, lIndex: number) => {
+                const lessonData = post.content?.[cIndex]?.[lIndex] || {};
+                const lessonOutline = outline[cIndex]?.lessons?.[lIndex] || {};
+
+                const questions = lessonData.questions || [];
+                questions.forEach((q: ANY, qIdx: number) => {
+                    const detail = typeof q?.question_detail === 'string' ? (() => { try { return JSON.parse(q.question_detail); } catch { return {}; } })() : (q?.question_detail || q);
+                    const body = detail?.body || q?.body || detail;
+                    const bodyArr = Array.isArray(body) ? body : (body?.body ? (Array.isArray(body.body) ? body.body : [body.body]) : []);
+                    scanComponents(bodyArr, `Câu hỏi ${qIdx + 1}`, cIndex, lIndex, 'question');
+                });
+
+                const flashcards = lessonData.flashcards || lessonOutline.flashcards || [];
+                const fcArr = Array.isArray(flashcards) ? flashcards : [];
+                fcArr.forEach((fc: ANY, fcIdx: number) => {
+                    const front = Array.isArray(fc?.front) ? fc.front : [];
+                    const back = Array.isArray(fc?.back) ? fc.back : [];
+                    scanComponents(front, `Flashcard ${fcIdx + 1} (mặt trước)`, cIndex, lIndex, 'flashcard');
+                    scanComponents(back, `Flashcard ${fcIdx + 1} (mặt sau)`, cIndex, lIndex, 'flashcard');
+                });
+
+                const welcome = lessonData.welcom_content || lessonData.welcome_content;
+                if (welcome) {
+                    const wDetail = typeof welcome === 'string' ? (() => { try { return JSON.parse(welcome); } catch { return {}; } })() : welcome;
+                    const wBody = wDetail?.body || welcome?.body;
+                    const wArr = Array.isArray(wBody) ? wBody : (wBody ? [wBody] : []);
+                    scanComponents(wArr, 'Chào mừng', cIndex, lIndex, 'question');
+                }
+                const recap = lessonData.recap_content || lessonData.recap;
+                if (recap) {
+                    const rDetail = typeof recap === 'string' ? (() => { try { return JSON.parse(recap); } catch { return {}; } })() : recap;
+                    const rBody = rDetail?.body || recap?.body;
+                    const rArr = Array.isArray(rBody) ? rBody : (rBody ? [rBody] : []);
+                    scanComponents(rArr, 'Tóm tắt', cIndex, lIndex, 'question');
+                }
+
+                const lessonContent = lessonData.content || lessonOutline.content;
+                const contentArr = Array.isArray(lessonContent) ? lessonContent : (typeof lessonContent === 'object' && lessonContent?.body ? (Array.isArray(lessonContent.body) ? lessonContent.body : [lessonContent.body]) : []);
+                scanComponents(contentArr, 'Nội dung bài học', cIndex, lIndex, 'content');
+            });
+        });
+        return result;
+    };
+
+    const allImageItems = useMemo(() => collectAllImageItems(), [post, outline]);
+    const imageIdsToCheck = useMemo(() => {
+        const ids: (number | string)[] = [];
+        const seen = new Set<string>();
+        allImageItems.forEach((item) => {
+            if (item.image_id != null && item.image_id !== '') {
+                const key = String(item.image_id);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    ids.push(item.image_id);
+                }
+            }
+        });
+        return ids;
+    }, [allImageItems]);
+
+    useEffect(() => {
+        if (imageIdsToCheck.length === 0) {
+            setImageStatusMap({});
+            return;
+        }
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/get-image-ai',
+            method: 'POST',
+            data: { image_ids: imageIdsToCheck },
+            success: (result: ANY) => {
+                const images = result?.images;
+                const map: Record<string, boolean> = {};
+                if (images && typeof images === 'object') {
+                    imageIdsToCheck.forEach((id) => {
+                        const key = String(id);
+                        const val = images[key] ?? images[id] ?? images[Number(id)];
+                        let hasValidSrc = false;
+                        if (val != null && val !== '') {
+                            try {
+                                const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+                                const link = parsed?.link;
+                                hasValidSrc = !!(link != null && link !== '');
+                            } catch {
+                                hasValidSrc = false;
+                            }
+                        }
+                        map[key] = hasValidSrc;
+                    });
+                }
+                setImageStatusMap(map);
+            },
+            error: () => setImageStatusMap({})
+        });
+    }, [imageIdsToCheck.join(',')]);
+
+    const ungeneratedImages = useMemo(() => {
+        return allImageItems.filter((item) => {
+            if (item.image_id == null || item.image_id === '') return true;
+            const key = String(item.image_id);
+            return !imageStatusMap[key];
+        });
+    }, [allImageItems, imageStatusMap]);
+    const ungeneratedCountByLesson = React.useMemo(() => {
+        const map: Record<string, number> = {};
+        ungeneratedImages.forEach(({ cIndex, lIndex }) => {
+            const key = `${cIndex}-${lIndex}`;
+            map[key] = (map[key] || 0) + 1;
+        });
+        return map;
+    }, [ungeneratedImages]);
+    const totalCountByLesson = React.useMemo(() => {
+        const map: Record<string, number> = {};
+        allImageItems.forEach(({ cIndex, lIndex }) => {
+            const key = `${cIndex}-${lIndex}`;
+            map[key] = (map[key] || 0) + 1;
+        });
+        return map;
+    }, [allImageItems]);
 
     const handleTogglePreview = (cIndex: number, lIndex: number, title: string, filter: 'questions' | 'flashcards' | 'content' | 'all' = 'all') => {
         setPreviewDrawer({
@@ -275,7 +415,24 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                                                 )}
                                             </Box>
 
-                                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                {(() => {
+                                                    const totalImg = totalCountByLesson[`${cIndex}-${lIndex}`] || 0;
+                                                    const ungenImg = ungeneratedCountByLesson[`${cIndex}-${lIndex}`] || 0;
+                                                    return totalImg > 0 ? (
+                                                        <Tooltip title="Chưa generate / Tổng">
+                                                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.25 }}>
+                                                                <Typography component="span" sx={{ color: ungenImg > 0 ? 'warning.main' : 'success.main', fontWeight: 'bold', fontSize: '0.7rem' }}>
+                                                                    {ungenImg}
+                                                                </Typography>
+                                                                <Typography component="span" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>/</Typography>
+                                                                <Typography component="span" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                                                                    {totalImg}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Tooltip>
+                                                    ) : null;
+                                                })()}
                                                 <IconButton
                                                     size="small"
                                                     color={lessonContent ? 'primary' : 'inherit'}
@@ -294,27 +451,43 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                 ))}
             </Box>
 
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', pt: 2, borderTop: '1px solid #eee', p: 2, alignItems: 'center' }}>
-                <Button onClick={onBack}>Quay lại</Button>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Course Progress:</Typography>
-                        <Box sx={{
-                            bgcolor: coursePercentage === 100 ? 'success.main' : 'warning.main',
-                            color: 'white',
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 1,
-                            fontSize: '0.9rem',
-                            fontWeight: 'bold'
-                        }}>
-                            {coursePercentage}%
+            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #eee', p: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: allImageItems.length > 0 ? 2 : 0 }}>
+                    <Button onClick={onBack}>Quay lại</Button>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Course Progress:</Typography>
+                            <Box sx={{
+                                bgcolor: coursePercentage === 100 ? 'success.main' : 'warning.main',
+                                color: 'white',
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontSize: '0.9rem',
+                                fontWeight: 'bold'
+                            }}>
+                                {coursePercentage}%
+                            </Box>
                         </Box>
+                        <LoadingButton loading={loading} variant="contained" color="success" onClick={handleFinish}>
+                            Hoàn tất
+                        </LoadingButton>
                     </Box>
-                    <LoadingButton loading={loading} variant="contained" color="success" onClick={handleFinish}>
-                        Hoàn tất
-                    </LoadingButton>
                 </Box>
+
+                {allImageItems.length > 0 && (
+                    <Paper sx={{ p: 2, bgcolor: ungeneratedImages.length > 0 ? 'rgba(255, 152, 0, 0.08)' : 'rgba(76, 175, 80, 0.08)', border: ungeneratedImages.length > 0 ? '1px solid rgba(255, 152, 0, 0.3)' : '1px solid rgba(76, 175, 80, 0.3)', borderRadius: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ImageNotSupportedIcon fontSize="small" color={ungeneratedImages.length > 0 ? 'warning' : 'success'} />
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: ungeneratedImages.length > 0 ? 'warning.dark' : 'success.dark' }}>
+                                Hình ảnh chưa được generate:{' '}
+                                <Typography component="span" sx={{ color: ungeneratedImages.length > 0 ? 'warning.main' : 'success.main', fontWeight: 'bold' }}>{ungeneratedImages.length}</Typography>
+                                <Typography component="span" sx={{ color: 'text.secondary', mx: 0.5 }}>/</Typography>
+                                <Typography component="span" sx={{ color: 'text.secondary' }}>{allImageItems.length}</Typography>
+                            </Typography>
+                        </Box>
+                    </Paper>
+                )}
             </Box>
 
             <DrawerCustom
