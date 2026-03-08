@@ -1,10 +1,10 @@
-import { Box, Button, Typography, Paper, IconButton, Divider, Tooltip } from '@mui/material';
+import { Box, Button, Typography, Paper, IconButton, Tooltip } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import React, { useState, useEffect, useMemo } from 'react';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ImageNotSupportedIcon from '@mui/icons-material/ImageNotSupported';
 import DrawerCustom from "components/molecules/DrawerCustom";
-import QuestionPreview from '../Common/QuestionPreview';
+import LessonPreviewDrawer from '../Common/LessonPreviewDrawer';
 import ReactMarkdown from 'react-markdown';
 import useAjax from 'hook/useApi';
 
@@ -18,7 +18,7 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
     const { ajax } = useAjax();
     const [loading, setLoading] = useState(false);
     const outline = post.outline || [];
-    const [previewDrawer, setPreviewDrawer] = useState<{ open: boolean, title: string, cIndex: number, lIndex: number, filter?: 'questions' | 'flashcards' | 'content' | 'all' } | null>(null);
+    const [previewDrawer, setPreviewDrawer] = useState<{ title: string, cIndex: number, lIndex: number, filter?: 'questions' | 'flashcards' | 'content' | 'all' } | null>(null);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
 
     // Bỏ số thứ tự có sẵn trong title để hiển thị theo index
@@ -196,7 +196,6 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
 
     const handleTogglePreview = (cIndex: number, lIndex: number, title: string, filter: 'questions' | 'flashcards' | 'content' | 'all' = 'all') => {
         setPreviewDrawer({
-            open: true,
             title: filter === 'questions' ? `Câu hỏi: ${title}` : (filter === 'flashcards' ? `Flashcards: ${title}` : (filter === 'content' ? `Nội dung bài học: ${title}` : `Xem trước: ${title}`)),
             cIndex,
             lIndex,
@@ -490,111 +489,12 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                 )}
             </Box>
 
-            <DrawerCustom
-                activeOnClose
-                open={previewDrawer?.open || false}
+            <LessonPreviewDrawer
+                post={post}
+                open={previewDrawer !== null}
                 onClose={() => setPreviewDrawer(null)}
-                title={previewDrawer?.title || ''}
-                width={1600}
-            >
-                <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {previewDrawer && (() => {
-                        const lessonData = post.content?.[previewDrawer.cIndex]?.[previewDrawer.lIndex] || {};
-                        const questions = lessonData.questions || [];
-                        const welcome = lessonData.welcom_content;
-                        const recap = lessonData.recap_content;
-                        const flashcards = lessonData.flashcards || (post.outline?.[previewDrawer.cIndex]?.lessons?.[previewDrawer.lIndex]?.flashcards);
-                        const filter = previewDrawer.filter || 'all';
-                        const lessonContent = lessonData.content || (post.outline?.[previewDrawer.cIndex]?.lessons?.[previewDrawer.lIndex]?.content);
-
-                        return (
-                            <>
-                                {filter === 'content' && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main', fontSize: 24 }}>
-                                            Nội dung bài học:
-                                        </Typography>
-                                        <Box sx={{
-                                            p: 2,
-                                            color: 'text.primary',
-                                            '& h1': { fontSize: '1.5rem', fontWeight: 'bold', mb: 1, mt: 2 },
-                                            '& h2': { fontSize: '1.25rem', fontWeight: 'bold', mb: 1, mt: 2 },
-                                            '& h3': { fontSize: '1.1rem', fontWeight: 'bold', mb: 1, mt: 1.5 },
-                                            '& p': { mb: 1.5, lineHeight: 1.6 },
-                                            '& ul, & ol': { mb: 1.5, pl: 3 },
-                                            '& li': { mb: 0.5 },
-                                            '& code': { bgcolor: '#f5f5f5', p: 0.5, borderRadius: 1, fontFamily: 'monospace' },
-                                            '& pre': { bgcolor: '#f5f5f5', p: 1.5, borderRadius: 1, overflowX: 'auto', mb: 1.5 },
-                                            '& blockquote': { borderLeft: '4px solid #ccc', pl: 2, color: 'text.secondary', fontStyle: 'italic', my: 2 }
-                                        }}>
-                                            <ReactMarkdown>{extractContent(lessonContent) || '*Chưa có nội dung bài học.*'}</ReactMarkdown>
-                                        </Box>
-                                    </Box>
-                                )}
-
-                                {(filter === 'all' || filter === 'questions') && welcome && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main', fontSize: 24 }}>
-                                            Chào mừng (Welcome):
-                                        </Typography>
-                                        <QuestionPreview question={typeof welcome === 'object' && !Array.isArray(welcome) ? welcome : { question_detail: welcome }} />
-                                    </Box>
-                                )}
-                                {(filter === 'all' || filter === 'questions') && welcome && <Divider />}
-
-                                {(filter === 'all' || filter === 'questions') && questions.length > 0 && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main', fontSize: 24 }}>
-                                            Danh sách câu hỏi:
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, backgroundColor: '#cececeff', p: 2, borderRadius: 2 }}>
-                                            {questions.map((q: ANY, i: number) => (<Box key={i}>
-                                                <Typography sx={{ fontWeight: 'bold', mb: 1, mt: 1, color: 'primary.main', fontSize: 24 }}>Câu hỏi {i + 1}</Typography>
-                                                <QuestionPreview key={i} question={typeof q === 'string' ? { idea: q, type: 'select_answer' } : q} />
-                                            </Box>
-                                            ))}
-                                        </Box>
-                                    </Box>
-                                )}
-                                {(filter === 'all' || filter === 'questions') && questions.length > 0 && <Divider />}
-                                {(filter === 'all' || filter === 'questions') && recap && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'success.main', fontSize: 24 }}>
-                                            Tóm tắt (Recap):
-                                        </Typography>
-                                        <QuestionPreview question={typeof recap === 'object' && !Array.isArray(recap) ? recap : { question_detail: recap }} />
-                                    </Box>
-                                )}
-
-                                {(filter === 'all' || filter === 'flashcards') && flashcards && (
-                                    <Box>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: 'secondary.main', fontSize: 24 }}>
-                                            Flashcards:
-                                        </Typography>
-                                        <QuestionPreview question={{ flashcards }} />
-                                    </Box>
-                                )}
-
-                                {filter === 'all' && !welcome && questions.length === 0 && !recap && !flashcards && (
-                                    <Typography color="text.secondary" align="center" sx={{ mt: 5 }}>
-                                        Chưa có nội dung để hiển thị.
-                                    </Typography>
-                                )}
-                                {filter === 'questions' && questions.length === 0 && (
-                                    <Typography color="text.secondary" align="center" sx={{ mt: 5 }}>
-                                        Chưa có danh sách câu hỏi.
-                                    </Typography>
-                                )}
-                                {filter === 'flashcards' && !flashcards && (
-                                    <Typography color="text.secondary" align="center" sx={{ mt: 5 }}>
-                                        Chưa có flashcards.
-                                    </Typography>
-                                )}
-                            </>
-                        );
-                    })()}
-                </Box>
-            </DrawerCustom>
+                previewDrawer={previewDrawer}
+            />
 
             <DrawerCustom
                 activeOnClose

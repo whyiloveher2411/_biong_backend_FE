@@ -219,7 +219,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                 }}>
                     {
                         data && data.config.filters_saved && data.config.filters_saved.length ?
-                            data.config.filters_saved.map((item, index) => (
+                            data.config.filters_saved?.map((item, index) => (
                                 <Button variant='contained' color={(stateFilterSavedName === item.name) ? 'primary' : 'inherit'} onClick={() => {
                                     setStateFilterSavedName(name => {
                                         if (name === item.name) {

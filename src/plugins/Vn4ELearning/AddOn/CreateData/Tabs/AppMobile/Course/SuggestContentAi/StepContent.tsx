@@ -10,6 +10,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import useAjax from 'hook/useApi';
 import ReactMarkdown from 'react-markdown';
 import DrawerCustom from 'components/molecules/DrawerCustom';
+import LessonPreviewDrawer from '../Common/LessonPreviewDrawer';
 import { pollCheckQueue } from '../Common/checkQueue';
 
 interface StepContentProps {
@@ -54,6 +55,7 @@ export default function StepContent({
     const [addingLesson, setAddingLesson] = useState(false);
     const [savingChapterTitle, setSavingChapterTitle] = useState(false);
     const [savingLessonTitle, setSavingLessonTitle] = useState(false);
+    const [previewDrawer, setPreviewDrawer] = useState<{ title: string, cIndex: number, lIndex: number, filter?: 'questions' | 'flashcards' } | null>(null);
 
     const postRef = useRef(post);
     const cancelPollsRef = useRef<Map<string, () => void>>(new Map());
@@ -764,8 +766,11 @@ export default function StepContent({
                                                                     const rawQuestions = lessonData.questions || [];
                                                                     const qCount = Array.isArray(rawQuestions) ? rawQuestions.length : Object.values(rawQuestions || {}).length;
                                                                     return qCount > 0 ? (
-                                                                        <Tooltip title={`${qCount} câu hỏi`}>
-                                                                            <Box sx={{ bgcolor: 'primary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                                                                        <Tooltip title={`${qCount} câu hỏi - Bấm để xem`}>
+                                                                            <Box
+                                                                                onClick={(e) => { e.stopPropagation(); setPreviewDrawer({ cIndex, lIndex, title: `Câu hỏi: ${lesson.title}`, filter: 'questions' }); }}
+                                                                                sx={{ bgcolor: 'primary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                                                            >
                                                                                 Question: {qCount}
                                                                             </Box>
                                                                         </Tooltip>
@@ -779,8 +784,11 @@ export default function StepContent({
                                                                     else if (flashcards && typeof flashcards === 'string') fCount = 1;
 
                                                                     return fCount > 0 ? (
-                                                                        <Tooltip title="Đã có Flashcard">
-                                                                            <Box sx={{ bgcolor: 'secondary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                                                                        <Tooltip title="Đã có Flashcard - Bấm để xem">
+                                                                            <Box
+                                                                                onClick={(e) => { e.stopPropagation(); setPreviewDrawer({ cIndex, lIndex, title: `Flashcards: ${lesson.title}`, filter: 'flashcards' }); }}
+                                                                                sx={{ bgcolor: 'secondary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                                                            >
                                                                                 Flashcard: {fCount}
                                                                             </Box>
                                                                         </Tooltip>
@@ -1059,6 +1067,13 @@ export default function StepContent({
                     </Box>
                 )}
             </DrawerCustom>
+
+            <LessonPreviewDrawer
+                post={post}
+                open={previewDrawer !== null}
+                onClose={() => setPreviewDrawer(null)}
+                previewDrawer={previewDrawer}
+            />
 
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', pt: 2, borderTop: '1px solid #eee' }}>
                 <Button onClick={onBack} disabled={transitionLoading}>Quay lại</Button>

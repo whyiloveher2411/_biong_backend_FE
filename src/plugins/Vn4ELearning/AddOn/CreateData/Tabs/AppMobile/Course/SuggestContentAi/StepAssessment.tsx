@@ -7,6 +7,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import SendIcon from '@mui/icons-material/Send';
 import ReactMarkdown from 'react-markdown';
 import DrawerCustom from "components/molecules/DrawerCustom";
+import LessonPreviewDrawer from '../Common/LessonPreviewDrawer';
 import useAjax from 'hook/useApi';
 import QuestionPreview from '../Common/QuestionPreview';
 import { pollCheckQueue } from '../Common/checkQueue';
@@ -45,6 +46,7 @@ export default function StepAssessment({
     const [submitting, setSubmitting] = useState(false);
     const [openChapterDrawer, setOpenChapterDrawer] = useState<number | null>(null);
     const [queueCompletedForLessons, setQueueCompletedForLessons] = useState<Set<string>>(new Set());
+    const [previewDrawer, setPreviewDrawer] = useState<{ title: string, cIndex: number, lIndex: number, filter?: 'questions' | 'flashcards' } | null>(null);
 
     const postRef = useRef(post);
     const cancelPollRefs = useRef<Record<string, () => void>>({});
@@ -579,8 +581,11 @@ export default function StepAssessment({
                                                     )}
                                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                         {questions.length > 0 && (
-                                                            <Tooltip title={`${questions.length} câu hỏi`}>
-                                                                <Box sx={{ bgcolor: 'primary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                                                            <Tooltip title={`${questions.length} câu hỏi - Bấm để xem`}>
+                                                                <Box
+                                                                    onClick={(e) => { e.stopPropagation(); setPreviewDrawer({ cIndex, lIndex, title: `Câu hỏi: ${lesson.title}`, filter: 'questions' }); }}
+                                                                    sx={{ bgcolor: 'primary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                                                >
                                                                     Question: {questions.length}
                                                                 </Box>
                                                             </Tooltip>
@@ -592,8 +597,11 @@ export default function StepAssessment({
                                                             else if (flashcards && typeof flashcards === 'string') fCount = 1; // Hoặc logic đếm dòng/markdown
 
                                                             return fCount > 0 ? (
-                                                                <Tooltip title="Đã có Flashcard">
-                                                                    <Box sx={{ bgcolor: 'secondary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                                                                <Tooltip title="Đã có Flashcard - Bấm để xem">
+                                                                    <Box
+                                                                        onClick={(e) => { e.stopPropagation(); setPreviewDrawer({ cIndex, lIndex, title: `Flashcards: ${lesson.title}`, filter: 'flashcards' }); }}
+                                                                        sx={{ bgcolor: 'secondary.main', color: 'white', fontSize: '0.65rem', px: 0.6, py: 0.1, borderRadius: 0.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                                                    >
                                                                         Flashcard: {fCount}
                                                                     </Box>
                                                                 </Tooltip>
@@ -870,6 +878,13 @@ export default function StepAssessment({
                     </Box>
                 </Box>
             </DrawerCustom>
+
+            <LessonPreviewDrawer
+                post={post}
+                open={previewDrawer !== null}
+                onClose={() => setPreviewDrawer(null)}
+                previewDrawer={previewDrawer}
+            />
         </Box>
     );
 }
