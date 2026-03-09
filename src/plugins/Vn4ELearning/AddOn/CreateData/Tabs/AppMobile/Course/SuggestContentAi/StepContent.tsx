@@ -46,6 +46,7 @@ export default function StepContent({
     const [generatingLessons, setGeneratingLessons] = useState<Set<string>>(new Set());
     const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
     const [generatingAllLessons, setGeneratingAllLessons] = useState<Set<number>>(new Set());
+    const [generatingAllContent, setGeneratingAllContent] = useState(false);
     const [completedLessonJobs, setCompletedLessonJobs] = useState<Set<string>>(new Set());
     const [completedChapterJobs, setCompletedChapterJobs] = useState<Set<number>>(new Set());
     const [expandedLesson, setExpandedLesson] = useState<{ cIndex: number, lIndex: number } | null>(null);
@@ -61,6 +62,7 @@ export default function StepContent({
     const cancelPollsRef = useRef<Map<string, () => void>>(new Map());
     const cancelChapterPollRef = useRef<(() => void) | null>(null);
     const cancelAllLessonsPollsRef = useRef<Map<number, () => void>>(new Map());
+    const cancelAllContentPollRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         postRef.current = post;
@@ -72,6 +74,7 @@ export default function StepContent({
         cancelChapterPollRef.current?.();
         cancelAllLessonsPollsRef.current.forEach((cancel) => cancel());
         cancelAllLessonsPollsRef.current.clear();
+        cancelAllContentPollRef.current?.();
     }, []);
 
     const [updatedLessons, setUpdatedLessons] = useState<{ [key: string]: string }>({});
@@ -460,6 +463,41 @@ export default function StepContent({
         });
     };
 
+    const handleGenerateAllContent = () => {
+        setGeneratingAllContent(true);
+        cancelAllContentPollRef.current?.();
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step3-generate-content-all-lessons',
+            method: 'POST',
+            data: { id: post.id },
+            success: (result: ANY) => {
+                if (result.job_id != null) {
+                    cancelAllContentPollRef.current = pollCheckQueue(ajax, Number(result.job_id), {
+                        onCompleted: () => {
+                            cancelAllContentPollRef.current = null;
+                            setGeneratingAllContent(false);
+                            onRefresh?.();
+                            refresh();
+                        },
+                        onFailed: () => {
+                            cancelAllContentPollRef.current = null;
+                            setGeneratingAllContent(false);
+                        }
+                    });
+                    return;
+                }
+                setGeneratingAllContent(false);
+                if (result.spacedev_course_ai_suggest) {
+                    onSyncAiData(result.spacedev_course_ai_suggest);
+                }
+                refresh();
+            },
+            error: () => {
+                setGeneratingAllContent(false);
+            }
+        });
+    };
+
     const handleToggleExpand = (cIndex: number, lIndex: number) => {
         if (expandedLesson?.cIndex === cIndex && expandedLesson?.lIndex === lIndex) {
             setExpandedLesson(null);
@@ -540,7 +578,24 @@ export default function StepContent({
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Chi tiết nội dung (Detailed Outline)</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Chi tiết nội dung (Detailed Outline)</Typography>
+                    <Tooltip title="Sinh nội dung tất cả bài học trong toàn bộ khóa học">
+                        <span>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                startIcon={generatingAllContent ? <CircularProgress size={16} /> : <AutoAwesomeIcon fontSize="small" />}
+                                onClick={handleGenerateAllContent}
+                                disabled={generatingAllContent || outline.length === 0}
+                                sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                            >
+                                {generatingAllContent ? 'Đang...' : 'Generate tất cả nội dung khóa học'}
+                            </Button>
+                        </span>
+                    </Tooltip>
+                </Box>
 
                 {outline.length === 0 ? (
                     <Typography color="text.secondary" align="center" sx={{ mt: 5 }}>
