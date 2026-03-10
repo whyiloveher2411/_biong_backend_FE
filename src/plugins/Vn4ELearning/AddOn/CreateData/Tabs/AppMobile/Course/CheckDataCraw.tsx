@@ -1,4 +1,4 @@
-import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton, Chip, Tooltip } from "@mui/material";
+import { Box, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem, Select, TextField, Typography, IconButton, Chip, Tooltip, Button } from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
 import React from "react";
@@ -13,6 +13,7 @@ import { DataResultApiProps } from "components/atoms/fields/relationship_onetoma
 import useLanguages from "../hooks/useLanguages";
 import useConfirmDialog from "hook/useConfirmDialog";
 import QuestionPreview from "./Common/QuestionPreview";
+import SuggestLessonContentAiDrawer from "./SuggestLessonContentAiDrawer";
 
 function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
@@ -27,6 +28,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawerEditPost, setOpenDrawerEditPost] = React.useState(false);
+    const [openSuggestLessonDrawer, setOpenSuggestLessonDrawer] = React.useState(false);
 
     const [activeQuestionIndex, setActiveQuestionIndex] = React.useState<number>(0);
     const questionRefs = React.useRef<(HTMLDivElement | null)[]>([]);
@@ -452,6 +454,18 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 <LoadingButton loading={loading} sx={{ mt: 2 }} variant="contained" onClick={handleAddDataFromJson}>Add lesson from json</LoadingButton>
             </Box>
 
+            <Box sx={{ mt: 2 }}>
+                <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => {
+                        setOpenSuggestLessonDrawer(true);
+                    }}
+                >
+                    Gợi ý nội dung bằng AI
+                </Button>
+            </Box>
+
             {/* Refactored Preview Drawer */}
             <DrawerCustom
                 open={openPreview}
@@ -468,6 +482,12 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
             >
                 {previewContent}
             </DrawerCustom>
+            <SuggestLessonContentAiDrawer
+                open={openSuggestLessonDrawer}
+                onClose={() => setOpenSuggestLessonDrawer(false)}
+                post={props.post}
+                onReview={props.onReview}
+            />
 
             {/* Drawer for creating/editing the question using standard form */}
             {openDrawerEditPost && drawerData && (

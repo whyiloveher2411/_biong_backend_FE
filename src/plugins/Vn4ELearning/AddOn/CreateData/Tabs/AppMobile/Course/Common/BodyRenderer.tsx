@@ -234,11 +234,12 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     // Normalize component: Infer type if missing
     const component = { ...rawComponent };
     if (!component.type) {
-        if (component.text) component.type = 'text';
+        // Ưu tiên đúng type nếu đã có; nếu không có thì đoán
+        if (component.info) component.type = 'info';
+        else if (component.text) component.type = 'text';
         else if (component.code) component.type = 'code';
         else if (component.image || component.image_link || component.image_id) component.type = 'image';
         else if (component.parts) component.type = 'parts';
-        else if (component.info) component.type = 'info';
     }
 
     const imgSrc = parseImgSrc(component.image) || parseImgSrc(component.image_link) || (component.image_id ? parseImgSrc(imageCache[component.image_id]) : '');
@@ -572,10 +573,22 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                 </div>
             );
         }
-        case 'info':
+        case 'info': {
+            const infoContent = component.info ?? component.text ?? '';
             return (
-                <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', color: '#0d47a1', borderRadius: '4px', borderLeft: '4px solid #1976d2' }} dangerouslySetInnerHTML={{ __html: component.info }} />
+                <div
+                    style={{
+                        marginBottom: '10px',
+                        padding: '10px',
+                        backgroundColor: '#e3f2fd',
+                        color: '#0d47a1',
+                        borderRadius: '4px',
+                        borderLeft: '4px solid #1976d2'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: infoContent }}
+                />
             );
+        }
         case 'parts': {
             let secretIndexCounter = 0;
             const isKeyboard = component.input_method === 'keyboard';
