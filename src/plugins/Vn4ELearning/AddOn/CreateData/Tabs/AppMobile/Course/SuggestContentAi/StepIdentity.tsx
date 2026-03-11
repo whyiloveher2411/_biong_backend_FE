@@ -4,6 +4,7 @@ import TransslateField from '../TransslateField';
 import FieldForm from 'components/atoms/fields/FieldForm';
 import useAjax from 'hook/useApi';
 import { useState } from 'react';
+import LoadingButton from '@mui/lab/LoadingButton';
 
 interface StepIdentityProps {
     post: ANY;
@@ -17,8 +18,22 @@ export default function StepIdentity({ post, onReview, onNext, maxStep, onSyncAi
 
     const { ajax } = useAjax();
     const [loading, setLoading] = useState(false);
+    const [suggesting, setSuggesting] = useState(false);
 
     const profile = post.course_identity_profile || {};
+
+    const getTitleEn = () => {
+        const title = post.title;
+        if (!title) return '';
+        if (typeof title === 'string') return title;
+        if (typeof title === 'object') {
+            if (title.en && typeof title.en === 'string') return title.en;
+            if (title.vi && typeof title.vi === 'string') return title.vi;
+            const first = Object.values(title)[0];
+            return typeof first === 'string' ? first : '';
+        }
+        return '';
+    };
 
     const styleGroups = [
         {
@@ -100,6 +115,79 @@ export default function StepIdentity({ post, onReview, onNext, maxStep, onSyncAi
         });
     };
 
+    const handleSuggestFromTitle = () => {
+        const titleEn = getTitleEn().trim();
+        if (!titleEn) {
+            alert('Vui lòng nhập title tiếng Anh trước khi gợi ý.');
+            return;
+        }
+
+        setSuggesting(true);
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/step1-suggest-input',
+            method: 'POST',
+            data: {
+                title: titleEn,
+                response_language: post.response_language,
+                description: post.description,
+            },
+            success: (result: ANY) => {
+                setSuggesting(false);
+                if (!result || result.success === false) {
+                    return;
+                }
+
+                const data = result.data || result;
+
+                if (typeof data.description === 'string' && data.description.trim()) {
+                    onReview(data.description, 'description');
+                }
+
+                if (Array.isArray(data.audience) && data.audience.length > 0) {
+                    onReview(data.audience, 'audience');
+                }
+
+                if (typeof data.learning_outcome === 'string' && data.learning_outcome.trim()) {
+                    onReview(data.learning_outcome, 'learning_outcome');
+                }
+
+                if (typeof data.content_requirements === 'string' && data.content_requirements.trim()) {
+                    onReview(data.content_requirements, 'content_requirements');
+                }
+
+                if (typeof data.prerequisites === 'string' && data.prerequisites.trim()) {
+                    onReview(data.prerequisites, 'prerequisites');
+                }
+
+                const joinStyles = (arr: ANY) =>
+                    Array.isArray(arr) ? arr.filter((s: ANY) => typeof s === 'string' && s.trim()).join(', ') : '';
+
+                const approachStr = joinStyles(data.approach);
+                if (approachStr) {
+                    onReview(approachStr, 'approach');
+                }
+
+                const toneStr = joinStyles(data.tone);
+                if (toneStr) {
+                    onReview(toneStr, 'tone');
+                }
+
+                const depthStr = joinStyles(data.depth);
+                if (depthStr) {
+                    onReview(depthStr, 'depth');
+                }
+
+                const visualsStr = joinStyles(data.visuals);
+                if (visualsStr) {
+                    onReview(visualsStr, 'visuals');
+                }
+            },
+            error: () => {
+                setSuggesting(false);
+            }
+        });
+    };
+
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -110,16 +198,30 @@ export default function StepIdentity({ post, onReview, onNext, maxStep, onSyncAi
                 </Typography>
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={8}>
-                        <TransslateField
-                            post={post}
-                            name="title"
-                            onReview={onReview}
-                            component="text"
-                            config={{
-                                title: false,
-                                primary_view: "text"
-                            }}
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ flex: 1 }}>
+                                <TransslateField
+                                    post={post}
+                                    name="title"
+                                    onReview={onReview}
+                                    component="text"
+                                    config={{
+                                        title: false,
+                                        primary_view: "text"
+                                    }}
+                                />
+                            </Box>
+                            <LoadingButton
+                                loading={suggesting}
+                                variant="contained"
+                                size="large"
+                                onClick={handleSuggestFromTitle}
+                                disabled={suggesting}
+                                sx={{ mt: 'auto' }}
+                            >
+                                {suggesting ? 'Đang gợi ý...' : 'Gợi ý từ title'}
+                            </LoadingButton>
+                        </Box>
                     </Grid>
                     <Grid item xs={12} md={4}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'text.primary' }}>Ngôn ngữ phản hồi</Typography>
