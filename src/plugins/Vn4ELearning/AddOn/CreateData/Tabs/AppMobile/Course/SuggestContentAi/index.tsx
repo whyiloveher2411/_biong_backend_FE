@@ -22,6 +22,67 @@ const steps = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ANY = any;
 
+const normalizeOutline = (outlineRaw: ANY): ANY[] => {
+    const raw = Array.isArray(outlineRaw) ? outlineRaw : [];
+    return raw.map((chapter: ANY) => {
+        if (!chapter) {
+            return {
+                title: '',
+                summary: '',
+                keywords: [],
+                lessons: []
+            };
+        }
+
+        // Nếu backend từng trả chapter là string (hiếm), convert sang object tối thiểu
+        if (typeof chapter === 'string') {
+            return {
+                title: chapter,
+                summary: '',
+                keywords: [],
+                lessons: []
+            };
+        }
+
+        const title = typeof chapter.title === 'string' ? chapter.title : '';
+        const summary = typeof chapter.summary === 'string' ? chapter.summary : '';
+        const keywords = Array.isArray(chapter.keywords)
+            ? chapter.keywords.filter((k: ANY) => typeof k === 'string')
+            : [];
+
+        const rawLessons = Array.isArray(chapter.lessons) ? chapter.lessons : [];
+        const lessons = rawLessons.map((lesson: ANY) => {
+            if (!lesson) {
+                return {
+                    title: '',
+                    summary: ''
+                };
+            }
+            if (typeof lesson === 'string') {
+                return {
+                    title: lesson,
+                    summary: ''
+                };
+            }
+            const lessonTitle = typeof lesson.title === 'string' ? lesson.title : '';
+            const lessonSummary = typeof lesson.summary === 'string' ? lesson.summary : '';
+            return {
+                ...lesson,
+                title: lessonTitle,
+                summary: lessonSummary
+            };
+        });
+
+        return {
+            ...chapter,
+            title,
+            summary,
+            keywords,
+            lessons
+        };
+    });
+};
+
 export default function SuggestContentAi({ post, onReview, courses, onStepChange, onFinish, refreshTrigger }: { post: ANY, onReview: ANY, courses?: ANY[], onStepChange?: (step: number) => void, onFinish?: () => void, refreshTrigger?: number }) {
     const [activeStep, setActiveStep] = React.useState(0);
 
@@ -67,7 +128,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
             depth: post.depth || '',
             visuals: post.visuals || '',
             course_identity_profile: post.course_identity_profile || {},
-            outline: post.outline || [],
+            outline: normalizeOutline(post.outline || []),
             content: post.content || [],
             chapters: post.chapters || []
         };
@@ -232,20 +293,7 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
                     let outline = aiSuggest.outline;
                     if (typeof outline === 'string') outline = JSON.parse(outline);
                     if (outline && Array.isArray(outline)) {
-                        const newOutline = Array.isArray(newSuggestionData.outline) ? [...newSuggestionData.outline] : [];
-                        outline.forEach((chapter, cIdx) => {
-                            if (chapter) {
-                                newOutline[cIdx] = { ...(newOutline[cIdx] || {}), ...chapter };
-                                if (chapter.lessons && Array.isArray(chapter.lessons)) {
-                                    const newLessons = Array.isArray(newOutline[cIdx].lessons) ? [...newOutline[cIdx].lessons] : [];
-                                    chapter.lessons.forEach((lesson: ANY, lIdx: number) => {
-                                        if (lesson) newLessons[lIdx] = { ...(newLessons[lIdx] || {}), ...lesson };
-                                    });
-                                    newOutline[cIdx].lessons = newLessons;
-                                }
-                            }
-                        });
-                        newSuggestionData.outline = newOutline;
+                        newSuggestionData.outline = normalizeOutline(outline);
                         hasUpdates = true;
                     }
                 } catch (e) { console.error("Error parsing outline", e); }
@@ -342,6 +390,11 @@ export default function SuggestContentAi({ post, onReview, courses, onStepChange
     const handleSuggestionReview = (value: ANY, key: string) => {
         console.log('[DEBUG] handleSuggestionReview called:', { key, value });
         setSuggestionData((prevValue: ANY) => {
+            if (key === 'outline') {
+                const normalized = normalizeOutline(value);
+                return { ...prevValue, outline: normalized, _user_edited_outline: true };
+            }
+
             if (key === 'content') {
                 // Ensure value is handled as an array of chapters
                 const incomingChapters = Array.isArray(value) ? value : (typeof value === 'object' && value !== null ? Object.values(value) : []);

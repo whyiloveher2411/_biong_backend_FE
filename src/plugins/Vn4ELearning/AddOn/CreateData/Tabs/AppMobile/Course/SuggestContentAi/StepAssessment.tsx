@@ -504,9 +504,23 @@ export default function StepAssessment({
                     outline.map((chapter: ANY, cIndex: number) => (
                         <Paper key={cIndex} sx={{ mb: 3, p: 2, borderRadius: 2, border: '1px solid #e0e0e0' }} elevation={0}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', flex: 1 }}>
-                                    {cIndex + 1}. {chapter.title}
-                                </Typography>
+                                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                        {cIndex + 1}. {chapter.title}
+                                    </Typography>
+                                    {chapter.summary && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {chapter.summary}
+                                        </Typography>
+                                    )}
+                                    {Array.isArray(chapter.keywords) && chapter.keywords.length > 0 && (
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                            {chapter.keywords.map((kw: ANY, idx: number) => typeof kw === 'string' && (
+                                                <Chip key={idx} label={kw} size="small" variant="outlined" />
+                                            ))}
+                                        </Box>
+                                    )}
+                                </Box>
                                 <IconButton size="small" onClick={() => setOpenChapterDrawer(cIndex)}>
                                     <VisibilityIcon fontSize="small" color={post.chapters?.[cIndex] ? 'primary' : 'inherit'} />
                                 </IconButton>
@@ -570,6 +584,15 @@ export default function StepAssessment({
                                                     >
                                                         {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
+                                                    {lesson.summary && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                            sx={{ width: '100%' }}
+                                                        >
+                                                            {lesson.summary}
+                                                        </Typography>
+                                                    )}
                                                     {queueCompletedForLessons.has(contentKey) && (
                                                         <Chip
                                                             label="Queue hoàn thành - Bấm để cập nhật"

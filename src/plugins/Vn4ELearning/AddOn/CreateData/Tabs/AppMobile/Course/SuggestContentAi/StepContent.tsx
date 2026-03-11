@@ -623,6 +623,22 @@ export default function StepContent({
                                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                                 {cIndex + 1}. {chapter.title}
                                             </Typography>
+                                            {chapter.summary && (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                    sx={{ width: '100%' }}
+                                                >
+                                                    {chapter.summary}
+                                                </Typography>
+                                            )}
+                                            {Array.isArray(chapter.keywords) && chapter.keywords.length > 0 && (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {chapter.keywords.map((kw: ANY, idx: number) => typeof kw === 'string' && (
+                                                        <Chip key={idx} label={kw} size="small" variant="outlined" />
+                                                    ))}
+                                                </Box>
+                                            )}
                                             {completedChapterJobs.has(cIndex) && (
                                                 <Chip
                                                     label="Queue hoàn thành - Bấm để cập nhật"
@@ -806,6 +822,15 @@ export default function StepContent({
                                                             >
                                                                 {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                             </Typography>
+                                                            {lesson.summary && (
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    color="text.secondary"
+                                                                    sx={{ width: '100%' }}
+                                                                >
+                                                                    {lesson.summary}
+                                                                </Typography>
+                                                            )}
                                                             {completedLessonJobs.has(`${cIndex}-${lIndex}`) && (
                                                                 <Chip
                                                                     label="Queue hoàn thành - Bấm để cập nhật"

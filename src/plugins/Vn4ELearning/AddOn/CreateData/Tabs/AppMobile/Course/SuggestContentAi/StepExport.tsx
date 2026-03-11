@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Paper, IconButton, Tooltip } from '@mui/material';
+import { Box, Button, Typography, Paper, IconButton, Tooltip, Chip } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import React, { useState, useEffect, useMemo } from 'react';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -299,10 +299,24 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                 {outline.map((chapter: ANY, cIndex: number) => (
                     <Box key={cIndex} sx={{ mb: 3 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                    {cIndex + 1}. {chapter.title}
-                                </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flex: 1 }}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                                        {cIndex + 1}. {chapter.title}
+                                    </Typography>
+                                    {chapter.summary && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {chapter.summary}
+                                        </Typography>
+                                    )}
+                                    {Array.isArray(chapter.keywords) && chapter.keywords.length > 0 && (
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                            {chapter.keywords.map((kw: ANY, idx: number) => typeof kw === 'string' && (
+                                                <Chip key={idx} label={kw} size="small" variant="outlined" />
+                                            ))}
+                                        </Box>
+                                    )}
+                                </Box>
                                 {(() => {
                                     const percentage = getChapterCompletion(cIndex);
                                     return (
@@ -313,7 +327,8 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                                             py: 0.2,
                                             borderRadius: 1,
                                             fontSize: '0.75rem',
-                                            fontWeight: 'bold'
+                                            fontWeight: 'bold',
+                                            whiteSpace: 'nowrap'
                                         }}>
                                             {percentage}%
                                         </Box>
@@ -353,6 +368,15 @@ export default function StepExport({ post, onBack, onFinish }: StepExportProps) 
                                                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                                         {lIndex + 1}. {stripLeadingNumber(lesson.title)}
                                                     </Typography>
+                                                    {lesson.summary && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                            sx={{ width: '100%' }}
+                                                        >
+                                                            {lesson.summary}
+                                                        </Typography>
+                                                    )}
                                                     <Box sx={{
                                                         bgcolor: isCompleted ? 'success.main' : 'warning.main',
                                                         color: 'white',
