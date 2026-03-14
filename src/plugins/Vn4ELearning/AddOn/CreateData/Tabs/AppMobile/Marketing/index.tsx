@@ -52,6 +52,28 @@ const normalizePlatform = (p: string): string => {
     return p;
 };
 
+/** Tính độ sáng tương đối (0–1). Dùng để chọn màu chữ trắng hoặc đen cho tương phản. */
+const getLuminance = (hex: string): number => {
+    const h = hex.replace(/^#/, '');
+    if (h.length !== 6 && h.length !== 3) return 0.5;
+    let r = 0, g = 0, b = 0;
+    if (h.length === 6) {
+        r = parseInt(h.slice(0, 2), 16) / 255;
+        g = parseInt(h.slice(2, 4), 16) / 255;
+        b = parseInt(h.slice(4, 6), 16) / 255;
+    } else {
+        r = parseInt(h[0] + h[0], 16) / 255;
+        g = parseInt(h[1] + h[1], 16) / 255;
+        b = parseInt(h[2] + h[2], 16) / 255;
+    }
+    const toLinear = (c: number) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    r = toLinear(r); g = toLinear(g); b = toLinear(b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const getContrastTextColor = (bgHex: string): string =>
+    getLuminance(bgHex) > 0.4 ? '#1a1a1a' : '#ffffff';
+
 const getPlatformsFromEvent = (event: ANY): string[] => {
     let platforms: string[] = [];
     if (event.resource && event.resource.platform) {
@@ -87,27 +109,116 @@ const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatfor
     const displayedPlatforms = platforms.slice(0, maxIcons);
     const extraCount = platforms.length - maxIcons;
 
+    const r = event.resource || {};
     const tooltipContent = (
-        <Box sx={{ p: 0.5, maxWidth: 300 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>{event.resource?.title || event.title}</Typography>
-            {event.resource?.date_publish && (
-                <Typography variant="body2" display="block" sx={{ mb: 0.5 }}>
-                    <strong>Thời gian:</strong> {moment(event.resource.date_publish).format('HH:mm DD/MM/YYYY')}
+        <Box sx={{ p: 0.5, maxWidth: 360 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                {r.title || event.title}
+            </Typography>
+
+            {r.date_publish && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Thời gian:</strong> {moment(r.date_publish).format('HH:mm DD/MM/YYYY')}
                 </Typography>
             )}
-            {event.resource?.content_type && (
-                <Typography variant="body2" display="block" sx={{ mb: 0.5 }}>
-                    <strong>Loại nội dung:</strong> {event.resource.content_type}
+
+            {r.platform && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Platform:</strong> {Array.isArray(r.platform) ? r.platform.join(', ') : r.platform}
                 </Typography>
             )}
-            {event.resource?.hashtags && (
-                <Typography variant="body2" display="block" sx={{ mb: 0.5 }}>
-                    <strong>Hashtags:</strong> {event.resource.hashtags}
+
+            {r.pillar && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Content Pillar:</strong> {r.pillar}
                 </Typography>
             )}
-            {event.resource?.description && (
-                <Typography variant="body2" display="block" sx={{ mt: 1, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {event.resource.description}
+
+            {r.content_type && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Loại nội dung:</strong> {r.content_type}
+                </Typography>
+            )}
+
+            {r.tone_of_voice && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Tone of Voice:</strong> {r.tone_of_voice}
+                </Typography>
+            )}
+
+            {r.length_constraint && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Độ dài:</strong> {r.length_constraint}
+                </Typography>
+            )}
+
+            {r.read_minutes && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Read minutes:</strong> {r.read_minutes}
+                </Typography>
+            )}
+
+            {r.language && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Ngôn ngữ:</strong> {r.language}
+                </Typography>
+            )}
+
+            {r.hashtags && (
+                <Typography variant="body2" display="block" sx={{ mb: 0.25 }}>
+                    <strong>Hashtags:</strong> {r.hashtags}
+                </Typography>
+            )}
+
+            {r.description && (
+                <Typography
+                    variant="body2"
+                    display="block"
+                    sx={{ mt: 0.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                    {r.description}
+                </Typography>
+            )}
+
+            {r.key_points && (
+                <Typography
+                    variant="body2"
+                    display="block"
+                    sx={{ mt: 0.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                    <strong>Key points:</strong>{' '}
+                    {Array.isArray(r.key_points) ? r.key_points.join(' • ') : r.key_points}
+                </Typography>
+            )}
+
+            {r.knowledge_base && (
+                <Typography
+                    variant="body2"
+                    display="block"
+                    sx={{ mt: 0.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                    <strong>Knowledge base:</strong>{' '}
+                    {Array.isArray(r.knowledge_base) ? r.knowledge_base.join(' • ') : r.knowledge_base}
+                </Typography>
+            )}
+
+            {r.visual_brief && (
+                <Typography
+                    variant="body2"
+                    display="block"
+                    sx={{ mt: 0.5, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                    <strong>Visual brief:</strong> {r.visual_brief}
+                </Typography>
+            )}
+
+            {r.cta && (
+                <Typography
+                    variant="body2"
+                    display="block"
+                    sx={{ mt: 0.5, fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                    <strong>CTA:</strong> {r.cta}
                 </Typography>
             )}
         </Box>
@@ -123,7 +234,7 @@ const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatfor
                         display: 'flex',
                         mr: '2px',
                         alignItems: 'center',
-                        backgroundColor: isCompleted ? 'transparent' : '#fff',
+                        backgroundColor: isCompleted ? 'transparent' : (r.color ? 'rgba(255,255,255,0.35)' : '#fff'),
                         borderRadius: isCompleted ? 0 : '4px',
                         padding: isCompleted ? 0 : '1px',
                         '& svg': { width: 16, height: 16 }
@@ -132,7 +243,7 @@ const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatfor
                     </Box>
                 ))}
                 {extraCount > 0 && (
-                    <Typography component="span" sx={{ fontSize: '12px', fontWeight: 500, color: 'text.secondary', ml: '2px', mr: '2px' }}>
+                    <Typography component="span" sx={{ fontSize: '12px', fontWeight: 500, color: r.color ? 'inherit' : 'text.secondary', ml: '2px', mr: '2px' }}>
                         +{extraCount}
                     </Typography>
                 )}
@@ -144,13 +255,24 @@ const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatfor
 
 const eventStyleGetter = (event: ANY) => {
     const isCompleted = event.resource?.completed_and_scheduled;
+    const bgColor = event.resource?.color;
+    const useCustomBg = typeof bgColor === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(bgColor);
+    const backgroundColor = useCustomBg
+        ? bgColor
+        : (isCompleted ? '#ffffff' : '#7f7f7fff');
+    const textColor = useCustomBg
+        ? getContrastTextColor(bgColor)
+        : (isCompleted ? '#333333' : '#ffffffff');
+    const borderColor = useCustomBg
+        ? (getLuminance(bgColor) > 0.4 ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.3)')
+        : (isCompleted ? '#e0e0e0' : '#8f8f8fff');
 
     return {
         style: {
-            backgroundColor: isCompleted ? '#ffffff' : '#7f7f7fff',
-            border: `1px solid ${isCompleted ? '#e0e0e0' : '#8f8f8fff'}`,
-            color: isCompleted ? '#333333' : '#ffffffff',
-            boxShadow: isCompleted ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            backgroundColor,
+            border: `1px solid ${borderColor}`,
+            color: textColor,
+            boxShadow: isCompleted && !useCustomBg ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
         }
     };
 };

@@ -27,7 +27,17 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
     const classes = useStyles()
     const valueInital = post && post[name] ? post[name] : '';
 
-    const [value, setValue] = React.useState(0);
+    const [, setValue] = React.useState(0);
+    const latestValueRef = React.useRef(valueInital);
+    React.useEffect(() => { latestValueRef.current = valueInital; }, [valueInital]);
+    const syncOnBlur = () => { onReview(latestValueRef.current || ''); };
+
+    const handleChange = (v: string) => {
+        setValue(prev => prev + 1);
+        post[name] = v;
+        latestValueRef.current = v;
+        onReview(v);
+    };
 
     return (
         <FormControl size={config.size ?? 'medium'} fullWidth variant="outlined">
@@ -40,8 +50,8 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
                             type='text'
                             style={{ color: valueInital }}
                             value={valueInital}
-                            onBlur={e => { onReview(e.target.value) }}
-                            onChange={e => { setValue(value + 1); post[name] = e.target.value }}
+                            onBlur={syncOnBlur}
+                            onChange={e => handleChange(e.target.value)}
                             endAdornment={
                                 <InputAdornment position="end">
                                     <IconButton
@@ -49,7 +59,7 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
                                         edge="end"
                                     >
                                         <Icon icon="ColorLens" />
-                                        <input className={classes.inputHidden} value={valueInital} onBlur={e => { onReview(e.target.value) }} onChange={e => { setValue(value + 1); post[name] = e.target.value }} type="color" />
+                                        <input className={classes.inputHidden} value={valueInital} onBlur={syncOnBlur} onChange={e => handleChange(e.target.value)} type="color" />
                                     </IconButton>
                                 </InputAdornment>
                             }
@@ -63,8 +73,8 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
                         type='text'
                         style={{ color: valueInital }}
                         value={valueInital}
-                        onBlur={e => { onReview(e.target.value) }}
-                        onChange={e => { setValue(value + 1); post[name] = e.target.value }}
+                        onBlur={syncOnBlur}
+                        onChange={e => handleChange(e.target.value)}
                         endAdornment={
                             <InputAdornment position="end">
                                 <IconButton
@@ -72,7 +82,7 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
                                     edge="end"
                                 >
                                     <Icon icon="ColorLens" />
-                                    <input className={classes.inputHidden} value={valueInital} onBlur={e => { onReview(e.target.value) }} onChange={e => { setValue(value + 1); post[name] = e.target.value }} type="color" />
+                                    <input className={classes.inputHidden} value={valueInital} onBlur={syncOnBlur} onChange={e => handleChange(e.target.value)} type="color" />
                                 </IconButton>
                             </InputAdornment>
                         }
