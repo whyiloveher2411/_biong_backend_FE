@@ -21,6 +21,32 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
 
     const theme = useTheme();
 
+    const rawTitle = data?.post?.title;
+
+    let postTitle: ANY = '';
+
+    let parsedTitle: ANY = rawTitle;
+
+    if (typeof rawTitle === 'string') {
+        try {
+            const json = JSON.parse(rawTitle);
+            parsedTitle = json;
+        } catch (error) {
+            parsedTitle = rawTitle;
+        }
+    }
+
+    if (typeof parsedTitle === 'object' && parsedTitle !== null) {
+        if (Array.isArray(parsedTitle)) {
+            postTitle = parsedTitle[0];
+        } else {
+            const values = Object.values(parsedTitle);
+            postTitle = values[0];
+        }
+    } else {
+        postTitle = parsedTitle;
+    }
+
     const onUpdateData = (value: ANY, key: ANY) => {
 
         setData(prev => {
@@ -58,7 +84,7 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
             }
             width={1300}
             {...data?.config?.dialogContent}
-            title={( (data.post?.id ? "Edit " : "Create ") + (data?.config?.title ?? "Post ") + (data?.post?.title ? ` - "${data?.post?.title}" --- ID: [${data?.post?.id}]` : ""))}
+            title={( (data.post?.id ? "Edit " : "Create ") + (data?.config?.title ?? "Post ") + (postTitle ? ` - "${postTitle}" --- ID: [${data?.post?.id}]` : ""))}
             open={open}
             onClose={onClose}
             headerAction={headerAction}
