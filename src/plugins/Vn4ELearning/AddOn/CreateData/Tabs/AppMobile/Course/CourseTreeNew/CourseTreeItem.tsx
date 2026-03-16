@@ -247,12 +247,33 @@ const CourseTreeItem = memo(function CourseTreeItem({
         }
     }, [expandedNodes, node]);
 
-    const nodeHasChildren = hasChildren(node);
+    let nodeHasChildren = hasChildren(node);
     const childrenCount = getChildrenCount(node);
     const nodeColor = getNodeColor(node);
     const isMissingReward = nodeType === "lesson" && typeof index === 'number' && (index + 1) % 5 === 4;
     const isTrash = (node as { status?: string }).status === 'trash';
     const isCompleted = (nodeType === 'lesson' || nodeType === 'course') && (node as Lesson | Course).is_completed;
+    // Nếu là course và hiện tại chưa có children trong cấu trúc,
+    // sử dụng thông tin summary (count_section) để quyết định hiển thị icon expand/collapse.
+    if (!nodeHasChildren && nodeType === "course") {
+        const courseNode = node as Course;
+        let summaryData = courseNode.summary_data;
+        if (typeof summaryData === "string") {
+            try {
+                summaryData = JSON.parse(summaryData);
+            } catch (e) {
+                summaryData = undefined;
+            }
+        }
+        const summary = summaryData as {
+            count_section?: number;
+        } | undefined;
+
+        if (summary && (summary.count_section || 0) > 0) {
+            nodeHasChildren = true;
+        }
+    }
+
     const backgroundColor = isTrash ? "#ffebee" : (isCompleted ? "#e8f5e9" : (isMissingReward ? "hsla(0, 0%, 0%, 0.15)" : getNodeBackgroundColor(node, depth)));
     const indentSize = 5;
     const basePadding = nodeType === "question" ? 8 : 2;

@@ -75,6 +75,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [previewCount, setPreviewCount] = React.useState(0);
     const [loadingPreview, setLoadingPreview] = React.useState(false);
     const checkDataCrawRef = React.useRef<CheckDataCrawRef>(null);
+    const [loadedCourseDetailIds, setLoadedCourseDetailIds] = React.useState<Set<string>>(new Set());
 
     const confirmSync = useConfirmDialog({
         title: "Xác nhận đồng bộ Courses",
@@ -252,7 +253,8 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             setLoading(true);
         }
         api.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/get-course",
+            // API nhẹ chỉ load danh sách course (không kèm toàn bộ cấu trúc chi tiết)
+            url: "plugin/vn4-e-learning/app-mobile/course-new/get-course-list",
             method: "POST",
             data: {
                 id: data.post.id,
@@ -261,11 +263,45 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             success: (result: { courses: Course[]; languages: Language[] }) => {
                 if (result.courses) {
                     setCourses((prev) => {
+                        // Đảm bảo course list luôn có trường sections (ít nhất là mảng rỗng)
+                        // và dựng lại summary_data từ các field count_* nếu backend trả về dạng phẳng.
+                        const normalizedCourses = result.courses.map((c: Course) => {
+                            const anyCourse = c as ANY;
+
+                            let summaryData = c.summary_data;
+                            if (!summaryData) {
+                                const hasCountField =
+                                    anyCourse.count_section != null ||
+                                    anyCourse.count_chapter != null ||
+                                    anyCourse.count_lesson != null ||
+                                    anyCourse.count_lesson_no_question != null ||
+                                    anyCourse.count_question != null;
+
+                                if (hasCountField) {
+                                    summaryData = {
+                                        count_section: anyCourse.count_section || 0,
+                                        count_chapter: anyCourse.count_chapter || 0,
+                                        count_lesson: anyCourse.count_lesson || 0,
+                                        count_lesson_no_question: anyCourse.count_lesson_no_question || 0,
+                                        count_question: anyCourse.count_question || 0,
+                                    };
+                                }
+                            }
+
+                            return {
+                                ...c,
+                                sections: anyCourse.sections || [],
+                                summary_data: summaryData ?? c.summary_data,
+                            } as Course;
+                        });
                         // Use mergeNodes to preserve object references for unchanged nodes
-                        return mergeNodes(prev || [], result.courses);
+                        return mergeNodes(prev || [], normalizedCourses);
                     });
+                    // Khi reload danh sách, coi như chưa có chi tiết nào được cache
+                    setLoadedCourseDetailIds(new Set());
                 } else {
                     setCourses([]);
+                    setLoadedCourseDetailIds(new Set());
                 }
 
                 if (result.languages) {
@@ -281,6 +317,45 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const loadCourseDetail = (courseId: string | number) => {
+        api.ajax({
+            // API chi tiết cho một khóa học, chỉ gọi khi người dùng mở / chọn khóa học
+            url: "plugin/vn4-e-learning/app-mobile/course-new/get-course-detail",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                course_id: courseId,
+            },
+            loading: false,
+            success: (result: { course: Course; languages?: Language[] }) => {
+                if (result.course) {
+                    setCourses((prev) => {
+                        if (!prev || prev.length === 0) {
+                            return [result.course];
+                        }
+                        const nextCourses = prev.map((c) =>
+                            String(c.id) === String(result.course.id) ? result.course : c
+                        );
+                        return mergeNodes(prev, nextCourses);
+                    });
+                    setLoadedCourseDetailIds((prev) => {
+                        const next = new Set(prev);
+                        next.add(String(result.course.id));
+                        return next;
+                    });
+                }
+
+                if (result.languages && result.languages.length > 0) {
+                    setLanguages(result.languages);
+                    if (!currentLanguageCode) {
+                        const defaultLang = result.languages.find((l: Language) => l.is_default) || result.languages[0];
+                        setCurrentLanguageCode(defaultLang.code);
+                    }
+                }
+            },
+        });
+    };
+
     const handleBackToOverview = () => {
         const searchParams = new URLSearchParams(location.search);
         searchParams.set("view", "overview");
@@ -290,6 +365,13 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     React.useEffect(() => {
         loadData();
     }, []);
+
+    React.useEffect(() => {
+        if (!selectedCourseId) return;
+        const idStr = String(selectedCourseId);
+        if (loadedCourseDetailIds.has(idStr)) return;
+        loadCourseDetail(selectedCourseId);
+    }, [selectedCourseId, loadedCourseDetailIds]);
 
     React.useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
