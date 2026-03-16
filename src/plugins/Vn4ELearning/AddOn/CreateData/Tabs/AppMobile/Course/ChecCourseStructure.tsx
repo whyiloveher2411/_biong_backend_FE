@@ -2,7 +2,16 @@ import DrawerCustom from "components/molecules/DrawerCustom";
 import Icon from "components/atoms/Icon";
 import IconButton from "components/atoms/IconButton";
 import { LoadingButton } from "@mui/lab";
-import { Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select, Tooltip } from "@mui/material";
+import {
+    Box,
+    Button,
+    CircularProgress,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
+    Tooltip,
+} from "@mui/material";
 import { FieldFormItemProps } from "components/atoms/fields/type";
 import useAjax from "hook/useApi";
 import useConfirmDialog from "hook/useConfirmDialog";
@@ -10,7 +19,6 @@ import React, { useState } from "react";
 import SuggestContentAi from "./SuggestContentAi";
 
 function ChecCourseStructure(props: FieldFormItemProps) {
-
     const ajaxUseApi = useAjax();
 
     const [courses, setCourses] = React.useState<ANY[]>([]);
@@ -23,9 +31,15 @@ function ChecCourseStructure(props: FieldFormItemProps) {
 
     const confirmClearData = useConfirmDialog({
         title: "Xác nhận xóa dữ liệu",
-        message: "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu gợi ý AI? Hành động này không thể hoàn tác.",
+        message:
+            "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu gợi ý AI? Hành động này không thể hoàn tác.",
     });
 
+    const confirmTranslateCourse = useConfirmDialog({
+        title: "Xác nhận dịch nội dung khóa học",
+        message:
+            "Bạn có chắc chắn muốn gửi yêu cầu AI dịch toàn bộ nội dung khóa học này? Hành động này có thể tốn thời gian xử lý.",
+    });
 
     const handleCheckDataCraw = () => {
         setLoading(true);
@@ -37,13 +51,17 @@ function ChecCourseStructure(props: FieldFormItemProps) {
                 id: props.post.id,
             },
             success: (result) => {
-                if (result.success && result.data && Array.isArray(result.data)) {
+                if (
+                    result.success &&
+                    result.data &&
+                    Array.isArray(result.data)
+                ) {
                     setCourses(result.data);
                 }
                 setLoading(false);
             },
         });
-    }
+    };
 
     const handleAddDataFromJson = () => {
         setLoading(true);
@@ -58,7 +76,7 @@ function ChecCourseStructure(props: FieldFormItemProps) {
                 setLoading(false);
             },
         });
-    }
+    };
 
     const handleSetStepCurrent = () => {
         setSavingStep(true);
@@ -68,7 +86,7 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             data: {
                 id: props.post.id,
                 step: currentStep + 1,
-                step_temp: currentStep + 1
+                step_temp: currentStep + 1,
             },
 
             success: (result) => {
@@ -76,9 +94,9 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             },
             error: () => {
                 setSavingStep(false);
-            }
+            },
         });
-    }
+    };
 
     const handleClearDataSuggest = () => {
         setClearingData(true);
@@ -93,13 +111,9 @@ function ChecCourseStructure(props: FieldFormItemProps) {
             },
             error: () => {
                 setClearingData(false);
-            }
+            },
         });
-    }
-
-
-
-
+    };
 
     React.useEffect(() => {
         if (props.post.id) {
@@ -107,101 +121,205 @@ function ChecCourseStructure(props: FieldFormItemProps) {
         }
     }, [props.post.id]);
 
-    const value = props.post?.[props.name || 'link_data_craw_json'] || '';
+    const value = props.post?.[props.name || "link_data_craw_json"] || "";
 
     const handleChange = (event: ANY) => {
-        props.onReview(event.target.value, props.name || 'link_data_craw_json');
+        props.onReview(event.target.value, props.name || "link_data_craw_json");
     };
 
-    const drawerTitleValue = typeof props.post?.title === 'string'
-        ? props.post.title
-        : (props.post?.title?.vi || props.post?.title?.en || 'Gợi ý nội dung bằng AI');
+    const drawerTitleValue =
+        typeof props.post?.title === "string"
+            ? props.post.title
+            : props.post?.title?.vi ||
+              props.post?.title?.en ||
+              "Gợi ý nội dung bằng AI";
 
     if (loading && courses.length === 0) {
         return <CircularProgress size={20} />;
     }
 
-    return (<Box>
-        <FormControl fullWidth size="small">
-            <InputLabel shrink id="link-data-craw-select-label">Link Data Craw JSON</InputLabel>
-            <Select
-                labelId="link-data-craw-select-label"
-                value={value}
-                label="Link Data Craw JSON"
-                onChange={handleChange}
-                displayEmpty
-                title="Link Data Craw JSON"
-            >
-                <MenuItem value="" disabled>
-                    <em>Select Data</em>
-                </MenuItem>
-                {courses.map((course, index) => {
-                    let maxMatchScore = 0;
-                    courses.forEach(c => {
-                        if (c.match_with_title > maxMatchScore) maxMatchScore = c.match_with_title;
-                    });
+    return (
+        <Box>
+            <FormControl fullWidth size="small">
+                <InputLabel shrink id="link-data-craw-select-label">
+                    Link Data Craw JSON
+                </InputLabel>
+                <Select
+                    labelId="link-data-craw-select-label"
+                    value={value}
+                    label="Link Data Craw JSON"
+                    onChange={handleChange}
+                    displayEmpty
+                    title="Link Data Craw JSON"
+                >
+                    <MenuItem value="" disabled>
+                        <em>Select Data</em>
+                    </MenuItem>
+                    {courses.map((course, index) => {
+                        let maxMatchScore = 0;
+                        courses.forEach((c) => {
+                            if (c.match_with_title > maxMatchScore)
+                                maxMatchScore = c.match_with_title;
+                        });
 
-                    return (
-                        <MenuItem
-                            key={`course-${index}`}
-                            value={course.path || ''}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                <span>
-                                    {course.title}
-                                    {course.match_with_title === maxMatchScore && maxMatchScore > 0 && <span style={{ color: 'green', fontSize: '0.85em', marginLeft: '5px', fontWeight: 'bold' }}>(Match: {course.match_with_title}%)</span>}
-                                </span>
-                                {course.used_in_course && course.used_in_course !== props.post.id && (
-                                    <span style={{ color: '#ff9800', fontSize: '0.85em', marginLeft: '10px' }}>
-                                        (Used)
-                                    </span>
-                                )}
-                            </div>
-                        </MenuItem>
-                    )
-                })}
-            </Select>
-        </FormControl>
-        <LoadingButton loading={loading} sx={{ mt: 2 }} variant="contained" onClick={handleAddDataFromJson}>Add course from json</LoadingButton>
-        <br />
-        <Button sx={{ mt: 2 }} variant="contained" color="success" onClick={() => setOpenSuggestAi(true)}>Gợi ý nội dung bằng ai</Button>
-
-        <DrawerCustom
-            open={openSuggestAi}
-            onClose={() => setOpenSuggestAi(false)}
-            title={drawerTitleValue || 'Gợi ý nội dung bằng AI'}
-            width={2000}
-            restDialogContent={{}}
-            headerAction={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Tooltip title="Làm mới dữ liệu (giữ nguyên vị trí và trạng thái)">
-                        <span>
-                            <IconButton
-                                onClick={() => {
-                                    handleCheckDataCraw();
-                                    setRefreshTrigger((prev) => prev + 1);
-                                }}
-                                aria-label="Làm mới"
-                                sx={{ color: 'white' }}
+                        return (
+                            <MenuItem
+                                key={`course-${index}`}
+                                value={course.path || ""}
                             >
-                                <Icon icon="Refresh" />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                    <LoadingButton loading={savingStep} size="small" sx={{ color: 'text.primary' }} variant="contained" color="inherit" onClick={handleSetStepCurrent}>Đặt ở bước này</LoadingButton>
-                    <LoadingButton loading={clearingData} size="small" variant="contained" color="error" onClick={() => confirmClearData.onConfirm(handleClearDataSuggest)}>Clear Data</LoadingButton>
-                </Box>
-            }
-        >
-            {confirmClearData.component}
-            <SuggestContentAi post={props.post} onReview={props.onReview} courses={courses} refreshTrigger={refreshTrigger} onStepChange={(step) => {
-                setCurrentStep(step);
-            }} onFinish={() => setOpenSuggestAi(false)} />
-        </DrawerCustom>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        width: "100%",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <span>
+                                        {course.title}
+                                        {course.match_with_title ===
+                                            maxMatchScore &&
+                                            maxMatchScore > 0 && (
+                                                <span
+                                                    style={{
+                                                        color: "green",
+                                                        fontSize: "0.85em",
+                                                        marginLeft: "5px",
+                                                        fontWeight: "bold",
+                                                    }}
+                                                >
+                                                    (Match:{" "}
+                                                    {course.match_with_title}%)
+                                                </span>
+                                            )}
+                                    </span>
+                                    {course.used_in_course &&
+                                        course.used_in_course !==
+                                            props.post.id && (
+                                            <span
+                                                style={{
+                                                    color: "#ff9800",
+                                                    fontSize: "0.85em",
+                                                    marginLeft: "10px",
+                                                }}
+                                            >
+                                                (Used)
+                                            </span>
+                                        )}
+                                </div>
+                            </MenuItem>
+                        );
+                    })}
+                </Select>
+            </FormControl>
+            <LoadingButton
+                loading={loading}
+                sx={{ mt: 2 }}
+                variant="contained"
+                onClick={handleAddDataFromJson}
+            >
+                Add course from json
+            </LoadingButton>
+            <br />
 
-
-
-    </Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+                <Button
+                    sx={{ mt: 2 }}
+                    variant="contained"
+                    color="success"
+                    onClick={() => setOpenSuggestAi(true)}
+                >
+                    Gợi ý nội dung bằng ai
+                </Button>
+                <Button
+                    sx={{ mt: 2 }}
+                    variant="contained"
+                    color="primary"
+                    onClick={() =>
+                        confirmTranslateCourse.onConfirm(() => {
+                            if (!props.post?.id) return;
+                            setLoading(true);
+                            ajaxUseApi.ajax({
+                                url: "plugin/vn4-e-learning/app-mobile/course-new/ai/translate/course",
+                                method: "POST",
+                                data: {
+                                    id: props.post.id,
+                                },
+                                success: () => {
+                                    setLoading(false);
+                                },
+                                error: () => {
+                                    setLoading(false);
+                                },
+                            });
+                        })
+                    }
+                >
+                    Dịch nội dung bằng ai
+                </Button>
+            </Box>
+            {confirmTranslateCourse.component}
+            <DrawerCustom
+                open={openSuggestAi}
+                onClose={() => setOpenSuggestAi(false)}
+                title={drawerTitleValue || "Gợi ý nội dung bằng AI"}
+                width={2000}
+                restDialogContent={{}}
+                headerAction={
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Tooltip title="Làm mới dữ liệu (giữ nguyên vị trí và trạng thái)">
+                            <span>
+                                <IconButton
+                                    onClick={() => {
+                                        handleCheckDataCraw();
+                                        setRefreshTrigger((prev) => prev + 1);
+                                    }}
+                                    aria-label="Làm mới"
+                                    sx={{ color: "white" }}
+                                >
+                                    <Icon icon="Refresh" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        <LoadingButton
+                            loading={savingStep}
+                            size="small"
+                            sx={{ color: "text.primary" }}
+                            variant="contained"
+                            color="inherit"
+                            onClick={handleSetStepCurrent}
+                        >
+                            Đặt ở bước này
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={clearingData}
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            onClick={() =>
+                                confirmClearData.onConfirm(
+                                    handleClearDataSuggest,
+                                )
+                            }
+                        >
+                            Clear Data
+                        </LoadingButton>
+                    </Box>
+                }
+            >
+                {confirmClearData.component}
+                <SuggestContentAi
+                    post={props.post}
+                    onReview={props.onReview}
+                    courses={courses}
+                    refreshTrigger={refreshTrigger}
+                    onStepChange={(step) => {
+                        setCurrentStep(step);
+                    }}
+                    onFinish={() => setOpenSuggestAi(false)}
+                />
+            </DrawerCustom>
+        </Box>
     );
 }
 

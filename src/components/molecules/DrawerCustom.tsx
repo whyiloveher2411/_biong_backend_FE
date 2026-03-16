@@ -89,7 +89,9 @@ function DrawerCustom({ title, content, activeOnClose, headerAction = false, act
                     <Box
                         sx={{
                             display: "flex",
-                            gridGap: 16
+                            alignItems: "center",
+                            gridGap: 16,
+                            marginLeft: "auto"
                         }}
                     >
                         {headerAction}

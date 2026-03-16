@@ -38,8 +38,9 @@ import {
 import CourseTreeItem from "./CourseTreeItem";
 import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
 import GolfCourseIcon from "@mui/icons-material/GolfCourse";
-import CheckDataCraw from "../CheckDataCraw";
+import CheckDataCraw, { CheckDataCrawRef } from "../CheckDataCraw";
 import DrawerCustom from "components/molecules/DrawerCustom";
+import { LoadingButton } from "@mui/lab";
 import { Virtuoso } from "react-virtuoso";
 import { flattenTree } from "./utils";
 
@@ -71,6 +72,9 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const openMenu = Boolean(anchorEl);
 
     const [previewNode, setPreviewNode] = React.useState<Lesson | null>(null);
+    const [previewCount, setPreviewCount] = React.useState(0);
+    const [loadingPreview, setLoadingPreview] = React.useState(false);
+    const checkDataCrawRef = React.useRef<CheckDataCrawRef>(null);
 
     const confirmSync = useConfirmDialog({
         title: "Xác nhận đồng bộ Courses",
@@ -853,10 +857,31 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
 
             <DrawerCustom
                 open={Boolean(previewNode)}
-                onClose={() => setPreviewNode(null)}
+                onClose={() => {
+                    setPreviewNode(null);
+                    setPreviewCount(0);
+                }}
                 activeOnClose
                 width={1900}
-                title="Preview Questions"
+                title={previewCount > 0 ? `Preview Questions (${previewCount})` : "Preview Questions"}
+                headerAction={
+                    <LoadingButton
+                        size="small"
+                        variant="contained"
+                        loading={loadingPreview}
+                        onClick={() => checkDataCrawRef.current?.refreshPreview()}
+                        sx={{
+                            color: "primary.main",
+                            backgroundColor: "white",
+                            "&:hover": {
+                                backgroundColor: "rgba(255,255,255,0.9)",
+                            },
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                        }}
+                    >
+                        Refresh
+                    </LoadingButton>
+                }
                 restDialogContent={{
                     sx: {
                         padding: 0,
@@ -869,12 +894,15 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             >
                 {previewNode && (
                     <CheckDataCraw
+                        ref={checkDataCrawRef}
                         post={previewNode}
                         config={{ title: 'Preview Questions' }}
                         name="link_data_craw_json"
                         onReview={() => { /* review */ }}
                         component="check_data_craw"
                         autoPreview={true}
+                        onPreviewDataChange={(data: ANY) => setPreviewCount(data?.count ?? 0)}
+                        onLoadingChange={setLoadingPreview}
                     />
                 )}
             </DrawerCustom>

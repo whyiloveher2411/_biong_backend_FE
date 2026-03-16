@@ -15,7 +15,15 @@ import useConfirmDialog from "hook/useConfirmDialog";
 import QuestionPreview from "./Common/QuestionPreview";
 import SuggestLessonContentAiDrawer from "./SuggestLessonContentAiDrawer";
 
-function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
+export interface CheckDataCrawRef {
+    refreshPreview: () => void;
+}
+
+function CheckDataCrawInner(props: FieldFormItemProps & {
+    autoPreview?: boolean;
+    onPreviewDataChange?: (data: ANY) => void;
+    onLoadingChange?: (loading: boolean) => void;
+}, ref: React.Ref<CheckDataCrawRef>) {
 
     const ajaxUseApi = useAjax();
 
@@ -204,6 +212,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
 
     const handlePreviewDataFromJson = () => {
         setLoading(true);
+        props.onLoadingChange?.(true);
         ajaxUseApi.ajax({
             url: "plugin/vn4-e-learning/app-mobile/course-new/preview-data-lesson-from-json",
             method: "POST",
@@ -216,15 +225,83 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 if (result.success && result.results) {
                     setPreviewData(result.results);
                     setOpenPreview(true);
+                    props.onPreviewDataChange?.(result.results);
                 }
                 setLoading(false);
+                props.onLoadingChange?.(false);
             },
+            error: () => {
+                setLoading(false);
+                props.onLoadingChange?.(false);
+            },
+        });
+    }
+
+    const handleRefreshPreviewKeepScroll = () => {
+        const container = document.getElementById('scroll-container-questions');
+        const currentScrollTop = container ? container.scrollTop : 0;
+
+        setLoading(true);
+        props.onLoadingChange?.(true);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/preview-data-lesson-from-json",
+            method: "POST",
+            data: {
+                action: "preview-data-lesson-from-json",
+                file: props.post[props.name || 'link_data_craw_json'],
+                id: props.post.id,
+            },
+            success: (result) => {
+                if (result.success && result.results) {
+                    setPreviewData(result.results);
+                    props.onPreviewDataChange?.(result.results);
+                    // Giữ nguyên trạng thái open của drawer
+                    if (!openPreview) setOpenPreview(true);
+
+                    // Khôi phục lại vị trí scroll sau khi React render xong
+                    setTimeout(() => {
+                        const newContainer = document.getElementById('scroll-container-questions');
+                        if (newContainer) {
+                            newContainer.scrollTop = currentScrollTop;
+                        }
+                    }, 0);
+                }
+                setLoading(false);
+                props.onLoadingChange?.(false);
+            },
+            error: () => {
+                setLoading(false);
+                props.onLoadingChange?.(false);
+            }
         });
     }
 
     const handleClosePreview = () => {
         setOpenPreview(false);
     };
+
+    React.useImperativeHandle(ref, () => ({
+        refreshPreview: handleRefreshPreviewKeepScroll,
+    }), [props.post?.id, props.post?.[props.name || 'link_data_craw_json']]);
+
+    const handleTranslateContent = () => {
+        if (!props.post?.id) return;
+
+        setLoading(true);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/ai/translate/lesson",
+            method: "POST",
+            data: {
+                id: props.post.id,
+            },
+            success: () => {
+                setLoading(false);
+            },
+            error: () => {
+                setLoading(false);
+            }
+        });
+    }
 
     React.useEffect(() => {
         if (props.post.id) {
@@ -454,7 +531,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 <LoadingButton loading={loading} sx={{ mt: 2 }} variant="contained" onClick={handleAddDataFromJson}>Add lesson from json</LoadingButton>
             </Box>
 
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 1 }}>
                 <Button
                     variant="contained"
                     color="success"
@@ -464,6 +541,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 >
                     Gợi ý nội dung bằng AI
                 </Button>
+                <Button variant="contained" color="primary" onClick={handleTranslateContent}>Dịch nội dung bằng AI</Button>
             </Box>
 
             {/* Refactored Preview Drawer */}
@@ -471,6 +549,24 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
                 open={openPreview}
                 onClose={handleClosePreview}
                 title={`Preview Questions (${previewData?.count || 0})`}
+                headerAction={
+                    <LoadingButton
+                        size="small"
+                        variant="contained"
+                        loading={loading}
+                        onClick={handleRefreshPreviewKeepScroll}
+                        sx={{
+                            color: 'primary.main',
+                            backgroundColor: 'white',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255,255,255,0.9)',
+                            },
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        }}
+                    >
+                        Refresh
+                    </LoadingButton>
+                }
                 width={1900}
                 restDialogContent={{
                     sx: {
@@ -527,6 +623,7 @@ function CheckDataCraw(props: FieldFormItemProps & { autoPreview?: boolean }) {
     );
 }
 
+const CheckDataCraw = React.forwardRef<CheckDataCrawRef, FieldFormItemProps & { autoPreview?: boolean; onPreviewDataChange?: (data: ANY) => void; onLoadingChange?: (loading: boolean) => void }>(CheckDataCrawInner);
 export default CheckDataCraw;
 
 function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, onTranslated, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, onTranslated?: () => void, languages: ANY[] }) {
@@ -535,6 +632,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
     const [jsonContent, setJsonContent] = React.useState(initialQuestion.content_post || initialQuestion.content ? JSON.stringify(initialQuestion.content_post || initialQuestion.content, null, 2) : '');
     const [loadingTranslate, setLoadingTranslate] = React.useState<string | number | boolean>(false);
+    const [loadingReContent, setLoadingReContent] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
 
     const [loadingAction, setLoadingAction] = React.useState(false);
@@ -600,7 +698,7 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     const handleTranslate = (lang: string | number) => {
         setLoadingTranslate(lang);
         ajaxUseApi.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/translate-question-by-ai",
+            url: "plugin/vn4-e-learning/app-mobile/course-new/ai/translate/question",
             method: "POST",
             data: { id: initialQuestion.post_id, lang: lang },
             success: (result: ANY) => {
@@ -629,6 +727,24 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
             },
             error: () => {
                 setLoadingTranslate(false);
+            }
+        });
+    };
+
+    const handleReContentQuestion = () => {
+        if (!initialQuestion.post_id) return;
+        setLoadingReContent(true);
+        ajaxUseApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/ai/re-content-question",
+            method: "POST",
+            data: {
+                id: initialQuestion.post_id,
+            },
+            success: () => {
+                setLoadingReContent(false);
+            },
+            error: () => {
+                setLoadingReContent(false);
             }
         });
     };
@@ -708,6 +824,19 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                     Question {index + 1} {initialQuestion.post_id ? (isTrash ? <Chip label="Deleted" color="error" size="small" /> : '') : <></>}
                 </Typography>
                 <div>
+                    {initialQuestion.post_id && (
+                        <LoadingButton
+                            variant="outlined"
+                            size="small"
+                            sx={{ mr: 1 }}
+                            loading={loadingReContent}
+                            disabled={loadingReContent}
+                            onClick={handleReContentQuestion}
+                            color="warning"
+                        >
+                            Làm lại nội dung bằng AI
+                        </LoadingButton>
+                    )}
                     {initialQuestion.post_id && languages.filter(l => l.code !== 'en').map((lang) => (
                         <LoadingButton
                             key={lang.code}

@@ -13,6 +13,7 @@ function TransslateField(props: FieldFormItemProps) {
 
     const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
     const refLangCodeCurrent = React.useRef(langCodeCurrent);
+    const [langChangeCount, setLangChangeCount] = React.useState(0);
     const { languages } = useLanguages();
     const useApi = useAjax();
     const [loadingTranslate, setLoadingTranslate] = React.useState<boolean>(false);
@@ -105,7 +106,8 @@ function TransslateField(props: FieldFormItemProps) {
                                 }}
                                 onClick={() => {
                                     refLangCodeCurrent.current = language.code;
-                                    setLangCodeCurrent(language.code)
+                                    setLangCodeCurrent(language.code);
+                                    setLangChangeCount(prev => prev + 1);
                                 }}
                             >
                                 {valueInital?.[language.code] && (
@@ -141,30 +143,60 @@ function TransslateField(props: FieldFormItemProps) {
                     ))}
                 </Box>
             </Box>
-            <FieldForm
-                component={props.config.primary_view}
-                config={{
-                    ...props.config, title: false,
-                    inputProps: {
-                        endAdornment: <IconButton
-                            size="small"
-                            onClick={handleTranslate}
-                            disabled={loadingTranslate}
-                        >
-                            {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
-                        </IconButton>
-                    }
-                }}
-                post={{ value: props.post[props.name]?.[refLangCodeCurrent.current] }}
-                name={'value'}
-                onReview={(value) => {
 
-                    props.onReview({
-                        ...props.post[props.name],
-                        [refLangCodeCurrent.current]: value
-                    }, props.name)
-                }}
-            />
+            {(langChangeCount % 2 === 0) ? (
+                <Box>
+                    <FieldForm
+                        component={props.config.primary_view}
+                        config={{
+                            ...props.config, title: false,
+                            inputProps: {
+                                endAdornment: <IconButton
+                                    size="small"
+                                    onClick={handleTranslate}
+                                    disabled={loadingTranslate}
+                                >
+                                    {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
+                                </IconButton>
+                            }
+                        }}
+                        post={{ value: props.post[props.name]?.[refLangCodeCurrent.current] }}
+                        name={'value'}
+                        onReview={(value) => {
+
+                            props.onReview({
+                                ...props.post[props.name],
+                                [refLangCodeCurrent.current]: value
+                            }, props.name)
+                        }}
+                    />
+                </Box>
+            ) : (
+                <FieldForm
+                    component={props.config.primary_view}
+                    config={{
+                        ...props.config, title: false,
+                        inputProps: {
+                            endAdornment: <IconButton
+                                size="small"
+                                onClick={handleTranslate}
+                                disabled={loadingTranslate}
+                            >
+                                {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
+                            </IconButton>
+                        }
+                    }}
+                    post={{ value: props.post[props.name]?.[refLangCodeCurrent.current] }}
+                    name={'value'}
+                    onReview={(value) => {
+
+                        props.onReview({
+                            ...props.post[props.name],
+                            [refLangCodeCurrent.current]: value
+                        }, props.name)
+                    }}
+                />
+            )}
         </Box>
     )
 }
