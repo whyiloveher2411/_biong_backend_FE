@@ -11,7 +11,6 @@ import IconButton from "components/atoms/IconButton";
 import AddIcon from "@mui/icons-material/Add";
 import SyncIcon from "@mui/icons-material/Sync";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
@@ -183,20 +182,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     loadData();
                 },
             });
-        });
-    };
-
-    const handleSummaryData = () => {
-        handleCloseMenu();
-        api.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/course-new/summary-data",
-            method: "POST",
-            data: {
-                id: data.post.id,
-            },
-            success: (result: { message?: string }) => {
-                // 
-            },
         });
     };
 
@@ -842,10 +827,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             Import Course
                         </MenuItem>
                         <Divider />
-                        <MenuItem onClick={handleSummaryData}>
-                            <AssessmentIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Summary data
-                        </MenuItem>
                         <MenuItem onClick={handleCheckDataQuestion}>
                             <FactCheckIcon sx={{ mr: 1, fontSize: 20 }} />
                             Check verify question

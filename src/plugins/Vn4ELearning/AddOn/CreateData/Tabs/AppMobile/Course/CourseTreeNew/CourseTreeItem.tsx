@@ -160,37 +160,54 @@ const CourseTreeItem = memo(function CourseTreeItem({
         if (!courseKey) return [];
         const links: { title: string; url: string; flag?: string }[] = [];
 
-        if (nodeType === 'course') {
+        if (nodeType === "course") {
+            // Config chung của course
             links.push({
-                title: 'Config khóa học',
-                url: `${prefixLink}/${courseKey}/info.json`
+                title: "Config khóa học",
+                url: `${prefixLink}/${courseKey}/info.json`,
             });
 
-            languages?.forEach(lang => {
+            // Config theo từng ngôn ngữ
+            languages?.forEach((lang) => {
                 links.push({
                     title: `Cấu trúc (${lang.title})`,
                     url: `${prefixLink}/${courseKey}/translate/${lang.code}/info.json`,
-                    flag: lang.flag_code
+                    flag: lang.flag_code,
                 });
                 links.push({
                     title: `Flash card (${lang.title})`,
                     url: `${prefixLink}/${courseKey}/translate/${lang.code}/flash_card.json`,
-                    flag: lang.flag_code
+                    flag: lang.flag_code,
                 });
             });
-        } else if (nodeType === 'lesson') {
-            const lessonKey = (node as Lesson).key || '';
+        } else if (nodeType === "chapter") {
+            // Ví dụ:
+            // https://spacedev-app.s3.ap-southeast-1.amazonaws.com/uploads/course_data/courses/vibe_coding/translate/en/chapters/chapter_1_welcome_to_the_world_of_vibe_coding_and_ai_assisted_development.json
+            const chapterKey = (node as Chapter).key || "";
+            if (chapterKey) {
+                languages?.forEach((lang) => {
+                    links.push({
+                        title: `Chapter (${lang.title})`,
+                        url: `${prefixLink}/${courseKey}/translate/${lang.code}/chapters/${chapterKey}.json`,
+                        flag: lang.flag_code,
+                    });
+                });
+            }
+        } else if (nodeType === "lesson") {
+            // Ví dụ:
+            // https://spacedev-app.s3.ap-southeast-1.amazonaws.com/uploads/course_data/courses/vibe_coding/translate/en/lessons/lesson_131_what_is_version_control_and_why_do_we_need_it/info.json
+            const lessonKey = (node as Lesson).key || "";
             if (lessonKey) {
-                languages?.forEach(lang => {
+                languages?.forEach((lang) => {
                     links.push({
                         title: `Nội dung bài học (${lang.title})`,
                         url: `${prefixLink}/${courseKey}/translate/${lang.code}/lessons/lesson_${lessonKey}/info.json`,
-                        flag: lang.flag_code
+                        flag: lang.flag_code,
                     });
                     links.push({
                         title: `Flash card bài học (${lang.title})`,
                         url: `${prefixLink}/${courseKey}/translate/${lang.code}/lessons/lesson_${lessonKey}/flash_card.json`,
-                        flag: lang.flag_code
+                        flag: lang.flag_code,
                     });
                 });
             }
