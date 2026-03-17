@@ -33,6 +33,7 @@ export interface Lesson {
     count_app_course_flashcard?: number;
     isPublished?: boolean;
     is_completed?: boolean;
+    count_question_not_verify?: number;
 }
 
 export interface Chapter {
@@ -50,6 +51,7 @@ export interface Chapter {
         [key: string]: unknown;
     };
     isPublished?: boolean;
+    count_question_not_verify?: number;
 }
 
 export interface Section {
@@ -61,6 +63,7 @@ export interface Section {
     status?: string;
     order?: number;
     isPublished?: boolean;
+    count_question_not_verify?: number;
 }
 
 export interface CourseLabel {
@@ -103,6 +106,7 @@ export interface Course {
         count_lesson_no_question?: number;
         count_question?: number;
     };
+    count_question_not_verify?: number;
     count_app_course_flashcard?: number;
     isPublished?: boolean;
     is_completed?: boolean;

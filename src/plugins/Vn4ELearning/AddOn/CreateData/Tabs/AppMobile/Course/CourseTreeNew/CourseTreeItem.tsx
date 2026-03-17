@@ -732,7 +732,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     if (!summary) return null;
 
                                     return (
-                                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: "wrap" }}>
                                             <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary" }}>
                                                 Sections: <b>{summary.count_section || 0}</b>
                                             </Typography>
@@ -756,6 +756,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                             </Box>
 
 
+                            {/* Flashcard badges cho Course & Lesson */}
                             {nodeType === "course" && (() => {
                                 const courseNode = node as Course;
                                 const x = courseNode.count_app_course_flashcard || 0;
@@ -800,6 +801,43 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     </Typography>
                                 </Box>
                             )}
+
+                            {/* Text số câu hỏi chưa verify cho từng cấp (giống style summary counts) */}
+                            {nodeType === "course" && (node as Course).count_question_not_verify ? (
+                                <Typography
+                                    variant="caption"
+                                    sx={{ fontSize: "0.7rem", color: "error.main", fontWeight: 600, mr: 1 }}
+                                >
+                                    {(node as Course).count_question_not_verify} questions not verified
+                                </Typography>
+                            ) : null}
+
+                            {nodeType === "section" && (node as Section).count_question_not_verify ? (
+                                <Typography
+                                    variant="caption"
+                                    sx={{ fontSize: "0.7rem", color: "error.main", mr: 1 }}
+                                >
+                                    {(node as Section).count_question_not_verify} questions not verified
+                                </Typography>
+                            ) : null}
+
+                            {nodeType === "chapter" && (node as Chapter).count_question_not_verify ? (
+                                <Typography
+                                    variant="caption"
+                                    sx={{ fontSize: "0.7rem", color: "error.main", mr: 1 }}
+                                >
+                                    {(node as Chapter).count_question_not_verify} questions not verified
+                                </Typography>
+                            ) : null}
+
+                            {nodeType === "lesson" && (node as Lesson).count_question_not_verify ? (
+                                <Typography
+                                    variant="caption"
+                                    sx={{ fontSize: "0.7rem", color: "error.main", mr: 1 }}
+                                >
+                                    {(node as Lesson).count_question_not_verify} questions not verified
+                                </Typography>
+                            ) : null}
 
                             {onAddChild && (() => {
                                 const childType = getChildType(nodeType);

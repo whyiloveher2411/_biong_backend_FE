@@ -404,13 +404,23 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                             alignItems: 'center',
                             justifyContent: 'center',
                             cursor: 'pointer',
-                            backgroundColor: activeQuestionIndex === index ? '#1976d2' : '#fff',
-                            color: activeQuestionIndex === index ? '#fff' : '#666',
-                            border: activeQuestionIndex === index ? 'none' : '1px solid #ddd',
+                            backgroundColor: activeQuestionIndex === index
+                                ? (question.verify === 0 ? '#ff9800' : '#1976d2')
+                                : (question.verify === 0 ? '#fff3e0' : '#fff'),
+                            color: activeQuestionIndex === index
+                                ? '#fff'
+                                : (question.verify === 0 ? '#f57c00' : '#666'),
+                            border: activeQuestionIndex === index
+                                ? 'none'
+                                : `1px solid ${question.verify === 0 ? '#ffb74d' : '#ddd'}`,
                             fontWeight: 'bold',
                             transition: 'all 0.2s ease',
                             transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
-                            boxShadow: activeQuestionIndex === index ? '0 4px 8px rgba(25, 118, 210, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
+                            boxShadow: activeQuestionIndex === index
+                                ? (question.verify === 0
+                                    ? '0 4px 8px rgba(255, 152, 0, 0.4)'
+                                    : '0 4px 8px rgba(25, 118, 210, 0.4)')
+                                : '0 1px 3px rgba(0,0,0,0.1)',
                             fontSize: '14px',
                             flexShrink: 0,
                             ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
@@ -816,12 +826,28 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
     };
 
     const isTrash = question.status === 'trash';
+    const isUnverified = question.verify === 0;
+    const verifyMessage = question.verify_message || initialQuestion.verify_message;
 
     return (
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: isTrash ? '#ffebee' : 'white', borderRadius: '4px', border: '1px solid #eee' }}>
+        <div
+            style={{
+                marginBottom: '20px',
+                padding: '15px',
+                backgroundColor: isUnverified ? '#ffebee' : (isTrash ? '#ffebee' : 'white'),
+                borderRadius: '4px',
+                border: '1px solid #eee'
+            }}
+        >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-                <Typography variant="subtitle1" style={{ fontWeight: 'bold' }}>
-                    Question {index + 1} {initialQuestion.post_id ? (isTrash ? <Chip label="Deleted" color="error" size="small" /> : '') : <></>}
+                <Typography variant="subtitle1" style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    Question {index + 1}
+                    {isUnverified && verifyMessage && (
+                        <span style={{ color: '#d32f2f', fontSize: '0.8rem', fontWeight: 500 }}>
+                            - {verifyMessage}
+                        </span>
+                    )}
+                    {initialQuestion.post_id ? (isTrash ? <Chip label="Deleted" color="error" size="small" /> : '') : <></>}
                 </Typography>
                 <div>
                     {initialQuestion.post_id && (

@@ -331,11 +331,37 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 if (result.course) {
                     setCourses((prev) => {
                         if (!prev || prev.length === 0) {
-                            return [result.course];
+                            const anyCourse = result.course as ANY;
+                            return [{
+                                ...result.course,
+                                sections: anyCourse.sections || [],
+                            }];
                         }
-                        const nextCourses = prev.map((c) =>
-                            String(c.id) === String(result.course.id) ? result.course : c
-                        );
+
+                        const nextCourses = prev.map((c) => {
+                            if (String(c.id) !== String(result.course.id)) return c;
+
+                            const anyDetail = result.course as ANY;
+                            const merged: Course = {
+                                // Giữ lại các thông tin đã có từ list (summary_data, count_*, ...)
+                                ...c,
+                                // Ghi đè bằng thông tin chi tiết (sections, lessons, questions, ...)
+                                ...result.course,
+                            };
+
+                            const prevAny = c as ANY;
+
+                            // Giữ summary_data nếu API chi tiết không trả về
+                            if (anyDetail.summary_data == null && prevAny.summary_data != null) {
+                                merged.summary_data = prevAny.summary_data;
+                            }
+
+                            // Đảm bảo luôn có sections (ít nhất là mảng rỗng) để UI nhận diện là course có children
+                            (merged as ANY).sections = anyDetail.sections || prevAny.sections || [];
+
+                            return merged;
+                        });
+
                         return mergeNodes(prev, nextCourses);
                     });
                     setLoadedCourseDetailIds((prev) => {
@@ -663,6 +689,28 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleExpandNode = (nodeKey: string) => {
+        setExpandedNodes(prev => {
+            const next = new Set(prev);
+            next.add(nodeKey);
+            return next;
+        });
+
+        if (!courses) return;
+
+        const node = findNodeByKey(courses, nodeKey);
+        if (!node) return;
+
+        const nodeType = getNodeType(node);
+        if (nodeType !== "course") return;
+
+        const courseId = (node as Course).id;
+        const idStr = String(courseId);
+        if (loadedCourseDetailIds.has(idStr)) return;
+
+        loadCourseDetail(courseId);
+    };
+
     const handleRefresh = () => {
         handleCloseMenu();
         loadData();
@@ -691,7 +739,16 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     }
 
     return (
-        <Box sx={{ p: 2, backgroundColor: "#f5f5f7", minHeight: "100vh" }}>
+        <Box
+            sx={{
+                p: 2,
+                backgroundColor: "#f5f5f7",
+                minHeight: "100vh",
+                overflowX: "hidden",
+                maxWidth: "100vw",
+                boxSizing: "border-box",
+            }}
+        >
             <Box
                 sx={{
                     display: "flex",
@@ -835,10 +892,11 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 backgroundColor: "transparent",
                                 // Cho phép Virtuoso chiếm chiều cao và tự scroll
                                 height: "calc(100vh - 180px)",
+                                overflowX: "hidden",
                             }}
                         >
                             <Virtuoso
-                                style={{ height: "100%" }}
+                                style={{ height: "100%", overflowX: "hidden" }}
                                 data={flatNodes}
                                 totalCount={flatNodes.length}
                                 itemContent={(index, flatNode) => {
@@ -872,7 +930,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                                         onUpdateLessonStatus={handleUpdateLessonStatus}
                                                         expandedNodes={expandedNodes}
                                                         onExpandAll={handleExpandAll}
-                                                        onExpandNode={(key: string) => setExpandedNodes(prev => new Set(prev).add(key))}
+                                                        onExpandNode={handleExpandNode}
                                                         onCollapse={(key: string) => setExpandedNodes(prev => {
                                                             const next = new Set(prev);
                                                             next.delete(key);
