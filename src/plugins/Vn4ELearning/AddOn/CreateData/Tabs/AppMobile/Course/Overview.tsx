@@ -46,10 +46,6 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                 onComplete: (data) => {
                     const message = extractMessageString(data.message) || "Đồng bộ tất cả courses lên Firebase thành công";
                     apiSyncCourses.showMessage(message, "success");
-                    // Đóng dialog sau 2 giây
-                    setTimeout(() => {
-                        setSyncProgressDialogOpen(false);
-                    }, 2000);
                 },
                 onError: (error) => {
                     apiSyncCourses.showMessage(
@@ -156,10 +152,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
             <SyncProgressDialog
                 open={syncProgressDialogOpen}
                 onClose={() => {
-                    if (!streamSync.isSyncing) {
-                        setSyncProgressDialogOpen(false);
-                        streamSync.reset();
-                    }
+                    setSyncProgressDialogOpen(false);
                 }}
                 progress={streamSync.progress}
                 currentStage={streamSync.currentStage}
@@ -168,6 +161,7 @@ function Overview({ data }: { data: CreatePostTypeData }) {
                 isSyncing={streamSync.isSyncing}
                 totalObjects={streamSync.totalObjects}
                 completedObjects={streamSync.completedObjects}
+                warnings={streamSync.warnings}
             />
         </Box>
     );

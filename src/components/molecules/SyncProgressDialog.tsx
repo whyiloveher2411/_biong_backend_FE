@@ -15,6 +15,7 @@ interface SyncProgressDialogProps {
     totalObjects: number;
     completedObjects: number;
     title?: string;
+    warnings?: StreamProgressData["warnings"] | null;
 }
 
 function SyncProgressDialog({
@@ -28,6 +29,7 @@ function SyncProgressDialog({
     totalObjects,
     completedObjects,
     title,
+    warnings,
 }: SyncProgressDialogProps) {
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -75,17 +77,30 @@ function SyncProgressDialog({
         return getStageLabel(data.type || data.stage || '');
     };
 
-    const handleClose = React.useCallback(() => {
-        if (!isSyncing) {
-            onClose();
-        }
-    }, [isSyncing, onClose]);
-
     return (
         <Dialog
             open={open}
-            onClose={handleClose}
-            title={title || "Đồng bộ lên Firebase"}
+            onClose={onClose}
+            title={
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 22, color: 'primary.contrastText', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                            {title || "Đồng bộ lên Firebase"}
+                        </Typography>
+                        {isSyncing && (
+                            <Typography component="span" variant="caption" color="text.secondary">
+                                (đang chạy)
+                            </Typography>
+                        )}
+                    </Box>
+                    <IconButton onClick={onClose} size="small" aria-label="Đóng" sx={{ color: 'primary.contrastText' }}>
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+            }
             style={{ minHeight: 400 }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -120,6 +135,49 @@ function SyncProgressDialog({
                         }}
                     >
                         <Typography variant="body2">{error}</Typography>
+                    </Box>
+                )}
+
+                {/* Warnings */}
+                {warnings && ((warnings.count ?? 0) > 0 || (warnings.items?.length ?? 0) > 0) && (
+                    <Box
+                        sx={{
+                            p: 2,
+                            bgcolor: 'warning.light',
+                            color: 'warning.contrastText',
+                            borderRadius: 1,
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                            Cảnh báo dữ liệu{typeof warnings.count === 'number' ? ` (${warnings.count})` : ''}
+                        </Typography>
+                        {warnings.items && warnings.items.length > 0 && (
+                            <Box
+                                sx={{
+                                    border: '1px solid',
+                                    borderColor: 'warning.dark',
+                                    borderRadius: 1,
+                                    bgcolor: 'rgba(255,255,255,0.35)',
+                                    maxHeight: 160,
+                                    overflow: 'auto',
+                                    mt: 1,
+                                }}
+                            >
+                                <List dense sx={{ py: 0 }}>
+                                    {warnings.items.slice(0, 200).map((item, idx) => (
+                                        <ListItem key={idx} sx={{ py: 0.5 }}>
+                                            <ListItemText
+                                                primary={
+                                                    <Typography variant="body2" component="span">
+                                                        {typeof item === 'string' ? item : JSON.stringify(item)}
+                                                    </Typography>
+                                                }
+                                            />
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </Box>
+                        )}
                     </Box>
                 )}
 
@@ -168,15 +226,6 @@ function SyncProgressDialog({
                         <div ref={messagesEndRef} />
                     </List>
                 </Box>
-
-                {/* Action Buttons */}
-                {!isSyncing && (
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                        <IconButton onClick={onClose} color="primary">
-                            <CloseIcon />
-                        </IconButton>
-                    </Box>
-                )}
             </Box>
         </Dialog>
     );

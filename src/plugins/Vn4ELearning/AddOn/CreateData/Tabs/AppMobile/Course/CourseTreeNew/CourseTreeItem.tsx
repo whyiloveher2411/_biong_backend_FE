@@ -238,9 +238,6 @@ const CourseTreeItem = memo(function CourseTreeItem({
                 onComplete: (data) => {
                     const message = extractMessageString(data.message) || "Đồng bộ khóa học lên Firebase thành công";
                     apiSyncCourse.showMessage(message, "success");
-                    setTimeout(() => {
-                        setSyncProgressDialogOpen(false);
-                    }, 100);
                 },
                 onError: (error) => {
                     apiSyncCourse.showMessage(
@@ -1188,6 +1185,7 @@ const CourseTreeItem = memo(function CourseTreeItem({
                 isSyncing={streamSync.isSyncing}
                 totalObjects={streamSync.totalObjects}
                 completedObjects={streamSync.completedObjects}
+                warnings={streamSync.warnings}
             />
 
             {/* Dialog xác nhận xóa vĩnh viễn */}

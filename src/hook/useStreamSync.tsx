@@ -15,6 +15,10 @@ export interface StreamProgressData {
     course_name?: string;
     current?: number;
     total?: number;
+    warnings?: {
+        count?: number;
+        items?: ANY[];
+    };
     [key: string]: ANY;
 }
 
@@ -27,6 +31,7 @@ export interface UseStreamSyncProps {
     error: string | null;
     totalObjects: number;
     completedObjects: number;
+    warnings: StreamProgressData["warnings"] | null;
     reset: () => void;
 }
 
@@ -59,6 +64,7 @@ export default function useStreamSync(): UseStreamSyncProps {
     const [error, setError] = React.useState<string | null>(null);
     const [totalObjects, setTotalObjects] = React.useState(0);
     const [completedObjects, setCompletedObjects] = React.useState(0);
+    const [warnings, setWarnings] = React.useState<StreamProgressData["warnings"] | null>(null);
 
     const reset = React.useCallback(() => {
         setIsSyncing(false);
@@ -68,6 +74,7 @@ export default function useStreamSync(): UseStreamSyncProps {
         setError(null);
         setTotalObjects(0);
         setCompletedObjects(0);
+        setWarnings(null);
     }, []);
 
     const sync = React.useCallback(async (params: StreamSyncParams) => {
@@ -81,6 +88,7 @@ export default function useStreamSync(): UseStreamSyncProps {
         setError(null);
         setTotalObjects(0);
         setCompletedObjects(0);
+        setWarnings(null);
 
         try {
             // Build URL with stream parameter
@@ -140,6 +148,10 @@ export default function useStreamSync(): UseStreamSyncProps {
                         const data: StreamProgressData = JSON.parse(jsonString);
 
                         setMessages((prev) => [...prev, data]);
+
+                        if (data.warnings) {
+                            setWarnings(data.warnings);
+                        }
 
                         // Update totalObjects and completedObjects
                         if (data.totalObjects !== undefined) {
@@ -202,6 +214,9 @@ export default function useStreamSync(): UseStreamSyncProps {
                 try {
                     const data: StreamProgressData = JSON.parse(buffer.trim());
                     setMessages((prev) => [...prev, data]);
+                    if (data.warnings) {
+                        setWarnings(data.warnings);
+                    }
                     if (data.progress !== undefined) {
                         setProgress(data.progress);
                     } else if (data.percent !== undefined) {
@@ -236,6 +251,7 @@ export default function useStreamSync(): UseStreamSyncProps {
         error,
         totalObjects,
         completedObjects,
+        warnings,
         reset,
     };
 }

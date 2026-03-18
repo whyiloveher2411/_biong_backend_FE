@@ -93,6 +93,12 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         message: "Bạn có chắc chắn muốn import course từ JSON? Hành động này sẽ thêm dữ liệu mới.",
     });
 
+    const confirmFixQuestionNotVerify = useConfirmDialog({
+        title: "Xác nhận sửa câu hỏi không verify",
+        message:
+            "Bạn có chắc chắn muốn tự động sửa tất cả các câu hỏi chưa được verify trong khóa học này?",
+    });
+
     const confirmSyncConfig = useConfirmDialog({
         title: "Xác nhận đồng bộ cấu hình",
         message: "Bạn có chắc chắn muốn chi tiết cấu hình Course?",
@@ -154,13 +160,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 },
                 onComplete: (data) => {
                     loadData();
-                    // Keep dialog open for a moment or close it? 
-                    // Usually useful to see the summary. 
-                    // But if successful, maybe we can auto-close after delay.
-                    // For now let's match handleSyncCourses behavior but maybe with a slight delay
-                    setTimeout(() => {
-                        setSyncProgressDialogOpen(false);
-                    }, 500);
                 },
                 onError: (error) => {
                     // specific error handling if needed
@@ -201,6 +200,19 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const handleFixQuestionNotVerify = () => {
+        handleCloseMenu();
+        confirmFixQuestionNotVerify.onConfirm(() => {
+            api.ajax({
+                url: "plugin/vn4-e-learning/app-mobile/course-new/ai/fix-question-not-verify",
+                method: "POST",
+                data: {
+                    id: data.post.id,
+                },
+            });
+        });
+    };
+
     const handleSyncCourses = () => {
         handleCloseMenu();
         confirmSync.onConfirm(() => {
@@ -219,9 +231,6 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 onComplete: (data) => {
                     const message = extractMessageString(data.message) || "Đồng bộ tất cả courses lên Firebase thành công";
                     apiSyncCourses.showMessage(message, "success");
-                    setTimeout(() => {
-                        setSyncProgressDialogOpen(false);
-                    }, 100);
                 },
                 onError: (error) => {
                     apiSyncCourses.showMessage(
@@ -831,6 +840,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             <FactCheckIcon sx={{ mr: 1, fontSize: 20 }} />
                             Check verify question
                         </MenuItem>
+                        <MenuItem onClick={handleFixQuestionNotVerify}>
+                            <FactCheckIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Fix question not verify
+                        </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
                             <GolfCourseIcon sx={{ mr: 1, fontSize: 20 }} />
@@ -975,6 +988,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
             {confirmImport.component}
             {confirmExport.component}
             {confirmImportJson.component}
+            {confirmFixQuestionNotVerify.component}
 
             <DrawerCustom
                 open={Boolean(previewNode)}
@@ -1033,10 +1047,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 open={syncProgressDialogOpen}
                 title={syncDialogTitle}
                 onClose={() => {
-                    if (!streamSync.isSyncing) {
-                        setSyncProgressDialogOpen(false);
-                        streamSync.reset();
-                    }
+                    setSyncProgressDialogOpen(false);
                 }}
                 progress={streamSync.progress}
                 currentStage={streamSync.currentStage}
@@ -1045,6 +1056,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 isSyncing={streamSync.isSyncing}
                 totalObjects={streamSync.totalObjects}
                 completedObjects={streamSync.completedObjects}
+                warnings={streamSync.warnings}
             />
         </Box>
     );
