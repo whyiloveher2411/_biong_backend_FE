@@ -2,7 +2,7 @@ import React from "react";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode, CourseLabel, CourseLabelsByLang, CourseLogo } from "./types";
+import { TreeNode, Course, Section, Chapter, Lesson, Language, FlatNode, CourseLabel, CourseLabelsByLang, CourseLogo, TreeParentContext } from "./types";
 
 /** Parse logo từ course (JSON string hoặc object) và trả về URL nếu có */
 export const parseCourseLogoUrl = (logo: string | CourseLogo | undefined): string | null => {
@@ -188,6 +188,20 @@ export const getChildren = (node: TreeNode): TreeNode[] => {
         default:
             return [];
     }
+};
+
+/** Lấy danh sách lessons trong section theo thứ tự (bỏ qua trạng thái trash) */
+export const getSectionLessonsOrdered = (section: Section): Lesson[] => {
+    const chapters = section.chapters || [];
+    return chapters.flatMap((ch) => (ch.lessons || []).filter((l) => (l as { status?: string }).status !== "trash"));
+};
+
+/** Tìm chỉ số (0-based) của lesson trong tổng bài học của section */
+export const getLessonIndexInSection = (lesson: Lesson, section: Section): number => {
+    const lessons = getSectionLessonsOrdered(section);
+    const key = getNodeKey(lesson);
+    const idx = lessons.findIndex((l) => getNodeKey(l) === key);
+    return idx;
 };
 
 export const findNodeByKey = (nodes: TreeNode[], key: string): TreeNode | null => {
@@ -431,7 +445,7 @@ export const flattenTree = (
     nodes: TreeNode[],
     expandedNodes: Set<string>,
     depth = 0,
-    parentContext: { courseId?: string | number, courseKey?: string, sectionId?: string | number, chapterId?: string | number } = {},
+    parentContext: TreeParentContext = {},
     parentId: string | number = "root",
     parentType = "app_mobile"
 ): FlatNode[] => {
@@ -441,12 +455,15 @@ export const flattenTree = (
         const nodeType = getNodeType(node);
         const nodeKey = getNodeKey(node);
 
-        const currentContext = { ...parentContext };
+        const currentContext: TreeParentContext = { ...parentContext };
         if (nodeType === 'course') {
             currentContext.courseId = node.id;
             currentContext.courseKey = (node as Course).key;
         }
-        if (nodeType === 'section') currentContext.sectionId = node.id;
+        if (nodeType === 'section') {
+            currentContext.sectionId = node.id;
+            currentContext.sectionNode = node as Section;
+        }
         if (nodeType === 'chapter') currentContext.chapterId = node.id;
 
         flatList.push({

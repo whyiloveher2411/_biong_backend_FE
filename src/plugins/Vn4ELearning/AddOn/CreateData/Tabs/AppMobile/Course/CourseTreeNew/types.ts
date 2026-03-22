@@ -123,11 +123,19 @@ export interface Language {
     flag_code: string;
 }
 
+export type TreeParentContext = {
+    courseId?: string | number;
+    courseKey?: string;
+    sectionId?: string | number;
+    chapterId?: string | number;
+    sectionNode?: Section;
+};
+
 export interface FlatNode {
     node: TreeNode;
     depth: number;
     index: number;
-    parentContext: { courseId?: string | number, courseKey?: string, sectionId?: string | number, chapterId?: string | number };
+    parentContext: TreeParentContext;
     nodeKey: string;
     parentId: string | number;
     parentType: string;

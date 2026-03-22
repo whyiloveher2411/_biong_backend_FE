@@ -385,13 +385,15 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                     <div
                         key={index}
                         onClick={() => {
-                            // Scroll inside container
+                            if (!question.post_id) {
+                                // Câu hỏi chưa có: click = click CREATE QUESTION
+                                handleCreateQuestion(question, index);
+                                return;
+                            }
+                            // Câu hỏi đã có: scroll đến vị trí
                             const container = document.getElementById('scroll-container-questions');
                             const el = questionRefs.current[index];
                             if (container && el) {
-                                // manual scroll calculation or just use scrollIntoView
-                                // but scrollIntoView might scroll parent drawer if not careful.
-                                // Use scrollIntoView with block: 'center' usually works well.
                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
                             setActiveQuestionIndex(index);
@@ -406,13 +408,13 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                             cursor: 'pointer',
                             backgroundColor: activeQuestionIndex === index
                                 ? (question.verify === 0 ? '#ff9800' : '#1976d2')
-                                : (question.verify === 0 ? '#fff3e0' : '#fff'),
+                                : (!question.post_id ? '#e8e8e8' : (question.verify === 0 ? '#fff3e0' : '#fff')),
                             color: activeQuestionIndex === index
                                 ? '#fff'
-                                : (question.verify === 0 ? '#f57c00' : '#666'),
+                                : (!question.post_id ? '#999' : (question.verify === 0 ? '#f57c00' : '#666')),
                             border: activeQuestionIndex === index
                                 ? 'none'
-                                : `1px solid ${question.verify === 0 ? '#ffb74d' : '#ddd'}`,
+                                : `1px solid ${!question.post_id ? '#d0d0d0' : (question.verify === 0 ? '#ffb74d' : '#ddd')}`,
                             fontWeight: 'bold',
                             transition: 'all 0.2s ease',
                             transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
@@ -425,7 +427,7 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                             flexShrink: 0,
                             ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
                         }}
-                        title={`Go to Question ${index + 1}`}
+                        title={!question.post_id ? `Tạo câu hỏi ${index + 1}` : `Đi tới câu hỏi ${index + 1}`}
                     >
                         {index + 1}
                     </div>
@@ -636,11 +638,45 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
 const CheckDataCraw = React.forwardRef<CheckDataCrawRef, FieldFormItemProps & { autoPreview?: boolean; onPreviewDataChange?: (data: ANY) => void; onLoadingChange?: (loading: boolean) => void }>(CheckDataCrawInner);
 export default CheckDataCraw;
 
+/** Chuyển body/content thành JSON string có format dễ đọc - parse các chuỗi JSON lồng nhau để \n \t hiển thị thật */
+function toEditableJson(data: ANY): string {
+    if (data === undefined || data === null) return data === undefined ? '' : 'null';
+    if (typeof data !== 'object') return JSON.stringify(data);
+
+    const expand = (val: ANY): ANY => {
+        if (val === null || val === undefined) return val;
+        if (typeof val === 'string') {
+            const t = val.trim();
+            if ((t.startsWith('[') && t.endsWith(']')) || (t.startsWith('{') && t.endsWith('}'))) {
+                try {
+                    const parsed = JSON.parse(val);
+                    return typeof parsed === 'object' && parsed !== null ? expandRecursive(parsed) : parsed;
+                } catch { return val; }
+            }
+            return val;
+        }
+        if (Array.isArray(val)) return val.map(expand);
+        if (typeof val === 'object') return expandRecursive(val);
+        return val;
+    };
+    const expandRecursive = (obj: ANY): ANY => {
+        if (Array.isArray(obj)) return obj.map(expand);
+        const result: ANY = {};
+        for (const [k, v] of Object.entries(obj)) {
+            result[k] = expand(v);
+        }
+        return result;
+    };
+
+    const expanded = expandRecursive(data);
+    return JSON.stringify(expanded, null, 2);
+}
+
 function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, onTranslated, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, onTranslated?: () => void, languages: ANY[] }) {
     const ajaxUseApi = useAjax();
     const [question, setQuestion] = React.useState(initialQuestion);
-    const [jsonBody, setJsonBody] = React.useState(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
-    const [jsonContent, setJsonContent] = React.useState(initialQuestion.content_post || initialQuestion.content ? JSON.stringify(initialQuestion.content_post || initialQuestion.content, null, 2) : '');
+    const [jsonBody, setJsonBody] = React.useState(() => toEditableJson(initialQuestion.body_post || initialQuestion.body));
+    const [jsonContent, setJsonContent] = React.useState(() => (initialQuestion.content_post || initialQuestion.content ? toEditableJson(initialQuestion.content_post || initialQuestion.content) : ''));
     const [loadingTranslate, setLoadingTranslate] = React.useState<string | number | boolean>(false);
     const [loadingReContent, setLoadingReContent] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -659,8 +695,8 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
 
     React.useEffect(() => {
         setQuestion(initialQuestion);
-        setJsonBody(JSON.stringify(initialQuestion.body_post || initialQuestion.body, null, 2));
-        setJsonContent(initialQuestion.content_post || initialQuestion.content ? JSON.stringify(initialQuestion.content_post || initialQuestion.content, null, 2) : '');
+        setJsonBody(toEditableJson(initialQuestion.body_post || initialQuestion.body));
+        setJsonContent(initialQuestion.content_post || initialQuestion.content ? toEditableJson(initialQuestion.content_post || initialQuestion.content) : '');
     }, [initialQuestion]);
 
     const availableLangs = React.useMemo(() => {
@@ -725,9 +761,9 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
 
                     const updatedQuestion = { ...question, ...data };
                     setQuestion(updatedQuestion);
-                    setJsonBody(JSON.stringify(updatedQuestion.body_post || updatedQuestion.body, null, 2));
+                    setJsonBody(toEditableJson(updatedQuestion.body_post || updatedQuestion.body));
                     if (updatedQuestion.content_post || updatedQuestion.content) {
-                        setJsonContent(JSON.stringify(updatedQuestion.content_post || updatedQuestion.content, null, 2));
+                        setJsonContent(toEditableJson(updatedQuestion.content_post || updatedQuestion.content));
                     }
                     if (onTranslated) {
                         onTranslated();

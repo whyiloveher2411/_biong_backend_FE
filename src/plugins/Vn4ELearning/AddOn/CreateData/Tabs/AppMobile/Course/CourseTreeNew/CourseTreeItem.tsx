@@ -54,6 +54,7 @@ import {
     calculateNodeProgress,
     calculateTotalLessonFlashcards,
     getCourseLabelsViOrEn,
+    getLessonIndexInSection,
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
@@ -64,6 +65,7 @@ export interface ParentContext {
     courseKey?: string;
     sectionId?: string | number;
     chapterId?: string | number;
+    sectionNode?: Section;
 }
 
 interface CourseTreeItemProps {
@@ -264,7 +266,10 @@ const CourseTreeItem = memo(function CourseTreeItem({
     let nodeHasChildren = hasChildren(node);
     const childrenCount = getChildrenCount(node);
     const nodeColor = getNodeColor(node);
-    const isMissingReward = nodeType === "lesson" && typeof index === 'number' && (index + 1) % 5 === 4;
+    const lessonIndexInSection = nodeType === "lesson" && parentContext?.sectionNode
+        ? getLessonIndexInSection(node as Lesson, parentContext.sectionNode)
+        : -1;
+    const isMissingReward = nodeType === "lesson" && lessonIndexInSection >= 0 && (lessonIndexInSection + 1) % 5 === 4;
     const isTrash = (node as { status?: string }).status === 'trash';
     const isCompleted = (nodeType === 'lesson' || nodeType === 'course') && (node as Lesson | Course).is_completed;
     // Nếu là course và hiện tại chưa có children trong cấu trúc,
@@ -304,7 +309,10 @@ const CourseTreeItem = memo(function CourseTreeItem({
             ctx.courseId = node.id;
             ctx.courseKey = (node as Course).key;
         }
-        if (nodeType === 'section') ctx.sectionId = node.id;
+        if (nodeType === 'section') {
+            ctx.sectionId = node.id;
+            ctx.sectionNode = node as Section;
+        }
         if (nodeType === 'chapter') ctx.chapterId = node.id;
         return ctx;
     }, [node.id, nodeType, parentContext, (node as Course).key]);

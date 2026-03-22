@@ -197,6 +197,15 @@ function Tools() {
                     // 
                 },
                 disable: false,
+            },
+            {
+                title: 'Gemini Batch Job',
+                icon: 'QueueOutlined',
+                href: '/post-type/gemini_batch_job/list',
+                onClick: () => {
+                    // 
+                },
+                disable: false,
             }
         ]
     ];

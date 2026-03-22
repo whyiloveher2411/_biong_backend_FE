@@ -154,6 +154,19 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
         });
     };
 
+    // Bắt phím Enter để submit form (native form submit có thể không chạy với một số input)
+    React.useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Enter' || e.shiftKey) return;
+
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+            handleSubmit();
+        };
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => document.removeEventListener('keydown', onKeyDown, true);
+    }, [handleSubmit]);
+
     const confirm = useConfirmDialog();
 
     const useAjaxDelete = useAjax();
@@ -209,17 +222,18 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                         loading={openLoading}
                                         loadingPosition="center"
                                     >
-                                        {__('Save Changes')}
+                                        {__('Edit')}
                                     </LoadingButton>
                                     {!isSimpleLayout && (
                                         <Tooltip title={__('Create a new post is a copy of the current post')}>
                                             <LoadingButton
+                                                type="button"
                                                 loading={openLoading}
                                                 loadingPosition="center"
                                                 variant='contained'
                                                 color="inherit"
                                                 sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
-                                                onClick={(e) => { data.post._copy = true; handleSubmit(); }}
+                                                onClick={() => { data.post._copy = true; handleSubmit(); }}
                                             >
                                                 {__('Copy')}
                                             </LoadingButton>
@@ -231,6 +245,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                 permission[postType + '_delete'] && data.post?.id &&
                                 <Collapse in={Boolean(data.post.status === 'trash')}>
                                     <LoadingButton
+                                        type="button"
                                         loading={openLoading}
                                         loadingPosition="center"
                                         variant='contained'
@@ -266,7 +281,8 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
         <>
             <Grid
                 container
-                spacing={4}>
+                spacing={4}
+            >
                 <Grid item md={12} xs={12}>
 
                     <Grid
@@ -670,6 +686,7 @@ function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }:
         </Box>
             :
             <LoadingButton
+                type="button"
                 loading={useAjaxAction.open}
                 loadingPosition="center"
                 color={color as ANY}
