@@ -34,6 +34,8 @@ export interface Lesson {
     isPublished?: boolean;
     is_completed?: boolean;
     count_question_not_verify?: number;
+    number_rive_image?: number;
+    number_chat_ai?: number;
 }
 
 export interface Chapter {
@@ -44,6 +46,8 @@ export interface Chapter {
     lessons?: Lesson[];
     order?: number;
     status?: string;
+    number_rive_image?: number;
+    number_chat_ai?: number;
     guidebook?: string; // JSON
     finalTestConfig?: {
         titleOverride?: string;
@@ -64,6 +68,8 @@ export interface Section {
     order?: number;
     isPublished?: boolean;
     count_question_not_verify?: number;
+    number_rive_image?: number;
+    number_chat_ai?: number;
 }
 
 export interface CourseLabel {
@@ -108,6 +114,8 @@ export interface Course {
     };
     count_question_not_verify?: number;
     count_app_course_flashcard?: number;
+    number_rive_image?: number;
+    number_chat_ai?: number;
     isPublished?: boolean;
     is_completed?: boolean;
     labels?: string | CourseLabelsByLang;

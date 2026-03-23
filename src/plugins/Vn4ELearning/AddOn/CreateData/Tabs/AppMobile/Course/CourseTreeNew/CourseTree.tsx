@@ -37,6 +37,7 @@ import {
 import CourseTreeItem from "./CourseTreeItem";
 import { Select, MenuItem as MuiMenuItem, FormControl, InputLabel, Divider } from "@mui/material";
 import GolfCourseIcon from "@mui/icons-material/GolfCourse";
+import AnimationIcon from "@mui/icons-material/Animation";
 import CheckDataCraw, { CheckDataCrawRef } from "../CheckDataCraw";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import { LoadingButton } from "@mui/lab";
@@ -210,6 +211,22 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     id: data.post.id,
                 },
             });
+        });
+    };
+
+    const handleCountRiveCourse = () => {
+        handleCloseMenu();
+        api.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/count-rive-course",
+            method: "POST",
+            data: {
+                id: data.post.id,
+            },
+            success: (result: { message?: string; data?: ANY }) => {
+                if (result.message) {
+                    api.showMessage(result.message, "success");
+                }
+            },
         });
     };
 
@@ -844,6 +861,10 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                             <FactCheckIcon sx={{ mr: 1, fontSize: 20 }} />
                             Fix question not verify
                         </MenuItem>
+                        <MenuItem onClick={handleCountRiveCourse}>
+                            <AnimationIcon sx={{ mr: 1, fontSize: 20 }} />
+                            Đếm question has rive image
+                        </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
                             <GolfCourseIcon sx={{ mr: 1, fontSize: 20 }} />
@@ -1031,6 +1052,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                     <CheckDataCraw
                         ref={checkDataCrawRef}
                         post={previewNode}
+                        appMobileId={data?.post?.id}
                         config={{ title: 'Preview Questions' }}
                         name="link_data_craw_json"
                         onReview={() => { /* review */ }}

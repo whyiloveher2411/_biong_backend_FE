@@ -37,6 +37,8 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+import AnimationIcon from "@mui/icons-material/Animation";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
@@ -860,6 +862,74 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                     {(node as Lesson).count_question_not_verify} questions not verified
                                 </Typography>
                             ) : null}
+
+                            {/* Rive image count - hiển thị tinh tế khi có giá trị */}
+                            {nodeType === "course" && ((node as Course).number_rive_image ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <AnimationIcon sx={{ fontSize: 14, color: "error.main" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "error.main", fontWeight: 500 }}>
+                                        {(node as Course).number_rive_image} Rive
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "section" && ((node as Section).number_rive_image ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <AnimationIcon sx={{ fontSize: 14, color: "error.main" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "error.main", fontWeight: 500 }}>
+                                        {(node as Section).number_rive_image} Rive
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "chapter" && ((node as Chapter).number_rive_image ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <AnimationIcon sx={{ fontSize: 14, color: "error.main" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "error.main", fontWeight: 500 }}>
+                                        {(node as Chapter).number_rive_image} Rive
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "lesson" && ((node as Lesson).number_rive_image ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <AnimationIcon sx={{ fontSize: 14, color: "error.main" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "error.main", fontWeight: 500 }}>
+                                        {(node as Lesson).number_rive_image} Rive
+                                    </Typography>
+                                </Box>
+                            )}
+
+                            {/* Chat AI count - hiển thị khi có giá trị */}
+                            {nodeType === "course" && ((node as Course).number_chat_ai ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
+                                        {(node as Course).number_chat_ai} Chat AI
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "section" && ((node as Section).number_chat_ai ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
+                                        {(node as Section).number_chat_ai} Chat AI
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "chapter" && ((node as Chapter).number_chat_ai ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
+                                        {(node as Chapter).number_chat_ai} Chat AI
+                                    </Typography>
+                                </Box>
+                            )}
+                            {nodeType === "lesson" && ((node as Lesson).number_chat_ai ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
+                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
+                                        {(node as Lesson).number_chat_ai} Chat AI
+                                    </Typography>
+                                </Box>
+                            )}
 
                             {onAddChild && (() => {
                                 const childType = getChildType(nodeType);

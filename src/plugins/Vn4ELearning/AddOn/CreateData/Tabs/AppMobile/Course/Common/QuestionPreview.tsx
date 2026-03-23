@@ -15,9 +15,13 @@ interface QuestionPreviewProps {
     postId?: number | string;
     cIndex?: number;
     lIndex?: number;
+    /** ID app_mobile - dùng cho API download-image */
+    appMobileId?: number | string;
+    /** Gọi khi download-image thành công để refresh data */
+    onRefresh?: () => void;
 }
 
-export default function QuestionPreview({ question, langCode = 'en', languages = [], onUpdate, postId, cIndex, lIndex }: QuestionPreviewProps) {
+export default function QuestionPreview({ question, langCode = 'en', languages = [], onUpdate, postId, cIndex, lIndex, appMobileId, onRefresh }: QuestionPreviewProps) {
     if (!question) return null;
 
     const langCodes = languages.map(l => l.code);
@@ -150,7 +154,14 @@ export default function QuestionPreview({ question, langCode = 'en', languages =
                             onUpdate({ ...question, body_post: newBody }); // Using body_post to ensure it overrides
                         }
                     }}
-                    context={{ postId, cIndex, lIndex, compIndex }}
+                    context={{
+                        postId,
+                        cIndex,
+                        lIndex,
+                        compIndex,
+                        appMobileId,
+                        onRefresh,
+                    }}
                 />
             ))}
 

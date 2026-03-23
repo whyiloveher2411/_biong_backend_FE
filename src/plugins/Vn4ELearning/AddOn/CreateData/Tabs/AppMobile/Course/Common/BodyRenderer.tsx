@@ -5,6 +5,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import EditIcon from '@mui/icons-material/Edit';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DownloadIcon from '@mui/icons-material/Download';
 import CourseEditImageDrawer from './CourseEditImageDrawer';
 import { IMAGE_TYPE_OPTIONS, getOptionLabel } from 'components/atoms/fields/image/GenerateImageAiDrawer';
 import { Layout, Fit, Alignment, useRive } from '@rive-app/react-canvas';
@@ -80,16 +81,23 @@ const stripBlockTags = (html: string) => {
     return html.replace(/<block>/g, '<span class="text-block">').replace(/<\/block>/g, '</span>');
 };
 
+/** Prefix S3 - ảnh đã upload lên S3 thì không cần download. Chỉ hiển thị nút Download Image khi URL khác prefix này. */
+const S3_IMAGE_PREFIX = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
+
 interface BodyRendererProps {
     component: ANY;
     onUpdate?: (newComponent: ANY) => void;
-    context?: {
+        context?: {
         postId?: number | string;
         cIndex?: number;
         lIndex?: number;
         fcIndex?: number;
         side?: 'front' | 'back';
         compIndex?: number;
+        /** ID app_mobile - dùng cho API download-image (download toàn bộ ảnh trong course) */
+        appMobileId?: number | string;
+        /** Gọi khi download-image thành công để refresh data */
+        onRefresh?: () => void;
     };
 }
 
@@ -126,6 +134,7 @@ export const clearImageCache = () => {
 const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRendererProps) => {
     const { ajax } = useAjax();
     const [loading, setLoading] = React.useState(false);
+    const [loadingDownload, setLoadingDownload] = React.useState(false);
     const [showPrompt, setShowPrompt] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
@@ -174,6 +183,29 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
         } else {
             updateUiAndProceed();
         }
+    };
+
+    /** Download toàn bộ ảnh từ URL ngoài S3 và upload lên S3 (API xử lý toàn course theo app_mobile id). */
+    const handleDownloadImage = () => {
+        const appMobileId = context?.appMobileId;
+        if (appMobileId == null) return;
+        setLoadingDownload(true);
+        ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/course-new/download-image',
+            method: 'POST',
+            data: {
+                id: appMobileId,
+            },
+            success: (result: ANY) => {
+                setLoadingDownload(false);
+                if (result.success) {
+                    context?.onRefresh?.();
+                }
+            },
+            error: () => {
+                setLoadingDownload(false);
+            },
+        });
     };
 
     const handleGenerateImage = (prompt: string, description: string, imageId?: number | string, imageType?: string) => {
@@ -415,6 +447,25 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             </Box>
                         )}
                         <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', display: 'block' }} />
+
+                        {/* Nút Download Image: chỉ hiển thị khi URL không phải S3 (cần download và upload lên S3) */}
+                        {imgSrc && !imgSrc.startsWith(S3_IMAGE_PREFIX) && context?.appMobileId != null && (
+                            <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+                                <LoadingButton
+                                    loading={loadingDownload}
+                                    variant="contained"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownloadImage();
+                                    }}
+                                    startIcon={<DownloadIcon fontSize="small" />}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Download Image
+                                </LoadingButton>
+                            </Box>
+                        )}
 
                         {showPrompt && component.prompt && (
                             <Box sx={{

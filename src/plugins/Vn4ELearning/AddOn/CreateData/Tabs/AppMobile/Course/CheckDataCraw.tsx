@@ -8,12 +8,120 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import RestoreIcon from "@mui/icons-material/Restore";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ImageIcon from "@mui/icons-material/Image";
+import AnimationIcon from "@mui/icons-material/Animation";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
 import useLanguages from "../hooks/useLanguages";
 import useConfirmDialog from "hook/useConfirmDialog";
 import QuestionPreview from "./Common/QuestionPreview";
 import SuggestLessonContentAiDrawer from "./SuggestLessonContentAiDrawer";
+import { parseImgSrc } from "./Common/BodyRenderer";
+
+const S3_IMAGE_PREFIX = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
+
+/** Kiểm tra câu hỏi có ảnh body type image cần download (URL khác S3) */
+function questionHasImageNeedingDownload(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    for (const comp of components) {
+        if (comp?.type === 'image' || comp?.image || comp?.image_link) {
+            const src = parseImgSrc(comp.image) || parseImgSrc(comp.image_link) || '';
+            if (src && typeof src === 'string' && !src.startsWith(S3_IMAGE_PREFIX)) return true;
+        }
+    }
+    return false;
+}
+
+/** Kiểm tra câu hỏi có body type rive */
+function questionHasRiveBody(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    return components.some((comp: ANY) => comp?.type === 'rive');
+}
+
+/** Kiểm tra câu hỏi có body type ai_chat hoặc chat_suggestions */
+function questionHasChatAiBody(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    return components.some((comp: ANY) => comp?.type === 'ai_chat' || comp?.type === 'chat_suggestions');
+}
 
 export interface CheckDataCrawRef {
     refreshPreview: () => void;
@@ -23,6 +131,8 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
     autoPreview?: boolean;
     onPreviewDataChange?: (data: ANY) => void;
     onLoadingChange?: (loading: boolean) => void;
+    /** ID app_mobile - dùng cho API download-image (download toàn bộ ảnh trong course) */
+    appMobileId?: number | string;
 }, ref: React.Ref<CheckDataCrawRef>) {
 
     const ajaxUseApi = useAjax();
@@ -352,6 +462,7 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                 index={index}
                                 initialQuestion={question}
                                 postId={props.post.id}
+                                appMobileId={props.appMobileId}
                                 file={props.post[props.name || 'link_data_craw_json']}
                                 languages={languages}
                                 onDelete={() => {
@@ -360,6 +471,7 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                     setPreviewData({ ...previewData, questions: newQuestions, count: newQuestions.length });
                                 }}
                                 onTranslated={handlePreviewDataFromJson}
+                                onRefresh={handleRefreshPreviewKeepScroll}
                                 onCreate={() => handleCreateQuestion(question, index)}
                             />
                         </div>
@@ -381,57 +493,85 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                 borderLeft: '1px solid #ddd',
                 backgroundColor: '#fff'
             }}>
-                {previewData && previewData.questions.map((question: ANY, index: number) => (
-                    <div
-                        key={index}
-                        onClick={() => {
-                            if (!question.post_id) {
-                                // Câu hỏi chưa có: click = click CREATE QUESTION
-                                handleCreateQuestion(question, index);
-                                return;
-                            }
-                            // Câu hỏi đã có: scroll đến vị trí
-                            const container = document.getElementById('scroll-container-questions');
-                            const el = questionRefs.current[index];
-                            if (container && el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                            setActiveQuestionIndex(index);
-                        }}
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            backgroundColor: activeQuestionIndex === index
-                                ? (question.verify === 0 ? '#ff9800' : '#1976d2')
-                                : (!question.post_id ? '#e8e8e8' : (question.verify === 0 ? '#fff3e0' : '#fff')),
-                            color: activeQuestionIndex === index
-                                ? '#fff'
-                                : (!question.post_id ? '#999' : (question.verify === 0 ? '#f57c00' : '#666')),
-                            border: activeQuestionIndex === index
-                                ? 'none'
-                                : `1px solid ${!question.post_id ? '#d0d0d0' : (question.verify === 0 ? '#ffb74d' : '#ddd')}`,
-                            fontWeight: 'bold',
-                            transition: 'all 0.2s ease',
-                            transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
-                            boxShadow: activeQuestionIndex === index
-                                ? (question.verify === 0
-                                    ? '0 4px 8px rgba(255, 152, 0, 0.4)'
-                                    : '0 4px 8px rgba(25, 118, 210, 0.4)')
-                                : '0 1px 3px rgba(0,0,0,0.1)',
-                            fontSize: '14px',
-                            flexShrink: 0,
-                            ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
-                        }}
-                        title={!question.post_id ? `Tạo câu hỏi ${index + 1}` : `Đi tới câu hỏi ${index + 1}`}
-                    >
-                        {index + 1}
-                    </div>
-                ))}
+                {previewData && previewData.questions.map((question: ANY, index: number) => {
+                    const hasImageNeedingDownload = questionHasImageNeedingDownload(question);
+                    const hasRiveBody = questionHasRiveBody(question);
+                    const hasChatAiBody = questionHasChatAiBody(question);
+                    return (
+                        <div
+                            key={index}
+                            onClick={() => {
+                                if (!question.post_id) {
+                                    handleCreateQuestion(question, index);
+                                    return;
+                                }
+                                const container = document.getElementById('scroll-container-questions');
+                                const el = questionRefs.current[index];
+                                if (container && el) {
+                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                                setActiveQuestionIndex(index);
+                            }}
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '2px',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                position: 'relative',
+                            }}
+                            title={!question.post_id ? `Tạo câu hỏi ${index + 1}` : (hasImageNeedingDownload ? `Câu hỏi ${index + 1} - Có ảnh cần download` : hasRiveBody ? `Câu hỏi ${index + 1} - Có Rive` : hasChatAiBody ? `Câu hỏi ${index + 1} - Có Chat AI` : `Đi tới câu hỏi ${index + 1}`)}
+                        >
+                            <div
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: activeQuestionIndex === index
+                                        ? (question.verify === 0 ? '#ff9800' : '#1976d2')
+                                        : (!question.post_id ? '#e8e8e8' : (question.verify === 0 ? '#fff3e0' : '#fff')),
+                                    color: activeQuestionIndex === index
+                                        ? '#fff'
+                                        : (!question.post_id ? '#999' : (question.verify === 0 ? '#f57c00' : '#666')),
+                                    border: activeQuestionIndex === index
+                                        ? 'none'
+                                        : `1px solid ${!question.post_id ? '#d0d0d0' : (question.verify === 0 ? '#ffb74d' : '#ddd')}`,
+                                    fontWeight: 'bold',
+                                    transition: 'all 0.2s ease',
+                                    transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
+                                    boxShadow: activeQuestionIndex === index
+                                        ? (question.verify === 0
+                                            ? '0 4px 8px rgba(255, 152, 0, 0.4)'
+                                            : '0 4px 8px rgba(25, 118, 210, 0.4)')
+                                        : '0 1px 3px rgba(0,0,0,0.1)',
+                                    fontSize: '14px',
+                                    ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
+                                }}
+                            >
+                                {index + 1}
+                            </div>
+                            {hasImageNeedingDownload && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <ImageIcon sx={{ fontSize: 14, color: '#d32f2f' }} />
+                                </Box>
+                            )}
+                            {hasRiveBody && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <AnimationIcon sx={{ fontSize: 14, color: '#d32f2f' }} />
+                                </Box>
+                            )}
+                            {hasChatAiBody && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'absolute', bottom: '-10px', zIndex: 1, right: 10 }}>
+                                    <SmartToyIcon sx={{ fontSize: 14, color: '#610bd9' }} />
+                                </Box>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -635,7 +775,7 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
     );
 }
 
-const CheckDataCraw = React.forwardRef<CheckDataCrawRef, FieldFormItemProps & { autoPreview?: boolean; onPreviewDataChange?: (data: ANY) => void; onLoadingChange?: (loading: boolean) => void }>(CheckDataCrawInner);
+const CheckDataCraw = React.forwardRef<CheckDataCrawRef, FieldFormItemProps & { autoPreview?: boolean; onPreviewDataChange?: (data: ANY) => void; onLoadingChange?: (loading: boolean) => void; appMobileId?: number | string }>(CheckDataCrawInner);
 export default CheckDataCraw;
 
 /** Chuyển body/content thành JSON string có format dễ đọc - parse các chuỗi JSON lồng nhau để \n \t hiển thị thật */
@@ -672,7 +812,7 @@ function toEditableJson(data: ANY): string {
     return JSON.stringify(expanded, null, 2);
 }
 
-function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate, onTranslated, languages }: { index: number, initialQuestion: ANY, postId: ANY, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, onTranslated?: () => void, languages: ANY[] }) {
+function QuestionItem({ index, initialQuestion, postId, appMobileId, file, onDelete, onCreate, onTranslated, onRefresh, languages }: { index: number, initialQuestion: ANY, postId: ANY, appMobileId?: number | string, file: ANY, onDelete: () => void, onCreate: (question: ANY) => void, onTranslated?: () => void, onRefresh?: () => void, languages: ANY[] }) {
     const ajaxUseApi = useAjax();
     const [question, setQuestion] = React.useState(initialQuestion);
     const [jsonBody, setJsonBody] = React.useState(() => toEditableJson(initialQuestion.body_post || initialQuestion.body));
@@ -1102,6 +1242,9 @@ function QuestionItem({ index, initialQuestion, postId, file, onDelete, onCreate
                                             question={question}
                                             langCode={langCode}
                                             languages={languages}
+                                            appMobileId={appMobileId}
+                                            onUpdate={(newQuestion) => setQuestion(newQuestion)}
+                                            onRefresh={onRefresh}
                                         />
                                     </Box>
                                 )
