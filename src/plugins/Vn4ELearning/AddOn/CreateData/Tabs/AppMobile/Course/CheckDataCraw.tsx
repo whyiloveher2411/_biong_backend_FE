@@ -11,6 +11,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ImageIcon from "@mui/icons-material/Image";
 import AnimationIcon from "@mui/icons-material/Animation";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
 import useLanguages from "../hooks/useLanguages";
@@ -19,9 +20,9 @@ import QuestionPreview from "./Common/QuestionPreview";
 import SuggestLessonContentAiDrawer from "./SuggestLessonContentAiDrawer";
 import { parseImgSrc } from "./Common/BodyRenderer";
 
-const S3_IMAGE_PREFIX = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
+const S3_PREFIX_LINK = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
 
-/** Kiểm tra câu hỏi có ảnh body type image cần download (URL khác S3) */
+/** Kiểm tra câu hỏi có ảnh body type image hoặc rive cần download (URL khác S3) */
 function questionHasImageNeedingDownload(question: ANY): boolean {
     if (!question) return false;
     const parseIfString = (data: ANY) => {
@@ -53,7 +54,11 @@ function questionHasImageNeedingDownload(question: ANY): boolean {
     for (const comp of components) {
         if (comp?.type === 'image' || comp?.image || comp?.image_link) {
             const src = parseImgSrc(comp.image) || parseImgSrc(comp.image_link) || '';
-            if (src && typeof src === 'string' && !src.startsWith(S3_IMAGE_PREFIX)) return true;
+            if (src && typeof src === 'string' && !src.startsWith(S3_PREFIX_LINK)) return true;
+        }
+        if (comp?.type === 'rive') {
+            const riveUrl = comp.webAssetUrl || comp.mobileAssetUrl || '';
+            if (riveUrl && typeof riveUrl === 'string' && !riveUrl.startsWith(S3_PREFIX_LINK)) return true;
         }
     }
     return false;
@@ -121,6 +126,79 @@ function questionHasChatAiBody(question: ANY): boolean {
     }
     const components = ensureArray(body);
     return components.some((comp: ANY) => comp?.type === 'ai_chat' || comp?.type === 'chat_suggestions');
+}
+
+/** Kiểm tra chat_suggestions hoặc ai_chat có response rỗng (chưa hoàn thành) */
+function questionHasIncompleteChatResponse(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    const isEmpty = (v: ANY) => v == null || String(v).trim() === '';
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    return components.some((comp: ANY) => {
+        if (comp?.type === 'ai_chat') {
+            return isEmpty(comp.response);
+        }
+        if (comp?.type === 'chat_suggestions') {
+            const options = ensureArray(comp.options);
+            if (options.length === 0) return true;
+            return options.some((opt: ANY) => isEmpty(opt.response));
+        }
+        return false;
+    });
+}
+
+/** Các mã ngôn ngữ đã có khóa trong body/content (giống logic preview đa ngôn ngữ trong QuestionItem). Luôn coi `en` là có. */
+function getAvailableLangCodesForQuestion(question: ANY, languages: ANY[]): string[] {
+    const langs: string[] = ['en'];
+    const langCodes = languages.map(l => l.code);
+    const fields = [
+        question?.body_post,
+        question?.content_post,
+        question?.body,
+        question?.content,
+        question?.question_detail?.body,
+        question?.question_detail?.content,
+    ];
+    fields.forEach(field => {
+        if (typeof field === 'object' && field !== null && !Array.isArray(field)) {
+            Object.keys(field).forEach(key => {
+                if (langCodes.includes(key) && !langs.includes(key)) langs.push(key);
+            });
+        }
+    });
+    return langs;
+}
+
+/** Ngôn ngữ cấu hình app nhưng chưa có bản dịch trong câu hỏi (thiếu khóa trên body/content). */
+function getMissingLangCodesForQuestion(question: ANY, languages: ANY[]): string[] {
+    if (!languages?.length) return [];
+    const langCodes = languages.map(l => l.code);
+    const available = new Set(getAvailableLangCodesForQuestion(question, languages));
+    return langCodes.filter(code => !available.has(code));
 }
 
 export interface CheckDataCrawRef {
@@ -497,6 +575,30 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                     const hasImageNeedingDownload = questionHasImageNeedingDownload(question);
                     const hasRiveBody = questionHasRiveBody(question);
                     const hasChatAiBody = questionHasChatAiBody(question);
+                    const hasIncompleteChatResponse = questionHasIncompleteChatResponse(question);
+                    const missingLangCodes = getMissingLangCodesForQuestion(question, languages);
+                    const tooltipTitle = !question.post_id
+                        ? (() => {
+                            if (missingLangCodes.length === 0) return `Tạo câu hỏi ${index + 1}`;
+                            const names = missingLangCodes
+                                .map(code => languages.find((l: ANY) => l.code === code)?.name || code)
+                                .join(', ');
+                            return `Tạo câu hỏi ${index + 1} - Thiếu bản dịch: ${names}`;
+                        })()
+                        : (() => {
+                            const parts: string[] = [];
+                            if (hasImageNeedingDownload) parts.push('Có ảnh cần download');
+                            if (hasRiveBody) parts.push('Có Rive');
+                            if (hasChatAiBody) parts.push('Có Chat AI');
+                            if (hasIncompleteChatResponse) parts.push('Response chưa hoàn thành');
+                            if (missingLangCodes.length > 0) {
+                                const names = missingLangCodes
+                                    .map(code => languages.find((l: ANY) => l.code === code)?.name || code)
+                                    .join(', ');
+                                parts.push(`Thiếu bản dịch: ${names}`);
+                            }
+                            return parts.length > 0 ? `Câu hỏi ${index + 1} - ${parts.join(', ')}` : `Đi tới câu hỏi ${index + 1}`;
+                        })();
                     return (
                         <div
                             key={index}
@@ -521,38 +623,111 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                 flexShrink: 0,
                                 position: 'relative',
                             }}
-                            title={!question.post_id ? `Tạo câu hỏi ${index + 1}` : (hasImageNeedingDownload ? `Câu hỏi ${index + 1} - Có ảnh cần download` : hasRiveBody ? `Câu hỏi ${index + 1} - Có Rive` : hasChatAiBody ? `Câu hỏi ${index + 1} - Có Chat AI` : `Đi tới câu hỏi ${index + 1}`)}
+                            title={tooltipTitle}
                         >
                             <div
                                 style={{
+                                    position: 'relative',
                                     width: '32px',
                                     height: '32px',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backgroundColor: activeQuestionIndex === index
-                                        ? (question.verify === 0 ? '#ff9800' : '#1976d2')
-                                        : (!question.post_id ? '#e8e8e8' : (question.verify === 0 ? '#fff3e0' : '#fff')),
-                                    color: activeQuestionIndex === index
-                                        ? '#fff'
-                                        : (!question.post_id ? '#999' : (question.verify === 0 ? '#f57c00' : '#666')),
-                                    border: activeQuestionIndex === index
-                                        ? 'none'
-                                        : `1px solid ${!question.post_id ? '#d0d0d0' : (question.verify === 0 ? '#ffb74d' : '#ddd')}`,
-                                    fontWeight: 'bold',
-                                    transition: 'all 0.2s ease',
-                                    transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
-                                    boxShadow: activeQuestionIndex === index
-                                        ? (question.verify === 0
-                                            ? '0 4px 8px rgba(255, 152, 0, 0.4)'
-                                            : '0 4px 8px rgba(25, 118, 210, 0.4)')
-                                        : '0 1px 3px rgba(0,0,0,0.1)',
-                                    fontSize: '14px',
-                                    ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
+                                    flexShrink: 0,
                                 }}
                             >
-                                {index + 1}
+                                <div
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: activeQuestionIndex === index
+                                            ? (question.verify === 0 ? '#ff9800' : '#1976d2')
+                                            : (!question.post_id ? '#e8e8e8' : (question.verify === 0 ? '#fff3e0' : '#fff')),
+                                        color: activeQuestionIndex === index
+                                            ? '#fff'
+                                            : (!question.post_id ? '#999' : (question.verify === 0 ? '#f57c00' : '#666')),
+                                        border: activeQuestionIndex === index
+                                            ? 'none'
+                                            : `1px solid ${!question.post_id ? '#d0d0d0' : (question.verify === 0 ? '#ffb74d' : '#ddd')}`,
+                                        fontWeight: 'bold',
+                                        transition: 'all 0.2s ease',
+                                        transform: activeQuestionIndex === index ? 'scale(1.15)' : 'scale(1)',
+                                        boxShadow: activeQuestionIndex === index
+                                            ? (question.verify === 0
+                                                ? '0 4px 8px rgba(255, 152, 0, 0.4)'
+                                                : '0 4px 8px rgba(25, 118, 210, 0.4)')
+                                            : '0 1px 3px rgba(0,0,0,0.1)',
+                                        fontSize: '14px',
+                                        ...(question.status === 'trash' ? { color: 'white', backgroundColor: '#c92f13ff' } : {})
+                                    }}
+                                >
+                                    {index + 1}
+                                </div>
+                                {missingLangCodes.length > 0 && (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            left: -2,
+                                            bottom: -2,
+                                            display: 'flex',
+                                            flexDirection: 'row',
+                                            alignItems: 'flex-end',
+                                            gap: '1px',
+                                            zIndex: 2,
+                                            maxWidth: 36,
+                                            flexWrap: 'wrap',
+                                        }}
+                                    >
+                                        {missingLangCodes.slice(0, 4).map((code) => {
+                                            const langInfo = languages.find((l: ANY) => l.code === code);
+                                            return (
+                                                <Box
+                                                    key={code}
+                                                    component="span"
+                                                    sx={{
+                                                        lineHeight: 0,
+                                                        borderRadius: '2px',
+                                                        overflow: 'hidden',
+                                                        boxShadow: '0 0 0 1px rgba(255,255,255,0.95)',
+                                                    }}
+                                                    title={langInfo?.name || code}
+                                                >
+                                                    {langInfo?.icon_url ? (
+                                                        <img
+                                                            src={langInfo.icon_url}
+                                                            alt=""
+                                                            style={{ width: 12, height: 8, display: 'block', objectFit: 'cover' }}
+                                                        />
+                                                    ) : langInfo?.flag_code ? (
+                                                        <img
+                                                            src={`https://flagcdn.com/w20/${langInfo.flag_code}.png`}
+                                                            alt=""
+                                                            style={{ width: 12, height: 8, display: 'block', objectFit: 'cover' }}
+                                                        />
+                                                    ) : (
+                                                        <span style={{ fontSize: 8, lineHeight: '10px' }}>🌐</span>
+                                                    )}
+                                                </Box>
+                                            );
+                                        })}
+                                        {missingLangCodes.length > 4 && (
+                                            <Typography
+                                                component="span"
+                                                variant="caption"
+                                                sx={{
+                                                    fontSize: '8px',
+                                                    lineHeight: 1,
+                                                    color: '#d32f2f',
+                                                    fontWeight: 700,
+                                                    textShadow: '0 0 2px #fff',
+                                                }}
+                                            >
+                                                +{missingLangCodes.length - 4}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                )}
                             </div>
                             {hasImageNeedingDownload && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -565,8 +740,13 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                 </Box>
                             )}
                             {hasChatAiBody && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'absolute', bottom: '-10px', zIndex: 1, right: 10 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'absolute', bottom: '10px', zIndex: 1, right: 10 }}>
                                     <SmartToyIcon sx={{ fontSize: 14, color: '#610bd9' }} />
+                                </Box>
+                            )}
+                            {hasIncompleteChatResponse && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 0.5, position: 'absolute', bottom: '0', zIndex: 1, right: 10 }}>
+                                    <WarningAmberIcon sx={{ fontSize: 14, color: '#ed6c02' }} />
                                 </Box>
                             )}
                         </div>
@@ -839,20 +1019,10 @@ function QuestionItem({ index, initialQuestion, postId, appMobileId, file, onDel
         setJsonContent(initialQuestion.content_post || initialQuestion.content ? toEditableJson(initialQuestion.content_post || initialQuestion.content) : '');
     }, [initialQuestion]);
 
-    const availableLangs = React.useMemo(() => {
-        const langs: string[] = ['en'];
-        const langCodes = languages.map(l => l.code);
-
-        [question.body_post, question.content_post, question.body, question.content].forEach(field => {
-            if (typeof field === 'object' && field !== null && !Array.isArray(field)) {
-                Object.keys(field).forEach(key => {
-                    if (langCodes.includes(key) && !langs.includes(key)) langs.push(key);
-                });
-            }
-        });
-
-        return langs;
-    }, [question, languages]);
+    const availableLangs = React.useMemo(
+        () => getAvailableLangCodesForQuestion(question, languages),
+        [question, languages]
+    );
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newVal = e.target.value;

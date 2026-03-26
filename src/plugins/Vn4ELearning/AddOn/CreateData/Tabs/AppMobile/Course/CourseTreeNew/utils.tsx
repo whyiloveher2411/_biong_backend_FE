@@ -353,11 +353,63 @@ export const arePropsEqual = (prev: ANY, next: ANY, keysToIgnore: string[] = [])
     return true;
 };
 
+/** count_section từ course (field phẳng hoặc summary_data) */
+const getCourseSectionCountHint = (course: Course): number | undefined => {
+    const anyC = course as ANY;
+    if (typeof anyC.count_section === "number") return anyC.count_section;
+    let summary = course.summary_data;
+    if (typeof summary === "string") {
+        try {
+            summary = JSON.parse(summary) as { count_section?: number };
+        } catch {
+            summary = undefined;
+        }
+    }
+    if (summary && typeof summary === "object" && "count_section" in summary) {
+        const n = (summary as { count_section?: number }).count_section;
+        return typeof n === "number" ? n : undefined;
+    }
+    return undefined;
+};
+
+/**
+ * API get-course-list thường trả sections/chapters/... rỗng (không nhúng nested).
+ * Nếu ghi đè bằng [] thì mất cây đã load → mất trạng thái expand và phải tải lại chi tiết.
+ * Chỉ chấp nhận mảng rỗng khi server báo rõ số con = 0.
+ */
+const shouldKeepPrevChildrenWhenNextEmpty = (nextNode: TreeNode, childrenKey: string): boolean => {
+    const nodeType = getNodeType(nextNode);
+
+    if (childrenKey === "sections" && nodeType === "course") {
+        const n = getCourseSectionCountHint(nextNode as Course);
+        if (n === 0) return false;
+        return true;
+    }
+
+    if (childrenKey === "chapters" && nodeType === "section") {
+        const n = (nextNode as ANY).count_chapter;
+        if (n === 0) return false;
+        return true;
+    }
+
+    if (childrenKey === "lessons" && nodeType === "chapter") {
+        const n = (nextNode as ANY).count_lesson;
+        if (n === 0) return false;
+        return true;
+    }
+
+    if (childrenKey === "questions" && nodeType === "lesson") {
+        const n = (nextNode as ANY).count_question;
+        if (n === 0) return false;
+        return true;
+    }
+
+    return true;
+};
+
 export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
     if (!prev || prev.length === 0) return next;
     if (!next) return next;
-
-    let hasChanges = false;
 
     // Map next nodes to potentially reused prev nodes
     const newResult = next.map(nextNode => {
@@ -365,7 +417,6 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
         const prevNode = prev.find(p => String(p.id) === String(nextNode.id) && getNodeType(p) === nodeType);
 
         if (!prevNode) {
-            hasChanges = true;
             return nextNode;
         }
 
@@ -392,8 +443,19 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
             prevChildren = (prevNode as ANY).questions || [];
         }
 
-        // Merge children
-        const mergedChildren = childrenKey ? mergeNodes(prevChildren, nextChildren) : [];
+        // Mảng con rỗng từ API list/detail không được coi là “xóa hết” nếu summary/count hoặc prev còn dữ liệu
+        let mergedChildren: TreeNode[] = [];
+        if (childrenKey) {
+            if (
+                nextChildren.length === 0 &&
+                prevChildren.length > 0 &&
+                shouldKeepPrevChildrenWhenNextEmpty(nextNode, childrenKey)
+            ) {
+                mergedChildren = mergeNodes(prevChildren, prevChildren);
+            } else {
+                mergedChildren = mergeNodes(prevChildren, nextChildren);
+            }
+        }
 
         // Check if children changed reference
         const childrenChanged = childrenKey && mergedChildren !== prevChildren;
@@ -405,7 +467,6 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
             return prevNode;
         }
 
-        hasChanges = true;
         // If props equal but children changed, reuse prevNode props + new children
         if (propsEqual) {
             return { ...prevNode, [childrenKey]: mergedChildren };
@@ -415,11 +476,8 @@ export const mergeNodes = (prev: TreeNode[], next: TreeNode[]): TreeNode[] => {
         return { ...nextNode, [childrenKey]: mergedChildren };
     });
 
-    if (!hasChanges && newResult.length === prev.length) {
-        const allSame = newResult.every((n, i) => n === prev[i]);
-        if (allSame) return prev;
-    }
-
+    // Luôn trả về mảng mới từ .map — không return `prev` dù nội dung giống nhau.
+    // Nếu return `prev`, setState nhận cùng reference → React bỏ qua render, UI không cập nhật (phải đóng/mở node).
     return newResult;
 };
 
@@ -485,4 +543,30 @@ export const flattenTree = (
     });
 
     return flatList;
+};
+
+/**
+ * Parse number_chat_ai: format "a/b" (ví dụ đã làm/tổng hoặc tương tự), "0" hoặc number (legacy).
+ * Màu xanh (hoàn thành) chỉ khi hai số bằng nhau và > 0 — ví dụ 9/9, 2/2.
+ * 0/2 không phải hoàn thành (hai số khác nhau) → màu tím.
+ */
+export const parseNumberChatAi = (
+    val: number | string | undefined | null
+): { hasChatAi: boolean; displayText: string; isAllComplete: boolean } => {
+    if (val == null || val === "") return { hasChatAi: false, displayText: "", isAllComplete: false };
+    if (typeof val === "number") {
+        const hasChatAi = val > 0;
+        return { hasChatAi, displayText: hasChatAi ? `${val} Chat AI` : "", isAllComplete: false };
+    }
+    const s = String(val).trim();
+    if (s === "0") return { hasChatAi: false, displayText: "", isAllComplete: false };
+    const match = s.match(/^(\d+)\/(\d+)$/);
+    if (match) {
+        const a = parseInt(match[1], 10);
+        const b = parseInt(match[2], 10);
+        const hasChatAi = b > 0;
+        const isAllComplete = hasChatAi && a === b && b > 0;
+        return { hasChatAi, displayText: hasChatAi ? `${s} Chat AI` : "", isAllComplete };
+    }
+    return { hasChatAi: false, displayText: "", isAllComplete: false };
 };

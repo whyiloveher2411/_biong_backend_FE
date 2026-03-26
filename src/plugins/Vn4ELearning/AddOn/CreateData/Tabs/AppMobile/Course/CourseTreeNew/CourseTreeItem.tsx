@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React from "react";
 import Box from "components/atoms/Box";
 import List from "components/atoms/List";
 import ListItem from "components/atoms/ListItem";
@@ -57,6 +57,7 @@ import {
     calculateTotalLessonFlashcards,
     getCourseLabelsViOrEn,
     getLessonIndexInSection,
+    parseNumberChatAi,
 } from "./utils";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
@@ -105,7 +106,7 @@ interface CourseTreeItemProps {
     onPreviewLesson?: (node: Lesson) => void;
 }
 
-const CourseTreeItem = memo(function CourseTreeItem({
+function CourseTreeItem({
     node,
     depth = 0,
     isLast = false,
@@ -897,39 +898,20 @@ const CourseTreeItem = memo(function CourseTreeItem({
                                 </Box>
                             )}
 
-                            {/* Chat AI count - hiển thị khi có giá trị */}
-                            {nodeType === "course" && ((node as Course).number_chat_ai ?? 0) > 0 && (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
-                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
-                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
-                                        {(node as Course).number_chat_ai} Chat AI
-                                    </Typography>
-                                </Box>
-                            )}
-                            {nodeType === "section" && ((node as Section).number_chat_ai ?? 0) > 0 && (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
-                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
-                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
-                                        {(node as Section).number_chat_ai} Chat AI
-                                    </Typography>
-                                </Box>
-                            )}
-                            {nodeType === "chapter" && ((node as Chapter).number_chat_ai ?? 0) > 0 && (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
-                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
-                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
-                                        {(node as Chapter).number_chat_ai} Chat AI
-                                    </Typography>
-                                </Box>
-                            )}
-                            {nodeType === "lesson" && ((node as Lesson).number_chat_ai ?? 0) > 0 && (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
-                                    <SmartToyIcon sx={{ fontSize: 14, color: "#610bd9" }} />
-                                    <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#610bd9", fontWeight: 500 }}>
-                                        {(node as Lesson).number_chat_ai} Chat AI
-                                    </Typography>
-                                </Box>
-                            )}
+                            {/* Chat AI count - format "[notResponse]/[total]" hoặc "0" hoặc number (legacy) */}
+                            {(nodeType === "course" || nodeType === "section" || nodeType === "chapter" || nodeType === "lesson") && (() => {
+                                const p = parseNumberChatAi((node as Course | Section | Chapter | Lesson).number_chat_ai);
+                                if (!p.hasChatAi) return null;
+                                const chatColor = p.isAllComplete ? "success.main" : "#610bd9";
+                                return (
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                        <SmartToyIcon sx={{ fontSize: 14, color: chatColor }} />
+                                        <Typography variant="caption" sx={{ fontSize: "0.7rem", color: chatColor, fontWeight: 500 }}>
+                                            {p.displayText}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })()}
 
                             {onAddChild && (() => {
                                 const childType = getChildType(nodeType);
@@ -1334,6 +1316,6 @@ const CourseTreeItem = memo(function CourseTreeItem({
             </Menu>
         </Box>
     );
-});
+}
 
 export default CourseTreeItem;

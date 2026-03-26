@@ -44,17 +44,72 @@ import { LoadingButton } from "@mui/lab";
 import { Virtuoso } from "react-virtuoso";
 import { flattenTree } from "./utils";
 
+/** ?course= / ?course_id= (chuỗi có thể là full search hoặc không có ?) */
+function parseCourseIdFromSearchString(searchOrQuery: string | null | undefined): string | null {
+    if (searchOrQuery == null || searchOrQuery === "") return null;
+    const s = searchOrQuery.startsWith("?") ? searchOrQuery.slice(1) : searchOrQuery;
+    const p = new URLSearchParams(s);
+    return p.get("course") || p.get("course_id");
+}
+
+/** HashRouter / link dạng #/path?course= */
+function parseCourseIdFromHash(hash: string | null | undefined): string | null {
+    if (!hash) return null;
+    const q = hash.indexOf("?");
+    if (q < 0) return null;
+    return parseCourseIdFromSearchString(hash.slice(q + 1));
+}
+
+/** Khôi phục trạng thái expand sau F5 — cần để gọi get-course-detail cho mọi course đang mở */
+function getExpandedNodesStorageKey(postId: string | number) {
+    return `vn4_course_tree_expanded_${postId}`;
+}
+
 export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
     const navigate = useNavigate();
     const location = useLocation();
+    const locationSearchRef = React.useRef(location.search);
+    React.useLayoutEffect(() => {
+        locationSearchRef.current = location.search;
+    }, [location.search]);
     const [courses, setCourses] = React.useState<Course[] | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [languages, setLanguages] = React.useState<Language[]>([]);
     const [currentLanguageCode, setCurrentLanguageCode] = React.useState<string>("");
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const [drawerData, setDrawerData] = React.useState<DataResultApiProps | false>(false);
-    const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set());
+    const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(() => {
+        try {
+            const raw = sessionStorage.getItem(getExpandedNodesStorageKey(data.post.id));
+            if (raw) {
+                const arr = JSON.parse(raw) as unknown;
+                if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) {
+                    return new Set(arr);
+                }
+            }
+        } catch {
+            /* ignore */
+        }
+        return new Set();
+    });
+    const expandedNodesRef = React.useRef<Set<string>>(new Set());
+    React.useLayoutEffect(() => {
+        expandedNodesRef.current = expandedNodes;
+    }, [expandedNodes]);
+
+    React.useEffect(() => {
+        try {
+            sessionStorage.setItem(
+                getExpandedNodesStorageKey(data.post.id),
+                JSON.stringify(Array.from(expandedNodes))
+            );
+        } catch {
+            /* ignore */
+        }
+    }, [expandedNodes, data.post.id]);
+    /** Snapshot cây sau merge get-course-list — dùng để map expandedNodes → course id (nhiều course mở cùng lúc) */
+    const listMergeSnapshotRef = React.useRef<Course[] | null>(null);
     const [selectedCourseId, setSelectedCourseId] = React.useState<string | null>(() => {
         const searchParams = new URLSearchParams(window.location.search);
         return searchParams.get("course") || null;
@@ -74,8 +129,84 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
     const [previewNode, setPreviewNode] = React.useState<Lesson | null>(null);
     const [previewCount, setPreviewCount] = React.useState(0);
     const [loadingPreview, setLoadingPreview] = React.useState(false);
+    const [loadingMarkLessonComplete, setLoadingMarkLessonComplete] = React.useState(false);
     const checkDataCrawRef = React.useRef<CheckDataCrawRef>(null);
     const [loadedCourseDetailIds, setLoadedCourseDetailIds] = React.useState<Set<string>>(new Set());
+    /** Luôn khớp selectedCourseId (success callback của ajax có thể chạy sau nhiều render — không dùng stale closure) */
+    const selectedCourseIdRef = React.useRef<string | null>(selectedCourseId);
+    React.useLayoutEffect(() => {
+        selectedCourseIdRef.current = selectedCourseId;
+    }, [selectedCourseId]);
+
+    /** Phải khai báo function (hoisted) trước loadData — success callback của get-course-list gọi được an toàn */
+    function loadCourseDetail(courseId: string | number) {
+        api.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/get-course-detail",
+            method: "POST",
+            data: {
+                id: data.post.id,
+                course_id: courseId,
+            },
+            loading: false,
+            success: (result: { course: Course; languages?: Language[] }) => {
+                if (result.course) {
+                    setCourses((prev) => {
+                        if (!prev || prev.length === 0) {
+                            const anyCourse = result.course as ANY;
+                            return [{
+                                ...result.course,
+                                sections: anyCourse.sections || [],
+                            }];
+                        }
+
+                        const nextCourses = prev.map((c) => {
+                            if (String(c.id) !== String(result.course.id)) return c;
+
+                            const anyDetail = result.course as ANY;
+                            const merged: Course = {
+                                ...c,
+                                ...result.course,
+                            };
+
+                            const prevAny = c as ANY;
+
+                            if (anyDetail.summary_data == null && prevAny.summary_data != null) {
+                                merged.summary_data = prevAny.summary_data;
+                            }
+
+                            {
+                                const detailSec = anyDetail.sections;
+                                if (Array.isArray(detailSec) && detailSec.length > 0) {
+                                    (merged as ANY).sections = detailSec;
+                                } else if (detailSec === undefined || detailSec === null) {
+                                    (merged as ANY).sections = prevAny.sections || [];
+                                } else {
+                                    (merged as ANY).sections = [];
+                                }
+                            }
+
+                            return merged;
+                        });
+
+                        return mergeNodes(prev, nextCourses);
+                    });
+                    setLoadedCourseDetailIds((prev) => {
+                        const next = new Set(prev);
+                        next.add(String(result.course.id));
+                        return next;
+                    });
+                }
+
+                if (result.languages && result.languages.length > 0) {
+                    setLanguages(result.languages);
+                    if (!currentLanguageCode) {
+                        const defaultLang = result.languages.find((l: Language) => l.is_default) || result.languages[0];
+                        setCurrentLanguageCode(defaultLang.code);
+                    }
+                }
+            },
+        });
+    }
 
     const confirmSync = useConfirmDialog({
         title: "Xác nhận đồng bộ Courses",
@@ -271,12 +402,44 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 id: data.post.id,
             },
             loading: false, // Prevent global loading indicator
-            success: (result: { courses: Course[]; languages: Language[] }) => {
-                if (result.courses) {
-                    setCourses((prev) => {
-                        // Đảm bảo course list luôn có trường sections (ít nhất là mảng rỗng)
-                        // và dựng lại summary_data từ các field count_* nếu backend trả về dạng phẳng.
-                        const normalizedCourses = result.courses.map((c: Course) => {
+            success: (result: ANY) => {
+                const scheduleDetailAfterList = () => {
+                    const ids = new Set<string>();
+
+                    const tree = listMergeSnapshotRef.current;
+                    if (tree && tree.length > 0) {
+                        expandedNodesRef.current.forEach((nodeKey) => {
+                            if (!nodeKey.startsWith("course-")) return;
+                            const node = findNodeByKey(tree, nodeKey);
+                            if (node && getNodeType(node) === "course") {
+                                ids.add(String((node as Course).id));
+                            }
+                        });
+                    }
+
+                    if (selectedCourseIdRef.current) {
+                        ids.add(String(selectedCourseIdRef.current));
+                    }
+                    const fromUrl =
+                        parseCourseIdFromSearchString(window.location.search) ||
+                        parseCourseIdFromSearchString(locationSearchRef.current) ||
+                        parseCourseIdFromHash(window.location.hash);
+                    if (fromUrl) {
+                        ids.add(String(fromUrl));
+                    }
+
+                    ids.forEach((id) => loadCourseDetail(id));
+                };
+
+                try {
+                    const coursesPayload: Course[] | undefined =
+                        result.courses ??
+                        result.data?.courses ??
+                        (Array.isArray(result.data) ? (result.data as Course[]) : undefined) ??
+                        result.data?.data?.courses;
+
+                    if (coursesPayload) {
+                        const normalizedCourses = coursesPayload.map((c: Course) => {
                             const anyCourse = c as ANY;
 
                             let summaryData = c.summary_data;
@@ -305,90 +468,55 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                 summary_data: summaryData ?? c.summary_data,
                             } as Course;
                         });
-                        // Use mergeNodes to preserve object references for unchanged nodes
-                        return mergeNodes(prev || [], normalizedCourses);
-                    });
-                    // Khi reload danh sách, coi như chưa có chi tiết nào được cache
-                    setLoadedCourseDetailIds(new Set());
-                } else {
-                    setCourses([]);
-                    setLoadedCourseDetailIds(new Set());
-                }
+                        const merged = mergeNodes(courses || [], normalizedCourses);
+                        listMergeSnapshotRef.current = merged;
+                        setCourses(merged);
+                        setLoadedCourseDetailIds(new Set());
+                    } else {
+                        listMergeSnapshotRef.current = null;
+                        setCourses([]);
+                        setLoadedCourseDetailIds(new Set());
+                    }
 
-                if (result.languages) {
-                    setLanguages(result.languages);
-                }
+                    const langs = result.languages ?? result.data?.languages;
+                    if (langs) {
+                        setLanguages(langs);
+                    }
 
-                if (result.languages && result.languages.length > 0 && !currentLanguageCode) {
-                    const defaultLang = result.languages.find((l: Language) => l.is_default) || result.languages[0];
-                    setCurrentLanguageCode(defaultLang.code);
+                    if (langs && langs.length > 0 && !currentLanguageCode) {
+                        const defaultLang = langs.find((l: Language) => l.is_default) || langs[0];
+                        setCurrentLanguageCode(defaultLang.code);
+                    }
+                    setLoading(false);
+                } finally {
+                    // Luôn chạy kể cả khi merge/setCourses lỗi; queueMicrotask sau flush React + đọc lại URL/hash
+                    queueMicrotask(scheduleDetailAfterList);
                 }
-                setLoading(false);
             },
         });
     };
 
-    const loadCourseDetail = (courseId: string | number) => {
+    const previewLessonCompleted = Boolean(previewNode?.is_completed);
+
+    const handleMarkLessonComplete = () => {
+        if (!previewNode?.id) return;
+        setLoadingMarkLessonComplete(true);
         api.ajax({
-            // API chi tiết cho một khóa học, chỉ gọi khi người dùng mở / chọn khóa học
-            url: "plugin/vn4-e-learning/app-mobile/course-new/get-course-detail",
+            url: "plugin/vn4-e-learning/app-mobile/course-new/mark-lesson-complete",
             method: "POST",
             data: {
-                id: data.post.id,
-                course_id: courseId,
+                lesson_id: previewNode.id,
             },
             loading: false,
-            success: (result: { course: Course; languages?: Language[] }) => {
-                if (result.course) {
-                    setCourses((prev) => {
-                        if (!prev || prev.length === 0) {
-                            const anyCourse = result.course as ANY;
-                            return [{
-                                ...result.course,
-                                sections: anyCourse.sections || [],
-                            }];
-                        }
-
-                        const nextCourses = prev.map((c) => {
-                            if (String(c.id) !== String(result.course.id)) return c;
-
-                            const anyDetail = result.course as ANY;
-                            const merged: Course = {
-                                // Giữ lại các thông tin đã có từ list (summary_data, count_*, ...)
-                                ...c,
-                                // Ghi đè bằng thông tin chi tiết (sections, lessons, questions, ...)
-                                ...result.course,
-                            };
-
-                            const prevAny = c as ANY;
-
-                            // Giữ summary_data nếu API chi tiết không trả về
-                            if (anyDetail.summary_data == null && prevAny.summary_data != null) {
-                                merged.summary_data = prevAny.summary_data;
-                            }
-
-                            // Đảm bảo luôn có sections (ít nhất là mảng rỗng) để UI nhận diện là course có children
-                            (merged as ANY).sections = anyDetail.sections || prevAny.sections || [];
-
-                            return merged;
-                        });
-
-                        return mergeNodes(prev, nextCourses);
-                    });
-                    setLoadedCourseDetailIds((prev) => {
-                        const next = new Set(prev);
-                        next.add(String(result.course.id));
-                        return next;
-                    });
-                }
-
-                if (result.languages && result.languages.length > 0) {
-                    setLanguages(result.languages);
-                    if (!currentLanguageCode) {
-                        const defaultLang = result.languages.find((l: Language) => l.is_default) || result.languages[0];
-                        setCurrentLanguageCode(defaultLang.code);
-                    }
-                }
+            success: () => {
+                setLoadingMarkLessonComplete(false);
+                setPreviewNode((prev) =>
+                    prev ? { ...prev, is_completed: !prev.is_completed } : null
+                );
+                loadData();
+            },
+            error: () => {
+                setLoadingMarkLessonComplete(false);
             },
         });
     };
@@ -863,7 +991,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </MenuItem>
                         <MenuItem onClick={handleCountRiveCourse}>
                             <AnimationIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Đếm question has rive image
+                            Đếm rive, Chat AI
                         </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>
@@ -1021,22 +1149,53 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                 width={1900}
                 title={previewCount > 0 ? `Preview Questions (${previewCount})` : "Preview Questions"}
                 headerAction={
-                    <LoadingButton
-                        size="small"
-                        variant="contained"
-                        loading={loadingPreview}
-                        onClick={() => checkDataCrawRef.current?.refreshPreview()}
-                        sx={{
-                            color: "primary.main",
-                            backgroundColor: "white",
-                            "&:hover": {
-                                backgroundColor: "rgba(255,255,255,0.9)",
-                            },
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                        }}
-                    >
-                        Refresh
-                    </LoadingButton>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            loading={loadingPreview}
+                            onClick={() => checkDataCrawRef.current?.refreshPreview()}
+                            sx={{
+                                color: "primary.main",
+                                backgroundColor: "white",
+                                "&:hover": {
+                                    backgroundColor: "rgba(255,255,255,0.9)",
+                                },
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                            }}
+                        >
+                            Refresh
+                        </LoadingButton>
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            color={previewLessonCompleted ? "success" : "primary"}
+                            loading={loadingMarkLessonComplete}
+                            disabled={!previewNode?.id}
+                            onClick={handleMarkLessonComplete}
+                            title={
+                                previewLessonCompleted
+                                    ? "Nhấn để bỏ trạng thái hoàn thành lesson"
+                                    : "Nhấn để đánh dấu lesson đã hoàn thành"
+                            }
+                            sx={
+                                previewLessonCompleted
+                                    ? {
+                                          boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                                      }
+                                    : {
+                                          color: "primary.main",
+                                          backgroundColor: "white",
+                                          "&:hover": {
+                                              backgroundColor: "rgba(255,255,255,0.9)",
+                                          },
+                                          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                                      }
+                            }
+                        >
+                            {previewLessonCompleted ? "Đã hoàn thành" : "Đánh dấu hoàn thành"}
+                        </LoadingButton>
+                    </Box>
                 }
                 restDialogContent={{
                     sx: {

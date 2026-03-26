@@ -161,6 +161,7 @@ export default function QuestionPreview({ question, langCode = 'en', languages =
                         compIndex,
                         appMobileId,
                         onRefresh,
+                        questionId: question?.post_id ?? question?.id,
                     }}
                 />
             ))}

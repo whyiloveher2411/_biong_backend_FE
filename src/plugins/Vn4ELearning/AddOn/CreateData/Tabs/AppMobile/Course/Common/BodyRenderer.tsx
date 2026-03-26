@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Box, Typography, Button, CircularProgress } from '@mui/material';
 import { LoadingButton } from "@mui/lab";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -81,8 +82,8 @@ const stripBlockTags = (html: string) => {
     return html.replace(/<block>/g, '<span class="text-block">').replace(/<\/block>/g, '</span>');
 };
 
-/** Prefix S3 - ảnh đã upload lên S3 thì không cần download. Chỉ hiển thị nút Download Image khi URL khác prefix này. */
-const S3_IMAGE_PREFIX = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
+/** Prefix S3 - ảnh/rive đã upload lên S3 thì không cần download. Chỉ hiển thị nút Download khi URL khác prefix này. */
+const S3_PREFIX_LINK = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
 
 interface BodyRendererProps {
     component: ANY;
@@ -98,6 +99,8 @@ interface BodyRendererProps {
         appMobileId?: number | string;
         /** Gọi khi download-image thành công để refresh data */
         onRefresh?: () => void;
+        /** ID question - dùng cho API complete-chat-suggestions */
+        questionId?: number | string;
     };
 }
 
@@ -135,6 +138,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
     const { ajax } = useAjax();
     const [loading, setLoading] = React.useState(false);
     const [loadingDownload, setLoadingDownload] = React.useState(false);
+    const [loadingCompleteChat, setLoadingCompleteChat] = React.useState(false);
     const [showPrompt, setShowPrompt] = React.useState(false);
     const [copied, setCopied] = React.useState(false);
     const [openEditDrawer, setOpenEditDrawer] = React.useState(false);
@@ -449,7 +453,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                         <img src={imgSrc} alt={component.description || 'Question Image'} style={{ maxWidth: '100%', display: 'block' }} />
 
                         {/* Nút Download Image: chỉ hiển thị khi URL không phải S3 (cần download và upload lên S3) */}
-                        {imgSrc && !imgSrc.startsWith(S3_IMAGE_PREFIX) && context?.appMobileId != null && (
+                        {imgSrc && !imgSrc.startsWith(S3_PREFIX_LINK) && context?.appMobileId != null && (
                             <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
                                 <LoadingButton
                                     loading={loadingDownload}
@@ -650,7 +654,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             <span style={{ fontSize: '14px' }}>⌨️</span> Keyboard Input
                         </Typography>
                     )}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
+                    <div style={{ display: 'inline-block', flexWrap: 'wrap', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
                         {component.parts?.map((part: ANY, partIndex: number) => {
                             if (!part.isASecret) {
                                 if (part.type === 'new_line') {
@@ -721,8 +725,57 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                     </div>
                 </div>
             );
-        case 'ai_chat':
-        case 'chat_suggestions':
+        case 'ai_chat': {
+            const questionId = context?.questionId;
+            const hasMessages = Array.isArray(component.messages) && component.messages.length > 0;
+            const hasInputDefault = component.inputDefaultValue != null && String(component.inputDefaultValue).trim() !== '';
+            const hasResponse = component.response != null && String(component.response).trim() !== '';
+            const hasContent = hasMessages || hasInputDefault || hasResponse;
+
+            const handleCompleteChatSuggestions = () => {
+                if (!questionId || !onUpdate) return;
+                setLoadingCompleteChat(true);
+                ajax({
+                    url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/complete-chat-suggestions',
+                    method: 'POST',
+                    data: { id: questionId },
+                    success: (res: ANY) => {
+                        setLoadingCompleteChat(false);
+                        if (res?.component && onUpdate) {
+                            onUpdate(res.component);
+                        } else if (onUpdate && res) {
+                            onUpdate({ ...rawComponent, ...res });
+                        }
+                        context?.onRefresh?.();
+                    },
+                    error: () => {
+                        setLoadingCompleteChat(false);
+                    }
+                });
+            };
+
+            const renderChatBubble = (content: string, isUser: boolean) => (
+                <Box
+                    sx={{
+                        alignSelf: isUser ? 'flex-end' : 'flex-start',
+                        maxWidth: '85%',
+                        p: 1.5,
+                        bgcolor: isUser ? '#2196f3' : '#fff',
+                        color: isUser ? '#fff' : '#333',
+                        borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                        fontSize: '0.875rem',
+                        border: isUser ? 'none' : '1px solid #e0e0e0',
+                        boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.06)',
+                        '& p': { margin: '0 0 0.5em 0' },
+                        '& p:last-child': { marginBottom: 0 },
+                        '& pre': { margin: 0, overflow: 'auto' },
+                        '& code': { fontSize: '0.8em' }
+                    }}
+                >
+                    <ReactMarkdown>{content}</ReactMarkdown>
+                </Box>
+            );
+
             return (
                 <div style={{ width: '100%', maxWidth: '600px', margin: '20px auto', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
                     <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
@@ -730,10 +783,140 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                     </div>
                     <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
                         {component.chatInstructions && <div style={{ marginBottom: '15px', color: '#546e7a' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />}
-                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>[AI Chat Preview]</Typography>
+                        {hasContent && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                {hasMessages && component.messages.map((msg: ANY, idx: number) => {
+                                    if (msg.content == null || String(msg.content).trim() === '') return null;
+                                    return <Box key={idx}>{renderChatBubble(String(msg.content).replace(/\\</g, ''), msg.role === 'user')}</Box>;
+                                })}
+                                {hasInputDefault && (
+                                    <Box sx={{ alignSelf: 'flex-end', maxWidth: '85%', p: 1.5, bgcolor: '#2196f3', color: '#fff', borderRadius: '12px 12px 4px 12px', fontSize: '0.875rem' }}>
+                                        {String(component.inputDefaultValue)}
+                                    </Box>
+                                )}
+                                {hasResponse && renderChatBubble(String(component.response), false)}
+                            </Box>
+                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                loading={loadingCompleteChat}
+                                onClick={handleCompleteChatSuggestions}
+                                startIcon={<AutoFixHighIcon fontSize="small" />}
+                                disabled={!questionId}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Suggest chat content
+                            </LoadingButton>
+                            {!questionId && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                    Lưu câu hỏi trước khi dùng AI hoàn thành
+                                </Typography>
+                            )}
+                        </Box>
+                        {!hasContent && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>[AI Chat Preview]</Typography>
+                        )}
                     </div>
                 </div>
             );
+        }
+        case 'chat_suggestions': {
+            const questionId = context?.questionId;
+            const handleCompleteChatSuggestions = () => {
+                if (!questionId || !onUpdate) return;
+                setLoadingCompleteChat(true);
+                ajax({
+                    url: 'plugin/vn4-e-learning/app-mobile/course-new/ai/complete-chat-suggestions',
+                    method: 'POST',
+                    data: { id: questionId },
+                    success: (res: ANY) => {
+                        setLoadingCompleteChat(false);
+                        if (res?.component && onUpdate) {
+                            onUpdate(res.component);
+                        } else if (res?.chat_suggestions != null && onUpdate) {
+                            onUpdate({ ...rawComponent, ...res });
+                        }
+                        context?.onRefresh?.();
+                    },
+                    error: () => {
+                        setLoadingCompleteChat(false);
+                    }
+                });
+            };
+            return (
+                <div style={{ width: '100%', maxWidth: '600px', margin: '20px auto', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#e3f2fd', padding: '12px', textAlign: 'center', borderBottom: '2px solid #2196f3', color: '#1976d2', fontWeight: 'bold' }}>
+                        CHAT SUGGESTIONS
+                    </div>
+                    <div style={{ padding: '20px', backgroundColor: '#f0f4f8' }}>
+                        {component.chatInstructions && <div style={{ marginBottom: '15px', color: '#546e7a' }} dangerouslySetInnerHTML={{ __html: component.chatInstructions }} />}
+                        {Array.isArray(component.options) && component.options.length > 0 && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
+                                {component.options.map((opt: ANY, idx: number) => (
+                                    <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                        {(() => {
+                                            const responseImageSrc = parseImgSrc(opt.response_image);
+                                            const hasResponseImage = responseImageSrc != null && String(responseImageSrc).trim() !== '';
+                                            return (
+                                                <>
+                                        {opt.text != null && opt.text !== '' && (
+                                            <Box sx={{ alignSelf: 'flex-end', maxWidth: '85%', p: 1.5, bgcolor: '#2196f3', color: '#fff', borderRadius: '12px 12px 4px 12px', fontSize: '0.875rem', '& p': { margin: 0 } }}>
+                                                <div style={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: String(opt.text || '').replace(/<block>|<\/block>/g, '') }} />
+                                            </Box>
+                                        )}
+                                        {hasResponseImage && (
+                                            <Box sx={{ alignSelf: 'flex-start', maxWidth: '85%', p: 1, bgcolor: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px 12px 12px 4px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                                                <img
+                                                    src={responseImageSrc}
+                                                    alt="AI response"
+                                                    style={{ display: 'block', maxWidth: '100%', borderRadius: 8 }}
+                                                />
+                                            </Box>
+                                        )}
+                                        {!hasResponseImage && opt.response != null && opt.response !== '' && (
+                                            <Box sx={{ alignSelf: 'flex-start', maxWidth: '85%', p: 1.5, bgcolor: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px 12px 12px 4px', fontSize: '0.875rem', color: '#333', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', '& p': { margin: '0 0 0.5em 0' }, '& p:last-child': { marginBottom: 0 }, '& ul': { margin: '0.25em 0', paddingLeft: '1.25em' } }}>
+                                                <ReactMarkdown>{String(opt.response || '')}</ReactMarkdown>
+                                            </Box>
+                                        )}
+                                        {(!opt.text || opt.text === '') && (!opt.response || opt.response === '') && !hasResponseImage && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>[Chưa có nội dung]</Typography>
+                                        )}
+                                                </>
+                                            );
+                                        })()}
+                                    </Box>
+                                ))}
+                            </Box>
+                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                loading={loadingCompleteChat}
+                                onClick={handleCompleteChatSuggestions}
+                                startIcon={<AutoFixHighIcon fontSize="small" />}
+                                disabled={!questionId}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Suggest chat content
+                            </LoadingButton>
+                            {!questionId && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                    Lưu câu hỏi trước khi dùng AI hoàn thành
+                                </Typography>
+                            )}
+                        </Box>
+                        {(!component.options || component.options.length === 0) && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', display: 'block', mt: 1 }}>[AI Chat Preview]</Typography>
+                        )}
+                    </div>
+                </div>
+            );
+        }
         case 'connect_block': {
             const connectContent = (component.content?.question_items || component.content?.left) ? component.content : component;
             const colors = ['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f', '#0288d1', '#7b1fa2'];
@@ -771,8 +954,9 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
         }
         case 'rive': {
             const assetUrl = component.webAssetUrl || component.mobileAssetUrl;
+            const riveUrlNeedsDownload = assetUrl && typeof assetUrl === 'string' && !assetUrl.startsWith(S3_PREFIX_LINK);
             return (
-                <div style={{ width: '100%', maxWidth: '600px', margin: '20px auto' }}>
+                <div style={{ width: '100%', maxWidth: '600px', margin: '20px auto', textAlign: 'center' }}>
                     <div style={{ position: 'relative', width: '100%', paddingTop: `75%`, backgroundColor: '#f0f0f0', borderRadius: '8px', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
                             {assetUrl ? (
@@ -780,6 +964,24 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             ) : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>No Rive asset</div>}
                         </div>
                     </div>
+                    {/* Nút Download: Rive cũng cần download khi link prefix khác S3 */}
+                    {riveUrlNeedsDownload && context?.appMobileId != null && (
+                        <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+                            <LoadingButton
+                                loading={loadingDownload}
+                                variant="outlined"
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadImage();
+                                }}
+                                startIcon={<DownloadIcon fontSize="small" />}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Download Image
+                            </LoadingButton>
+                        </Box>
+                    )}
                 </div>
             );
         }
