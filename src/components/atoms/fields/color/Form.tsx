@@ -20,12 +20,42 @@ const useStyles = makeStyles({
         opacity: 0,
         cursor: 'pointer',
     },
+    colorSwatchList: {
+        marginTop: 8,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignItems: 'center',
+    },
+    colorSwatchItem: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        border: '3px solid rgba(0,0,0,0.15)',
+        boxSizing: 'border-box',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    colorSwatchItemActive: {
+        borderColor: '#111',
+        boxShadow: '0 0 0 1px #111, 0 0 0 3px #fff',
+    },
 })
 
 export default React.memo(function ColorForm({ config, post, onReview, name }: FieldFormItemProps) {
 
     const classes = useStyles()
     const valueInital = post && post[name] ? post[name] : '';
+    const listOptionColors = React.useMemo(() => {
+        if (!Array.isArray(config.list_option)) return [];
+
+        return config.list_option
+            .map((value: unknown) => typeof value === 'string' ? value.trim() : '')
+            .filter((value: string) => /^#?[0-9A-Fa-f]{6}$/.test(value))
+            .map((value: string) => value.startsWith('#') ? value : `#${value}`);
+    }, [config.list_option]);
 
     const [, setValue] = React.useState(0);
     const latestValueRef = React.useRef(valueInital);
@@ -92,6 +122,31 @@ export default React.memo(function ColorForm({ config, post, onReview, name }: F
             {
                 Boolean(config.note) &&
                 <FormHelperText>{config.note}</FormHelperText>
+            }
+            {
+                listOptionColors.length > 0 && (
+                    <div className={classes.colorSwatchList}>
+                        {listOptionColors.map((hex: string) => {
+                            const selected = (valueInital ?? '').toLowerCase() === hex.toLowerCase();
+                            return (
+                                <div
+                                    key={hex}
+                                    className={`${classes.colorSwatchItem}${selected ? ` ${classes.colorSwatchItemActive}` : ''}`}
+                                    style={{ backgroundColor: hex }}
+                                    onClick={() => handleChange(hex)}
+                                    aria-label={`Chọn màu ${hex}`}
+                                >
+                                    {selected && (
+                                        <Icon
+                                            icon="Check"
+                                            style={{ color: '#fff', filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.75))' }}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )
             }
             <SpecialNotes specialNotes={config.special_notes} />
         </FormControl>

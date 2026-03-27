@@ -42,6 +42,7 @@ export interface Chapter {
     id: string | number;
     title: string; // JSON
     key?: string;
+    colorHex?: string;
     subtitle?: string; // JSON
     lessons?: Lesson[];
     order?: number;

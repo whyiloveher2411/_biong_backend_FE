@@ -304,6 +304,9 @@ function CourseTreeItem({
     const children = getChildren(node);
 
     const title = parseJsonTitle((node as Course).title || "", currentLanguageCode);
+    const isChapterMissingColorHex = nodeType === "chapter" && !(node as Chapter).colorHex?.trim();
+    const nodeTypeChipLabel = isChapterMissingColorHex ? "Yêu cầu update colorHex" : getNodeLabel(node);
+    const chapterColorHex = nodeType === "chapter" ? (node as Chapter).colorHex?.trim() : undefined;
 
     // Calculate context for children
     const childContext: ParentContext = React.useMemo(() => {
@@ -651,12 +654,12 @@ function CourseTreeItem({
                                     })()}
 
                                     <Chip
-                                        label={getNodeLabel(node)}
+                                        label={nodeTypeChipLabel}
                                         size="small"
                                         sx={{
                                             height: 16,
                                             fontSize: "0.625rem",
-                                            backgroundColor: nodeColor,
+                                            backgroundColor: chapterColorHex || nodeColor,
                                             color: "white",
                                             fontWeight: 600,
                                             cursor: "pointer",
