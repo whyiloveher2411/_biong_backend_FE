@@ -22,6 +22,7 @@ import TableBody from 'components/atoms/TableBody';
 import TableCell from 'components/atoms/TableCell';
 import TableContainer from 'components/atoms/TableContainer';
 import TableRow from 'components/atoms/TableRow';
+import Tooltip from 'components/atoms/Tooltip';
 import Typography from 'components/atoms/Typography';
 import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import { default as DialogCustom } from 'components/molecules/Dialog';
@@ -175,6 +176,36 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
 
     post[name] = valueInital;
 
+    const safeStringify = (value: ANY) => {
+        const seen = new WeakSet<object>();
+
+        return JSON.stringify(value, (key, currentValue) => {
+            if (typeof currentValue === 'function' || typeof currentValue === 'symbol') {
+                return undefined;
+            }
+
+            if (typeof window !== 'undefined' && currentValue instanceof HTMLElement) {
+                return undefined;
+            }
+
+            if (key && key.startsWith('__react')) {
+                return undefined;
+            }
+
+            if (currentValue && typeof currentValue === 'object') {
+                if (seen.has(currentValue)) {
+                    return undefined;
+                }
+
+                seen.add(currentValue);
+            }
+
+            return currentValue;
+        });
+    };
+
+    const getConfigSignature = () => safeStringify(config?.templates ?? config);
+
     const expandedAccordion = (i: number, changeOpen: boolean) => {
 
         expandedAccordionData[i] = changeOpen;
@@ -321,43 +352,63 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
         }
     };
 
-    const handleCopyToClipboard = () => {
-        if (indexOfAction !== false) {
-            let item = { config: config, value: copyArray(valueInital[indexOfAction]) };
-            navigator.clipboard.writeText(JSON.stringify(item));
-            showMessage(__('Copied to clipboard.'), 'info');
-            setIndexOfAction(false);
-        }
+    const handleCopyToClipboard = (explicitRowIndex?: number) => {
+        const rowIndex =
+            typeof explicitRowIndex === 'number'
+                ? explicitRowIndex
+                : indexOfAction !== false
+                    ? indexOfAction
+                    : false;
+
+        if (rowIndex === false || valueInital[rowIndex] === undefined) return;
+
+        let item = {
+            configSignature: getConfigSignature(),
+            value: copyArray(valueInital[rowIndex])
+        };
+        navigator.clipboard.writeText(safeStringify(item));
+        showMessage(__('Copied to clipboard.'), 'info');
+        setIndexOfAction(false);
     };
 
-    const handlePasteFromClipboard = () => {
+    const handlePasteFromClipboard = (explicitRowIndex?: number) => {
+        const rowIndex =
+            typeof explicitRowIndex === 'number'
+                ? explicitRowIndex
+                : indexOfAction !== false
+                    ? indexOfAction
+                    : false;
+
+        if (rowIndex === false || valueInital[rowIndex] === undefined) return;
+
         let items = copyArray(valueInital);
 
-        if (indexOfAction !== false && items[indexOfAction]) {
-            navigator.clipboard.readText()
-                .then(text => {
-                    let itemFromclipboard = JSON.parse(text);
+        navigator.clipboard.readText()
+            .then(text => {
+                let itemFromclipboard = JSON.parse(text);
 
-                    if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
-                        if (itemFromclipboard.value) {
-                            items[indexOfAction] = { ...itemFromclipboard.value, open: items[indexOfAction].open };
-                            post[name] = items;
-                            showMessage(__('Paste from clipboard success.'), 'success');
-                        } else {
-                            showMessage(__('Paste from clipboard error.'), 'warning');
-                        }
+                const currentConfigSignature = getConfigSignature();
+                const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
+
+                if (clipboardConfigSignature === currentConfigSignature) {
+                    if (itemFromclipboard.value) {
+                        items[rowIndex] = { ...itemFromclipboard.value, open: items[rowIndex].open };
+                        post[name] = items;
+                        showMessage(__('Paste from clipboard success.'), 'success');
                     } else {
-                        showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                        showMessage(__('Paste from clipboard error.'), 'warning');
                     }
+                } else {
+                    showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                }
 
-                    setIndexOfAction(false);
-                    onReview(post[name]);
-                })
-                .catch(() => {
-                    showMessage(__('Paste from clipboard error.'), 'warning');
-                    setIndexOfAction(false);
-                });
-        }
+                setIndexOfAction(false);
+                onReview(post[name]);
+            })
+            .catch(() => {
+                showMessage(__('Paste from clipboard error.'), 'warning');
+                setIndexOfAction(false);
+            });
     }
 
     const addElement = (key: string) => {
@@ -394,8 +445,11 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
     };
 
     const handleCopyAll = () => {
-        let item = { config: config, value: copyArray(valueInital) };
-        navigator.clipboard.writeText(JSON.stringify(item));
+        let item = {
+            configSignature: getConfigSignature(),
+            value: copyArray(valueInital)
+        };
+        navigator.clipboard.writeText(safeStringify(item));
         showMessage(__('Copied to clipboard.'), 'info');
         setIndexOfAction(false);
     }
@@ -407,7 +461,10 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
             .then(text => {
                 let itemFromclipboard = JSON.parse(text);
                 console.log(itemFromclipboard);
-                if (JSON.stringify(itemFromclipboard.config) === JSON.stringify(config)) {
+                const currentConfigSignature = getConfigSignature();
+                const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
+
+                if (clipboardConfigSignature === currentConfigSignature) {
                     if (itemFromclipboard.value) {
                         items = [...itemFromclipboard.value];
                         post[name] = items;
@@ -516,16 +573,47 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
                                                                     </Typography>
                                                                     <Typography className={classes.hicon} onClick={e => e.stopPropagation()} >
 
-                                                                        <IconButton
-                                                                            onClick={(e: React.MouseEvent<HTMLSpanElement>) => {
-                                                                                setIndexOfAction(index);
-                                                                                setRefMenuAction(e.currentTarget);
-                                                                            }}
-                                                                            // ref={indexOfAction === index ? refMenuAction : null}
-                                                                            aria-label="Delete"
-                                                                            component="span">
-                                                                            <Icon icon="MoreVert" />
-                                                                        </IconButton>
+                                                                        <Tooltip title={__('Copy to clipboard')}>
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    onClick={(e: React.MouseEvent<HTMLSpanElement>) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleCopyToClipboard(index);
+                                                                                    }}
+                                                                                    aria-label={__('Copy to clipboard')}
+                                                                                    component="span"
+                                                                                    size="small">
+                                                                                    <Icon icon="Memory" />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                        <Tooltip title={__('Paste from clipboard')}>
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    onClick={(e: React.MouseEvent<HTMLSpanElement>) => {
+                                                                                        e.stopPropagation();
+                                                                                        handlePasteFromClipboard(index);
+                                                                                    }}
+                                                                                    aria-label={__('Paste from clipboard')}
+                                                                                    component="span"
+                                                                                    size="small">
+                                                                                    <Icon icon="FileCopy" />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                        <Tooltip title={__('More actions')}>
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    onClick={(e: React.MouseEvent<HTMLSpanElement>) => {
+                                                                                        setIndexOfAction(index);
+                                                                                        setRefMenuAction(e.currentTarget);
+                                                                                    }}
+                                                                                    aria-label={__('More actions')}
+                                                                                    component="span">
+                                                                                    <Icon icon="MoreVert" />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
                                                                         <ConfirmDialog
                                                                             open={item.confirmDelete ? true : false}
                                                                             onClose={() => closeDialogConfirmDelete(index)}
@@ -767,18 +855,6 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
                         <Icon icon="AddToPhotosRounded" />
                     </ListItemIcon>
                     <ListItemText disableTypography primary="Duplicate" />
-                </MenuItem>
-                <MenuItem onClick={handleCopyToClipboard}>
-                    <ListItemIcon>
-                        <Icon icon="Memory" />
-                    </ListItemIcon>
-                    <ListItemText disableTypography primary="Copy to clipboard" />
-                </MenuItem>
-                <MenuItem onClick={handlePasteFromClipboard}>
-                    <ListItemIcon>
-                        <Icon icon="FileCopy" />
-                    </ListItemIcon>
-                    <ListItemText disableTypography primary="Paste from clipboard" />
                 </MenuItem>
                 <MenuItem onClick={trashRepeater}>
                     {

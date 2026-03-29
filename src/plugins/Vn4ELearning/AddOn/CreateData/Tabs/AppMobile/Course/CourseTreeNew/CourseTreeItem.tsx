@@ -39,6 +39,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import AnimationIcon from "@mui/icons-material/Animation";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import CodeIcon from "@mui/icons-material/Code";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
 import {
     getNodeType,
@@ -911,6 +912,22 @@ function CourseTreeItem({
                                         <SmartToyIcon sx={{ fontSize: 14, color: chatColor }} />
                                         <Typography variant="caption" sx={{ fontSize: "0.7rem", color: chatColor, fontWeight: 500 }}>
                                             {p.displayText}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })()}
+
+                            {/* Run code count - hiển thị nếu có dữ liệu */}
+                            {(nodeType === "course" || nodeType === "section" || nodeType === "chapter" || nodeType === "lesson") && (() => {
+                                const runCodeRaw = (node as (Course | Section | Chapter | Lesson) & { number_run_code?: number | string }).number_run_code;
+                                const runCodeCount = Number(runCodeRaw ?? 0);
+                                if (!Number.isFinite(runCodeCount) || runCodeCount <= 0) return null;
+
+                                return (
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mr: 1 }}>
+                                        <CodeIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                                        <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "text.secondary", fontWeight: 500 }}>
+                                            {runCodeCount}
                                         </Typography>
                                     </Box>
                                 );

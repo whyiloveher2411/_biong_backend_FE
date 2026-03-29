@@ -157,10 +157,15 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
     // Bắt phím Enter để submit form (native form submit có thể không chạy với một số input)
     React.useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key !== 'Enter' || e.shiftKey) return;
+            
+            const isEnter = e.key === 'Enter' && !e.shiftKey;
+            const isSpace = e.code === 'Space';
+
+            if (!isEnter && !isSpace) return;
 
             const target = e.target as HTMLElement;
             if (target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
             handleSubmit();
         };
         document.addEventListener('keydown', onKeyDown, true);

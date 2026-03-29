@@ -991,7 +991,7 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                         </MenuItem>
                         <MenuItem onClick={handleCountRiveCourse}>
                             <AnimationIcon sx={{ mr: 1, fontSize: 20 }} />
-                            Đếm rive, Chat AI
+                            Đếm rive/Chat AI/Run code
                         </MenuItem>
                         <Divider />
                         <MenuItem onClick={handleSyncCourses} disabled={apiSyncCourses.open}>

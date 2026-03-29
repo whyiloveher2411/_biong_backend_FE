@@ -11,6 +11,8 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ImageIcon from "@mui/icons-material/Image";
 import AnimationIcon from "@mui/icons-material/Animation";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import CodeIcon from "@mui/icons-material/Code";
+import ExtensionIcon from "@mui/icons-material/Extension";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
@@ -94,6 +96,70 @@ function questionHasRiveBody(question: ANY): boolean {
     }
     const components = ensureArray(body);
     return components.some((comp: ANY) => comp?.type === 'rive');
+}
+
+/** Kiểm tra câu hỏi có body type run_code */
+function questionHasRunCodeBody(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    return components.some((comp: ANY) => comp?.type === 'run_code');
+}
+
+/** Kiểm tra câu hỏi có body type parts */
+function questionHasPartsBody(question: ANY): boolean {
+    if (!question) return false;
+    const parseIfString = (data: ANY) => {
+        if (!data) return data;
+        if (typeof data === 'string') {
+            const t = data.trim();
+            if ((t.startsWith('{') || t.startsWith('[')) && t.length > 1) {
+                try { return JSON.parse(data); } catch { return data; }
+            }
+        }
+        return data;
+    };
+    const ensureArray = (data: ANY): ANY[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && data !== null) return Object.values(data);
+        return [];
+    };
+    let body = question.body_post || question.body || question.question_detail?.body;
+    if (!body && Array.isArray(question.question_detail)) body = question.question_detail;
+    body = parseIfString(body);
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+        const keys = Object.keys(body);
+        const langKeys = ['en', 'vi', 'vn'];
+        const firstLang = keys.find(k => langKeys.includes(k)) || keys[0];
+        if (firstLang) body = parseIfString(body[firstLang]);
+    }
+    const components = ensureArray(body);
+    return components.some((comp: ANY) => comp?.type === 'parts');
 }
 
 /** Kiểm tra câu hỏi có body type ai_chat hoặc chat_suggestions */
@@ -574,6 +640,8 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                 {previewData && previewData.questions.map((question: ANY, index: number) => {
                     const hasImageNeedingDownload = questionHasImageNeedingDownload(question);
                     const hasRiveBody = questionHasRiveBody(question);
+                    const hasRunCodeBody = questionHasRunCodeBody(question);
+                    const hasPartsBody = questionHasPartsBody(question);
                     const hasChatAiBody = questionHasChatAiBody(question);
                     const hasIncompleteChatResponse = questionHasIncompleteChatResponse(question);
                     const missingLangCodes = getMissingLangCodesForQuestion(question, languages);
@@ -589,6 +657,8 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                             const parts: string[] = [];
                             if (hasImageNeedingDownload) parts.push('Có ảnh cần download');
                             if (hasRiveBody) parts.push('Có Rive');
+                            if (hasRunCodeBody) parts.push('Có Run Code');
+                            if (hasPartsBody) parts.push('Có Parts');
                             if (hasChatAiBody) parts.push('Có Chat AI');
                             if (hasIncompleteChatResponse) parts.push('Response chưa hoàn thành');
                             if (missingLangCodes.length > 0) {
@@ -737,6 +807,39 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                             {hasRiveBody && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <AnimationIcon sx={{ fontSize: 14, color: '#d32f2f' }} />
+                                </Box>
+                            )}
+                            {hasRunCodeBody && (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        px: 0.5,
+                                        py: '2px',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#000',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                                    }}
+                                >
+                                    <CodeIcon sx={{ fontSize: 13, color: '#fff' }} />
+                                </Box>
+                            )}
+                            {hasPartsBody && (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        px: 0.5,
+                                        py: '2px',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#eceff1',
+                                        border: '1px solid #cfd8dc',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                                    }}
+                                >
+                                    <ExtensionIcon sx={{ fontSize: 13, color: '#546e7a' }} />
                                 </Box>
                             )}
                             {hasChatAiBody && (
@@ -1345,25 +1448,35 @@ function QuestionItem({ index, initialQuestion, postId, appMobileId, file, onDel
                             };
 
                             const isSufficient = checkSufficientData();
+                            const missingLangCodes = getMissingLangCodesForQuestion(question, languages);
+                            const showCheckIcon = isSufficient && missingLangCodes.length === 0;
 
                             return (
                                 <>
-                                    {isSufficient && (
-                                        <Box sx={{
-                                            position: 'absolute',
-                                            top: 0,
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            bgcolor: 'rgba(46, 125, 50, 0.05)',
-                                            zIndex: 10,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            borderRadius: '4px',
-                                            pointerEvents: 'none'
-                                        }}>
-                                            <CheckCircleIcon color="success" sx={{ fontSize: 200, opacity: 0.4, bgcolor: 'white', borderRadius: '50%', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
+                                    {showCheckIcon && (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                right: 8,
+                                                bottom: 8,
+                                                zIndex: 10,
+                                                pointerEvents: 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                            aria-hidden
+                                        >
+                                            <CheckCircleIcon
+                                                color="success"
+                                                sx={{
+                                                    fontSize: 45,
+                                                    opacity: 0.92,
+                                                    bgcolor: 'rgba(255,255,255,0.95)',
+                                                    borderRadius: '50%',
+                                                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                                                }}
+                                            />
                                         </Box>
                                     )}
                                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, borderBottom: '1px solid #eee', pb: 0.5 }}>

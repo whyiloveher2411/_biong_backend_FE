@@ -82,6 +82,19 @@ const stripBlockTags = (html: string) => {
     return html.replace(/<block>/g, '<span class="text-block">').replace(/<\/block>/g, '</span>');
 };
 
+/** Chuẩn hóa index_correct (number | string) cho body type parts — so khớp với chỉ số ô trống (0-based). */
+const normalizePartsIndexCorrect = (v: ANY): number | null => {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string') {
+        const t = v.trim();
+        if (t === '') return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+};
+
 /** Prefix S3 - ảnh/rive đã upload lên S3 thì không cần download. Chỉ hiển thị nút Download khi URL khác prefix này. */
 const S3_PREFIX_LINK = 'https://spacedev-app.s3.ap-southeast-1.amazonaws.com';
 
@@ -647,6 +660,15 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
         case 'parts': {
             let secretIndexCounter = 0;
             const isKeyboard = component.input_method === 'keyboard';
+            const secretCount = Array.isArray(component.parts)
+                ? component.parts.filter((part: ANY) => Boolean(part?.isASecret)).length
+                : 0;
+            const wrongOptions = Array.isArray(component.answer)
+                ? component.answer.filter((ans: ANY) => {
+                    const answerIndex = normalizePartsIndexCorrect(ans?.index_correct);
+                    return answerIndex === null || answerIndex < 0 || answerIndex >= secretCount;
+                })
+                : [];
             return (
                 <div style={{ marginBottom: '10px' }}>
                     {isKeyboard && (
@@ -663,7 +685,7 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                                 return <span key={partIndex}>{part.content}</span>;
                             } else {
                                 const currentSecretIndex = secretIndexCounter++;
-                                const matchingAnswer = component.answer?.find((a: ANY) => a.index_correct === currentSecretIndex);
+                                const matchingAnswer = component.answer?.find((a: ANY) => normalizePartsIndexCorrect(a.index_correct) === currentSecretIndex);
 
                                 if (isKeyboard) {
                                     const widthStyle = part.maxLength ? { minWidth: `${Math.max(30, part.maxLength * 9)}px` } : { minWidth: '40px' };
@@ -706,6 +728,25 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                             }
                         })}
                     </div>
+                    {wrongOptions.length > 0 && (
+                        <Box sx={{ mt: 1, p: 1.5, bgcolor: '#fff8e1', border: '1px solid #ffe0b2', borderRadius: 1 }}>
+                            <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#8a6d3b', mb: 0.5 }}>
+                                Option không đúng:
+                            </Typography>
+                            <Box component="ul" sx={{ margin: 0, pl: 2.5, color: '#6d4c41' }}>
+                                {wrongOptions.map((opt: ANY, idx: number) => {
+                                    const optionText = opt?.text ?? opt?.content ?? opt?.label ?? opt?.value ?? '';
+                                    return (
+                                        <li key={idx}>
+                                            <Typography component="span" variant="body2" sx={{ color: '#f44336', fontSize: '16px' }}>
+                                                {String(optionText || '[Không có nội dung]')}
+                                            </Typography>
+                                        </li>
+                                    );
+                                })}
+                            </Box>
+                        </Box>
+                    )}
                 </div>
             );
         }
