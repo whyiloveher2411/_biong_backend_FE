@@ -81,6 +81,8 @@ export default React.memo(function TextForm({ config, post, onReview, name, data
     )
 
 }, (props1, props2) => {
-    return props1.post[props1.name] === props2.post[props2.name];
+    return props1.post[props1.name] === props2.post[props2.name]
+        && props1.config?.inputProps?.disabled === props2.config?.inputProps?.disabled
+        && props1.config?.inputProps?.disable === props2.config?.inputProps?.disable;
 })
 

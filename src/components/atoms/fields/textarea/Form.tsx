@@ -103,7 +103,9 @@ export default React.memo(function TextareaForm({ dataPostType, ...props }: Fiel
         return false;
     }
 
-    return props1.post[props1.name] === props2.post[props2.name];
+    return props1.post[props1.name] === props2.post[props2.name]
+        && props1.config?.inputProps?.disabled === props2.config?.inputProps?.disabled
+        && props1.config?.inputProps?.disable === props2.config?.inputProps?.disable;
 })
 
 

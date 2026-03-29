@@ -41,6 +41,147 @@ import AnimationIcon from "@mui/icons-material/Animation";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import CodeIcon from "@mui/icons-material/Code";
 import { TreeNode, Course, Lesson, Language, Question, Section, Chapter } from "./types";
+
+const TREE_TITLE_FLAG_TYPES = new Set(["course", "section", "chapter", "lesson"]);
+
+/** atoms/Tooltip mặc định disablePortal — tooltip bị cắt bởi overflow:hidden trên hàng tree */
+const FLAG_TOOLTIP_POPPER_PROPS = { disablePortal: false };
+
+const FLAG_TOOLTIP_SX = {
+    maxWidth: 420,
+    whiteSpace: "normal" as const,
+    wordBreak: "break-word" as const,
+};
+
+function TitleLangPreviewFlags({
+    languages,
+    titleMap,
+    effectiveLang,
+    onSelectLang,
+}: {
+    languages?: Language[];
+    titleMap: Record<string, string>;
+    effectiveLang: string | null;
+    onSelectLang: (code: string) => void;
+}) {
+    const hasData = (code: string) => Boolean(titleMap[code]?.trim());
+    const configured = languages?.length ? languages : [];
+    const extraCodes = Object.keys(titleMap).filter(
+        (code) => hasData(code) && !configured.some((l) => l.code === code)
+    );
+
+    return (
+        <Box
+            sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            {configured.map((lang) => {
+                const ok = hasData(lang.code);
+                const selected = ok && effectiveLang === lang.code;
+                const flagImg = (
+                    <Box
+                        component="img"
+                        src={`https://flagcdn.com/w20/${lang.flag_code}.png`}
+                        alt=""
+                        sx={{
+                            width: 16,
+                            height: 10,
+                            objectFit: "cover",
+                            borderRadius: "2px",
+                            display: "block",
+                        }}
+                    />
+                );
+                const inner = ok ? (
+                    <Box
+                        component="button"
+                        type="button"
+                        onClick={() => onSelectLang(lang.code)}
+                        sx={{
+                            p: 0.25,
+                            m: 0,
+                            borderRadius: 0.75,
+                            border: "2px solid",
+                            borderColor: selected ? "primary.main" : "transparent",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            background: "none",
+                            lineHeight: 0,
+                            "&:hover": { bgcolor: "action.hover" },
+                        }}
+                    >
+                        {flagImg}
+                    </Box>
+                ) : (
+                    <Box
+                        sx={{
+                            p: 0.25,
+                            borderRadius: 0.75,
+                            border: "2px solid transparent",
+                            opacity: 0.38,
+                            display: "flex",
+                            alignItems: "center",
+                            lineHeight: 0,
+                        }}
+                    >
+                        {flagImg}
+                    </Box>
+                );
+                return (
+                    <Tooltip
+                        key={lang.code}
+                        title={
+                            ok
+                                ? titleMap[lang.code].trim()
+                                : `Chưa có tiêu đề (${lang.title})`
+                        }
+                        placement="top"
+                        PopperProps={FLAG_TOOLTIP_POPPER_PROPS}
+                        componentsProps={{ tooltip: { sx: FLAG_TOOLTIP_SX } }}
+                    >
+                        <span style={{ display: "inline-flex" }}>{inner}</span>
+                    </Tooltip>
+                );
+            })}
+            {extraCodes.map((code) => {
+                const selected = effectiveLang === code;
+                return (
+                    <Tooltip
+                        key={code}
+                        title={titleMap[code].trim()}
+                        placement="top"
+                        PopperProps={FLAG_TOOLTIP_POPPER_PROPS}
+                        componentsProps={{ tooltip: { sx: FLAG_TOOLTIP_SX } }}
+                    >
+                        <span style={{ display: "inline-flex" }}>
+                            <Box
+                                component="button"
+                                type="button"
+                                onClick={() => onSelectLang(code)}
+                                sx={{
+                                    minWidth: 24,
+                                    height: 22,
+                                    px: 0.5,
+                                    borderRadius: 1,
+                                    border: "2px solid",
+                                    borderColor: selected ? "primary.main" : "transparent",
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    bgcolor: "action.hover",
+                                    lineHeight: 1,
+                                }}
+                            >
+                                {code}
+                            </Box>
+                        </span>
+                    </Tooltip>
+                );
+            })}
+        </Box>
+    );
+}
 import {
     getNodeType,
     getNodeKey,
@@ -53,6 +194,8 @@ import {
     hasChildren,
     getChildren,
     parseJsonTitle,
+    parseMultiLangTitle,
+    pickDefaultTitleLang,
     parseCourseLogoUrl,
     calculateNodeProgress,
     calculateTotalLessonFlashcards,
@@ -60,6 +203,7 @@ import {
     getLessonIndexInSection,
     parseNumberChatAi,
 } from "./utils";
+import Tooltip from "components/atoms/Tooltip";
 import useStreamSync, { extractMessageString } from "hook/useStreamSync";
 import SyncProgressDialog from "components/molecules/SyncProgressDialog";
 import useConfirmDialog from "hook/useConfirmDialog";
@@ -304,7 +448,36 @@ function CourseTreeItem({
 
     const children = getChildren(node);
 
-    const title = parseJsonTitle((node as Course).title || "", currentLanguageCode);
+    const nodeTitleRaw = String((node as Course).title ?? "");
+    const { isMulti: titleIsMulti, map: titleLangMap } = React.useMemo(
+        () => parseMultiLangTitle(nodeTitleRaw),
+        [nodeTitleRaw]
+    );
+    const showTitleLangFlags = titleIsMulti && TREE_TITLE_FLAG_TYPES.has(nodeType);
+
+    const [previewTitleLang, setPreviewTitleLang] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        setPreviewTitleLang(null);
+    }, [node.id, nodeTitleRaw]);
+
+    const effectiveTitleLang = React.useMemo(() => {
+        if (!showTitleLangFlags) return null;
+        const hasData = (c: string) => Boolean(titleLangMap[c]?.trim());
+        if (previewTitleLang && hasData(previewTitleLang)) return previewTitleLang;
+        return pickDefaultTitleLang(titleLangMap, currentLanguageCode);
+    }, [showTitleLangFlags, titleLangMap, previewTitleLang, currentLanguageCode]);
+
+    const title = React.useMemo(() => {
+        if (showTitleLangFlags) {
+            if (effectiveTitleLang && titleLangMap[effectiveTitleLang]?.trim()) {
+                return titleLangMap[effectiveTitleLang].trim();
+            }
+            return "";
+        }
+        return parseJsonTitle(nodeTitleRaw, currentLanguageCode);
+    }, [showTitleLangFlags, effectiveTitleLang, titleLangMap, nodeTitleRaw, currentLanguageCode]);
+
     const isChapterMissingColorHex = nodeType === "chapter" && !(node as Chapter).colorHex?.trim();
     const nodeTypeChipLabel = isChapterMissingColorHex ? "Yêu cầu update colorHex" : getNodeLabel(node);
     const chapterColorHex = nodeType === "chapter" ? (node as Chapter).colorHex?.trim() : undefined;
@@ -609,6 +782,15 @@ function CourseTreeItem({
                                         {title || `Untitled ${getNodeLabel(node)}`}
                                         {(node as ANY).status === 'trash' && " - Deleted"}
                                     </Typography>
+
+                                    {showTitleLangFlags ? (
+                                        <TitleLangPreviewFlags
+                                            languages={languages}
+                                            titleMap={titleLangMap}
+                                            effectiveLang={effectiveTitleLang}
+                                            onSelectLang={setPreviewTitleLang}
+                                        />
+                                    ) : null}
 
                                     {nodeType === "course" && (node as Course).isComingSoon ? (
                                         <Chip

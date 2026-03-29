@@ -9,6 +9,21 @@ import useAjax from 'hook/useApi';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { CircularProgress } from '@mui/material';
 
+/** Bỏ khoảng trắng đầu/cuối và lớp dấu nháy bọc ngoài (vd. `"data"`, `'"data"'` → `data`). */
+function normalizeTranslatedText(raw: string): string {
+    let s = raw.trim();
+    while (s.length >= 2) {
+        const d = s[0];
+        const e = s[s.length - 1];
+        if ((d === '"' && e === '"') || (d === "'" && e === "'")) {
+            s = s.slice(1, -1).trim();
+        } else {
+            break;
+        }
+    }
+    return s;
+}
+
 function TransslateField(props: FieldFormItemProps) {
 
     const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
@@ -45,29 +60,33 @@ function TransslateField(props: FieldFormItemProps) {
 
         const lang = languages.find(l => l.code === langCodeCurrent);
 
-        if (lang) {
-            useApi.ajax({
-                url: "plugin/vn4-e-learning/app-mobile/course-new/translate-word",
-                method: "POST",
-                data: {
-                    text: props.post[props.name]?.[refLangCodeCurrent.current === 'en' ? 'en' : 'en'] || props.post[props.name]?.['en'], // Fallback to 'en' source
-                    lang_source: 'en', // Assuming 'en' is always the source for now
-                    lang_target: lang.code // API expects code or id? User said "data: text, lang_source, lang_target". Usually codes. Let's try code first as it's more standard for these params. 
-                },
-                success: (result: ANY) => {
-                    if (result.text) {
-                        props.onReview({
-                            ...props.post[props.name],
-                            [langCodeCurrent]: result.text
-                        }, props.name);
-                    }
-                    setLoadingTranslate(false);
-                },
-                error: () => {
-                    setLoadingTranslate(false);
-                }
-            });
+        if (!lang) {
+            setLoadingTranslate(false);
+            return;
         }
+
+        useApi.ajax({
+            url: "plugin/vn4-e-learning/app-mobile/course-new/translate-word",
+            method: "POST",
+            data: {
+                text: props.post[props.name]?.[refLangCodeCurrent.current === 'en' ? 'en' : 'en'] || props.post[props.name]?.['en'], // Fallback to 'en' source
+                lang_source: 'en', // Assuming 'en' is always the source for now
+                lang_target: lang.code // API expects code or id? User said "data: text, lang_source, lang_target". Usually codes. Let's try code first as it's more standard for these params. 
+            },
+            success: (result: ANY) => {
+                if (result.text != null && String(result.text).length > 0) {
+                    const cleaned = normalizeTranslatedText(String(result.text));
+                    props.onReview({
+                        ...props.post[props.name],
+                        [langCodeCurrent]: cleaned
+                    }, props.name);
+                }
+                setLoadingTranslate(false);
+            },
+            error: () => {
+                setLoadingTranslate(false);
+            }
+        });
     }
 
     return (
@@ -151,10 +170,13 @@ function TransslateField(props: FieldFormItemProps) {
                         config={{
                             ...props.config, title: false,
                             inputProps: {
+                                disabled: loadingTranslate,
+                                disable: loadingTranslate,
                                 endAdornment: <IconButton
                                     size="small"
                                     onClick={handleTranslate}
                                     disabled={loadingTranslate}
+                                    aria-busy={loadingTranslate}
                                 >
                                     {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
                                 </IconButton>
@@ -177,10 +199,13 @@ function TransslateField(props: FieldFormItemProps) {
                     config={{
                         ...props.config, title: false,
                         inputProps: {
+                            disabled: loadingTranslate,
+                            disable: loadingTranslate,
                             endAdornment: <IconButton
                                 size="small"
                                 onClick={handleTranslate}
                                 disabled={loadingTranslate}
+                                aria-busy={loadingTranslate}
                             >
                                 {loadingTranslate ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon fontSize='small' color="primary" />}
                             </IconButton>

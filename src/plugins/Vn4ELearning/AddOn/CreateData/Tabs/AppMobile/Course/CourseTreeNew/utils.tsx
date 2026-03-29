@@ -308,6 +308,40 @@ export const parseJsonTitle = (title: string, langCode: string): string => {
     }
 };
 
+/** Title dạng `{ [langCode]: string }` trong JSON; legacy plain string → isMulti: false */
+export const parseMultiLangTitle = (
+    raw: string | undefined | null
+): { isMulti: boolean; map: Record<string, string> } => {
+    const s = raw == null ? "" : String(raw);
+    if (!s.trim()) return { isMulti: false, map: {} };
+    try {
+        const parsed = JSON.parse(s);
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+            const map: Record<string, string> = {};
+            for (const [k, v] of Object.entries(parsed)) {
+                if (v == null) continue;
+                map[k] = typeof v === "string" ? v : String(v);
+            }
+            return { isMulti: true, map };
+        }
+    } catch {
+        /* chuỗi tiêu đề cũ */
+    }
+    return { isMulti: false, map: {} };
+};
+
+/** Ngôn ngữ đầu tiên có text khác rỗng: ưu tiên currentLanguageCode, rồi en, rồi key đầu tiên */
+export const pickDefaultTitleLang = (
+    map: Record<string, string>,
+    currentLanguageCode: string
+): string | null => {
+    const hasData = (code: string) => Boolean(map[code]?.trim());
+    if (hasData(currentLanguageCode)) return currentLanguageCode;
+    if (hasData("en")) return "en";
+    const first = Object.keys(map).find((k) => hasData(k));
+    return first ?? null;
+};
+
 export const getCourseLabelsViOrEn = (course: Course): CourseLabel[] => {
     const raw = (course as ANY).labels as string | CourseLabelsByLang | undefined;
     if (!raw) return [];
