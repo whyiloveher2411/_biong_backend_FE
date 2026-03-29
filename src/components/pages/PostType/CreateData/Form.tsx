@@ -154,17 +154,38 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
         });
     };
 
-    // Bắt phím Enter để submit form (native form submit có thể không chạy với một số input)
+    // Bắt phím Enter / Space để submit form khi focus không nằm trên ô nhập liệu
     React.useEffect(() => {
+        const isFocusOnFormInput = (): boolean => {
+            const el = document.activeElement as HTMLElement | null;
+            if (!el) return false;
+
+            if (el.isContentEditable) return true;
+            if (el.closest('[contenteditable="true"]')) return true;
+
+            const tag = el.tagName;
+            if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT') return true;
+
+            const role = el.getAttribute('role');
+            if (
+                role === 'textbox' ||
+                role === 'combobox' ||
+                role === 'searchbox' ||
+                role === 'spinbutton'
+            ) {
+                return true;
+            }
+
+            return false;
+        };
+
         const onKeyDown = (e: KeyboardEvent) => {
-            
             const isEnter = e.key === 'Enter' && !e.shiftKey;
             const isSpace = e.code === 'Space';
 
             if (!isEnter && !isSpace) return;
 
-            const target = e.target as HTMLElement;
-            if (target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+            if (isFocusOnFormInput()) return;
 
             handleSubmit();
         };
