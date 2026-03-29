@@ -868,35 +868,43 @@ function CourseTreeItem({
                                         />
                                     )}
 
-                                    {nodeType === "lesson" && ((node as Lesson).special?.active) && (
-                                        <Box
-                                            sx={{
-                                                p: '4px 8px',
-                                                backgroundColor: "#289303",
-                                                borderRadius: '32px',
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 1,
-                                            }}
-                                        >
+                                    {nodeType === "lesson" && ((node as Lesson).special?.active) && (() => {
+                                        const lessonNode = node as Lesson;
+                                        const isChallengeReward = Boolean(lessonNode.special?.lessonId);
+                                        const freeRewardWrongSlot =
+                                            !isChallengeReward &&
+                                            lessonIndexInSection >= 0 &&
+                                            !isMissingReward;
+                                        const badgeBg = freeRewardWrongSlot ? "#000000" : "#289303";
+                                        return (
                                             <Box
-                                                component="img"
-                                                src="/images/gift_box.png"
-                                                alt="gift"
                                                 sx={{
-                                                    width: 24,
-                                                    height: 24,
-                                                    objectFit: "contain",
+                                                    p: '4px 8px',
+                                                    backgroundColor: badgeBg,
+                                                    borderRadius: '32px',
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
                                                 }}
-                                            />
-                                            {
-                                                (node as Lesson).special?.lessonId ?
+                                            >
+                                                <Box
+                                                    component="img"
+                                                    src="/images/gift_box.png"
+                                                    alt="gift"
+                                                    sx={{
+                                                        width: 24,
+                                                        height: 24,
+                                                        objectFit: "contain",
+                                                    }}
+                                                />
+                                                {isChallengeReward ? (
                                                     <Typography sx={{ color: "white" }}>Thử thách</Typography>
-                                                    :
+                                                ) : (
                                                     <Typography sx={{ color: "white" }}>Phần thưởng miễn phí</Typography>
-                                            }
-                                        </Box>
-                                    )}
+                                                )}
+                                            </Box>
+                                        );
+                                    })()}
                                     {isMissingReward && !((node as Lesson).special?.active) && (
                                         <Box
                                             sx={{
