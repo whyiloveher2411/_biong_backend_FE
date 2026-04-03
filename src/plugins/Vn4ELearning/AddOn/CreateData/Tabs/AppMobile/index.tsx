@@ -20,7 +20,15 @@ export default function (props: CreatePostTypeData) {
 
         window.__app_mobile_id = props.post.id;
 
-        return {
+        let feature_flags: Record<string, 0 | 1> = {};
+
+        try {
+            feature_flags = props.post.feature_flags ? JSON.parse(props.post.feature_flags) : {};
+        } catch (e) {
+            feature_flags = {};
+        }
+
+        const tabs = {
             database: {
                 title: __p('Database', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Database data={props.data} />,
@@ -77,6 +85,10 @@ export default function (props: CreatePostTypeData) {
             //     component: (props) => <Customers {...props} />,
             //     priority: 5,
             // },
-        }
+        };
+        console.log(feature_flags);
+        return Object.fromEntries(
+            Object.entries(tabs).filter(([key]) => key === 'modules' || feature_flags?.[key] === 1)
+        );
     }
 }

@@ -24,15 +24,31 @@ function normalizeTranslatedText(raw: string): string {
     return s;
 }
 
+/** Ưu tiên `en` nếu có trong danh sách; không thì lấy ngôn ngữ đầu tiên. */
+function getDefaultLangCode(languages: { code: string }[]): string {
+    if (!languages?.length) return 'en';
+    return languages.some((l) => l.code === 'en') ? 'en' : languages[0].code;
+}
+
 function TransslateField(props: FieldFormItemProps) {
 
-    const [langCodeCurrent, setLangCodeCurrent] = React.useState('en');
+    const [langCodeCurrent, setLangCodeCurrent] = React.useState(() =>
+        getDefaultLangCode(typeof window !== 'undefined' ? window.__languages || [] : [])
+    );
     const refLangCodeCurrent = React.useRef(langCodeCurrent);
     const [langChangeCount, setLangChangeCount] = React.useState(0);
     const { languages } = useLanguages();
     const useApi = useAjax();
     const [loadingTranslate, setLoadingTranslate] = React.useState<boolean>(false);
 
+    React.useEffect(() => {
+        if (!languages.length) return;
+        if (!languages.some((l) => l.code === langCodeCurrent)) {
+            const next = getDefaultLangCode(languages);
+            refLangCodeCurrent.current = next;
+            setLangCodeCurrent(next);
+        }
+    }, [languages, langCodeCurrent]);
 
     let valueInital: { [key: string]: ANY } = {};
     try {
@@ -65,13 +81,15 @@ function TransslateField(props: FieldFormItemProps) {
             return;
         }
 
+        const sourceLangCode = getDefaultLangCode(languages);
+
         useApi.ajax({
             url: "plugin/vn4-e-learning/app-mobile/course-new/translate-word",
             method: "POST",
             data: {
-                text: props.post[props.name]?.[refLangCodeCurrent.current === 'en' ? 'en' : 'en'] || props.post[props.name]?.['en'], // Fallback to 'en' source
-                lang_source: 'en', // Assuming 'en' is always the source for now
-                lang_target: lang.code // API expects code or id? User said "data: text, lang_source, lang_target". Usually codes. Let's try code first as it's more standard for these params. 
+                text: props.post[props.name]?.[sourceLangCode] ?? '',
+                lang_source: sourceLangCode,
+                lang_target: lang.code,
             },
             success: (result: ANY) => {
                 if (result.text != null && String(result.text).length > 0) {

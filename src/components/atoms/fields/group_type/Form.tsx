@@ -91,6 +91,19 @@ const useStyles = makeCSS((theme: Theme) => ({
         borderRadius: 4,
         color: "#555d66",
     },
+    templateNote: {
+        marginTop: 8,
+        padding: "10px 12px",
+        borderRadius: 8,
+        border: "1px solid #ffcc80",
+        background: "#fff8e1",
+        color: "#8a4b00",
+        fontSize: 13,
+        lineHeight: 1.5,
+        "& strong": {
+            fontWeight: 700,
+        },
+    },
 }));
 
 export default React.memo(
@@ -136,6 +149,29 @@ export default React.memo(
         post[name] = valueInital;
 
         let configKey = Object.keys(config.templates[type]?.sub_fields ?? {}) ?? [];
+
+        const onTypeChange = (newType: string) => {
+            try {
+                if (typeof post[name] !== "object") {
+                    if (post && post[name]) {
+                        post[name] = JSON.parse(post[name]);
+                    }
+                }
+            } catch (error) {
+                post[name] = {};
+            }
+            if (typeof post[name] !== "object" || post[name] === null) {
+                post[name] = {};
+            }
+            post[name] = {
+                ...post[name],
+                [keyField]: newType,
+            };
+            setType(newType);
+            console.log("onChangeInputGroup", post[name]);
+            onReview(post[name]);
+            setRender((prev) => prev + 1);
+        };
 
         const onChangeInputRepeater = (value: ANY, key: ANY) => {
             try {
@@ -198,6 +234,7 @@ export default React.memo(
         const currentTemplate =
             templateOptions.find((opt) => opt._key === type) ||
             templateOptions[0];
+        const currentTemplateConfig = config.templates[type];
 
         return (
             <FormControl className={classes.root} component="div">
@@ -241,7 +278,7 @@ export default React.memo(
                             )}
                             onChange={(_e, value) => {
                                 if (value) {
-                                    setType(value._key);
+                                    onTypeChange(value._key);
                                 }
                             }}
                             value={currentTemplate}
@@ -263,12 +300,22 @@ export default React.memo(
                                     type === typeStr ? "contained" : "outlined"
                                 }
                                 onClick={() => {
-                                    setType(typeStr);
+                                    onTypeChange(typeStr);
                                 }}
                             >
                                 {config.templates[typeStr].title}
                             </Button>
                         ))
+                    )}
+                    {Boolean(currentTemplateConfig?.note) && (
+                        <Box className={classes.templateNote} sx={{ width: "100%" }}>
+                            <strong>Note:</strong>{" "}
+                            <span
+                                dangerouslySetInnerHTML={{
+                                    __html: currentTemplateConfig.note,
+                                }}
+                            />
+                        </Box>
                     )}
                 </Box>
                 {Boolean(config.note) && (

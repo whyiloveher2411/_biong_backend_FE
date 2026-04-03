@@ -55,12 +55,12 @@ interface ApiResponse {
     success: boolean;
     data: {
         languages: Language[];
-        localize: LocalizeData;
+        localize: LocalizeData | null;
         translations: {
             [langCode: string]: {
                 [key: string]: string;
             };
-        };
+        } | Array<unknown>;
     };
 }
 
@@ -392,20 +392,39 @@ function Localization({ data }: { data: CreatePostTypeData }) {
             },
             success: (result: ApiResponse) => {
                 if (result.success && result.data) {
-                    setLanguages(result.data.languages);
-                    setLocalizeData(result.data.localize);
-                    processLocalizationData(
-                        result.data.languages,
-                        result.data.localize,
-                        result.data.translations || {}
-                    );
-                    // Tự động chọn tab đầu tiên
-                    const groupKeys = Object.keys(result.data.localize.groups);
-                    if (groupKeys.length > 0) {
-                        setSelectedTab(groupKeys[0]);
+                    const languagesFromApi = Array.isArray(result.data.languages)
+                        ? result.data.languages
+                        : [];
+                    const localizeFromApi = result.data.localize;
+                    const translationsFromApi =
+                        result.data.translations &&
+                            !Array.isArray(result.data.translations)
+                            ? result.data.translations
+                            : {};
+
+                    setLanguages(languagesFromApi);
+
+                    if (localizeFromApi?.groups) {
+                        setLocalizeData(localizeFromApi);
+                        processLocalizationData(
+                            languagesFromApi,
+                            localizeFromApi,
+                            translationsFromApi
+                        );
+                        // Tự động chọn tab đầu tiên
+                        const groupKeys = Object.keys(localizeFromApi.groups);
+                        if (groupKeys.length > 0) {
+                            setSelectedTab(groupKeys[0]);
+                        } else {
+                            setSelectedTab("");
+                        }
+                    } else {
+                        setLocalizeData(null);
+                        setTranslations([]);
+                        setSelectedTab("");
                     }
-                    setIsLoadData(true);
                 }
+                setIsLoadData(true);
             },
         });
     };
@@ -810,16 +829,6 @@ function Localization({ data }: { data: CreatePostTypeData }) {
         );
     }
 
-    if (!localizeData) {
-        return (
-            <Box>
-                <Typography variant="h6">
-                    Không có dữ liệu localization
-                </Typography>
-            </Box>
-        );
-    }
-
     // Nhóm translations theo namespace
     const groupedTranslations: { [namespace: string]: TranslationItem[] } = {};
     translations.forEach((item) => {
@@ -1154,7 +1163,7 @@ function Localization({ data }: { data: CreatePostTypeData }) {
                 </Box>
             </Box>
 
-            {groupNames.length > 0 ? (
+            {localizeData && groupNames.length > 0 ? (
                 <Grid
                     container
                     spacing={2}

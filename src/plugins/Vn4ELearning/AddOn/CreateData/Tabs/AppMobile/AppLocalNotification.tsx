@@ -4,14 +4,32 @@ import Box from 'components/atoms/Box';
 import Typography from 'components/atoms/Typography';
 import Divider from 'components/atoms/Divider';
 import LoadingButton from 'components/atoms/LoadingButton';
+import Button from 'components/atoms/Button';
 import useAjax from 'hook/useApi';
 import FieldForm from 'components/atoms/fields/FieldForm';
 import Card from 'components/atoms/Card';
 import CardHeader from 'components/atoms/CardHeader';
 import CardContent from 'components/atoms/CardContent';
+import { useSnackbar } from 'notistack';
+
+function copyTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return Promise.resolve();
+}
 
 function AppLocalNotification({ data }: { data: CreatePostTypeData }) {
     const useApi = useAjax();
+    const { enqueueSnackbar } = useSnackbar();
 
     const handleSyncMessage = () => {
         useApi.ajax({
@@ -21,8 +39,46 @@ function AppLocalNotification({ data }: { data: CreatePostTypeData }) {
                 action: "sync",
                 app_id: data.post.id,
             },
-            success: (result) => {
-                // 
+            success: (result: { link?: string }) => {
+                const link = result?.link;
+                if (typeof link !== 'string' || !link) {
+                    return;
+                }
+                enqueueSnackbar(
+                    {
+                        content: 'Đồng bộ tin nhắn thành công',
+                        type: 'custom',
+                        custom: (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-start' }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Liên kết đã sẵn sàng. Nhấn nút bên dưới để sao chép.
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={() => {
+                                        void copyTextToClipboard(link).then(() => {
+                                            useApi.showMessage('Đã sao chép liên kết', 'success');
+                                        });
+                                    }}
+                                >
+                                    Sao chép liên kết
+                                </Button>
+                            </Box>
+                        ),
+                        options: {
+                            preventDuplicate: false,
+                            variant: 'success',
+                            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                        },
+                    },
+                    {
+                        preventDuplicate: false,
+                        variant: 'success',
+                        anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                    }
+                );
             },
         });
     };

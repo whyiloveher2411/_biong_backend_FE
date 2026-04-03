@@ -138,6 +138,7 @@ function HeaderRightEnvironment({ data, postType }: HookCreateDataProps) {
                 open={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
                 title={__('Config')}
+                width={880}
                 children={<Config data={data} />}
                 activeOnClose
             />
