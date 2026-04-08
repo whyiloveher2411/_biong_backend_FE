@@ -1,4 +1,5 @@
 import { ImageProps } from 'components/atoms/Avatar';
+import Box from 'components/atoms/Box';
 import Fab from 'components/atoms/Fab';
 import FormHelperText from 'components/atoms/FormHelperText';
 import Icon from 'components/atoms/Icon';
@@ -12,6 +13,13 @@ import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 
+/** Bỏ các key chỉ dùng cho UI (React node) — không được đưa vào queryUrl / body API (JSON.stringify). */
+function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions'> {
+    const rest = { ...source };
+    delete rest.relationshipHeaderActions;
+    return rest as Omit<T, 'relationshipHeaderActions'>;
+}
+
 export default React.memo(function RelationshipOneToManyShowForm({ config, post }: FieldFormItemProps) {
 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
@@ -24,14 +32,14 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
         id: ID,
         page: number,
         rowsPerPage: string | number,
-    }>({
-        ...config,
+    }>(() => ({
+        ...stripNonSerializableQueryParts(config as Record<string, ANY>),
         mainType: post.type,
         id: post.id,
         page: 1,
         rowsPerPage: 5,
         ...config.paginate
-    });
+    }));
 
     const handleOnClose = () => {
         setOpenDrawer(false);
@@ -46,7 +54,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
             url: 'post-type/show-post-relationship',
             method: 'POST',
             data: {
-                ...queryUrl,
+                ...stripNonSerializableQueryParts(queryUrl),
                 id: post.id,
             },
             success: (result: DataResultApiProps) => {
@@ -109,15 +117,33 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
 
     return (
         <div>
-            <Typography variant="h5" style={{ margin: '8px 0' }}>
-                {config.title}
-                < Fab onClick={onLoadCollection} style={{ marginLeft: 8 }} size="small" color="inherit" aria-label="refresh">
-                    <Icon icon="RefreshRounded" />
-                </Fab>
-                < Fab onClick={handelOnOpen} style={{ marginLeft: 8 }} size="small" color="primary" aria-label="add">
-                    <Icon icon="AddRounded" />
-                </Fab>
-            </Typography>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    margin: '8px 0',
+                    width: '100%',
+                }}
+            >
+                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="h5" component="span">
+                        {config.title}
+                    </Typography>
+                    <Fab onClick={onLoadCollection} size="small" color="inherit" aria-label="refresh">
+                        <Icon icon="RefreshRounded" />
+                    </Fab>
+                    <Fab onClick={handelOnOpen} size="small" color="primary" aria-label="add">
+                        <Icon icon="AddRounded" />
+                    </Fab>
+                </Box>
+                {config.relationshipHeaderActions ? (
+                    <Box sx={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                        {config.relationshipHeaderActions}
+                    </Box>
+                ) : null}
+            </Box>
             {
                 Boolean(config.note) &&
                 <FormHelperText ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>

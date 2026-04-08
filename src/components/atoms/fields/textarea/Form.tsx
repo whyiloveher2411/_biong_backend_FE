@@ -18,7 +18,53 @@ const useStyles = makeStyles({
         '&>.MuiInputBase-root>textarea, &>label': {
             lineHeight: 2.2
         },
+        '& .MuiInputBase-root': {
+            width: '100%',
+        },
+        '& textarea': {
+            width: '100% !important',
+            boxSizing: 'border-box',
+            paddingTop: 30,
+            paddingBottom: 30,
+        },
         lineHeight: '24px',
+        width: '100%',
+    },
+    textareaContainer: {
+        position: 'relative',
+        width: '100%',
+    },
+    collapsedTextarea: {
+        '& textarea': {
+            maxHeight: 180,
+            overflow: 'hidden !important',
+        },
+    },
+    fadeOverlay: {
+        position: 'absolute',
+        left: 1,
+        right: 1,
+        bottom: 1,
+        height: 54,
+        pointerEvents: 'none',
+        borderBottomLeftRadius: 4,
+        borderBottomRightRadius: 4,
+        background: 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 65%, rgba(255,255,255,1) 100%)',
+    },
+    toggleButtonWrap: {
+        position: 'absolute',
+        right: 12,
+        top: 8,
+        zIndex: 1,
+    },
+    toggleButton: {
+        border: 'none',
+        background: 'transparent',
+        color: '#1976d2',
+        cursor: 'pointer',
+        fontSize: 13,
+        fontWeight: 600,
+        padding: 0,
     },
 })
 
@@ -30,6 +76,10 @@ export default React.memo(function TextareaForm({ dataPostType, ...props }: Fiel
 
     const valueInital = post && post[name] ? post[name] : '';
     const [, setRender] = React.useState(0);
+    const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+    const hasInitCollapseRef = React.useRef(false);
+    const [canCollapse, setCanCollapse] = React.useState(false);
+    const [isExpanded, setIsExpanded] = React.useState(false);
 
     const tooltipAiSuggest = useTooltipAiSuggest({
         config,
@@ -43,6 +93,37 @@ export default React.memo(function TextareaForm({ dataPostType, ...props }: Fiel
         dataPostType,
     });
 
+    React.useLayoutEffect(() => {
+        const textareaElement = textareaRef.current;
+
+        if (!textareaElement) {
+            return;
+        }
+
+        const tooLong = textareaElement.scrollHeight > 184;
+        setCanCollapse(tooLong);
+
+        // Chi thu gon tu dong 1 lan khi du lieu vua co gia tri tu API.
+        if (!hasInitCollapseRef.current && valueInital) {
+            hasInitCollapseRef.current = true;
+            setIsExpanded(!tooLong);
+        }
+    }, [valueInital]);
+
+    const textareaProps = {
+        type: 'textarea' as const,
+        name,
+        rows: config.rows ?? 1,
+        multiline: true,
+        value: valueInital,
+        className: `${classes.editor} ${canCollapse && !isExpanded ? classes.collapsedTextarea : ''}`,
+        onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => { onReview(e.target.value, name); setRender(prev => prev + 1); },
+        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => { setRender(prev => prev + 1); post[name] = e.target.value },
+        inputComponent: TextareaAutosize,
+        inputRef: textareaRef,
+        ...config.inputProps,
+    };
+
     return (
         <TooltipAiSuggest {...tooltipAiSuggest.tooltipAiSuggestProps}>
             <FormControl fullWidth variant="outlined">
@@ -50,35 +131,45 @@ export default React.memo(function TextareaForm({ dataPostType, ...props }: Fiel
                     config.title ?
                         <>
                             <InputLabel {...config.labelProps}>{config.title}</InputLabel>
-                            <OutlinedInput
-                                type='textarea'
-                                name={name}
-                                rows={config.rows ?? 1}
-                                multiline
-                                value={valueInital}
-                                className={classes.editor}
-                                label={config.title}
-                                onBlur={e => { onReview(e.target.value, name); setRender(prev => prev + 1); }}
-                                onChange={e => { setRender(prev => prev + 1); post[name] = e.target.value }}
-                                inputComponent={TextareaAutosize}
-                                startAdornment={tooltipAiSuggest.startAdornment}
-                                {...config.inputProps}
-                            />
+                            <div className={classes.textareaContainer}>
+                                <OutlinedInput
+                                    {...textareaProps}
+                                    label={config.title}
+                                    startAdornment={tooltipAiSuggest.startAdornment}
+                                />
+                                {canCollapse && !isExpanded && <div className={classes.fadeOverlay}></div>}
+                                {canCollapse &&
+                                    <div className={classes.toggleButtonWrap}>
+                                        <button
+                                            type='button'
+                                            className={classes.toggleButton}
+                                            onClick={() => setIsExpanded(prev => !prev)}
+                                        >
+                                            {isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                                        </button>
+                                    </div>
+                                }
+                            </div>
                         </>
                         :
-                        <OutlinedInput
-                            type='textarea'
-                            name={name}
-                            rows={config.rows ?? 1}
-                            multiline
-                            value={valueInital}
-                            className={classes.editor}
-                            onBlur={e => { onReview(e.target.value, name); setRender(prev => prev + 1); }}
-                            onChange={e => { setRender(prev => prev + 1); post[name] = e.target.value }}
-                            inputComponent={TextareaAutosize}
-                            endAdornment={tooltipAiSuggest.startAdornment}
-                            {...config.inputProps}
-                        />
+                        <div className={classes.textareaContainer}>
+                            <OutlinedInput
+                                {...textareaProps}
+                                endAdornment={tooltipAiSuggest.startAdornment}
+                            />
+                            {canCollapse && !isExpanded && <div className={classes.fadeOverlay}></div>}
+                            {canCollapse &&
+                                <div className={classes.toggleButtonWrap}>
+                                    <button
+                                        type='button'
+                                        className={classes.toggleButton}
+                                        onClick={() => setIsExpanded(prev => !prev)}
+                                    >
+                                        {isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                                    </button>
+                                </div>
+                            }
+                        </div>
                 }
 
                 {

@@ -7,7 +7,6 @@ import Box from 'components/atoms/Box';
 import Button from 'components/atoms/Button';
 import FieldForm from 'components/atoms/fields/FieldForm';
 import FormControl from 'components/atoms/FormControl';
-import FormHelperText from 'components/atoms/FormHelperText';
 import FormLabel from 'components/atoms/FormLabel';
 import Grid from 'components/atoms/Grid';
 import Icon from 'components/atoms/Icon';
@@ -138,6 +137,24 @@ const useStyles = makeStyles((theme: Theme) => ({
         cursor: 'pointer',
         borderRadius: 4,
         color: theme.palette.text.secondary
+    },
+    noteBox: {
+        marginTop: 8,
+        display: 'flex',
+        gap: 8,
+        alignItems: 'flex-start',
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: '1px solid #ffcc80',
+        backgroundColor: '#fff8e1',
+        color: '#8a4b00',
+        '& .MuiTypography-root': {
+            color: '#8a4b00',
+            lineHeight: 1.5
+        },
+        '& strong': {
+            fontWeight: 700
+        }
     }
 }));
 
@@ -519,7 +536,13 @@ export default React.memo(function RepeaterForm({ config, post, name, onReview, 
             </Box>
             {
                 Boolean(config.note) &&
-                <FormHelperText style={{ marginTop: 5 }} ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                <Box className={classes.noteBox}>
+                    <Icon icon="WarningAmberRounded" sx={{ color: '#f57c00', fontSize: 20, marginTop: '2px' }} />
+                    <Typography variant="body2" component="div">
+                        <strong>Note:</strong>{' '}
+                        <span dangerouslySetInnerHTML={{ __html: config.note }}></span>
+                    </Typography>
+                </Box>
             }
             <SpecialNotes specialNotes={config.special_notes} />
             {

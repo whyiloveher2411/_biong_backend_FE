@@ -11,6 +11,8 @@ import Modules from './Modules';
 import Course from './Course';
 import Content from './Content';
 import Marketing from './Marketing';
+import Cuisine from './Cuisine';
+import Gym from './Gym';
 
 
 
@@ -67,6 +69,16 @@ export default function (props: CreatePostTypeData) {
             marketing: {
                 title: __p('Marketing', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Marketing data={props.data} />,
+                priority: 3,
+            },
+            cuisine: {
+                title: __p('Ẩm thực', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <Cuisine data={props.data} />,
+                priority: 3,
+            },
+            gym: {
+                title: __p('Bài tập (Gym)', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <Gym data={props.data} />,
                 priority: 3,
             },
             // analytics: {

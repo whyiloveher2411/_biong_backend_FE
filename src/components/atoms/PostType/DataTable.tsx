@@ -165,22 +165,12 @@ function DataTable(props: DataTableProps) {
         }
     }
 
-    if (!data.rows.total) {
-        return (
-            <Table>
-                <TableBody>
-                    <TableRow>
-                        <TableCell colSpan={100}>
-                            <NotFound
-                                subTitle={__('Seems like no {{data}} have been created yet.', {
-                                    data: data.config.title ?? 'Data'
-                                })} />
-                        </TableCell>
-                    </TableRow>
-                </TableBody>
-            </Table>
-        )
-    }
+    const hasActiveSearch = Boolean(queryUrl.search && String(queryUrl.search).trim());
+    const emptyListSubtitle = hasActiveSearch
+        ? __('No results match your search.')
+        : __('Seems like no {{data}} have been created yet.', {
+            data: data.config.label?.singularName ?? data.config.title ?? __('Data'),
+        });
 
     return (
         <Box>
@@ -290,10 +280,7 @@ function DataTable(props: DataTableProps) {
                             :
                             <TableRow>
                                 <TableCell colSpan={100}>
-                                    <NotFound
-                                        subTitle={__('Seems like no {{data}} have been created yet.', {
-                                            data: data.config.singularName
-                                        })} />
+                                    <NotFound subTitle={emptyListSubtitle} />
                                 </TableCell>
                             </TableRow>
                         }

@@ -84,6 +84,14 @@ function ActionOnPost({
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
 
+    const openLinkFromResult = (result?: JsonFormat) => {
+        if (!result || typeof result.open_link !== "string" || !result.open_link) {
+            return;
+        }
+
+        window.open(result.open_link, "_blank");
+    };
+
     const handleActionEvent = (
         id: ID,
         item: IActionPostType,
@@ -106,7 +114,8 @@ function ActionOnPost({
                 data: {
                     id,
                 },
-                success: () => {
+                success: (result) => {
+                    openLinkFromResult(result);
                     setLoadingStateButton((prev) => ({
                         ...prev,
                         [index]: false,
