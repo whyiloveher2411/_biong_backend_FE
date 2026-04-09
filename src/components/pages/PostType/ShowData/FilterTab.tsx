@@ -95,11 +95,59 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         });
     }, [name, queryUrl.filter]);
 
-    const filters = data !== false && data.config.filters ? Object.keys(data.config.filters).filter(key => data.config.filters[key].count > 0) : [];
+    const dataConfig = data !== false ? data.config : null;
+    const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
+    const selectedSavedFilter = dataConfig?.filters_saved?.find((item: { name: string }) => item.name === queryUrl.filter_saved_name);
+    const currentFilterTitle = selectedSavedFilter
+        ? selectedSavedFilter.name
+        : __(dataConfig?.filters?.[tabCurrent[name]]?.title ?? 'All');
+
+    const filterActions = filters.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: string) => {
+        acc[`system-filter-${item}`] = {
+            title: `${__(dataConfig?.filters?.[item]?.title ?? item)} (${dataConfig?.filters?.[item]?.count ?? 0})`,
+            action: () => {
+                setQueryUrl({
+                    ...queryUrl,
+                    filter: item,
+                    filter_saved_name: '',
+                });
+                handleChangeTab(item);
+            }
+        };
+        return acc;
+    }, {});
+
+    dataConfig?.filters_saved?.forEach((item: { name: string, sort: string, filters: string }, index: number) => {
+        filterActions[`saved-filter-${index}`] = {
+            title: `[Custom] ${item.name}`,
+            action: () => {
+                let sort = { sortKey: '', sortType: '' };
+                try {
+                    sort = JSON.parse(item.sort);
+                } catch (error) {
+                    //
+                }
+
+                setQueryUrl(prev => ({
+                    ...prev,
+                    filter_saved_name: item.name,
+                    filters: item.filters,
+                    ...sort,
+                }));
+            }
+        };
+    });
+    const selectedMenuKey = selectedSavedFilter
+        ? `saved-filter-${dataConfig?.filters_saved?.findIndex((item: { name: string }) => item.name === selectedSavedFilter.name)}`
+        : `system-filter-${tabCurrent[name]}`;
+
+    const handleRefreshData = () => {
+        setQueryUrl({ ...queryUrl });
+    };
 
     // const tabSelectedIndex = filters.findIndex(item => item === tabCurrent[name]);
 
-    if (data !== false && Boolean(data.config.filters)) {
+    if (data !== false && Boolean(dataConfig?.filters)) {
         return (
             <div
                 className={addClasses({
@@ -136,36 +184,39 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                         </Button>
                     ))
                 } */}
-                {
-                    filters.length > 1 ?
-                        <MoreButton
-                            actions={[filters.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: string) => {
-                                acc[item] = {
-                                    title: __(data.config.filters[item].title) + ' (' + data.config.filters[item].count + ')',
-                                    action: () => {
-                                        setQueryUrl({ ...queryUrl, filter: item });
-                                        handleChangeTab(item);
-                                    }
-                                }
-                                return acc;
-                            }, {})]}
-                        >
-                            <Button
-                                size="large"
-                                startIcon={<Icon icon={data.config.filters[tabCurrent[name]]?.icon ?? 'PublicOutlined'} />}
-                                variant='contained'
-                                sx={{
-                                    backgroundColor: data.config.filters[tabCurrent[name]]?.color ?? 'primary.main',
-                                    '&:hover, &:active, &:focus': {
-                                        backgroundColor: data.config.filters[tabCurrent[name]]?.color ? fade(data.config.filters[tabCurrent[name]].color, 0.9) : 'primary.dark',
-                                    }
-                                }}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Button
+                        size="large"
+                        variant='outlined'
+                        className="refresh-post-type-data"
+                        onClick={handleRefreshData}
+                        title={__('Refresh')}
+                    >
+                        <Icon icon='Refresh' />
+                    </Button>
+                    {
+                        Object.keys(filterActions).length > 0 ?
+                            <MoreButton
+                                actions={[filterActions]}
+                                selected={selectedMenuKey}
                             >
-                                {__(data.config.filters[tabCurrent[name]]?.title ?? 'All')}
-                            </Button>
-                        </MoreButton>
-                        :
-                        <Box>
+                                <Button
+                                    size="large"
+                                    startIcon={<Icon icon={selectedSavedFilter ? 'FilterListRounded' : (dataConfig?.filters?.[tabCurrent[name]]?.icon ?? 'PublicOutlined')} />}
+                                    variant='contained'
+                                    sx={{
+                                        backgroundColor: selectedSavedFilter ? 'primary.main' : (dataConfig?.filters?.[tabCurrent[name]]?.color ?? 'primary.main'),
+                                        '&:hover, &:active, &:focus': {
+                                            backgroundColor: selectedSavedFilter
+                                                ? 'primary.dark'
+                                                : (dataConfig?.filters?.[tabCurrent[name]]?.color ? fade(dataConfig.filters[tabCurrent[name]].color, 0.9) : 'primary.dark'),
+                                        }
+                                    }}
+                                >
+                                    {currentFilterTitle}
+                                </Button>
+                            </MoreButton>
+                            :
                             <Button
                                 size="large"
                                 startIcon={<Icon icon={'PublicOutlined'} />}
@@ -173,8 +224,8 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                             >
                                 {__('All')}
                             </Button>
-                        </Box>
-                }
+                    }
+                </Box>
             </div>
         )
     }

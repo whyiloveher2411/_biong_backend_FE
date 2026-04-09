@@ -26,6 +26,7 @@ import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined
 import useDebounce from 'hook/useDebounce';
 import { InputAdornment, TextField } from '@mui/material';
 import { Search } from '@mui/icons-material';
+import Button from 'components/atoms/Button';
 
 const useStyles = makeCSS({
     tr: {
@@ -171,10 +172,26 @@ function DataTable(props: DataTableProps) {
         : __('Seems like no {{data}} have been created yet.', {
             data: data.config.label?.singularName ?? data.config.title ?? __('Data'),
         });
+    const handleRefreshData = () => {
+        if (props.onEdit) {
+            props.onEdit();
+            return;
+        }
+
+        setQueryUrl({ ...queryUrl });
+    };
 
     return (
         <Box>
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    className="refresh-post-type-data"
+                    onClick={handleRefreshData}
+                >
+                    {__('Refresh')}
+                </Button>
                 <TextField
                     size="small"
                     placeholder={__('Search')}

@@ -24,7 +24,23 @@ const useStyles = makeCSS((theme: Theme) => ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
+        gap: theme.spacing(1.5),
+        width: '100%',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        paddingBottom: theme.spacing(0.5),
+    },
+    leftGroup: {
+        minWidth: 0,
+        flex: 1,
+    },
+    actionsGroup: {
+        display: 'flex',
+        gap: theme.spacing(1),
+        alignItems: 'center',
+        flexShrink: 0,
+        flexWrap: 'nowrap',
     },
     searchInput: {
         flexGrow: 1,
@@ -41,7 +57,8 @@ const useStyles = makeCSS((theme: Theme) => ({
         color: theme.palette.icon,
     },
     search: {
-        flexGrow: 1,
+        flex: 1,
+        minWidth: 220,
         height: 42.5,
         gap: theme.spacing(2),
         padding: theme.spacing(0, 2),
@@ -93,10 +110,9 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
         sortType: string,
     }>({ sortKey: paramUrl.sortKey?.toString() ?? '', sortType: paramUrl.sortType?.toString() ?? '' });
 
-    const [stateFilterSavedName, setStateFilterSavedName] = React.useState(paramUrl.filter_saved_name);
-
     const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
     const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
+    const maxVisibleGlobalActions = 0;
 
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
@@ -180,17 +196,6 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
         });
     }
 
-    const handleDeleteFilterSaved = (index: number) => {
-        saveFilterApi.ajax({
-            url: '/post-type/delete-filter-saved',
-            method: 'POST',
-            data: {
-                post_type: type,
-                index: index,
-            }
-        });
-    }
-
     React.useEffect(() => {
 
         setInputValue(paramUrl.search + '');
@@ -202,69 +207,25 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             setFilters([]);
         }
 
-        setStateFilterSavedName(paramUrl.filter_saved_name);
-
     }, [type]);
+
+    const globalActions: IActionPostType[] = data && data.config?.global_actions ? data.config.global_actions : [];
+    const hiddenGlobalActions = globalActions.slice(maxVisibleGlobalActions);
 
     return (<>
         <Grid
             {...rest}
             className={classes.root + ' ' + className}
             container
-            spacing={3}>
-            <Grid item>
+            spacing={1}>
+            <Grid item className={classes.leftGroup}>
                 <Box sx={{
                     display: 'flex',
-                    gap: 2
+                    gap: 1,
+                    alignItems: 'center',
+                    flexWrap: 'nowrap',
+                    minWidth: 0,
                 }}>
-                    {
-                        data && data.config.filters_saved && data.config.filters_saved.length ?
-                            data.config.filters_saved?.map((item, index) => (
-                                <Button variant='contained' color={(stateFilterSavedName === item.name) ? 'primary' : 'inherit'} onClick={() => {
-                                    setStateFilterSavedName(name => {
-                                        if (name === item.name) {
-                                            onFilter([]);
-                                            setFilters([]);
-                                            setQueryUrl(prev => {
-                                                return { ...prev, filter_saved_name: '', sortKey: '', sortType: '' };
-                                            });
-                                            return '';
-                                        }
-
-                                        onFilter(JSON.parse(item.filters));
-                                        setFilters(JSON.parse(item.filters));
-                                        let sort = { sortKey: '', sortType: '' };
-                                        try {
-                                            sort = JSON.parse(item.sort);
-                                        } catch (error) {
-                                            //
-                                        }
-                                        setSortData(sort);
-                                        setQueryUrl(prev => {
-                                            return {
-                                                ...prev,
-                                                ...sort,
-                                                filter_saved_name: item.name,
-                                            }
-                                        });
-                                        return item.name;
-                                    });
-                                }} key={index}
-                                    endIcon={<Icon icon='ClearRounded'
-                                        color="error"
-                                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                            e.stopPropagation();
-                                            confirm.onConfirm(() => {
-                                                handleDeleteFilterSaved(index);
-                                            }, {
-                                                message: 'Hành động này sẽ xóa filter đã lưu vĩnh viễn, bạn có chắc chắn muốn xóa filter này?'
-                                            });
-                                        }}
-                                    />}
-                                >{item.name}</Button>
-                            ))
-                            : null
-                    }
                     <Paper className={classes.search} elevation={2}>
                         <Icon icon="Search" className={classes.searchIcon} />
                         <Input
@@ -293,26 +254,31 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                     </Button>
                 </Box>
             </Grid>
-            <Grid item sx={{
-
-                display: 'flex',
-                gap: 1,
-            }}>
+            <Grid item className={classes.actionsGroup}>
 
                 {
-                    data && data.config?.global_actions?.map((item: IActionPostType, index) => (
-                        <Button
-                            key={index}
-                            color="inherit"
-                            variant="contained"
-                            disabled={loadingStateButton[index] ? true : false}
-                            onClick={handleActionEvent(item, index)}
-                        >
-                            {item.title} {progressButton[index] !== undefined ? ` (${progressButton[index]}%)` : ''}
-                        </Button>
-                    ))
-                }
+                    hiddenGlobalActions.length > 0 &&
+                    <MoreButton
+                        actions={[hiddenGlobalActions.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: IActionPostType, index: number) => {
+                            const actionIndex = index + maxVisibleGlobalActions;
+                            const loading = loadingStateButton[actionIndex] ? '...' : '';
+                            const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
 
+                            acc[`global-action-${actionIndex}`] = {
+                                title: `${item.title}${loading}${progress}`,
+                                action: handleActionEvent(item, actionIndex),
+                            };
+                            return acc;
+                        }, {})]}
+                    >
+                        <Button
+                            color="inherit"
+                            variant="outlined"
+                        >
+                            {__('Tools')}
+                        </Button>
+                    </MoreButton>
+                }
 
 
                 <Button
