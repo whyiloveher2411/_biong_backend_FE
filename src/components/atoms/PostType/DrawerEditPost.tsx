@@ -7,7 +7,7 @@ import { HandleUpdateDataProps } from 'hook/useForm';
 import React from 'react';
 import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
 
-function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfterDelete, children, openLoading, headerAction }: {
+function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfterDelete, children, openLoading, headerAction, showCopyPostJson }: {
     open: boolean,
     openLoading: boolean,
     onClose: () => void,
@@ -17,6 +17,7 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
     children?: ANY,
     handleAfterDelete?: () => void,
     headerAction?: React.ReactNode,
+    showCopyPostJson?: boolean,
 }) {
 
     const theme = useTheme();
@@ -103,6 +104,7 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
                         handleSubmit={handleSubmit}
                         handleAfterDelete={handleAfterDelete}
                         open={openLoading}
+                        showCopyPostJson={showCopyPostJson}
                     />
                 }
             </Box>

@@ -87,9 +87,10 @@ interface FormCreateDataProps {
     onUpdateData: HandleUpdateDataProps,
     handleSubmit: () => void,
     handleAfterDelete?: () => void,
+    showCopyPostJson?: boolean,
 }
 
-function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, open: openLoading }: FormCreateDataProps) {
+function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, open: openLoading, showCopyPostJson = true }: FormCreateDataProps) {
 
     const [tabCurrent, setTableCurrent] = React.useState(
         {
@@ -224,6 +225,33 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
 
     const isSimpleLayout = data.config?.layout === 'simple';
 
+    const copyPostJsonToClipboard = () => {
+        if (!data?.post) return;
+        const postExport = { ...data.post };
+        delete postExport._copy;
+        const text = JSON.stringify(postExport, null, 2);
+       
+        const notifyOk = () => useAjaxDelete.showMessage(__('Đã copy JSON bài viết vào clipboard'), 'success');
+        const notifyErr = () => useAjaxDelete.showMessage(__('Không thể copy vào clipboard'), 'error');
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).then(notifyOk).catch(notifyErr);
+        } else {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                notifyOk();
+            } catch {
+                notifyErr();
+            }
+        }
+    };
+
     const renderSaveButton = () => (
         <div>
             {
@@ -273,6 +301,20 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                             </LoadingButton>
                                         </Tooltip>
                                     )}
+                                    {
+                                        showCopyPostJson && !isSimpleLayout && (
+                                            <LoadingButton
+                                                type="button"
+                                                loading={false}
+                                                variant="contained"
+                                                color="info"
+                                                sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                                                onClick={copyPostJsonToClipboard}
+                                            >
+                                                {__('Copy Json')}
+                                            </LoadingButton>
+                                        )
+                                    }
                                 </React.Fragment>
                             }
                             {

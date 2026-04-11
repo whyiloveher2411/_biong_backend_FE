@@ -73,6 +73,7 @@ function EditPostType({ open, onClose, id, postType, onEdit }: {
             data={data as DataResultApiProps}
             setData={setData}
             handleSubmit={handleSubmit}
+            showCopyPostJson
         >
             {
                 useAjax1.open &&
