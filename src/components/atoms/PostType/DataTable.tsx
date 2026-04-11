@@ -184,14 +184,18 @@ function DataTable(props: DataTableProps) {
     return (
         <Box>
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                <Button
-                    size="small"
-                    variant="outlined"
-                    className="refresh-post-type-data"
-                    onClick={handleRefreshData}
-                >
-                    {__('Refresh')}
-                </Button>
+                {props.showRefreshButton !== false ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        className="refresh-post-type-data"
+                        onClick={handleRefreshData}
+                    >
+                        {__('Refresh')}
+                    </Button>
+                ) : (
+                    <Box />
+                )}
                 <TextField
                     size="small"
                     placeholder={__('Search')}
@@ -359,6 +363,7 @@ export interface DataTableProps {
     },
     config: JsonFormat,
     onEdit?: () => void,
+    showRefreshButton?: boolean,
 }
 
 

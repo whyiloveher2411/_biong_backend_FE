@@ -39,7 +39,10 @@ const useStyles = makeCSS((theme: Theme) => ({
         flexDirection: 'column',
         borderRight: `1px solid ${theme.palette.divider}`,
         position: 'relative',
-        width: 160,
+        minWidth: 160,
+        maxWidth: 320,
+        width: 'max-content',
+        flexShrink: 0,
         '&>.indicator': {
             backgroundColor: '#3f51b5',
             position: 'absolute',
@@ -49,7 +52,7 @@ const useStyles = makeCSS((theme: Theme) => ({
             transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
         },
         '&>button': {
-            width: '100%', maxWidth: 160, height: 48, opacity: 0.7,
+            minWidth: 160, maxWidth: 320, width: '100%', height: 48, opacity: 0.7,
             fontSize: 15,
             textTransform: 'unset',
             fontWeight: 'normal',
@@ -68,6 +71,11 @@ const useStyles = makeCSS((theme: Theme) => ({
     },
     tabsItem: {
         padding: '6px 16px'
+    },
+    tabContent: {
+        paddingLeft: 24,
+        flex: 1,
+        minWidth: 0,
     }
 
 }));
@@ -351,7 +359,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                                         ))
                                                     }
                                                 </div>
-                                                <div style={{ paddingLeft: 24, width: 'calc( 100% - 160px )' }}>
+                                                <div className={classes.tabContent}>
                                                     <Grid
                                                         container
                                                         spacing={4}>

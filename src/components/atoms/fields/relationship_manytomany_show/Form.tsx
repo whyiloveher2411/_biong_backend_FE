@@ -1,4 +1,5 @@
 import { ImageProps } from 'components/atoms/Avatar';
+import Button from 'components/atoms/Button';
 import Fab from 'components/atoms/Fab';
 import FormHelperText from 'components/atoms/FormHelperText';
 import Icon from 'components/atoms/Icon';
@@ -11,12 +12,14 @@ import useAjax from 'hook/useApi';
 import React from 'react';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
+import { Link } from 'react-router-dom';
 
 export default React.memo(function RelationshipManyToManyShowForm({ config, post }: FieldFormItemProps) {
 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const { ajax, open } = useAjax();
+    const listPostTypeLink = `/post-type/${config.object}/list`;
 
     const [queryUrl, setQueryUrl] = React.useState({
         ...config,
@@ -82,7 +85,18 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
     if (!post.id) {
         return (<>
             <Typography variant="h5" style={{ margin: '8px 0' }}>
-                {config.title}
+                <Button
+                    component={Link}
+                    to={listPostTypeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    sx={{ textTransform: 'none' }}
+                >
+                    {config.title}
+                </Button>
             </Typography>
             {
                 Boolean(config.note) &&
@@ -99,7 +113,18 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
     return (
         <div>
             <Typography variant="h5" style={{ margin: '8px 0' }}>
-                {config.title}
+                <Button
+                    component={Link}
+                    to={listPostTypeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    sx={{ textTransform: 'none' }}
+                >
+                    {config.title}
+                </Button>
                 < Fab onClick={onLoadCollection} style={{ marginLeft: 8 }} size="small" color="inherit" aria-label="refresh">
                     <Icon icon="RefreshRounded" />
                 </Fab>
@@ -120,6 +145,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
                         data={data}
                         onEdit={onLoadCollection}
                         config={config}
+                        showRefreshButton={false}
                     />
                     <DrawerEditPost
                         open={openDrawer}

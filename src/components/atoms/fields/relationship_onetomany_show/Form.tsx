@@ -1,5 +1,6 @@
 import { ImageProps } from 'components/atoms/Avatar';
 import Box from 'components/atoms/Box';
+import Button from 'components/atoms/Button';
 import Fab from 'components/atoms/Fab';
 import FormHelperText from 'components/atoms/FormHelperText';
 import Icon from 'components/atoms/Icon';
@@ -12,6 +13,7 @@ import React from 'react';
 import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
+import { Link } from 'react-router-dom';
 
 /** Bỏ các key chỉ dùng cho UI (React node) — không được đưa vào queryUrl / body API (JSON.stringify). */
 function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions'> {
@@ -25,6 +27,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const { ajax, open } = useAjax();
+    const listPostTypeLink = `/post-type/${config.object}/list`;
 
     const [queryUrl, setQueryUrl] = React.useState<{
         [key: string]: ANY,
@@ -97,7 +100,18 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
     if (!post.id) {
         return (<>
             <Typography variant="h5" style={{ margin: '8px 0' }}>
-                {config.title}
+                <Button
+                    component={Link}
+                    to={listPostTypeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    sx={{ textTransform: 'none' }}
+                >
+                    {config.title}
+                </Button>
                 < Fab onClick={handelOnOpen} style={{ marginLeft: 8 }} size="small" color="primary" aria-label="add">
                     <Icon icon="AddRounded" />
                 </Fab>
@@ -128,9 +142,18 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                 }}
             >
                 <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <Typography variant="h5" component="span">
+                    <Button
+                        component={Link}
+                        to={listPostTypeLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        color="inherit"
+                        size="small"
+                        sx={{ textTransform: 'none' }}
+                    >
                         {config.title}
-                    </Typography>
+                    </Button>
                     <Fab onClick={onLoadCollection} size="small" color="inherit" aria-label="refresh">
                         <Icon icon="RefreshRounded" />
                     </Fab>
@@ -157,6 +180,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                         data={data}
                         onEdit={onLoadCollection}
                         config={config}
+                        showRefreshButton={false}
                     />
                     <DrawerEditPost
                         open={openDrawer}
