@@ -9,17 +9,21 @@ import Typography from 'components/atoms/Typography';
 import NotFound from 'components/molecules/NotFound';
 import { __ } from 'helpers/i18n';
 import useAjax from 'hook/useApi';
+import useConfirmDialog from 'hook/useConfirmDialog';
+import MoreButton from 'components/atoms/MoreButton';
 import React from 'react';
 import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 import { Link } from 'react-router-dom';
+import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
 
-/** Bỏ các key chỉ dùng cho UI (React node) — không được đưa vào queryUrl / body API (JSON.stringify). */
-function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions'> {
+/** Bỏ các key chỉ dùng cho UI — không được đưa vào queryUrl / body API (JSON.stringify). */
+function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions' | 'global_actions_request_data'> {
     const rest = { ...source };
     delete rest.relationshipHeaderActions;
-    return rest as Omit<T, 'relationshipHeaderActions'>;
+    delete rest.global_actions_request_data;
+    return rest as Omit<T, 'relationshipHeaderActions' | 'global_actions_request_data'>;
 }
 
 export default React.memo(function RelationshipOneToManyShowForm({ config, post }: FieldFormItemProps) {
@@ -27,7 +31,82 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const { ajax, open } = useAjax();
+    const useAjaxGlobalAction = useAjax();
+    const confirm = useConfirmDialog();
+    const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
+    const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
+    const maxVisibleGlobalActions = 0;
     const listPostTypeLink = `/post-type/${config.object}/list`;
+
+    const handleGlobalActionEvent = (item: IActionPostType, index: number) => () => {
+        const globalActionPostData = resolveRelationshipGlobalActionsRequestData(config as Record<string, ANY>, post);
+
+        const callApi = () => {
+            setLoadingStateButton(prev => ({
+                ...prev,
+                [index]: true,
+            }));
+
+            setProgressButton(prev => ({
+                ...prev,
+                [index]: 0
+            }));
+
+            useAjaxGlobalAction.ajax({
+                url: item.link_api,
+                method: 'POST',
+                ...(globalActionPostData ? { data: { ...globalActionPostData } } : {}),
+                success: () => {
+                    setLoadingStateButton(prev => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                }
+            });
+
+            if (item.check_progress) {
+
+                const callCheckProgress = () => {
+                    useAjaxGlobalAction.ajax({
+                        url: item.link_api,
+                        method: 'POST',
+                        data: {
+                            ...(globalActionPostData || {}),
+                            check_progress: true
+                        },
+                        success: (result) => {
+                            if (result.progress !== undefined) {
+                                setProgressButton(prev => ({
+                                    ...prev,
+                                    [index]: result.progress
+                                }));
+                                setTimeout(() => {
+                                    callCheckProgress();
+                                }, 1000);
+                            } else {
+                                setProgressButton(prev => {
+                                    delete prev[index];
+                                    return { ...prev };
+                                })
+                            }
+                        }
+                    });
+                };
+
+                callCheckProgress();
+            }
+        };
+
+        if (item.confirm_message) {
+            confirm.onConfirm(callApi, {
+                message: item.confirm_message
+            });
+            return;
+        }
+
+        callApi();
+
+    };
 
     const [queryUrl, setQueryUrl] = React.useState<{
         [key: string]: ANY,
@@ -97,6 +176,9 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
     };
 
 
+    const globalActions: IActionPostType[] = data && data.config?.global_actions ? data.config.global_actions : [];
+    const hiddenGlobalActions = globalActions.slice(maxVisibleGlobalActions);
+
     if (!post.id) {
         return (<>
             <Typography variant="h5" style={{ margin: '8px 0' }}>
@@ -157,6 +239,31 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                     <Fab onClick={onLoadCollection} size="small" color="inherit" aria-label="refresh">
                         <Icon icon="RefreshRounded" />
                     </Fab>
+                    {
+                        data !== false && hiddenGlobalActions.length > 0 ?
+                            <MoreButton
+                                actions={[hiddenGlobalActions.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: IActionPostType, index: number) => {
+                                    const actionIndex = index + maxVisibleGlobalActions;
+                                    const loading = loadingStateButton[actionIndex] ? '...' : '';
+                                    const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
+
+                                    acc[`global-action-${actionIndex}`] = {
+                                        title: `${item.title}${loading}${progress}`,
+                                        action: handleGlobalActionEvent(item, actionIndex),
+                                    };
+                                    return acc;
+                                }, {})]}
+                            >
+                                <Button
+                                    color="inherit"
+                                    variant="outlined"
+                                    size="small"
+                                >
+                                    {__('Tools')}
+                                </Button>
+                            </MoreButton>
+                            : null
+                    }
                     <Fab onClick={handelOnOpen} size="small" color="primary" aria-label="add">
                         <Icon icon="AddRounded" />
                     </Fab>
@@ -192,10 +299,19 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                     />
                 </>
             }
+            {confirm.component}
         </div >
     )
 }, (props1, props2) => {
-    return props1.post[props1.name] === props2.post[props2.name] && props1.post?.id === props2.post?.id;
+    const samePost =
+        props1.post[props1.name] === props2.post[props2.name] &&
+        props1.post?.id === props2.post?.id;
+    if (!samePost) {
+        return false;
+    }
+    const g1 = JSON.stringify((props1.config as Record<string, ANY>)?.global_actions_request_data);
+    const g2 = JSON.stringify((props2.config as Record<string, ANY>)?.global_actions_request_data);
+    return g1 === g2;
 })
 
 

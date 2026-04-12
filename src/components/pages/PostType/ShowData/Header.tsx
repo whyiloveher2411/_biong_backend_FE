@@ -11,6 +11,7 @@ import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShowPostTypeData } from '.'
 
+export { globalActionsRequestSourceMain } from './globalActionsRequestSource'
 
 const useStyles = makeCSS((theme: Theme) => ({
     root: {

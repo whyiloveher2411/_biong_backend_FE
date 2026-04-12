@@ -9,6 +9,7 @@ import React from 'react'
 import { IconButton, TextField, Theme, Typography } from '@mui/material'
 import { __ } from 'helpers/i18n'
 import DrawerCustom from 'components/molecules/DrawerCustom'
+import { globalActionsRequestSourceMain } from './globalActionsRequestSource'
 import FieldForm from 'components/atoms/fields/FieldForm'
 import MoreButton from 'components/atoms/MoreButton'
 import { ShowPostTypeData } from '.'
@@ -132,6 +133,9 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             useAjaxAction.ajax({
                 url: item.link_api,
                 method: 'POST',
+                data: {
+                    ...globalActionsRequestSourceMain,
+                },
                 success: () => {
                     setLoadingStateButton(prev => ({
                         ...prev,
@@ -147,6 +151,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         url: item.link_api,
                         method: 'POST',
                         data: {
+                            ...globalActionsRequestSourceMain,
                             check_progress: true
                         },
                         success: (result) => {

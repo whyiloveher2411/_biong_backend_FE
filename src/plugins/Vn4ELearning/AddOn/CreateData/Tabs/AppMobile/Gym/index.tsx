@@ -6,14 +6,22 @@ import LoadingButton from "components/atoms/LoadingButton";
 import DrawerCustom from "components/molecules/DrawerCustom";
 import ConfirmDialog from "components/molecules/ConfirmDialog";
 import useAjax from "hook/useApi";
-import ImportExercisesButton from "./ImportExercisesButton";
 
 export default function Gym({ data }: { data: CreatePostTypeData }) {
-    const [exercisesTableKey, setExercisesTableKey] = React.useState(0);
+    const globalActionsRequestData = React.useMemo(
+        () => ({
+            source: "custom" as const,
+            app_mobile: data.post.id,
+        }),
+        [data.post.id],
+    );
+
+    const [exercisesTableKey] = React.useState(0);
     const [musclesTableKey, setMusclesTableKey] = React.useState(0);
     const [openEquipmentDrawer, setOpenEquipmentDrawer] = React.useState(false);
     const [openMuscleDrawer, setOpenMuscleDrawer] = React.useState(false);
-    const [confirmSyncMusclesOpen, setConfirmSyncMusclesOpen] = React.useState(false);
+    const [confirmSyncMusclesOpen, setConfirmSyncMusclesOpen] =
+        React.useState(false);
     const syncMusclesApi = useAjax();
 
     const runSyncMusclesToMongodb = () => {
@@ -42,12 +50,9 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                     paginate: {
                         rowsPerPage: 10,
                     },
+                    global_actions_request_data: globalActionsRequestData,
                     relationshipHeaderActions: (
                         <Box sx={{ display: "flex", gap: 1 }}>
-                            <ImportExercisesButton
-                                appMobileId={data.post.id}
-                                onImported={() => setExercisesTableKey((k) => k + 1)}
-                            />
                             <LoadingButton
                                 variant="outlined"
                                 size="small"
@@ -70,6 +75,29 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                 onReview={() => {}} // eslint-disable-line
             />
 
+            <FieldForm
+                key={exercisesTableKey}
+                component={"relationship_onetomany_show"}
+                config={{
+                    title: "Template",
+                    object: "gym_routine_template",
+                    field: "app_mobile",
+                    view: "relationship_onetomany_show",
+                    paginate: {
+                        rowsPerPage: 10,
+                    },
+                    global_actions_request_data: globalActionsRequestData,
+                    relationshipHeaderActions: (
+                        <Box sx={{ display: "flex", gap: 1 }}>
+                            {/*  */}
+                        </Box>
+                    ),
+                }}
+                post={data.post}
+                name={"gym_routine_template"}
+                onReview={() => {}} // eslint-disable-line
+            />
+
             <DrawerCustom
                 open={openEquipmentDrawer}
                 onClose={() => setOpenEquipmentDrawer(false)}
@@ -87,6 +115,7 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                         paginate: {
                             rowsPerPage: 10,
                         },
+                        global_actions_request_data: globalActionsRequestData,
                     }}
                     post={data.post}
                     name={"gym_equipment"}
@@ -112,6 +141,7 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                         paginate: {
                             rowsPerPage: 10,
                         },
+                        global_actions_request_data: globalActionsRequestData,
                         relationshipHeaderActions: (
                             <LoadingButton
                                 variant="outlined"
