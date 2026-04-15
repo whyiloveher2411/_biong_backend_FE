@@ -79,8 +79,8 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                 key={exercisesTableKey}
                 component={"relationship_onetomany_show"}
                 config={{
-                    title: "Template",
-                    object: "gym_routine_template",
+                    title: "Kế hoạch tập luyện mẫu",
+                    object: "gym_program",
                     field: "app_mobile",
                     view: "relationship_onetomany_show",
                     paginate: {
@@ -94,7 +94,7 @@ export default function Gym({ data }: { data: CreatePostTypeData }) {
                     ),
                 }}
                 post={data.post}
-                name={"gym_routine_template"}
+                name={"gym_program"}
                 onReview={() => {}} // eslint-disable-line
             />
 

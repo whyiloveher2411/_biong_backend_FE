@@ -750,6 +750,71 @@ const BodyRenderer = ({ component: rawComponent, onUpdate, context }: BodyRender
                 </div>
             );
         }
+        case 'select_answer':
+        case 'select_answer_multi_choice': {
+            const options = Array.isArray(component.options) ? component.options : [];
+            return (
+                <Box sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {options.map((option: ANY, optIndex: number) => {
+                        const optionText = option?.text ?? option?.content ?? '';
+                        const feedbackMessage = option?.feedbackMessage;
+                        const hasFeedbackMessage = feedbackMessage != null && String(feedbackMessage).trim() !== '';
+                        return (
+                            <Box
+                                key={optIndex}
+                                sx={{
+                                    p: 1.25,
+                                    borderRadius: 1,
+                                    backgroundColor: option?.isCorrect ? '#e8f5e9' : '#fff',
+                                    border: `1px solid ${option?.isCorrect ? '#a5d6a7' : '#eee'}`
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                    <Box sx={{
+                                        width: 24,
+                                        height: 24,
+                                        borderRadius: '50%',
+                                        backgroundColor: option?.isCorrect ? '#4caf50' : '#eee',
+                                        color: option?.isCorrect ? '#fff' : '#666',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontWeight: 'bold',
+                                        fontSize: 13,
+                                        flexShrink: 0
+                                    }}>
+                                        {String.fromCharCode(65 + optIndex)}
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        {option?.imageUrl && (
+                                            <img
+                                                src={parseImgSrc(option.imageUrl)}
+                                                alt=""
+                                                style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', display: 'block', marginBottom: '4px' }}
+                                            />
+                                        )}
+                                        <Typography component="div" sx={{ color: option?.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option?.isCorrect ? 500 : 400 }}>
+                                            <span dangerouslySetInnerHTML={{ __html: stripBlockTags(String(optionText)) }} />
+                                        </Typography>
+                                        {hasFeedbackMessage && (
+                                            <Box sx={{ mt: 0.75, p: 1, bgcolor: '#fff8e1', border: '1px solid #ffe0b2', borderRadius: 1 }}>
+                                                <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#8a6d3b', mb: 0.5 }}>
+                                                    Feedback
+                                                </Typography>
+                                                <Typography component="div" variant="body2" sx={{ color: '#6d4c41', '& p': { margin: 0 } }}>
+                                                    <span dangerouslySetInnerHTML={{ __html: stripBlockTags(String(feedbackMessage)) }} />
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    </Box>
+                                    {option?.isCorrect && <Typography component="span" sx={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold' }}>(Correct)</Typography>}
+                                </Box>
+                            </Box>
+                        );
+                    })}
+                </Box>
+            );
+        }
         case 'run_code':
             return (
                 <div style={{ marginBottom: '10px', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>

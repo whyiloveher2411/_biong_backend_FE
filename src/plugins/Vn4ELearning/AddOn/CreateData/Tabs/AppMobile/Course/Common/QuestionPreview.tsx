@@ -223,6 +223,19 @@ export default function QuestionPreview({ question, langCode = 'en', languages =
                                     <div style={{ flex: 1 }}>
                                         {option.imageUrl && <img src={parseImgSrc(option.imageUrl)} alt="" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', display: 'block', marginBottom: '4px' }} />}
                                         <span style={{ color: option.isCorrect ? '#2e7d32' : 'inherit', fontWeight: option.isCorrect ? '500' : 'normal' }}>{option.text}</span>
+                                        {option.feedbackMessage != null && String(option.feedbackMessage).trim() !== '' && (
+                                            <Box sx={{ mt: 1, p: 1, bgcolor: '#fff8e1', border: '1px solid #ffe0b2', borderRadius: 1 }}>
+                                                <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#8a6d3b', mb: 0.5 }}>
+                                                    Feedback
+                                                </Typography>
+                                                <Typography
+                                                    component="div"
+                                                    variant="body2"
+                                                    sx={{ color: '#6d4c41', '& p': { margin: 0 } }}
+                                                    dangerouslySetInnerHTML={{ __html: String(option.feedbackMessage).replace(/<block>/g, '').replace(/<\/block>/g, '') }}
+                                                />
+                                            </Box>
+                                        )}
                                     </div>
                                     {option.isCorrect && <span style={{ fontSize: '0.85em', color: '#2e7d32', fontWeight: 'bold' }}>(Correct)</span>}
                                 </div>
