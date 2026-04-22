@@ -31,7 +31,7 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
     overrides: { ios: {}, android: {} }
   });
 
-  const [targeting, setTargeting] = React.useState<TargetingState>({ type: 'topic', topic: 'all_users' });
+  const [targeting, setTargeting] = React.useState<TargetingState>({ type: 'topic', topicTargetMode: 'single', topic: 'all_users' });
   // const [advanced, setAdvanced] = React.useState<AdvancedOptionsState>({ priority: 'high', ttlSeconds: undefined, scheduleAt: null });
 
   // Đọc tab từ URL params, mặc định là 'compose'
@@ -69,7 +69,7 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
     if (!compose.payload.title || !compose.payload.body) return false;
     if (targeting.type === 'single') return !!targeting.token;
     if (targeting.type === 'multicast') return (targeting.tokens?.length || 0) > 0;
-    if (targeting.type === 'topic') return !!targeting.topic;
+    if (targeting.type === 'topic') return !!targeting.topic?.trim();
     if (targeting.type === 'deviceGroup') return !!targeting.notificationKey;
     return false;
   }, [compose, targeting]);
@@ -79,6 +79,14 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
   }, [compose.payload.title, compose.payload.body]);
 
   const handleSend = () => {
+    const targetType = targeting.type === 'topic'
+      ? (targeting.topicTargetMode === 'condition' ? 'condition' : 'topic')
+      : undefined;
+
+    const targetValue = targeting.type === 'topic'
+      ? (targeting.topic || '')
+      : undefined;
+
     api.ajax({
       url: 'plugin/vn4-e-learning/app-mobile/push-notification/send',
       method: 'POST',
@@ -87,6 +95,10 @@ function PushNotification({ data }: { data: CreatePostTypeData }) {
         title: compose.payload.title,
         body: compose.payload.body,
         topic: targeting.topic,
+        ...(targetType && targetValue ? {
+          target_type: targetType,
+          target_value: targetValue,
+        } : {}),
         fcm_token: targeting.token,
         imageUrl: getImageUrl(compose.payload.imageUrl),
         iconUrl: getImageUrl(compose.payload.iconUrl),

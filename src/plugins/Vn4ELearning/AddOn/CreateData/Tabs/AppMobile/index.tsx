@@ -31,8 +31,8 @@ export default function (props: CreatePostTypeData) {
         }
 
         const tabs = {
-            database: {
-                title: __p('Database', PLUGIN_NAME),
+            firestore: {
+                title: __p('Firestore', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Database data={props.data} />,
                 priority: 3,
             },

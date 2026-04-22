@@ -46,6 +46,8 @@ export interface TargetingState {
     token?: string; // single
     tokens?: string[]; // multicast
     topic?: string; // topic
+    topicTargetMode?: 'single' | 'condition';
+    topicCondition?: string; // ("topic_a" in topics && "topic_b" in topics) || ...
     notificationKey?: string; // device group
 }
 

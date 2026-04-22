@@ -61,6 +61,7 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
     }, [config.list_option]);
 
     const classes = useStyles();
+    const showKeyAfterTitle = Boolean((config as ANY).showKeyAfterTitle);
 
     let valueInital: { [key: string]: string } | null = null;
 
@@ -192,7 +193,10 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
         <FormControl fullWidth variant="outlined">
             <Autocomplete
                 options={listOption}
-                getOptionLabel={(option: Option) => option.title ? option.title : ''}
+                getOptionLabel={(option: Option) => {
+                    if (!option?.title) return '';
+                    return showKeyAfterTitle ? `${option.title} (${option._key})` : option.title;
+                }}
                 disableClearable
                 size={config.size ?? 'medium'}
                 renderInput={(params) => {
@@ -263,7 +267,17 @@ export default React.memo(function SelectForm({ config, post, onReview, name }: 
                                         src={option.image as string}
                                     />
                                 }
-                                {option.title}
+                                <Typography component="span">
+                                    {option.title}
+                                    {showKeyAfterTitle && (
+                                        <>
+                                            {' '}
+                                            <Typography component="strong" sx={{ fontWeight: 700 }}>
+                                                ({option._key})
+                                            </Typography>
+                                        </>
+                                    )}
+                                </Typography>
                             </Box>
                             {
                                 Boolean(option.description) &&

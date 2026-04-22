@@ -387,10 +387,10 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
             .then(text => {
                 let itemFromclipboard = JSON.parse(text);
 
-                const currentConfigSignature = getConfigSignature();
-                const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
+                // const currentConfigSignature = getConfigSignature();
+                // const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
 
-                if (clipboardConfigSignature === currentConfigSignature) {
+                // if (clipboardConfigSignature === currentConfigSignature) {
                     if (itemFromclipboard.value) {
                         items[rowIndex] = { ...itemFromclipboard.value, open: items[rowIndex].open };
                         post[name] = items;
@@ -398,9 +398,9 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
                     } else {
                         showMessage(__('Paste from clipboard error.'), 'warning');
                     }
-                } else {
-                    showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
-                }
+                // } else {
+                    // showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                // }
 
                 setIndexOfAction(false);
                 onReview(post[name]);
@@ -461,10 +461,10 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
             .then(text => {
                 let itemFromclipboard = JSON.parse(text);
                 console.log(itemFromclipboard);
-                const currentConfigSignature = getConfigSignature();
-                const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
+                // const currentConfigSignature = getConfigSignature();
+                // const clipboardConfigSignature = itemFromclipboard?.configSignature ?? safeStringify(itemFromclipboard?.config);
 
-                if (clipboardConfigSignature === currentConfigSignature) {
+                // if (clipboardConfigSignature === currentConfigSignature) {
                     if (itemFromclipboard.value) {
                         items = [...itemFromclipboard.value];
                         post[name] = items;
@@ -472,9 +472,9 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
                     } else {
                         showMessage(__('Paste from clipboard error.'), 'warning');
                     }
-                } else {
-                    showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
-                }
+                // } else {
+                    // showMessage(__('Can\'t synchronize two different groups of structures.'), 'error');
+                // }
                 setRender(prev => prev + 1);
                 setIndexOfAction(false);
                 onReview(post[name]);
