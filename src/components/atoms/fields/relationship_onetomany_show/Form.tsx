@@ -17,6 +17,7 @@ import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 import { Link } from 'react-router-dom';
 import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
+import ToolActionProgressDialog, { ToolActionProgressState } from 'components/molecules/ToolActionProgressDialog';
 
 /** Bỏ các key chỉ dùng cho UI — không được đưa vào queryUrl / body API (JSON.stringify). */
 function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions' | 'global_actions_request_data'> {
@@ -35,11 +36,44 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
     const confirm = useConfirmDialog();
     const [loadingStateButton, setLoadingStateButton] = React.useState<{ [key: number]: boolean }>({});
     const [progressButton, setProgressButton] = React.useState<{ [key: number]: number }>({});
+    const [toolProgressDialog, setToolProgressDialog] = React.useState<ToolActionProgressState>({
+        open: false,
+        title: '',
+        progress: 0,
+        status: 'idle',
+    });
     const maxVisibleGlobalActions = 0;
     const listPostTypeLink = `/post-type/${config.object}/list`;
 
     const handleGlobalActionEvent = (item: IActionPostType, index: number) => () => {
         const globalActionPostData = resolveRelationshipGlobalActionsRequestData(config as Record<string, ANY>, post);
+        const openRunningDialog = () => {
+            setToolProgressDialog({
+                open: true,
+                title: item.title,
+                progress: 0,
+                status: 'running',
+            });
+        };
+        const updateDialogProgress = (progress: number) => {
+            setToolProgressDialog(prev => ({
+                ...prev,
+                progress,
+            }));
+        };
+        const markDialogDone = () => {
+            setToolProgressDialog(prev => ({
+                ...prev,
+                progress: 100,
+                status: 'done',
+            }));
+        };
+        const markDialogError = () => {
+            setToolProgressDialog(prev => ({
+                ...prev,
+                status: 'error',
+            }));
+        };
 
         const callApi = () => {
             setLoadingStateButton(prev => ({
@@ -51,6 +85,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                 ...prev,
                 [index]: 0
             }));
+            openRunningDialog();
 
             useAjaxGlobalAction.ajax({
                 url: item.link_api,
@@ -61,6 +96,16 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                         ...prev,
                         [index]: false,
                     }));
+                    if (!item.check_progress) {
+                        markDialogDone();
+                    }
+                },
+                error: () => {
+                    setLoadingStateButton(prev => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                    markDialogError();
                 }
             });
 
@@ -80,6 +125,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                                     ...prev,
                                     [index]: result.progress
                                 }));
+                                updateDialogProgress(result.progress);
                                 setTimeout(() => {
                                     callCheckProgress();
                                 }, 1000);
@@ -87,9 +133,13 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                                 setProgressButton(prev => {
                                     delete prev[index];
                                     return { ...prev };
-                                })
+                                });
+                                markDialogDone();
                             }
-                        }
+                        },
+                        error: () => {
+                            markDialogError();
+                        },
                     });
                 };
 
@@ -97,15 +147,24 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
             }
         };
 
-        if (item.confirm_message) {
-            confirm.onConfirm(callApi, {
-                message: item.confirm_message
-            });
+        confirm.onConfirm(callApi, {
+            message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                toolTitle: item.title
+            })
+        });
+
+    };
+
+    const handleCloseToolProgressDialog = () => {
+        if (toolProgressDialog.status === 'running') {
             return;
         }
-
-        callApi();
-
+        setToolProgressDialog({
+            open: false,
+            title: '',
+            progress: 0,
+            status: 'idle',
+        });
     };
 
     const [queryUrl, setQueryUrl] = React.useState<{
@@ -300,6 +359,10 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                 </>
             }
             {confirm.component}
+            <ToolActionProgressDialog
+                state={toolProgressDialog}
+                onClose={handleCloseToolProgressDialog}
+            />
         </div >
     )
 }, (props1, props2) => {

@@ -13,6 +13,7 @@ import MoreButton from "../MoreButton";
 import { IActionPostType } from "components/pages/PostType/CreateData/Form";
 import useAjax from "hook/useApi";
 import useConfirmDialog from "hook/useConfirmDialog";
+import ToolActionProgressDialog, { ToolActionProgressState } from "components/molecules/ToolActionProgressDialog";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -80,6 +81,12 @@ function ActionOnPost({
     const [progressButton, setProgressButton] = React.useState<{
         [key: number]: number;
     }>({});
+    const [toolProgressDialog, setToolProgressDialog] = React.useState<ToolActionProgressState>({
+        open: false,
+        title: "",
+        progress: 0,
+        status: "idle",
+    });
 
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
@@ -97,6 +104,37 @@ function ActionOnPost({
         item: IActionPostType,
         index: number
     ) => {
+        const openRunningDialog = () => {
+            setToolProgressDialog({
+                open: true,
+                title: item.title,
+                progress: 0,
+                status: "running",
+            });
+        };
+
+        const updateDialogProgress = (progress: number) => {
+            setToolProgressDialog((prev) => ({
+                ...prev,
+                progress,
+            }));
+        };
+
+        const markDialogDone = () => {
+            setToolProgressDialog((prev) => ({
+                ...prev,
+                progress: 100,
+                status: "done",
+            }));
+        };
+
+        const markDialogError = () => {
+            setToolProgressDialog((prev) => ({
+                ...prev,
+                status: "error",
+            }));
+        };
+
         const callApi = () => {
             setLoadingStateButton((prev) => ({
                 ...prev,
@@ -107,6 +145,7 @@ function ActionOnPost({
                 ...prev,
                 [index]: 0,
             }));
+            openRunningDialog();
 
             useAjaxAction.ajax({
                 url: item.link_api,
@@ -120,6 +159,16 @@ function ActionOnPost({
                         ...prev,
                         [index]: false,
                     }));
+                    if (!item.check_progress) {
+                        markDialogDone();
+                    }
+                },
+                error: () => {
+                    setLoadingStateButton((prev) => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                    markDialogError();
                 },
             });
 
@@ -138,6 +187,7 @@ function ActionOnPost({
                                     ...prev,
                                     [index]: result.progress,
                                 }));
+                                updateDialogProgress(result.progress);
                                 setTimeout(() => {
                                     callCheckProgress();
                                 }, 1000);
@@ -146,7 +196,11 @@ function ActionOnPost({
                                     delete prev[index];
                                     return { ...prev };
                                 });
+                                markDialogDone();
                             }
+                        },
+                        error: () => {
+                            markDialogError();
                         },
                     });
                 };
@@ -155,14 +209,24 @@ function ActionOnPost({
             }
         };
 
-        if (item.confirm_message) {
-            confirm.onConfirm(callApi, {
-                message: item.confirm_message,
-            });
+        confirm.onConfirm(callApi, {
+            message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                toolTitle: item.title,
+            }),
+        });
+    };
+
+    const handleCloseToolProgressDialog = () => {
+        if (toolProgressDialog.status === "running") {
             return;
         }
 
-        callApi();
+        setToolProgressDialog({
+            open: false,
+            title: "",
+            progress: 0,
+            status: "idle",
+        });
     };
 
     return (
@@ -340,6 +404,10 @@ function ActionOnPost({
                 }}
             >
                 {confirm.component}
+                <ToolActionProgressDialog
+                    state={toolProgressDialog}
+                    onClose={handleCloseToolProgressDialog}
+                />
             </Box>
             <Hook
                 hook="PostType/Action"

@@ -16,11 +16,12 @@ export default React.memo(function CheckboxForm({ config, name, post, onReview }
     let valueInital: string[] = [];
 
     try {
-        if (typeof post[name] === 'object') {
+        if (Array.isArray(post[name])) {
             valueInital = post[name];
         } else {
             if (post && post[name]) {
-                valueInital = JSON.parse(post[name]);
+                const parsedValue = JSON.parse(post[name]);
+                valueInital = Array.isArray(parsedValue) ? parsedValue : [];
             }
         }
     } catch (error) {
@@ -61,8 +62,9 @@ export default React.memo(function CheckboxForm({ config, name, post, onReview }
                     getOptionLabel={(key) => config.list_option[key]?.title || key}
                     value={valueInital}
                     onChange={(_event, newValue) => {
-                        post[name] = newValue;
-                        onReview(newValue);
+                        const safeNewValue = Array.isArray(newValue) ? newValue : [];
+                        post[name] = safeNewValue;
+                        onReview(safeNewValue);
                         setValue(value + 1);
                     }}
                     size={config.size ?? 'medium'}
