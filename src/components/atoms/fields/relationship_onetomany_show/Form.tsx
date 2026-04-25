@@ -15,6 +15,7 @@ import React from 'react';
 import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
+import FilterTab from 'components/pages/PostType/ShowData/FilterTab';
 import { Link } from 'react-router-dom';
 import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
 import ToolActionProgressDialog, { ToolActionProgressState } from 'components/molecules/ToolActionProgressDialog';
@@ -30,6 +31,10 @@ function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T
 export default React.memo(function RelationshipOneToManyShowForm({ config, post }: FieldFormItemProps) {
 
     const [data, setData] = React.useState<DataResultApiProps | false>(false);
+    const [filterMeta, setFilterMeta] = React.useState<{ filters: JsonFormat, filtersSaved: Array<{ name: string, filters: string, sort: string }> }>({
+        filters: {},
+        filtersSaved: [],
+    });
     const [openDrawer, setOpenDrawer] = React.useState(false);
     const { ajax, open } = useAjax();
     const useAjaxGlobalAction = useAjax();
@@ -179,8 +184,39 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
         id: post.id,
         page: 1,
         rowsPerPage: 5,
+        filter: 'all',
         ...config.paginate
     }));
+
+    React.useEffect(() => {
+        ajax({
+            url: `post-type/get-data/${config.object}`,
+            method: 'POST',
+            data: {
+                page: 1,
+                rowsPerPage: 1,
+                filter: 'all',
+            },
+            success: (result: JsonFormat) => {
+                let filtersSaved: Array<{ name: string, filters: string, sort: string }> = [];
+
+                if (Array.isArray(result?.config?.filters_saved)) {
+                    filtersSaved = result.config.filters_saved;
+                } else if (typeof result?.config?.filters_saved === 'string') {
+                    try {
+                        filtersSaved = JSON.parse(result.config.filters_saved);
+                    } catch (error) {
+                        filtersSaved = [];
+                    }
+                }
+
+                setFilterMeta({
+                    filters: result?.config?.filters || {},
+                    filtersSaved,
+                });
+            }
+        });
+    }, [config.object]);
 
     const handleOnClose = () => {
         setOpenDrawer(false);
@@ -200,6 +236,13 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
             },
             success: (result: DataResultApiProps) => {
                 if (result.rows) {
+                    if (typeof result.config?.filters_saved === 'string') {
+                        try {
+                            result.config.filters_saved = JSON.parse(result.config.filters_saved);
+                        } catch (error) {
+                            result.config.filters_saved = [];
+                        }
+                    }
                     result.action = 'ADD_NEW';
                     setData({ ...result, type: config.object as string });
                 }
@@ -237,6 +280,37 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
 
     const globalActions: IActionPostType[] = data && data.config?.global_actions ? data.config.global_actions : [];
     const hiddenGlobalActions = globalActions.slice(maxVisibleGlobalActions);
+    const filterTabData = React.useMemo<DataResultApiProps | false>(() => {
+        if (data === false) {
+            return false;
+        }
+
+        const resolvedFilters = data.config?.filters && Object.keys(data.config.filters).length > 0
+            ? data.config.filters
+            : (filterMeta.filters && Object.keys(filterMeta.filters).length > 0 ? filterMeta.filters : {
+                all: {
+                    count: data.rows?.total ?? data.rows?.data?.length ?? 0,
+                    icon: 'PublicOutlined',
+                    key: 'all',
+                    title: 'All',
+                    color: '#1976d2',
+                    where: {},
+                }
+            });
+
+        const resolvedFiltersSaved = Array.isArray(data.config?.filters_saved) && data.config.filters_saved.length > 0
+            ? data.config.filters_saved
+            : filterMeta.filtersSaved;
+
+        return {
+            ...data,
+            config: {
+                ...data.config,
+                filters: resolvedFilters,
+                filters_saved: resolvedFiltersSaved,
+            }
+        };
+    }, [data, filterMeta]);
 
     if (!post.id) {
         return (<>
@@ -295,9 +369,6 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                     >
                         {config.title}
                     </Button>
-                    <Fab onClick={onLoadCollection} size="small" color="inherit" aria-label="refresh">
-                        <Icon icon="RefreshRounded" />
-                    </Fab>
                     {
                         data !== false && hiddenGlobalActions.length > 0 ?
                             <MoreButton
@@ -323,15 +394,24 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                             </MoreButton>
                             : null
                     }
+                    {
+                        filterTabData !== false ?
+                            <FilterTab
+                                name={config.object as string}
+                                queryUrl={queryUrl}
+                                data={filterTabData}
+                                setQueryUrl={setQueryUrl as React.Dispatch<React.SetStateAction<JsonFormat>>}
+                                acctionPost={() => undefined}
+                            />
+                            : null
+                    }
                     <Fab onClick={handelOnOpen} size="small" color="primary" aria-label="add">
                         <Icon icon="AddRounded" />
                     </Fab>
                 </Box>
-                {config.relationshipHeaderActions ? (
-                    <Box sx={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-                        {config.relationshipHeaderActions}
-                    </Box>
-                ) : null}
+                <Box sx={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {config.relationshipHeaderActions ? config.relationshipHeaderActions : null}
+                </Box>
             </Box>
             {
                 Boolean(config.note) &&
