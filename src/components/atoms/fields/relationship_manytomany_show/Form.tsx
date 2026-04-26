@@ -39,6 +39,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
         progress: 0,
         status: 'idle',
     });
+    const retryToolActionRef = React.useRef<(() => void) | null>(null);
     const maxVisibleGlobalActions = 0;
     const listPostTypeLink = `/post-type/${config.object}/list`;
 
@@ -72,7 +73,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             }));
         };
 
-        const callApi = () => {
+        const runApi = () => {
             setLoadingStateButton(prev => ({
                 ...prev,
                 [index]: true,
@@ -144,6 +145,11 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             }
         };
 
+        const callApi = () => {
+            retryToolActionRef.current = runApi;
+            runApi();
+        };
+
         confirm.onConfirm(callApi, {
             message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
                 toolTitle: item.title
@@ -162,6 +168,16 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             progress: 0,
             status: 'idle',
         });
+        retryToolActionRef.current = null;
+    };
+
+    const handleRetryToolAction = () => {
+        if (toolProgressDialog.status === 'running') {
+            return;
+        }
+        if (retryToolActionRef.current) {
+            retryToolActionRef.current();
+        }
     };
 
     const [queryUrl, setQueryUrl] = React.useState(() => {
@@ -425,6 +441,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             <ToolActionProgressDialog
                 state={toolProgressDialog}
                 onClose={handleCloseToolProgressDialog}
+                onRetry={handleRetryToolAction}
             />
         </div>
     )

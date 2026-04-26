@@ -87,6 +87,7 @@ function ActionOnPost({
         progress: 0,
         status: "idle",
     });
+    const retryToolActionRef = React.useRef<(() => void) | null>(null);
 
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
@@ -135,7 +136,7 @@ function ActionOnPost({
             }));
         };
 
-        const callApi = () => {
+        const runApi = () => {
             setLoadingStateButton((prev) => ({
                 ...prev,
                 [index]: true,
@@ -209,11 +210,25 @@ function ActionOnPost({
             }
         };
 
+        const callApi = () => {
+            retryToolActionRef.current = runApi;
+            runApi();
+        };
+
         confirm.onConfirm(callApi, {
             message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
                 toolTitle: item.title,
             }),
         });
+    };
+
+    const handleRetryToolAction = () => {
+        if (toolProgressDialog.status === "running") {
+            return;
+        }
+        if (retryToolActionRef.current) {
+            retryToolActionRef.current();
+        }
     };
 
     const handleCloseToolProgressDialog = () => {
@@ -227,6 +242,7 @@ function ActionOnPost({
             progress: 0,
             status: "idle",
         });
+        retryToolActionRef.current = null;
     };
 
     return (
@@ -407,6 +423,7 @@ function ActionOnPost({
                 <ToolActionProgressDialog
                     state={toolProgressDialog}
                     onClose={handleCloseToolProgressDialog}
+                    onRetry={handleRetryToolAction}
                 />
             </Box>
             <Hook

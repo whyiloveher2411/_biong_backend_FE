@@ -110,6 +110,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                     ...queryUrl,
                     filter: item,
                     filter_saved_name: '',
+                    filters: '',
                 });
                 handleChangeTab(item);
             }

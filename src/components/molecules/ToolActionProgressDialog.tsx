@@ -23,9 +23,10 @@ export interface ToolActionProgressState {
 interface ToolActionProgressDialogProps {
     state: ToolActionProgressState;
     onClose: () => void;
+    onRetry?: () => void;
 }
 
-function ToolActionProgressDialog({ state, onClose }: ToolActionProgressDialogProps) {
+function ToolActionProgressDialog({ state, onClose, onRetry }: ToolActionProgressDialogProps) {
     const canClose = state.status === 'done' || state.status === 'error';
     const handleDialogClose = () => {
         if (canClose) {
@@ -75,6 +76,11 @@ function ToolActionProgressDialog({ state, onClose }: ToolActionProgressDialogPr
                 </Box>
             </DialogContent>
             <DialogActions>
+                {canClose && Boolean(onRetry) && (
+                    <Button onClick={onRetry} color="inherit">
+                        {__('Thử lại')}
+                    </Button>
+                )}
                 <Button onClick={onClose} color="primary" disabled={!canClose}>
                     {__('Close')}
                 </Button>

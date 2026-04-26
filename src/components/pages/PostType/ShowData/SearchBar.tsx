@@ -77,7 +77,7 @@ interface SearchBarProps {
     className?: string,
     onFilter: (filter: Array<{
         key: string,
-        condition: '=' | '!=',
+        condition: '=' | '!=' | 'like',
         value: string,
     }>) => void,
     moreButton?: React.ReactNode,
@@ -100,7 +100,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
 
     const [filters, setFilters] = React.useState<Array<{
         key: string,
-        condition: '=' | '!=',
+        condition: '=' | '!=' | 'like',
         value: string,
     }>>([]);
 
@@ -375,7 +375,16 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                                                         return [...prev];
                                                     });
                                                 },
-                                            }
+                                            },
+                                            'like': {
+                                                title: 'like',
+                                                action: () => {
+                                                    setFilters(prev => {
+                                                        prev[index].condition = 'like';
+                                                        return [...prev];
+                                                    });
+                                                },
+                                            },
                                         }
                                     ]}
 
