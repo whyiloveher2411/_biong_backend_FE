@@ -19,6 +19,7 @@ import FilterTab from 'components/pages/PostType/ShowData/FilterTab';
 import { Link } from 'react-router-dom';
 import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
 import ToolActionProgressDialog, { ToolActionProgressState } from 'components/molecules/ToolActionProgressDialog';
+import { groupActionsForMenu } from 'components/atoms/PostType/groupActionsForMenu';
 
 export default React.memo(function RelationshipManyToManyShowForm({ config, post }: FieldFormItemProps) {
 
@@ -45,6 +46,10 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
 
     const handleGlobalActionEvent = (item: IActionPostType, index: number) => () => {
         const globalActionPostData = resolveRelationshipGlobalActionsRequestData(config as Record<string, ANY>, post);
+        const globalActionPayload = {
+            ...(globalActionPostData || {}),
+            post_type: config.object || post.type,
+        };
         const openRunningDialog = () => {
             setToolProgressDialog({
                 open: true,
@@ -88,7 +93,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             useAjaxGlobalAction.ajax({
                 url: item.link_api,
                 method: 'POST',
-                ...(globalActionPostData ? { data: { ...globalActionPostData } } : {}),
+                data: globalActionPayload,
                 success: () => {
                     setLoadingStateButton(prev => ({
                         ...prev,
@@ -114,7 +119,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
                         url: item.link_api,
                         method: 'POST',
                         data: {
-                            ...(globalActionPostData || {}),
+                            ...globalActionPayload,
                             check_progress: true
                         },
                         success: (result) => {
@@ -151,7 +156,10 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
         };
 
         confirm.onConfirm(callApi, {
-            message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+            title: item.confirm?.title,
+            icon: item.confirm?.icon,
+            numberConfirm: item.confirm?.number_confirm,
+            message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
                 toolTitle: item.title
             })
         });
@@ -374,17 +382,19 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
                     {
                         data !== false && hiddenGlobalActions.length > 0 ?
                             <MoreButton
-                                actions={[hiddenGlobalActions.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: IActionPostType, index: number) => {
+                                actions={groupActionsForMenu(hiddenGlobalActions.map((item: IActionPostType, index: number) => {
                                     const actionIndex = index + maxVisibleGlobalActions;
                                     const loading = loadingStateButton[actionIndex] ? '...' : '';
                                     const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
 
-                                    acc[`global-action-${actionIndex}`] = {
+                                    return {
+                                        key: `global-action-${actionIndex}`,
+                                        group: (item as ANY).group,
                                         title: `${item.title}${loading}${progress}`,
-                                        action: handleGlobalActionEvent(item, actionIndex),
+                                        color: item.color,
+                                        action: () => handleGlobalActionEvent(item, actionIndex)(),
                                     };
-                                    return acc;
-                                }, {})]}
+                                }))}
                             >
                                 <Button
                                     color="inherit"
@@ -477,6 +487,11 @@ export interface DataResultApiProps {
             [key: string]: FieldConfigProps
         },
         filters_saved: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
+        filters_custom: Array<{
             name: string,
             filters: string,
             sort: string,

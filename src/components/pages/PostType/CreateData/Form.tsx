@@ -343,7 +343,9 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                         title={item.title}
                         link={item.link_api}
                         id={data.post.id}
+                        postType={data.type}
                         confirmMessage={item.confirm_message}
+                        confirmConfig={item.confirm}
                         checkProgress={item.check_progress}
                         color={item.color}
                     />
@@ -654,15 +656,23 @@ export interface IActionPostType {
     variant: string,
     link_api: string,
     link: string,
+    group?: string,
     confirm_message?: string,
+    confirm?: {
+        title?: string,
+        message?: string,
+        icon?: string,
+        number_confirm?: number,
+    },
     check_progress?: boolean,
-    color: 'inherit'
+    color?: 'inherit'
     | 'primary'
     | 'secondary'
     | 'success'
     | 'error'
     | 'info'
-    | 'warning',
+    | 'warning'
+    | string,
 }
 
 
@@ -695,7 +705,30 @@ function CircularProgressWithLabel(
     );
 }
 
-function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }: { title: string, link: string, confirmMessage?: string, id: ID, checkProgress?: boolean, color: string }) {
+function ButtonAction({
+    title,
+    link,
+    id,
+    postType,
+    confirmMessage,
+    confirmConfig,
+    checkProgress,
+    color,
+}: {
+    title: string,
+    link: string,
+    confirmMessage?: string,
+    postType: string,
+    confirmConfig?: {
+        title?: string,
+        message?: string,
+        icon?: string,
+        number_confirm?: number,
+    },
+    id: ID,
+    checkProgress?: boolean,
+    color?: string
+}) {
 
     const useAjaxAction = useAjax();
 
@@ -704,14 +737,16 @@ function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }:
     const [progressButton,] = React.useState<number>(0);
 
     const handleActionEvent = () => {
+        const actionPayload = {
+            id,
+            post_type: postType,
+        };
         const callApi = () => {
 
             useAjaxAction.ajax({
                 url: link,
                 method: 'POST',
-                data: {
-                    id
-                },
+                data: actionPayload,
                 success: () => {
                     //   
                 },
@@ -724,7 +759,7 @@ function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }:
                         url: link,
                         method: 'POST',
                         data: {
-                            id,
+                            ...actionPayload,
                             check_progress: true
                         },
                         success: (result) => {
@@ -737,14 +772,14 @@ function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }:
             }
         };
 
-        if (confirmMessage) {
-            confirm.onConfirm(callApi, {
-                message: confirmMessage
-            });
-            return;
-        }
-
-        callApi();
+        confirm.onConfirm(callApi, {
+            title: confirmConfig?.title,
+            icon: confirmConfig?.icon,
+            numberConfirm: confirmConfig?.number_confirm,
+            message: confirmConfig?.message || confirmMessage || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                toolTitle: title,
+            }),
+        });
 
     }
 
@@ -765,7 +800,7 @@ function ButtonAction({ title, link, id, confirmMessage, checkProgress, color }:
                 type="button"
                 loading={useAjaxAction.open}
                 loadingPosition="center"
-                color={color as ANY}
+                color={(color || 'inherit') as ANY}
                 sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
                 variant="contained"
                 onClick={handleActionEvent}

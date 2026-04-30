@@ -118,11 +118,25 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                             if (typeof result.config.filters_saved === 'string') {
                                 result.config.filters_saved = JSON.parse(result.config.filters_saved);
                             }
+                            if (typeof result.config.filters_custom === 'string') {
+                                result.config.filters_custom = JSON.parse(result.config.filters_custom);
+                            }
+                            if (typeof result.config.filter_custom === 'string') {
+                                result.config.filter_custom = JSON.parse(result.config.filter_custom);
+                            }
                             if (typeof result.config.sort === 'string') {
                                 result.config.sort = JSON.parse(result.config.sort);
                             }
                         } catch (error) {
                             // 
+                        }
+
+                        if (!Array.isArray(result.config.filters_saved)) {
+                            result.config.filters_saved = [];
+                        }
+
+                        if (!Array.isArray(result.config.filters_custom)) {
+                            result.config.filters_custom = Array.isArray(result.config.filter_custom) ? result.config.filter_custom : [];
                         }
 
                         result.type = type;
@@ -515,6 +529,11 @@ export interface ShowPostTypeData {
             },
         },
         filters_saved: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
+        filters_custom: Array<{
             name: string,
             filters: string,
             sort: string,

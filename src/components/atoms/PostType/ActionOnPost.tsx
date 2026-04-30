@@ -1,5 +1,5 @@
 import { Box, Button, Theme } from "@mui/material";
-import Icon, { IconFormat } from "components/atoms/Icon";
+import Icon from "components/atoms/Icon";
 import IconButton from "components/atoms/IconButton";
 import makeCSS from "components/atoms/makeCSS";
 import Tooltip from "components/atoms/Tooltip";
@@ -14,6 +14,7 @@ import { IActionPostType } from "components/pages/PostType/CreateData/Form";
 import useAjax from "hook/useApi";
 import useConfirmDialog from "hook/useConfirmDialog";
 import ToolActionProgressDialog, { ToolActionProgressState } from "components/molecules/ToolActionProgressDialog";
+import { groupActionsForMenu } from "./groupActionsForMenu";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -105,6 +106,10 @@ function ActionOnPost({
         item: IActionPostType,
         index: number
     ) => {
+        const actionPayload = {
+            id,
+            post_type: postType || post.type,
+        };
         const openRunningDialog = () => {
             setToolProgressDialog({
                 open: true,
@@ -151,9 +156,7 @@ function ActionOnPost({
             useAjaxAction.ajax({
                 url: item.link_api,
                 method: "POST",
-                data: {
-                    id,
-                },
+                data: actionPayload,
                 success: (result) => {
                     openLinkFromResult(result);
                     setLoadingStateButton((prev) => ({
@@ -179,7 +182,7 @@ function ActionOnPost({
                         url: item.link_api,
                         method: "POST",
                         data: {
-                            id,
+                            ...actionPayload,
                             check_progress: true,
                         },
                         success: (result) => {
@@ -216,7 +219,10 @@ function ActionOnPost({
         };
 
         confirm.onConfirm(callApi, {
-            message: item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+            title: item.confirm?.title,
+            icon: item.confirm?.icon,
+            numberConfirm: item.confirm?.number_confirm,
+            message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
                 toolTitle: item.title,
             }),
         });
@@ -346,42 +352,27 @@ function ActionOnPost({
                     {config.actions.length > 5 ? (
                         <MoreButton
                             actions={(() => {
-                                const menuMoreAction: Array<{
-                                    [key: string]: {
-                                        title: string;
-                                        action: (
-                                            e: React.MouseEvent<
-                                                HTMLLIElement,
-                                                MouseEvent
-                                            >
-                                        ) => void;
-                                        icon?: IconFormat;
-                                    };
-                                }> = [];
-                                config.actions.forEach((action, index) => {
-                                    menuMoreAction.push({
-                                        [action.link_api]: {
-                                            title:
-                                                action.title +
-                                                (progressButton[index] !==
-                                                undefined
-                                                    ? ` (${progressButton[index]}%)`
-                                                    : ""),
-                                            icon: loadingStateButton[index]
-                                                ? "LoopRounded"
-                                                : undefined,
-                                            action: (e) => {
-                                                e.stopPropagation();
-                                                handleActionEvent(
-                                                    post.id,
-                                                    action,
-                                                    index
-                                                );
-                                            },
-                                        },
-                                    });
-                                });
-                                return menuMoreAction;
+                                return groupActionsForMenu(config.actions.map((action, index) => ({
+                                    key: `${action.link_api || action.title}-${index}`,
+                                    group: action.group,
+                                    title:
+                                        action.title +
+                                        (progressButton[index] !== undefined
+                                            ? ` (${progressButton[index]}%)`
+                                            : ""),
+                                    color: action.color,
+                                    icon: loadingStateButton[index]
+                                        ? "LoopRounded"
+                                        : undefined,
+                                    action: (e) => {
+                                        e.stopPropagation();
+                                        handleActionEvent(
+                                            post.id,
+                                            action,
+                                            index
+                                        );
+                                    },
+                                })));
                             })()}
                         >
                             <IconButton size="large">

@@ -97,7 +97,15 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
 
     const dataConfig = data !== false ? data.config : null;
     const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
-    const selectedSavedFilter = dataConfig?.filters_saved?.find((item: { name: string }) => item.name === queryUrl.filter_saved_name);
+    const filtersSaved = Array.isArray(dataConfig?.filters_saved) ? (dataConfig?.filters_saved ?? []) : [];
+    const filtersCustom = Array.isArray(dataConfig?.filters_custom)
+        ? (dataConfig?.filters_custom ?? [])
+        : (Array.isArray(dataConfig?.filter_custom) ? (dataConfig?.filter_custom ?? []) : []);
+    const mergedSavedFilters = [
+        ...filtersSaved,
+        ...filtersCustom,
+    ];
+    const selectedSavedFilter = mergedSavedFilters.find((item: { name: string }) => item.name === queryUrl.filter_saved_name);
     const currentFilterTitle = selectedSavedFilter
         ? selectedSavedFilter.name
         : __(dataConfig?.filters?.[tabCurrent[name]]?.title ?? 'All');
@@ -118,7 +126,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         return acc;
     }, {});
 
-    dataConfig?.filters_saved?.forEach((item: { name: string, sort: string, filters: string }, index: number) => {
+    mergedSavedFilters.forEach((item: { name: string, sort: string, filters: string }, index: number) => {
         filterActions[`saved-filter-${index}`] = {
             title: `[Custom] ${item.name}`,
             action: () => {
@@ -139,7 +147,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         };
     });
     const selectedMenuKey = selectedSavedFilter
-        ? `saved-filter-${dataConfig?.filters_saved?.findIndex((item: { name: string }) => item.name === selectedSavedFilter.name)}`
+        ? `saved-filter-${mergedSavedFilters.findIndex((item: { name: string }) => item.name === selectedSavedFilter.name)}`
         : `system-filter-${tabCurrent[name]}`;
 
     const handleRefreshData = () => {

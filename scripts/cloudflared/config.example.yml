@@ -1,0 +1,9 @@
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /Users/YOUR_USER/.cloudflared/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: cms.yourdomain.com
+    service: http://127.0.0.1:3030
+  - hostname: api.yourdomain.com
+    service: http://127.0.0.1:9999
+  - service: http_status:404

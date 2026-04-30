@@ -20,6 +20,7 @@ import { IActionPostType } from '../CreateData/Form'
 import useConfirmDialog from 'hook/useConfirmDialog'
 import useAjax from 'hook/useApi'
 import Dialog from 'components/molecules/Dialog'
+import { groupActionsForMenu } from 'components/atoms/PostType/groupActionsForMenu'
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
         display: 'flex',
@@ -119,6 +120,10 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
     const confirm = useConfirmDialog();
 
     const handleActionEvent = (item: IActionPostType, index: number) => () => {
+        const globalActionPayload = {
+            ...globalActionsRequestSourceMain,
+            post_type: type,
+        };
         const callApi = () => {
             setLoadingStateButton(prev => ({
                 ...prev,
@@ -133,9 +138,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             useAjaxAction.ajax({
                 url: item.link_api,
                 method: 'POST',
-                data: {
-                    ...globalActionsRequestSourceMain,
-                },
+                data: globalActionPayload,
                 success: () => {
                     setLoadingStateButton(prev => ({
                         ...prev,
@@ -151,7 +154,7 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         url: item.link_api,
                         method: 'POST',
                         data: {
-                            ...globalActionsRequestSourceMain,
+                            ...globalActionPayload,
                             check_progress: true
                         },
                         success: (result) => {
@@ -177,14 +180,14 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
             }
         };
 
-        if (item.confirm_message) {
-            confirm.onConfirm(callApi, {
-                message: item.confirm_message
-            });
-            return;
-        }
-
-        callApi();
+        confirm.onConfirm(callApi, {
+            title: item.confirm?.title,
+            icon: item.confirm?.icon,
+            numberConfirm: item.confirm?.number_confirm,
+            message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                toolTitle: item.title,
+            })
+        });
 
     }
 
@@ -264,17 +267,19 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                 {
                     hiddenGlobalActions.length > 0 &&
                     <MoreButton
-                        actions={[hiddenGlobalActions.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: IActionPostType, index: number) => {
+                        actions={groupActionsForMenu(hiddenGlobalActions.map((item: IActionPostType, index: number) => {
                             const actionIndex = index + maxVisibleGlobalActions;
                             const loading = loadingStateButton[actionIndex] ? '...' : '';
                             const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
 
-                            acc[`global-action-${actionIndex}`] = {
+                            return {
+                                key: `global-action-${actionIndex}`,
+                                group: (item as ANY).group,
                                 title: `${item.title}${loading}${progress}`,
+                                color: item.color,
                                 action: handleActionEvent(item, actionIndex),
                             };
-                            return acc;
-                        }, {})]}
+                        }))}
                     >
                         <Button
                             color="inherit"

@@ -2,6 +2,7 @@ import React from "react";
 import { FieldViewItemProps } from "components/atoms/fields/type";
 import { Box } from "@mui/material";
 import { getAccessToken } from "store/user/user.reducers";
+import { convertToURL } from "helpers/url";
 
 function ViewReasonNotCompleted(props: FieldViewItemProps) {
     const postNameVi = String(props?.post?.name_vi ?? "").trim();
@@ -11,7 +12,10 @@ function ViewReasonNotCompleted(props: FieldViewItemProps) {
     const appendParams = React.useCallback(
         (url: string) => {
             const accessToken = getAccessToken() ?? "";
-            const apiUrl = "http://localhost:9999/api/admin/plugin/vn4-e-learning/app-mobile/cuisine/update-image-edited";
+            const apiUrl = convertToURL(
+                process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+                "/api/admin/plugin/vn4-e-learning/app-mobile/cuisine/update-image-edited",
+            );
             const finalUrl = new URL(url);
             finalUrl.searchParams.set("copy_image_edited", "1");
             finalUrl.searchParams.set("cuisine_ingredient_id", cuisineIngredientId);

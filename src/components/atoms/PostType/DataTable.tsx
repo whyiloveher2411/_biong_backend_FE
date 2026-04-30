@@ -390,6 +390,11 @@ export interface DataTableResultApiProps {
             filters: string,
             sort: string,
         }>,
+        filters_custom: Array<{
+            name: string,
+            filters: string,
+            sort: string,
+        }>,
         filters: {
             [key: string]: {
                 count: number,

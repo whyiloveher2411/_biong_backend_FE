@@ -16,7 +16,8 @@ const MoreButton = ({ children, title, actions, selected, icon = 'MoreVert', ...
         [key: string]: {
             title: string,
             action: (e: React.MouseEvent<HTMLLIElement, MouseEvent>) => void,
-            icon?: IconFormat
+            icon?: IconFormat,
+            color?: string,
         }
     }>,
     title?: string,
@@ -81,7 +82,12 @@ const MoreButton = ({ children, title, actions, selected, icon = 'MoreVert', ...
                                         <Icon icon={group[key].icon} />
                                     </ListItemIcon>
                                 }
-                                <ListItemText primary={group[key].title} />
+                                <ListItemText
+                                    primary={group[key].title}
+                                    primaryTypographyProps={{
+                                        sx: group[key].color ? { color: group[key].color } : undefined,
+                                    }}
+                                />
                             </MenuItem>
                         ));
                         if (index !== (actions.length - 1)) {

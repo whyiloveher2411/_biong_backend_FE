@@ -3,7 +3,7 @@ import { __p } from 'helpers/i18n';
 import { PLUGIN_NAME } from 'plugins/Vn4Ecommerce/helpers/plugin';
 import RemoteConfig from './RemoteConfig';
 import Localization from './Localization';
-import Database from './Database';
+import Database from './database';
 import FileManager from './FileManager';
 import PushNotification from './PushNotification';
 // import Analytics from './Analytics';

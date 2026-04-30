@@ -19,7 +19,7 @@ function Hook({ hook, ...propsChild }: Props) {
                 try {
                     let compoment = toCamelCase(settings.general_client_theme) + '/' + hook;
                     //eslint-disable-next-line
-                    let resolved = require(`./../../themes/${compoment}`).default;
+                    let resolved = require(`./../../theme/${compoment}`).default;
                     return React.createElement(resolved, { ...propsChild });
                 } catch (error) {
                     //
