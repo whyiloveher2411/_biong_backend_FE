@@ -22,6 +22,7 @@ Xem hướng dẫn đầy đủ tại:
 
 - `docs/PUBLIC_LOCAL_DEPLOYMENT.md`
 - `docs/API_CORS_AUTH_TEMPLATE.md`
+- `docs/CLOUDFLARE_CACHE_BYPASS.md`
 
 Các file hỗ trợ triển khai tunnel:
 

@@ -24,9 +24,12 @@ import Box from '@mui/material/Box';
 import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
 import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
 import useDebounce from 'hook/useDebounce';
-import { InputAdornment, TextField } from '@mui/material';
+import { useFloatingMessages } from 'hook/useFloatingMessages';
+import { IconButton, InputAdornment, TextField, Tooltip } from '@mui/material';
 import { Search } from '@mui/icons-material';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import Button from 'components/atoms/Button';
+import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 
 const useStyles = makeCSS({
     tr: {
@@ -63,6 +66,7 @@ function DataTable(props: DataTableProps) {
     const { data, setQueryUrl, queryUrl, config } = props;
 
     const { ajax, Loading, open } = useAjax();
+    const { showMessage } = useFloatingMessages();
 
     const [openDrawer, setOpenDrawer] = React.useState(false);
 
@@ -116,6 +120,55 @@ function DataTable(props: DataTableProps) {
             setQueryUrl({ ...queryUrl, sortKey: key, sortType: '1' });
         }
     }
+
+    const copyColumnValues = (columnKey: string) => {
+        requestCopyUniqueColumnValues({
+            ajax,
+            postType: queryUrl.object,
+            columnKey,
+            rows: data.rows.data || [],
+            showMessage,
+        });
+    };
+    const renderHeaderWithCopy = (key: string, title: ANY, enableSort: boolean) => (
+        <TableCell
+            key={key}
+            sx={enableSort ? { cursor: 'pointer' } : undefined}
+            onClick={enableSort ? () => handleSort(key) : undefined}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+                    {String(title ?? key)}
+                    {
+                        enableSort && queryUrl.sortKey === key ? <Box
+                            sx={{
+                                display: 'inline-flex',
+                                position: 'absolute',
+                                right: 0,
+                                transform: 'translateX(100%)',
+                            }}
+                        >
+                            {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
+                        </Box>
+                            : null
+                    }
+                </Box>
+                <Tooltip title={__('Copy')}>
+                    <IconButton
+                        size="small"
+                        sx={{ p: 0.5 }}
+                        aria-label={__('Copy')}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            copyColumnValues(key);
+                        }}
+                    >
+                        <ContentCopyOutlinedIcon fontSize="inherit" />
+                    </IconButton>
+                </Tooltip>
+            </Box>
+        </TableCell>
+    );
 
     const acctionPost = (payload: JsonFormat, success?: (result: JsonFormat) => void) => {
         ajax({
@@ -217,31 +270,14 @@ function DataTable(props: DataTableProps) {
                             {
                                 config && config.showFields ?
                                     Object.keys(config.showFields).map(key => (
-                                        <TableCell key={key}>{config.showFields[key].title}</TableCell>
+                                        renderHeaderWithCopy(key, config.showFields[key].title, false)
                                     ))
                                     :
                                     (data.config.fields &&
                                         Object.keys(data.config.fields).map(key => (
                                             (data.config.fields[key].show_data !== false || data.config.fields[key].show_data === undefined)
                                                 ?
-                                                <TableCell key={key} sx={{ cursor: 'pointer' }} onClick={() => handleSort(key)}>
-                                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
-                                                        {data.config.fields[key].title}
-                                                        {
-                                                            queryUrl.sortKey === key ? <Box
-                                                                sx={{
-                                                                    display: 'inline-flex',
-                                                                    position: 'absolute',
-                                                                    right: 0,
-                                                                    transform: 'translateX(100%)',
-                                                                }}
-                                                            >
-                                                                {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
-                                                            </Box>
-                                                                : null
-                                                        }
-                                                    </Box>
-                                                </TableCell>
+                                                renderHeaderWithCopy(key, data.config.fields[key].title, true)
                                                 :
                                                 <React.Fragment key={key}></React.Fragment>
                                         ))

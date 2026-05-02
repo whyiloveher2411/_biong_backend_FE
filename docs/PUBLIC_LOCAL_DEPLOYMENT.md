@@ -181,6 +181,18 @@ bash scripts/ops/cms-stack.sh restart
 bash scripts/ops/cms-stack.sh stop
 ```
 
+## 9) Cấu hình Cloudflare không cache cho 2 domain local
+
+Xem hướng dẫn chi tiết:
+
+- `docs/CLOUDFLARE_CACHE_BYPASS.md`
+
+Kiểm tra nhanh cache-status:
+
+```bash
+bash scripts/cloudflared/check-cache-status.sh
+```
+
 Nếu lỗi 502:
 
 - Kiểm tra app local còn chạy ở đúng port `3030/9999`

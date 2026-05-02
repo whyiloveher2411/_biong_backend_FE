@@ -27,12 +27,15 @@ import NotFound from 'components/molecules/NotFound';
 import { dateTimeFormat } from 'helpers/date';
 import { __ } from 'helpers/i18n';
 import useAjax from 'hook/useApi';
+import { useFloatingMessages } from 'hook/useFloatingMessages';
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShowPostTypeData } from '.';
 import ActionOnPostSelected from './Result/ActionOnPostSelected';
 import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
 import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
+import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
@@ -140,6 +143,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     const [confirmDelete, setConfirmDelete] = React.useState(0);
 
     const { ajax, Loading } = useAjax();
+    const { showMessage } = useFloatingMessages();
 
     // const [openDrawer, setOpenDrawer] = React.useState(false);
     // const [dataDrawer, setDataDrawer] = React.useState(false);
@@ -256,7 +260,17 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
             setQueryUrl({ ...queryUrl, sortKey: key, sortType: '1' });
         }
         setRender(render + 1);
-    }
+    };
+
+    const copyColumnValues = (columnKey: string) => {
+        requestCopyUniqueColumnValues({
+            ajax,
+            postType,
+            columnKey,
+            rows: data.rows.data || [],
+            showMessage,
+        });
+    };
 
     const eventClickRow = (_e: React.MouseEvent<HTMLTableRowElement>, id: string) => {
 
@@ -352,21 +366,38 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                     {keyFields.length > 0 &&
                                         keyFields.map(key => (
                                             <TableCell className={classes.pad8} onClick={() => handleSort(key)} key={key}>
-                                                <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>{data.config.fields[key].title}
-                                                    {
-                                                        queryUrl.sortKey === key ? <Box
-                                                            sx={{
-                                                                display: 'inline-flex',
-                                                                position: 'absolute',
-                                                                right: 0,
-                                                                transform: 'translateX(100%)',
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+                                                        {data.config.fields[key].title}
+                                                        {
+                                                            queryUrl.sortKey === key ? <Box
+                                                                sx={{
+                                                                    display: 'inline-flex',
+                                                                    position: 'absolute',
+                                                                    right: 0,
+                                                                    transform: 'translateX(100%)',
+                                                                }}
+                                                            >
+                                                                {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
+                                                            </Box>
+                                                                : null
+                                                        }
+                                                    </Box>
+                                                    <Tooltip title={__('Copy')}>
+                                                        <IconButton
+                                                            size="small"
+                                                            sx={{ p: 0.5 }}
+                                                            aria-label={__('Copy')}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                copyColumnValues(key);
                                                             }}
                                                         >
-                                                            {queryUrl.sortType === '1' ? <ArrowDropUpOutlinedIcon /> : <ArrowDropDownOutlinedIcon />}
-                                                        </Box>
-                                                            : null
-                                                    }
-                                                </Box></TableCell>
+                                                            <ContentCopyOutlinedIcon fontSize="inherit" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Box>
+                                            </TableCell>
                                         ))
                                     }
                                     {
