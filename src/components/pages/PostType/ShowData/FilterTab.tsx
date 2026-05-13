@@ -110,8 +110,38 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         ? selectedSavedFilter.name
         : __(dataConfig?.filters?.[tabCurrent[name]]?.title ?? 'All');
 
-    const filterActions = filters.reduce((acc: { [key: string]: { title: string, action: () => void } }, item: string) => {
-        acc[`system-filter-${item}`] = {
+    const defaultFilterGroupKey = '__all_filters__';
+    const groupedFilterActions: Array<{
+        [key: string]: {
+            title: string,
+            action: () => void
+        }
+    }> = [];
+    const groupActionMap: {
+        [key: string]: {
+            [key: string]: {
+                title: string,
+                action: () => void
+        }
+        }
+    } = {};
+
+    const pushActionToGroup = (
+        groupName: string | undefined,
+        actionKey: string,
+        actionValue: { title: string, action: () => void }
+    ) => {
+        const normalizedGroupName = groupName?.trim() ? groupName.trim() : defaultFilterGroupKey;
+        if (!groupActionMap[normalizedGroupName]) {
+            groupActionMap[normalizedGroupName] = {};
+            groupedFilterActions.push(groupActionMap[normalizedGroupName]);
+        }
+        groupActionMap[normalizedGroupName][actionKey] = actionValue;
+    };
+
+    filters.forEach((item: string) => {
+        const groupName = (dataConfig?.filters?.[item] as ANY)?.group;
+        pushActionToGroup(groupName, `system-filter-${item}`, {
             title: `${__(dataConfig?.filters?.[item]?.title ?? item)} (${dataConfig?.filters?.[item]?.count ?? 0})`,
             action: () => {
                 setQueryUrl({
@@ -122,12 +152,11 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                 });
                 handleChangeTab(item);
             }
-        };
-        return acc;
-    }, {});
+        });
+    });
 
-    mergedSavedFilters.forEach((item: { name: string, sort: string, filters: string }, index: number) => {
-        filterActions[`saved-filter-${index}`] = {
+    mergedSavedFilters.forEach((item: { name: string, sort: string, filters: string, group?: string }, index: number) => {
+        pushActionToGroup(item.group, `saved-filter-${index}`, {
             title: `[Custom] ${item.name}`,
             action: () => {
                 let sort = { sortKey: '', sortType: '' };
@@ -144,7 +173,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                     ...sort,
                 }));
             }
-        };
+        });
     });
     const selectedMenuKey = selectedSavedFilter
         ? `saved-filter-${mergedSavedFilters.findIndex((item: { name: string }) => item.name === selectedSavedFilter.name)}`
@@ -204,9 +233,9 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                         <Icon icon='Refresh' />
                     </Button>
                     {
-                        Object.keys(filterActions).length > 0 ?
+                        groupedFilterActions.length > 0 ?
                             <MoreButton
-                                actions={[filterActions]}
+                                actions={groupedFilterActions}
                                 selected={selectedMenuKey}
                             >
                                 <Button

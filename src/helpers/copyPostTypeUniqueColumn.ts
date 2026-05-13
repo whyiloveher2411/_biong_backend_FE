@@ -90,9 +90,10 @@ export function requestCopyUniqueColumnValues(options: {
     postType: string;
     columnKey: string;
     rows: JsonFormat[];
+    filters?: JsonFormat;
     showMessage: (message: string, type?: VariantType) => void;
 }): void {
-    const { ajax, postType, columnKey, rows, showMessage } = options;
+    const { ajax, postType, columnKey, rows, filters, showMessage } = options;
 
     ajax({
         url: 'post-type/copy-unique-value-column',
@@ -100,6 +101,7 @@ export function requestCopyUniqueColumnValues(options: {
         data: {
             post_type: postType,
             column_name: columnKey,
+            ...(filters || {}),
         },
         success: async (result: ANY) => {
             let copiedText = clipboardTextFromCopyUniqueApiResult(result);

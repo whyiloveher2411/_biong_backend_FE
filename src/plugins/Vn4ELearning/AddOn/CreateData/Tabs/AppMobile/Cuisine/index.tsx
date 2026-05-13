@@ -4,9 +4,10 @@ import { CreatePostTypeData } from "components/pages/PostType/CreateData";
 import FieldForm from "components/atoms/fields/relationship_onetomany_show/Form";
 import LoadingButton from "components/atoms/LoadingButton";
 import DrawerCustom from "components/molecules/DrawerCustom";
+import QuickInputIngredientsButton from "./QuickInputIngredientsButton";
 
 export default function Cuisine({ data }: { data: CreatePostTypeData }) {
-    const [ingredientsTableKey] = React.useState(0);
+    const [ingredientsTableKey, setIngredientsTableKey] = React.useState(0);
     const [openIngredientCategoryDrawer, setOpenIngredientCategoryDrawer] =
         React.useState(false);
  
@@ -25,13 +26,19 @@ export default function Cuisine({ data }: { data: CreatePostTypeData }) {
                         rowsPerPage: 10,
                     },
                     relationshipHeaderActions: (
-                        <LoadingButton
-                            variant="outlined"
-                            size="small"
-                            onClick={() => setOpenIngredientCategoryDrawer(true)}
-                        >
-                            Danh mục nguyên liệu
-                        </LoadingButton>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            <LoadingButton
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setOpenIngredientCategoryDrawer(true)}
+                            >
+                                Danh mục nguyên liệu
+                            </LoadingButton>
+                            <QuickInputIngredientsButton
+                                appMobileId={data.post.id}
+                                onSuccess={() => setIngredientsTableKey((k) => k + 1)}
+                            />
+                        </Box>
                     ),
                 }}
                 post={data.post}

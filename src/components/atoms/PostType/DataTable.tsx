@@ -127,6 +127,7 @@ function DataTable(props: DataTableProps) {
             postType: queryUrl.object,
             columnKey,
             rows: data.rows.data || [],
+            filters: queryUrl,
             showMessage,
         });
     };

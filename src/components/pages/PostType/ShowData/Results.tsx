@@ -268,6 +268,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
             postType,
             columnKey,
             rows: data.rows.data || [],
+            filters: queryUrl,
             showMessage,
         });
     };
