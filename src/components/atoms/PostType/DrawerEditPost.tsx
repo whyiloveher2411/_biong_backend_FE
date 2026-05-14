@@ -48,6 +48,10 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
         postTitle = parsedTitle;
     }
 
+    const dialogContentRaw = data?.config?.dialogContent as Record<string, ANY> | undefined;
+    const { disableCloseOnSave: _omitDisableCloseOnSave, ...dialogContentForDrawer } = dialogContentRaw ?? {};
+    void _omitDisableCloseOnSave;
+
     const onUpdateData = (value: ANY, key: ANY) => {
 
         setData(prev => {
@@ -84,7 +88,7 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
                 }
             }
             width={1300}
-            {...data?.config?.dialogContent}
+            {...dialogContentForDrawer}
             title={( (data.post?.id ? "Edit " : "Create ") + (data?.config?.title ?? "Post ") + (postTitle ? ` - "${postTitle}" --- ID: [${data?.post?.id}]` : ""))}
             open={open}
             onClose={onClose}

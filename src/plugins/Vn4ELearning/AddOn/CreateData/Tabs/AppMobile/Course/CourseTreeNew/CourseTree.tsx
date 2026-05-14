@@ -7,6 +7,7 @@ import Skeleton from "components/atoms/Skeleton";
 import Button from "components/atoms/Button";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
+import { shouldCloseDrawerAfterPostSave } from "helpers/postTypeDrawer";
 import IconButton from "components/atoms/IconButton";
 import AddIcon from "@mui/icons-material/Add";
 import SyncIcon from "@mui/icons-material/Sync";
@@ -1115,8 +1116,22 @@ export default function CourseTree({ data }: { data: CreatePostTypeData }) {
                                     ...drawerData.post,
                                     _action: drawerData.action,
                                 },
-                                success: () => {
-                                    setOpenDrawer(false);
+                                success: (result: JsonFormat) => {
+                                    if (result.post?.id) {
+                                        setDrawerData((prev) => {
+                                            if (!prev) return prev;
+                                            return {
+                                                ...prev,
+                                                post: result.post,
+                                                author: result.author,
+                                                editor: result.editor,
+                                                updatePost: new Date(),
+                                            };
+                                        });
+                                    }
+                                    if (shouldCloseDrawerAfterPostSave(drawerData)) {
+                                        setOpenDrawer(false);
+                                    }
                                     loadData();
                                 },
                             });

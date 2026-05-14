@@ -7,7 +7,9 @@ import useAjax from 'hook/useApi';
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
-import { Button, Typography, SvgIcon, Checkbox } from '@mui/material';
+import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
+import { Button, Typography, SvgIcon, Checkbox, IconButton, CircularProgress } from '@mui/material';
+import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import SuggestAiDrawer from './SuggestAiDrawer';
 import TooltipWhite from 'components/atoms/TooltipWhite';
 import FacebookIcon from '@mui/icons-material/Facebook';
@@ -36,6 +38,14 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
     'X': <TwitterIcon fontSize="small" sx={{ color: '#1DA1F2' }} />,
     'Threads': <SvgIcon fontSize="small" viewBox="0 0 24 24" sx={{ color: '#000' }}><path d="M11.906 18c-3.235 0-5.858-2.613-5.858-5.844 0-3.328 2.502-5.918 5.86-5.918 2.054 0 3.755.992 4.793 2.535l1.696-1.127C17.07 5.688 14.777 4.3 11.9 4.3 7.424 4.3 3.903 7.913 3.903 12.158c0 4.148 3.328 7.734 7.828 7.734 4.416 0 7.9-3.41 7.9-7.868V8.63l-2.026.046v3.25c0 3.123-2.457 5.578-5.698 5.578v.496m0-9.66c-2.05 0-3.71 1.66-3.71 3.71s1.66 3.71 3.71 3.71c1.98 0 3.6-1.57 3.69-3.526l-1.99-.047c-.07.94-.87 1.68-1.83 1.68-1.01 0-1.84-.83-1.84-1.84 0-1.01.83-1.84 1.84-1.84.97 0 1.77.75 1.83 1.7l1.99.046c-.09-2.062-1.78-3.704-3.86-3.704v.102M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8z" /></SvgIcon>,
     'LinkedIn': <LinkedInIcon fontSize="small" sx={{ color: '#0A66C2' }} />,
+};
+
+/** Post chưa có JSON API trên cloud → hiện nút đồng bộ. */
+const isMissingLinkApiJson = (resource: ANY): boolean => {
+    const v = resource?.link_api_json;
+    if (v === null || v === undefined) return true;
+    if (typeof v === 'string' && v.trim() === '') return true;
+    return false;
 };
 
 const normalizePlatform = (p: string): string => {
@@ -98,7 +108,17 @@ const getPlatformsFromEvent = (event: ANY): string[] => {
     return Array.from(new Set(normalized));
 };
 
-const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatforms?: string[] }) => {
+const CustomEvent = ({
+    event,
+    selectedPlatforms,
+    onSyncCloud,
+    syncingPostId,
+}: {
+    event: ANY;
+    selectedPlatforms?: string[];
+    onSyncCloud?: (postId: number) => void;
+    syncingPostId?: number | null;
+}) => {
     let platforms = getPlatformsFromEvent(event);
 
     if (selectedPlatforms && selectedPlatforms.length > 0) {
@@ -225,10 +245,43 @@ const CustomEvent = ({ event, selectedPlatforms }: { event: ANY, selectedPlatfor
     );
 
     const isCompleted = event.resource?.completed_and_scheduled;
+    const postIdNum =
+        r.id !== null && r.id !== undefined && r.id !== ''
+            ? Number(r.id)
+            : NaN;
+    const showSyncCloud = isMissingLinkApiJson(r) && Number.isFinite(postIdNum) && onSyncCloud;
+    const isSyncingThis = syncingPostId !== null && syncingPostId === postIdNum;
 
     return (
         <TooltipWhite title={tooltipContent} placement="top" arrow enterDelay={400} PopperProps={{ disablePortal: false, style: { zIndex: 1500 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+            <Box sx={{ backgroundColor: showSyncCloud ? 'red' : 'unset', display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                {showSyncCloud && (
+                    <IconButton
+                        size="small"
+                        aria-label="Đồng bộ lên cloud"
+                        disabled={syncingPostId !== null}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onSyncCloud?.(postIdNum);
+                        }}
+                        sx={{
+                            p: '2px',
+                            mr: '4px',
+                            flexShrink: 0,
+                            color: 'inherit',
+                            opacity: isSyncingThis ? 1 : 0.85,
+                            '&:hover': { opacity: 1, backgroundColor: 'rgba(0,0,0,0.08)' },
+                        }}
+                    >
+                        {isSyncingThis ? (
+                            <CircularProgress size={14} sx={{ color: 'inherit' }} />
+                        ) : (
+                            <CloudSyncIcon sx={{ fontSize: 18 }} />
+                        )}
+                    </IconButton>
+                )}
                 {displayedPlatforms.map((plat) => (
                     <Box key={plat} sx={{
                         display: 'flex',
@@ -285,6 +338,25 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [events, setEvents] = useState<ANY[]>([]);
     const [currentRange, setCurrentRange] = useState<{ start: Date, end: Date } | null>(null);
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+    const [syncingPostId, setSyncingPostId] = useState<number | null>(null);
+
+    const handleSyncPostToS3 = (postId: number) => {
+        setSyncingPostId(postId);
+        api.ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/sync-posst-to-s3',
+            method: 'POST',
+            data: {
+                id: postId,
+                post_type: 'spacedev_app_marketing_post',
+            },
+            success: () => {
+                if (currentRange) {
+                    fetchPosts(currentRange.start, currentRange.end);
+                }
+            },
+            finally: () => setSyncingPostId(null),
+        });
+    };
 
     React.useEffect(() => {
         const start = moment().startOf('month').toDate();
@@ -468,7 +540,14 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         eventTimeRangeFormat: () => ''
                     }}
                     components={{
-                        event: (props: ANY) => <CustomEvent {...props} selectedPlatforms={selectedPlatforms} />
+                        event: (props: ANY) => (
+                            <CustomEvent
+                                {...props}
+                                selectedPlatforms={selectedPlatforms}
+                                onSyncCloud={handleSyncPostToS3}
+                                syncingPostId={syncingPostId}
+                            />
+                        ),
                     }}
                     eventPropGetter={eventStyleGetter}
                 />
@@ -488,8 +567,22 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                     ...drawerData.post,
                                     _action: drawerData.action,
                                 },
-                                success: () => {
-                                    setOpenDrawer(false);
+                                success: (result: JsonFormat) => {
+                                    if (result.post?.id) {
+                                        setDrawerData((prev) => {
+                                            if (!prev) return prev;
+                                            return {
+                                                ...prev,
+                                                post: result.post,
+                                                author: result.author,
+                                                editor: result.editor,
+                                                updatePost: new Date(),
+                                            };
+                                        });
+                                    }
+                                    if (shouldCloseDrawerAfterPostSave(drawerData)) {
+                                        setOpenDrawer(false);
+                                    }
                                     if (currentRange) {
                                         fetchPosts(currentRange.start, currentRange.end);
                                     }

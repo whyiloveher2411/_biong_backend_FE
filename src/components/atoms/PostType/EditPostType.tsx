@@ -1,6 +1,7 @@
 import Box from 'components/atoms/Box';
 import useAjax from 'hook/useApi';
 import React from 'react';
+import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
 import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
 import DrawerEditPost from './DrawerEditPost';
 
@@ -56,8 +57,21 @@ function EditPostType({ open, onClose, id, postType, onEdit }: {
                         if (onEdit) {
                             onEdit(result.post);
                         }
-                        onClose();
-                        setData(false);
+                        if (shouldCloseDrawerAfterPostSave(data)) {
+                            onClose();
+                            setData(false);
+                        } else {
+                            setData((prev) => {
+                                if (!prev) return prev;
+                                return {
+                                    ...prev,
+                                    post: result.post,
+                                    author: result.author,
+                                    editor: result.editor,
+                                    updatePost: new Date(),
+                                };
+                            });
+                        }
                     }
                 }
             });

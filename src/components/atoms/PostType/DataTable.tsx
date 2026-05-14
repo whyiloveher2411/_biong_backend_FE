@@ -12,6 +12,7 @@ import TableRow from 'components/atoms/TableRow';
 import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import NotFound from 'components/molecules/NotFound';
 import { __ } from 'helpers/i18n';
+import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
 import useAjax from 'hook/useApi';
 import React from 'react';
 import { ImageProps } from '../Avatar';
@@ -202,7 +203,19 @@ function DataTable(props: DataTableProps) {
                 data: { ...dataDrawer.post, _action: 'EDIT' },
                 success: (result) => {
                     if (result.post?.id) {
-                        setOpenDrawer(false);
+                        setDataDrawer((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                post: result.post,
+                                author: result.author,
+                                editor: result.editor,
+                                updatePost: new Date(),
+                            };
+                        });
+                        if (shouldCloseDrawerAfterPostSave(dataDrawer)) {
+                            setOpenDrawer(false);
+                        }
                         if (props.onEdit) {
                             props.onEdit();
                         }

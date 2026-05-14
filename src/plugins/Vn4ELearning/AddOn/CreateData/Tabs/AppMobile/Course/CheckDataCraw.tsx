@@ -16,6 +16,7 @@ import ExtensionIcon from "@mui/icons-material/Extension";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from "components/atoms/fields/relationship_onetomany_show/Form";
+import { shouldCloseDrawerAfterPostSave } from "helpers/postTypeDrawer";
 import useLanguages from "../hooks/useLanguages";
 import useConfirmDialog from "hook/useConfirmDialog";
 import QuestionPreview from "./Common/QuestionPreview";
@@ -885,8 +886,22 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                         ...drawerData.post,
                                         _action: drawerData.action,
                                     },
-                                    success: () => {
-                                        setOpenDrawerEditPost(false);
+                                    success: (result: JsonFormat) => {
+                                        if (result.post?.id) {
+                                            setDrawerData((prev) => {
+                                                if (!prev) return prev;
+                                                return {
+                                                    ...prev,
+                                                    post: result.post,
+                                                    author: result.author,
+                                                    editor: result.editor,
+                                                    updatePost: new Date(),
+                                                };
+                                            });
+                                        }
+                                        if (shouldCloseDrawerAfterPostSave(drawerData)) {
+                                            setOpenDrawerEditPost(false);
+                                        }
                                         // Optionally remove form preview list?
                                         handlePreviewDataFromJson();
                                     },
@@ -1035,8 +1050,22 @@ function CheckDataCrawInner(props: FieldFormItemProps & {
                                     ...drawerData.post,
                                     _action: drawerData.action,
                                 },
-                                success: () => {
-                                    setOpenDrawerEditPost(false);
+                                success: (result: JsonFormat) => {
+                                    if (result.post?.id) {
+                                        setDrawerData((prev) => {
+                                            if (!prev) return prev;
+                                            return {
+                                                ...prev,
+                                                post: result.post,
+                                                author: result.author,
+                                                editor: result.editor,
+                                                updatePost: new Date(),
+                                            };
+                                        });
+                                    }
+                                    if (shouldCloseDrawerAfterPostSave(drawerData)) {
+                                        setOpenDrawerEditPost(false);
+                                    }
                                     // Optionally remove form preview list?
                                     handlePreviewDataFromJson();
                                 },

@@ -9,6 +9,7 @@ import DrawerEditPost from 'components/atoms/PostType/DrawerEditPost';
 import Typography from 'components/atoms/Typography';
 import NotFound from 'components/molecules/NotFound';
 import { __ } from 'helpers/i18n';
+import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
 import useAjax from 'hook/useApi';
 import useConfirmDialog from 'hook/useConfirmDialog';
 import MoreButton from 'components/atoms/MoreButton';
@@ -317,7 +318,19 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
                 data: data !== false ? { ...data.post, _action: data.action } : {},
                 success: (result: JsonFormat) => {
                     if (result.post?.id) {
-                        setOpenDrawer(false);
+                        setData((prev) => {
+                            if (prev === false) return prev;
+                            return {
+                                ...prev,
+                                post: result.post,
+                                author: result.author,
+                                editor: result.editor,
+                                updatePost: new Date(),
+                            };
+                        });
+                        if (shouldCloseDrawerAfterPostSave(data)) {
+                            setOpenDrawer(false);
+                        }
                         onLoadCollection();
                     }
                 }

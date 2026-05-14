@@ -293,7 +293,9 @@ export interface CreatePostTypeData {
         layout?: 'simple',
         title: string,
         dialogContent?: {
-            width: number
+            width?: number,
+            disableCloseOnSave?: boolean,
+            [key: string]: ANY,
         },
         fields: {
             [key: string]: FieldConfigProps

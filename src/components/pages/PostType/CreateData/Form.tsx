@@ -340,6 +340,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
             {
                 data?.config?.actions ? data.config.actions.map((item, index) =>
                     <ButtonAction
+                        key={item.link_api + '-' + index}
                         title={item.title}
                         link={item.link_api}
                         id={data.post.id}
@@ -785,6 +786,7 @@ function ButtonAction({
 
 
     return <>
+        {confirm.component}
         {useAjaxAction.open && checkProgress ? <Box
             sx={{
                 display: 'flex',

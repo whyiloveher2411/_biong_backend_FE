@@ -12,6 +12,7 @@ import useAjax from 'hook/useApi';
 import useConfirmDialog from 'hook/useConfirmDialog';
 import MoreButton from 'components/atoms/MoreButton';
 import React from 'react';
+import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
 import DataTable from '../../PostType/DataTable';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
@@ -292,7 +293,19 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                 data: data ? { ...data.post, _action: data.action } : {},
                 success: (result) => {
                     if (result.post?.id) {
-                        setOpenDrawer(false);
+                        setData((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                post: result.post,
+                                author: result.author,
+                                editor: result.editor,
+                                updatePost: new Date(),
+                            };
+                        });
+                        if (shouldCloseDrawerAfterPostSave(data)) {
+                            setOpenDrawer(false);
+                        }
                         onLoadCollection();
                     }
                 }
