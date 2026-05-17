@@ -21,6 +21,7 @@ import { CreatePostTypeData } from '.';
 import SectionInfo from './SectionInfo';
 import SectionStatus from './SectionStatus';
 import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
+import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -100,6 +101,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
     );
 
     const [marketingAiDrawerOpen, setMarketingAiDrawerOpen] = React.useState(false);
+    const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
 
@@ -357,6 +359,9 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                             if (action === 'drawer:MarketingContentAi') {
                                 setMarketingAiDrawerOpen(true);
                             }
+                            if (action === 'drawer:NotificationAi') {
+                                setNotificationAiDrawerOpen(true);
+                            }
                         }}
                     />
                 )
@@ -377,6 +382,43 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                             onUpdateData((prev) => ({
                                 ...prev,
                                 updatePost: new Date(),
+                            }));
+                        }
+                    }}
+                />
+            )}
+            {postType === 'app_local_notification' && (
+                <NotificationAiDrawer
+                    open={notificationAiDrawerOpen}
+                    onClose={() => setNotificationAiDrawerOpen(false)}
+                    data={data}
+                    onApply={(messages) => {
+                        const nextMessages = messages.map((row: ANY) => ({
+                            open: false,
+                            confirmDelete: false,
+                            delete: 0,
+                            title:
+                                row.title && typeof row.title === 'object'
+                                    ? { ...row.title }
+                                    : row.title,
+                            body:
+                                row.body && typeof row.body === 'object'
+                                    ? { ...row.body }
+                                    : row.body,
+                        }));
+                        onUpdateData((prev) => ({
+                            ...prev,
+                            post: {
+                                ...prev.post,
+                                messages: nextMessages,
+                            },
+                            updatePost: new Date(),
+                        }));
+                        const messageTabIndex = listTabLeft.indexOf('message');
+                        if (messageTabIndex >= 0) {
+                            setTableCurrent((tc) => ({
+                                ...tc,
+                                [postType]: messageTabIndex,
                             }));
                         }
                     }}
