@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { CreatePostTypeData } from '.';
 import SectionInfo from './SectionInfo';
 import SectionStatus from './SectionStatus';
+import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
 
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -97,6 +98,8 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
             [postType]: 0
         }
     );
+
+    const [marketingAiDrawerOpen, setMarketingAiDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
 
@@ -349,6 +352,12 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                         confirmConfig={item.confirm}
                         checkProgress={item.check_progress}
                         color={item.color}
+                        clientAction={item.client_action}
+                        onClientDrawer={(action) => {
+                            if (action === 'drawer:MarketingContentAi') {
+                                setMarketingAiDrawerOpen(true);
+                            }
+                        }}
                     />
                 )
                     : null
@@ -358,6 +367,21 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
 
     return (
         <>
+            {postType === 'spacedev_app_marketing_post' && (
+                <ContentAiWizard
+                    open={marketingAiDrawerOpen}
+                    onClose={() => setMarketingAiDrawerOpen(false)}
+                    data={data}
+                    onRefreshPost={() => {
+                        if (data.post?.id) {
+                            onUpdateData((prev) => ({
+                                ...prev,
+                                updatePost: new Date(),
+                            }));
+                        }
+                    }}
+                />
+            )}
             <Grid
                 container
                 spacing={4}
@@ -657,6 +681,7 @@ export interface IActionPostType {
     variant: string,
     link_api: string,
     link: string,
+    client_action?: string,
     group?: string,
     confirm_message?: string,
     confirm?: {
@@ -715,6 +740,8 @@ function ButtonAction({
     confirmConfig,
     checkProgress,
     color,
+    clientAction,
+    onClientDrawer,
 }: {
     title: string,
     link: string,
@@ -728,7 +755,9 @@ function ButtonAction({
     },
     id: ID,
     checkProgress?: boolean,
-    color?: string
+    color?: string,
+    clientAction?: string,
+    onClientDrawer?: (action: string) => void,
 }) {
 
     const useAjaxAction = useAjax();
@@ -738,6 +767,13 @@ function ButtonAction({
     const [progressButton,] = React.useState<number>(0);
 
     const handleActionEvent = () => {
+        if (clientAction && clientAction.startsWith('drawer:') && onClientDrawer) {
+            if (!id) {
+                return;
+            }
+            onClientDrawer(clientAction);
+            return;
+        }
         const actionPayload = {
             id,
             post_type: postType,
@@ -806,6 +842,7 @@ function ButtonAction({
                 sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
                 variant="contained"
                 onClick={handleActionEvent}
+                disabled={clientAction?.startsWith('drawer:') && !id}
             >
                 {title}
             </LoadingButton>
