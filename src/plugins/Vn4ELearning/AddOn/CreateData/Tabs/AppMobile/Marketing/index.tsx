@@ -19,8 +19,19 @@ import TwitterIcon from '@mui/icons-material/Twitter';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import LanguageIcon from '@mui/icons-material/Language';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
+import { useSearchParams } from 'react-router-dom';
+
+const MARKETING_VIEW_PARAM = 'marketing_view';
+
+type MarketingViewMode = 'calendar' | 'list';
 
 const localizer = momentLocalizer(moment);
+
+const parseMarketingViewMode = (searchParams: URLSearchParams): MarketingViewMode =>
+    searchParams.get(MARKETING_VIEW_PARAM) === 'list' ? 'list' : 'calendar';
 
 const TikTokIcon = (props: ANY) => (
     <SvgIcon {...props} viewBox="0 0 24 24">
@@ -332,6 +343,11 @@ const eventStyleGetter = (event: ANY) => {
 
 export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const api = useAjax();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [viewMode, setViewMode] = useState<MarketingViewMode>(() =>
+        parseMarketingViewMode(searchParams)
+    );
+    const [postsTableKey, setPostsTableKey] = useState(0);
     const [openDrawer, setOpenDrawer] = useState(false);
     const [drawerData, setDrawerData] = useState<DataResultApiProps | false>(false);
     const [openDrawerAi, setOpenDrawerAi] = useState(false);
@@ -339,6 +355,21 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [currentRange, setCurrentRange] = useState<{ start: Date, end: Date } | null>(null);
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
     const [syncingPostId, setSyncingPostId] = useState<number | null>(null);
+
+    React.useEffect(() => {
+        setViewMode(parseMarketingViewMode(searchParams));
+    }, [searchParams]);
+
+    const handleViewModeChange = React.useCallback((newView: MarketingViewMode) => {
+        setViewMode(newView);
+        const nextParams = new URLSearchParams(searchParams.toString());
+        if (newView === 'calendar') {
+            nextParams.delete(MARKETING_VIEW_PARAM);
+        } else {
+            nextParams.set(MARKETING_VIEW_PARAM, newView);
+        }
+        setSearchParams(nextParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const handleSyncPostToS3 = (postId: number) => {
         setSyncingPostId(postId);
@@ -446,6 +477,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         }
     };
 
+    const handleSwitchToList = () => {
+        setPostsTableKey((k) => k + 1);
+        handleViewModeChange('list');
+    };
+
     return (
         <div style={{ padding: 24, height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
 
@@ -453,11 +489,14 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                 sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    mb: 2
+                    alignItems: 'flex-start',
+                    gap: 2,
+                    mb: 2,
+                    flexWrap: 'wrap',
                 }}
             >
-                <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {viewMode === 'calendar' && (
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1 }}>
                     {Object.keys(PLATFORM_ICONS).map((plat) => {
                         const isSelected = selectedPlatforms.includes(plat);
                         return (
@@ -501,14 +540,54 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         );
                     })}
                 </Box>
+                )}
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h5"></Typography>
-                    <Button variant="contained" color="secondary" onClick={() => setOpenDrawerAi(true)}>
-                        Lên lịch bằng AI
-                    </Button>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
+                    {viewMode === 'calendar' ? (
+                        <>
+                            <Button
+                                variant="outlined"
+                                startIcon={<ViewListIcon />}
+                                onClick={handleSwitchToList}
+                            >
+                                Danh sách bài viết
+                            </Button>
+                            <Button variant="contained" color="secondary" onClick={() => setOpenDrawerAi(true)}>
+                                Lên lịch bằng AI
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="outlined"
+                            startIcon={<CalendarTodayIcon />}
+                            onClick={() => handleViewModeChange('calendar')}
+                        >
+                            Xem lịch
+                        </Button>
+                    )}
                 </Box>
             </Box>
+
+            {viewMode === 'list' ? (
+                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                    <FieldForm
+                        key={postsTableKey}
+                        component="relationship_onetomany_show"
+                        config={{
+                            title: 'Bài viết marketing',
+                            object: 'spacedev_app_marketing_post',
+                            field: 'app_mobile',
+                            view: 'relationship_onetomany_show',
+                            paginate: {
+                                rowsPerPage: 20,
+                            },
+                        }}
+                        post={data.post}
+                        name="app_mobile"
+                        onReview={() => {}} // eslint-disable-line @typescript-eslint/no-empty-function
+                    />
+                </Box>
+            ) : (
             <Box sx={{
                 flex: 1,
                 minHeight: 0,
@@ -552,6 +631,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     eventPropGetter={eventStyleGetter}
                 />
             </Box>
+            )}
 
             {openDrawer && drawerData && (
                 <DrawerEditPost
