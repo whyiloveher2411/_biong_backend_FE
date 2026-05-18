@@ -90,9 +90,21 @@ interface FormCreateDataProps {
     handleSubmit: () => void,
     handleAfterDelete?: () => void,
     showCopyPostJson?: boolean,
+    onRefreshPost?: () => void,
+    refreshingPost?: boolean,
 }
 
-function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, open: openLoading, showCopyPostJson = true }: FormCreateDataProps) {
+function Form({
+    data,
+    postType,
+    onUpdateData,
+    handleSubmit,
+    handleAfterDelete,
+    open: openLoading,
+    showCopyPostJson = true,
+    onRefreshPost,
+    refreshingPost = false,
+}: FormCreateDataProps) {
 
     const [tabCurrent, setTableCurrent] = React.useState(
         {
@@ -377,14 +389,7 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                     open={marketingAiDrawerOpen}
                     onClose={() => setMarketingAiDrawerOpen(false)}
                     data={data}
-                    onRefreshPost={() => {
-                        if (data.post?.id) {
-                            onUpdateData((prev) => ({
-                                ...prev,
-                                updatePost: new Date(),
-                            }));
-                        }
-                    }}
+                    onRefreshPost={onRefreshPost}
                 />
             )}
             {postType === 'app_local_notification' && (
@@ -574,6 +579,8 @@ function Form({ data, postType, onUpdateData, handleSubmit, handleAfterDelete, o
                                     <SectionStatus
                                         data={data}
                                         onReview={onReview}
+                                        onRefresh={onRefreshPost}
+                                        refreshing={refreshingPost}
                                     />
 
                                     {renderSaveButton()}

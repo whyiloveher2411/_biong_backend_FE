@@ -11,10 +11,13 @@ import React from 'react';
 import { CreatePostTypeData } from '.';
 import { Link } from 'react-router-dom';
 import { Button } from '@mui/material';
+import LoadingButton from 'components/atoms/LoadingButton';
 
-function SectionStatus({ data, onReview }: {
+function SectionStatus({ data, onReview, onRefresh, refreshing = false }: {
     data: CreatePostTypeData,
-    onReview: (value: ANY, key: ANY) => void
+    onReview: (value: ANY, key: ANY) => void,
+    onRefresh?: () => void,
+    refreshing?: boolean,
 }) {
 
     const [activePostDateGmt, setActivePostDateGmt] = React.useState({
@@ -28,16 +31,39 @@ function SectionStatus({ data, onReview }: {
         onReview(Number(data.post.starred) === 1 ? 0 : 1, 'starred');
     };
 
+    const showNextPost = Boolean(data.post.id);
+    const showRefresh = Boolean(onRefresh);
+
     return <>
-        {
-            data.post.id ?
-                <Button
-                    component={Link}
-                    variant='outlined'
-                    to={'/post-type/' + data.post.type + '/edit?post_id=' + (data.post.id + 1)}
-                >Next Post</Button>
-                : null
-        }
+        {(showNextPost || showRefresh) && (
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                }}
+            >
+                {showNextPost ? (
+                    <Button
+                        component={Link}
+                        variant="outlined"
+                        to={'/post-type/' + data.post.type + '/edit?post_id=' + (data.post.id + 1)}
+                    >
+                        Next Post
+                    </Button>
+                ) : null}
+                {showRefresh ? (
+                    <LoadingButton
+                        variant="outlined"
+                        loading={refreshing}
+                        disabled={!data.post.id || refreshing}
+                        onClick={() => onRefresh?.()}
+                    >
+                        {__('Tải lại')}
+                    </LoadingButton>
+                ) : null}
+            </Box>
+        )}
         <Card>
             <CardContent>
                 <Box

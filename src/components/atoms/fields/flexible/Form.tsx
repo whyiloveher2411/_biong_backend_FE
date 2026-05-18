@@ -29,6 +29,7 @@ import { default as DialogCustom } from 'components/molecules/Dialog';
 import { copyArray } from 'helpers/array';
 import { __ } from 'helpers/i18n';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
+import useConfirmDialog from 'hook/useConfirmDialog';
 import React, { useCallback } from 'react';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import FieldForm from '../FieldForm';
@@ -485,6 +486,14 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
             });
     }
 
+    const handleDeleteAll = () => {
+        post[name] = [];
+        onReview(post[name]);
+        setRender(prev => prev + 1);
+    }
+
+    const confirmDelete = useConfirmDialog();
+
     return (
         <FormControl ref={refFormControl} className={classes.root} component="div">
             <Box
@@ -499,6 +508,14 @@ export default React.memo(function FlexibleForm({ config, post, name, onReview, 
                 <Box>
                     <Button color="inherit" onClick={handleCopyAll}>Copy</Button>
                     <Button sx={{ ml: 1, }} variant='outlined' onClick={handlePasteAll}>Paste</Button>
+                    <Button sx={{ ml: 1, }} variant='outlined' color='error' onClick={() => {
+                        confirmDelete.onConfirm(() => {
+                            handleDeleteAll();
+                        }, {
+                            message: 'Are you sure you want to delete all items?',
+                        });
+                    }}>Delete All</Button>
+                    {confirmDelete.component}
                 </Box>
             </Box>
             {

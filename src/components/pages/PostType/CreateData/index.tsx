@@ -35,6 +35,48 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
 
     const hasCalledApiRef = React.useRef(false);
     const currentIdRef = React.useRef<string | number>(id);
+    const [refreshingPost, setRefreshingPost] = React.useState(false);
+
+    const reloadPostFromServer = React.useCallback(() => {
+        const postId = getUrlParams(window.location.search, { post_id: 0 }).post_id as string;
+        if (!postId || postId === '0') {
+            return;
+        }
+
+        setRefreshingPost(true);
+        ajax({
+            url: `post-type/detail/${type}/${postId}`,
+            method: 'POST',
+            success: (result: CreatePostTypeData) => {
+                unstable_batchedUpdates(() => {
+                    setRefreshingPost(false);
+                    if (result.redirect) {
+                        navigate(result.redirect);
+                        return;
+                    }
+                    if (!result.post) {
+                        return;
+                    }
+                    setData((prev: CreatePostTypeData) => {
+                        if (!prev) {
+                            return prev;
+                        }
+                        return {
+                            ...prev,
+                            post: result.post,
+                            author: result.author ?? prev.author,
+                            editor: result.editor ?? prev.editor,
+                            updatePost: new Date(),
+                        };
+                    });
+                    setTimes((t) => t + 1);
+                });
+            },
+            error: () => {
+                setRefreshingPost(false);
+            },
+        });
+    }, [ajax, navigate, setData, type]);
 
     const handleSubmit = () => {
 
@@ -212,6 +254,8 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
                                                                             onUpdateData={onUpdateData}
                                                                             handleSubmit={handleSubmit}
                                                                             open={open}
+                                                                            onRefreshPost={reloadPostFromServer}
+                                                                            refreshingPost={refreshingPost}
                                                                         />
                                                                     }
                                                                 }
@@ -260,6 +304,8 @@ const CreateData = ({ type, action, afterEditOrNew }: { type: string, action: st
                                                     onUpdateData={onUpdateData}
                                                     handleSubmit={handleSubmit}
                                                     open={open}
+                                                    onRefreshPost={reloadPostFromServer}
+                                                    refreshingPost={refreshingPost}
                                                 />
                                         }
                                     </>

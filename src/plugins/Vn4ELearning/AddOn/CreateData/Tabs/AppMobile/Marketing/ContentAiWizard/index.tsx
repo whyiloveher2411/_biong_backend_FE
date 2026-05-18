@@ -36,7 +36,11 @@ import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
 import { convertToURL } from 'helpers/url';
-import { marketingPipelinePreviewMarkdown } from '../marketingPipelinePreview';
+import {
+    buildMarketingPreviewBlocks,
+    marketingPipelinePreviewMarkdown,
+} from '../marketingPipelinePreview';
+import MarketingContentBlocksPreview from '../MarketingContentBlocksPreview';
 
 const RESULT_MARKER_HINT = '###RESULT: START### … ###RESULT: END###';
 
@@ -707,6 +711,11 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
         pipeline.overview_text_fallback ||
         '';
 
+    const previewBlocks = React.useMemo(
+        () => buildMarketingPreviewBlocks(pipeline, displayPost as Record<string, unknown>),
+        [pipeline, displayPost],
+    );
+
     const isWriterLongForm =
         currentStage === 'writer' && contentType === 'long_form';
     const overviewPasteHint = isWriterLongForm
@@ -873,10 +882,18 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                             Chưa có danh sách ảnh — hoàn thành bước Minh họa trước.
                         </Alert>
                     )}
-                    {previewBody && (
-                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2, maxHeight: 360, overflow: 'auto' }}>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Xem trước bài (markdown)</Typography>
-                            <Markdown>{previewBody}</Markdown>
+                    {(previewBlocks.length > 0 || previewBody) && (
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Xem trước bài (text + ảnh)
+                            </Typography>
+                            {previewBlocks.length > 0 ? (
+                                <MarketingContentBlocksPreview blocks={previewBlocks} maxHeight={360} />
+                            ) : (
+                                <Box sx={{ maxHeight: 360, overflow: 'auto' }}>
+                                    <Markdown>{previewBody}</Markdown>
+                                </Box>
+                            )}
                         </Box>
                     )}
                 </Box>
@@ -902,7 +919,7 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                         minRows={12}
                         value={finalContent || previewBody}
                         InputProps={{ readOnly: true }}
-                        helperText="Khi bấm Lưu vào CMS, hệ thống tách thành các block text (markdown) + image cho app mobile."
+                        helperText="Khi bấm Lưu vào CMS: block text (markdown) + image; cuối bài thêm block quảng cáo native (không hiển thị ở xem trước)."
                     />
                     {showLongFormCoverPanel && (
                         <MarketingCoverVisualPanel
@@ -912,10 +929,18 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                             onUpdated={handleCoverPipelineUpdate}
                         />
                     )}
-                    {previewBody && (
-                        <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2, maxHeight: 320, overflow: 'auto' }}>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Xem trước</Typography>
-                            <Markdown>{previewBody}</Markdown>
+                    {(previewBlocks.length > 0 || previewBody) && (
+                        <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Xem trước (text + ảnh)
+                            </Typography>
+                            {previewBlocks.length > 0 ? (
+                                <MarketingContentBlocksPreview blocks={previewBlocks} maxHeight={320} />
+                            ) : (
+                                <Box sx={{ maxHeight: 320, overflow: 'auto' }}>
+                                    <Markdown>{previewBody}</Markdown>
+                                </Box>
+                            )}
                         </Box>
                     )}
                     <LoadingButton variant="contained" color="success" loading={api.open} onClick={finalize}>

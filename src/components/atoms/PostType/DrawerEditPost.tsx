@@ -4,7 +4,9 @@ import Box from 'components/atoms/Box';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import Form from 'components/pages/PostType/CreateData/Form';
 import { HandleUpdateDataProps } from 'hook/useForm';
+import useAjax from 'hook/useApi';
 import React from 'react';
+import { unstable_batchedUpdates } from 'react-dom';
 import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
 
 function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfterDelete, children, openLoading, headerAction, showCopyPostJson }: {
@@ -21,6 +23,45 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
 }) {
 
     const theme = useTheme();
+    const { ajax } = useAjax();
+    const [refreshingPost, setRefreshingPost] = React.useState(false);
+
+    const reloadPostFromServer = React.useCallback(() => {
+        const postId = data?.post?.id;
+        const postType = data?.type;
+        if (!postId || !postType) {
+            return;
+        }
+
+        setRefreshingPost(true);
+        ajax({
+            url: `post-type/detail/${postType}/${postId}`,
+            method: 'POST',
+            success: (result: CreatePostTypeData) => {
+                unstable_batchedUpdates(() => {
+                    setRefreshingPost(false);
+                    if (!result.post) {
+                        return;
+                    }
+                    setData((prev) => {
+                        if (!prev) {
+                            return prev;
+                        }
+                        return {
+                            ...prev,
+                            post: result.post,
+                            author: result.author ?? prev.author,
+                            editor: result.editor ?? prev.editor,
+                            updatePost: new Date(),
+                        };
+                    });
+                });
+            },
+            error: () => {
+                setRefreshingPost(false);
+            },
+        });
+    }, [ajax, data?.post?.id, data?.type, setData]);
 
     const rawTitle = data?.post?.title;
 
@@ -109,6 +150,8 @@ function DrawerEditPost({ data, setData, open, onClose, handleSubmit, handleAfte
                         handleAfterDelete={handleAfterDelete}
                         open={openLoading}
                         showCopyPostJson={showCopyPostJson}
+                        onRefreshPost={reloadPostFromServer}
+                        refreshingPost={refreshingPost}
                     />
                 }
             </Box>
