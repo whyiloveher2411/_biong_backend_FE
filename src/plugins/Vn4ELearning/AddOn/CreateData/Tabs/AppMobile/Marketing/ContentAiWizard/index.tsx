@@ -36,6 +36,7 @@ import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
 import { convertToURL } from 'helpers/url';
+import { marketingPipelinePreviewMarkdown } from '../marketingPipelinePreview';
 
 const RESULT_MARKER_HINT = '###RESULT: START### … ###RESULT: END###';
 
@@ -368,14 +369,7 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                 if (res?.post) setWizardPost(res.post);
                 setFinalTitle(String(p.title || ''));
                 setFinalDescription(String(p.description || ''));
-                const bodyPreview = String(
-                    p.content_text
-                    || pl.drafts?.editor_with_slots
-                    || pl.drafts?.editor
-                    || pl.drafts?.writer
-                    || '',
-                );
-                setFinalContent(bodyPreview);
+                setFinalContent(marketingPipelinePreviewMarkdown(pl, p as Record<string, unknown>));
                 if (Array.isArray(res.distribution_platforms)) {
                     setDistributionPlatforms(res.distribution_platforms);
                 }
@@ -606,11 +600,14 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
             setPlatformDistributionStale(Boolean((res.pipeline as Pipeline).platform_distribution_stale));
             setHasArticleSource(true);
         }
-        const syncedBody = res?.normalized?.content_text
-            || res?.post?.content_text
-            || (res?.pipeline as Pipeline | undefined)?.drafts?.editor
-            || (res?.pipeline as Pipeline | undefined)?.drafts?.writer
-            || '';
+        const resAny = res as MarketingAiLlmSuccessPayload & {
+            preview_markdown?: string;
+            normalized?: { preview_markdown?: string; content_text?: string };
+        };
+        const syncedBody = resAny?.preview_markdown
+            || resAny?.normalized?.preview_markdown
+            || resAny?.normalized?.content_text
+            || (res?.pipeline ? marketingPipelinePreviewMarkdown(res.pipeline as Pipeline) : '');
         if (syncedBody) {
             setFinalContent(String(syncedBody));
         }
@@ -646,7 +643,6 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                 post_id: postId,
                 title: finalTitle,
                 description: finalDescription,
-                content_text: finalContent,
                 ...(coverUrl ? { cover_thumbnail_url: coverUrl } : {}),
             },
             success: () => {
@@ -665,7 +661,8 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
 
     const handleCoverPipelineUpdate = React.useCallback((res: {
         pipeline?: Pipeline;
-        content_text?: string;
+        preview_markdown?: string;
+        editorial_working_content?: string;
         image_placements?: ImagePlacement[];
     }) => {
         if (res.pipeline || res.image_placements) {
@@ -675,9 +672,11 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                 ...(res.image_placements ? { image_placements: res.image_placements } : {}),
             }));
         }
-        if (res.content_text) {
-            setFinalContent(res.content_text);
-            setWizardPost((wp) => ({ ...wp, content_text: res.content_text }));
+        const preview = res.preview_markdown
+            || res.editorial_working_content
+            || (res.pipeline ? marketingPipelinePreviewMarkdown(res.pipeline) : '');
+        if (preview) {
+            setFinalContent(preview);
         }
     }, []);
 
@@ -700,7 +699,7 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
     }, [open, postId, currentStage, fetchStagePrompt]);
     const previewBody =
         finalContent ||
-        (displayPost.content_text as string) ||
+        marketingPipelinePreviewMarkdown(pipeline, displayPost as Record<string, unknown>) ||
         pipeline.editorial_working_content ||
         pipeline.drafts?.editor_with_slots ||
         pipeline.drafts?.editor ||
@@ -860,14 +859,12 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                                 setPipeline((p) => ({ ...p, image_placements: next }));
                             }}
                             onSynced={(res) => {
-                                if (res.content_text) {
-                                    setFinalContent(res.content_text);
+                                const preview = res.preview_markdown || res.editorial_working_content;
+                                if (preview) {
+                                    setFinalContent(preview);
                                 }
                                 if (res.image_placements) {
                                     setPipeline((p) => ({ ...p, image_placements: res.image_placements }));
-                                }
-                                if (res.content_text) {
-                                    setWizardPost((wp) => ({ ...wp, content_text: res.content_text }));
                                 }
                             }}
                         />
@@ -899,12 +896,13 @@ export default function ContentAiWizard({ open, onClose, data, onRefreshPost }: 
                         onChange={(e) => setFinalDescription(e.target.value)}
                     />
                     <TextField
-                        label="Nội dung (Markdown / HTML)"
+                        label="Xem trước markdown (pipeline)"
                         fullWidth
                         multiline
                         minRows={12}
-                        value={finalContent}
-                        onChange={(e) => setFinalContent(e.target.value)}
+                        value={finalContent || previewBody}
+                        InputProps={{ readOnly: true }}
+                        helperText="Khi bấm Lưu vào CMS, hệ thống tách thành các block text (markdown) + image cho app mobile."
                     />
                     {showLongFormCoverPanel && (
                         <MarketingCoverVisualPanel

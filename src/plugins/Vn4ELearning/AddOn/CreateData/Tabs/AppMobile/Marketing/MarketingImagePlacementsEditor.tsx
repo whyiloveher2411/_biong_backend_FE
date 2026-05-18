@@ -36,7 +36,8 @@ interface Props {
     placements: ImagePlacement[];
     onPlacementsChange?: (placements: ImagePlacement[]) => void;
     onSynced?: (payload: {
-        content_text?: string;
+        preview_markdown?: string;
+        editorial_working_content?: string;
         image_placements?: ImagePlacement[];
     }) => void;
 }
@@ -92,7 +93,8 @@ export default function MarketingImagePlacementsEditor({ postId, placements, onP
                 placements: nextRows.map((r) => ({ id: r.id, url: r.url || '' })),
             },
             success: (res: {
-                content_text?: string;
+                preview_markdown?: string;
+                editorial_working_content?: string;
                 image_placements?: ImagePlacement[];
             }) => {
                 if (res?.image_placements) {

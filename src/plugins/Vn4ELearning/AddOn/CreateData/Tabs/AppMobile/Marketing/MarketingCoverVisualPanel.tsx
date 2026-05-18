@@ -41,7 +41,8 @@ interface Props {
     showUrlField?: boolean;
     onUpdated?: (payload: {
         pipeline?: PipelineLike & Record<string, unknown>;
-        content_text?: string;
+        preview_markdown?: string;
+        editorial_working_content?: string;
         image_placements?: ImagePlacement[];
     }) => void;
 }
@@ -107,7 +108,8 @@ export default function MarketingCoverVisualPanel({
                 placements: [{ id: coverId, url: trimmed }],
             },
             success: (res: {
-                content_text?: string;
+                preview_markdown?: string;
+                editorial_working_content?: string;
                 image_placements?: ImagePlacement[];
                 pipeline?: PipelineLike & Record<string, unknown>;
                 thumbnail_saved?: boolean;

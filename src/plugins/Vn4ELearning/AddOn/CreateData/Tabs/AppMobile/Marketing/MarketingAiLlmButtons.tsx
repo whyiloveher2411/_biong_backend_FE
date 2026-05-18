@@ -17,7 +17,8 @@ import { getAccessToken } from 'store/user/user.reducers';
 export type MarketingAiLlmSuccessPayload = {
     pipeline?: Record<string, unknown>;
     post?: Record<string, unknown>;
-    normalized?: { content_text?: string; success?: boolean };
+    preview_markdown?: string;
+    normalized?: { content_text?: string; preview_markdown?: string; success?: boolean };
     angles_pick_hint?: boolean;
     stage?: string;
 };
