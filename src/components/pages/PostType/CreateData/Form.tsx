@@ -21,6 +21,8 @@ import { CreatePostTypeData } from '.';
 import SectionInfo from './SectionInfo';
 import SectionStatus from './SectionStatus';
 import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
+import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
+import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 
 
@@ -113,6 +115,8 @@ function Form({
     );
 
     const [marketingAiDrawerOpen, setMarketingAiDrawerOpen] = React.useState(false);
+    const [articleRewriteDrawerOpen, setArticleRewriteDrawerOpen] = React.useState(false);
+    const [contentTranslateDrawerOpen, setContentTranslateDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
@@ -371,6 +375,12 @@ function Form({
                             if (action === 'drawer:MarketingContentAi') {
                                 setMarketingAiDrawerOpen(true);
                             }
+                            if (action === 'drawer:MarketingArticleRewrite') {
+                                setArticleRewriteDrawerOpen(true);
+                            }
+                            if (action === 'drawer:MarketingContentTranslate') {
+                                setContentTranslateDrawerOpen(true);
+                            }
                             if (action === 'drawer:NotificationAi') {
                                 setNotificationAiDrawerOpen(true);
                             }
@@ -385,12 +395,26 @@ function Form({
     return (
         <>
             {postType === 'spacedev_app_marketing_post' && (
-                <ContentAiWizard
-                    open={marketingAiDrawerOpen}
-                    onClose={() => setMarketingAiDrawerOpen(false)}
-                    data={data}
-                    onRefreshPost={onRefreshPost}
-                />
+                <>
+                    <ContentAiWizard
+                        open={marketingAiDrawerOpen}
+                        onClose={() => setMarketingAiDrawerOpen(false)}
+                        data={data}
+                        onRefreshPost={onRefreshPost}
+                    />
+                    <ArticleRewriteDrawer
+                        open={articleRewriteDrawerOpen}
+                        onClose={() => setArticleRewriteDrawerOpen(false)}
+                        data={data}
+                        onRefreshPost={onRefreshPost}
+                    />
+                    <MarketingContentTranslateDrawer
+                        open={contentTranslateDrawerOpen}
+                        onClose={() => setContentTranslateDrawerOpen(false)}
+                        data={data}
+                        onRefreshPost={onRefreshPost}
+                    />
+                </>
             )}
             {postType === 'app_local_notification' && (
                 <NotificationAiDrawer
