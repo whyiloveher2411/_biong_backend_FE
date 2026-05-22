@@ -23,6 +23,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
+import MarketingSourceTablesDrawer from './MarketingSourceTablesDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -351,6 +352,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openDrawer, setOpenDrawer] = useState(false);
     const [drawerData, setDrawerData] = useState<DataResultApiProps | false>(false);
     const [openDrawerAi, setOpenDrawerAi] = useState(false);
+    const [openSourceCrawlerDrawer, setOpenSourceCrawlerDrawer] = useState(false);
     const [events, setEvents] = useState<ANY[]>([]);
     const [currentRange, setCurrentRange] = useState<{ start: Date, end: Date } | null>(null);
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
@@ -547,6 +549,12 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         <>
                             <Button
                                 variant="outlined"
+                                onClick={() => setOpenSourceCrawlerDrawer(true)}
+                            >
+                                Crawl source
+                            </Button>
+                            <Button
+                                variant="outlined"
                                 startIcon={<ViewListIcon />}
                                 onClick={handleSwitchToList}
                             >
@@ -689,6 +697,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         fetchPosts(currentRange.start, currentRange.end);
                     }
                 }}
+            />
+            <MarketingSourceTablesDrawer
+                open={openSourceCrawlerDrawer}
+                onClose={() => setOpenSourceCrawlerDrawer(false)}
+                appMobileId={Number(data?.post?.id || 0)}
             />
         </div >
     );

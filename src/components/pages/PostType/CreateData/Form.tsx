@@ -371,6 +371,7 @@ function Form({
                         checkProgress={item.check_progress}
                         color={item.color}
                         clientAction={item.client_action}
+                        onActionSuccess={onRefreshPost}
                         onClientDrawer={(action) => {
                             if (action === 'drawer:MarketingContentAi') {
                                 setMarketingAiDrawerOpen(true);
@@ -815,6 +816,7 @@ function ButtonAction({
     color,
     clientAction,
     onClientDrawer,
+    onActionSuccess,
 }: {
     title: string,
     link: string,
@@ -831,6 +833,7 @@ function ButtonAction({
     color?: string,
     clientAction?: string,
     onClientDrawer?: (action: string) => void,
+    onActionSuccess?: () => void,
 }) {
 
     const useAjaxAction = useAjax();
@@ -858,7 +861,7 @@ function ButtonAction({
                 method: 'POST',
                 data: actionPayload,
                 success: () => {
-                    //   
+                    onActionSuccess?.();
                 },
             });
 
