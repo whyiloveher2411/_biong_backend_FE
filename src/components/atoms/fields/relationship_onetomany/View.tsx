@@ -10,8 +10,17 @@ function View({ post, name }: FieldViewItemProps) {
 
             const postJson = JSON.parse(post[name + '_detail']);
 
+            let label = postJson.title;
+
+            try {
+                label = JSON.parse(postJson.title);
+
+                label = label.vi || label.en;
+            } catch (error) {
+                label = postJson.title;
+            }
             return <Chip
-                label={postJson.title}
+                label={label}
                 onClick={(e: React.MouseEvent<HTMLAnchorElement>) => e.stopPropagation()}
                 component={NavLink}
                 to={`/post-type/${postJson.type}/edit?post_id=${postJson.id}`}

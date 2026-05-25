@@ -18,6 +18,7 @@ const MoreButton = ({ children, title, actions, selected, icon = 'MoreVert', ...
             action: (e: React.MouseEvent<HTMLLIElement, MouseEvent>) => void,
             icon?: IconFormat,
             color?: string,
+            backgroundColor?: string,
         }
     }>,
     title?: string,
@@ -72,6 +73,7 @@ const MoreButton = ({ children, title, actions, selected, icon = 'MoreVert', ...
                             <MenuItem
                                 key={key}
                                 selected={key === selected}
+                                sx={group[key].backgroundColor ? { backgroundColor: group[key].backgroundColor } : undefined}
                                 onClick={(e) => {
                                     group[key].action(e);
                                     handleMenuClose();

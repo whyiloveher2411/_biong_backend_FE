@@ -1,12 +1,9 @@
 import { ImageProps } from 'components/atoms/Avatar';
-import Box from 'components/atoms/Box';
 import Button from 'components/atoms/Button';
-import Fab from 'components/atoms/Fab';
-import FormHelperText from 'components/atoms/FormHelperText';
-import Icon from 'components/atoms/Icon';
+import RelationshipShowFormHeader from 'components/atoms/fields/RelationshipShowFormHeader';
 import DataTable from 'components/atoms/PostType/DataTable';
+import PostTypeTablePanel from 'components/atoms/PostType/PostTypeTablePanel';
 import DrawerEditPost from 'components/atoms/PostType/DrawerEditPost';
-import Typography from 'components/atoms/Typography';
 import NotFound from 'components/molecules/NotFound';
 import { __ } from 'helpers/i18n';
 import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
@@ -17,7 +14,6 @@ import React from 'react';
 import { FieldConfigProps, FieldFormItemProps } from '../type';
 import { IActionPostType } from 'components/pages/PostType/CreateData/Form';
 import FilterTab from 'components/pages/PostType/ShowData/FilterTab';
-import { Link } from 'react-router-dom';
 import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
 import ToolActionProgressDialog, { ToolActionProgressState } from 'components/molecules/ToolActionProgressDialog';
 import { groupActionsForMenu } from 'components/atoms/PostType/groupActionsForMenu';
@@ -339,26 +335,61 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
 
     };
 
+    const toolbarStart = (
+        <>
+            {
+                data !== false && hiddenGlobalActions.length > 0 ?
+                    <MoreButton
+                        actions={groupActionsForMenu(hiddenGlobalActions.map((item: IActionPostType, index: number) => {
+                            const actionIndex = index + maxVisibleGlobalActions;
+                            const loading = loadingStateButton[actionIndex] ? '...' : '';
+                            const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
+
+                            return {
+                                key: `global-action-${actionIndex}`,
+                                group: (item as ANY).group,
+                                title: `${item.title}${loading}${progress}`,
+                                color: item.color,
+                                action: () => handleGlobalActionEvent(item, actionIndex)(),
+                            };
+                        }))}
+                    >
+                        <Button
+                            color="inherit"
+                            variant="outlined"
+                            size="small"
+                            sx={{ textTransform: 'none' }}
+                        >
+                            {__('Tools')}
+                        </Button>
+                    </MoreButton>
+                    : null
+            }
+            {
+                filterTabData !== false ?
+                    <FilterTab
+                        name={config.object as string}
+                        queryUrl={queryUrl}
+                        data={filterTabData}
+                        setQueryUrl={setQueryUrl as React.Dispatch<React.SetStateAction<JsonFormat>>}
+                        acctionPost={() => undefined}
+                    />
+                    : null
+            }
+        </>
+    );
+
     if (!post.id) {
         return (<>
-            <Typography variant="h5" style={{ margin: '8px 0' }}>
-                <Button
-                    component={Link}
-                    to={listPostTypeLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    variant="outlined"
-                    color="inherit"
-                    size="small"
-                    sx={{ textTransform: 'none' }}
-                >
-                    {config.title}
-                </Button>
-            </Typography>
-            {
-                Boolean(config.note) &&
-                <FormHelperText ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
-            }
+            <RelationshipShowFormHeader
+                title={String(config.title || '')}
+                listPostTypeLink={listPostTypeLink}
+                note={config.note ? String(config.note) : undefined}
+                onAdd={handelOnOpen}
+                queryUrl={queryUrl}
+                setQueryUrl={setQueryUrl}
+                showSearch={false}
+            />
             <NotFound
                 subTitle={__('Seems like no {{data}} have been created yet.', {
                     data: data !== false ? data.config.singularName ?? __('Data') : ''
@@ -369,87 +400,48 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
 
     return (
         <div>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 1,
-                    margin: '8px 0',
-                    width: '100%',
-                }}
-            >
-                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <Button
-                        component={Link}
-                        to={listPostTypeLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        variant="outlined"
-                        color="inherit"
-                        size="small"
-                        sx={{ textTransform: 'none' }}
-                    >
-                        {config.title}
-                    </Button>
-                    {
-                        data !== false && hiddenGlobalActions.length > 0 ?
-                            <MoreButton
-                                actions={groupActionsForMenu(hiddenGlobalActions.map((item: IActionPostType, index: number) => {
-                                    const actionIndex = index + maxVisibleGlobalActions;
-                                    const loading = loadingStateButton[actionIndex] ? '...' : '';
-                                    const progress = progressButton[actionIndex] !== undefined ? ` (${progressButton[actionIndex]}%)` : '';
-
-                                    return {
-                                        key: `global-action-${actionIndex}`,
-                                        group: (item as ANY).group,
-                                        title: `${item.title}${loading}${progress}`,
-                                        color: item.color,
-                                        action: () => handleGlobalActionEvent(item, actionIndex)(),
-                                    };
-                                }))}
-                            >
-                                <Button
-                                    color="inherit"
-                                    variant="outlined"
-                                    size="small"
-                                >
-                                    {__('Tools')}
-                                </Button>
-                            </MoreButton>
-                            : null
-                    }
-                    {
-                        filterTabData !== false ?
-                            <FilterTab
-                                name={config.object as string}
-                                queryUrl={queryUrl}
-                                data={filterTabData}
-                                setQueryUrl={setQueryUrl as React.Dispatch<React.SetStateAction<JsonFormat>>}
-                                acctionPost={() => undefined}
-                            />
-                            : null
-                    }
-                    <Fab onClick={handelOnOpen} size="small" color="primary" aria-label="add">
-                        <Icon icon="AddRounded" />
-                    </Fab>
-                </Box>
-            </Box>
             {
-                Boolean(config.note) &&
-                <FormHelperText ><span dangerouslySetInnerHTML={{ __html: config.note }}></span></FormHelperText>
+                data !== false && post.id ?
+                    <PostTypeTablePanel
+                        toolbar={
+                            <RelationshipShowFormHeader
+                                embedded
+                                title={String(config.title || '')}
+                                listPostTypeLink={listPostTypeLink}
+                                note={config.note ? String(config.note) : undefined}
+                                onAdd={handelOnOpen}
+                                queryUrl={queryUrl}
+                                setQueryUrl={setQueryUrl}
+                                toolbarStart={toolbarStart}
+                                toolbarEnd={config.relationshipHeaderActions ? config.relationshipHeaderActions : null}
+                            />
+                        }
+                    >
+                        <DataTable
+                            setQueryUrl={setQueryUrl}
+                            queryUrl={queryUrl}
+                            data={data}
+                            onEdit={onLoadCollection}
+                            config={config}
+                            showRefreshButton={false}
+                            hideToolbar
+                            embeddedInPanel
+                        />
+                    </PostTypeTablePanel>
+                    :
+                    <RelationshipShowFormHeader
+                        title={String(config.title || '')}
+                        listPostTypeLink={listPostTypeLink}
+                        note={config.note ? String(config.note) : undefined}
+                        onAdd={handelOnOpen}
+                        queryUrl={queryUrl}
+                        setQueryUrl={setQueryUrl}
+                        toolbarStart={toolbarStart}
+                        toolbarEnd={config.relationshipHeaderActions ? config.relationshipHeaderActions : null}
+                    />
             }
             {
-                data !== false && post.id &&
-                <>
-                    <DataTable
-                        setQueryUrl={setQueryUrl}
-                        queryUrl={queryUrl}
-                        data={data}
-                        onEdit={onLoadCollection}
-                        config={config}
-                        showRefreshButton={false}
-                    />
+                data !== false ?
                     <DrawerEditPost
                         open={openDrawer}
                         openLoading={open}
@@ -458,7 +450,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
                         setData={setData}
                         handleSubmit={handleSubmit}
                     />
-                </>
+                    : null
             }
             {confirm.component}
             <ToolActionProgressDialog
@@ -501,13 +493,17 @@ export interface DataResultApiProps {
         },
         filters_saved: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         filters_custom: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         filters: {
             [key: string]: {

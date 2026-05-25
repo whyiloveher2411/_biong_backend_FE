@@ -8,7 +8,20 @@ import DrawerEditPost from "components/atoms/PostType/DrawerEditPost";
 import { DataResultApiProps } from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
-import { Button, Typography, SvgIcon, Checkbox, IconButton, CircularProgress } from '@mui/material';
+import {
+    Button,
+    Typography,
+    SvgIcon,
+    IconButton,
+    CircularProgress,
+    Stack,
+    Divider,
+    Tooltip,
+    Chip,
+    ToggleButton,
+    ToggleButtonGroup,
+} from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import SuggestAiDrawer from './SuggestAiDrawer';
 import TooltipWhite from 'components/atoms/TooltipWhite';
@@ -21,18 +34,27 @@ import LanguageIcon from '@mui/icons-material/Language';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
-import MarketingSourceTablesDrawer from './MarketingSourceTablesDrawer';
+import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
+import MarketingCrawlAutoToggle from './MarketingCrawlAutoToggle';
+import MarketingSourcesDrawer from './MarketingSourcesDrawer';
+import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
-type MarketingViewMode = 'calendar' | 'list';
+type MarketingViewMode = 'calendar' | 'list' | 'crawl';
 
 const localizer = momentLocalizer(moment);
 
-const parseMarketingViewMode = (searchParams: URLSearchParams): MarketingViewMode =>
-    searchParams.get(MARKETING_VIEW_PARAM) === 'list' ? 'list' : 'calendar';
+const parseMarketingViewMode = (searchParams: URLSearchParams): MarketingViewMode => {
+    const view = searchParams.get(MARKETING_VIEW_PARAM);
+    if (view === 'list') return 'list';
+    if (view === 'crawl') return 'crawl';
+    return 'calendar';
+};
 
 const TikTokIcon = (props: ANY) => (
     <SvgIcon {...props} viewBox="0 0 24 24">
@@ -58,6 +80,47 @@ const isMissingLinkApiJson = (resource: ANY): boolean => {
     if (v === null || v === undefined) return true;
     if (typeof v === 'string' && v.trim() === '') return true;
     return false;
+};
+
+/** Title marketing: string thường hoặc đa ngôn ngữ `{ vi, en, ... }` (object hoặc JSON string). */
+const resolveMarketingTitle = (title: unknown): string => {
+    if (title === null || title === undefined) return '';
+
+    const pickFromMap = (map: Record<string, unknown>): string => {
+        const vi = map.vi;
+        if (typeof vi === 'string' && vi.trim() !== '') return vi.trim();
+        const en = map.en;
+        if (typeof en === 'string' && en.trim() !== '') return en.trim();
+        for (const v of Object.values(map)) {
+            if (typeof v === 'string' && v.trim() !== '') return v.trim();
+        }
+        return '';
+    };
+
+    if (typeof title === 'object' && !Array.isArray(title)) {
+        return pickFromMap(title as Record<string, unknown>);
+    }
+
+    if (typeof title !== 'string') {
+        return String(title);
+    }
+
+    const trimmed = title.trim();
+    if (!trimmed) return '';
+
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const resolved = pickFromMap(parsed as Record<string, unknown>);
+                if (resolved) return resolved;
+            }
+        } catch {
+            /* plain string */
+        }
+    }
+
+    return trimmed;
 };
 
 const normalizePlatform = (p: string): string => {
@@ -145,7 +208,7 @@ const CustomEvent = ({
     const tooltipContent = (
         <Box sx={{ p: 0.5, maxWidth: 360 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                {r.title || event.title}
+                {resolveMarketingTitle(r.title) || event.title}
             </Typography>
 
             {r.date_publish && (
@@ -349,14 +412,17 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         parseMarketingViewMode(searchParams)
     );
     const [postsTableKey, setPostsTableKey] = useState(0);
+    const [crawlTableKey, setCrawlTableKey] = useState(0);
     const [openDrawer, setOpenDrawer] = useState(false);
     const [drawerData, setDrawerData] = useState<DataResultApiProps | false>(false);
     const [openDrawerAi, setOpenDrawerAi] = useState(false);
-    const [openSourceCrawlerDrawer, setOpenSourceCrawlerDrawer] = useState(false);
     const [events, setEvents] = useState<ANY[]>([]);
     const [currentRange, setCurrentRange] = useState<{ start: Date, end: Date } | null>(null);
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
     const [syncingPostId, setSyncingPostId] = useState<number | null>(null);
+    const [calendarRefreshing, setCalendarRefreshing] = useState(false);
+    const [openSourcesDrawer, setOpenSourcesDrawer] = useState(false);
+    const [openCategoriesDrawer, setOpenCategoriesDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -391,42 +457,68 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         });
     };
 
+    const appMobileId = data.post.id;
+    const apiRef = React.useRef(api);
+    apiRef.current = api;
+    const lastFetchedRangeKeyRef = React.useRef<string | null>(null);
+
+    const fetchPosts = React.useCallback((start: Date, end: Date) => {
+        setCalendarRefreshing(true);
+        apiRef.current.ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/get-post',
+            data: {
+                id: appMobileId,
+                start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
+                end_time: moment(end).format('YYYY-MM-DD HH:mm:ss'),
+            },
+            success: (result: ANY) => {
+                const mapPost = (post: ANY) => ({
+                    title: resolveMarketingTitle(post.title),
+                    start: moment(post.date_publish).toDate(),
+                    end: moment(post.date_publish).add(1, 'hour').toDate(),
+                    resource: post,
+                });
+                if (Array.isArray(result)) {
+                    setEvents(result.map(mapPost));
+                } else if (result && Array.isArray(result.posts)) {
+                    setEvents(result.posts.map(mapPost));
+                } else {
+                    setEvents([]);
+                }
+            },
+            finally: () => setCalendarRefreshing(false),
+        });
+    }, [appMobileId]);
+
     React.useEffect(() => {
+        const start = moment().startOf('month').toDate();
+        const end = moment().endOf('month').toDate();
+        const rangeKey = `${moment(start).format('YYYY-MM-DD')}|${moment(end).format('YYYY-MM-DD')}`;
+        lastFetchedRangeKeyRef.current = rangeKey;
+        setCurrentRange({ start, end });
+        fetchPosts(start, end);
+        // Chỉ load lần đầu / khi đổi app mobile — không phụ thuộc `api` (đổi reference mỗi render).
+    }, [appMobileId, fetchPosts]);
+
+    const handleRefreshCalendar = React.useCallback(() => {
+        lastFetchedRangeKeyRef.current = null;
+        if (currentRange) {
+            fetchPosts(currentRange.start, currentRange.end);
+            return;
+        }
         const start = moment().startOf('month').toDate();
         const end = moment().endOf('month').toDate();
         setCurrentRange({ start, end });
         fetchPosts(start, end);
+    }, [currentRange, fetchPosts]);
+
+    const togglePlatformFilter = React.useCallback((plat: string) => {
+        setSelectedPlatforms((prev) =>
+            prev.includes(plat) ? prev.filter((p) => p !== plat) : [...prev, plat]
+        );
     }, []);
 
-    const fetchPosts = (start: Date, end: Date) => {
-        api.ajax({
-            url: "plugin/vn4-e-learning/app-mobile/marketing/get-post",
-            data: {
-                id: data.post.id,
-                start_time: moment(start).format('YYYY-MM-DD HH:mm:ss'),
-                end_time: moment(end).format('YYYY-MM-DD HH:mm:ss')
-            },
-            success: (result: ANY) => {
-                if (Array.isArray(result)) {
-                    setEvents(result.map(post => ({
-                        title: post.title,
-                        start: moment(post.date_publish).toDate(),
-                        end: moment(post.date_publish).add(1, 'hour').toDate(),
-                        resource: post,
-                    })));
-                } else if (result && Array.isArray(result.posts)) {
-                    setEvents(result.posts.map((post: ANY) => ({
-                        title: post.title,
-                        start: moment(post.date_publish).toDate(),
-                        end: moment(post.date_publish).add(1, 'hour').toDate(),
-                        resource: post,
-                    })));
-                }
-            }
-        });
-    };
-
-    const handleRangeChange = (range: Date[] | { start: Date; end: Date }) => {
+    const handleRangeChange = React.useCallback((range: Date[] | { start: Date; end: Date }) => {
         let start: Date;
         let end: Date;
         if (Array.isArray(range)) {
@@ -436,9 +528,14 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             start = range.start;
             end = range.end;
         }
+        const rangeKey = `${moment(start).format('YYYY-MM-DD')}|${moment(end).format('YYYY-MM-DD')}`;
+        if (lastFetchedRangeKeyRef.current === rangeKey) {
+            return;
+        }
+        lastFetchedRangeKeyRef.current = rangeKey;
         setCurrentRange({ start, end });
         fetchPosts(start, end);
-    };
+    }, [fetchPosts]);
 
     const handleSelectSlot = (slotInfo: { start: Date, end: Date }) => {
 
@@ -479,101 +576,216 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         }
     };
 
-    const handleSwitchToList = () => {
-        setPostsTableKey((k) => k + 1);
-        handleViewModeChange('list');
-    };
+    const handlePrimaryViewChange = React.useCallback(
+        (_event: React.MouseEvent<HTMLElement>, newView: MarketingViewMode | null) => {
+            if (!newView || newView === viewMode) return;
+            if (newView === 'list') {
+                setPostsTableKey((k) => k + 1);
+            } else if (newView === 'crawl') {
+                setCrawlTableKey((k) => k + 1);
+            }
+            handleViewModeChange(newView);
+        },
+        [viewMode, handleViewModeChange]
+    );
 
     return (
         <div style={{ padding: 24, height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
 
             <Box
                 sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: 2,
                     mb: 2,
-                    flexWrap: 'wrap',
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
                 }}
             >
-                {viewMode === 'calendar' && (
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1 }}>
-                    {Object.keys(PLATFORM_ICONS).map((plat) => {
-                        const isSelected = selectedPlatforms.includes(plat);
-                        return (
-                            <Box
-                                key={plat}
-                                onClick={() => {
-                                    setSelectedPlatforms(prev =>
-                                        prev.includes(plat)
-                                            ? prev.filter(p => p !== plat)
-                                            : [...prev, plat]
-                                    );
-                                }}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    padding: '4px 12px 4px 4px',
-                                    border: '1px solid #e0e0e0',
-                                    borderRadius: 1.5,
-                                    cursor: 'pointer',
-                                    backgroundColor: isSelected ? '#f9f9f9' : '#d1d1d1ff',
-                                    borderColor: isSelected ? '#bdbdbd' : '#e0e0e0',
-                                    '&:hover': {
-                                        backgroundColor: '#e1e1e1ff',
-                                        borderColor: '#bdbdbd'
-                                    }
-                                }}
-                            >
-                                <Checkbox
-                                    size="small"
-                                    checked={isSelected}
-                                    disableRipple
-                                    sx={{ p: '4px' }}
-                                />
-                                <Box sx={{ display: 'flex', alignItems: 'center', ml: '2px', mr: '4px' }}>
-                                    {PLATFORM_ICONS[plat]}
-                                </Box>
-                                <Typography sx={{ textTransform: 'capitalize', fontSize: '14px', fontWeight: 500, color: '#333' }}>
-                                    {plat}
-                                </Typography>
-                            </Box>
-                        );
-                    })}
-                </Box>
-                )}
+                <Stack spacing={1.5} sx={{ px: 2, py: 1.5 }}>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={viewMode}
+                        onChange={handlePrimaryViewChange}
+                        aria-label="Chế độ xem marketing"
+                        sx={{
+                            flexShrink: 0,
+                            alignSelf: 'flex-start',
+                            '& .MuiToggleButton-root': {
+                                px: 2,
+                                py: 0.75,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                gap: 0.75,
+                            },
+                        }}
+                    >
+                        <ToggleButton value="crawl" aria-label="Source">
+                            <CloudSyncIcon fontSize="small" />
+                            Source
+                        </ToggleButton>
+                        <ToggleButton value="list" aria-label="Post">
+                            <ViewListIcon fontSize="small" />
+                            Post
+                        </ToggleButton>
+                        <ToggleButton value="calendar" aria-label="Calendar">
+                            <CalendarTodayIcon fontSize="small" />
+                            Calendar
+                        </ToggleButton>
+                    </ToggleButtonGroup>
 
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
-                    {viewMode === 'calendar' ? (
+                    {viewMode === 'list' && (
                         <>
-                            <Button
-                                variant="outlined"
-                                onClick={() => setOpenSourceCrawlerDrawer(true)}
-                            >
-                                Crawl source
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                startIcon={<ViewListIcon />}
-                                onClick={handleSwitchToList}
-                            >
-                                Danh sách bài viết
-                            </Button>
-                            <Button variant="contained" color="secondary" onClick={() => setOpenDrawerAi(true)}>
-                                Lên lịch bằng AI
-                            </Button>
+                            <Divider />
+                            <Stack direction="row" justifyContent="flex-end">
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<CategoryOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenCategoriesDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Quản lý category
+                                </Button>
+                            </Stack>
                         </>
-                    ) : (
-                        <Button
-                            variant="outlined"
-                            startIcon={<CalendarTodayIcon />}
-                            onClick={() => handleViewModeChange('calendar')}
-                        >
-                            Xem lịch
-                        </Button>
                     )}
-                </Box>
+
+                    {viewMode === 'crawl' && (
+                        <>
+                            <Divider />
+                            <Stack
+                                direction={{ xs: 'column', sm: 'row' }}
+                                alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+                                justifyContent="space-between"
+                                spacing={1.5}
+                            >
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <MarketingCrawlAutoToggle appMobileId={Number(data?.post?.id || 0)} />
+                                </Box>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<StorageOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenSourcesDrawer(true)}
+                                    sx={{
+                                        textTransform: 'none',
+                                        flexShrink: 0,
+                                        alignSelf: { xs: 'flex-start', sm: 'flex-start' },
+                                    }}
+                                >
+                                    Danh sách source
+                                </Button>
+                            </Stack>
+                        </>
+                    )}
+
+                    {viewMode === 'calendar' && (
+                        <>
+                            <Divider />
+                            <Stack
+                                direction={{ xs: 'column', md: 'row' }}
+                                alignItems={{ xs: 'stretch', md: 'flex-start' }}
+                                justifyContent="space-between"
+                                spacing={1.5}
+                            >
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ fontWeight: 600, display: 'block', mb: 0.75 }}
+                                    >
+                                        Lọc theo nền tảng
+                                    </Typography>
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: 0.75,
+                                            maxHeight: { xs: 120, sm: 'none' },
+                                            overflowY: { xs: 'auto', sm: 'visible' },
+                                        }}
+                                    >
+                                        {Object.keys(PLATFORM_ICONS).map((plat) => {
+                                            const isSelected = selectedPlatforms.includes(plat);
+                                            return (
+                                                <Chip
+                                                    key={plat}
+                                                    size="small"
+                                                    label={
+                                                        <Box
+                                                            component="span"
+                                                            sx={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 0.5,
+                                                                '& svg': { fontSize: 16 },
+                                                            }}
+                                                        >
+                                                            {PLATFORM_ICONS[plat]}
+                                                            {plat}
+                                                        </Box>
+                                                    }
+                                                    variant={isSelected ? 'filled' : 'outlined'}
+                                                    color={isSelected ? 'primary' : 'default'}
+                                                    onClick={() => togglePlatformFilter(plat)}
+                                                    sx={{ cursor: 'pointer' }}
+                                                />
+                                            );
+                                        })}
+                                        {selectedPlatforms.length > 0 && (
+                                            <Chip
+                                                size="small"
+                                                label="Bỏ lọc"
+                                                variant="outlined"
+                                                onClick={() => setSelectedPlatforms([])}
+                                                sx={{ cursor: 'pointer' }}
+                                            />
+                                        )}
+                                    </Box>
+                                </Box>
+
+                                <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    alignItems="center"
+                                    flexWrap="wrap"
+                                    sx={{ flexShrink: 0 }}
+                                >
+                                    <Tooltip title="Tải lại dữ liệu lịch">
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                aria-label="Tải lại lịch"
+                                                onClick={handleRefreshCalendar}
+                                                disabled={calendarRefreshing}
+                                                sx={{
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    borderRadius: 1,
+                                                }}
+                                            >
+                                                {calendarRefreshing ? (
+                                                    <CircularProgress size={20} />
+                                                ) : (
+                                                    <RefreshIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                    <Button
+                                        size="small"
+                                        variant="contained"
+                                        color="secondary"
+                                        onClick={() => setOpenDrawerAi(true)}
+                                    >
+                                        Lên lịch bằng AI
+                                    </Button>
+                                </Stack>
+                            </Stack>
+                        </>
+                    )}
+                </Stack>
             </Box>
 
             {viewMode === 'list' ? (
@@ -593,6 +805,13 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         post={data.post}
                         name="app_mobile"
                         onReview={() => {}} // eslint-disable-line @typescript-eslint/no-empty-function
+                    />
+                </Box>
+            ) : viewMode === 'crawl' ? (
+                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                    <MarketingSourceTablesPanel
+                        key={crawlTableKey}
+                        appMobileId={Number(data?.post?.id || 0)}
                     />
                 </Box>
             ) : (
@@ -698,10 +917,23 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     }
                 }}
             />
-            <MarketingSourceTablesDrawer
-                open={openSourceCrawlerDrawer}
-                onClose={() => setOpenSourceCrawlerDrawer(false)}
+
+            <MarketingSourcesDrawer
+                open={openSourcesDrawer}
+                onClose={() => setOpenSourcesDrawer(false)}
                 appMobileId={Number(data?.post?.id || 0)}
+            />
+
+            <MarketingRelationshipDrawer
+                open={openCategoriesDrawer}
+                onClose={() => setOpenCategoriesDrawer(false)}
+                appMobileId={Number(data?.post?.id || 0)}
+                config={{
+                    drawerTitle: 'Danh mục marketing theo mobile app',
+                    listTitle: 'Marketing Category',
+                    object: 'spacedev_app_marketing_category',
+                    field: 'app_mobile',
+                }}
             />
         </div >
     );

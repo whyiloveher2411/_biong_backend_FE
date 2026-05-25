@@ -22,6 +22,7 @@ const useStyles = makeCSS((theme: Theme) => ({
         top: "50%",
         right: "0",
         minWidth: "100%",
+        paddingLeft: 10,
         backgroundColor: theme.palette.background.default,
         transform: "translateY(-50%)",
         opacity: 0,
@@ -76,6 +77,10 @@ function ActionOnPost({
         post.type + "_trash"
     );
 
+    const rowActions: IActionPostType[] | undefined = Array.isArray(post._row_actions)
+        ? (post._row_actions as IActionPostType[])
+        : config.actions;
+
     const [loadingStateButton, setLoadingStateButton] = React.useState<{
         [key: number]: boolean;
     }>({});
@@ -101,6 +106,12 @@ function ActionOnPost({
         window.open(result.open_link, "_blank");
     };
 
+    const maybeRefreshAfterAction = (item: IActionPostType) => {
+        if (item.auto_refresh) {
+            acctionPost({});
+        }
+    };
+
     const handleActionEvent = (
         id: ID,
         item: IActionPostType,
@@ -110,7 +121,12 @@ function ActionOnPost({
             id,
             post_type: postType || post.type,
         };
+        const showProgressDialog = !item.skip_confirm;
+
         const openRunningDialog = () => {
+            if (!showProgressDialog) {
+                return;
+            }
             setToolProgressDialog({
                 open: true,
                 title: item.title,
@@ -120,6 +136,9 @@ function ActionOnPost({
         };
 
         const updateDialogProgress = (progress: number) => {
+            if (!showProgressDialog) {
+                return;
+            }
             setToolProgressDialog((prev) => ({
                 ...prev,
                 progress,
@@ -127,6 +146,9 @@ function ActionOnPost({
         };
 
         const markDialogDone = () => {
+            if (!showProgressDialog) {
+                return;
+            }
             setToolProgressDialog((prev) => ({
                 ...prev,
                 progress: 100,
@@ -135,6 +157,9 @@ function ActionOnPost({
         };
 
         const markDialogError = () => {
+            if (!showProgressDialog) {
+                return;
+            }
             setToolProgressDialog((prev) => ({
                 ...prev,
                 status: "error",
@@ -147,10 +172,12 @@ function ActionOnPost({
                 [index]: true,
             }));
 
-            setProgressButton((prev) => ({
-                ...prev,
-                [index]: 0,
-            }));
+            if (item.check_progress) {
+                setProgressButton((prev) => ({
+                    ...prev,
+                    [index]: 0,
+                }));
+            }
             openRunningDialog();
 
             useAjaxAction.ajax({
@@ -165,6 +192,7 @@ function ActionOnPost({
                     }));
                     if (!item.check_progress) {
                         markDialogDone();
+                        maybeRefreshAfterAction(item);
                     }
                 },
                 error: () => {
@@ -200,10 +228,19 @@ function ActionOnPost({
                                     delete prev[index];
                                     return { ...prev };
                                 });
+                                setLoadingStateButton((prev) => ({
+                                    ...prev,
+                                    [index]: false,
+                                }));
                                 markDialogDone();
+                                maybeRefreshAfterAction(item);
                             }
                         },
                         error: () => {
+                            setLoadingStateButton((prev) => ({
+                                ...prev,
+                                [index]: false,
+                            }));
                             markDialogError();
                         },
                     });
@@ -218,14 +255,18 @@ function ActionOnPost({
             runApi();
         };
 
-        confirm.onConfirm(callApi, {
-            title: item.confirm?.title,
-            icon: item.confirm?.icon,
-            numberConfirm: item.confirm?.number_confirm,
-            message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
-                toolTitle: item.title,
-            }),
-        });
+        if (item.skip_confirm) {
+            callApi();
+        } else {
+            confirm.onConfirm(callApi, {
+                title: item.confirm?.title,
+                icon: item.confirm?.icon,
+                numberConfirm: item.confirm?.number_confirm,
+                message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                    toolTitle: item.title,
+                }),
+            });
+        }
     };
 
     const handleRetryToolAction = () => {
@@ -253,7 +294,74 @@ function ActionOnPost({
 
     return (
         <div className={classes.actionPost + " actionPost"}>
-            {permission[post.type + "_edit"] && (
+             {rowActions?.length ? (
+                <Box
+                    onClick={(e) => {
+                        e.stopPropagation();
+                    }}
+                    sx={{
+                        display: "flex",
+                        gap: 1,
+                        pr: 1,
+                    }}
+                >
+                    {rowActions.length > 5 ? (
+                        <MoreButton
+                            actions={(() => {
+                                return groupActionsForMenu(rowActions.map((action, index) => ({
+                                    key: `${action.link_api || action.title}-${index}`,
+                                    group: action.group,
+                                    title:
+                                        action.title +
+                                        (progressButton[index] !== undefined
+                                            ? ` (${progressButton[index]}%)`
+                                            : ""),
+                                    color: action.color,
+                                    icon: loadingStateButton[index]
+                                        ? "LoopRounded"
+                                        : undefined,
+                                    action: (e) => {
+                                        e.stopPropagation();
+                                        handleActionEvent(
+                                            post.id,
+                                            action,
+                                            index
+                                        );
+                                    },
+                                })));
+                            })()}
+                        >
+                            <IconButton size="large">
+                                <Icon icon="MoreVert" />
+                            </IconButton>
+                        </MoreButton>
+                    ) : (
+                        rowActions.map((action, index) => (
+                            <Box key={index} sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Button
+                                    key={index}
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+
+                                        if(action.link) {
+                                            navigate(action.link);
+                                            return;
+                                        }
+
+                                        handleActionEvent(post.id, action, index);
+                                    }}
+                                    variant="contained"
+                                    color={action.color as ANY}
+                                >
+                                    {action.title}
+                                </Button>
+                            </Box>
+                        ))
+                    )}
+                </Box>
+            ) : null}
+            {/* {permission[post.type + "_edit"] && (
                 <Tooltip title={__("Edit")} aria-label="edit">
                     <IconButton
                         onClick={(e) => {
@@ -268,7 +376,7 @@ function ActionOnPost({
                         <Icon icon="EditOutlined" />
                     </IconButton>
                 </Tooltip>
-            )}
+            )} */}
             {post.status === "trash" ? (
                 <>
                     {permission[post.type + "_delete"] && (
@@ -338,73 +446,7 @@ function ActionOnPost({
                     )}
                 </>
             )}
-            {config.actions ? (
-                <Box
-                    onClick={(e) => {
-                        e.stopPropagation();
-                    }}
-                    sx={{
-                        display: "flex",
-                        gap: 1,
-                        pr: 1,
-                    }}
-                >
-                    {config.actions.length > 5 ? (
-                        <MoreButton
-                            actions={(() => {
-                                return groupActionsForMenu(config.actions.map((action, index) => ({
-                                    key: `${action.link_api || action.title}-${index}`,
-                                    group: action.group,
-                                    title:
-                                        action.title +
-                                        (progressButton[index] !== undefined
-                                            ? ` (${progressButton[index]}%)`
-                                            : ""),
-                                    color: action.color,
-                                    icon: loadingStateButton[index]
-                                        ? "LoopRounded"
-                                        : undefined,
-                                    action: (e) => {
-                                        e.stopPropagation();
-                                        handleActionEvent(
-                                            post.id,
-                                            action,
-                                            index
-                                        );
-                                    },
-                                })));
-                            })()}
-                        >
-                            <IconButton size="large">
-                                <Icon icon="MoreVert" />
-                            </IconButton>
-                        </MoreButton>
-                    ) : (
-                        config.actions.map((action, index) => (
-                            <Box key={index} sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <Button
-                                    key={index}
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-
-                                        if(action.link) {
-                                            navigate(action.link);
-                                            return;
-                                        }
-
-                                        handleActionEvent(post.id, action, index);
-                                    }}
-                                    variant="contained"
-                                    color={action.color as ANY}
-                                >
-                                    {action.title}
-                                </Button>
-                            </Box>
-                        ))
-                    )}
-                </Box>
-            ) : null}
+           
             <Box
                 onClick={(e) => {
                     e.stopPropagation();

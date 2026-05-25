@@ -2,20 +2,15 @@ import React from 'react';
 import {
     Alert,
     Box,
-    Button,
     Checkbox,
     CircularProgress,
     FormControlLabel,
     Typography,
 } from '@mui/material';
-import DrawerCustom from 'components/molecules/DrawerCustom';
-import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import useAjax from 'hook/useApi';
 import { DataResultApiProps } from 'components/atoms/fields/relationship_onetomany_show/Form';
 
 type Props = {
-    open: boolean;
-    onClose: () => void;
     appMobileId?: number;
 };
 
@@ -56,7 +51,7 @@ function isJobCrawlAutoEnabled(jobCrawl: Record<string, unknown>): boolean {
     return v === true || v === 1 || v === '1';
 }
 
-export default function MarketingSourceTablesDrawer({ open, onClose, appMobileId }: Props) {
+export default function MarketingCrawlAutoToggle({ appMobileId }: Props) {
     const api = useAjax();
     const apiAjaxRef = React.useRef(api.ajax);
     apiAjaxRef.current = api.ajax;
@@ -113,9 +108,8 @@ export default function MarketingSourceTablesDrawer({ open, onClose, appMobileId
     }, [appMobileId]);
 
     React.useEffect(() => {
-        if (!open) return;
         loadData();
-    }, [open, loadData]);
+    }, [loadData]);
 
     const handleToggleAutoCrawl = (checked: boolean) => {
         if (!appMobileId || !appMobileDetail?.post) return;
@@ -166,96 +160,73 @@ export default function MarketingSourceTablesDrawer({ open, onClose, appMobileId
 
     const intervalMinutes = schedulerConfig?.interval_minutes ?? 10;
 
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                <CircularProgress size={20} />
+                <Typography variant="caption" color="text.secondary">
+                    Đang tải cài đặt crawl...
+                </Typography>
+            </Box>
+        );
+    }
+
+    if (!appMobileDetail?.post) {
+        return error ? (
+            <Alert severity="error" sx={{ py: 0 }}>
+                {error}
+            </Alert>
+        ) : null;
+    }
+
     return (
-        <DrawerCustom
-            open={open}
-            onClose={onClose}
-            title="Crawl Source"
-            width={1200}
-            action={<Button onClick={onClose}>Đóng</Button>}
-        >
+        <Box>
             {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
+                <Alert severity="error" sx={{ mb: 1 }}>
                     {error}
                 </Alert>
             )}
 
-            {loading && (
-                <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-                    <CircularProgress />
-                </Box>
+            {schedulerConfig && schedulerConfig.scheduler_enabled === false && (
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                    Scheduler crawl toàn hệ thống đang tắt (MARKETING_CRAWL_SCHEDULER_ENABLED=0).
+                    Cron sẽ không enqueue job cho đến khi bật trong .env.
+                </Alert>
             )}
 
-            {!loading && appMobileDetail?.post && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {schedulerConfig && schedulerConfig.scheduler_enabled === false && (
-                        <Alert severity="warning">
-                            Scheduler crawl toàn hệ thống đang tắt (MARKETING_CRAWL_SCHEDULER_ENABLED=0).
-                            Cron sẽ không enqueue job cho đến khi bật trong .env.
-                        </Alert>
-                    )}
-
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            flexWrap: 'wrap',
-                        }}
-                    >
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    checked={autoCrawlEnabled}
-                                    disabled={savingToggle}
-                                    onChange={(e) => handleToggleAutoCrawl(e.target.checked)}
-                                />
-                            }
-                            label={`Tự động crawl sau ${intervalMinutes} phút`}
+            <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600, display: 'block', mb: 0.75 }}
+            >
+                Tự động crawl
+            </Typography>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                }}
+            >
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={autoCrawlEnabled}
+                            disabled={savingToggle}
+                            onChange={(e) => handleToggleAutoCrawl(e.target.checked)}
+                            size="small"
                         />
-                        {savingToggle && <CircularProgress size={20} />}
-                    </Box>
-
-                    <Typography variant="caption" color="text.secondary">
-                        Bật công tắc trên app mobile; từng source vẫn cần bật &quot;Tự động crawl&quot; và đủ chu kỳ
-                        riêng. Cron quét mỗi {intervalMinutes} phút (MARKETING_CRAWL_SCHEDULER_INTERVAL_MINUTES).
-                    </Typography>
-
-                    <Typography variant="subtitle2">Danh sách source theo mobile app</Typography>
-                    <FieldForm
-                        component="relationship_onetomany_show"
-                        config={{
-                            title: 'Marketing Source',
-                            object: 'spacedev_app_marketing_source',
-                            field: 'mobile_app',
-                            view: 'relationship_onetomany_show',
-                            paginate: {
-                                rowsPerPage: 20,
-                            },
-                        }}
-                        post={appMobileDetail.post}
-                        name="mobile_app"
-                        onReview={() => { }} // eslint-disable-line @typescript-eslint/no-empty-function
-                    />
-
-                    <Typography variant="subtitle2">Danh sách source item theo mobile app</Typography>
-                    <FieldForm
-                        component="relationship_onetomany_show"
-                        config={{
-                            title: 'Marketing Source Item',
-                            object: 'spacedev_app_marketing_source_item',
-                            field: 'app_mobile',
-                            view: 'relationship_onetomany_show',
-                            paginate: {
-                                rowsPerPage: 20,
-                            },
-                        }}
-                        post={appMobileDetail.post}
-                        name="app_mobile"
-                        onReview={() => { }} // eslint-disable-line @typescript-eslint/no-empty-function
-                    />
-                </Box>
-            )}
-        </DrawerCustom>
+                    }
+                    label={`Tự động crawl sau ${intervalMinutes} phút`}
+                    sx={{ m: 0 }}
+                />
+                {savingToggle && <CircularProgress size={20} />}
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Bật công tắc trên app mobile; từng source vẫn cần bật &quot;Tự động crawl&quot; và đủ chu kỳ
+                riêng. Cron quét mỗi {intervalMinutes} phút (MARKETING_CRAWL_SCHEDULER_INTERVAL_MINUTES).
+            </Typography>
+        </Box>
     );
 }

@@ -42,6 +42,7 @@ type PrepareData = {
     draft_markdown?: string;
     has_draft?: boolean;
     prompt_ready?: boolean;
+    reference_image_count?: number;
     message?: { content?: string } | string;
 };
 
@@ -105,6 +106,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     const refLen = referenceRaw.trim().length;
     const longFormBlock = longFormErrorText(prepareData);
     const promptReady = Boolean(prepareData?.prompt_ready) && refLen >= minChars && !longFormBlock;
+    const referenceImageCount = prepareData?.reference_image_count ?? 0;
 
     const loadPrepare = React.useCallback(() => {
         if (!postId) return;
@@ -175,6 +177,10 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                 }
                 setSaveReferenceOk('Đã lưu bài gốc vào post.');
                 setAiStatus(null);
+                const imgCount = Number((res as { reference_image_count?: number }).reference_image_count ?? 0);
+                if (imgCount > 0) {
+                    setPrepareData((prev) => (prev ? { ...prev, reference_image_count: imgCount } : prev));
+                }
                 loadPrepare();
             },
             error: (err: unknown) => {
@@ -298,6 +304,12 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                 Dán nội dung bài viết tìm trên mạng, lưu bài gốc, rồi dùng AI viết lại (giữ ý, đổi
                                 cách diễn đạt). Không dùng chung pipeline Google Overview.
                             </Typography>
+                            {referenceImageCount > 0 && (
+                                <Alert severity="info" sx={{ mb: 2 }}>
+                                    Phát hiện {referenceImageCount} ảnh trong bài gốc — sẽ giữ lại khi viết lại và áp
+                                    dụng vào content_text.
+                                </Alert>
+                            )}
                             <TextField
                                 fullWidth
                                 size="small"
@@ -405,8 +417,6 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                     border: 1,
                                     borderColor: 'divider',
                                     borderRadius: 1,
-                                    maxHeight: 480,
-                                    overflow: 'auto',
                                     bgcolor: 'background.paper',
                                 }}
                             >
@@ -417,23 +427,6 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                         Chưa có bản nháp.
                                     </Typography>
                                 )}
-                            </Box>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                                <LoadingButton
-                                    variant="contained"
-                                    color="primary"
-                                    disabled={!draftMarkdown.trim() || Boolean(longFormBlock) || applying}
-                                    loading={applying}
-                                    onClick={handleApply}
-                                >
-                                    Áp dụng vào content_text
-                                </LoadingButton>
-                                <Typography variant="caption" color="text.secondary">
-                                    Lưu bản viết lại vào CMS (không cần bấm Edit post sau đó).
-                                </Typography>
                             </Box>
                         </Grid>
 

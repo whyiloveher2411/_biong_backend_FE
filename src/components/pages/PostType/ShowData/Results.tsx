@@ -26,6 +26,9 @@ import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import NotFound from 'components/molecules/NotFound';
 import { dateTimeFormat } from 'helpers/date';
 import { __ } from 'helpers/i18n';
+import { getPostTypeRowStyle } from 'helpers/postTypeRowStyle';
+import PostTypeRowBadges from 'components/atoms/PostType/PostTypeRowBadges';
+import { postTypeEmbeddedTableSx } from 'components/atoms/PostType/PostTypeTablePanel';
 import useAjax from 'hook/useApi';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import React, { useState } from 'react';
@@ -39,7 +42,7 @@ import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn'
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
-        marginTop: theme.spacing(3),
+        marginTop: theme.spacing(0),
     },
     cardWarper: {
         position: 'relative',
@@ -132,9 +135,11 @@ interface ShowDataTableProps {
     acctionPost: (payload: JsonFormat, success?: ((result: JsonFormat) => void) | undefined) => void,
     selectedCustomers: string[],
     setSelectedCustomers: React.Dispatch<React.SetStateAction<string[]>>,
+    /** Bảng nằm trong PostTypeTablePanel — không tạo card riêng. */
+    embeddedInPanel?: boolean,
 }
 
-const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData, acctionPost, selectedCustomers, setSelectedCustomers, ...rest }: ShowDataTableProps) => {
+const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData, acctionPost, selectedCustomers, setSelectedCustomers, embeddedInPanel = false, ...rest }: ShowDataTableProps) => {
 
     const classes = useStyles();
 
@@ -306,38 +311,48 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     //     (options.fields[key].show_data !== false || options.fields[key].show_data
 
 
+    const recordsSummary = (
+        <Typography
+            color="textSecondary"
+            gutterBottom={!embeddedInPanel}
+            variant="body2"
+            sx={embeddedInPanel ? { mb: 0 } : undefined}
+        >
+            {
+                __('{{total}} Records found. Page {{current_page}} of {{total_page}}', {
+                    total: data.rows.total,
+                    current_page: data.rows.current_page,
+                    total_page: Math.ceil(data.rows.total / data.rows.per_page * 1)
+                })
+            }
+        </Typography>
+    );
+
+    const tableWrapperClass = classes.cardWarper + ' ' + (loading ? classes.showLoading : '');
+    const TableWrapper: React.ElementType = embeddedInPanel ? Box : Card;
+    const TableContentWrapper: React.ElementType = embeddedInPanel ? Box : CardContent;
+    const TableFooterWrapper: React.ElementType = embeddedInPanel ? Box : CardActions;
+
     return (
         <div {...rest} className={classes.results}>
-            {
-                // data.rows.total ?
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                    {
-                        __('{{total}} Records found. Page {{current_page}} of {{total_page}}', {
-                            total: data.rows.total,
-                            current_page: data.rows.current_page,
-                            total_page: Math.ceil(data.rows.total / data.rows.per_page * 1)
-                        })
-                    }
-                </Typography>
-                // :
-                // <Typography color="textSecondary" gutterBottom variant="body2">
-                //     &nbsp;
-                // </Typography>
-            }
-            <Card className={classes.cardWarper + ' ' + (loading ? classes.showLoading : '')}>
-                {/* <CardHeader
-                    className={classes.cardHeader}
-                    action={
-                        <>
-                            <Button color='inherit'>Import</Button>
-                            <Button color='inherit'>Export</Button>
-                            <Button color='inherit'>Columns</Button>
-                        </>
-                    }
-                />
-                <Divider /> */}
-                <CardContent className={classes.content}>
-                    <TableContainer sx={{ maxHeight: 700 }} className="custom_scroll">
+            {!embeddedInPanel ? recordsSummary : null}
+            <TableWrapper
+                className={tableWrapperClass}
+                sx={embeddedInPanel ? { position: 'relative' } : undefined}
+            >
+                {embeddedInPanel ? (
+                    <Box sx={{ px: 2, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        {recordsSummary}
+                    </Box>
+                ) : null}
+                <TableContentWrapper className={classes.content}>
+                    <TableContainer
+                        sx={{
+                            maxHeight: 700,
+                            ...(embeddedInPanel ? postTypeEmbeddedTableSx : {}),
+                        }}
+                        className="custom_scroll"
+                    >
                         <Table stickyHeader aria-label="sticky table">
                             <TableHead>
                                 <TableRow>
@@ -418,6 +433,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                             data-id={customer.id}
                                             key={customer.id}
                                             className={classes.rowRecord}
+                                            style={getPostTypeRowStyle(customer)}
                                             selected={
                                                 selectedCustomers.indexOf(
                                                     customer.id
@@ -479,30 +495,33 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                 keyFields.map(key => (
                                                     key === keyFields[0] ?
                                                         <TableCell key={key} className={classes.trRowAction}>
-                                                            <Box display="flex" alignItems="center" >
-                                                                <FieldView
-                                                                    name={key}
-                                                                    component={data.config.fields[key].view ?? 'text'}
-                                                                    post={customer}
-                                                                    config={data.config.fields[key]}
-                                                                    content={customer[key]}
-                                                                    actionLiveEdit={actionLiveEdit}
-                                                                />
-                                                                {
-                                                                    (() => {
-                                                                        if (customer.is_homepage) {
-                                                                            try {
-                                                                                let label = JSON.parse(customer.is_homepage);
+                                                            <Box display="flex" flexDirection="column" alignItems="flex-start">
+                                                                <Box display="flex" alignItems="center">
+                                                                    <FieldView
+                                                                        name={key}
+                                                                        component={data.config.fields[key].view ?? 'text'}
+                                                                        post={customer}
+                                                                        config={data.config.fields[key]}
+                                                                        content={customer[key]}
+                                                                        actionLiveEdit={actionLiveEdit}
+                                                                    />
+                                                                    {
+                                                                        (() => {
+                                                                            if (customer.is_homepage) {
+                                                                                try {
+                                                                                    let label = JSON.parse(customer.is_homepage);
 
-                                                                                if (label) {
-                                                                                    return <strong>&nbsp;- {label.title}</strong>;
+                                                                                    if (label) {
+                                                                                        return <strong>&nbsp;- {label.title}</strong>;
+                                                                                    }
+                                                                                } catch (error) {
+                                                                                    return null;
                                                                                 }
-                                                                            } catch (error) {
-                                                                                return null;
                                                                             }
-                                                                        }
-                                                                    })()
-                                                                }
+                                                                        })()
+                                                                    }
+                                                                </Box>
+                                                                <PostTypeRowBadges row={customer} />
                                                             </Box>
                                                         </TableCell>
                                                         :
@@ -572,8 +591,11 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                             </TableBody>
                         </Table>
                     </TableContainer>
-                </CardContent>
-                <CardActions className={classes.actions}>
+                </TableContentWrapper>
+                <TableFooterWrapper
+                    className={classes.actions}
+                    sx={embeddedInPanel ? { borderTop: '1px solid', borderColor: 'divider' } : undefined}
+                >
                     <TablePagination
                         rowsPerPageOptions={[10, 25, 50, 100]}
                         count={data.rows.total ? data.rows.total * 1 : 0}
@@ -584,9 +606,9 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                         labelRowsPerPage={__('Rows per page:')}
                         labelDisplayedRows={({ from, to, count }) => `${from} - ${to} ${__('of')} ${count !== -1 ? count : `${__('more than')} ${to}`}`}
                     />
-                </CardActions>
+                </TableFooterWrapper>
                 {loading && <CircularProgress value={75} className={classes.iconLoading} />}
-            </Card>
+            </TableWrapper>
 
             <ActionOnPostSelected
                 acctionPost={acctionPost}

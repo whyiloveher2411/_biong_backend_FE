@@ -1,12 +1,9 @@
-import Grid from 'components/atoms/Grid'
-import makeCSS from 'components/atoms/makeCSS'
 import Box from 'components/atoms/Box'
-import Icon from 'components/atoms/Icon'
-import Input from 'components/atoms/Input'
-import Paper from 'components/atoms/Paper'
 import Button from 'components/atoms/Button'
+import makeCSS from 'components/atoms/makeCSS'
 import React from 'react'
-import { IconButton, TextField, Theme, Typography } from '@mui/material'
+import { IconButton, InputAdornment, TextField, Theme, Typography } from '@mui/material'
+import SearchIcon from '@mui/icons-material/Search'
 import { __ } from 'helpers/i18n'
 import DrawerCustom from 'components/molecules/DrawerCustom'
 import { globalActionsRequestSourceMain } from './globalActionsRequestSource'
@@ -23,50 +20,30 @@ import Dialog from 'components/molecules/Dialog'
 import { groupActionsForMenu } from 'components/atoms/PostType/groupActionsForMenu'
 const useStyles = makeCSS((theme: Theme) => ({
     root: {
+        width: '100%',
+    },
+    toolbarRow: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flexWrap: 'nowrap',
-        gap: theme.spacing(1.5),
+        flexWrap: 'wrap',
+        gap: theme.spacing(1),
         width: '100%',
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        paddingBottom: theme.spacing(0.5),
     },
-    leftGroup: {
-        minWidth: 0,
+    searchGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: theme.spacing(1),
         flex: 1,
+        minWidth: 0,
     },
     actionsGroup: {
         display: 'flex',
         gap: theme.spacing(1),
         alignItems: 'center',
         flexShrink: 0,
-        flexWrap: 'nowrap',
-    },
-    searchInput: {
-        flexGrow: 1,
-        fontSize: 14,
-        height: 36,
-        maxWidth: '100%',
-        width: 160,
-        "& input::placeholder": {
-            opacity: .6,
-            color: "inherit",
-        },
-    },
-    searchIcon: {
-        color: theme.palette.icon,
-    },
-    search: {
-        flex: 1,
-        minWidth: 220,
-        height: 42.5,
-        gap: theme.spacing(2),
-        padding: theme.spacing(0, 2),
-        display: 'flex',
-        borderRadius: theme.spacing(1),
-        alignItems: 'center',
+        flexWrap: 'wrap',
     },
 }))
 
@@ -221,49 +198,47 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
     const hiddenGlobalActions = globalActions.slice(maxVisibleGlobalActions);
 
     return (<>
-        <Grid
-            {...rest}
-            className={classes.root + ' ' + className}
-            container
-            spacing={1}>
-            <Grid item className={classes.leftGroup}>
-                <Box sx={{
-                    display: 'flex',
-                    gap: 1,
-                    alignItems: 'center',
-                    flexWrap: 'nowrap',
-                    minWidth: 0,
-                }}>
-                    <Paper className={classes.search} elevation={2}>
-                        <Icon icon="Search" className={classes.searchIcon} />
-                        <Input
-                            className={classes.searchInput}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
-                                setInputValue(e.target.value);
-                            }}
-                            onKeyPress={e => {
-                                if (e.key === 'Enter') {
-                                    onSearch(inputValue);
-                                }
-                            }}
-                            disableUnderline
-                            placeholder={__('Enter something...')}
-                            value={inputValue}
-                        />
-                    </Paper>
-                    <Button
-                        onClick={() => {
-                            onSearch(inputValue);
+        <Box {...rest} className={`${classes.root} ${className}`.trim()}>
+            <Box className={classes.toolbarRow}>
+                <Box className={classes.searchGroup}>
+                    <TextField
+                        size="small"
+                        placeholder={__('Enter something...')}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                onSearch(inputValue);
+                            }
                         }}
+                        sx={{
+                            flex: 1,
+                            minWidth: { xs: '100%', sm: 200 },
+                            maxWidth: { sm: 360 },
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                                bgcolor: 'background.default',
+                            },
+                        }}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon fontSize="small" color="action" />
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+                    <Button
+                        onClick={() => onSearch(inputValue)}
                         color="inherit"
-                        size="large"
-                        variant="contained">
+                        size="small"
+                        variant="outlined"
+                        sx={{ textTransform: 'none', flexShrink: 0 }}
+                    >
                         {__('Search')}
                     </Button>
                 </Box>
-            </Grid>
-            <Grid item className={classes.actionsGroup}>
-
+                <Box className={classes.actionsGroup}>
                 {
                     hiddenGlobalActions.length > 0 &&
                     <MoreButton
@@ -284,6 +259,8 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         <Button
                             color="inherit"
                             variant="outlined"
+                            size="small"
+                            sx={{ textTransform: 'none' }}
                         >
                             {__('Tools')}
                         </Button>
@@ -299,11 +276,14 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
                         color: "inherit",
                         variant: 'outlined',
                     })}
+                    size="small"
+                    sx={{ textTransform: 'none' }}
                     onClick={() => setOpenFilter(true)} >{__('Filter & Sort')}</Button>
 
                 {moreButton}
-            </Grid>
-        </Grid>
+                </Box>
+            </Box>
+        </Box>
         <DrawerCustom
             title="Filter"
             open={openFilter}

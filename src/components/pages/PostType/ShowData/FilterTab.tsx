@@ -9,6 +9,12 @@ import { ShowPostTypeData } from '.';
 import MoreButton from 'components/atoms/MoreButton';
 import { fade } from 'helpers/mui4/color';
 import { __ } from 'helpers/i18n';
+import {
+    getMergedCustomFilters,
+    getPostTypeColorBackground,
+    resolvePostTypeColor,
+    type PostTypeCustomFilter,
+} from 'helpers/postTypeColor';
 
 const useStyles = makeCSS((theme: Theme) => ({
     tabsItem: {
@@ -97,15 +103,13 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
 
     const dataConfig = data !== false ? data.config : null;
     const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
-    const filtersSaved = Array.isArray(dataConfig?.filters_saved) ? (dataConfig?.filters_saved ?? []) : [];
-    const filtersCustom = Array.isArray(dataConfig?.filters_custom)
-        ? (dataConfig?.filters_custom ?? [])
-        : (Array.isArray(dataConfig?.filter_custom) ? (dataConfig?.filter_custom ?? []) : []);
-    const mergedSavedFilters = [
-        ...filtersSaved,
-        ...filtersCustom,
-    ];
-    const selectedSavedFilter = mergedSavedFilters.find((item: { name: string }) => item.name === queryUrl.filter_saved_name);
+    const mergedSavedFilters = getMergedCustomFilters(dataConfig);
+    const selectedSavedFilter = mergedSavedFilters.find((item) => item.name === queryUrl.filter_saved_name);
+    const selectedCustomFilterColor = resolvePostTypeColor(selectedSavedFilter?.color);
+    const selectedSystemFilterColor = !selectedSavedFilter
+        ? dataConfig?.filters?.[tabCurrent[name]]?.color
+        : undefined;
+    const filterButtonColor = selectedCustomFilterColor ?? selectedSystemFilterColor;
     const currentFilterTitle = selectedSavedFilter
         ? selectedSavedFilter.name
         : __(dataConfig?.filters?.[tabCurrent[name]]?.title ?? 'All');
@@ -114,14 +118,18 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
     const groupedFilterActions: Array<{
         [key: string]: {
             title: string,
-            action: () => void
+            action: () => void,
+            color?: string,
+            backgroundColor?: string,
         }
     }> = [];
     const groupActionMap: {
         [key: string]: {
             [key: string]: {
                 title: string,
-                action: () => void
+                action: () => void,
+                color?: string,
+                backgroundColor?: string,
         }
         }
     } = {};
@@ -129,7 +137,12 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
     const pushActionToGroup = (
         groupName: string | undefined,
         actionKey: string,
-        actionValue: { title: string, action: () => void }
+        actionValue: {
+            title: string,
+            action: () => void,
+            color?: string,
+            backgroundColor?: string,
+        }
     ) => {
         const normalizedGroupName = groupName?.trim() ? groupName.trim() : defaultFilterGroupKey;
         if (!groupActionMap[normalizedGroupName]) {
@@ -155,13 +168,15 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         });
     });
 
-    mergedSavedFilters.forEach((item: { name: string, sort: string, filters: string, group?: string }, index: number) => {
+    mergedSavedFilters.forEach((item: PostTypeCustomFilter, index: number) => {
         pushActionToGroup(item.group, `saved-filter-${index}`, {
             title: `[Custom] ${item.name}`,
+            color: item.color ? resolvePostTypeColor(item.color) : undefined,
+            backgroundColor: getPostTypeColorBackground(item.color, 0.15),
             action: () => {
                 let sort = { sortKey: '', sortType: '' };
                 try {
-                    sort = JSON.parse(item.sort);
+                    sort = JSON.parse(item.sort ?? '{"sortKey":"","sortType":""}');
                 } catch (error) {
                     //
                 }
@@ -224,11 +239,12 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                 } */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Button
-                        size="large"
-                        variant='outlined'
+                        size="small"
+                        variant="outlined"
                         className="refresh-post-type-data"
                         onClick={handleRefreshData}
                         title={__('Refresh')}
+                        sx={{ minWidth: 36, px: 1 }}
                     >
                         <Icon icon='Refresh' />
                     </Button>
@@ -239,15 +255,20 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                                 selected={selectedMenuKey}
                             >
                                 <Button
-                                    size="large"
+                                    size="small"
                                     startIcon={<Icon icon={selectedSavedFilter ? 'FilterListRounded' : (dataConfig?.filters?.[tabCurrent[name]]?.icon ?? 'PublicOutlined')} />}
                                     variant='contained'
                                     sx={{
-                                        backgroundColor: selectedSavedFilter ? 'primary.main' : (dataConfig?.filters?.[tabCurrent[name]]?.color ?? 'primary.main'),
+                                        textTransform: 'none',
+                                        backgroundColor: filterButtonColor ?? 'primary.main',
                                         '&:hover, &:active, &:focus': {
-                                            backgroundColor: selectedSavedFilter
-                                                ? 'primary.dark'
-                                                : (dataConfig?.filters?.[tabCurrent[name]]?.color ? fade(dataConfig.filters[tabCurrent[name]].color, 0.9) : 'primary.dark'),
+                                            backgroundColor: filterButtonColor
+                                                ? fade(filterButtonColor, 0.9)
+                                                : (selectedSavedFilter
+                                                    ? 'primary.dark'
+                                                    : (dataConfig?.filters?.[tabCurrent[name]]?.color
+                                                        ? fade(dataConfig.filters[tabCurrent[name]].color, 0.9)
+                                                        : 'primary.dark')),
                                         }
                                     }}
                                 >
@@ -256,9 +277,10 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                             </MoreButton>
                             :
                             <Button
-                                size="large"
+                                size="small"
                                 startIcon={<Icon icon={'PublicOutlined'} />}
                                 variant='contained'
+                                sx={{ textTransform: 'none' }}
                             >
                                 {__('All')}
                             </Button>

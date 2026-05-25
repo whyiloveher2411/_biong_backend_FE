@@ -369,9 +369,10 @@ function Form({
                         confirmMessage={item.confirm_message}
                         confirmConfig={item.confirm}
                         checkProgress={item.check_progress}
+                        skipConfirm={item.skip_confirm}
                         color={item.color}
                         clientAction={item.client_action}
-                        onActionSuccess={onRefreshPost}
+                        onActionSuccess={item.auto_refresh ? onRefreshPost : undefined}
                         onClientDrawer={(action) => {
                             if (action === 'drawer:MarketingContentAi') {
                                 setMarketingAiDrawerOpen(true);
@@ -765,6 +766,8 @@ export interface IActionPostType {
         number_confirm?: number,
     },
     check_progress?: boolean,
+    skip_confirm?: boolean,
+    auto_refresh?: boolean,
     color?: 'inherit'
     | 'primary'
     | 'secondary'
@@ -813,6 +816,7 @@ function ButtonAction({
     confirmMessage,
     confirmConfig,
     checkProgress,
+    skipConfirm,
     color,
     clientAction,
     onClientDrawer,
@@ -830,6 +834,7 @@ function ButtonAction({
     },
     id: ID,
     checkProgress?: boolean,
+    skipConfirm?: boolean,
     color?: string,
     clientAction?: string,
     onClientDrawer?: (action: string) => void,
@@ -885,14 +890,18 @@ function ButtonAction({
             }
         };
 
-        confirm.onConfirm(callApi, {
-            title: confirmConfig?.title,
-            icon: confirmConfig?.icon,
-            numberConfirm: confirmConfig?.number_confirm,
-            message: confirmConfig?.message || confirmMessage || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
-                toolTitle: title,
-            }),
-        });
+        if (skipConfirm) {
+            callApi();
+        } else {
+            confirm.onConfirm(callApi, {
+                title: confirmConfig?.title,
+                icon: confirmConfig?.icon,
+                numberConfirm: confirmConfig?.number_confirm,
+                message: confirmConfig?.message || confirmMessage || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                    toolTitle: title,
+                }),
+            });
+        }
 
     }
 

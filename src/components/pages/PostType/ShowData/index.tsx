@@ -22,6 +22,7 @@ import FilterTab from './FilterTab';
 import Header from './Header';
 import Results from './Results';
 import SearchBar from './SearchBar';
+import PostTypeTablePanel from 'components/atoms/PostType/PostTypeTablePanel';
 import { FieldConfigProps } from 'components/atoms/fields/type'
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import CreateData from '../CreateData';
@@ -243,62 +244,91 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                 />
             </div>
             <Box sx={{ width: '100%' }}>
-                <Box
-                    sx={{
-                        display: 'flex',
-                        gap: 2,
-                    }}
+                <PostTypeTablePanel
+                    toolbar={
+                        <Box
+                            sx={{
+                                px: 2,
+                                py: 1.5,
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: { xs: 'column', lg: 'row' },
+                                    alignItems: { xs: 'stretch', lg: 'center' },
+                                    justifyContent: 'space-between',
+                                    gap: 1.5,
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
+                                    <FilterTab
+                                        name={type}
+                                        acctionPost={acctionPost}
+                                        queryUrl={queryUrl}
+                                        data={data}
+                                        setQueryUrl={setQueryUrl}
+                                    />
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <SearchBar
+                                        type={type}
+                                        value={queryUrl.search}
+                                        onSearch={handleSearch}
+                                        setQueryUrl={setQueryUrl}
+                                        onFilter={(filters) => {
+                                            setQueryUrl({
+                                                ...queryUrl,
+                                                filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
+                                            });
+                                        }}
+                                        data={data}
+                                        moreButton={
+                                            enableNewInline ?
+                                                <Button
+                                                    variant="contained"
+                                                    size="small"
+                                                    disabled={!permission[type + '_create']}
+                                                    color="primary"
+                                                    sx={{ textTransform: 'none' }}
+                                                    onClick={() => setOpenCreateInline(true)}
+                                                >
+                                                    {__('Add new')}
+                                                </Button>
+                                                :
+                                                <Button
+                                                    component={Link}
+                                                    to={`/post-type/${type}/new`}
+                                                    variant="contained"
+                                                    size="small"
+                                                    disabled={!permission[type + '_create']}
+                                                    color="primary"
+                                                    sx={{ textTransform: 'none' }}
+                                                >
+                                                    {__('Add new')}
+                                                </Button>
+                                        }
+                                    />
+                                </Box>
+                            </Box>
+                        </Box>
+                    }
                 >
-                    <FilterTab
-                        name={type}
-                        acctionPost={acctionPost}
-                        queryUrl={queryUrl}
-                        data={data}
-                        setQueryUrl={setQueryUrl}
-                    />
-                    <SearchBar
-                        type={type}
-                        value={queryUrl.search}
-                        onSearch={handleSearch}
-                        setQueryUrl={setQueryUrl}
-                        onFilter={(filters) => {
-                            setQueryUrl({
-                                ...queryUrl,
-                                filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
-                            });
-                        }}
-                        data={data}
-                        moreButton={
-                            enableNewInline ?
-                                <Button
-                                    variant="contained"
-                                    size="large"
-                                    disabled={!permission[type + '_create']}
-                                    color="primary"
-                                    onClick={() => setOpenCreateInline(true)}
-                                >
-                                    {__('Add new')}
-                                </Button>
-                                :
-                                <Button component={Link} to={`/post-type/${type}/new`} variant="contained" size="large" disabled={!permission[type + '_create']} color="primary">
-                                    {__('Add new')}
-                                </Button>
-                        }
-                    />
-                </Box>
-                {data !== false && (
-                    <Results
-                        data={data}
-                        loading={showLoading}
-                        queryUrl={queryUrl}
-                        setQueryUrl={setQueryUrl}
-                        isLoadedData={isLoadedData}
-                        postType={type}
-                        acctionPost={acctionPost}
-                        selectedCustomers={selectedCustomers}
-                        setSelectedCustomers={setSelectedCustomers}
-                    />
-                )}
+                    {data !== false && (
+                        <Results
+                            embeddedInPanel
+                            data={data}
+                            loading={showLoading}
+                            queryUrl={queryUrl}
+                            setQueryUrl={setQueryUrl}
+                            isLoadedData={isLoadedData}
+                            postType={type}
+                            acctionPost={acctionPost}
+                            selectedCustomers={selectedCustomers}
+                            setSelectedCustomers={setSelectedCustomers}
+                        />
+                    )}
+                </PostTypeTablePanel>
             </Box>
         </Box>
     );
@@ -530,13 +560,17 @@ export interface ShowPostTypeData {
         },
         filters_saved: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         filters_custom: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         label: {
             name: string,

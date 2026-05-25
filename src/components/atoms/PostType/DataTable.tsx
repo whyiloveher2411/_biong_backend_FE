@@ -13,6 +13,9 @@ import ConfirmDialog from 'components/molecules/ConfirmDialog';
 import NotFound from 'components/molecules/NotFound';
 import { __ } from 'helpers/i18n';
 import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
+import { getPostTypeRowStyle } from 'helpers/postTypeRowStyle';
+import PostTypeRowBadges from 'components/atoms/PostType/PostTypeRowBadges';
+import { postTypeEmbeddedTableSx } from 'components/atoms/PostType/PostTypeTablePanel';
 import useAjax from 'hook/useApi';
 import React from 'react';
 import { ImageProps } from '../Avatar';
@@ -64,14 +67,14 @@ const useStyles = makeCSS({
 function DataTable(props: DataTableProps) {
 
     const classes = useStyles();
-    const { data, setQueryUrl, queryUrl, config } = props;
+    const { data, setQueryUrl, queryUrl, config, embeddedInPanel } = props;
 
     const { ajax, Loading, open } = useAjax();
     const { showMessage } = useFloatingMessages();
 
     const [openDrawer, setOpenDrawer] = React.useState(false);
 
-    const [dataDrawer, setDataDrawer] = React.useState<DataTableResultApiProps | false>(false);
+    const [dataDrawer, setDataDrawer] = React.useState<DataResultApiProps | false>(false);
 
     const [confirmDelete, setConfirmDelete] = React.useState(0);
 
@@ -250,34 +253,40 @@ function DataTable(props: DataTableProps) {
 
     return (
         <Box>
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                {props.showRefreshButton !== false ? (
-                    <Button
+            {!props.hideToolbar ? (
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                    {props.showRefreshButton !== false ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            className="refresh-post-type-data"
+                            onClick={handleRefreshData}
+                        >
+                            {__('Refresh')}
+                        </Button>
+                    ) : (
+                        <Box />
+                    )}
+                    <TextField
                         size="small"
-                        variant="outlined"
-                        className="refresh-post-type-data"
-                        onClick={handleRefreshData}
-                    >
-                        {__('Refresh')}
-                    </Button>
-                ) : (
-                    <Box />
-                )}
-                <TextField
-                    size="small"
-                    placeholder={__('Search')}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <Search />
-                            </InputAdornment>
-                        ),
-                    }}
-                />
-            </Box>
-            <TableContainer component={Paper}>
+                        placeholder={__('Search')}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <Search />
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+                </Box>
+            ) : null}
+            <TableContainer
+                component={Paper}
+                elevation={embeddedInPanel ? 0 : undefined}
+                sx={embeddedInPanel ? postTypeEmbeddedTableSx : undefined}
+            >
                 <Table>
                     <TableHead>
                         <TableRow>
@@ -303,10 +312,20 @@ function DataTable(props: DataTableProps) {
                     </TableHead>
                     <TableBody>
                         {data.rows.data && data.rows.data[0] ?
-                            data.rows.data.map((customer) => (
+                            data.rows.data.map((customer) => {
+                                const visibleFieldKeys = config && config.showFields
+                                    ? Object.keys(config.showFields)
+                                    : Object.keys(data.config.fields).filter(
+                                        (key) => data.config.fields[key].show_data !== false
+                                            || data.config.fields[key].show_data === undefined
+                                    );
+                                const firstFieldKey = visibleFieldKeys[0];
+
+                                return (
                                 <TableRow
                                     hover
                                     className={classes.tr}
+                                    style={getPostTypeRowStyle(customer)}
                                     onClick={e => eventClickRow(customer.type, customer.id)}
                                     data-id={customer.id}
                                     key={customer.id}
@@ -316,22 +335,45 @@ function DataTable(props: DataTableProps) {
                                         config && config.showFields ?
                                             Object.keys(config.showFields).map((key) => (
                                                 <TableCell key={key}>
-                                                    <FieldView
-                                                        name={key}
-                                                        config={config.showFields[key]}
-                                                        component={config.showFields[key].view}
-                                                        post={customer} content={customer[key]} />
+                                                    {key === firstFieldKey ? (
+                                                        <Box display="flex" flexDirection="column" alignItems="flex-start">
+                                                            <FieldView
+                                                                name={key}
+                                                                config={config.showFields[key]}
+                                                                component={config.showFields[key].view}
+                                                                post={customer} content={customer[key]} />
+                                                            <PostTypeRowBadges row={customer} />
+                                                        </Box>
+                                                    ) : (
+                                                        <FieldView
+                                                            name={key}
+                                                            config={config.showFields[key]}
+                                                            component={config.showFields[key].view}
+                                                            post={customer} content={customer[key]} />
+                                                    )}
                                                 </TableCell>
                                             ))
                                             :
-                                            Object.keys(data.config.fields).filter(key => data.config.fields[key].show_data !== false || data.config.fields[key].show_data === undefined).map((key) => (
+                                            visibleFieldKeys.map((key) => (
                                                 <TableCell key={key}>
-                                                    <FieldView
-                                                        name={key}
-                                                        config={data.config.fields[key]}
-                                                        component={data.config.fields[key].view ?? 'text'}
-                                                        post={customer} content={customer[key]}
-                                                    />
+                                                    {key === firstFieldKey ? (
+                                                        <Box display="flex" flexDirection="column" alignItems="flex-start">
+                                                            <FieldView
+                                                                name={key}
+                                                                config={data.config.fields[key]}
+                                                                component={data.config.fields[key].view ?? 'text'}
+                                                                post={customer} content={customer[key]}
+                                                            />
+                                                            <PostTypeRowBadges row={customer} />
+                                                        </Box>
+                                                    ) : (
+                                                        <FieldView
+                                                            name={key}
+                                                            config={data.config.fields[key]}
+                                                            component={data.config.fields[key].view ?? 'text'}
+                                                            post={customer} content={customer[key]}
+                                                        />
+                                                    )}
                                                 </TableCell>
                                             ))
                                     }
@@ -347,7 +389,8 @@ function DataTable(props: DataTableProps) {
                                         />
                                     </TableCell>
                                 </TableRow>
-                            ))
+                                );
+                            })
                             :
                             <TableRow>
                                 <TableCell colSpan={100}>
@@ -360,6 +403,7 @@ function DataTable(props: DataTableProps) {
             </TableContainer>
 
             <TablePagination
+                sx={embeddedInPanel ? { borderTop: '1px solid', borderColor: 'divider' } : undefined}
                 count={data.rows.total * 1}
                 onPageChange={(_e, v) => { setQueryUrl({ ...queryUrl, page: v + 1 }); }}
                 onRowsPerPageChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setQueryUrl({ ...queryUrl, rowsPerPage: e.target.value }); }}
@@ -414,6 +458,10 @@ export interface DataTableProps {
     config: JsonFormat,
     onEdit?: () => void,
     showRefreshButton?: boolean,
+    /** Ẩn hàng refresh + search (toolbar đã nằm ở RelationshipShowFormHeader). */
+    hideToolbar?: boolean,
+    /** Bảng nằm trong PostTypeTablePanel — không tạo card riêng. */
+    embeddedInPanel?: boolean,
 }
 
 
@@ -437,13 +485,17 @@ export interface DataTableResultApiProps {
         },
         filters_saved: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         filters_custom: Array<{
             name: string,
-            filters: string,
-            sort: string,
+            filters?: string,
+            sort?: string,
+            group?: string,
+            color?: string,
         }>,
         filters: {
             [key: string]: {
