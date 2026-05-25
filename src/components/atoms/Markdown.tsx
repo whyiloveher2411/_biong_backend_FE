@@ -61,6 +61,20 @@ const useStyles = makeStyles((theme: Theme) => ({
                 textDecoration: 'underline',
             },
         },
+        '& img': {
+            maxWidth: '100%',
+            height: 'auto',
+            display: 'block',
+        },
+        '& pre': {
+            maxWidth: '100%',
+            overflow: 'auto',
+        },
+        '& table': {
+            display: 'block',
+            maxWidth: '100%',
+            overflowX: 'auto',
+        },
     },
 }))
 

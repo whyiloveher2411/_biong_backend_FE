@@ -394,7 +394,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                             </Alert>
                         </Grid>
 
-                        <Grid item xs={12} md={6}>
+                        <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                 Chỉnh sửa bản nháp (markdown)
                             </Typography>
@@ -407,7 +407,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                 placeholder="Kết quả AI hiển thị ở đây sau khi viết lại…"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                 Preview
                             </Typography>
@@ -418,6 +418,15 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                     borderColor: 'divider',
                                     borderRadius: 1,
                                     bgcolor: 'background.paper',
+                                    maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    overflowX: 'auto',
+                                    wordBreak: 'break-word',
+                                    '& img': {
+                                        maxWidth: '100%',
+                                        height: 'auto',
+                                        display: 'block',
+                                    },
                                 }}
                             >
                                 {draftMarkdown.trim() ? (
