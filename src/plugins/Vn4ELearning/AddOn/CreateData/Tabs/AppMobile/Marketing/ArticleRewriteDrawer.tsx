@@ -21,6 +21,36 @@ import Markdown from 'components/atoms/Markdown';
 import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
+import { convertToURL } from 'helpers/url';
+
+const ARTICLE_REWRITE_OVERVIEW_STAGE = 'article_rewrite';
+
+/** Gemini web (tài khoản Pro) — thay Google Search AI mode do giới hạn overview. */
+const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
+
+function buildGeminiArticleRewriteUrl(postId: number, prompt: string, topic: string): string {
+    const accessToken = getAccessToken() ?? '';
+    const apiUrl = convertToURL(
+        process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+        '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/article-rewrite/update-from-overview',
+    );
+    const url = new URL(GEMINI_WEB_APP_URL);
+    const hashParams = new URLSearchParams({
+        copy_marketing_ai: '1',
+        marketing_post_id: String(postId),
+        marketing_stage: ARTICLE_REWRITE_OVERVIEW_STAGE,
+        access_token: accessToken,
+        api_url: apiUrl,
+        content_type: 'long_form',
+        topic: topic || '',
+    });
+    const promptTrimmed = prompt.trim();
+    if (promptTrimmed) {
+        hashParams.set('marketing_prompt', encodeURIComponent(promptTrimmed));
+    }
+    url.hash = hashParams.toString();
+    return url.toString();
+}
 
 type PrepareData = {
     success?: boolean;
@@ -42,6 +72,7 @@ type PrepareData = {
     draft_markdown?: string;
     has_draft?: boolean;
     prompt_ready?: boolean;
+    prompt?: string;
     reference_image_count?: number;
     message?: { content?: string } | string;
 };
@@ -96,6 +127,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     const [savingReference, setSavingReference] = React.useState(false);
     const [saveReferenceOk, setSaveReferenceOk] = React.useState<string | null>(null);
     const [aiLoading, setAiLoading] = React.useState<'gemini' | 'deepseek' | null>(null);
+    const [overviewOpening, setOverviewOpening] = React.useState(false);
     const [confirmProvider, setConfirmProvider] = React.useState<'gemini' | 'deepseek' | null>(null);
     const [aiStatus, setAiStatus] = React.useState<{ severity: 'info' | 'success' | 'error'; text: string } | null>(null);
     const [applying, setApplying] = React.useState(false);
@@ -146,6 +178,60 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
         if (!open) return;
         if (postId) loadPrepare();
     }, [open, postId, loadPrepare]);
+
+    React.useEffect(() => {
+        if (!open || !postId) return;
+        const onWindowFocus = () => {
+            loadPrepare();
+        };
+        window.addEventListener('focus', onWindowFocus);
+        return () => window.removeEventListener('focus', onWindowFocus);
+    }, [open, postId, loadPrepare]);
+
+    const handleOpenGeminiWeb = () => {
+        if (!postId || !promptReady || overviewOpening || aiLoading !== null) return;
+        setOverviewOpening(true);
+        setAiStatus({ severity: 'info', text: 'Đang tạo prompt cho Gemini web…' });
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/article-rewrite/get-overview-prompt',
+            method: 'POST',
+            data: {
+                post_id: postId,
+                reference_article_raw: referenceRaw.trim(),
+            },
+            loading: false,
+            success: (res: { success?: boolean; prompt?: string; reference_truncated?: boolean }) => {
+                setOverviewOpening(false);
+                if (!res?.success) {
+                    setAiStatus({ severity: 'error', text: extractApiMessage(res) });
+                    return;
+                }
+                const promptText = String(res.prompt || prepareData?.prompt || '').trim();
+                if (!promptText) {
+                    setAiStatus({ severity: 'error', text: 'Không tạo được prompt. Hãy lưu bài gốc trước.' });
+                    return;
+                }
+                const topic = String(
+                    prepareData?.post?.title || (data.post as { title?: string })?.title || '',
+                );
+                window.open(
+                    buildGeminiArticleRewriteUrl(postId, promptText, topic),
+                    '_blank',
+                    'noopener,noreferrer',
+                );
+                let msg =
+                    'Đã mở Gemini web. Extension sẽ dán prompt, gửi (Pro), lưu bản nháp và đóng tab — quay lại drawer để xem kết quả.';
+                if (res.reference_truncated) {
+                    msg += ' (Bài gốc đã cắt bớt trong prompt do quá dài.)';
+                }
+                setAiStatus({ severity: 'info', text: msg });
+            },
+            error: (err: unknown) => {
+                setOverviewOpening(false);
+                setAiStatus({ severity: 'error', text: extractApiMessage(err) });
+            },
+        });
+    };
 
     const handleSaveReference = () => {
         if (!postId || savingReference) return;
@@ -301,8 +387,8 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                     <Grid container spacing={2}>
                         <Grid item xs={12}>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                Dán nội dung bài viết tìm trên mạng, lưu bài gốc, rồi dùng AI viết lại (giữ ý, đổi
-                                cách diễn đạt). Không dùng chung pipeline Google Overview.
+                                Dán nội dung bài viết tìm trên mạng, lưu bài gốc, rồi viết lại bằng Gemini web (Pro),
+                                API Gemini/DeepSeek (giữ ý gốc, đổi cách diễn đạt).
                             </Typography>
                             {referenceImageCount > 0 && (
                                 <Alert severity="info" sx={{ mb: 2 }}>
@@ -353,7 +439,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                             <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
                                 Viết lại bằng AI
                             </Typography>
-                            {aiLoading && <LinearProgress sx={{ mb: 1 }} />}
+                            {(aiLoading || overviewOpening) && <LinearProgress sx={{ mb: 1 }} />}
                             {aiStatus && (
                                 <Alert
                                     severity={aiStatus.severity}
@@ -366,9 +452,19 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                                 <LoadingButton
                                     variant="contained"
+                                    color="primary"
+                                    size="small"
+                                    disabled={!promptReady || aiLoading !== null || overviewOpening}
+                                    loading={overviewOpening}
+                                    onClick={handleOpenGeminiWeb}
+                                >
+                                    Dùng Gemini web
+                                </LoadingButton>
+                                <LoadingButton
+                                    variant="contained"
                                     color="secondary"
                                     size="small"
-                                    disabled={!promptReady || aiLoading !== null}
+                                    disabled={!promptReady || aiLoading !== null || overviewOpening}
                                     loading={aiLoading === 'gemini'}
                                     onClick={() => setConfirmProvider('gemini')}
                                 >
@@ -377,7 +473,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                 <LoadingButton
                                     variant="outlined"
                                     size="small"
-                                    disabled={!promptReady || aiLoading !== null}
+                                    disabled={!promptReady || aiLoading !== null || overviewOpening}
                                     loading={aiLoading === 'deepseek'}
                                     onClick={() => setConfirmProvider('deepseek')}
                                 >
@@ -389,8 +485,9 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                         <Grid item xs={12}>
                             <Alert severity="info" sx={{ mb: 0 }}>
                                 Sau khi chỉnh sửa xong, bấm{' '}
-                                <strong>Áp dụng vào content_text</strong> (cuối drawer) để lưu vào tab Content Text
-                                của post.
+                                <strong>Áp dụng vào content_text</strong> (cuối drawer) để lưu vào ngôn ngữ của bài
+                                (theo field Language). Chỉ <strong>content_text</strong> của các ngôn ngữ khác sẽ bị
+                                xóa để bạn dịch lại; title và field khác giữ nguyên.
                             </Alert>
                         </Grid>
 
@@ -424,8 +521,13 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                     wordBreak: 'break-word',
                                     '& img': {
                                         maxWidth: '100%',
+                                        width: 'auto',
                                         height: 'auto',
                                         display: 'block',
+                                        objectFit: 'contain',
+                                    },
+                                    '& p img, & a img': {
+                                        maxWidth: '100%',
                                     },
                                 }}
                             >

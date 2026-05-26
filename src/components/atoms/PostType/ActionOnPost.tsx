@@ -15,6 +15,10 @@ import useAjax from "hook/useApi";
 import useConfirmDialog from "hook/useConfirmDialog";
 import ToolActionProgressDialog, { ToolActionProgressState } from "components/molecules/ToolActionProgressDialog";
 import { groupActionsForMenu } from "./groupActionsForMenu";
+import PostTypeClientActionDrawers, {
+    buildCreatePostTypeDataFromListRow,
+    PostTypeClientDrawerAction,
+} from "./PostTypeClientActionDrawers";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -94,6 +98,12 @@ function ActionOnPost({
         status: "idle",
     });
     const retryToolActionRef = React.useRef<(() => void) | null>(null);
+    const [activeClientDrawer, setActiveClientDrawer] = React.useState<PostTypeClientDrawerAction | null>(null);
+
+    const drawerData = React.useMemo(
+        () => buildCreatePostTypeDataFromListRow(post, postType, config),
+        [post, postType, config]
+    );
 
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
@@ -117,6 +127,14 @@ function ActionOnPost({
         item: IActionPostType,
         index: number
     ) => {
+        if (item.client_action?.startsWith('drawer:')) {
+            if (!id) {
+                return;
+            }
+            setActiveClientDrawer(item.client_action);
+            return;
+        }
+
         const actionPayload = {
             id,
             post_type: postType || post.type,
@@ -464,6 +482,13 @@ function ActionOnPost({
                 screen="list"
                 post={post}
                 postType={postType}
+            />
+            <PostTypeClientActionDrawers
+                postType={postType || String(post.type)}
+                data={drawerData}
+                activeDrawer={activeClientDrawer}
+                onClose={() => setActiveClientDrawer(null)}
+                onRefreshPost={() => acctionPost({})}
             />
         </div>
     );

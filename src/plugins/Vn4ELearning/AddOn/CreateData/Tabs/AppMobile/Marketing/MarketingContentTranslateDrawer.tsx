@@ -13,6 +13,7 @@ import {
     LinearProgress,
     List,
     ListItem,
+    ListItemSecondaryAction,
     ListItemText,
     Typography,
 } from '@mui/material';
@@ -20,6 +21,35 @@ import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
+import { getAccessToken } from 'store/user/user.reducers';
+import { convertToURL } from 'helpers/url';
+
+const CONTENT_TRANSLATE_GEMINI_STAGE = 'content_translate';
+const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
+
+function buildGeminiContentTranslateUrl(postId: number, prompt: string, targetLang: string): string {
+    const accessToken = getAccessToken() ?? '';
+    const apiUrl = convertToURL(
+        process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+        '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/content-translate/update-from-overview',
+    );
+    const url = new URL(GEMINI_WEB_APP_URL);
+    const hashParams = new URLSearchParams({
+        copy_marketing_ai: '1',
+        marketing_post_id: String(postId),
+        marketing_stage: CONTENT_TRANSLATE_GEMINI_STAGE,
+        target_lang: targetLang,
+        access_token: accessToken,
+        api_url: apiUrl,
+        content_type: 'long_form',
+    });
+    const promptTrimmed = prompt.trim();
+    if (promptTrimmed) {
+        hashParams.set('marketing_prompt', encodeURIComponent(promptTrimmed));
+    }
+    url.hash = hashParams.toString();
+    return url.toString();
+}
 
 type LanguageItem = {
     code: string;
@@ -70,6 +100,7 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
         severity: 'info' | 'success' | 'error';
         text: string;
     } | null>(null);
+    const [geminiWebOpening, setGeminiWebOpening] = React.useState<Record<string, boolean>>({});
 
     const loadPrepare = React.useCallback(() => {
         if (!postId) return;
@@ -99,6 +130,61 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
     React.useEffect(() => {
         if (open && postId) loadPrepare();
     }, [open, postId, loadPrepare]);
+
+    React.useEffect(() => {
+        if (!open || !postId) return;
+        const onWindowFocus = () => {
+            loadPrepare();
+            onRefreshPost?.();
+        };
+        window.addEventListener('focus', onWindowFocus);
+        return () => window.removeEventListener('focus', onWindowFocus);
+    }, [open, postId, loadPrepare, onRefreshPost]);
+
+    const handleOpenGeminiWeb = (targetLang: string) => {
+        if (!postId || !targetLang || aiLoading !== null) return;
+        const code = targetLang.trim().toLowerCase();
+        if (!code) return;
+
+        setGeminiWebOpening((prev) => ({ ...prev, [code]: true }));
+        setStatusAlert({ severity: 'info', text: `Đang tạo prompt dịch sang ${code}…` });
+
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/content-translate/get-gemini-prompt',
+            method: 'POST',
+            data: { post_id: postId, id: postId, target_lang: code },
+            loading: false,
+            success: (res: {
+                success?: boolean;
+                prompt?: string;
+                content_truncated?: boolean;
+                target_lang?: string;
+            }) => {
+                setGeminiWebOpening((prev) => ({ ...prev, [code]: false }));
+                if (!res?.success) {
+                    setStatusAlert({ severity: 'error', text: extractApiMessage(res) });
+                    return;
+                }
+                const promptText = String(res.prompt || '').trim();
+                if (!promptText) {
+                    setStatusAlert({ severity: 'error', text: 'Không tạo được prompt.' });
+                    return;
+                }
+                const lang = String(res.target_lang || code);
+                window.open(buildGeminiContentTranslateUrl(postId, promptText, lang), '_blank', 'noopener,noreferrer');
+                let msg =
+                    `Đã mở Gemini web (${lang}). Extension sẽ dán prompt, gửi, lưu bản dịch và đóng tab — quay lại drawer để xem.`;
+                if (res.content_truncated) {
+                    msg += ' (Nội dung nguồn đã cắt bớt trong prompt.)';
+                }
+                setStatusAlert({ severity: 'info', text: msg });
+            },
+            error: (err: unknown) => {
+                setGeminiWebOpening((prev) => ({ ...prev, [code]: false }));
+                setStatusAlert({ severity: 'error', text: extractApiMessage(err) });
+            },
+        });
+    };
 
     const runTranslate = (provider: 'gemini' | 'deepseek') => {
         if (!postId || !prepareData?.can_translate) return;
@@ -202,8 +288,20 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                         </Typography>
                         <List dense sx={{ mb: 2 }}>
                             {(prepareData.missing_languages || []).map((lang) => (
-                                <ListItem key={lang.code}>
+                                <ListItem key={lang.code} sx={{ pr: 12 }}>
                                     <ListItemText primary={lang.name} secondary={lang.code} />
+                                    <ListItemSecondaryAction>
+                                        <LoadingButton
+                                            size="small"
+                                            variant="contained"
+                                            color="info"
+                                            disabled={aiLoading !== null}
+                                            loading={!!geminiWebOpening[lang.code]}
+                                            onClick={() => handleOpenGeminiWeb(lang.code)}
+                                        >
+                                            Dùng Gemini web
+                                        </LoadingButton>
+                                    </ListItemSecondaryAction>
                                 </ListItem>
                             ))}
                             {(prepareData.missing_languages || []).length === 0 && (
@@ -232,7 +330,7 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                                 loading={aiLoading === 'gemini'}
                                 onClick={() => setConfirmProvider('gemini')}
                             >
-                                Dịch bằng Gemini
+                                Dịch bằng Gemini API
                             </LoadingButton>
                             <LoadingButton
                                 variant="outlined"
@@ -255,7 +353,7 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                 <DialogContent>
                     <DialogContentText>
                         Dịch title và content_text sang {(prepareData?.missing_langs || []).join(', ')} bằng{' '}
-                        {confirmProvider === 'gemini' ? 'Gemini' : 'DeepSeek'}?
+                        {confirmProvider === 'gemini' ? 'Gemini API' : 'DeepSeek'}?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>

@@ -1,0 +1,83 @@
+import React from 'react';
+import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
+import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
+import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
+import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
+
+export type PostTypeClientDrawerAction =
+    | 'drawer:MarketingContentAi'
+    | 'drawer:MarketingArticleRewrite'
+    | 'drawer:MarketingContentTranslate'
+    | string;
+
+type Props = {
+    postType: string;
+    data: CreatePostTypeData;
+    activeDrawer: PostTypeClientDrawerAction | null;
+    onClose: () => void;
+    onRefreshPost?: () => void;
+};
+
+function PostTypeClientActionDrawers({
+    postType,
+    data,
+    activeDrawer,
+    onClose,
+    onRefreshPost,
+}: Props) {
+    if (!activeDrawer?.startsWith('drawer:')) {
+        return null;
+    }
+
+    if (postType === 'spacedev_app_marketing_post') {
+        return (
+            <>
+                <ContentAiWizard
+                    open={activeDrawer === 'drawer:MarketingContentAi'}
+                    onClose={onClose}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
+                />
+                <ArticleRewriteDrawer
+                    open={activeDrawer === 'drawer:MarketingArticleRewrite'}
+                    onClose={onClose}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
+                />
+                <MarketingContentTranslateDrawer
+                    open={activeDrawer === 'drawer:MarketingContentTranslate'}
+                    onClose={onClose}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
+                />
+            </>
+        );
+    }
+
+    return null;
+}
+
+export function buildCreatePostTypeDataFromListRow(
+    post: JsonFormat,
+    postType: string,
+    config: { title?: string; fields?: ANY; public_view?: boolean; slug?: string; table?: string; tabs?: ANY; actions?: ANY }
+): CreatePostTypeData {
+    return {
+        author: null,
+        type: postType || String(post.type),
+        action: 'edit',
+        config: {
+            title: config.title ?? '',
+            fields: config.fields ?? {},
+            public_view: config.public_view ?? false,
+            slug: config.slug ?? '',
+            table: config.table ?? '',
+            tabs: config.tabs ?? {},
+            actions: config.actions ?? [],
+        },
+        editor: [],
+        post,
+    };
+}
+
+export default PostTypeClientActionDrawers;
