@@ -23,6 +23,7 @@ import SectionStatus from './SectionStatus';
 import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
+import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 
 
@@ -117,6 +118,7 @@ function Form({
     const [marketingAiDrawerOpen, setMarketingAiDrawerOpen] = React.useState(false);
     const [articleRewriteDrawerOpen, setArticleRewriteDrawerOpen] = React.useState(false);
     const [contentTranslateDrawerOpen, setContentTranslateDrawerOpen] = React.useState(false);
+    const [facebookPreviewDrawerOpen, setFacebookPreviewDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
@@ -383,6 +385,9 @@ function Form({
                             if (action === 'drawer:MarketingContentTranslate') {
                                 setContentTranslateDrawerOpen(true);
                             }
+                            if (action === 'drawer:MarketingFacebookPreview') {
+                                setFacebookPreviewDrawerOpen(true);
+                            }
                             if (action === 'drawer:NotificationAi') {
                                 setNotificationAiDrawerOpen(true);
                             }
@@ -415,6 +420,12 @@ function Form({
                         onClose={() => setContentTranslateDrawerOpen(false)}
                         data={data}
                         onRefreshPost={onRefreshPost}
+                    />
+                    <MarketingFacebookPreviewDrawer
+                        open={facebookPreviewDrawerOpen}
+                        onClose={() => setFacebookPreviewDrawerOpen(false)}
+                        postId={Number(data?.post?.id || 0)}
+                        fallbackThumbnail={data?.post?.thumbnail}
                     />
                 </>
             )}

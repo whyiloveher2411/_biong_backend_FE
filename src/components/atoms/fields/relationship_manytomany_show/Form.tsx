@@ -17,6 +17,15 @@ import FilterTab from 'components/pages/PostType/ShowData/FilterTab';
 import { resolveRelationshipGlobalActionsRequestData } from '../relationshipGlobalActionsRequest';
 import ToolActionProgressDialog, { ToolActionProgressState } from 'components/molecules/ToolActionProgressDialog';
 import { groupActionsForMenu } from 'components/atoms/PostType/groupActionsForMenu';
+import { usePostTypeTableQueryUrl } from 'hook/usePostTypeTableQueryUrl';
+
+/** Bỏ các key chỉ dùng cho UI — không được đưa vào queryUrl / body API (JSON.stringify). */
+function stripNonSerializableQueryParts<T extends Record<string, ANY>>(source: T): Omit<T, 'relationshipHeaderActions' | 'global_actions_request_data'> {
+    const rest = { ...source };
+    delete rest.relationshipHeaderActions;
+    delete rest.global_actions_request_data;
+    return rest as Omit<T, 'relationshipHeaderActions' | 'global_actions_request_data'>;
+}
 
 export default React.memo(function RelationshipManyToManyShowForm({ config, post }: FieldFormItemProps) {
 
@@ -185,20 +194,49 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
         }
     };
 
-    const [queryUrl, setQueryUrl] = React.useState(() => {
-        const cfg = { ...(config as Record<string, ANY>) };
-        delete cfg.global_actions_request_data;
-        delete cfg.relationshipHeaderActions;
-        return {
-            ...cfg,
+    const relationshipScope = React.useMemo(
+        () => ({
+            kind: 'relationship' as const,
             mainType: post.type,
-            id: post.id,
+            field: String(config.field || ''),
+            object: String(config.object || ''),
+        }),
+        [post.type, config.field, config.object]
+    );
+
+    const queryDefaults = React.useMemo(
+        () => ({
             page: 1,
             rowsPerPage: 5,
             filter: 'all',
-            ...cfg.paginate,
-        };
+            search: '',
+            ...(config.paginate || {}),
+        }),
+        [config.paginate]
+    );
+
+    const apiOnlyExtras = React.useMemo(
+        () => ({
+            ...stripNonSerializableQueryParts(config as Record<string, ANY>),
+            mainType: post.type,
+            id: post.id,
+        }),
+        [config, post.type, post.id]
+    );
+
+    const { queryUrl, setQueryUrl } = usePostTypeTableQueryUrl({
+        scope: relationshipScope,
+        defaults: queryDefaults,
+        apiOnlyExtras,
     });
+
+    React.useEffect(() => {
+        setQueryUrl((prev) => ({
+            ...prev,
+            mainType: post.type,
+            id: post.id,
+        }));
+    }, [post.id, post.type, setQueryUrl]);
 
     React.useEffect(() => {
         ajax({
@@ -243,7 +281,7 @@ export default React.memo(function RelationshipManyToManyShowForm({ config, post
             url: 'post-type/show-post-relationship',
             method: 'POST',
             data: {
-                ...queryUrl,
+                ...stripNonSerializableQueryParts(queryUrl),
                 id: post.id,
             },
             success: (result: DataResultApiProps) => {

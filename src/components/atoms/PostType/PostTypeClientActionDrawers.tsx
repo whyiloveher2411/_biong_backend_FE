@@ -3,11 +3,13 @@ import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
+import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
     | 'drawer:MarketingArticleRewrite'
     | 'drawer:MarketingContentTranslate'
+    | 'drawer:MarketingFacebookPreview'
     | string;
 
 type Props = {
@@ -49,6 +51,12 @@ function PostTypeClientActionDrawers({
                     onClose={onClose}
                     data={data}
                     onRefreshPost={onRefreshPost}
+                />
+                <MarketingFacebookPreviewDrawer
+                    open={activeDrawer === 'drawer:MarketingFacebookPreview'}
+                    onClose={onClose}
+                    postId={Number(data?.post?.id || 0)}
+                    fallbackThumbnail={data?.post?.thumbnail}
                 />
             </>
         );

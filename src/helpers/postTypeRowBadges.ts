@@ -1,5 +1,18 @@
 import type { CSSProperties } from 'react';
 
+export type PostTypeRowWorkflowBadge = {
+    action: 'article_rewrite' | 'content_translate' | 'facebook_distribution';
+    target_lang?: string | null;
+    post_id: number;
+    stage?: 'rewrite' | 'translate' | 'facebook' | 'done' | string;
+    platform?: string | null;
+    distribution_stage?: string | null;
+};
+
+export type PostTypeRowFacebookPreviewBadge = {
+    post_id: number;
+};
+
 export type PostTypeRowBadge = {
     key?: string;
     /** Nội dung hiển thị trên chip */
@@ -7,6 +20,8 @@ export type PostTypeRowBadge = {
     color?: string;
     backgroundColor?: string;
     borderColor?: string;
+    workflow?: PostTypeRowWorkflowBadge;
+    facebook_preview?: PostTypeRowFacebookPreviewBadge;
 };
 
 /** Badge có nội dung hiển thị (text thuần hoặc HTML như img cờ). */

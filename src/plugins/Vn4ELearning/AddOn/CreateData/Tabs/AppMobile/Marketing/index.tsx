@@ -46,8 +46,39 @@ import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
 type MarketingViewMode = 'calendar' | 'list' | 'crawl';
+type CalendarViewMode = 'month' | 'week' | 'work_week' | 'day' | 'agenda';
 
 const localizer = momentLocalizer(moment);
+
+const getCalendarRangeByView = (view: CalendarViewMode, anchorDate: Date): { start: Date; end: Date } => {
+    const m = moment(anchorDate);
+
+    if (view === 'day') {
+        return {
+            start: m.clone().startOf('day').toDate(),
+            end: m.clone().endOf('day').toDate(),
+        };
+    }
+
+    if (view === 'week' || view === 'work_week') {
+        return {
+            start: m.clone().startOf('week').toDate(),
+            end: m.clone().endOf('week').toDate(),
+        };
+    }
+
+    if (view === 'agenda') {
+        return {
+            start: m.clone().startOf('day').toDate(),
+            end: m.clone().add(30, 'days').endOf('day').toDate(),
+        };
+    }
+
+    return {
+        start: m.clone().startOf('month').toDate(),
+        end: m.clone().endOf('month').toDate(),
+    };
+};
 
 const parseMarketingViewMode = (searchParams: URLSearchParams): MarketingViewMode => {
     const view = searchParams.get(MARKETING_VIEW_PARAM);
@@ -418,6 +449,8 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openDrawerAi, setOpenDrawerAi] = useState(false);
     const [events, setEvents] = useState<ANY[]>([]);
     const [currentRange, setCurrentRange] = useState<{ start: Date, end: Date } | null>(null);
+    const [calendarView, setCalendarView] = useState<CalendarViewMode>('month');
+    const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
     const [syncingPostId, setSyncingPostId] = useState<number | null>(null);
     const [calendarRefreshing, setCalendarRefreshing] = useState(false);
@@ -491,14 +524,23 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     }, [appMobileId]);
 
     React.useEffect(() => {
-        const start = moment().startOf('month').toDate();
-        const end = moment().endOf('month').toDate();
+        const { start, end } = getCalendarRangeByView(calendarView, calendarDate);
         const rangeKey = `${moment(start).format('YYYY-MM-DD')}|${moment(end).format('YYYY-MM-DD')}`;
         lastFetchedRangeKeyRef.current = rangeKey;
         setCurrentRange({ start, end });
         fetchPosts(start, end);
         // Chỉ load lần đầu / khi đổi app mobile — không phụ thuộc `api` (đổi reference mỗi render).
     }, [appMobileId, fetchPosts]);
+
+    React.useEffect(() => {
+        if (viewMode !== 'calendar') return;
+        const { start, end } = getCalendarRangeByView(calendarView, calendarDate);
+        const rangeKey = `${moment(start).format('YYYY-MM-DD')}|${moment(end).format('YYYY-MM-DD')}`;
+        if (lastFetchedRangeKeyRef.current === rangeKey) return;
+        lastFetchedRangeKeyRef.current = rangeKey;
+        setCurrentRange({ start, end });
+        fetchPosts(start, end);
+    }, [viewMode, calendarView, calendarDate, fetchPosts]);
 
     const handleRefreshCalendar = React.useCallback(() => {
         lastFetchedRangeKeyRef.current = null;
@@ -536,6 +578,14 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         setCurrentRange({ start, end });
         fetchPosts(start, end);
     }, [fetchPosts]);
+
+    const handleCalendarViewChange = React.useCallback((nextView: CalendarViewMode) => {
+        setCalendarView(nextView);
+    }, []);
+
+    const handleCalendarNavigate = React.useCallback((nextDate: Date) => {
+        setCalendarDate(nextDate);
+    }, []);
 
     const handleSelectSlot = (slotInfo: { start: Date, end: Date }) => {
 
@@ -831,6 +881,8 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             }}>
                 <Calendar
                     localizer={localizer}
+                    view={calendarView}
+                    date={calendarDate}
                     events={selectedPlatforms.length > 0 ? events.filter(e => {
                         const evtPlats = getPlatformsFromEvent(e);
                         return evtPlats.some(p => selectedPlatforms.includes(p));
@@ -842,6 +894,8 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     onSelectSlot={handleSelectSlot}
                     onSelectEvent={handleSelectEvent}
                     onRangeChange={handleRangeChange}
+                    onView={handleCalendarViewChange}
+                    onNavigate={handleCalendarNavigate}
                     formats={{
                         eventTimeRangeFormat: () => ''
                     }}

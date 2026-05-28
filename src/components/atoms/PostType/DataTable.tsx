@@ -34,6 +34,7 @@ import { Search } from '@mui/icons-material';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import Button from 'components/atoms/Button';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
+import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
 
 const useStyles = makeCSS({
     tr: {
@@ -248,7 +249,10 @@ function DataTable(props: DataTableProps) {
             return;
         }
 
-        setQueryUrl({ ...queryUrl });
+        setQueryUrl((prev) => ({
+            ...prev,
+            [POST_TYPE_QUERY_REFETCH_KEY]: Date.now(),
+        }));
     };
 
     return (
@@ -286,6 +290,9 @@ function DataTable(props: DataTableProps) {
                 component={Paper}
                 elevation={embeddedInPanel ? 0 : undefined}
                 sx={embeddedInPanel ? postTypeEmbeddedTableSx : undefined}
+                {...(String(data?.config?.type || data?.type || '') === 'spacedev_app_marketing_post'
+                    ? { 'data-marketing-post-list': '1' as const }
+                    : {})}
             >
                 <Table>
                     <TableHead>
@@ -441,20 +448,8 @@ export default DataTable
 
 export interface DataTableProps {
     data: DataResultApiProps,
-    setQueryUrl: React.Dispatch<React.SetStateAction<{
-        [key: string]: ANY;
-        mainType: string;
-        id: ID;
-        page: number;
-        rowsPerPage: string | number;
-    }>>,
-    queryUrl: {
-        [key: string]: ANY;
-        mainType: string;
-        id: ID;
-        page: number;
-        rowsPerPage: string | number;
-    },
+    setQueryUrl: React.Dispatch<React.SetStateAction<Record<string, ANY>>>,
+    queryUrl: Record<string, ANY>,
     config: JsonFormat,
     onEdit?: () => void,
     showRefreshButton?: boolean,

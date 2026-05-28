@@ -15,6 +15,7 @@ import {
     resolvePostTypeColor,
     type PostTypeCustomFilter,
 } from 'helpers/postTypeColor';
+import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
 
 const useStyles = makeCSS((theme: Theme) => ({
     tabsItem: {
@@ -96,10 +97,13 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
     };
 
     React.useEffect(() => {
+        if (queryUrl.filter_saved_name) {
+            return;
+        }
         setTableCurrent({
-            [name]: queryUrl.filter,
+            [name]: queryUrl.filter || 'all',
         });
-    }, [name, queryUrl.filter]);
+    }, [name, queryUrl.filter, queryUrl.filter_saved_name]);
 
     const dataConfig = data !== false ? data.config : null;
     const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
@@ -195,7 +199,10 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         : `system-filter-${tabCurrent[name]}`;
 
     const handleRefreshData = () => {
-        setQueryUrl({ ...queryUrl });
+        setQueryUrl((prev) => ({
+            ...prev,
+            [POST_TYPE_QUERY_REFETCH_KEY]: Date.now(),
+        }));
     };
 
     // const tabSelectedIndex = filters.findIndex(item => item === tabCurrent[name]);

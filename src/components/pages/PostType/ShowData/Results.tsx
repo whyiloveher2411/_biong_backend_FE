@@ -352,6 +352,9 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                             ...(embeddedInPanel ? postTypeEmbeddedTableSx : {}),
                         }}
                         className="custom_scroll"
+                        {...(postType === 'spacedev_app_marketing_post'
+                            ? { 'data-marketing-post-list': '1' as const }
+                            : {})}
                     >
                         <Table stickyHeader aria-label="sticky table">
                             <TableHead>

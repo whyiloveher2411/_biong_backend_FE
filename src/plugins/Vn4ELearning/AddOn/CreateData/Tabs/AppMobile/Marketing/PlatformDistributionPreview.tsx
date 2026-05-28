@@ -21,23 +21,64 @@ import {
 } from './platformDistributionConstants';
 import { buildGoogleImagesUrl, copyMarketingText } from './marketingImageUtils';
 
+function normalizeImageUrl(url: string): string {
+    const t = String(url || '').trim();
+    if (!t) return '';
+    // Một số thumbnail trả về URL proxy kiểu ".../https:%2F%2F..." (Yahoo/Mysterio).
+    // Ưu tiên decode URL gốc để tăng khả năng hiển thị trong <img>.
+    const wrappedMatch = t.match(/https?:%2F%2F[^?#\s]+/i);
+    if (wrappedMatch?.[0]) {
+        try {
+            return decodeURIComponent(wrappedMatch[0]);
+        } catch {
+            // fallback dùng URL gốc nếu decode lỗi
+        }
+    }
+    if (/^https?:\/\//i.test(t) || /^data:image\//i.test(t)) return t;
+    if (t.startsWith('//')) return `${window.location.protocol}${t}`;
+    if (t.startsWith('/')) return `${window.location.origin}${t}`;
+    return t;
+}
+
 function parseThumbnailUrl(raw: unknown): string {
     if (raw === null || raw === undefined) return '';
+
     if (typeof raw === 'string') {
         const t = raw.trim();
         if (t === '') return '';
         if (t.startsWith('{') || t.startsWith('[')) {
             try {
-                const dec = JSON.parse(t);
-                if (dec && typeof dec === 'object' && 'link' in dec) {
-                    return String((dec as { link?: string }).link || '').trim();
-                }
+                return parseThumbnailUrl(JSON.parse(t));
             } catch {
-                return t;
+                return normalizeImageUrl(t);
             }
         }
-        return t;
+        return normalizeImageUrl(t);
     }
+
+    if (Array.isArray(raw)) {
+        for (const item of raw) {
+            const u = parseThumbnailUrl(item);
+            if (u) return u;
+        }
+        return '';
+    }
+
+    if (typeof raw === 'object') {
+        const obj = raw as Record<string, unknown>;
+
+        const directKeys = ['link', 'url', 'src', 'original', 'original_url', 'image', 'thumbnail'];
+        for (const key of directKeys) {
+            const u = parseThumbnailUrl(obj[key]);
+            if (u) return u;
+        }
+
+        for (const value of Object.values(obj)) {
+            const u = parseThumbnailUrl(value);
+            if (u) return u;
+        }
+    }
+
     return '';
 }
 
@@ -51,18 +92,13 @@ export function resolveDistributionPreviewImageUrl(
     if (direct) {
         return { url: direct, source: 'uploaded' };
     }
-    const reuse = media.reuse_article_thumbnail === true
-        || media.reuse_article_thumbnail === 'true'
-        || media.reuse_article_thumbnail === 1;
-    if (reuse) {
-        const thumb = parseThumbnailUrl(post.thumbnail);
-        if (thumb) {
-            return { url: thumb, source: 'article_thumbnail' };
-        }
-        const cover = String(articleCoverUrl || '').trim();
-        if (cover) {
-            return { url: cover, source: 'article_thumbnail' };
-        }
+    const thumb = parseThumbnailUrl(post.thumbnail);
+    if (thumb) {
+        return { url: thumb, source: 'article_thumbnail' };
+    }
+    const cover = String(articleCoverUrl || '').trim();
+    if (cover) {
+        return { url: cover, source: 'article_thumbnail' };
     }
     return { url: '', source: 'none' };
 }
@@ -134,10 +170,12 @@ interface Props {
     entry: PlatformDistributionEntry;
     post: Record<string, unknown>;
     articleCoverUrl?: string;
-    imageUrl: string;
-    onImageUrlChange: (url: string) => void;
-    onSaveImageUrl: () => void;
+    imageUrl?: string;
+    onImageUrlChange?: (url: string) => void;
+    onSaveImageUrl?: () => void;
     savingImage?: boolean;
+    /** Chỉ xem & copy — ẩn form chỉnh URL ảnh (drawer list). */
+    readOnly?: boolean;
 }
 
 export default function PlatformDistributionPreview({
@@ -145,18 +183,24 @@ export default function PlatformDistributionPreview({
     entry,
     post,
     articleCoverUrl = '',
-    imageUrl,
+    imageUrl = '',
     onImageUrlChange,
     onSaveImageUrl,
     savingImage,
+    readOnly = false,
 }: Props) {
     const platformLabel = PLATFORM_LABELS[platform] || platform;
     const strategy = entry.strategy || {};
     const copy = entry.copy || {};
     const media = entry.media || {};
     const previewImage = resolveDistributionPreviewImageUrl(entry, post, articleCoverUrl);
+    const articleThumbUrl = parseThumbnailUrl(post.thumbnail) || String(articleCoverUrl || '').trim();
 
     const displayUrl = imageUrl.trim() || previewImage.url;
+    const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+    React.useEffect(() => {
+        setImageLoadFailed(false);
+    }, [displayUrl]);
 
     const mainCopy = String(
         copy.caption
@@ -184,11 +228,18 @@ export default function PlatformDistributionPreview({
     });
 
     const [postCopied, setPostCopied] = React.useState(false);
+    const [thumbCopied, setThumbCopied] = React.useState(false);
     const copyFullPost = async () => {
         if (!fullPostText.trim()) return;
         await copyMarketingText(fullPostText);
         setPostCopied(true);
         window.setTimeout(() => setPostCopied(false), 2000);
+    };
+    const copyThumbnailUrl = async () => {
+        if (!articleThumbUrl) return;
+        await copyMarketingText(articleThumbUrl);
+        setThumbCopied(true);
+        window.setTimeout(() => setThumbCopied(false), 2000);
     };
 
     return (
@@ -229,6 +280,29 @@ export default function PlatformDistributionPreview({
                 <CopyableBlock label="Hashtag" value={hashtags} />
                 <CopyableBlock label="Link / teaser" value={linkTeaser} />
                 <CopyableBlock label="Alt ảnh" value={altText} multiline />
+                <CopyableBlock label="Link ảnh preview" value={displayUrl} monospace />
+                <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                        <Typography variant="caption" fontWeight={600} color="text.secondary">
+                            Link thumbnail bài viết
+                        </Typography>
+                        <Tooltip title={thumbCopied ? 'Đã sao chép' : 'Sao chép'}>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={copyThumbnailUrl}
+                                    aria-label="Sao chép link thumbnail"
+                                    disabled={!articleThumbUrl}
+                                >
+                                    <ContentCopyIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    </Box>
+                    <Typography variant="body2" sx={{ mt: 0.25, wordBreak: 'break-all', opacity: articleThumbUrl ? 1 : 0.7 }}>
+                        {articleThumbUrl || 'Chưa có thumbnail trên bài viết'}
+                    </Typography>
+                </Box>
 
                 {fullPostText && (
                     <Button
@@ -266,7 +340,7 @@ export default function PlatformDistributionPreview({
                         gap: 1,
                     }}
                 >
-                    <Typography variant="subtitle2" fontWeight={700}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: 'inherit' }}>
                         Xem trước bài đăng — {platformLabel}
                     </Typography>
                     {fullPostText && (
@@ -283,7 +357,7 @@ export default function PlatformDistributionPreview({
                     )}
                 </Box>
 
-                {displayUrl ? (
+                {displayUrl && !imageLoadFailed ? (
                     <Box
                         component="img"
                         src={displayUrl}
@@ -296,7 +370,7 @@ export default function PlatformDistributionPreview({
                             bgcolor: 'grey.200',
                         }}
                         onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                            e.currentTarget.style.display = 'none';
+                            setImageLoadFailed(true);
                         }}
                     />
                 ) : (
@@ -347,106 +421,130 @@ export default function PlatformDistributionPreview({
                 </Box>
             </Paper>
 
-            {/* —— Ảnh & media (công cụ) —— */}
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50' }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                    Ảnh & media
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                    Dán URL sau khi tìm ảnh, hoặc dùng prompt / từ khóa để sinh hoặc tìm ảnh mới.
-                </Typography>
+            {!readOnly && (
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50' }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                        Ảnh & media
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                        Dán URL sau khi tìm ảnh, hoặc dùng prompt / từ khóa để sinh hoặc tìm ảnh mới.
+                    </Typography>
 
-                {previewImage.source === 'article_thumbnail' && !imageUrl.trim() && (
-                    <Alert severity="success" sx={{ mb: 1.5 }}>
-                        Preview đang dùng <strong>thumbnail bài viết gốc</strong>.
-                    </Alert>
-                )}
-                {previewImage.source === 'uploaded' && (
-                    <Alert severity="success" sx={{ mb: 1.5 }}>
-                        Đang hiển thị URL ảnh đã lưu ở bước Media.
-                    </Alert>
-                )}
+                    {previewImage.source === 'article_thumbnail' && !imageUrl.trim() && (
+                        <Alert severity="success" sx={{ mb: 1.5 }}>
+                            Preview đang dùng <strong>thumbnail bài viết gốc</strong>.
+                        </Alert>
+                    )}
+                    {previewImage.source === 'uploaded' && (
+                        <Alert severity="success" sx={{ mb: 1.5 }}>
+                            Đang hiển thị URL ảnh đã lưu ở bước Media.
+                        </Alert>
+                    )}
 
-                <TextField
-                    size="small"
-                    fullWidth
-                    label="URL ảnh (dán link sau khi tìm trên Google Images)"
-                    placeholder="https://..."
-                    value={imageUrl}
-                    onChange={(e) => onImageUrlChange(e.target.value)}
-                    onBlur={onSaveImageUrl}
-                    sx={{ mb: 1 }}
-                />
-                <LoadingButton variant="outlined" size="small" loading={savingImage} onClick={onSaveImageUrl}>
-                    Lưu URL ảnh
-                </LoadingButton>
+                    <TextField
+                        size="small"
+                        fullWidth
+                        label="URL ảnh (dán link sau khi tìm trên Google Images)"
+                        placeholder="https://..."
+                        value={imageUrl}
+                        onChange={(e) => onImageUrlChange?.(e.target.value)}
+                        onBlur={() => onSaveImageUrl?.()}
+                        sx={{ mb: 1 }}
+                    />
+                    <LoadingButton
+                        variant="outlined"
+                        size="small"
+                        loading={savingImage}
+                        onClick={() => onSaveImageUrl?.()}
+                    >
+                        Lưu URL ảnh
+                    </LoadingButton>
 
-                {(visualPrompt || imageKeyword) && (
-                    <>
-                        <Divider sx={{ my: 2 }} />
-                        {visualPrompt && (
-                            <Box sx={{ mb: 2 }}>
-                                <CopyableBlock
-                                    label="Prompt AI (sinh ảnh — copy vào công cụ AI)"
-                                    value={visualPrompt}
-                                    multiline
-                                    monospace
-                                />
-                            </Box>
-                        )}
-                        {imageKeyword && (
-                            <Box>
-                                <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                    {`Từ khóa Google Images${media.dimensions ? ` · ${media.dimensions}` : ''}${media.aspect_ratio ? ` · ${media.aspect_ratio}` : ''}`}
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Link
-                                        component="button"
-                                        type="button"
-                                        variant="body2"
-                                        onClick={() => window.open(
-                                            buildGoogleImagesUrl(imageKeyword),
-                                            '_blank',
-                                            'noopener,noreferrer',
-                                        )}
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            fontSize: 12,
-                                            flex: 1,
-                                            minWidth: 0,
-                                            textAlign: 'left',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        {imageKeyword}
-                                    </Link>
-                                    <Tooltip title="Sao chép từ khóa">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => copyMarketingText(imageKeyword)}
-                                            aria-label="Sao chép từ khóa"
-                                        >
-                                            <ContentCopyIcon sx={{ fontSize: 16 }} />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Button
-                                        variant="contained"
-                                        size="small"
-                                        endIcon={<OpenInNewIcon />}
-                                        onClick={() => window.open(
-                                            buildGoogleImagesUrl(imageKeyword),
-                                            '_blank',
-                                            'noopener,noreferrer',
-                                        )}
-                                    >
-                                        Mở Google Images
-                                    </Button>
+                    {(visualPrompt || imageKeyword) && (
+                        <>
+                            <Divider sx={{ my: 2 }} />
+                            {visualPrompt && (
+                                <Box sx={{ mb: 2 }}>
+                                    <CopyableBlock
+                                        label="Prompt AI (sinh ảnh — copy vào công cụ AI)"
+                                        value={visualPrompt}
+                                        multiline
+                                        monospace
+                                    />
                                 </Box>
-                            </Box>
-                        )}
-                    </>
-                )}
-            </Paper>
+                            )}
+                            {imageKeyword && (
+                                <Box>
+                                    <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                        {`Từ khóa Google Images${media.dimensions ? ` · ${media.dimensions}` : ''}${media.aspect_ratio ? ` · ${media.aspect_ratio}` : ''}`}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                        <Link
+                                            component="button"
+                                            type="button"
+                                            variant="body2"
+                                            onClick={() => window.open(
+                                                buildGoogleImagesUrl(imageKeyword),
+                                                '_blank',
+                                                'noopener,noreferrer',
+                                            )}
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                fontSize: 12,
+                                                flex: 1,
+                                                minWidth: 0,
+                                                textAlign: 'left',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {imageKeyword}
+                                        </Link>
+                                        <Tooltip title="Sao chép từ khóa">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => copyMarketingText(imageKeyword)}
+                                                aria-label="Sao chép từ khóa"
+                                            >
+                                                <ContentCopyIcon sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Button
+                                            variant="contained"
+                                            size="small"
+                                            endIcon={<OpenInNewIcon />}
+                                            onClick={() => window.open(
+                                                buildGoogleImagesUrl(imageKeyword),
+                                                '_blank',
+                                                'noopener,noreferrer',
+                                            )}
+                                        >
+                                            Mở Google Images
+                                        </Button>
+                                    </Box>
+                                </Box>
+                            )}
+                        </>
+                    )}
+                </Paper>
+            )}
+            {readOnly && (visualPrompt || imageKeyword) && (
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50' }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                        Media (chỉ xem)
+                    </Typography>
+                    {visualPrompt && (
+                        <CopyableBlock
+                            label="Prompt AI ảnh"
+                            value={visualPrompt}
+                            multiline
+                            monospace
+                        />
+                    )}
+                    {imageKeyword && (
+                        <CopyableBlock label="Từ khóa ảnh" value={imageKeyword} />
+                    )}
+                </Paper>
+            )}
         </Box>
     );
 }

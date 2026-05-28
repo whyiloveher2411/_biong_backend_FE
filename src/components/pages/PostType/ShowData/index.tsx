@@ -13,8 +13,9 @@ import Hook from 'components/function/Hook';
 import Page from 'components/templates/Page';
 import { __ } from 'helpers/i18n';
 import { toCamelCase } from 'helpers/string';
-import { getUrlParams, replaceUrlParam } from 'helpers/url';
+import { getUrlParams } from 'helpers/url';
 import useAjax from 'hook/useApi';
+import { usePostTypeTableQueryUrl } from 'hook/usePostTypeTableQueryUrl';
 import { usePermission } from 'hook/usePermission';
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -38,7 +39,6 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
 
     const [showLoading, setShowLoading] = useState(true);
     const [isLoadedData, setIsLoadedData] = useState(false);
-    const [render, setRender] = useState(0);
 
     const navigate = useNavigate();
 
@@ -52,20 +52,28 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
 
     const { ajax } = useAjax({ loadingType: 'custom' });
 
-    const valueInital = {
-        rowsPerPage: 10,
-        page: 1,
-        search: '',
-        filter: 'all',
-        ...getUrlParams(window.location.search) as object
-    };
+    const listQueryDefaults = React.useMemo(
+        () => ({
+            rowsPerPage: 10,
+            page: 1,
+            search: '',
+            filter: 'all',
+        }),
+        []
+    );
 
-    const [queryUrl, setQueryUrl] = useState<JsonFormat>(valueInital);
+    const listScope = React.useMemo(
+        () => ({ kind: 'list' as const, postType: type }),
+        [type]
+    );
+
+    const { queryUrl, setQueryUrl, resetFromLocation } = usePostTypeTableQueryUrl({
+        scope: listScope,
+        defaults: listQueryDefaults,
+    });
 
     useEffect(() => {
-
-        setQueryUrl({ ...valueInital, ...getUrlParams(window.location.search) as object });
-
+        resetFromLocation();
         //eslint-disable-next-line
     }, [type]);
 
@@ -96,11 +104,6 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
     };
 
     useEffect(() => {
-
-        if (!render) {
-            setRender(render + 1);
-            return;
-        }
 
         let mounted = true
 
@@ -149,8 +152,6 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                         setData(result);
                         setTitle(result.config?.title);
                         setIsLoadedData(true);
-                        let url = replaceUrlParam(window.location.href, queryUrl);
-                        window.history.pushState({ url: url, page: 'Page template table' }, "Page template table", url);
 
                     }
                 }
@@ -161,7 +162,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
             mounted = false
         }
         //eslint-disable-next-line
-    }, [queryUrl]);
+    }, [queryUrl, type]);
 
     useEffect(() => {
         if (onSelectPosts) {

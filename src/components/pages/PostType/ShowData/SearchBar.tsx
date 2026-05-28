@@ -186,8 +186,12 @@ const SearchBar = ({ type, data, onSearch, onFilter, className = '', value, more
         setInputValue(paramUrl.search + '');
 
         if (paramUrl.filters) {
-            const filters = JSON.parse(paramUrl.filters.toString());
-            setFilters(filters);
+            try {
+                const filters = JSON.parse(paramUrl.filters.toString());
+                setFilters(filters);
+            } catch (error) {
+                setFilters([]);
+            }
         } else {
             setFilters([]);
         }
