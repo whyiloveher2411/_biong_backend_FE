@@ -198,6 +198,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
             data: {
                 post_id: postId,
                 reference_article_raw: referenceRaw.trim(),
+                output_lang_code: 'vi',
             },
             loading: false,
             success: (res: { success?: boolean; prompt?: string; reference_truncated?: boolean }) => {

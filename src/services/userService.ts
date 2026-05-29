@@ -7,6 +7,12 @@ export interface IUser {
     user_re_login?: object,
 }
 
+export interface IAutoLogin {
+    access_token?: string,
+    auto_login_disabled?: boolean,
+    message?: { content: string },
+}
+
 const service = {
 
     getInfo: async (): Promise<IUser> => {
@@ -15,7 +21,14 @@ const service = {
         });
 
         return data;
-    }
+    },
+
+    autoLogin: async (): Promise<IAutoLogin> => {
+        return ajax({
+            url: 'login/auto',
+            method: 'POST',
+        });
+    },
 
 }
 

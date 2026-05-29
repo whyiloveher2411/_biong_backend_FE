@@ -4,11 +4,19 @@ import { convertToURL } from 'helpers/url';
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
-export const MARKETING_PIPELINE_FILTER_SAVED_NAME = 'Pipeline Gemini (viết lại + dịch + Facebook)';
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME =
+    'Pipeline Gemini (viết lại + dịch + format MD + Facebook)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại + dịch)';
 
-export type MarketingWorkflowAction = 'article_rewrite' | 'content_translate' | 'facebook_distribution';
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_FB_LEGACY =
+    'Pipeline Gemini (viết lại + dịch + Facebook)';
+
+export type MarketingWorkflowAction =
+    | 'article_rewrite'
+    | 'content_translate'
+    | 'content_markdown_format'
+    | 'facebook_distribution';
 
 export type MarketingWorkflowMeta = {
     action: MarketingWorkflowAction;
@@ -51,6 +59,9 @@ export function marketingWorkflowSaveApiUrl(action: MarketingWorkflowAction): st
     if (action === 'facebook_distribution') {
         return pluginApiPath('content-ai/update-from-overview');
     }
+    if (action === 'content_markdown_format') {
+        return pluginApiPath('content-markdown-format/update-from-overview');
+    }
     return pluginApiPath('content-translate/update-from-overview');
 }
 
@@ -77,17 +88,26 @@ export async function fetchMarketingWorkflowStatus(postId: number): Promise<Mark
     return res.json();
 }
 
-export async function fetchArticleRewritePrompt(postId: number): Promise<{ success?: boolean; prompt?: string; topic?: string }> {
+export async function fetchArticleRewritePrompt(postId: number): Promise<{
+    success?: boolean;
+    prompt?: string;
+    topic?: string;
+    output_language_code?: string;
+}> {
     const token = getAccessToken() ?? '';
-    const url = new URL(pluginApiPath('article-rewrite/get-overview-prompt'));
-    url.searchParams.set('post_id', String(postId));
-    if (token) {
-        url.searchParams.set('access_token', token);
-    }
-    const res = await fetch(url.toString(), {
-        method: 'GET',
+    const res = await fetch(pluginApiPath('article-rewrite/get-overview-prompt'), {
+        method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+            post_id: postId,
+            id: postId,
+            output_lang_code: 'vi',
+            access_token: token,
+        }),
     });
     return res.json();
 }
@@ -98,6 +118,28 @@ export async function fetchContentTranslatePrompt(
 ): Promise<{ success?: boolean; prompt?: string; target_lang?: string }> {
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath('content-translate/get-gemini-prompt'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+            post_id: postId,
+            id: postId,
+            target_lang: targetLang,
+            access_token: token,
+        }),
+    });
+    return res.json();
+}
+
+export async function fetchContentMarkdownFormatPrompt(
+    postId: number,
+    targetLang: string
+): Promise<{ success?: boolean; prompt?: string; target_lang?: string; item_count?: number }> {
+    const token = getAccessToken() ?? '';
+    const res = await fetch(pluginApiPath('content-markdown-format/get-gemini-prompt'), {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -146,11 +188,14 @@ export function buildGeminiWorkflowUrl(options: {
     const accessToken = getAccessToken() ?? '';
     const apiUrl = marketingWorkflowSaveApiUrl(action);
     const isFacebook = action === 'facebook_distribution';
+    const isMarkdownFormat = action === 'content_markdown_format';
     const stage = isFacebook
         ? 'dist:facebook:plat_copy'
         : action === 'article_rewrite'
           ? 'article_rewrite'
-          : 'content_translate';
+          : isMarkdownFormat
+            ? 'content_markdown_format'
+            : 'content_translate';
 
     const url = new URL(GEMINI_WEB_APP_URL);
     const hashParams = new URLSearchParams({
@@ -166,7 +211,7 @@ export function buildGeminiWorkflowUrl(options: {
         hashParams.set('platform', 'facebook');
         hashParams.set('distribution_stage', 'plat_copy');
     }
-    if (action === 'content_translate' && targetLang) {
+    if ((action === 'content_translate' || action === 'content_markdown_format') && targetLang) {
         hashParams.set('target_lang', targetLang.trim().toLowerCase());
     }
     if (topic) {
@@ -180,7 +225,9 @@ export function buildGeminiWorkflowUrl(options: {
                 ? 'rewrite'
                 : isFacebook
                   ? 'facebook'
-                  : 'translate'
+                  : isMarkdownFormat
+                    ? 'markdown_format'
+                    : 'translate'
         );
         hashParams.set('marketing_apply_api_url', marketingWorkflowApplyApiUrl());
     }
@@ -228,6 +275,22 @@ export async function openMarketingGeminiWorkflow(
                     ? (res as { message?: { content?: string } }).message?.content
                     : 'Không tạo được prompt Facebook';
             window.alert(msg || 'Không tạo được prompt Facebook');
+            return;
+        }
+        prompt = String(res.prompt || '').trim();
+    } else if (action === 'content_markdown_format') {
+        const lang = String(workflow.target_lang || '').trim().toLowerCase();
+        if (!lang) {
+            window.alert('Thiếu ngôn ngữ đích');
+            return;
+        }
+        const res = await fetchContentMarkdownFormatPrompt(postId, lang);
+        if (!res?.success) {
+            const msg =
+                typeof (res as { message?: { content?: string } })?.message === 'object'
+                    ? (res as { message?: { content?: string } }).message?.content
+                    : 'Không tạo được prompt format markdown';
+            window.alert(msg || 'Không tạo được prompt format markdown');
             return;
         }
         prompt = String(res.prompt || '').trim();

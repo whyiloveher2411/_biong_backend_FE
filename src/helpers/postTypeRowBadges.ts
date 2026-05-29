@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react';
 
 export type PostTypeRowWorkflowBadge = {
-    action: 'article_rewrite' | 'content_translate' | 'facebook_distribution';
+    action: 'article_rewrite' | 'content_translate' | 'content_markdown_format' | 'facebook_distribution';
     target_lang?: string | null;
     post_id: number;
-    stage?: 'rewrite' | 'translate' | 'facebook' | 'done' | string;
+    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'done' | string;
     platform?: string | null;
     distribution_stage?: string | null;
 };
