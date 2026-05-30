@@ -8,6 +8,7 @@ import Tooltip from 'components/atoms/Tooltip';
 import Typography from 'components/atoms/Typography';
 import Hook from "components/function/Hook";
 import Account from 'components/molecules/Header/Account';
+import CmsClients from 'components/molecules/Header/CmsClients';
 import Notification from 'components/molecules/Header/Notification';
 import Search from 'components/molecules/Header/Search';
 import Tools from 'components/molecules/Header/ToolList';
@@ -76,6 +77,8 @@ export default function Header() {
                 <div className={classes.grow} />
                 <div className={classes.sectionDesktop}>
                     <Hook hook="TopBar/Right" />
+
+                    <CmsClients />
 
                     <Tooltip title={__("Refesh")}>
                         <IconButton
