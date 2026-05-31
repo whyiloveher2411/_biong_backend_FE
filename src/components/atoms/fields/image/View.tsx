@@ -4,6 +4,31 @@ import ImageListItem from 'components/atoms/ImageListItem';
 import { ImageObjectProps } from 'helpers/image';
 import { convertToURL } from 'helpers/url';
 import { FieldViewItemProps } from '../type';
+import Box from 'components/atoms/Box';
+
+function openImagePopup(url: string) {
+    const width = 900;
+    const height = 700;
+    const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
+    const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
+    const features = [
+        `width=${width}`,
+        `height=${height}`,
+        `left=${left}`,
+        `top=${top}`,
+        'menubar=no',
+        'toolbar=no',
+        'location=no',
+        'status=no',
+        'scrollbars=yes',
+        'resizable=yes',
+        'noopener',
+        'noreferrer',
+    ].join(',');
+
+    window.open(url, 'imagePreview', features);
+    window.focus();
+}
 
 function View(props: FieldViewItemProps) {
 
@@ -54,17 +79,27 @@ function View(props: FieldViewItemProps) {
 
     if (!valueInital) valueInital = false;
 
+    const handleOnClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (valueInital && valueInital.type_link === 'local') {
+            openImagePopup(convertToURL(process.env.REACT_APP_BASE_URL, valueInital.link));
+        } else if (valueInital && valueInital.link) {
+            openImagePopup(valueInital.link);
+        }
+    }
+
     return (
         <>
             {valueInital !== false &&
                 <div>
-                    <div style={{ marginBottom: 5, position: 'relative', display: 'inline-block' }}>
+                    <Box onClick={handleOnClick} style={{ marginBottom: 5, position: 'relative', display: 'inline-block' }}>
                         <CardMedia
                             style={{ width: 88, height: 50, maxWidth: '100%', maxHeight: 50, objectFit: 'contain', cursor: 'pointer' }}
                             component="img"
                             image={valueInital.type_link === 'local' ? convertToURL(process.env.REACT_APP_BASE_URL, valueInital.link) : valueInital.link}
                         />
-                    </div>
+                    </Box>
                 </div>
             }
         </>

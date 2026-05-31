@@ -32,7 +32,7 @@ const useStyles = makeCSS((theme: Theme) => ({
     },
     row: {
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: theme.spacing(1),
     },
     rowField: {
@@ -180,6 +180,14 @@ export default React.memo(function DynamicGroupForm(props: FieldFormItemProps) {
                                         component={valueView}
                                         config={{
                                             title: humanizeFieldKey(key),
+                                            ...(valueView === 'number'
+                                                ? {
+                                                    activeSubtraction: true,
+                                                    activeAddition: true,
+                                                    min: 0,
+                                                    step: 1,
+                                                }
+                                                : {}),
                                         }}
                                         post={post[name] ?? {}}
                                         name={key}
@@ -190,7 +198,6 @@ export default React.memo(function DynamicGroupForm(props: FieldFormItemProps) {
                                     aria-label={`Xóa key ${key}`}
                                     color="error"
                                     size="small"
-                                    sx={{ mt: 3 }}
                                     onClick={() => setDeleteConfirmKey(key)}
                                 >
                                     <Delete fontSize="small" />
