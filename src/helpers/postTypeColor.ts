@@ -1,5 +1,18 @@
 import { fade } from 'helpers/mui4/color';
 
+export function safeFadeColor(color?: string, alpha = 0.12): string | undefined {
+    const resolved = resolvePostTypeColor(color);
+    if (!resolved) {
+        return undefined;
+    }
+
+    try {
+        return fade(resolved, alpha);
+    } catch {
+        return undefined;
+    }
+}
+
 const NAMED_COLORS: Record<string, string> = {
     primary: '#3f51b5',
     secondary: '#f50057',
@@ -30,7 +43,20 @@ export function resolvePostTypeColor(color?: string): string | undefined {
         return undefined;
     }
 
-    if (trimmed.startsWith('#') || trimmed.startsWith('rgb')) {
+    if (trimmed.startsWith('#')) {
+        return trimmed;
+    }
+
+    if (trimmed.startsWith('rgb(') && !trimmed.includes(',')) {
+        const parts = trimmed.replace(/^rgba?\(|\)$/g, '').trim().split(/\s+/);
+        if (parts.length >= 3) {
+            return parts.length >= 4
+                ? `rgba(${parts.join(', ')})`
+                : `rgb(${parts.join(', ')})`;
+        }
+    }
+
+    if (trimmed.startsWith('rgb')) {
         return trimmed;
     }
 

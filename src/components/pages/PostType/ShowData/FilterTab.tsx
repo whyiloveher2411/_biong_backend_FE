@@ -7,12 +7,11 @@ import { addClasses } from 'helpers/dom';
 import React from 'react';
 import { ShowPostTypeData } from '.';
 import MoreButton from 'components/atoms/MoreButton';
-import { fade } from 'helpers/mui4/color';
 import { __ } from 'helpers/i18n';
 import {
     getMergedCustomFilters,
-    getPostTypeColorBackground,
     resolvePostTypeColor,
+    safeFadeColor,
     type PostTypeCustomFilter,
 } from 'helpers/postTypeColor';
 import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
@@ -158,8 +157,10 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
 
     filters.forEach((item: string) => {
         const groupName = (dataConfig?.filters?.[item] as ANY)?.group;
+        const systemFilterColor = dataConfig?.filters?.[item]?.color;
         pushActionToGroup(groupName, `system-filter-${item}`, {
             title: `${__(dataConfig?.filters?.[item]?.title ?? item)} (${dataConfig?.filters?.[item]?.count ?? 0})`,
+            color: systemFilterColor ? resolvePostTypeColor(systemFilterColor) : undefined,
             action: () => {
                 setQueryUrl({
                     ...queryUrl,
@@ -176,7 +177,6 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
         pushActionToGroup(item.group, `saved-filter-${index}`, {
             title: `[Custom] ${item.name}`,
             color: item.color ? resolvePostTypeColor(item.color) : undefined,
-            backgroundColor: getPostTypeColorBackground(item.color, 0.15),
             action: () => {
                 let sort = { sortKey: '', sortType: '' };
                 try {
@@ -270,11 +270,11 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                                         backgroundColor: filterButtonColor ?? 'primary.main',
                                         '&:hover, &:active, &:focus': {
                                             backgroundColor: filterButtonColor
-                                                ? fade(filterButtonColor, 0.9)
+                                                ? (safeFadeColor(filterButtonColor, 0.9) ?? filterButtonColor)
                                                 : (selectedSavedFilter
                                                     ? 'primary.dark'
                                                     : (dataConfig?.filters?.[tabCurrent[name]]?.color
-                                                        ? fade(dataConfig.filters[tabCurrent[name]].color, 0.9)
+                                                        ? (safeFadeColor(dataConfig.filters[tabCurrent[name]].color, 0.9) ?? 'primary.dark')
                                                         : 'primary.dark')),
                                         }
                                     }}
