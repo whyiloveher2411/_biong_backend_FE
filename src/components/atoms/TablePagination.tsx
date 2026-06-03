@@ -84,7 +84,13 @@ const paginationGroupSx = {
     gap: 1,
 } as const;
 
+const PAGINATION_BORDER_WIDTH = '1.5px';
+
 function navButtonSx(theme: Theme, disabled: boolean) {
+    const borderColor = disabled
+        ? theme.palette.action.disabledBackground
+        : theme.palette.primary.main;
+
     return {
         minWidth: 'auto',
         height: NAV_BUTTON_HEIGHT,
@@ -95,18 +101,30 @@ function navButtonSx(theme: Theme, disabled: boolean) {
         fontSize: '0.8125rem',
         letterSpacing: '0.02em',
         boxShadow: 'none',
-        borderWidth: 1.5,
+        boxSizing: 'border-box',
+        borderWidth: PAGINATION_BORDER_WIDTH,
         borderStyle: 'solid',
-        borderColor: disabled ? theme.palette.action.disabledBackground : theme.palette.primary.main,
+        borderColor,
         color: disabled ? theme.palette.text.disabled : theme.palette.primary.main,
         backgroundColor: theme.palette.background.paper,
         '&:hover': {
             boxShadow: 'none',
-            borderColor: theme.palette.primary.dark,
+            borderWidth: PAGINATION_BORDER_WIDTH,
+            borderStyle: 'solid',
+            borderColor: disabled ? borderColor : theme.palette.primary.dark,
             backgroundColor: alpha(theme.palette.primary.main, 0.06),
         },
+        '&.Mui-focusVisible': {
+            borderWidth: PAGINATION_BORDER_WIDTH,
+        },
+        '&.MuiButton-outlined': {
+            borderWidth: PAGINATION_BORDER_WIDTH,
+        },
+        '&.MuiButton-outlined:hover': {
+            borderWidth: PAGINATION_BORDER_WIDTH,
+        },
         '&.Mui-disabled': {
-            borderWidth: 1.5,
+            borderWidth: PAGINATION_BORDER_WIDTH,
             borderColor: theme.palette.action.disabledBackground,
             color: theme.palette.text.disabled,
             backgroundColor: theme.palette.action.hover,
@@ -115,6 +133,10 @@ function navButtonSx(theme: Theme, disabled: boolean) {
 }
 
 function pageNumberButtonSx(theme: Theme, active: boolean) {
+    const borderColor = active
+        ? theme.palette.primary.main
+        : theme.palette.divider;
+
     return {
         minWidth: PAGE_NUMBER_SIZE,
         width: PAGE_NUMBER_SIZE,
@@ -127,27 +149,26 @@ function pageNumberButtonSx(theme: Theme, active: boolean) {
         boxShadow: 'none',
         textTransform: 'none',
         flexShrink: 0,
-        ...(active
-            ? {
-                  color: theme.palette.primary.contrastText,
-                  backgroundColor: theme.palette.primary.main,
-                  border: `1.5px solid ${theme.palette.primary.main}`,
-                  '&:hover': {
-                      boxShadow: 'none',
-                      backgroundColor: theme.palette.primary.dark,
-                      borderColor: theme.palette.primary.dark,
-                  },
-              }
-            : {
-                  color: theme.palette.text.primary,
-                  backgroundColor: theme.palette.background.paper,
-                  border: `1.5px solid ${theme.palette.divider}`,
-                  '&:hover': {
-                      boxShadow: 'none',
-                      borderColor: theme.palette.primary.main,
-                      backgroundColor: alpha(theme.palette.primary.main, 0.06),
-                  },
-              }),
+        boxSizing: 'border-box',
+        borderWidth: PAGINATION_BORDER_WIDTH,
+        borderStyle: 'solid',
+        borderColor,
+        color: active ? theme.palette.primary.contrastText : theme.palette.text.primary,
+        backgroundColor: active
+            ? theme.palette.primary.main
+            : theme.palette.background.paper,
+        '&:hover': {
+            boxShadow: 'none',
+            borderWidth: PAGINATION_BORDER_WIDTH,
+            borderStyle: 'solid',
+            borderColor: active ? theme.palette.primary.dark : theme.palette.primary.main,
+            backgroundColor: active
+                ? theme.palette.primary.dark
+                : alpha(theme.palette.primary.main, 0.06),
+        },
+        '&.Mui-focusVisible': {
+            borderWidth: PAGINATION_BORDER_WIDTH,
+        },
     };
 }
 
