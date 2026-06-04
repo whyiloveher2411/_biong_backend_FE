@@ -278,10 +278,11 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                                         onSearch={handleSearch}
                                         setQueryUrl={setQueryUrl}
                                         onFilter={(filters) => {
-                                            setQueryUrl({
-                                                ...queryUrl,
+                                            setQueryUrl((prev) => ({
+                                                ...prev,
                                                 filters: '[' + filters.map(item => JSON.stringify(item)).join(',') + ']',
-                                            });
+                                                page: 1,
+                                            }));
                                         }}
                                         data={data}
                                         moreButton={

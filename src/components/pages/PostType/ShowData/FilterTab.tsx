@@ -162,12 +162,13 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
             title: `${__(dataConfig?.filters?.[item]?.title ?? item)} (${dataConfig?.filters?.[item]?.count ?? 0})`,
             color: systemFilterColor ? resolvePostTypeColor(systemFilterColor) : undefined,
             action: () => {
-                setQueryUrl({
-                    ...queryUrl,
+                setQueryUrl((prev) => ({
+                    ...prev,
                     filter: item,
                     filter_saved_name: '',
                     filters: '',
-                });
+                    page: 1,
+                }));
                 handleChangeTab(item);
             }
         });
@@ -189,6 +190,7 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
                     ...prev,
                     filter_saved_name: item.name,
                     filters: item.filters,
+                    page: 1,
                     ...sort,
                 }));
             }

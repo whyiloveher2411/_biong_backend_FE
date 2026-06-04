@@ -39,6 +39,7 @@ import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
 import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
+import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
@@ -159,6 +160,11 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     };
 
     const [render, setRender] = useState(0);
+    const tableScrollRef = React.useRef<HTMLDivElement>(null);
+
+    useScrollPostTypeTableOnQueryChange(tableScrollRef, queryUrl, {
+        ready: !loading && isLoadedData,
+    });
 
     const handleOnClickSelectAll = () => {
 
@@ -347,8 +353,10 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                 ) : null}
                 <TableContentWrapper className={classes.content}>
                     <TableContainer
+                        ref={tableScrollRef}
                         sx={{
                             maxHeight: 700,
+                            overflowY: 'auto',
                             ...(embeddedInPanel ? postTypeEmbeddedTableSx : {}),
                         }}
                         className="custom_scroll"

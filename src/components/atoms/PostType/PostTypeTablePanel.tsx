@@ -14,6 +14,7 @@ type Props = {
 export default function PostTypeTablePanel({ toolbar, children, meta }: Props) {
     return (
         <Box
+            data-post-type-table-panel=""
             sx={{
                 mb: 2,
                 borderRadius: 2,

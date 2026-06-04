@@ -35,6 +35,7 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import Button from 'components/atoms/Button';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
+import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 
 const useStyles = makeCSS({
     tr: {
@@ -78,6 +79,11 @@ function DataTable(props: DataTableProps) {
     const [dataDrawer, setDataDrawer] = React.useState<DataResultApiProps | false>(false);
 
     const [confirmDelete, setConfirmDelete] = React.useState(0);
+    const tableScrollRef = React.useRef<HTMLDivElement>(null);
+
+    useScrollPostTypeTableOnQueryChange(tableScrollRef, queryUrl, {
+        ready: Boolean(data?.rows),
+    });
 
     const [search, setSearch] = React.useState(queryUrl.search || '');
 
@@ -287,9 +293,15 @@ function DataTable(props: DataTableProps) {
                 </Box>
             ) : null}
             <TableContainer
+                ref={tableScrollRef}
                 component={Paper}
                 elevation={embeddedInPanel ? 0 : undefined}
-                sx={embeddedInPanel ? postTypeEmbeddedTableSx : undefined}
+                sx={
+                    embeddedInPanel
+                        ? { ...postTypeEmbeddedTableSx, maxHeight: 700, overflowY: 'auto' }
+                        : { maxHeight: 700, overflowY: 'auto' }
+                }
+                className="custom_scroll"
                 {...(String(data?.config?.type || data?.type || '') === 'spacedev_app_marketing_post'
                     ? { 'data-marketing-post-list': '1' as const }
                     : {})}
