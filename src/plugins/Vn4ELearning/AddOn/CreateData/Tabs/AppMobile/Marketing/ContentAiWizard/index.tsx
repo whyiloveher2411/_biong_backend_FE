@@ -35,6 +35,7 @@ import Markdown from 'components/atoms/Markdown';
 import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 import {
     buildMarketingPreviewBlocks,
@@ -166,7 +167,7 @@ function buildGoogleMarketingUrl(
 ): string {
     const accessToken = getAccessToken() ?? '';
     const apiUrl = convertToURL(
-        process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+        getApiHost(),
         '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/content-ai/update-from-overview',
     );
     const url = new URL('https://www.google.com/search');

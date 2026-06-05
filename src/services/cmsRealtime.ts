@@ -1,6 +1,7 @@
 import Echo from 'laravel-echo';
 import Pusher, { ChannelAuthorizerGenerator } from 'pusher-js';
 import { getLanguage } from 'helpers/i18n';
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 import { getAccessToken } from 'store/user/user.reducers';
 
@@ -177,7 +178,7 @@ function createPusherClient(): Pusher {
     const cluster = process.env.REACT_APP_PUSHER_APP_CLUSTER ?? 'ap1';
 
     const authEndpoint = convertToURL(
-        process.env.REACT_APP_HOST_API_KEY,
+        getApiHost(),
         '/api/admin/cms-realtime/pusher-auth'
     );
 

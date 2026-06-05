@@ -2,6 +2,7 @@ import React from "react";
 import { FieldViewItemProps } from "components/atoms/fields/type";
 import { Box } from "@mui/material";
 import { getAccessToken } from "store/user/user.reducers";
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from "helpers/url";
 
 function ViewReasonNotCompleted(props: FieldViewItemProps) {
@@ -13,7 +14,7 @@ function ViewReasonNotCompleted(props: FieldViewItemProps) {
         (url: string) => {
             const accessToken = getAccessToken() ?? "";
             const apiUrl = convertToURL(
-                process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+                getApiHost(),
                 "/api/admin/plugin/vn4-e-learning/app-mobile/cuisine/update-image-edited",
             );
             const finalUrl = new URL(url);

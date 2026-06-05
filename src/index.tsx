@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 
 import { Provider as ReduxProvider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
+import { bootstrapApiHost } from 'helpers/apiHost';
 import App from './App';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
@@ -10,16 +11,20 @@ import store from './store/configureStore';
 
 const basename = process.env.REACT_APP_BASENAME;
 
+async function startApp() {
+    await bootstrapApiHost();
 
+    const container = document.getElementById('root');
+    //@ts-ignore
+    const root = createRoot(container);
+    root.render(<ReduxProvider store={store}>
+        <BrowserRouter basename={basename}>
+            <App />
+        </BrowserRouter>
+    </ReduxProvider>);
+}
 
-const container = document.getElementById('root');
-//@ts-ignore
-const root = createRoot(container);
-root.render(<ReduxProvider store={store}>
-    <BrowserRouter basename={basename}>
-        <App />
-    </BrowserRouter>
-</ReduxProvider>);
+startApp();
 
 
 // ReactDOM.render(

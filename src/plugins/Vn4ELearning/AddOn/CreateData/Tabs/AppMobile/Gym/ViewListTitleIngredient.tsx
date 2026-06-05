@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Button } from "@mui/material";
 import { FieldViewItemProps } from "components/atoms/fields/type";
 import { getAccessToken } from "store/user/user.reducers";
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from "helpers/url";
 
 function ViewListTitleIngredient(props: FieldViewItemProps) {
@@ -12,7 +13,7 @@ function ViewListTitleIngredient(props: FieldViewItemProps) {
         const imageSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(keyword)}`;
         const accessToken = getAccessToken() ?? "";
         const apiUrl = convertToURL(
-            process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+            getApiHost(),
             "/api/admin/plugin/vn4-e-learning/app-mobile/cuisine/update-image-edited",
         );
         const finalUrl = new URL(imageSearchUrl);

@@ -22,6 +22,7 @@ import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 
 const CONTENT_TRANSLATE_GEMINI_STAGE = 'content_translate';
@@ -30,7 +31,7 @@ const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 function buildGeminiContentTranslateUrl(postId: number, prompt: string, targetLang: string): string {
     const accessToken = getAccessToken() ?? '';
     const apiUrl = convertToURL(
-        process.env.REACT_APP_HOST_API_KEY || window.location.origin,
+        getApiHost(),
         '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/content-translate/update-from-overview',
     );
     const url = new URL(GEMINI_WEB_APP_URL);

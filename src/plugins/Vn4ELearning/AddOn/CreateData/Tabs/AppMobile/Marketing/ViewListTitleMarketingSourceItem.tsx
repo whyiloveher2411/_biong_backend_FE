@@ -2,10 +2,11 @@ import React from "react";
 import { Box, Button } from "@mui/material";
 import { FieldViewItemProps } from "components/atoms/fields/type";
 import { getAccessToken } from "store/user/user.reducers";
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from "helpers/url";
 
 function buildTranslateTrendApiUrls() {
-    const host = process.env.REACT_APP_HOST_API_KEY || window.location.origin;
+    const host = getApiHost();
     const updateApiUrl = convertToURL(
         host,
         "/api/admin/plugin/vn4-e-learning/app-mobile/marketing/source/item/update-translate-trend-from-overview",

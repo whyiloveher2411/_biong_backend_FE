@@ -1,6 +1,8 @@
 import { CircularProgressProps } from '@mui/material';
 import Loading from 'components/atoms/Loading';
 import { getLanguage } from 'helpers/i18n';
+import { getAdminApiPrefix, isUsingCustomApiHost, rollbackCustomApiHost } from 'helpers/apiHost';
+import { __ } from 'helpers/i18n';
 import { convertToURL } from 'helpers/url';
 import { SnackbarOrigin, VariantType } from 'notistack';
 import React from 'react';
@@ -8,8 +10,6 @@ import { useDispatch } from 'react-redux';
 import { updatePopupRelogin } from 'store/popupRelogin/popupRelogin.reducers';
 import { UserProps } from 'store/user/user.reducers';
 import { useFloatingMessages } from './useFloatingMessages';
-
-const urlPrefixDefault = convertToURL(process.env.REACT_APP_HOST_API_KEY, '/api/admin/');
 
 const language = getLanguage();
 // const language = { code: 'vi' };
@@ -116,13 +116,25 @@ export default function useAjax(props?: Props): UseAjaxProps {
 
         data.__l = window.btoa(language.code + '#' + Date.now());
 
-        fetch(convertToURL((urlPrefix ?? urlPrefixDefault), url), {
+        const requestUrl = convertToURL((urlPrefix ?? getAdminApiPrefix()), url);
+        const usedCustomHost = isUsingCustomApiHost();
+
+        const runFetch = (targetUrl: string) => fetch(targetUrl, {
             headers: headers,
             method: method,
             body: JSON.stringify(data)
-        }).then(async (response) => {
+        });
+
+        runFetch(requestUrl).then(async (response) => {
             callbackSuccess(params, response);
         }).catch(function (error) {
+            if (usedCustomHost && rollbackCustomApiHost()) {
+                showMessage(__('Custom API link is invalid. Reverted to default from env.'), 'warning');
+                return runFetch(convertToURL(getAdminApiPrefix(), url))
+                    .then(async (response) => callbackSuccess(params, response))
+                    .catch(callbackError);
+            }
+
             callbackError(error);
         }).finally(() => {
             callbackFinally(params);
@@ -184,16 +196,24 @@ export async function ajax(params: ANY) {
         paramForFetch.body = JSON.stringify(data);
     }
 
-    const respon = await fetch( convertToURL( (urlPrefix ?? urlPrefixDefault) , url), paramForFetch)
-        .then(async (response) => {
-            return await response.json();
-        }).catch(function (error) {
-            return error;
-        }).finally(() => {
-            return params;
-        });
+    const usedCustomHost = isUsingCustomApiHost();
+    const requestUrl = convertToURL((urlPrefix ?? getAdminApiPrefix()), url);
 
-    return respon;
+    try {
+        const response = await fetch(requestUrl, paramForFetch);
+        return await response.json();
+    } catch (error) {
+        if (usedCustomHost && rollbackCustomApiHost()) {
+            try {
+                const retryResponse = await fetch(convertToURL(getAdminApiPrefix(), url), paramForFetch);
+                return await retryResponse.json();
+            } catch (retryError) {
+                return retryError;
+            }
+        }
+
+        return error;
+    }
 }
 
 export interface ParamsApiProps {

@@ -1,4 +1,5 @@
 import { getAccessToken } from 'store/user/user.reducers';
+import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
@@ -45,7 +46,7 @@ export type MarketingWorkflowStatus = {
 };
 
 function apiHost(): string {
-    return process.env.REACT_APP_HOST_API_KEY || window.location.origin;
+    return getApiHost();
 }
 
 function pluginApiPath(suffix: string): string {
