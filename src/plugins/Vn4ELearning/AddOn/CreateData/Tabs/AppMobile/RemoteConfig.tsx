@@ -6,12 +6,44 @@ import FieldForm from "components/atoms/fields/FieldForm";
 import { LoadingButton } from "@mui/lab";
 import { Card, CardContent, CircularProgress, InputAdornment, IconButton, Tooltip, Grid, Typography, List, ListItem, ListItemButton, ListItemText, Divider, Chip } from "@mui/material";
 import { Warning, Settings } from "@mui/icons-material";
+import { useSearchParams } from "react-router-dom";
 
 import useLanguages from './hooks/useLanguages';
+
+const REMOTE_CONFIG_GROUP_PARAM = 'remote_config_group';
+
+const getUntemplatedFieldKeys = (config: JsonFormat, tmpl: JsonFormat): string[] => {
+    return Object.keys(config).filter(key =>
+        !Object.keys(tmpl).some(groupKey =>
+            tmpl[groupKey].fields && tmpl[groupKey].fields[key]
+        )
+    );
+};
+
+const resolveSelectedGroup = (
+    groupKeys: string[],
+    hasUntemplated: boolean,
+    preferredGroup?: string | null,
+): string => {
+    if (preferredGroup === 'untemplated' && hasUntemplated) {
+        return 'untemplated';
+    }
+    if (preferredGroup && groupKeys.includes(preferredGroup)) {
+        return preferredGroup;
+    }
+    if (groupKeys.length > 0) {
+        return groupKeys[0];
+    }
+    if (hasUntemplated) {
+        return 'untemplated';
+    }
+    return '';
+};
 
 function RemoteConfig({ data }: { data: CreatePostTypeData }) {
 
     const useApi = useAjax();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [remoteConfig, setRemoteConfig] = React.useState<JsonFormat>({});
     const [templates, setTemplates] = React.useState<JsonFormat>({});
     const [isLoadData, setIsLoadData] = React.useState<boolean>(false);
@@ -19,6 +51,13 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
     const [updatingGroups, setUpdatingGroups] = React.useState<Set<string>>(new Set());
 
     useLanguages();
+
+    const handleSelectGroup = React.useCallback((groupKey: string) => {
+        setSelectedGroup(groupKey);
+        const newSearchParams = new URLSearchParams(searchParams.toString());
+        newSearchParams.set(REMOTE_CONFIG_GROUP_PARAM, groupKey);
+        setSearchParams(newSearchParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const handleGetData = () => {
         useApi.ajax({
@@ -32,11 +71,11 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                 setRemoteConfig(result.data);
                 setTemplates(result.templates);
                 setIsLoadData(true);
-                // Tự động chọn group đầu tiên
+
                 const groupKeys = Object.keys(result.templates);
-                if (groupKeys.length > 0) {
-                    setSelectedGroup(groupKeys[0]);
-                }
+                const hasUntemplated = getUntemplatedFieldKeys(result.data, result.templates).length > 0;
+                const groupFromUrl = searchParams.get(REMOTE_CONFIG_GROUP_PARAM);
+                setSelectedGroup(resolveSelectedGroup(groupKeys, hasUntemplated, groupFromUrl));
             },
         });
     }
@@ -44,6 +83,19 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
     React.useEffect(() => {
         handleGetData();
     }, []);
+
+    React.useEffect(() => {
+        if (!isLoadData) return;
+
+        const groupKeys = Object.keys(templates);
+        const hasUntemplated = getUntemplatedFieldKeys(remoteConfig, templates).length > 0;
+        const groupFromUrl = searchParams.get(REMOTE_CONFIG_GROUP_PARAM);
+        const resolvedGroup = resolveSelectedGroup(groupKeys, hasUntemplated, groupFromUrl);
+
+        if (resolvedGroup !== selectedGroup) {
+            setSelectedGroup(resolvedGroup);
+        }
+    }, [searchParams, isLoadData, templates, remoteConfig, selectedGroup]);
 
     const handleUpdateGroup = (templateKey: string, groupKey?: string) => {
         const updateKey = groupKey ? `${templateKey}_${groupKey}` : templateKey;
@@ -207,7 +259,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         <ListItem key={groupKey} disablePadding>
                                             <ListItemButton
                                                 selected={isSelected}
-                                                onClick={() => setSelectedGroup(groupKey)}
+                                                onClick={() => handleSelectGroup(groupKey)}
                                                 sx={{
                                                     borderRadius: 1,
                                                     mb: 1,
@@ -257,12 +309,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
 
                                 {/* Render group cho các fields không có template */}
                                 {(() => {
-                                    const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                        // Kiểm tra xem field có tồn tại trong bất kỳ template nào không
-                                        return !Object.keys(templates).some(groupKey =>
-                                            templates[groupKey].fields && templates[groupKey].fields[key]
-                                        );
-                                    });
+                                    const untemplatedFields = getUntemplatedFieldKeys(remoteConfig, templates);
 
                                     if (untemplatedFields.length > 0) {
                                         const isSelected = selectedGroup === 'untemplated';
@@ -270,7 +317,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                             <ListItem key="untemplated" disablePadding>
                                                 <ListItemButton
                                                     selected={isSelected}
-                                                    onClick={() => setSelectedGroup('untemplated')}
+                                                    onClick={() => handleSelectGroup('untemplated')}
                                                     sx={{
                                                         borderRadius: 1,
                                                         mb: 1,
@@ -332,11 +379,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         {selectedGroup === 'untemplated' ? (
                                             /* Render các trường không có template */
                                             (() => {
-                                                const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                                    return !Object.keys(templates).some(groupKey =>
-                                                        templates[groupKey].fields && templates[groupKey].fields[key]
-                                                    );
-                                                });
+                                                const untemplatedFields = getUntemplatedFieldKeys(remoteConfig, templates);
 
                                                 return (
                                                     <Card>
@@ -418,11 +461,7 @@ function RemoteConfig({ data }: { data: CreatePostTypeData }) {
                                         color="primary"
                                         onClick={() => {
                                             if (selectedGroup === 'untemplated') {
-                                                const untemplatedFields = Object.keys(remoteConfig).filter(key => {
-                                                    return !Object.keys(templates).some(groupKey =>
-                                                        templates[groupKey].fields && templates[groupKey].fields[key]
-                                                    );
-                                                });
+                                                const untemplatedFields = getUntemplatedFieldKeys(remoteConfig, templates);
                                                 const untemplatedData: JsonFormat = {};
                                                 untemplatedFields.forEach((key: string) => {
                                                     untemplatedData[key] = remoteConfig[key as keyof typeof remoteConfig];

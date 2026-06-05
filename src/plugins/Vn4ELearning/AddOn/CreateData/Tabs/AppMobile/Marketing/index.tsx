@@ -36,12 +36,14 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
 import MarketingCrawlAutoToggle from './MarketingCrawlAutoToggle';
 import MarketingSourcesDrawer from './MarketingSourcesDrawer';
 import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
+import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -456,6 +458,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [calendarRefreshing, setCalendarRefreshing] = useState(false);
     const [openSourcesDrawer, setOpenSourcesDrawer] = useState(false);
     const [openCategoriesDrawer, setOpenCategoriesDrawer] = useState(false);
+    const [openNewsPushConfigDrawer, setOpenNewsPushConfigDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -687,7 +690,16 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     {viewMode === 'list' && (
                         <>
                             <Divider />
-                            <Stack direction="row" justifyContent="flex-end">
+                            <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<NotificationsActiveOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenNewsPushConfigDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Cấu hình gửi tin
+                                </Button>
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -988,6 +1000,12 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                     object: 'spacedev_app_marketing_category',
                     field: 'app_mobile',
                 }}
+            />
+
+            <MarketingNewsPushConfigDrawer
+                open={openNewsPushConfigDrawer}
+                onClose={() => setOpenNewsPushConfigDrawer(false)}
+                appMobileId={Number(data?.post?.id || 0)}
             />
         </div >
     );
