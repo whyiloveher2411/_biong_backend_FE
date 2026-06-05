@@ -25,6 +25,7 @@ import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
+import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -120,6 +121,7 @@ function Form({
     const [contentTranslateDrawerOpen, setContentTranslateDrawerOpen] = React.useState(false);
     const [facebookPreviewDrawerOpen, setFacebookPreviewDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
+    const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
 
@@ -363,7 +365,7 @@ function Form({
             {
                 data?.config?.actions ? data.config.actions.map((item, index) =>
                     <ButtonAction
-                        key={item.link_api + '-' + index}
+                        key={(item.link_api || item.client_action || item.title) + '-' + index}
                         title={item.title}
                         link={item.link_api}
                         id={data.post.id}
@@ -390,6 +392,9 @@ function Form({
                             }
                             if (action === 'drawer:NotificationAi') {
                                 setNotificationAiDrawerOpen(true);
+                            }
+                            if (action === 'drawer:ObjectStoreMigrate') {
+                                setObjectStoreMigrateDrawerOpen(true);
                             }
                         }}
                     />
@@ -428,6 +433,13 @@ function Form({
                         fallbackThumbnail={data?.post?.thumbnail}
                     />
                 </>
+            )}
+            {postType === 'app_mobile' && (
+                <ObjectStoreMigrateDrawer
+                    open={objectStoreMigrateDrawerOpen}
+                    onClose={() => setObjectStoreMigrateDrawerOpen(false)}
+                    data={data}
+                />
             )}
             {postType === 'app_local_notification' && (
                 <NotificationAiDrawer

@@ -4,12 +4,14 @@ import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobil
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
+import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
     | 'drawer:MarketingArticleRewrite'
     | 'drawer:MarketingContentTranslate'
     | 'drawer:MarketingFacebookPreview'
+    | 'drawer:ObjectStoreMigrate'
     | string;
 
 type Props = {
@@ -29,6 +31,16 @@ function PostTypeClientActionDrawers({
 }: Props) {
     if (!activeDrawer?.startsWith('drawer:')) {
         return null;
+    }
+
+    if (postType === 'app_mobile') {
+        return (
+            <ObjectStoreMigrateDrawer
+                open={activeDrawer === 'drawer:ObjectStoreMigrate'}
+                onClose={onClose}
+                data={data}
+            />
+        );
     }
 
     if (postType === 'spacedev_app_marketing_post') {
