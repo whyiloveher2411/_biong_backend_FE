@@ -19,6 +19,12 @@ import PostTypeClientActionDrawers, {
     buildCreatePostTypeDataFromListRow,
     PostTypeClientDrawerAction,
 } from "./PostTypeClientActionDrawers";
+import { openMarketingXaiTtsWorkflow } from "helpers/marketingXaiTtsWorkflow";
+import { openExternalTabViaExtension } from "helpers/openExternalTabViaExtension";
+import {
+    getPostTypeActionButtonColorProps,
+    resolvePostTypeColor,
+} from "helpers/postTypeColor";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -108,12 +114,19 @@ function ActionOnPost({
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
 
-    const openLinkFromResult = (result?: JsonFormat) => {
-        if (!result || typeof result.open_link !== "string" || !result.open_link) {
+    const openLinkFromResult = (result?: JsonFormat, item?: IActionPostType) => {
+        const link = typeof result?.open_link === "string" ? result.open_link.trim() : "";
+        if (!link) {
+            if (item?.open_browser_tab) {
+                window.alert(
+                    result?.message ||
+                        __("Không nhận được link mở xAI Playground. Kiểm tra extension Chrome đã bật.")
+                );
+            }
             return;
         }
 
-        window.open(result.open_link, "_blank");
+        openExternalTabViaExtension(link);
     };
 
     const maybeRefreshAfterAction = (item: IActionPostType) => {
@@ -132,6 +145,46 @@ function ActionOnPost({
                 return;
             }
             setActiveClientDrawer(item.client_action);
+            return;
+        }
+
+        if (item.client_action === 'xai_tts:open') {
+            if (!id) {
+                return;
+            }
+            const runXaiTts = async () => {
+                setLoadingStateButton((prev) => ({
+                    ...prev,
+                    [index]: true,
+                }));
+                try {
+                    await openMarketingXaiTtsWorkflow({
+                        postId: Number(id),
+                    });
+                    maybeRefreshAfterAction(item);
+                } catch (e) {
+                    window.alert(e instanceof Error ? e.message : String(e));
+                } finally {
+                    setLoadingStateButton((prev) => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                }
+            };
+            if (item.skip_confirm) {
+                void runXaiTts();
+            } else {
+                confirm.onConfirm(() => {
+                    void runXaiTts();
+                }, {
+                    title: item.confirm?.title,
+                    icon: item.confirm?.icon,
+                    numberConfirm: item.confirm?.number_confirm,
+                    message: item.confirm?.message || item.confirm_message || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                        toolTitle: item.title,
+                    }),
+                });
+            }
             return;
         }
 
@@ -190,24 +243,31 @@ function ActionOnPost({
                 [index]: true,
             }));
 
-            if (item.check_progress) {
+            if (item.check_progress && !item.open_browser_tab && !item.skip_progress) {
                 setProgressButton((prev) => ({
                     ...prev,
                     [index]: 0,
                 }));
             }
-            openRunningDialog();
+            if (!item.open_browser_tab && !item.skip_progress) {
+                openRunningDialog();
+            }
 
             useAjaxAction.ajax({
                 url: item.link_api,
                 method: "POST",
                 data: actionPayload,
                 success: (result) => {
-                    openLinkFromResult(result);
+                    openLinkFromResult(result, item);
                     setLoadingStateButton((prev) => ({
                         ...prev,
                         [index]: false,
                     }));
+                    if (item.open_browser_tab || item.skip_progress) {
+                        markDialogDone();
+                        maybeRefreshAfterAction(item);
+                        return;
+                    }
                     if (!item.check_progress) {
                         markDialogDone();
                         maybeRefreshAfterAction(item);
@@ -222,7 +282,7 @@ function ActionOnPost({
                 },
             });
 
-            if (item.check_progress) {
+            if (item.check_progress && !item.open_browser_tab && !item.skip_progress) {
                 const callCheckProgress = () => {
                     useAjaxAction.ajax({
                         url: item.link_api,
@@ -334,7 +394,7 @@ function ActionOnPost({
                                         (progressButton[index] !== undefined
                                             ? ` (${progressButton[index]}%)`
                                             : ""),
-                                    color: action.color,
+                                    color: resolvePostTypeColor(action.color),
                                     icon: loadingStateButton[index]
                                         ? "LoopRounded"
                                         : undefined,
@@ -354,7 +414,10 @@ function ActionOnPost({
                             </IconButton>
                         </MoreButton>
                     ) : (
-                        rowActions.map((action, index) => (
+                        rowActions.map((action, index) => {
+                            const actionColorProps = getPostTypeActionButtonColorProps(action.color);
+
+                            return (
                             <Box key={index} sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <Button
                                     key={index}
@@ -370,12 +433,14 @@ function ActionOnPost({
                                         handleActionEvent(post.id, action, index);
                                     }}
                                     variant="contained"
-                                    color={action.color as ANY}
+                                    color={actionColorProps.color}
+                                    sx={actionColorProps.sx}
                                 >
                                     {action.title}
                                 </Button>
                             </Box>
-                        ))
+                            );
+                        })
                     )}
                 </Box>
             ) : null}

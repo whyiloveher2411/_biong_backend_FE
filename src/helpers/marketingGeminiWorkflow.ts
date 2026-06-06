@@ -6,7 +6,7 @@ const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME =
-    'Pipeline Gemini (viết lại + dịch + format MD + Facebook)';
+    'Pipeline Gemini (viết lại + dịch + format MD + Facebook + đánh giá Pro + xAI audio)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại + dịch)';
 
@@ -17,7 +17,9 @@ export type MarketingWorkflowAction =
     | 'article_rewrite'
     | 'content_translate'
     | 'content_markdown_format'
-    | 'facebook_distribution';
+    | 'facebook_distribution'
+    | 'pro_value_assessment'
+    | 'xai_tts';
 
 export type MarketingWorkflowMeta = {
     action: MarketingWorkflowAction;

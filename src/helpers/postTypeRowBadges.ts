@@ -1,16 +1,27 @@
 import type { CSSProperties } from 'react';
 
 export type PostTypeRowWorkflowBadge = {
-    action: 'article_rewrite' | 'content_translate' | 'content_markdown_format' | 'facebook_distribution';
+    action:
+        | 'article_rewrite'
+        | 'content_translate'
+        | 'content_markdown_format'
+        | 'facebook_distribution'
+        | 'pro_value_assessment'
+        | 'xai_tts';
     target_lang?: string | null;
     post_id: number;
-    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'done' | string;
+    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'done' | string;
     platform?: string | null;
     distribution_stage?: string | null;
 };
 
 export type PostTypeRowFacebookPreviewBadge = {
     post_id: number;
+};
+
+export type PostTypeRowXaiTtsBadge = {
+    post_id: number;
+    target_lang: string;
 };
 
 export type PostTypeRowBadge = {
@@ -22,6 +33,7 @@ export type PostTypeRowBadge = {
     borderColor?: string;
     workflow?: PostTypeRowWorkflowBadge;
     facebook_preview?: PostTypeRowFacebookPreviewBadge;
+    xai_tts?: PostTypeRowXaiTtsBadge;
 };
 
 /** Badge có nội dung hiển thị (text thuần hoặc HTML như img cờ). */

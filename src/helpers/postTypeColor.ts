@@ -33,6 +33,62 @@ export type PostTypeCustomFilter = {
     color?: string,
 };
 
+export const MUI_BUTTON_COLOR_VALUES = [
+    'inherit',
+    'primary',
+    'secondary',
+    'success',
+    'error',
+    'info',
+    'warning',
+] as const;
+
+export type MuiButtonColor = typeof MUI_BUTTON_COLOR_VALUES[number];
+
+export function isMuiButtonColor(color?: string): color is MuiButtonColor {
+    if (!color || typeof color !== 'string') {
+        return false;
+    }
+
+    return (MUI_BUTTON_COLOR_VALUES as readonly string[]).includes(color.trim().toLowerCase());
+}
+
+export function getPostTypeActionButtonColorProps(color?: string): {
+    color?: MuiButtonColor,
+    sx?: Record<string, unknown>,
+} {
+    if (!color) {
+        return {};
+    }
+
+    const trimmed = color.trim();
+    if (!trimmed) {
+        return {};
+    }
+
+    if (isMuiButtonColor(trimmed)) {
+        return { color: trimmed.toLowerCase() as MuiButtonColor };
+    }
+
+    const resolved = resolvePostTypeColor(trimmed);
+    if (!resolved) {
+        return {};
+    }
+
+    const hoverColor = safeFadeColor(resolved, 0.9) ?? resolved;
+
+    return {
+        color: 'inherit',
+        sx: {
+            backgroundColor: resolved,
+            color: '#fff',
+            '&:hover, &:active, &:focus': {
+                backgroundColor: hoverColor,
+            },
+        },
+    };
+}
+
 export function resolvePostTypeColor(color?: string): string | undefined {
     if (!color || typeof color !== 'string') {
         return undefined;

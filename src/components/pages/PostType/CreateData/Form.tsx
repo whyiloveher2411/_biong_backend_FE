@@ -26,6 +26,8 @@ import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateDa
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
+import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
+import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -788,6 +790,8 @@ export interface IActionPostType {
         icon?: string,
         number_confirm?: number,
     },
+    open_browser_tab?: boolean,
+    skip_progress?: boolean,
     check_progress?: boolean,
     skip_confirm?: boolean,
     auto_refresh?: boolean,
@@ -869,6 +873,7 @@ function ButtonAction({
     const confirm = useConfirmDialog();
 
     const [progressButton,] = React.useState<number>(0);
+    const actionColorProps = getPostTypeActionButtonColorProps(color);
 
     const handleActionEvent = () => {
         if (clientAction && clientAction.startsWith('drawer:') && onClientDrawer) {
@@ -878,6 +883,38 @@ function ButtonAction({
             onClientDrawer(clientAction);
             return;
         }
+
+        if (clientAction === 'xai_tts:open') {
+            if (!id) {
+                return;
+            }
+            const runXaiTts = async () => {
+                try {
+                    await openMarketingXaiTtsWorkflow({
+                        postId: Number(id),
+                    });
+                    onActionSuccess?.();
+                } catch (e) {
+                    window.alert(e instanceof Error ? e.message : String(e));
+                }
+            };
+            if (skipConfirm) {
+                void runXaiTts();
+            } else {
+                confirm.onConfirm(() => {
+                    void runXaiTts();
+                }, {
+                    title: confirmConfig?.title,
+                    icon: confirmConfig?.icon,
+                    numberConfirm: confirmConfig?.number_confirm,
+                    message: confirmConfig?.message || confirmMessage || __('Bạn có chắc muốn "{{toolTitle}}" không?', {
+                        toolTitle: title,
+                    }),
+                });
+            }
+            return;
+        }
+
         const actionPayload = {
             id,
             post_type: postType,
@@ -946,8 +983,14 @@ function ButtonAction({
                 type="button"
                 loading={useAjaxAction.open}
                 loadingPosition="center"
-                color={(color || 'inherit') as ANY}
-                sx={{ width: '100%', marginTop: 3, height: 48, fontSize: 16 }}
+                color={actionColorProps.color ?? 'inherit'}
+                sx={{
+                    width: '100%',
+                    marginTop: 3,
+                    height: 48,
+                    fontSize: 16,
+                    ...actionColorProps.sx,
+                }}
                 variant="contained"
                 onClick={handleActionEvent}
                 disabled={clientAction?.startsWith('drawer:') && !id}

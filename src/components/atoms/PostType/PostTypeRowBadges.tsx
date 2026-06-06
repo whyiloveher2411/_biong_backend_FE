@@ -10,6 +10,7 @@ import {
     marketingWorkflowSaveApiUrl,
     openMarketingGeminiWorkflow,
 } from 'helpers/marketingGeminiWorkflow';
+import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { getAccessToken } from 'store/user/user.reducers';
 import React from 'react';
 
@@ -58,6 +59,17 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
         if (!wf?.action || !wf.post_id) {
             return;
         }
+        if (wf.action === 'xai_tts') {
+            try {
+                await openMarketingXaiTtsWorkflow({
+                    postId: wf.post_id,
+                    targetLang: wf.target_lang,
+                });
+            } catch (e) {
+                window.alert(e instanceof Error ? e.message : String(e));
+            }
+            return;
+        }
         try {
             await openMarketingGeminiWorkflow({
                 action: wf.action,
@@ -65,6 +77,26 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                 post_id: wf.post_id,
                 platform: wf.platform,
                 distribution_stage: wf.distribution_stage,
+            });
+        } catch (e) {
+            window.alert(e instanceof Error ? e.message : String(e));
+        }
+    };
+
+    const handleXaiTtsClick = async (
+        event: React.MouseEvent,
+        badge: PostTypeRowBadge
+    ) => {
+        event.stopPropagation();
+        event.preventDefault();
+        const xai = badge.xai_tts;
+        if (!xai?.post_id || !xai.target_lang) {
+            return;
+        }
+        try {
+            await openMarketingXaiTtsWorkflow({
+                postId: xai.post_id,
+                targetLang: xai.target_lang,
             });
         } catch (e) {
             window.alert(e instanceof Error ? e.message : String(e));
@@ -98,17 +130,19 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                 {badges.map((badge, index) => {
                     const wf = badge.workflow;
                     const fbPreview = badge.facebook_preview;
+                    const xaiTts = badge.xai_tts;
                     const isWorkflow = !!wf?.action && !!wf.post_id;
                     const isFacebookPreview = !!fbPreview?.post_id;
+                    const isXaiTts = !!xaiTts?.post_id && !!xaiTts?.target_lang;
                     const postId = Number(
-                        wf?.post_id || fbPreview?.post_id || rowPostId || 0
+                        wf?.post_id || fbPreview?.post_id || xaiTts?.post_id || rowPostId || 0
                     );
                     const action = wf?.action;
                     const targetLang = wf?.target_lang
                         ? String(wf.target_lang).trim().toLowerCase()
                         : '';
                     const apiUrl = action ? marketingWorkflowSaveApiUrl(action) : '';
-                    const clickable = isWorkflow || isFacebookPreview;
+                    const clickable = isWorkflow || isFacebookPreview || isXaiTts;
 
                     return (
                         <Chip
@@ -119,9 +153,11 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                             onClick={
                                 isWorkflow
                                     ? (e) => handleWorkflowClick(e, badge)
-                                    : isFacebookPreview
-                                      ? (e) => handleFacebookPreviewClick(e, badge)
-                                      : undefined
+                                    : isXaiTts
+                                      ? (e) => handleXaiTtsClick(e, badge)
+                                      : isFacebookPreview
+                                        ? (e) => handleFacebookPreviewClick(e, badge)
+                                        : undefined
                             }
                             data-marketing-post-id={isWorkflow ? String(postId) : undefined}
                             data-marketing-workflow-action={isWorkflow ? action : undefined}
