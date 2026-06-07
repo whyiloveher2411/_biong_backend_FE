@@ -84,7 +84,7 @@ export default function MarketingSourceTablesPanel({ appMobileId }: Props) {
                                 field: 'app_mobile',
                                 view: 'relationship_onetomany_show',
                                 paginate: {
-                                    rowsPerPage: 20,
+                                    rowsPerPage: 5,
                                 },
                             }}
                             post={appMobileDetail.post}

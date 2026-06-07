@@ -261,6 +261,14 @@ function DataTable(props: DataTableProps) {
         }));
     };
 
+    const postTypeKey = String(data?.config?.type || data?.type || queryUrl.object || '');
+    const isMarketingRelationshipTable =
+        postTypeKey === 'spacedev_app_marketing_post'
+        || postTypeKey === 'spacedev_app_marketing_source_item';
+    const tableScrollSx = isMarketingRelationshipTable
+        ? {}
+        : { maxHeight: 700, overflowY: 'auto' as const };
+
     return (
         <Box>
             {!props.hideToolbar ? (
@@ -298,13 +306,15 @@ function DataTable(props: DataTableProps) {
                 elevation={embeddedInPanel ? 0 : undefined}
                 sx={
                     embeddedInPanel
-                        ? { ...postTypeEmbeddedTableSx, maxHeight: 700, overflowY: 'auto' }
-                        : { maxHeight: 700, overflowY: 'auto' }
+                        ? { ...postTypeEmbeddedTableSx, ...tableScrollSx }
+                        : tableScrollSx
                 }
                 className="custom_scroll"
-                {...(String(data?.config?.type || data?.type || '') === 'spacedev_app_marketing_post'
+                {...(postTypeKey === 'spacedev_app_marketing_post'
                     ? { 'data-marketing-post-list': '1' as const }
-                    : {})}
+                    : postTypeKey === 'spacedev_app_marketing_source_item'
+                        ? { 'data-marketing-source-item-list': '1' as const }
+                        : {})}
             >
                 <Table>
                     <TableHead>

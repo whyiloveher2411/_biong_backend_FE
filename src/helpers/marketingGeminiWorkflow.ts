@@ -6,12 +6,16 @@ const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME =
-    'Pipeline Gemini (viết lại + dịch + format MD + Facebook + đánh giá Pro + xAI audio)';
+    'Pipeline Gemini (viết lại + dịch + format MD + đánh giá Pro + xAI audio)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại + dịch)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_FB_LEGACY =
     'Pipeline Gemini (viết lại + dịch + Facebook)';
+
+/** Filter pipeline cũ (còn bước Facebook auto) — vẫn khớp khi CMS lưu tên cũ. */
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_FB_FULL_LEGACY =
+    'Pipeline Gemini (viết lại + dịch + format MD + Facebook + đánh giá Pro + xAI audio)';
 
 export type MarketingWorkflowAction =
     | 'article_rewrite'
@@ -137,10 +141,22 @@ export async function fetchContentTranslatePrompt(
     return res.json();
 }
 
+export type ContentMarkdownFormatPromptResponse = {
+    success?: boolean;
+    prompt?: string;
+    target_lang?: string;
+    item_count?: number;
+    total_item_count?: number;
+    batch_index?: number;
+    batch_count?: number;
+    batch_codes?: string[];
+    message?: { content?: string } | string;
+};
+
 export async function fetchContentMarkdownFormatPrompt(
     postId: number,
     targetLang: string
-): Promise<{ success?: boolean; prompt?: string; target_lang?: string; item_count?: number }> {
+): Promise<ContentMarkdownFormatPromptResponse> {
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath('content-markdown-format/get-gemini-prompt'), {
         method: 'POST',
@@ -290,11 +306,22 @@ export async function openMarketingGeminiWorkflow(
         const res = await fetchContentMarkdownFormatPrompt(postId, lang);
         if (!res?.success) {
             const msg =
-                typeof (res as { message?: { content?: string } })?.message === 'object'
-                    ? (res as { message?: { content?: string } }).message?.content
-                    : 'Không tạo được prompt format markdown';
+                typeof res?.message === 'object'
+                    ? res.message?.content
+                    : typeof res?.message === 'string'
+                      ? res.message
+                      : 'Không tạo được prompt format markdown';
             window.alert(msg || 'Không tạo được prompt format markdown');
             return;
+        }
+        const batchCount = Number(res.batch_count ?? 1);
+        const batchIndex = Number(res.batch_index ?? 0);
+        if (batchCount > 1) {
+            window.alert(
+                `Bài dài — format markdown chia ${batchCount} batch. ` +
+                    `Đang mở batch ${batchIndex + 1}/${batchCount} cho ${lang.toUpperCase()}. ` +
+                    'Extension auto sẽ tiếp tục các batch còn lại sau khi lưu từng batch.'
+            );
         }
         prompt = String(res.prompt || '').trim();
     } else {

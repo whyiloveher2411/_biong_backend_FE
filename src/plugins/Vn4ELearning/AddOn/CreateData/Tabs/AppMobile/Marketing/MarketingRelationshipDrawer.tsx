@@ -73,7 +73,7 @@ export default function MarketingRelationshipDrawer({ open, onClose, appMobileId
         }
     }, [open, loadData]);
 
-    const rowsPerPage = config.rowsPerPage ?? 20;
+    const rowsPerPage = config.rowsPerPage ?? 5;
 
     return (
         <DrawerCustom

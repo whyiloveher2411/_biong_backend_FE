@@ -1,6 +1,5 @@
 import React from 'react';
 import { getAdminApiPrefix } from 'helpers/apiHost';
-import { convertToURL } from 'helpers/url';
 
 export interface StreamProgressData {
     type: 'init' | 'progress' | 'course' | 'translates' | 'translate' | 'lessons' | 'course_complete' | 'finished' | 'final' | 'error' | 'complete' | 'start' | 'log' | 'success' | 'done';

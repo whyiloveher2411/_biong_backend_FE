@@ -642,8 +642,17 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
         [viewMode, handleViewModeChange]
     );
 
+    const isCalendarView = viewMode === 'calendar';
+
     return (
-        <div style={{ padding: 24, height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
+        <div
+            style={{
+                padding: 24,
+                ...(isCalendarView
+                    ? { height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }
+                    : {}),
+            }}
+        >
 
             <Box
                 sx={{
@@ -851,31 +860,27 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             </Box>
 
             {viewMode === 'list' ? (
-                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                    <FieldForm
-                        key={postsTableKey}
-                        component="relationship_onetomany_show"
-                        config={{
-                            title: 'Bài viết marketing',
-                            object: 'spacedev_app_marketing_post',
-                            field: 'app_mobile',
-                            view: 'relationship_onetomany_show',
-                            paginate: {
-                                rowsPerPage: 20,
-                            },
-                        }}
-                        post={data.post}
-                        name="app_mobile"
-                        onReview={() => {}} // eslint-disable-line @typescript-eslint/no-empty-function
-                    />
-                </Box>
+                <FieldForm
+                    key={postsTableKey}
+                    component="relationship_onetomany_show"
+                    config={{
+                        title: 'Bài viết marketing',
+                        object: 'spacedev_app_marketing_post',
+                        field: 'app_mobile',
+                        view: 'relationship_onetomany_show',
+                        paginate: {
+                            rowsPerPage: 5,
+                        },
+                    }}
+                    post={data.post}
+                    name="app_mobile"
+                    onReview={() => {}} // eslint-disable-line @typescript-eslint/no-empty-function
+                />
             ) : viewMode === 'crawl' ? (
-                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                    <MarketingSourceTablesPanel
-                        key={crawlTableKey}
-                        appMobileId={Number(data?.post?.id || 0)}
-                    />
-                </Box>
+                <MarketingSourceTablesPanel
+                    key={crawlTableKey}
+                    appMobileId={Number(data?.post?.id || 0)}
+                />
             ) : (
             <Box sx={{
                 flex: 1,
