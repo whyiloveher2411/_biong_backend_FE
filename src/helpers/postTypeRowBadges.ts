@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { isMarketingNewsLangEnabled } from 'helpers/marketingNewsLanguageConfig';
 
 export type PostTypeRowWorkflowBadge = {
     action:
@@ -52,13 +53,51 @@ export function hasVisibleBadgeContent(content: string): boolean {
     return /<(img|svg|br)\b/i.test(trimmed);
 }
 
+function isMarketingNewsLangBadge(badge: PostTypeRowBadge): boolean {
+    const key = String(badge.key ?? '').trim().toLowerCase();
+    if (key !== '') {
+        const langSuffixMatch = key.match(/_([a-z]{2,3}(?:-[a-z]{2})?)$/);
+        if (langSuffixMatch && !isMarketingNewsLangEnabled(langSuffixMatch[1])) {
+            return false;
+        }
+        if (
+            key.startsWith('content_text_')
+            || key.startsWith('rewrite_pending_')
+            || key.startsWith('rewrite_blocked_')
+        ) {
+            const code = key.startsWith('content_text_')
+                ? key.slice('content_text_'.length)
+                : key.replace(/^rewrite_(pending|blocked)_/, '');
+            if (!isMarketingNewsLangEnabled(code)) {
+                return false;
+            }
+        }
+    }
+
+    const workflowLang = badge.workflow?.target_lang;
+    if (workflowLang && !isMarketingNewsLangEnabled(workflowLang)) {
+        return false;
+    }
+
+    const xaiLang = badge.xai_tts?.target_lang;
+    if (xaiLang && !isMarketingNewsLangEnabled(xaiLang)) {
+        return false;
+    }
+
+    return true;
+}
+
 export function getPostTypeRowBadges(row: { _row_badges?: PostTypeRowBadge[] }): PostTypeRowBadge[] {
     const badges = row?._row_badges;
     if (!Array.isArray(badges)) {
         return [];
     }
     return badges.filter(
-        (badge) => badge && typeof badge.content === 'string' && hasVisibleBadgeContent(badge.content)
+        (badge) =>
+            badge &&
+            typeof badge.content === 'string' &&
+            hasVisibleBadgeContent(badge.content) &&
+            isMarketingNewsLangBadge(badge)
     );
 }
 

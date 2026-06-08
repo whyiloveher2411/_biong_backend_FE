@@ -16,11 +16,20 @@ fi
 echo "Cài service cloudflared cho user hiện tại..."
 cloudflared service install
 
-echo "Khởi động service..."
+echo "Tắt brew service cloudflared (nếu có) để tránh xung đột launch agent..."
 if command -v brew >/dev/null 2>&1; then
-  brew services restart cloudflared || brew services start cloudflared
+  brew services stop cloudflared 2>/dev/null || true
 fi
 
+echo "Khởi động service com.cloudflare.cloudflared..."
+launchctl kickstart -k "gui/$(id -u)/com.cloudflare.cloudflared" 2>/dev/null \
+  || launchctl bootstrap "gui/$(id -u)" "${HOME}/Library/LaunchAgents/com.cloudflare.cloudflared.plist"
+
+echo ""
+echo "Nếu dùng WARP, chạy thêm:"
+echo "  bash scripts/cloudflared/setup-warp-split-tunnel.sh"
+
+echo ""
 echo "Xong. Kiểm tra trạng thái:"
 echo "  cloudflared tunnel list"
-echo "  cloudflared tunnel info YOUR_TUNNEL_NAME"
+echo "  cloudflared tunnel info cms-local"

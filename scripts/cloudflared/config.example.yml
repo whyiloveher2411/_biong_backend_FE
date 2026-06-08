@@ -1,5 +1,7 @@
 tunnel: YOUR_TUNNEL_ID
 credentials-file: /Users/YOUR_USER/.cloudflared/YOUR_TUNNEL_ID.json
+# Khuyến nghị khi chạy song song Cloudflare WARP (tránh timeout QUIC -> lỗi 530)
+protocol: http2
 
 ingress:
   - hostname: cms.yourdomain.com

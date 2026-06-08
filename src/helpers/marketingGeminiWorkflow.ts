@@ -6,9 +6,16 @@ const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME =
-    'Pipeline Gemini (viết lại + dịch + format MD + đánh giá Pro + xAI audio)';
+    'Pipeline Gemini (viết lại VI+EN + format MD + đánh giá Pro + xAI audio + tải thumbnail)';
 
-export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại + dịch)';
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_WITHOUT_THUMBNAIL =
+    'Pipeline Gemini (viết lại VI+EN + format MD + đánh giá Pro + xAI audio)';
+
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại VI+EN)';
+
+/** Tên filter cũ (viết lại + dịch) — extension vẫn khớp khi CMS chưa đổi tên. */
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_TRANSLATE_LEGACY =
+    'Pipeline Gemini (viết lại + dịch + format MD + đánh giá Pro + xAI audio)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_FB_LEGACY =
     'Pipeline Gemini (viết lại + dịch + Facebook)';
@@ -23,7 +30,8 @@ export type MarketingWorkflowAction =
     | 'content_markdown_format'
     | 'facebook_distribution'
     | 'pro_value_assessment'
-    | 'xai_tts';
+    | 'xai_tts'
+    | 'thumbnail_download';
 
 export type MarketingWorkflowMeta = {
     action: MarketingWorkflowAction;
@@ -33,12 +41,26 @@ export type MarketingWorkflowMeta = {
     distribution_stage?: string | null;
 };
 
+export type MarketingLangPipelineStatus = {
+    has_content?: boolean;
+    markdown_formatted?: boolean;
+    has_audio?: boolean;
+    needs_rewrite?: boolean;
+    can_rewrite?: boolean;
+    next_step?: string | null;
+    complete?: boolean;
+};
+
 export type MarketingWorkflowStatus = {
     success?: boolean;
     post_id?: number;
     stage?: string;
     source_lang?: string;
+    language_codes?: string[];
     missing_langs?: string[];
+    missing_rewrite_langs?: string[];
+    lang_pipeline_status?: Record<string, MarketingLangPipelineStatus>;
+    pipeline_incomplete?: boolean;
     can_rewrite?: boolean;
     next_action?: {
         type?: string;
@@ -95,12 +117,24 @@ export async function fetchMarketingWorkflowStatus(postId: number): Promise<Mark
     return res.json();
 }
 
-export async function fetchArticleRewritePrompt(postId: number): Promise<{
+export async function fetchArticleRewritePrompt(
+    postId: number,
+    outputLangCode?: string | null,
+): Promise<{
     success?: boolean;
     prompt?: string;
     topic?: string;
     output_language_code?: string;
 }> {
+    const lang = String(outputLangCode ?? '').trim().toLowerCase();
+    if (!lang) {
+        return { success: false, message: 'Thiếu output_lang_code' } as {
+            success?: boolean;
+            prompt?: string;
+            topic?: string;
+            output_language_code?: string;
+        };
+    }
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath('article-rewrite/get-overview-prompt'), {
         method: 'POST',
@@ -112,7 +146,7 @@ export async function fetchArticleRewritePrompt(postId: number): Promise<{
         body: JSON.stringify({
             post_id: postId,
             id: postId,
-            output_lang_code: 'vi',
+            output_lang_code: lang,
             access_token: token,
         }),
     });
@@ -230,7 +264,10 @@ export function buildGeminiWorkflowUrl(options: {
         hashParams.set('platform', 'facebook');
         hashParams.set('distribution_stage', 'plat_copy');
     }
-    if ((action === 'content_translate' || action === 'content_markdown_format') && targetLang) {
+    if (
+        (action === 'article_rewrite' || action === 'content_translate' || action === 'content_markdown_format') &&
+        targetLang
+    ) {
         hashParams.set('target_lang', targetLang.trim().toLowerCase());
     }
     if (topic) {
@@ -275,7 +312,12 @@ export async function openMarketingGeminiWorkflow(
     let topic = '';
 
     if (action === 'article_rewrite') {
-        const res = await fetchArticleRewritePrompt(postId);
+        const outputLang = String(workflow.target_lang ?? '').trim().toLowerCase();
+        if (!outputLang) {
+            window.alert('Thiếu ngôn ngữ đích (target_lang)');
+            return;
+        }
+        const res = await fetchArticleRewritePrompt(postId, outputLang);
         if (!res?.success) {
             const msg =
                 typeof (res as { message?: { content?: string } })?.message === 'object'

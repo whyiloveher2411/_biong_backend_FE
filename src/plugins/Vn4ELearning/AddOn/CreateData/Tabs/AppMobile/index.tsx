@@ -11,6 +11,7 @@ import Modules from './Modules';
 import Course from './Course';
 import Content from './Content';
 import Marketing from './Marketing';
+import StoreScreenshots from './StoreScreenshots';
 import Cuisine from './Cuisine';
 import Gym from './Gym';
 
@@ -69,6 +70,11 @@ export default function (props: CreatePostTypeData) {
             marketing: {
                 title: __p('Marketing', PLUGIN_NAME),
                 component: (props: CreatePostAddOnProps) => <Marketing data={props.data} />,
+                priority: 3,
+            },
+            storeScreenshots: {
+                title: __p('Store screenshots', PLUGIN_NAME),
+                component: (props: CreatePostAddOnProps) => <StoreScreenshots data={props.data} />,
                 priority: 3,
             },
             cuisine: {

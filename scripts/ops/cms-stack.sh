@@ -41,17 +41,25 @@ stop_cms() {
 
 start_tunnel() {
   if command -v brew >/dev/null 2>&1; then
-    brew services restart cloudflared || brew services start cloudflared
+    brew services stop cloudflared 2>/dev/null || true
+  fi
+
+  if launchctl print "gui/$(id -u)/com.cloudflare.cloudflared" >/dev/null 2>&1; then
+    launchctl kickstart -k "gui/$(id -u)/com.cloudflare.cloudflared"
+  elif command -v cloudflared >/dev/null 2>&1; then
+    cloudflared service install 2>/dev/null || true
+    launchctl kickstart -k "gui/$(id -u)/com.cloudflare.cloudflared" 2>/dev/null \
+      || cloudflared tunnel run "${TUNNEL_NAME}"
   else
-    echo "Không tìm thấy Homebrew. Chạy manual:"
-    echo "  cloudflared tunnel run ${TUNNEL_NAME}"
+    echo "Không tìm thấy cloudflared. Cài bằng: brew install cloudflared"
   fi
 }
 
 stop_tunnel() {
   if command -v brew >/dev/null 2>&1; then
-    brew services stop cloudflared || true
+    brew services stop cloudflared 2>/dev/null || true
   fi
+  launchctl bootout "gui/$(id -u)" "${HOME}/Library/LaunchAgents/com.cloudflare.cloudflared.plist" 2>/dev/null || true
 }
 
 show_status() {

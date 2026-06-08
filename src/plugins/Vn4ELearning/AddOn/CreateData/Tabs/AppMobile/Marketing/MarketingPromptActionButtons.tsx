@@ -2,23 +2,13 @@ import React from 'react';
 import { Button, type ButtonProps } from '@mui/material';
 import { LoadingButton, type LoadingButtonProps } from '@mui/lab';
 import CheckIcon from '@mui/icons-material/Check';
+import ImageIcon from '@mui/icons-material/Image';
+import {
+    copyStoreScreenshotImageToClipboard,
+    copyTextToClipboard,
+} from '../StoreScreenshots/storeScreenshotClipboard';
 
 const FEEDBACK_MS = 5000;
-
-async function copyTextToClipboard(text: string): Promise<void> {
-    const value = String(text || '').trim();
-    if (!value) return;
-    try {
-        await navigator.clipboard.writeText(value);
-    } catch {
-        const ta = document.createElement('textarea');
-        ta.value = value;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-    }
-}
 
 function useSuccessFlash() {
     const [success, setSuccess] = React.useState(false);
@@ -42,6 +32,7 @@ function useSuccessFlash() {
 
 type CopyButtonProps = Omit<ButtonProps, 'onClick'> & {
     promptText: string;
+    onCopied?: () => void;
 };
 
 export function MarketingCopyPromptButton({
@@ -51,6 +42,7 @@ export function MarketingCopyPromptButton({
     startIcon,
     color,
     variant = 'outlined',
+    onCopied,
     ...rest
 }: CopyButtonProps) {
     const { success, flash } = useSuccessFlash();
@@ -59,6 +51,7 @@ export function MarketingCopyPromptButton({
         if (!String(promptText || '').trim() || disabled) return;
         await copyTextToClipboard(promptText);
         flash();
+        onCopied?.();
     };
 
     return (
@@ -70,7 +63,62 @@ export function MarketingCopyPromptButton({
             onClick={handleClick}
             {...rest}
         >
-            {success ? 'Đã sao chép' : children}
+            {success ? 'Đã sao chép prompt' : children}
+        </Button>
+    );
+}
+
+type CopyImageButtonProps = Omit<ButtonProps, 'onClick'> & {
+    imageUrl?: string;
+    getImageBlob?: () => Promise<Blob>;
+    /** Không fallback fetch URL khi API proxy lỗi (logo local hay bị CORS). */
+    proxyOnly?: boolean;
+    onCopyNotice?: (message: string) => void;
+};
+
+export function MarketingCopyImageButton({
+    imageUrl,
+    getImageBlob,
+    proxyOnly = false,
+    onCopyNotice,
+    disabled,
+    children = 'Sao chép ảnh',
+    variant = 'outlined',
+    ...rest
+}: CopyImageButtonProps) {
+    const { success, flash } = useSuccessFlash();
+    const [loading, setLoading] = React.useState(false);
+
+    const handleClick = async () => {
+        const url = String(imageUrl || '').trim();
+        if ((!url && !getImageBlob) || disabled || loading || success) return;
+
+        setLoading(true);
+        try {
+            await copyStoreScreenshotImageToClipboard({
+                ...(url && !proxyOnly ? { imageUrl: url } : {}),
+                getImageBlob,
+                proxyOnly: proxyOnly || (!url && Boolean(getImageBlob)),
+            });
+            flash();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Không copy được ảnh';
+            onCopyNotice?.(message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Button
+            variant={variant}
+            disabled={disabled || success || loading || (!String(imageUrl || '').trim() && !getImageBlob)}
+            color={success ? 'success' : rest.color}
+            startIcon={success ? <CheckIcon fontSize="small" /> : <ImageIcon fontSize="small" />}
+            onClick={handleClick}
+            {...rest}
+        >
+            {success ? 'Đã sao chép ảnh' : loading ? 'Đang copy…' : children}
         </Button>
     );
 }

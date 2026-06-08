@@ -13,6 +13,8 @@ import {
     Grid,
     LinearProgress,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
@@ -23,13 +25,23 @@ import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { getAccessToken } from 'store/user/user.reducers';
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
+import {
+    marketingLangDisplayLabel,
+    normalizeMarketingLangCode,
+    type MarketingAppLanguage,
+} from 'helpers/marketingNewsLanguageConfig';
 
 const ARTICLE_REWRITE_OVERVIEW_STAGE = 'article_rewrite';
 
 /** Gemini web (tài khoản Pro) — thay Google Search AI mode do giới hạn overview. */
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
-function buildGeminiArticleRewriteUrl(postId: number, prompt: string, topic: string): string {
+function buildGeminiArticleRewriteUrl(
+    postId: number,
+    prompt: string,
+    topic: string,
+    outputLangCode: string,
+): string {
     const accessToken = getAccessToken() ?? '';
     const apiUrl = convertToURL(
         getApiHost(),
@@ -44,6 +56,7 @@ function buildGeminiArticleRewriteUrl(postId: number, prompt: string, topic: str
         api_url: apiUrl,
         content_type: 'long_form',
         topic: topic || '',
+        target_lang: normalizeMarketingLangCode(outputLangCode),
     });
     const promptTrimmed = prompt.trim();
     if (promptTrimmed) {
@@ -71,10 +84,15 @@ type PrepareData = {
         language?: string;
     };
     draft_markdown?: string;
+    draft_lang?: string;
+    draft_markdown_by_lang?: Record<string, string>;
+    preview_source_by_lang?: Record<string, string>;
     has_draft?: boolean;
     prompt_ready?: boolean;
     prompt?: string;
     reference_image_count?: number;
+    language_codes?: string[];
+    languages?: MarketingAppLanguage[];
     message?: { content?: string } | string;
 };
 
@@ -92,6 +110,23 @@ function extractApiMessage(res: unknown): string {
     if (typeof r.message === 'string') return r.message;
     if (r.message?.content) return r.message.content;
     return 'Yêu cầu thất bại';
+}
+
+function normalizeDraftMarkdownByLang(
+    raw: Record<string, string> | undefined | null,
+): Record<string, string> {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+    const out: Record<string, string> = {};
+    Object.entries(raw).forEach(([code, value]) => {
+        const lang = normalizeMarketingLangCode(code);
+        const md = String(value ?? '').trim();
+        if (lang && md) {
+            out[lang] = md;
+        }
+    });
+    return out;
 }
 
 function longFormErrorText(data: PrepareData | null): string | null {
@@ -124,6 +159,8 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     const [referenceUrl, setReferenceUrl] = React.useState('');
     const [referenceRaw, setReferenceRaw] = React.useState('');
     const [draftMarkdown, setDraftMarkdown] = React.useState('');
+    const draftByLangRef = React.useRef<Record<string, string>>({});
+    const outputLangCodeRef = React.useRef('');
 
     const [savingReference, setSavingReference] = React.useState(false);
     const [saveReferenceOk, setSaveReferenceOk] = React.useState<string | null>(null);
@@ -133,6 +170,18 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     const [aiStatus, setAiStatus] = React.useState<{ severity: 'info' | 'success' | 'error'; text: string } | null>(null);
     const [applying, setApplying] = React.useState(false);
     const [applyOk, setApplyOk] = React.useState<string | null>(null);
+    const [outputLangCode, setOutputLangCode] = React.useState('');
+
+    const appLanguages = React.useMemo(() => {
+        const langs = prepareData?.languages ?? [];
+        if (langs.length > 0) {
+            return langs.filter((lang) => normalizeMarketingLangCode(lang.code) !== '');
+        }
+        return (prepareData?.language_codes ?? []).map((code) => ({
+            code,
+            name: code.toUpperCase(),
+        }));
+    }, [prepareData?.languages, prepareData?.language_codes]);
 
     const minChars = prepareData?.limits?.reference_min_chars ?? 200;
     const maxChars = prepareData?.limits?.reference_max_chars ?? 16000;
@@ -140,6 +189,93 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     const longFormBlock = longFormErrorText(prepareData);
     const promptReady = Boolean(prepareData?.prompt_ready) && refLen >= minChars && !longFormBlock;
     const referenceImageCount = prepareData?.reference_image_count ?? 0;
+
+    const persistDraftForLang = React.useCallback((langCode: string, markdown: string) => {
+        const lang = normalizeMarketingLangCode(langCode);
+        if (!lang) return;
+        draftByLangRef.current = { ...draftByLangRef.current, [lang]: markdown };
+    }, []);
+
+    const applyDraftMarkdownByLang = React.useCallback(
+        (byLang: Record<string, string>, preferredLang: string) => {
+            const normalized = normalizeDraftMarkdownByLang(byLang);
+            draftByLangRef.current = normalized;
+            const lang = normalizeMarketingLangCode(preferredLang);
+            const activeLang =
+                lang && normalized[lang] !== undefined
+                    ? lang
+                    : Object.keys(normalized)[0] ?? lang;
+            if (activeLang) {
+                setDraftMarkdown(normalized[activeLang] ?? '');
+            } else {
+                setDraftMarkdown('');
+            }
+        },
+        [],
+    );
+
+    const fetchPreviewMarkdownForLang = React.useCallback(
+        (targetLang: string, localSnapshot: Record<string, string>) => {
+            const normalizedTarget = normalizeMarketingLangCode(targetLang);
+            if (!postId || !normalizedTarget) return;
+
+            apiAjaxRef.current({
+                url: 'plugin/vn4-e-learning/app-mobile/marketing/article-rewrite/prepare',
+                method: 'POST',
+                data: { post_id: postId, id: postId },
+                loading: false,
+                success: (res: PrepareData) => {
+                    if (!res?.success) return;
+                    const serverByLang = normalizeDraftMarkdownByLang(res.draft_markdown_by_lang);
+                    const nextMap = { ...localSnapshot, ...serverByLang };
+                    draftByLangRef.current = nextMap;
+                    if (normalizeMarketingLangCode(outputLangCodeRef.current) !== normalizedTarget) {
+                        return;
+                    }
+                    setDraftMarkdown(nextMap[normalizedTarget] ?? '');
+                    if (res.preview_source_by_lang) {
+                        setPrepareData((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      preview_source_by_lang: {
+                                          ...prev.preview_source_by_lang,
+                                          ...res.preview_source_by_lang,
+                                      },
+                                  }
+                                : prev,
+                        );
+                    }
+                },
+            });
+        },
+        [postId],
+    );
+
+    const handleOutputLangChange = React.useCallback(
+        (nextLang: string | null) => {
+            if (!nextLang) return;
+            const normalized = normalizeMarketingLangCode(nextLang);
+            if (!normalized || normalized === outputLangCodeRef.current) return;
+
+            const previousLang = outputLangCodeRef.current;
+            const localSnapshot = { ...draftByLangRef.current };
+            if (previousLang) {
+                localSnapshot[normalizeMarketingLangCode(previousLang)] = draftMarkdown;
+                draftByLangRef.current = localSnapshot;
+            }
+
+            outputLangCodeRef.current = normalized;
+            setOutputLangCode(normalized);
+            setDraftMarkdown(localSnapshot[normalized] ?? '');
+            fetchPreviewMarkdownForLang(normalized, localSnapshot);
+        },
+        [draftMarkdown, fetchPreviewMarkdownForLang],
+    );
+
+    React.useEffect(() => {
+        outputLangCodeRef.current = normalizeMarketingLangCode(outputLangCode);
+    }, [outputLangCode]);
 
     const loadPrepare = React.useCallback(() => {
         if (!postId) return;
@@ -161,11 +297,35 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                     return;
                 }
                 setPrepareData(res);
+                const codes = (res.language_codes ?? res.languages?.map((l) => l.code) ?? [])
+                    .map((c) => normalizeMarketingLangCode(c))
+                    .filter(Boolean);
+                const preferredLang = (() => {
+                    const current = normalizeMarketingLangCode(outputLangCodeRef.current);
+                    if (current && codes.includes(current)) {
+                        return current;
+                    }
+                    const draftLang = normalizeMarketingLangCode(res.draft_lang ?? '');
+                    if (draftLang && codes.includes(draftLang)) {
+                        return draftLang;
+                    }
+                    return codes[0] ?? '';
+                })();
+                if (preferredLang) {
+                    outputLangCodeRef.current = preferredLang;
+                    setOutputLangCode(preferredLang);
+                }
                 const p = res.post || {};
                 setReferenceUrl(String(p.reference_article_url || ''));
                 setReferenceRaw(String(p.reference_article_raw || ''));
-                const draft = String(res.draft_markdown || p.article_rewrite_draft_markdown || '');
-                setDraftMarkdown(draft);
+                const byLang = normalizeDraftMarkdownByLang(res.draft_markdown_by_lang);
+                const legacyDraft = String(res.draft_markdown || p.article_rewrite_draft_markdown || '').trim();
+                if (legacyDraft !== '' && Object.keys(byLang).length === 0) {
+                    const fallbackLang =
+                        normalizeMarketingLangCode(res.draft_lang ?? '') || preferredLang || 'vi';
+                    byLang[fallbackLang] = legacyDraft;
+                }
+                applyDraftMarkdownByLang(byLang, preferredLang);
             },
             error: (err: unknown) => {
                 if (fetchId !== prepareFetchIdRef.current) return;
@@ -173,7 +333,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                 setPrepareError(extractApiMessage(err));
             },
         });
-    }, [postId]);
+    }, [postId, applyDraftMarkdownByLang]);
 
     React.useEffect(() => {
         if (!open) return;
@@ -190,7 +350,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
     }, [open, postId, loadPrepare]);
 
     const handleOpenGeminiWeb = () => {
-        if (!postId || !promptReady || overviewOpening || aiLoading !== null) return;
+        if (!postId || !promptReady || !outputLangCode || overviewOpening || aiLoading !== null) return;
         setOverviewOpening(true);
         setAiStatus({ severity: 'info', text: 'Đang tạo prompt cho Gemini web…' });
         apiAjaxRef.current({
@@ -199,7 +359,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
             data: {
                 post_id: postId,
                 reference_article_raw: referenceRaw.trim(),
-                output_lang_code: 'vi',
+                output_lang_code: outputLangCode,
             },
             loading: false,
             success: (res: { success?: boolean; prompt?: string; reference_truncated?: boolean }) => {
@@ -217,7 +377,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                     prepareData?.post?.title || (data.post as { title?: string })?.title || '',
                 );
                 window.open(
-                    buildGeminiArticleRewriteUrl(postId, promptText, topic),
+                    buildGeminiArticleRewriteUrl(postId, promptText, topic, outputLangCode),
                     '_blank',
                     'noopener,noreferrer',
                 );
@@ -291,6 +451,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
             data: {
                 post_id: postId,
                 ai_provider: provider,
+                output_lang_code: outputLangCode,
                 reference_article_raw: referenceRaw.trim(),
                 reference_article_url: referenceUrl.trim(),
                 access_token: getAccessToken() || '',
@@ -304,6 +465,9 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                 }
                 const md = String(res.preview_markdown || '');
                 setDraftMarkdown(md);
+                if (outputLangCodeRef.current) {
+                    persistDraftForLang(outputLangCodeRef.current, md);
+                }
                 let msg = 'Đã viết lại bài. Xem preview và chỉnh sửa trước khi áp dụng.';
                 if (res.reference_truncated) {
                     msg += ' (Bài gốc đã được cắt bớt trong prompt do quá dài.)';
@@ -325,7 +489,7 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
         apiAjaxRef.current({
             url: 'plugin/vn4-e-learning/app-mobile/marketing/article-rewrite/apply',
             method: 'POST',
-            data: { post_id: postId, markdown: md },
+            data: { post_id: postId, markdown: md, output_lang_code: outputLangCode },
             loading: false,
             success: (res: { success?: boolean; message?: { content?: string } }) => {
                 setApplying(false);
@@ -441,6 +605,30 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                             <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
                                 Viết lại bằng AI
                             </Typography>
+                            {appLanguages.length > 0 && (
+                                <Box sx={{ mb: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                                        Ngôn ngữ đầu ra (từ app mobile)
+                                    </Typography>
+                                    <ToggleButtonGroup
+                                        exclusive
+                                        size="small"
+                                        value={outputLangCode}
+                                        onChange={(_e, val: string | null) => {
+                                            handleOutputLangChange(val);
+                                        }}
+                                    >
+                                        {appLanguages.map((lang) => {
+                                            const code = normalizeMarketingLangCode(lang.code);
+                                            return (
+                                                <ToggleButton key={code} value={code}>
+                                                    {marketingLangDisplayLabel(lang)}
+                                                </ToggleButton>
+                                            );
+                                        })}
+                                    </ToggleButtonGroup>
+                                </Box>
+                            )}
                             {(aiLoading || overviewOpening) && <LinearProgress sx={{ mb: 1 }} />}
                             {aiStatus && (
                                 <Alert
@@ -486,10 +674,10 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
 
                         <Grid item xs={12}>
                             <Alert severity="info" sx={{ mb: 0 }}>
-                                Sau khi chỉnh sửa xong, bấm{' '}
-                                <strong>Áp dụng vào content_text</strong> (cuối drawer) để lưu vào ngôn ngữ của bài
-                                (theo field Language). Chỉ <strong>content_text</strong> của các ngôn ngữ khác sẽ bị
-                                xóa để bạn dịch lại; title và field khác giữ nguyên.
+                                Chọn ngôn ngữ app trước khi mở Gemini — mỗi ngôn ngữ viết lại độc lập từ bài tham
+                                chiếu, rồi format MD và audio riêng. Sau khi chỉnh sửa, bấm{' '}
+                                <strong>Áp dụng vào content_text</strong> để ghi vào key{' '}
+                                <strong>{outputLangCode || '…'}</strong>.
                             </Alert>
                         </Grid>
 
@@ -502,13 +690,35 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                 multiline
                                 minRows={12}
                                 value={draftMarkdown}
-                                onChange={(e) => setDraftMarkdown(e.target.value)}
+                                onChange={(e) => {
+                                    const next = e.target.value;
+                                    setDraftMarkdown(next);
+                                    if (outputLangCode) {
+                                        persistDraftForLang(outputLangCode, next);
+                                    }
+                                }}
                                 placeholder="Kết quả AI hiển thị ở đây sau khi viết lại…"
                             />
                         </Grid>
                         <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                 Preview
+                                {outputLangCode ? (
+                                    <Typography
+                                        component="span"
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ ml: 1, fontWeight: 400 }}
+                                    >
+                                        ({outputLangCode.toUpperCase()}
+                                        {prepareData?.preview_source_by_lang?.[
+                                            normalizeMarketingLangCode(outputLangCode)
+                                        ] === 'formatted_blocks'
+                                            ? ' · Format MD'
+                                            : ''}
+                                        )
+                                    </Typography>
+                                ) : null}
                             </Typography>
                             <Box
                                 sx={{
@@ -534,7 +744,9 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                                 }}
                             >
                                 {draftMarkdown.trim() ? (
-                                    <Markdown>{draftMarkdown}</Markdown>
+                                    <Markdown key={`rewrite-preview-${outputLangCode}`}>
+                                        {draftMarkdown}
+                                    </Markdown>
                                 ) : (
                                     <Typography variant="body2" color="text.secondary">
                                         Chưa có bản nháp.
