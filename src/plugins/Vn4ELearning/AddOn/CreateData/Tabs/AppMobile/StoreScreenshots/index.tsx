@@ -34,6 +34,7 @@ import {
 import type {
     StoreMetadata,
     StoreScreenshotConfig,
+    StoreScreenshotProjectResponse,
     StoreScreenshotTarget,
 } from './storeScreenshotTypes';
 import { fetchStoreScreenshotProject, saveStoreScreenshotActiveStep } from './storeScreenshotApi';
@@ -128,6 +129,13 @@ function StoreScreenshots({ data }: Props) {
         }
     };
 
+    const handleProjectRefreshed = (result: StoreScreenshotProjectResponse) => {
+        setConfig(result.config);
+        setStoreMetadata(result.store_metadata || DEFAULT_STORE_METADATA);
+        setTargets(result.targets || {});
+        setAppLogoUrl(String(result.app?.logo || ''));
+    };
+
     const handleError = (message: string) => {
         showMessage(message, 'error');
     };
@@ -196,6 +204,7 @@ function StoreScreenshots({ data }: Props) {
                         config={config}
                         targets={targets}
                         onUpdated={handleConfigUpdated}
+                        onProjectRefreshed={handleProjectRefreshed}
                         onError={handleError}
                     />
                 );

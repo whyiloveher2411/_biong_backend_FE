@@ -174,10 +174,16 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
 
     const appLanguages = React.useMemo(() => {
         const langs = prepareData?.languages ?? [];
+        const viOnly = (items: MarketingAppLanguage[]) =>
+            items.filter((lang) => normalizeMarketingLangCode(lang.code) === 'vi');
         if (langs.length > 0) {
-            return langs.filter((lang) => normalizeMarketingLangCode(lang.code) !== '');
+            const filtered = viOnly(langs);
+            return filtered.length > 0 ? filtered : langs.filter((lang) => normalizeMarketingLangCode(lang.code) !== '');
         }
-        return (prepareData?.language_codes ?? []).map((code) => ({
+        const codes = (prepareData?.language_codes ?? [])
+            .map((code) => normalizeMarketingLangCode(code))
+            .filter((code) => code === 'vi');
+        return codes.map((code) => ({
             code,
             name: code.toUpperCase(),
         }));
@@ -301,6 +307,9 @@ export default function ArticleRewriteDrawer({ open, onClose, data, onRefreshPos
                     .map((c) => normalizeMarketingLangCode(c))
                     .filter(Boolean);
                 const preferredLang = (() => {
+                    if (codes.includes('vi')) {
+                        return 'vi';
+                    }
                     const current = normalizeMarketingLangCode(outputLangCodeRef.current);
                     if (current && codes.includes(current)) {
                         return current;

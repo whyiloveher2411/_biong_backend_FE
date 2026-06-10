@@ -19,6 +19,24 @@ export function encodeExternalImageUrl(url: string): string {
     }
 }
 
+/** Thêm ?t= để tránh browser/CDN cache ảnh cũ sau khi upload lại cùng URL. */
+export function encodeExternalImageUrlWithCacheBust(url: string, timestamp?: number): string {
+    const encoded = encodeExternalImageUrl(url);
+    if (!encoded) {
+        return '';
+    }
+
+    const t = timestamp ?? Date.now();
+    try {
+        const parsed = new URL(encoded);
+        parsed.searchParams.set('t', String(t));
+        return parsed.toString();
+    } catch {
+        const separator = encoded.includes('?') ? '&' : '?';
+        return `${encoded}${separator}t=${t}`;
+    }
+}
+
 export function imageUrlToImageValue(
     url: string,
     width = 0,

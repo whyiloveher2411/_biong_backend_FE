@@ -1,6 +1,16 @@
 import React from 'react';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { Box, Stack, Typography } from '@mui/material';
+import {
+    Box,
+    FormControl,
+    FormHelperText,
+    InputLabel,
+    MenuItem,
+    Select,
+    Stack,
+    Typography,
+} from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import { alpha } from '@mui/material/styles';
 import {
     CROP_TARGET_SIZE_OPTIONS,
@@ -11,10 +21,43 @@ import {
 type Props = {
     value: CropTargetSizeId | string;
     onChange: (value: CropTargetSizeId) => void;
+    compact?: boolean;
 };
 
-function ScreenshotCropTargetField({ value, onChange }: Props) {
+function ScreenshotCropTargetField({ value, onChange, compact = false }: Props) {
     const selectedId = normalizeCropTargetSizeId(value);
+    const selectedOption = CROP_TARGET_SIZE_OPTIONS.find((option) => option.id === selectedId)
+        ?? CROP_TARGET_SIZE_OPTIONS[0];
+
+    if (compact) {
+        return (
+            <Stack spacing={0.75}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Kích thước cắt App Store
+                </Typography>
+                <FormControl size="small" fullWidth>
+                    <InputLabel id="store-screenshot-crop-target-label">Kích thước</InputLabel>
+                    <Select
+                        labelId="store-screenshot-crop-target-label"
+                        label="Kích thước"
+                        value={selectedId}
+                        onChange={(event: SelectChangeEvent<string>) => {
+                            onChange(normalizeCropTargetSizeId(event.target.value));
+                        }}
+                    >
+                        {CROP_TARGET_SIZE_OPTIONS.map((option) => (
+                            <MenuItem key={option.id} value={option.id}>
+                                {option.label} · {option.orientationLabel} · {option.ratio}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                    <FormHelperText>
+                        {selectedOption.orientationLabel} — safe zone cho headline và device khi cắt đúng size.
+                    </FormHelperText>
+                </FormControl>
+            </Stack>
+        );
+    }
 
     return (
         <Stack spacing={0.75}>

@@ -6,12 +6,12 @@ const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME =
-    'Pipeline Gemini (viết lại VI+EN + format MD + đánh giá Pro + xAI audio + tải thumbnail)';
+    'Pipeline Gemini (viết lại VI + format MD VI + dịch + xAI audio + tải thumbnail + đánh giá Pro)';
 
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_WITHOUT_THUMBNAIL =
-    'Pipeline Gemini (viết lại VI+EN + format MD + đánh giá Pro + xAI audio)';
+    'Pipeline Gemini (viết lại VI + format MD VI + dịch + xAI audio + đánh giá Pro)';
 
-export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại VI+EN)';
+export const MARKETING_PIPELINE_FILTER_SAVED_NAME_LEGACY = 'Pipeline Gemini (viết lại VI + dịch)';
 
 /** Tên filter cũ (viết lại + dịch) — extension vẫn khớp khi CMS chưa đổi tên. */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME_TRANSLATE_LEGACY =
@@ -36,6 +36,7 @@ export type MarketingWorkflowAction =
 export type MarketingWorkflowMeta = {
     action: MarketingWorkflowAction;
     target_lang?: string | null;
+    translate_scope?: 'text' | 'caption' | string | null;
     post_id: number;
     platform?: string | null;
     distribution_stage?: string | null;
@@ -153,10 +154,25 @@ export async function fetchArticleRewritePrompt(
     return res.json();
 }
 
+export type ContentTranslatePromptResponse = {
+    success?: boolean;
+    prompt?: string;
+    target_lang?: string;
+    translate_scope?: string;
+    batch_index?: number;
+    batch_count?: number;
+    batch_codes?: string[];
+    message?: { content?: string } | string;
+};
+
 export async function fetchContentTranslatePrompt(
     postId: number,
-    targetLang: string
-): Promise<{ success?: boolean; prompt?: string; target_lang?: string }> {
+    targetLang: string,
+    options?: {
+        batchIndex?: number | null;
+        freshSession?: boolean;
+    },
+): Promise<ContentTranslatePromptResponse> {
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath('content-translate/get-gemini-prompt'), {
         method: 'POST',
@@ -169,6 +185,8 @@ export async function fetchContentTranslatePrompt(
             post_id: postId,
             id: postId,
             target_lang: targetLang,
+            batch_index: options?.batchIndex ?? undefined,
+            fresh_session: options?.freshSession !== false ? 1 : 0,
             access_token: token,
         }),
     });
@@ -184,6 +202,8 @@ export type ContentMarkdownFormatPromptResponse = {
     batch_index?: number;
     batch_count?: number;
     batch_codes?: string[];
+    placeholder_codes?: string[];
+    source_tail?: string;
     message?: { content?: string } | string;
 };
 
@@ -204,6 +224,7 @@ export async function fetchContentMarkdownFormatPrompt(
             id: postId,
             target_lang: targetLang,
             access_token: token,
+            fresh_session: 1,
         }),
     });
     return res.json();
@@ -233,11 +254,15 @@ export function buildGeminiWorkflowUrl(options: {
     postId: number;
     action: MarketingWorkflowAction;
     targetLang?: string | null;
+    translateScope?: string | null;
+    batchIndex?: number | null;
+    batchCodes?: string[];
+    freshSession?: boolean;
     prompt: string;
     topic?: string;
     auto?: boolean;
 }): string {
-    const { postId, action, targetLang, prompt, topic, auto } = options;
+    const { postId, action, targetLang, prompt, topic, auto, batchIndex, batchCodes, freshSession } = options;
     const accessToken = getAccessToken() ?? '';
     const apiUrl = marketingWorkflowSaveApiUrl(action);
     const isFacebook = action === 'facebook_distribution';
@@ -269,6 +294,20 @@ export function buildGeminiWorkflowUrl(options: {
         targetLang
     ) {
         hashParams.set('target_lang', targetLang.trim().toLowerCase());
+    }
+    if (action === 'content_translate') {
+        if (batchIndex !== undefined && batchIndex !== null) {
+            hashParams.set('batch_index', String(batchIndex));
+        }
+        if (batchCodes && batchCodes.length > 0) {
+            hashParams.set('batch_codes', encodeURIComponent(JSON.stringify(batchCodes)));
+        }
+        if (freshSession !== false) {
+            hashParams.set('fresh_session', '1');
+        }
+    }
+    if (isMarkdownFormat && freshSession !== false) {
+        hashParams.set('fresh_session', '1');
     }
     if (topic) {
         hashParams.set('topic', topic);
@@ -356,28 +395,51 @@ export async function openMarketingGeminiWorkflow(
             window.alert(msg || 'Không tạo được prompt format markdown');
             return;
         }
-        const batchCount = Number(res.batch_count ?? 1);
-        const batchIndex = Number(res.batch_index ?? 0);
-        if (batchCount > 1) {
-            window.alert(
-                `Bài dài — format markdown chia ${batchCount} batch. ` +
-                    `Đang mở batch ${batchIndex + 1}/${batchCount} cho ${lang.toUpperCase()}. ` +
-                    'Extension auto sẽ tiếp tục các batch còn lại sau khi lưu từng batch.'
-            );
-        }
         prompt = String(res.prompt || '').trim();
-    } else {
+    } else if (action === 'content_translate') {
         const lang = String(workflow.target_lang || '').trim().toLowerCase();
         if (!lang) {
             window.alert('Thiếu ngôn ngữ đích');
             return;
         }
-        const res = await fetchContentTranslatePrompt(postId, lang);
+        const res = await fetchContentTranslatePrompt(postId, lang, {
+            freshSession: true,
+        });
         if (!res?.success) {
-            window.alert('Không tạo được prompt dịch');
+            const msg =
+                typeof res?.message === 'object'
+                    ? res.message?.content
+                    : typeof res?.message === 'string'
+                      ? res.message
+                      : 'Không tạo được prompt dịch';
+            window.alert(msg || 'Không tạo được prompt dịch');
             return;
         }
+        const batchCount = Number(res.batch_count ?? 1);
+        const batchIndex = Number(res.batch_index ?? 0);
+        if (batchCount > 1) {
+            window.alert(
+                `Dịch ${lang.toUpperCase()}: batch ${batchIndex + 1}/${batchCount}. ` +
+                    'Mỗi batch mở tab Gemini mới — extension đóng tab sau khi lưu.',
+            );
+        }
         prompt = String(res.prompt || '').trim();
+        const geminiUrl = buildGeminiWorkflowUrl({
+            postId,
+            action,
+            targetLang: workflow.target_lang,
+            batchIndex,
+            batchCodes: res.batch_codes,
+            freshSession: true,
+            prompt,
+            topic,
+            auto: options?.auto,
+        });
+        window.open(geminiUrl, '_blank', 'noopener,noreferrer');
+        return;
+    } else {
+        window.alert('Hành động workflow không hỗ trợ');
+        return;
     }
 
     if (!prompt) {
@@ -389,9 +451,11 @@ export async function openMarketingGeminiWorkflow(
         postId,
         action,
         targetLang: workflow.target_lang,
+        freshSession: action === 'content_markdown_format' ? true : undefined,
         prompt,
         topic,
         auto: options?.auto,
     });
     window.open(geminiUrl, '_blank', 'noopener,noreferrer');
 }
+

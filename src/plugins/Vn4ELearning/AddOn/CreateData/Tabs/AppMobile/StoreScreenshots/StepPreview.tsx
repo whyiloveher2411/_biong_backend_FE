@@ -1,34 +1,31 @@
 import React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardMedia,
-    Link,
-    Stack,
-    Typography,
-} from '@mui/material';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { Alert, Box, Stack } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import useDraggableScroll from 'hook/useDraggableScroll';
 import type { StoreScreenshotConfig } from './storeScreenshotTypes';
-import {
-    getPromptLangText,
-    normalizeMultilangText,
-    STORE_SCREENSHOT_PROMPT_LANG,
-} from './storeScreenshotMultilang';
+import { encodeExternalImageUrlWithCacheBust } from './storeScreenshotImageUtils';
 
 type Props = {
     config: StoreScreenshotConfig;
 };
 
 function StepPreview({ config }: Props) {
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+    const { onMouseDown } = useDraggableScroll(scrollRef, { direction: 'horizontal' });
+
     const items = [...(config.screenshots || [])]
         .sort((a, b) => a.order - b.order)
         .filter((item) => String(item.ai_image_url || '').trim() !== '');
 
+    const previewCacheBust = React.useMemo(
+        () => Date.now(),
+        [items.map((item) => `${item.id}:${item.ai_image_url}`).join('|')],
+    );
+
     return (
         <Stack spacing={2}>
             <Alert severity="info">
-                Xem trước các ảnh store do AI tạo mà bạn đã upload ở bước Copy & ảnh AI.
+                Xem trước các ảnh store do AI tạo mà bạn đã upload ở bước Copy & ảnh AI. Kéo ngang để xem như trên app store.
             </Alert>
 
             {items.length === 0 ? (
@@ -37,60 +34,59 @@ function StepPreview({ config }: Props) {
                 </Alert>
             ) : (
                 <Box
-                    sx={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                    ref={scrollRef}
+                    onMouseDown={onMouseDown}
+                    sx={(theme) => ({
+                        display: 'flex',
+                        alignItems: 'flex-start',
                         gap: 2,
-                    }}
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        cursor: 'grab',
+                        py: 3,
+                        px: { xs: 1.5, md: 2.5 },
+                        borderRadius: 2,
+                        bgcolor: alpha(theme.palette.common.black, 0.04),
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        scrollSnapType: 'x mandatory',
+                        WebkitOverflowScrolling: 'touch',
+                        '&::-webkit-scrollbar': { height: 8 },
+                        '&::-webkit-scrollbar-thumb': {
+                            borderRadius: 4,
+                            bgcolor: 'action.disabled',
+                        },
+                    })}
                 >
                     {items.map((item) => {
-                        const headlineMap = normalizeMultilangText(item.headline);
-                        const subtitleMap = normalizeMultilangText(item.subtitle);
-                        const promptHeadline = getPromptLangText(headlineMap);
-                        const promptSubtitle = getPromptLangText(subtitleMap);
-                        const reviewLines = [
-                            ...Object.entries(headlineMap)
-                                .filter(([lang]) => lang !== STORE_SCREENSHOT_PROMPT_LANG)
-                                .map(([lang, text]) => `${lang} headline: ${text}`),
-                            ...Object.entries(subtitleMap)
-                                .filter(([lang]) => lang !== STORE_SCREENSHOT_PROMPT_LANG)
-                                .map(([lang, text]) => `${lang} subtitle: ${text}`),
-                        ];
+                        const imageUrl = encodeExternalImageUrlWithCacheBust(item.ai_image_url, previewCacheBust);
 
                         return (
-                        <Card key={item.id}>
-                            <CardMedia
-                                component="img"
-                                image={item.ai_image_url}
-                                alt={`AI screenshot ${item.order}`}
-                                sx={{ height: 360, objectFit: 'cover' }}
-                            />
-                            <Box sx={{ p: 1.5 }}>
-                                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                                    Screenshot #{item.order}
-                                </Typography>
-                                {promptHeadline ? (
-                                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.25 }}>
-                                        {promptHeadline}
-                                    </Typography>
-                                ) : null}
-                                {promptSubtitle ? (
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                        {promptSubtitle}
-                                    </Typography>
-                                ) : null}
-                                {reviewLines.length > 0 ? (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                        Review: {reviewLines.join(' · ')}
-                                    </Typography>
-                                ) : null}
-                                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <Link href={item.ai_image_url} target="_blank" rel="noopener noreferrer">
-                                        <OpenInNewIcon fontSize="small" />
-                                    </Link>
-                                </Box>
+                            <Box
+                                key={item.id}
+                                sx={(theme) => ({
+                                    flex: '0 0 auto',
+                                    scrollSnapAlign: 'start',
+                                    borderRadius: 2.5,
+                                    overflow: 'hidden',
+                                    bgcolor: theme.palette.common.black,
+                                    boxShadow: theme.shadows[6],
+                                })}
+                            >
+                                <Box
+                                    component="img"
+                                    src={imageUrl}
+                                    alt={`Store screenshot ${item.order}`}
+                                    draggable={false}
+                                    sx={{
+                                        display: 'block',
+                                        height: 'auto',
+                                        width: 'auto',
+                                        maxHeight: 'min(78vh, 920px)',
+                                        objectFit: 'contain',
+                                    }}
+                                />
                             </Box>
-                        </Card>
                         );
                     })}
                 </Box>

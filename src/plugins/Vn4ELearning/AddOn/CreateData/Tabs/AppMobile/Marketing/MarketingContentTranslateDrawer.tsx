@@ -13,7 +13,6 @@ import {
     LinearProgress,
     List,
     ListItem,
-    ListItemSecondaryAction,
     ListItemText,
     Typography,
 } from '@mui/material';
@@ -21,42 +20,18 @@ import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
-import { getAccessToken } from 'store/user/user.reducers';
-import { getApiHost } from 'helpers/apiHost';
-import { convertToURL } from 'helpers/url';
-
-const CONTENT_TRANSLATE_GEMINI_STAGE = 'content_translate';
-const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
-
-function buildGeminiContentTranslateUrl(postId: number, prompt: string, targetLang: string): string {
-    const accessToken = getAccessToken() ?? '';
-    const apiUrl = convertToURL(
-        getApiHost(),
-        '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/content-translate/update-from-overview',
-    );
-    const url = new URL(GEMINI_WEB_APP_URL);
-    const hashParams = new URLSearchParams({
-        copy_marketing_ai: '1',
-        marketing_post_id: String(postId),
-        marketing_stage: CONTENT_TRANSLATE_GEMINI_STAGE,
-        target_lang: targetLang,
-        access_token: accessToken,
-        api_url: apiUrl,
-        content_type: 'long_form',
-    });
-    const promptTrimmed = prompt.trim();
-    if (promptTrimmed) {
-        hashParams.set('marketing_prompt', encodeURIComponent(promptTrimmed));
-    }
-    url.hash = hashParams.toString();
-    return url.toString();
-}
 
 type LanguageItem = {
     code: string;
     name: string;
     flag_code?: string;
     icon_url?: string;
+};
+
+type TranslateLangStatus = {
+    needs_translate?: boolean;
+    translate_complete?: boolean;
+    partial_items?: string[];
 };
 
 type PrepareData = {
@@ -67,6 +42,7 @@ type PrepareData = {
     missing_langs?: string[];
     filled_langs?: string[];
     can_translate?: boolean;
+    translate_status?: Record<string, TranslateLangStatus>;
     source?: { title?: string; content_block_count?: number };
     message?: { content?: string } | string;
 };
@@ -145,21 +121,31 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
     const handleOpenGeminiWeb = (targetLang: string) => {
         if (!postId || !targetLang || aiLoading !== null) return;
         const code = targetLang.trim().toLowerCase();
-        if (!code) return;
+        if (!code || code === 'vi') return;
 
         setGeminiWebOpening((prev) => ({ ...prev, [code]: true }));
-        setStatusAlert({ severity: 'info', text: `Đang tạo prompt dịch sang ${code}…` });
+        setStatusAlert({
+            severity: 'info',
+            text: `Đang tạo prompt dịch sang ${code}…`,
+        });
 
         apiAjaxRef.current({
             url: 'plugin/vn4-e-learning/app-mobile/marketing/content-translate/get-gemini-prompt',
             method: 'POST',
-            data: { post_id: postId, id: postId, target_lang: code },
+            data: {
+                post_id: postId,
+                id: postId,
+                target_lang: code,
+                fresh_session: 1,
+            },
             loading: false,
             success: (res: {
                 success?: boolean;
                 prompt?: string;
-                content_truncated?: boolean;
                 target_lang?: string;
+                batch_index?: number;
+                batch_count?: number;
+                batch_codes?: string[];
             }) => {
                 setGeminiWebOpening((prev) => ({ ...prev, [code]: false }));
                 if (!res?.success) {
@@ -172,11 +158,27 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                     return;
                 }
                 const lang = String(res.target_lang || code);
-                window.open(buildGeminiContentTranslateUrl(postId, promptText, lang), '_blank', 'noopener,noreferrer');
+                const batchCount = Number(res.batch_count ?? 1);
+                const batchIndex = Number(res.batch_index ?? 0);
+
+                void import('helpers/marketingGeminiWorkflow').then(({ buildGeminiWorkflowUrl }) => {
+                    const url = buildGeminiWorkflowUrl({
+                        postId,
+                        action: 'content_translate',
+                        targetLang: lang,
+                        batchIndex,
+                        batchCodes: res.batch_codes,
+                        freshSession: true,
+                        prompt: promptText,
+                    });
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                });
+
                 let msg =
-                    `Đã mở Gemini web (${lang}). Extension sẽ dán prompt, gửi, lưu bản dịch và đóng tab — quay lại drawer để xem.`;
-                if (res.content_truncated) {
-                    msg += ' (Nội dung nguồn đã cắt bớt trong prompt.)';
+                    `Đã mở Gemini web — dịch ${lang.toUpperCase()} (title + text + caption). ` +
+                    'Extension lưu batch và đóng tab; quay lại drawer để xem tiến độ.';
+                if (batchCount > 1) {
+                    msg += ` (Batch ${batchIndex + 1}/${batchCount}.)`;
                 }
                 setStatusAlert({ severity: 'info', text: msg });
             },
@@ -224,6 +226,11 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
         });
     };
 
+    const translateLanguages = React.useMemo(() => {
+        const langs = prepareData?.languages ?? prepareData?.missing_languages ?? [];
+        return langs.filter((lang) => String(lang.code || '').trim().toLowerCase() !== 'vi');
+    }, [prepareData?.languages, prepareData?.missing_languages]);
+
     const actionFooter = (
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end', width: '100%' }}>
             <Button onClick={onClose}>Đóng</Button>
@@ -252,8 +259,8 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                 {prepareData?.success && (
                     <Box>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Dịch <strong>title</strong> và <strong>content_text</strong> từ ngôn ngữ nguồn sang các
-                            ngôn ngữ của app còn thiếu. Ngôn ngữ đã có nội dung sẽ được bỏ qua.
+                            Dịch từ <strong>VI đã format markdown</strong> sang các ngôn ngữ app — một bước
+                            gồm title, body text và caption ảnh. Mỗi batch Gemini = tab mới.
                         </Typography>
 
                         <Box sx={{ mb: 2 }}>
@@ -274,10 +281,12 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                             Đã có bản dịch
                         </Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
-                            {(prepareData.filled_langs || []).map((code) => (
-                                <Chip key={code} size="small" label={code} color="success" variant="outlined" />
-                            ))}
-                            {(prepareData.filled_langs || []).length === 0 && (
+                            {(prepareData.filled_langs || [])
+                                .filter((code) => code !== 'vi')
+                                .map((code) => (
+                                    <Chip key={code} size="small" label={code} color="success" variant="outlined" />
+                                ))}
+                            {(prepareData.filled_langs || []).filter((c) => c !== 'vi').length === 0 && (
                                 <Typography variant="caption" color="text.secondary">
                                     Chưa có
                                 </Typography>
@@ -285,29 +294,45 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                         </Box>
 
                         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                            Cần dịch
+                            Dịch theo ngôn ngữ
                         </Typography>
                         <List dense sx={{ mb: 2 }}>
-                            {(prepareData.missing_languages || []).map((lang) => (
-                                <ListItem key={lang.code} sx={{ pr: 12 }}>
-                                    <ListItemText primary={lang.name} secondary={lang.code} />
-                                    <ListItemSecondaryAction>
-                                        <LoadingButton
-                                            size="small"
-                                            variant="contained"
-                                            color="info"
-                                            disabled={aiLoading !== null}
-                                            loading={!!geminiWebOpening[lang.code]}
-                                            onClick={() => handleOpenGeminiWeb(lang.code)}
-                                        >
-                                            Dùng Gemini web
-                                        </LoadingButton>
-                                    </ListItemSecondaryAction>
-                                </ListItem>
-                            ))}
-                            {(prepareData.missing_languages || []).length === 0 && (
+                            {translateLanguages.map((lang) => {
+                                const code = String(lang.code || '').trim().toLowerCase();
+                                const status = prepareData.translate_status?.[code];
+                                const needsTranslate = status?.needs_translate ?? true;
+
+                                return (
+                                    <ListItem key={lang.code} sx={{ pr: 2, flexDirection: 'column', alignItems: 'stretch' }}>
+                                        <ListItemText
+                                            primary={lang.name}
+                                            secondary={
+                                                <>
+                                                    {code}
+                                                    {status?.partial_items?.length ? (
+                                                        <> · partial: {status.partial_items.join(', ')}</>
+                                                    ) : null}
+                                                </>
+                                            }
+                                        />
+                                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                                            <LoadingButton
+                                                size="small"
+                                                variant={needsTranslate ? 'contained' : 'outlined'}
+                                                color="info"
+                                                disabled={!needsTranslate || aiLoading !== null}
+                                                loading={!!geminiWebOpening[code]}
+                                                onClick={() => handleOpenGeminiWeb(code)}
+                                            >
+                                                {needsTranslate ? `Dịch ${code.toUpperCase()} (Gemini)` : 'Đã dịch ✓'}
+                                            </LoadingButton>
+                                        </Box>
+                                    </ListItem>
+                                );
+                            })}
+                            {translateLanguages.length === 0 && (
                                 <ListItem>
-                                    <ListItemText primary="Đã đủ tất cả ngôn ngữ của app" />
+                                    <ListItemText primary="Không có ngôn ngữ đích (ngoài VI)" />
                                 </ListItem>
                             )}
                         </List>
@@ -350,11 +375,11 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
             </DrawerCustom>
 
             <Dialog open={confirmProvider !== null} onClose={() => setConfirmProvider(null)}>
-                <DialogTitle>Xác nhận dịch</DialogTitle>
+                <DialogTitle>Xác nhận dịch API</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Dịch title và content_text sang {(prepareData?.missing_langs || []).join(', ')} bằng{' '}
-                        {confirmProvider === 'gemini' ? 'Gemini API' : 'DeepSeek'}?
+                        Dịch tự động qua {confirmProvider === 'gemini' ? 'Gemini' : 'DeepSeek'} API cho các ngôn ngữ
+                        thiếu. Tiếp tục?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
@@ -367,7 +392,7 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                             if (p) runTranslate(p);
                         }}
                     >
-                        Tiếp tục
+                        Dịch
                     </Button>
                 </DialogActions>
             </Dialog>

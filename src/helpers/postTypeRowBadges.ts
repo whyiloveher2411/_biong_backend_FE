@@ -10,6 +10,7 @@ export type PostTypeRowWorkflowBadge = {
         | 'pro_value_assessment'
         | 'xai_tts';
     target_lang?: string | null;
+    translate_scope?: 'text' | 'caption' | string | null;
     post_id: number;
     stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'done' | string;
     platform?: string | null;

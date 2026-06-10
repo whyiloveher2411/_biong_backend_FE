@@ -3,32 +3,23 @@ import {
     Alert,
     Box,
     Card,
-    CardMedia,
     Stack,
-    Typography,
 } from '@mui/material';
-import ImageForm from 'components/atoms/fields/image/Form';
 import LoadingButton from 'components/atoms/LoadingButton';
 import type { ImageObjectProps } from 'helpers/image';
-import {
-    MarketingCopyImageButton,
-    MarketingCopyPromptButton,
-} from '../Marketing/MarketingPromptActionButtons';
-import ScreenshotCropTargetField from './ScreenshotCropTargetField';
-import ScreenshotBackgroundPatternField from './ScreenshotBackgroundPatternField';
-import ScreenshotDecorOptionsField from './ScreenshotDecorOptionsField';
-import ScreenshotFeatureHighlightField from './ScreenshotFeatureHighlightField';
-import StoreScreenshotColorField from './StoreScreenshotColorField';
-import ScreenshotLogoPlacementField from './ScreenshotLogoPlacementField';
+import { MarketingCopyImageButton } from '../Marketing/MarketingPromptActionButtons';
+import StepMappingHeadlineBulkPanel from './StepMappingHeadlineBulkPanel';
+import StepMappingItemEditor from './StepMappingItemEditor';
+import StepMappingScreenshotNav from './StepMappingScreenshotNav';
+import { normalizeBackgroundPatternId } from './storeScreenshotBackgroundPattern';
+import { normalizeBackgroundColor } from './storeScreenshotBackgroundColorPrompt';
+import { normalizeFeatureHighlightText } from './storeScreenshotFeatureHighlightPrompt';
+import { normalizeHexColor } from './storeScreenshotColorUtils';
 import {
     DEFAULT_CROP_TARGET_SIZE_ID,
     normalizeCropTargetSizeId,
 } from './storeScreenshotCropTarget';
-import { normalizeBackgroundPatternId } from './storeScreenshotBackgroundPattern';
 import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
-import { normalizeBackgroundColor } from './storeScreenshotBackgroundColorPrompt';
-import { normalizeFeatureHighlightText } from './storeScreenshotFeatureHighlightPrompt';
-import { normalizeHexColor } from './storeScreenshotColorUtils';
 import {
     DEFAULT_LOGO_PLACEMENT_ID,
     logoPlacementUsesLogo,
@@ -38,30 +29,23 @@ import type {
     StoreMetadata,
     StoreScreenshotConfig,
     StoreScreenshotItem,
+    StoreScreenshotProjectResponse,
     StoreScreenshotTarget,
 } from './storeScreenshotTypes';
 import {
     fetchStoreScreenshotAppLogoBlob,
+    fetchStoreScreenshotProject,
     fetchStoreScreenshotSourceImageBlob,
     saveStoreScreenshotAiContent,
 } from './storeScreenshotApi';
 import { buildStoreScreenshotAiPrompt } from './storeScreenshotPrompt';
 import { buildHeadlineBulkPrompt } from './storeScreenshotHeadlinePrompt';
 import { applyHeadlinesToItems } from './storeScreenshotHeadlineParser';
-import StepMappingHeadlineBulkPanel from './StepMappingHeadlineBulkPanel';
-import {
-    getCopyStylePresetById,
-    getScreenshotPositionHint,
-    normalizeCopyStylePresetId,
-} from './storeScreenshotCopyStyleOptions';
-import StoreScreenshotExampleHighlight from './StoreScreenshotExampleHighlight';
-import StoreScreenshotMultilangField from './StoreScreenshotMultilangField';
 import {
     normalizeMultilangText,
-    type StoreScreenshotMultilangText,
 } from './storeScreenshotMultilang';
+import type { EditableItem } from './stepMappingTypes';
 import {
-    encodeExternalImageUrl,
     getStoreScreenshotAiFieldName,
     imageUrlToImageObject,
     imageUrlToImagePostValue,
@@ -77,13 +61,8 @@ type Props = {
     config: StoreScreenshotConfig;
     targets: Record<string, StoreScreenshotTarget>;
     onUpdated: (config: StoreScreenshotConfig) => void;
+    onProjectRefreshed?: (result: StoreScreenshotProjectResponse) => void;
     onError: (message: string) => void;
-};
-
-type EditableItem = Omit<StoreScreenshotItem, 'headline' | 'subtitle'> & {
-    headline: StoreScreenshotMultilangText;
-    subtitle: StoreScreenshotMultilangText;
-    ai_image: ImageObjectProps | null;
 };
 
 function buildEditableItems(screenshots: StoreScreenshotItem[]): EditableItem[] {
@@ -94,7 +73,11 @@ function buildEditableItems(screenshots: StoreScreenshotItem[]): EditableItem[] 
             headline: normalizeMultilangText(item.headline),
             subtitle: normalizeMultilangText(item.subtitle),
             ai_image_url: item.ai_image_url || '',
-            ai_image: imageUrlToImageObject(item.ai_image_url, item.width, item.height),
+            ai_image: imageUrlToImageObject(
+                item.ai_image_url,
+                item.ai_image_width || item.width,
+                item.ai_image_height || item.height,
+            ),
             crop_target_size: normalizeCropTargetSizeId(item.crop_target_size),
             logo_placement: normalizeLogoPlacementId(item.logo_placement),
             floating_icons_enabled: normalizeFloatingIconsEnabled(item.floating_icons_enabled),
@@ -113,24 +96,29 @@ function StepMapping({
     appLogoUrl,
     storeMetadata,
     config,
-    targets,
     onUpdated,
+    onProjectRefreshed,
     onError,
 }: Props) {
     const [items, setItems] = React.useState<EditableItem[]>([]);
+    const [activeId, setActiveId] = React.useState('');
     const [saving, setSaving] = React.useState(false);
     const [copyNotice, setCopyNotice] = React.useState('');
     const [imageFieldKeys, setImageFieldKeys] = React.useState<Record<string, number>>({});
     const postRef = React.useRef<Record<string, ImageObjectProps | ''>>({});
 
-    React.useEffect(() => {
-        const nextItems = buildEditableItems(config.screenshots || []);
+    const applyProjectConfig = React.useCallback((projectConfig: StoreScreenshotConfig) => {
+        const nextItems = buildEditableItems(projectConfig.screenshots || []);
         setItems(nextItems);
 
         const nextPost: Record<string, ImageObjectProps | ''> = {};
         nextItems.forEach((item) => {
             const fieldName = getStoreScreenshotAiFieldName(item.id);
-            nextPost[fieldName] = imageUrlToImagePostValue(item.ai_image_url, item.width, item.height);
+            nextPost[fieldName] = imageUrlToImagePostValue(
+                item.ai_image_url,
+                item.ai_image_width || item.width,
+                item.ai_image_height || item.height,
+            );
         });
         postRef.current = nextPost;
         setImageFieldKeys((prev) => {
@@ -140,9 +128,20 @@ function StepMapping({
             });
             return next;
         });
-    }, [config.updated_at]);
+        setActiveId((prev) => {
+            if (prev && nextItems.some((item) => item.id === prev)) {
+                return prev;
+            }
+            return nextItems[0]?.id || '';
+        });
+    }, []);
+
+    React.useEffect(() => {
+        applyProjectConfig(config);
+    }, [config.updated_at, applyProjectConfig]);
 
     const totalCount = items.length;
+    const activeItem = items.find((item) => item.id === activeId) || items[0];
     const brandColor = normalizeHexColor(config.template.brand_color, '#1A73E8');
     const backgroundColorSwatches = brandColor ? [brandColor] : [];
     const showLogoCopyButton = items.some((item) => logoPlacementUsesLogo(item.logo_placement));
@@ -183,11 +182,28 @@ function StepMapping({
         updateItem(id, {
             ai_image: image,
             ai_image_url: image?.link || '',
+            ai_image_width: image?.width || 0,
+            ai_image_height: image?.height || 0,
         });
         setImageFieldKeys((prev) => ({
             ...prev,
             [id]: (prev[id] || 0) + 1,
         }));
+    };
+
+    const handleRefreshAiImage = async (_id: string) => {
+        try {
+            const result = await fetchStoreScreenshotProject(appMobileId);
+            applyProjectConfig(result.config);
+            if (onProjectRefreshed) {
+                onProjectRefreshed(result);
+            } else {
+                onUpdated(result.config);
+            }
+            setCopyNotice('Đã tải lại toàn bộ dữ liệu từ server');
+        } catch (error) {
+            onError(error instanceof Error ? error.message : 'Không tải lại được dữ liệu từ server');
+        }
     };
 
     const handleSave = async () => {
@@ -226,11 +242,15 @@ function StepMapping({
         return <Alert severity="warning">Hãy chọn ít nhất 1 screenshot ở bước Upload.</Alert>;
     }
 
+    if (!activeItem) {
+        return null;
+    }
+
     return (
         <Box sx={{ position: 'relative' }}>
             <Stack spacing={2} sx={{ pb: 10 }}>
-                <Alert severity="info">
-                    Ưu tiên: headline/subtitle phải thu hút user tải app. Với từng ảnh: chọn kích thước cắt và vị trí logo. Nếu có logo: dán ảnh 1 = logo app, ảnh 2 = screenshot gốc trước khi gửi prompt. Bước 1: prompt bulk headline. Bước 2: copy logo (nếu cần) + copy ảnh gốc + copy prompt ảnh → AI → upload kết quả.
+                <Alert severity="info" sx={{ py: 1 }}>
+                    Bước 1: sinh headline bulk. Bước 2: chọn ảnh ở thanh trên → chỉnh từng tab → copy prompt/ảnh → AI → upload. Logo (nếu có): ảnh 1 = logo, ảnh 2 = screenshot.
                 </Alert>
 
                 <StepMappingHeadlineBulkPanel
@@ -251,144 +271,37 @@ function StepMapping({
                     </Alert>
                 ) : null}
 
-                {items.map((item) => {
-                const promptText = resolvePrompt(item);
-                const fieldName = getStoreScreenshotAiFieldName(item.id);
-                const previewUrl = encodeExternalImageUrl(item.source_url);
-                const getImageBlob = () => fetchStoreScreenshotSourceImageBlob(appMobileId, item.id);
-                const itemCopyPreset = getCopyStylePresetById(
-                    normalizeCopyStylePresetId(item.copy_style_preset),
-                );
+                <StepMappingScreenshotNav
+                    items={items}
+                    activeId={activeItem.id}
+                    onSelect={setActiveId}
+                />
 
-                return (
-                    <Card key={item.id} sx={{ p: 2 }}>
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: {
-                                    xs: '1fr',
-                                    md: 'minmax(140px, 180px) minmax(0, 1fr) minmax(140px, 180px)',
-                                },
-                                gap: 2,
-                                alignItems: 'start',
-                            }}
-                        >
-                            <Stack spacing={1}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Ảnh gốc
-                                </Typography>
-                                <CardMedia
-                                    component="img"
-                                    image={previewUrl}
-                                    alt={`Screenshot ${item.order}`}
-                                    sx={{ height: 220, objectFit: 'cover', borderRadius: 1 }}
-                                />
-                                <MarketingCopyImageButton
-                                    imageUrl={previewUrl}
-                                    getImageBlob={getImageBlob}
-                                    onCopyNotice={setCopyNotice}
-                                    fullWidth
-                                />
-                                <ScreenshotFeatureHighlightField
-                                    value={item.feature_highlight || ''}
-                                    onChange={(featureHighlight) => updateItem(item.id, {
-                                        feature_highlight: featureHighlight,
-                                    })}
-                                />
-                                <ScreenshotBackgroundPatternField
-                                    value={item.background_pattern || ''}
-                                    onChange={(backgroundPattern) => updateItem(item.id, {
-                                        background_pattern: backgroundPattern,
-                                    })}
-                                />
-                                <ScreenshotDecorOptionsField
-                                    floatingIconsEnabled={normalizeFloatingIconsEnabled(item.floating_icons_enabled)}
-                                    onFloatingIconsChange={(floatingIconsEnabled) => updateItem(item.id, {
-                                        floating_icons_enabled: floatingIconsEnabled,
-                                    })}
-                                />
-                                <StoreScreenshotColorField
-                                    label="Màu nền"
-                                    value={item.background_color || ''}
-                                    onChange={(backgroundColor) => updateItem(item.id, {
-                                        background_color: normalizeBackgroundColor(backgroundColor),
-                                    })}
-                                    swatchColors={backgroundColorSwatches}
-                                    note="Để trống để dùng màu brand từ template. Chọn màu riêng cho từng ảnh."
-                                />
-                            </Stack>
-
-                            <Stack spacing={1.5}>
-                                <Typography variant="subtitle1">Screenshot #{item.order}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Phong cách: {itemCopyPreset.label}
-                                    {item.caption ? ` · ${item.caption}` : ''}
-                                </Typography>
-
-                                <StoreScreenshotMultilangField
-                                    label="Headline"
-                                    value={item.headline}
-                                    onChange={(headline) => updateItem(item.id, { headline })}
-                                    placeholder="Learn in just 5 minutes a day"
-                                    helperText="Bản en dùng trong prompt ảnh AI. Bản vi thường sinh từ prompt bulk."
-                                />
-
-                                <StoreScreenshotMultilangField
-                                    label="Subtitle"
-                                    value={item.subtitle}
-                                    onChange={(subtitle) => updateItem(item.id, { subtitle })}
-                                    placeholder="Short lessons that fit a busy schedule"
-                                    helperText="Ngắn hơn headline. En cho prompt ảnh; vi cho review."
-                                />
-
-                                <ScreenshotCropTargetField
-                                    value={item.crop_target_size || DEFAULT_CROP_TARGET_SIZE_ID}
-                                    onChange={(cropTargetSize) => updateItem(item.id, {
-                                        crop_target_size: cropTargetSize,
-                                    })}
-                                />
-
-                                <ScreenshotLogoPlacementField
-                                    value={item.logo_placement || DEFAULT_LOGO_PLACEMENT_ID}
-                                    onChange={(logoPlacement) => updateItem(item.id, {
-                                        logo_placement: logoPlacement,
-                                    })}
-                                />
-
-                                <StoreScreenshotExampleHighlight
-                                    title={`Gợi ý #${item.order} — ${itemCopyPreset.label}`}
-                                    headline={itemCopyPreset.example.headline}
-                                    subtitle={itemCopyPreset.example.subtitle}
-                                    avoid={itemCopyPreset.example.avoid}
-                                    hint={getScreenshotPositionHint(item.order, totalCount)}
-                                />
-
-                                <MarketingCopyPromptButton
-                                    promptText={promptText}
-                                    sx={{ alignSelf: 'flex-start' }}
-                                />
-                            </Stack>
-
-                            <Stack spacing={1}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Ảnh AI
-                                </Typography>
-                                <ImageForm
-                                    key={imageFieldKeys[item.id] || 0}
-                                    component="image"
-                                    name={fieldName}
-                                    post={postRef.current}
-                                    config={{
-                                        title: '',
-                                        multiple: false,
-                                    }}
-                                    onReview={(value) => handleAiImageReview(item.id, value)}
-                                />
-                            </Stack>
-                        </Box>
-                    </Card>
-                );
-                })}
+                <Card sx={{ p: 2 }}>
+                    <StepMappingItemEditor
+                        key={activeItem.id}
+                        appMobileId={appMobileId}
+                        appLogoUrl={appLogoUrl}
+                        item={activeItem}
+                        totalCount={totalCount}
+                        promptText={resolvePrompt(activeItem)}
+                        imageFieldKey={imageFieldKeys[activeItem.id] || 0}
+                        fieldName={getStoreScreenshotAiFieldName(activeItem.id)}
+                        post={postRef.current}
+                        backgroundColorSwatches={backgroundColorSwatches}
+                        onItemChange={(patch) => updateItem(activeItem.id, patch)}
+                        onAiImageReview={(value) => handleAiImageReview(activeItem.id, value)}
+                        onCopyNotice={setCopyNotice}
+                        onError={onError}
+                        onRefreshAiImage={() => handleRefreshAiImage(activeItem.id)}
+                        getImageBlob={() => fetchStoreScreenshotSourceImageBlob(appMobileId, activeItem.id)}
+                        getLogoBlob={
+                            logoPlacementUsesLogo(activeItem.logo_placement)
+                                ? getAppLogoBlob
+                                : undefined
+                        }
+                    />
+                </Card>
             </Stack>
 
             <Box

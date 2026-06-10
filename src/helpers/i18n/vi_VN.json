@@ -98,6 +98,7 @@
     "Save link": "Lưu link",
     "Saving…": "Đang lưu…",
     "Reset to env default": "Khôi phục mặc định env",
+    "Use localhost:9999": "Dùng localhost:9999",
     "If the custom link is unreachable, the app will automatically revert to the env default link.": "Nếu link tùy chỉnh không truy cập được, ứng dụng sẽ tự động quay về link mặc định từ env.",
     "Custom API link is invalid. Reverted to default from env.": "Link API tùy chỉnh không hợp lệ. Đã quay về mặc định từ env.",
     "Connected clients": "Client đang kết nối",

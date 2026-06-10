@@ -74,6 +74,7 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
             await openMarketingGeminiWorkflow({
                 action: wf.action,
                 target_lang: wf.target_lang,
+                translate_scope: wf.translate_scope,
                 post_id: wf.post_id,
                 platform: wf.platform,
                 distribution_stage: wf.distribution_stage,

@@ -25,6 +25,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { refreshScreen } from 'store/user/user.reducers';
 
+const LOCAL_API_HOST = 'http://localhost:9999';
+
 const useStyles = makeStyles(({ zIndex, spacing }: Theme) => ({
     popper: {
         zIndex: zIndex.appBar + 100,
@@ -90,8 +92,8 @@ export default function ApiLinkManager() {
         handleClose();
     };
 
-    const handleSave = async () => {
-        const normalized = normalizeApiHost(linkInput);
+    const saveHost = async (host: string) => {
+        const normalized = normalizeApiHost(host);
 
         if (!normalized) {
             showMessage(__('Please enter a valid API link'), 'error');
@@ -108,9 +110,14 @@ export default function ApiLinkManager() {
         }
 
         setCustomApiHost(normalized);
+        setLinkInput(normalized);
         applyHostChange(__('API link saved. Reloading data…'));
         setSaving(false);
     };
+
+    const handleSave = () => saveHost(linkInput);
+
+    const handleUseLocalhost = () => saveHost(LOCAL_API_HOST);
 
     const handleReset = () => {
         clearCustomApiHost();
@@ -186,6 +193,15 @@ export default function ApiLinkManager() {
                             sx={{ textTransform: 'none' }}
                         >
                             {saving ? __('Saving…') : __('Save link')}
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={handleUseLocalhost}
+                            disabled={saving}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            {__('Use localhost:9999')}
                         </Button>
                         <Button
                             variant="outlined"

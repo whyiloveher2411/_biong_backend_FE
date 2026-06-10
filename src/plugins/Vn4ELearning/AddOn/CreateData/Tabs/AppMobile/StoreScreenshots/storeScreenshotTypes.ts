@@ -49,6 +49,8 @@ export type StoreScreenshotItem = {
     ai_prompt: string;
     ai_image_url: string;
     ai_image_key: string;
+    ai_image_width?: number;
+    ai_image_height?: number;
     status: string;
 };
 

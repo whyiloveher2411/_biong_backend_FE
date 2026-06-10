@@ -98,6 +98,7 @@
     "Save link": "Save link",
     "Saving…": "Saving…",
     "Reset to env default": "Reset to env default",
+    "Use localhost:9999": "Use localhost:9999",
     "If the custom link is unreachable, the app will automatically revert to the env default link.": "If the custom link is unreachable, the app will automatically revert to the env default link.",
     "Custom API link is invalid. Reverted to default from env.": "Custom API link is invalid. Reverted to default from env.",
     "Connected clients": "Connected clients",
