@@ -25,7 +25,7 @@ function StepPreview({ config }: Props) {
     return (
         <Stack spacing={2}>
             <Alert severity="info">
-                Xem trước các ảnh store do AI tạo mà bạn đã upload ở bước Copy & ảnh AI. Kéo ngang để xem như trên app store.
+                Xem trước các ảnh store do AI tạo mà bạn đã upload ở bước Copy & ảnh AI. Cuộn hoặc kéo ngang tự do để xem như trên app store.
             </Alert>
 
             {items.length === 0 ? (
@@ -49,7 +49,7 @@ function StepPreview({ config }: Props) {
                         bgcolor: alpha(theme.palette.common.black, 0.04),
                         border: '1px solid',
                         borderColor: 'divider',
-                        scrollSnapType: 'x mandatory',
+                        scrollSnapType: 'none',
                         WebkitOverflowScrolling: 'touch',
                         '&::-webkit-scrollbar': { height: 8 },
                         '&::-webkit-scrollbar-thumb': {
@@ -66,7 +66,6 @@ function StepPreview({ config }: Props) {
                                 key={item.id}
                                 sx={(theme) => ({
                                     flex: '0 0 auto',
-                                    scrollSnapAlign: 'start',
                                     borderRadius: 2.5,
                                     overflow: 'hidden',
                                     bgcolor: theme.palette.common.black,

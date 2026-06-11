@@ -103,6 +103,8 @@ export type StoreScreenshotConfig = {
     version: number;
     status: StoreScreenshotStatus;
     active_step_id?: StoreScreenshotStepId;
+    /** ID screenshot đang chỉnh ở bước Copy & ảnh AI */
+    active_mapping_screenshot_id?: string;
     screenshots: StoreScreenshotItem[];
     template: StoreScreenshotTemplate;
     generated: StoreScreenshotGenerated[];

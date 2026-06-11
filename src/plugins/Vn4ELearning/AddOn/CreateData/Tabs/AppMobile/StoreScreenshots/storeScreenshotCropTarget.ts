@@ -77,13 +77,14 @@ export function getCropTargetSizeById(id: CropTargetSizeId): CropTargetSizeOptio
 
 export function buildCropTargetPromptLines(
     cropTargetSizeId?: string | null,
-    options?: { includeLogoInSafeZone?: boolean },
+    options?: { includeLogoInSafeZone?: boolean; logoImageNum?: number },
 ): string[] {
     const option = getCropTargetSizeById(normalizeCropTargetSizeId(cropTargetSizeId));
     const includeLogo = options?.includeLogoInSafeZone === true;
+    const logoImageNum = options?.logoImageNum ?? 1;
 
-    const portraitLines = buildPortraitSafeZoneLines(option, includeLogo);
-    const landscapeLines = buildLandscapeSafeZoneLines(option, includeLogo);
+    const portraitLines = buildPortraitSafeZoneLines(option, includeLogo, logoImageNum);
+    const landscapeLines = buildLandscapeSafeZoneLines(option, includeLogo, logoImageNum);
 
     return [
         '## Target crop size & safe framing (critical — read first)',
@@ -94,7 +95,11 @@ export function buildCropTargetPromptLines(
     ];
 }
 
-function buildPortraitSafeZoneLines(option: CropTargetSizeOption, includeLogo: boolean): string[] {
+function buildPortraitSafeZoneLines(
+    option: CropTargetSizeOption,
+    includeLogo: boolean,
+    logoImageNum: number,
+): string[] {
     return [
         `Target crop: ${option.label} (portrait, aspect ${option.ratio}).`,
         'The user will center-crop or trim your image to this exact aspect ratio. Your output size may differ — compose for safe cropping, not pixel-perfect export.',
@@ -109,14 +114,18 @@ function buildPortraitSafeZoneLines(option: CropTargetSizeOption, includeLogo: b
         '- No drop shadow under the device.',
         '- WRONG: phone centered with 25%+ empty gradient below it. RIGHT: phone nearly touches bottom safe zone.',
         ...(includeLogo
-            ? ['- Logo (from image 1): follow logo placement rules; keep inside safe zone margins.']
+            ? [`- Logo (from image ${logoImageNum}): follow logo placement rules; keep inside safe zone margins.`]
             : []),
         '- Background gradients, stars, and decorative shapes MAY bleed to edges — decoration only, never typography or UI.',
         '- Mental test: if a 9:19.5 crop window slides over your image, every letter of headline/subtitle and the full device must remain visible.',
     ];
 }
 
-function buildLandscapeSafeZoneLines(option: CropTargetSizeOption, includeLogo: boolean): string[] {
+function buildLandscapeSafeZoneLines(
+    option: CropTargetSizeOption,
+    includeLogo: boolean,
+    logoImageNum: number,
+): string[] {
     return [
         `Target crop: ${option.label} (landscape, aspect ${option.ratio}).`,
         'The user will center-crop or trim your image to this exact aspect ratio. Your output size may differ — compose for safe cropping, not pixel-perfect export.',
@@ -128,7 +137,7 @@ function buildLandscapeSafeZoneLines(option: CropTargetSizeOption, includeLogo: 
         '- Device mockup (hero): center or center-right; height 72–88% of canvas; width 38–50% of canvas. Largest object on the frame.',
         '- Must not extend into the outer 12% margin on any side, but fill available height aggressively.',
         ...(includeLogo
-            ? ['- Logo (from image 1): follow logo placement rules; keep inside safe zone margins.']
+            ? [`- Logo (from image ${logoImageNum}): follow logo placement rules; keep inside safe zone margins.`]
             : []),
         '- Background decoration MAY reach edges; readable text and device UI must not.',
         '- Mental test: if a 19.5:9 crop window slides over your image, every letter and the full device must remain visible.',

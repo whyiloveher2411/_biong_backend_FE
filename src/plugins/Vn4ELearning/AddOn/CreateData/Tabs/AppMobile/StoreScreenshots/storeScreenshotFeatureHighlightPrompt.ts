@@ -1,3 +1,6 @@
+import type { ImageAttachmentRoles } from './storeScreenshotImageAttachment';
+import { formatMainScreenshotRef } from './storeScreenshotImageAttachment';
+
 export function normalizeFeatureHighlightText(value?: string | null): string {
     return String(value || '').trim();
 }
@@ -8,12 +11,10 @@ export function hasFeatureHighlight(value?: string | null): boolean {
 
 export function buildFeatureHighlightPromptLines(
     instruction: string | undefined | null,
-    usesLogo: boolean,
+    roles: ImageAttachmentRoles,
 ): string[] {
     const text = normalizeFeatureHighlightText(instruction);
-    const mainImageRef = usesLogo
-        ? 'image 2 (main screenshot)'
-        : 'the attached main screenshot';
+    const mainImageRef = formatMainScreenshotRef(roles);
 
     if (!text) {
         return [

@@ -1,3 +1,5 @@
+import type { ImageAttachmentRoles } from './storeScreenshotImageAttachment';
+import { formatMainScreenshotRef } from './storeScreenshotImageAttachment';
 import { normalizeLogoPlacementId, type LogoPlacementId } from './storeScreenshotLogoPlacement';
 
 function isBottomLogoPlacement(placementId: LogoPlacementId): boolean {
@@ -12,16 +14,22 @@ function isBottomLogoPlacement(placementId: LogoPlacementId): boolean {
 export function buildMainImagePromptLines(
     usesLogo: boolean,
     logoPlacementId?: string | null,
+    roles?: ImageAttachmentRoles,
 ): string[] {
     const placement = normalizeLogoPlacementId(logoPlacementId);
     const bottomLogo = usesLogo && isBottomLogoPlacement(placement);
-    const imageRef = usesLogo
-        ? 'Image 2 (main screenshot)'
-        : 'The attached main screenshot';
+    const imageRoles = roles ?? { layoutRefNum: null, logoNum: usesLogo ? 1 : null, mainScreenshotNum: usesLogo ? 2 : 1 };
+    const imageRef = formatMainScreenshotRef(imageRoles);
+    const layoutRefNum = imageRoles.layoutRefNum;
 
     return [
         '## Main screenshot & device mockup (HIGHEST PRIORITY — size & layout)',
         `${imageRef} is the raw in-app UI. The device screen MUST display it faithfully — large, sharp, detailed.`,
+        ...(layoutRefNum
+            ? [
+                `CRITICAL: Phone screen pixels come ONLY from ${imageRef}. Do NOT show in-app UI from image ${layoutRefNum} (layout reference) inside the device.`,
+            ]
+            : []),
         'Never replace the real UI with a generic placeholder, wireframe, or re-drawn approximation.',
         '',
         '### Portrait layout blueprint (follow these percentages exactly)',
@@ -65,8 +73,12 @@ export function buildMainImagePromptLines(
 export function buildMainImageSizeOverrideLines(
     usesLogo: boolean,
     logoPlacementId?: string | null,
+    hasLayoutReference = false,
+    roles?: ImageAttachmentRoles,
 ): string[] {
     const bottomLogo = usesLogo && isBottomLogoPlacement(normalizeLogoPlacementId(logoPlacementId));
+    const imageRoles = roles ?? { layoutRefNum: null, logoNum: usesLogo ? 1 : null, mainScreenshotNum: usesLogo ? 2 : 1 };
+    const mainRef = formatMainScreenshotRef(imageRoles);
 
     return [
         '## FINAL CHECK — device size (override everything above if conflict)',
@@ -75,5 +87,10 @@ export function buildMainImageSizeOverrideLines(
             ? 'Bottom logo case: phone bottom must be within 8% of canvas bottom; no large empty band under the phone.'
             : 'Phone bottom within 8% of canvas bottom.',
         'If the phone looks small or there is a large empty area below it — enlarge the phone and push it downward until the layout matches the blueprint.',
+        ...(hasLayoutReference && imageRoles.layoutRefNum
+            ? [
+                `FINAL UI CHECK: in-app screen content must match ${mainRef} exactly — NOT image ${imageRoles.layoutRefNum}. If they look the same as the layout reference UI, regenerate using ${mainRef}.`,
+            ]
+            : []),
     ];
 }

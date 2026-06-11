@@ -1,10 +1,12 @@
+import type { ImageAttachmentRoles } from './storeScreenshotImageAttachment';
+import { formatMainScreenshotRef } from './storeScreenshotImageAttachment';
 import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
 
 export { normalizeFloatingIconsEnabled };
 
 export function buildFloatingIconsPromptLines(
     enabled: boolean,
-    usesLogo: boolean,
+    roles: ImageAttachmentRoles,
 ): string[] {
     if (!enabled) {
         return [
@@ -17,9 +19,7 @@ export function buildFloatingIconsPromptLines(
         ];
     }
 
-    const mainImageRef = usesLogo
-        ? 'image 2 (main screenshot)'
-        : 'the attached main screenshot';
+    const mainImageRef = formatMainScreenshotRef(roles);
 
     return [
         '## Floating icons & decorative UI outside the device (ENABLED)',

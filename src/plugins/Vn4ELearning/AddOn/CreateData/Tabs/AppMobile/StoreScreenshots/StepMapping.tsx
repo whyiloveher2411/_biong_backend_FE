@@ -36,8 +36,10 @@ import {
     fetchStoreScreenshotAppLogoBlob,
     fetchStoreScreenshotProject,
     fetchStoreScreenshotSourceImageBlob,
+    saveStoreScreenshotActiveScreenshot,
     saveStoreScreenshotAiContent,
 } from './storeScreenshotApi';
+import { resolveLayoutReference } from './storeScreenshotLayoutReference';
 import { buildStoreScreenshotAiPrompt } from './storeScreenshotPrompt';
 import { buildHeadlineBulkPrompt } from './storeScreenshotHeadlinePrompt';
 import { applyHeadlinesToItems } from './storeScreenshotHeadlineParser';
@@ -106,6 +108,23 @@ function StepMapping({
     const [copyNotice, setCopyNotice] = React.useState('');
     const [imageFieldKeys, setImageFieldKeys] = React.useState<Record<string, number>>({});
     const postRef = React.useRef<Record<string, ImageObjectProps | ''>>({});
+    const configRef = React.useRef(config);
+    configRef.current = config;
+
+    const resolveActiveScreenshotId = React.useCallback((
+        projectConfig: StoreScreenshotConfig,
+        itemsList: EditableItem[],
+        fallbackId = '',
+    ) => {
+        const savedId = String(projectConfig.active_mapping_screenshot_id || '').trim();
+        if (savedId && itemsList.some((item) => item.id === savedId)) {
+            return savedId;
+        }
+        if (fallbackId && itemsList.some((item) => item.id === fallbackId)) {
+            return fallbackId;
+        }
+        return itemsList[0]?.id || '';
+    }, []);
 
     const applyProjectConfig = React.useCallback((projectConfig: StoreScreenshotConfig) => {
         const nextItems = buildEditableItems(projectConfig.screenshots || []);
@@ -128,13 +147,8 @@ function StepMapping({
             });
             return next;
         });
-        setActiveId((prev) => {
-            if (prev && nextItems.some((item) => item.id === prev)) {
-                return prev;
-            }
-            return nextItems[0]?.id || '';
-        });
-    }, []);
+        setActiveId((prev) => resolveActiveScreenshotId(projectConfig, nextItems, prev));
+    }, [resolveActiveScreenshotId]);
 
     React.useEffect(() => {
         applyProjectConfig(config);
@@ -151,14 +165,38 @@ function StepMapping({
     );
 
     const resolvePrompt = React.useCallback((item: EditableItem): string => {
+        const layoutReference = resolveLayoutReference(items, item);
         return buildStoreScreenshotAiPrompt({
             appTitle,
             storeMetadata,
             template: config.template,
             item,
             totalCount,
+            hasLayoutReference: !!layoutReference,
+            layoutReferenceOrder: layoutReference?.order ?? 1,
         });
-    }, [appTitle, storeMetadata, config.template, totalCount]);
+    }, [appTitle, storeMetadata, config.template, totalCount, items]);
+
+    const activeLayoutReference = React.useMemo(
+        () => resolveLayoutReference(items, activeItem),
+        [items, activeItem],
+    );
+
+    const geminiImageOrderHint = React.useMemo(() => {
+        const usesLogo = logoPlacementUsesLogo(activeItem?.logo_placement);
+        const hasRef = !!activeLayoutReference;
+
+        if (usesLogo && hasRef) {
+            return 'Ảnh 1 = layout reference (#1), ảnh 2 = logo, ảnh 3 = screenshot gốc (nội dung màn hình).';
+        }
+        if (usesLogo) {
+            return 'Logo (nếu có): ảnh 1 = logo, ảnh 2 = screenshot.';
+        }
+        if (hasRef) {
+            return 'Ảnh 1 = layout reference (#1), ảnh 2 = screenshot gốc (nội dung màn hình).';
+        }
+        return 'Ảnh 1 = screenshot.';
+    }, [activeItem?.logo_placement, activeLayoutReference]);
 
     const headlineBulkPrompt = React.useMemo(() => buildHeadlineBulkPrompt({
         appTitle,
@@ -174,6 +212,26 @@ function StepMapping({
     const updateItem = (id: string, patch: Partial<EditableItem>) => {
         setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     };
+
+    const handleSelectScreenshot = React.useCallback((screenshotId: string) => {
+        setActiveId(screenshotId);
+        onUpdated({
+            ...configRef.current,
+            active_mapping_screenshot_id: screenshotId,
+        });
+
+        if (!appMobileId) {
+            return;
+        }
+
+        saveStoreScreenshotActiveScreenshot(appMobileId, screenshotId)
+            .then((result) => {
+                onUpdated(result.config);
+            })
+            .catch((error) => {
+                onError(error instanceof Error ? error.message : 'Không lưu được screenshot đang chỉnh');
+            });
+    }, [appMobileId, onError, onUpdated]);
 
     const handleAiImageReview = (id: string, value: JsonFormat) => {
         const image = normalizeImageFieldValue(value);
@@ -250,7 +308,7 @@ function StepMapping({
         <Box sx={{ position: 'relative' }}>
             <Stack spacing={2} sx={{ pb: 10 }}>
                 <Alert severity="info" sx={{ py: 1 }}>
-                    Bước 1: sinh headline bulk. Bước 2: chọn ảnh ở thanh trên → chỉnh từng tab → copy prompt/ảnh → AI → upload. Logo (nếu có): ảnh 1 = logo, ảnh 2 = screenshot.
+                    {`Bước 1: sinh headline bulk. Bước 2: chọn ảnh ở thanh trên → chỉnh từng tab → copy prompt/ảnh → AI → upload. ${geminiImageOrderHint} Generate screenshot #1 trước để #2+ dùng làm layout reference.`}
                 </Alert>
 
                 <StepMappingHeadlineBulkPanel
@@ -274,7 +332,7 @@ function StepMapping({
                 <StepMappingScreenshotNav
                     items={items}
                     activeId={activeItem.id}
-                    onSelect={setActiveId}
+                    onSelect={handleSelectScreenshot}
                 />
 
                 <Card sx={{ p: 2 }}>
@@ -284,6 +342,7 @@ function StepMapping({
                         appLogoUrl={appLogoUrl}
                         item={activeItem}
                         totalCount={totalCount}
+                        layoutReferenceUrl={activeLayoutReference?.url}
                         promptText={resolvePrompt(activeItem)}
                         imageFieldKey={imageFieldKeys[activeItem.id] || 0}
                         fieldName={getStoreScreenshotAiFieldName(activeItem.id)}

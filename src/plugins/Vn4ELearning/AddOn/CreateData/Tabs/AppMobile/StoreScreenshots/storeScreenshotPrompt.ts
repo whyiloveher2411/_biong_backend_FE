@@ -22,6 +22,12 @@ import { buildHeadlineTypographyPromptLines } from './storeScreenshotHeadlineTyp
 import { buildFeatureHighlightPromptLines } from './storeScreenshotFeatureHighlightPrompt';
 import { buildMainImagePromptLines, buildMainImageSizeOverrideLines } from './storeScreenshotMainImagePrompt';
 import { getPromptLangText } from './storeScreenshotMultilang';
+import { getImageAttachmentRoles } from './storeScreenshotImageAttachment';
+import {
+    buildLayoutReferenceCriticalWarningLines,
+    buildLayoutReferencePromptLines,
+    buildSeriesLayoutLockPromptLines,
+} from './storeScreenshotSeriesLayoutPrompt';
 import { buildStylePromptLines } from './storeScreenshotStyleOptions';
 
 type BuildPromptInput = {
@@ -30,6 +36,8 @@ type BuildPromptInput = {
     template: StoreScreenshotTemplate;
     item: StoreScreenshotItem;
     totalCount: number;
+    hasLayoutReference?: boolean;
+    layoutReferenceOrder?: number;
 };
 
 export function buildStoreScreenshotAiPrompt({
@@ -38,6 +46,8 @@ export function buildStoreScreenshotAiPrompt({
     template,
     item,
     totalCount,
+    hasLayoutReference = false,
+    layoutReferenceOrder = 1,
 }: BuildPromptInput): string {
     const headline = getPromptLangText(item.headline);
     const subtitle = getPromptLangText(item.subtitle);
@@ -49,6 +59,7 @@ export function buildStoreScreenshotAiPrompt({
         item.background_motifs_enabled,
     );
     const resolvedAppName = appTitle || storeMetadata.title || 'App';
+    const imageRoles = getImageAttachmentRoles(usesLogo, hasLayoutReference);
 
     const lines = [
         'You are an expert mobile app store marketing designer with deep experience in App Store and Google Play screenshot creatives.',
@@ -66,13 +77,22 @@ export function buildStoreScreenshotAiPrompt({
         headline ? `Headline: ${headline}` : '',
         subtitle ? `Subtitle: ${subtitle}` : '',
         '',
-        ...buildLogoAttachmentPromptLines(logoPlacementId, resolvedAppName),
+        ...(hasLayoutReference
+            ? buildLayoutReferenceCriticalWarningLines(imageRoles, layoutReferenceOrder)
+            : []),
+        ...buildLogoAttachmentPromptLines(logoPlacementId, resolvedAppName, imageRoles),
         '',
-        ...buildMainImagePromptLines(usesLogo, logoPlacementId),
+        ...(hasLayoutReference
+            ? [
+                ...buildLayoutReferencePromptLines(imageRoles, layoutReferenceOrder),
+                '',
+            ]
+            : []),
+        ...buildMainImagePromptLines(usesLogo, logoPlacementId, imageRoles),
         '',
-        ...buildFeatureHighlightPromptLines(item.feature_highlight, usesLogo),
+        ...buildFeatureHighlightPromptLines(item.feature_highlight, imageRoles),
         '',
-        ...buildFloatingIconsPromptLines(floatingIconsEnabled, usesLogo),
+        ...buildFloatingIconsPromptLines(floatingIconsEnabled, imageRoles),
         '',
         ...buildBackgroundColorPromptLines(item.background_color, template),
         '',
@@ -80,6 +100,7 @@ export function buildStoreScreenshotAiPrompt({
         '',
         ...buildCropTargetPromptLines(item.crop_target_size, {
             includeLogoInSafeZone: usesLogo,
+            logoImageNum: imageRoles.logoNum ?? undefined,
         }),
         '',
         '## Headline & title on image',
@@ -96,7 +117,13 @@ export function buildStoreScreenshotAiPrompt({
         ...buildStylePromptLines(template, item.background_color),
         'Global overrides: device mockup has NO drop shadow; logo/app name and floating icons have NO background containers or plates.',
         '',
-        ...buildMainImageSizeOverrideLines(usesLogo, logoPlacementId),
+        ...(totalCount > 1
+            ? [
+                ...buildSeriesLayoutLockPromptLines(item.crop_target_size, resolvedAppName),
+                '',
+            ]
+            : []),
+        ...buildMainImageSizeOverrideLines(usesLogo, logoPlacementId, hasLayoutReference, imageRoles),
     ];
 
     return lines.filter((line) => line !== '').join('\n');

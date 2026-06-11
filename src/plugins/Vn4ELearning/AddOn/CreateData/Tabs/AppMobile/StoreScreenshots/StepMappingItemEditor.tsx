@@ -46,6 +46,7 @@ type Props = {
     appLogoUrl: string;
     item: EditableItem;
     totalCount: number;
+    layoutReferenceUrl?: string;
     promptText: string;
     imageFieldKey: number;
     fieldName: string;
@@ -65,6 +66,7 @@ function StepMappingItemEditor({
     appLogoUrl,
     item,
     totalCount,
+    layoutReferenceUrl,
     promptText,
     imageFieldKey,
     fieldName,
@@ -94,12 +96,19 @@ function StepMappingItemEditor({
 
         setOpeningGemini(true);
         try {
+            if (item.order > 1 && totalCount > 1 && !String(layoutReferenceUrl || '').trim()) {
+                onCopyNotice(
+                    'Screenshot #1 chưa có ảnh AI — generate #1 trước để #2+ đồng bộ layout tốt hơn.',
+                );
+            }
+
             await openStoreScreenshotGemini({
                 appMobileId,
                 screenshotId: item.id,
                 prompt: promptText,
                 sourceImageUrl: item.source_url,
                 logoImageUrl: usesLogo ? appLogoUrl : undefined,
+                layoutReferenceImageUrl: layoutReferenceUrl,
                 usesLogo,
             });
         } catch (error) {

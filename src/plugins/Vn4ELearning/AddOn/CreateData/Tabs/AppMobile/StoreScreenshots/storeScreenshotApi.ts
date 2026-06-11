@@ -70,6 +70,19 @@ export async function saveStoreScreenshotActiveStep(
     });
 }
 
+export async function saveStoreScreenshotActiveScreenshot(
+    appMobileId: number,
+    screenshotId: string,
+): Promise<StoreScreenshotProjectResponse> {
+    return postJson<StoreScreenshotProjectResponse>({
+        url: `${STORE_SCREENSHOT_API}/save-active-screenshot`,
+        data: {
+            app_mobile: appMobileId,
+            active_mapping_screenshot_id: screenshotId,
+        },
+    });
+}
+
 export type StoreScreenshotMetadataInput = {
     description: string;
     promotional_text: string;

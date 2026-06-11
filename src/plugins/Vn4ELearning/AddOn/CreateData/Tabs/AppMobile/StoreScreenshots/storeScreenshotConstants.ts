@@ -38,6 +38,7 @@ export const DEFAULT_STORE_SCREENSHOT_CONFIG: StoreScreenshotConfig = {
     version: 1,
     status: 'draft',
     active_step_id: DEFAULT_STORE_SCREENSHOT_STEP_ID,
+    active_mapping_screenshot_id: '',
     screenshots: [],
     template: {
         brand_color: '#1A73E8',

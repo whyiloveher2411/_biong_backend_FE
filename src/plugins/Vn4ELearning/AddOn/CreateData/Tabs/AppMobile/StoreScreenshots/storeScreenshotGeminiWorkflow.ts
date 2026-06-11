@@ -15,6 +15,7 @@ export function buildGeminiStoreScreenshotUrl(input: {
     screenshotId: string;
     sourceImageUrl: string;
     logoImageUrl?: string;
+    layoutReferenceImageUrl?: string;
     usesLogo: boolean;
 }): string {
     const url = new URL(GEMINI_WEB_APP_URL);
@@ -39,6 +40,14 @@ export function buildGeminiStoreScreenshotUrl(input: {
         hashParams.set('store_screenshot_logo_url', encodeExternalImageUrl(input.logoImageUrl));
     }
 
+    const layoutReferenceImageUrl = String(input.layoutReferenceImageUrl || '').trim();
+    if (layoutReferenceImageUrl) {
+        hashParams.set(
+            'store_screenshot_layout_ref_url',
+            encodeExternalImageUrl(layoutReferenceImageUrl),
+        );
+    }
+
     url.hash = hashParams.toString();
     return url.toString();
 }
@@ -49,6 +58,7 @@ export type OpenStoreScreenshotGeminiInput = {
     prompt: string;
     sourceImageUrl: string;
     logoImageUrl?: string;
+    layoutReferenceImageUrl?: string;
     usesLogo: boolean;
 };
 
@@ -89,6 +99,7 @@ export async function openStoreScreenshotGemini(input: OpenStoreScreenshotGemini
         screenshotId: input.screenshotId,
         sourceImageUrl,
         logoImageUrl: input.logoImageUrl,
+        layoutReferenceImageUrl: input.layoutReferenceImageUrl,
         usesLogo: input.usesLogo,
     });
 

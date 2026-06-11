@@ -1,3 +1,5 @@
+import type { ImageAttachmentRoles } from './storeScreenshotImageAttachment';
+
 export type LogoPlacementId =
     | 'none'
     | 'top_left'
@@ -80,7 +82,7 @@ export function logoPlacementUsesLogo(placementId?: string | null): boolean {
     return getLogoPlacementById(normalizeLogoPlacementId(placementId)).usesLogo;
 }
 
-function buildLogoSizeAndAppNameLines(appName: string): string[] {
+function buildLogoSizeAndAppNameLines(appName: string, logoImageNum = 1): string[] {
     const name = String(appName || '').trim() || 'App';
 
     return [
@@ -98,7 +100,7 @@ function buildLogoSizeAndAppNameLines(appName: string): string[] {
         'Right: small logo icon + white app name text sitting cleanly on the gradient with zero background fill.',
         '',
         '## Logo size (critical — do not oversize)',
-        'Scale the logo from image 1 as a SMALL brand mark — not a hero graphic or sticker.',
+        `Scale the logo from image ${logoImageNum} as a SMALL brand mark — not a hero graphic or sticker.`,
         'Maximum logo bounding box: 8–12% of total canvas width AND 4–6% of total canvas height.',
         'Keep generous empty space around the logo; it must not touch or crowd the device mockup.',
         'Visual hierarchy: headline > device mockup > subtitle > app name + logo badge.',
@@ -144,13 +146,51 @@ function buildPlacementPositionLines(placementId: LogoPlacementId): string[] {
     }
 }
 
+function buildAttachedImageOrderLines(roles: ImageAttachmentRoles): string[] {
+    const lines: string[] = ['The user will paste images in this exact order before sending this prompt:'];
+    let step = 0;
+
+    if (roles.layoutRefNum) {
+        step += 1;
+        lines.push(
+            `${step}. Image ${roles.layoutRefNum} — Layout reference: finished marketing image from an earlier screenshot. Structural template ONLY — match device/logo scale, NEVER use its in-app UI.`,
+        );
+    }
+    if (roles.logoNum) {
+        step += 1;
+        lines.push(
+            `${step}. Image ${roles.logoNum} — App logo: official brand logo. Use exactly as the logo.`,
+        );
+    }
+    step += 1;
+    lines.push(
+        `${step}. Image ${roles.mainScreenshotNum} — Main screenshot: raw in-app UI. Display LARGE inside device mockup — this is the ONLY source for phone screen content.`,
+    );
+    lines.push('');
+    lines.push('Main screenshot is attached LAST on purpose — always use it for in-app UI, not the layout reference.');
+    return lines;
+}
+
 export function buildLogoAttachmentPromptLines(
     placementId?: string | null,
     appName?: string,
+    roles?: ImageAttachmentRoles,
 ): string[] {
     const placement = getLogoPlacementById(normalizeLogoPlacementId(placementId));
+    const imageRoles = roles ?? { layoutRefNum: null, logoNum: 1, mainScreenshotNum: 2 };
 
     if (!placement.usesLogo) {
+        if (imageRoles.layoutRefNum) {
+            return [
+                '## Attached images (order is mandatory)',
+                ...buildAttachedImageOrderLines(imageRoles),
+                '',
+                '## Logo',
+                'Do NOT add any app logo, brand mark, wordmark, or invented logo graphic to this image.',
+                'No placeholder logo — omit logo entirely.',
+            ];
+        }
+
         return [
             '## Logo',
             'Do NOT add any app logo, brand mark, wordmark, or invented logo graphic to this image.',
@@ -160,17 +200,13 @@ export function buildLogoAttachmentPromptLines(
 
     return [
         '## Attached images (order is mandatory)',
-        'The user will paste TWO images into this chat in this exact order before sending this prompt:',
-        '1. Image 1 — App logo: the official brand logo file. Use THIS image exactly as the logo. Do not draw, recreate, typographically rewrite, or substitute a different logo.',
-        '2. Image 2 — Main screenshot: the raw in-app screenshot. Display it LARGE inside a slim device mockup — sharp, full-fidelity UI. Do not invent different UI or shrink the phone.',
+        ...buildAttachedImageOrderLines(imageRoles),
         '',
-        'If only one image is attached, stop and ask the user to attach the logo first, then the main screenshot.',
-        '',
-        ...buildLogoSizeAndAppNameLines(appName || ''),
+        ...buildLogoSizeAndAppNameLines(appName || '', imageRoles.logoNum ?? 1),
         '',
         `## Logo placement: ${placement.label}`,
         ...buildPlacementPositionLines(placement.id),
-        'Render the logo from image 1 at the position above — never use text-only fake logos.',
+        `Render the logo from image ${imageRoles.logoNum ?? 1} at the position above — never use text-only fake logos.`,
         'Logo and app name: transparent background only — never place inside a colored or rounded container.',
         'Keep the logo and app name inside the crop safe zone so they are not clipped when the user crops to store size.',
     ];
