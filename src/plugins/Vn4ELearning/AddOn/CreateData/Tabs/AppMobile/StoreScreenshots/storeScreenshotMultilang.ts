@@ -40,6 +40,26 @@ export function getPromptLangText(
     return normalizeMultilangText(raw)[lang]?.trim() || '';
 }
 
+/** Ưu tiên vi cho review UI; chỉ fallback en khi không có vi. */
+export function getReviewCopyLines(
+    headline: StoreScreenshotMultilangText | string | null | undefined,
+    subtitle: StoreScreenshotMultilangText | string | null | undefined,
+): { headline: string; subtitle: string } {
+    const headlineMap = normalizeMultilangText(headline);
+    const subtitleMap = normalizeMultilangText(subtitle);
+    const viHeadline = headlineMap[STORE_SCREENSHOT_BULK_LANG]?.trim() || '';
+    const viSubtitle = subtitleMap[STORE_SCREENSHOT_BULK_LANG]?.trim() || '';
+
+    if (viHeadline || viSubtitle) {
+        return { headline: viHeadline, subtitle: viSubtitle };
+    }
+
+    return {
+        headline: headlineMap[STORE_SCREENSHOT_PROMPT_LANG]?.trim() || '',
+        subtitle: subtitleMap[STORE_SCREENSHOT_PROMPT_LANG]?.trim() || '',
+    };
+}
+
 export function hasMultilangText(
     raw: StoreScreenshotMultilangText | string | null | undefined,
 ): boolean {

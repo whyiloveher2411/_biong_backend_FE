@@ -1,15 +1,29 @@
 import React from 'react';
-import { Alert, Box, Stack } from '@mui/material';
+import { Alert, Box, Chip, Stack } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import useDraggableScroll from 'hook/useDraggableScroll';
+import GeminiLogoRegionSelector from './GeminiLogoRegionSelector';
 import type { StoreScreenshotConfig } from './storeScreenshotTypes';
-import { encodeExternalImageUrlWithCacheBust } from './storeScreenshotImageUtils';
+import type { GeminiLogoRegionsById } from './storeScreenshotGeminiLogoRegion';
+import { resolveStoreScreenshotAiImageDisplayUrl } from './storeScreenshotImageUtils';
 
 type Props = {
     config: StoreScreenshotConfig;
+    regionsById: GeminiLogoRegionsById;
+    activeSelectionId: string | null;
+    geminiRemoverReady?: boolean;
+    onRegionsChange: (regionsById: GeminiLogoRegionsById) => void;
+    onActiveSelectionChange: (screenshotId: string | null) => void;
 };
 
-function StepPreview({ config }: Props) {
+function StepPreview({
+    config,
+    regionsById,
+    activeSelectionId,
+    geminiRemoverReady = false,
+    onRegionsChange,
+    onActiveSelectionChange,
+}: Props) {
     const scrollRef = React.useRef<HTMLDivElement>(null);
     const { onMouseDown } = useDraggableScroll(scrollRef, { direction: 'horizontal' });
 
@@ -17,15 +31,17 @@ function StepPreview({ config }: Props) {
         .sort((a, b) => a.order - b.order)
         .filter((item) => String(item.ai_image_url || '').trim() !== '');
 
-    const previewCacheBust = React.useMemo(
-        () => Date.now(),
-        [items.map((item) => `${item.id}:${item.ai_image_url}`).join('|')],
-    );
+    const handleRegionChange = (screenshotId: string, region: GeminiLogoRegionsById[string]) => {
+        onRegionsChange({
+            ...regionsById,
+            [screenshotId]: region,
+        });
+    };
 
     return (
         <Stack spacing={2}>
             <Alert severity="info">
-                Xem trước các ảnh store do AI tạo mà bạn đã upload ở bước Copy & ảnh AI. Cuộn hoặc kéo ngang tự do để xem như trên app store.
+                Xem trước các ảnh store do AI tạo. Logo Gemini có thể không cùng vị trí — nhấn biểu tượng khung, kéo chọn vùng sát logo sparkle (khoảng 48–96 px), rồi bấm Xóa logo Gemini. Chỉ ảnh đã chọn vùng mới được xóa; ảnh không chọn vùng giữ nguyên. Nếu đã xóa bị vết đen, dùng Lấy lại ảnh gốc rồi chọn lại vùng nhỏ hơn.
             </Alert>
 
             {items.length === 0 ? (
@@ -35,14 +51,14 @@ function StepPreview({ config }: Props) {
             ) : (
                 <Box
                     ref={scrollRef}
-                    onMouseDown={onMouseDown}
+                    onMouseDown={activeSelectionId ? undefined : onMouseDown}
                     sx={(theme) => ({
                         display: 'flex',
                         alignItems: 'flex-start',
                         gap: 2,
                         overflowX: 'auto',
                         overflowY: 'hidden',
-                        cursor: 'grab',
+                        cursor: activeSelectionId ? 'default' : 'grab',
                         py: 3,
                         px: { xs: 1.5, md: 2.5 },
                         borderRadius: 2,
@@ -59,31 +75,47 @@ function StepPreview({ config }: Props) {
                     })}
                 >
                     {items.map((item) => {
-                        const imageUrl = encodeExternalImageUrlWithCacheBust(item.ai_image_url, previewCacheBust);
+                        const imageUrl = resolveStoreScreenshotAiImageDisplayUrl(item);
+                        const region = regionsById[item.id] ?? null;
 
                         return (
-                            <Box
-                                key={item.id}
-                                sx={(theme) => ({
-                                    flex: '0 0 auto',
-                                    borderRadius: 2.5,
-                                    overflow: 'hidden',
-                                    bgcolor: theme.palette.common.black,
-                                    boxShadow: theme.shadows[6],
-                                })}
-                            >
-                                <Box
-                                    component="img"
-                                    src={imageUrl}
+                            <Box key={item.id} sx={{ position: 'relative' }}>
+                                {item.gemini_logo_removed ? (
+                                    <Chip
+                                        label="Đã xóa logo"
+                                        size="small"
+                                        color="success"
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 44,
+                                            left: 12,
+                                            zIndex: 4,
+                                        }}
+                                    />
+                                ) : region ? (
+                                    <Chip
+                                        label="Đã chọn vùng"
+                                        size="small"
+                                        color="warning"
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 44,
+                                            left: 12,
+                                            zIndex: 4,
+                                        }}
+                                    />
+                                ) : null}
+                                <GeminiLogoRegionSelector
+                                    imageUrl={imageUrl}
                                     alt={`Store screenshot ${item.order}`}
-                                    draggable={false}
-                                    sx={{
-                                        display: 'block',
-                                        height: 'auto',
-                                        width: 'auto',
-                                        maxHeight: 'min(78vh, 920px)',
-                                        objectFit: 'contain',
-                                    }}
+                                    order={item.order}
+                                    region={region}
+                                    selecting={activeSelectionId === item.id}
+                                    disabled={!geminiRemoverReady || Boolean(item.gemini_logo_removed)}
+                                    logoRemoved={Boolean(item.gemini_logo_removed)}
+                                    onSelectStart={() => onActiveSelectionChange(item.id)}
+                                    onSelectEnd={() => onActiveSelectionChange(null)}
+                                    onRegionChange={(nextRegion) => handleRegionChange(item.id, nextRegion)}
                                 />
                             </Box>
                         );

@@ -6,9 +6,26 @@ import {
     waitForExtensionReady,
 } from 'helpers/openExternalTabViaExtension';
 import { copyTextToClipboard } from './storeScreenshotClipboard';
+import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
 import { encodeExternalImageUrl } from './storeScreenshotImageUtils';
+import { parseDecorStringListForSave } from './storeScreenshotVisualDecorCatalog';
 
-const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
+const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
+
+export function resolveFloatingIconsForGemini(input: {
+    floating_icons_enabled?: boolean;
+    icons?: string[];
+    iconsText?: string;
+}): string[] {
+    const fromArray = (input.icons ?? [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+    if (fromArray.length > 0) {
+        return fromArray;
+    }
+
+    return parseDecorStringListForSave(String(input.iconsText || ''), 3);
+}
 
 export function buildGeminiStoreScreenshotUrl(input: {
     appMobileId: number;
@@ -17,6 +34,12 @@ export function buildGeminiStoreScreenshotUrl(input: {
     logoImageUrl?: string;
     layoutReferenceImageUrl?: string;
     usesLogo: boolean;
+    headlineOnly?: boolean;
+    floatingIconsEnabled?: boolean;
+    floatingIcons?: string[];
+    headline?: string;
+    subtitle?: string;
+    brandColor?: string;
 }): string {
     const url = new URL(GEMINI_WEB_APP_URL);
     const accessToken = getAccessToken() ?? '';
@@ -48,6 +71,37 @@ export function buildGeminiStoreScreenshotUrl(input: {
         );
     }
 
+    if (input.headlineOnly) {
+        hashParams.set('store_screenshot_headline_only', '1');
+    }
+
+    const floatingIconsEnabled = normalizeFloatingIconsEnabled(input.floatingIconsEnabled);
+    hashParams.set('store_screenshot_floating_icons_enabled', floatingIconsEnabled ? '1' : '0');
+    if (floatingIconsEnabled) {
+        const floatingIcons = (input.floatingIcons ?? [])
+            .map((item) => String(item || '').trim())
+            .filter(Boolean);
+        if (floatingIcons.length > 0) {
+            hashParams.set(
+                'store_screenshot_floating_icons',
+                encodeURIComponent(JSON.stringify(floatingIcons)),
+            );
+        }
+    }
+
+    const headline = String(input.headline || '').trim();
+    const subtitle = String(input.subtitle || '').trim();
+    const brandColor = String(input.brandColor || '').trim();
+    if (headline) {
+        hashParams.set('store_screenshot_headline', encodeURIComponent(headline));
+    }
+    if (subtitle) {
+        hashParams.set('store_screenshot_subtitle', encodeURIComponent(subtitle));
+    }
+    if (brandColor) {
+        hashParams.set('store_screenshot_brand_color', encodeURIComponent(brandColor));
+    }
+
     url.hash = hashParams.toString();
     return url.toString();
 }
@@ -60,6 +114,12 @@ export type OpenStoreScreenshotGeminiInput = {
     logoImageUrl?: string;
     layoutReferenceImageUrl?: string;
     usesLogo: boolean;
+    headlineOnly?: boolean;
+    floatingIconsEnabled?: boolean;
+    floatingIcons?: string[];
+    headline?: string;
+    subtitle?: string;
+    brandColor?: string;
 };
 
 export async function openStoreScreenshotGemini(input: OpenStoreScreenshotGeminiInput): Promise<void> {
@@ -101,6 +161,12 @@ export async function openStoreScreenshotGemini(input: OpenStoreScreenshotGemini
         logoImageUrl: input.logoImageUrl,
         layoutReferenceImageUrl: input.layoutReferenceImageUrl,
         usesLogo: input.usesLogo,
+        headlineOnly: input.headlineOnly,
+        floatingIconsEnabled: input.floatingIconsEnabled,
+        floatingIcons: input.floatingIcons,
+        headline: input.headline,
+        subtitle: input.subtitle,
+        brandColor: input.brandColor,
     });
 
     openExternalTabViaExtension(geminiUrl);

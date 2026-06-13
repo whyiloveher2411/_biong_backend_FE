@@ -1,34 +1,10 @@
 import CardMedia from 'components/atoms/CardMedia';
 import ImageList from 'components/atoms/ImageList';
 import ImageListItem from 'components/atoms/ImageListItem';
-import { ImageObjectProps } from 'helpers/image';
+import { ImageObjectProps, openImagePopup } from 'helpers/image';
 import { convertToURL } from 'helpers/url';
 import { FieldViewItemProps } from '../type';
 import Box from 'components/atoms/Box';
-
-function openImagePopup(url: string) {
-    const width = 900;
-    const height = 700;
-    const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
-    const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
-    const features = [
-        `width=${width}`,
-        `height=${height}`,
-        `left=${left}`,
-        `top=${top}`,
-        'menubar=no',
-        'toolbar=no',
-        'location=no',
-        'status=no',
-        'scrollbars=yes',
-        'resizable=yes',
-        'noopener',
-        'noreferrer',
-    ].join(',');
-
-    window.open(url, 'imagePreview', features);
-    window.focus();
-}
 
 function View(props: FieldViewItemProps) {
 

@@ -1,58 +1,61 @@
 import React from 'react';
 import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Box,
     CardMedia,
+    Divider,
     Stack,
     Tab,
     Tabs,
+    TextField,
     Typography,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageForm from 'components/atoms/fields/image/Form';
 import LoadingButton from 'components/atoms/LoadingButton';
-import {
-    MarketingCopyImageButton,
-    MarketingCopyPromptButton,
-} from '../Marketing/MarketingPromptActionButtons';
-import ScreenshotBackgroundPatternField from './ScreenshotBackgroundPatternField';
+import HeadlineGeminiActionButtons from './HeadlineGeminiActionButtons';
+import HeadlineGeminiPanel from './HeadlineGeminiPanel';
+import ScreenshotSourceCopyMenu from './ScreenshotSourceCopyMenu';
+import { useHeadlineGeminiPanel } from './useHeadlineGeminiPanel';
 import ScreenshotCropTargetField from './ScreenshotCropTargetField';
-import ScreenshotDecorOptionsField from './ScreenshotDecorOptionsField';
+import ScreenshotDecorEditor from './ScreenshotDecorEditor';
 import ScreenshotFeatureHighlightField from './ScreenshotFeatureHighlightField';
-import ScreenshotLogoPlacementField from './ScreenshotLogoPlacementField';
-import StoreScreenshotColorField from './StoreScreenshotColorField';
-import StoreScreenshotExampleHighlight from './StoreScreenshotExampleHighlight';
 import StoreScreenshotMultilangField from './StoreScreenshotMultilangField';
 import { DEFAULT_CROP_TARGET_SIZE_ID } from './storeScreenshotCropTarget';
-import { DEFAULT_LOGO_PLACEMENT_ID } from './storeScreenshotLogoPlacement';
-import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
 import {
     getCopyStylePresetById,
-    getScreenshotPositionHint,
     normalizeCopyStylePresetId,
 } from './storeScreenshotCopyStyleOptions';
-import { logoPlacementUsesLogo } from './storeScreenshotLogoPlacement';
-import { openStoreScreenshotGemini } from './storeScreenshotGeminiWorkflow';
+import { normalizeHexColor } from './storeScreenshotColorUtils';
+import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
+import {
+    openStoreScreenshotGemini,
+    resolveFloatingIconsForGemini,
+} from './storeScreenshotGeminiWorkflow';
+import { getPromptLangText } from './storeScreenshotMultilang';
 import { encodeExternalImageUrl } from './storeScreenshotImageUtils';
 import type { EditableItem } from './stepMappingTypes';
+import type { StoreMetadata, StoreScreenshotConfig } from './storeScreenshotTypes';
 
 type TabId = 'copy' | 'layout' | 'visual';
 
 type Props = {
     appMobileId: number;
+    appTitle: string;
     appLogoUrl: string;
+    storeMetadata: StoreMetadata;
+    config: StoreScreenshotConfig;
     item: EditableItem;
     totalCount: number;
     layoutReferenceUrl?: string;
+    usesLogo: boolean;
     promptText: string;
     imageFieldKey: number;
     fieldName: string;
     post: Record<string, unknown>;
     backgroundColorSwatches: string[];
+    geminiDisabled?: boolean;
     onItemChange: (patch: Partial<EditableItem>) => void;
+    onConfigUpdated: (config: StoreScreenshotConfig) => void;
     onAiImageReview: (value: JsonFormat) => void;
     onCopyNotice: (message: string) => void;
     onError: (message: string) => void;
@@ -63,16 +66,22 @@ type Props = {
 
 function StepMappingItemEditor({
     appMobileId,
+    appTitle,
     appLogoUrl,
+    storeMetadata,
+    config,
     item,
     totalCount,
     layoutReferenceUrl,
+    usesLogo,
     promptText,
     imageFieldKey,
     fieldName,
     post,
     backgroundColorSwatches,
+    geminiDisabled = false,
     onItemChange,
+    onConfigUpdated,
     onAiImageReview,
     onCopyNotice,
     onError,
@@ -87,7 +96,25 @@ function StepMappingItemEditor({
     const itemCopyPreset = getCopyStylePresetById(
         normalizeCopyStylePresetId(item.copy_style_preset),
     );
-    const usesLogo = logoPlacementUsesLogo(item.logo_placement);
+
+    const headlineWorkflow = useHeadlineGeminiPanel({
+        appMobileId,
+        appTitle,
+        storeMetadata,
+        config,
+        screenshotId: item.id,
+        sourceUrl: item.source_url,
+        order: item.order,
+        caption: item.caption || '',
+        totalCount,
+        copyStylePreset: item.copy_style_preset,
+        headline: item.headline,
+        subtitle: item.subtitle,
+        headlineVariants: item.headline_variants ?? [],
+        disabled: geminiDisabled,
+        onUpdated: onConfigUpdated,
+        onError,
+    });
 
     const handleOpenGemini = async () => {
         if (openingGemini || !String(promptText || '').trim()) {
@@ -102,6 +129,15 @@ function StepMappingItemEditor({
                 );
             }
 
+            const floatingIconsEnabled = normalizeFloatingIconsEnabled(item.floating_icons_enabled);
+            const floatingIcons = floatingIconsEnabled
+                ? resolveFloatingIconsForGemini({
+                      floating_icons_enabled: item.floating_icons_enabled,
+                      icons: item.icons,
+                      iconsText: item.iconsText,
+                  })
+                : [];
+
             await openStoreScreenshotGemini({
                 appMobileId,
                 screenshotId: item.id,
@@ -110,6 +146,11 @@ function StepMappingItemEditor({
                 logoImageUrl: usesLogo ? appLogoUrl : undefined,
                 layoutReferenceImageUrl: layoutReferenceUrl,
                 usesLogo,
+                floatingIconsEnabled,
+                floatingIcons,
+                headline: getPromptLangText(item.headline),
+                subtitle: getPromptLangText(item.subtitle),
+                brandColor: normalizeHexColor(config.template.brand_color, '#1A73E8'),
             });
         } catch (error) {
             onError(error instanceof Error ? error.message : 'Không mở được Gemini');
@@ -140,12 +181,34 @@ function StepMappingItemEditor({
                     alt={`Screenshot ${item.order}`}
                     sx={{ height: 180, objectFit: 'cover', borderRadius: 1 }}
                 />
-                <MarketingCopyImageButton
-                    imageUrl={previewUrl}
-                    getImageBlob={getImageBlob}
-                    onCopyNotice={onCopyNotice}
-                    fullWidth
-                />
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    Gợi ý copy
+                </Typography>
+                <HeadlineGeminiActionButtons workflow={headlineWorkflow} />
+                <Divider sx={{ my: 0.25 }} />
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    Ảnh AI
+                </Typography>
+                <Stack direction="row" spacing={0.5} alignItems="stretch">
+                    <LoadingButton
+                        variant="contained"
+                        size="small"
+                        loading={openingGemini}
+                        disabled={!String(promptText || '').trim() || geminiDisabled}
+                        startIcon={<AutoAwesomeIcon />}
+                        onClick={handleOpenGemini}
+                        title="Tự điền logo + screenshot + prompt ảnh AI — bạn chỉ cần bấm Gửi trên Gemini"
+                        sx={{ flex: 1, minWidth: 0 }}
+                    >
+                        Mở Gemini ảnh AI
+                    </LoadingButton>
+                    <ScreenshotSourceCopyMenu
+                        promptText={promptText}
+                        imageUrl={previewUrl}
+                        getImageBlob={getImageBlob}
+                        onCopyNotice={onCopyNotice}
+                    />
+                </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
                     Phong cách: {itemCopyPreset.label}
                     {item.caption ? ` · ${item.caption}` : ''}
@@ -153,6 +216,18 @@ function StepMappingItemEditor({
             </Stack>
 
             <Stack spacing={1.5}>
+                <TextField
+                    label="Tên / mô tả"
+                    value={item.caption || ''}
+                    onChange={(event) => onItemChange({ caption: event.target.value })}
+                    placeholder="Ví dụ: Màn hình học bài, streak hàng ngày..."
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    size="small"
+                    helperText="Mô tả nội dung ảnh — dùng trong prompt Gemini"
+                />
+
                 <Tabs
                     value={activeTab}
                     onChange={(_, value: TabId) => setActiveTab(value)}
@@ -167,12 +242,17 @@ function StepMappingItemEditor({
 
                 {activeTab === 'copy' ? (
                     <Stack spacing={1.25}>
+                        {headlineWorkflow.hasSavedSelection ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                {`Phong cách đang dùng — ${itemCopyPreset.label}`}
+                            </Typography>
+                        ) : null}
                         <StoreScreenshotMultilangField
                             label="Headline"
                             value={item.headline}
                             onChange={(headline) => onItemChange({ headline })}
                             placeholder="Learn in just 5 minutes a day"
-                            helperText="En dùng trong prompt ảnh AI."
+                            helperText="En dùng trong prompt ảnh AI — chỉnh tay hoặc chọn gợi ý phong cách bên ảnh gốc."
                         />
                         <StoreScreenshotMultilangField
                             label="Subtitle"
@@ -181,80 +261,39 @@ function StepMappingItemEditor({
                             placeholder="Short lessons that fit a busy schedule"
                             helperText="Ngắn hơn headline."
                         />
-                        <Accordion disableGutters elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    Gợi ý phong cách — {itemCopyPreset.label}
-                                </Typography>
-                            </AccordionSummary>
-                            <AccordionDetails sx={{ pt: 0 }}>
-                                <StoreScreenshotExampleHighlight
-                                    title={`Gợi ý #${item.order}`}
-                                    headline={itemCopyPreset.example.headline}
-                                    subtitle={itemCopyPreset.example.subtitle}
-                                    avoid={itemCopyPreset.example.avoid}
-                                    hint={getScreenshotPositionHint(item.order, totalCount)}
-                                />
-                            </AccordionDetails>
-                        </Accordion>
+                        <HeadlineGeminiPanel workflow={headlineWorkflow} />
                     </Stack>
                 ) : null}
 
                 {activeTab === 'layout' ? (
-                    <Stack spacing={1.5}>
-                        <ScreenshotCropTargetField
-                            compact
-                            value={item.crop_target_size || DEFAULT_CROP_TARGET_SIZE_ID}
-                            onChange={(cropTargetSize) => onItemChange({ crop_target_size: cropTargetSize })}
-                        />
-                        <ScreenshotLogoPlacementField
-                            value={item.logo_placement || DEFAULT_LOGO_PLACEMENT_ID}
-                            onChange={(logoPlacement) => onItemChange({ logo_placement: logoPlacement })}
-                        />
-                    </Stack>
+                    <ScreenshotCropTargetField
+                        compact
+                        value={item.crop_target_size || DEFAULT_CROP_TARGET_SIZE_ID}
+                        onChange={(cropTargetSize) => onItemChange({ crop_target_size: cropTargetSize })}
+                    />
                 ) : null}
 
                 {activeTab === 'visual' ? (
                     <Stack spacing={1.25}>
-                        <ScreenshotBackgroundPatternField
-                            value={item.background_pattern || ''}
-                            onChange={(backgroundPattern) => onItemChange({ background_pattern: backgroundPattern })}
-                        />
-                        <StoreScreenshotColorField
-                            label="Màu nền"
-                            value={item.background_color || ''}
-                            onChange={(backgroundColor) => onItemChange({ background_color: backgroundColor })}
-                            swatchColors={backgroundColorSwatches}
-                            note="Để trống = màu brand từ template."
+                        <ScreenshotDecorEditor
+                            value={{
+                                background_pattern: item.background_pattern,
+                                background_color: item.background_color,
+                                floating_icons_enabled: item.floating_icons_enabled,
+                                icons: item.icons,
+                                background_motifs: item.background_motifs,
+                                iconsText: item.iconsText,
+                                backgroundMotifsText: item.backgroundMotifsText,
+                            }}
+                            brandColor={backgroundColorSwatches[0]}
+                            onChange={onItemChange}
                         />
                         <ScreenshotFeatureHighlightField
                             value={item.feature_highlight || ''}
                             onChange={(featureHighlight) => onItemChange({ feature_highlight: featureHighlight })}
                         />
-                        <ScreenshotDecorOptionsField
-                            floatingIconsEnabled={normalizeFloatingIconsEnabled(item.floating_icons_enabled)}
-                            onFloatingIconsChange={(floatingIconsEnabled) => onItemChange({
-                                floating_icons_enabled: floatingIconsEnabled,
-                            })}
-                        />
                     </Stack>
                 ) : null}
-
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <LoadingButton
-                        variant="contained"
-                        loading={openingGemini}
-                        disabled={!String(promptText || '').trim()}
-                        startIcon={<AutoAwesomeIcon />}
-                        onClick={handleOpenGemini}
-                        title="Tự điền logo + screenshot + prompt — bạn chỉ cần bấm Gửi trên Gemini"
-                    >
-                        Mở Gemini
-                    </LoadingButton>
-                    <MarketingCopyPromptButton
-                        promptText={promptText}
-                    />
-                </Stack>
             </Stack>
 
             <Stack spacing={1}>

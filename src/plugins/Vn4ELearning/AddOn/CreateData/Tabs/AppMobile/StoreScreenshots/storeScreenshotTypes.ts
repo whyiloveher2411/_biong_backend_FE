@@ -1,5 +1,12 @@
 import type { ImageObjectProps } from 'helpers/image';
+import type { CopyStylePresetId } from './storeScreenshotCopyStyleOptions';
 import type { StoreScreenshotMultilangText } from './storeScreenshotMultilang';
+
+export type HeadlineCopyVariant = {
+    copy_style_id: CopyStylePresetId;
+    headline: StoreScreenshotMultilangText;
+    subtitle: StoreScreenshotMultilangText;
+};
 
 export type StoreScreenshotStatus =
     | 'draft'
@@ -40,17 +47,26 @@ export type StoreScreenshotItem = {
     logo_placement?: string;
     floating_icons_enabled?: boolean;
     background_pattern?: string;
+    /** Mô tả floating icons từ Gemini (mỗi phần tử gồm icon + style). */
+    icons?: string[];
+    /** Mô tả họa tiết nền cụ thể (hình dạng, vị trí). */
+    background_motifs?: string[];
     /** @deprecated Dùng background_pattern — giữ để migrate dữ liệu cũ */
     background_motifs_enabled?: boolean;
     feature_highlight?: string;
     background_color?: string;
     headline: StoreScreenshotMultilangText | string;
     subtitle: StoreScreenshotMultilangText | string;
+    headline_variants?: HeadlineCopyVariant[];
     ai_prompt: string;
     ai_image_url: string;
     ai_image_key: string;
     ai_image_width?: number;
     ai_image_height?: number;
+    ai_image_original_url?: string;
+    ai_image_original_key?: string;
+    gemini_logo_removed?: boolean;
+    ai_image_version?: number;
     status: string;
 };
 
@@ -93,7 +109,6 @@ export type StoreScreenshotExport = {
 
 export type StoreScreenshotStepId =
     | 'metadata'
-    | 'upload'
     | 'mapping'
     | 'template'
     | 'preview'
@@ -120,6 +135,17 @@ export type StoreScreenshotTarget = {
     folder: string;
 };
 
+export type StoreScreenshotGeminiRemoverStatus = {
+    ready: boolean;
+    message?: string;
+};
+
+export type StoreScreenshotGeminiLogoResult = {
+    screenshot_id: string;
+    status: string;
+    error?: string;
+};
+
 export type StoreScreenshotProjectResponse = {
     success?: boolean;
     message?: string | { text?: string };
@@ -132,4 +158,7 @@ export type StoreScreenshotProjectResponse = {
         description: string;
     };
     targets: Record<string, StoreScreenshotTarget>;
+    gemini_remover?: StoreScreenshotGeminiRemoverStatus;
+    processed?: number;
+    results?: StoreScreenshotGeminiLogoResult[];
 };

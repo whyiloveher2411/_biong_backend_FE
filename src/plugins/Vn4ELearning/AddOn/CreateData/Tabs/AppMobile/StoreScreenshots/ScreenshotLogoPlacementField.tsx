@@ -23,7 +23,7 @@ function ScreenshotLogoPlacementField({ value, onChange }: Props) {
                 Vị trí logo
             </Typography>
             <Typography variant="caption" color="text.secondary">
-                Chọn có logo hay không. Nếu có logo, prompt sẽ mô tả ảnh 1 = logo, ảnh 2 = screenshot chính.
+                Áp dụng cùng một vị trí logo cho tất cả ảnh store. Nếu có logo, prompt sẽ mô tả ảnh 1 = logo, ảnh 2 = screenshot chính.
             </Typography>
             <Box
                 role="radiogroup"

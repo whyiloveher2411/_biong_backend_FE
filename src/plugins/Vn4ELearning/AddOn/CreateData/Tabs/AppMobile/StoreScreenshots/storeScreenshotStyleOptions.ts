@@ -412,16 +412,10 @@ export function buildStylePromptLines(
     const presetId = normalizeStylePresetId(template.style_preset);
     const preset = PRESET_MAP[presetId];
     const advanced = resolveStyleAdvancedFields(template);
-    const layout = findOption(LAYOUT_OPTIONS, advanced.layout_style, DEFAULT_STYLE_ADVANCED.layout_style);
     const device = findOption(
         DEVICE_FRAME_OPTIONS,
         advanced.device_frame_style,
         DEFAULT_STYLE_ADVANCED.device_frame_style,
-    );
-    const typography = findOption(
-        TYPOGRAPHY_OPTIONS,
-        advanced.typography_style,
-        DEFAULT_STYLE_ADVANCED.typography_style,
     );
     const fontFamily = findOption(
         FONT_FAMILY_OPTIONS,
@@ -432,11 +426,8 @@ export function buildStylePromptLines(
     return [
         preset.promptLine,
         buildStyleBackgroundPromptLine(template, screenshotBackgroundColor),
-        layout.promptLine,
         device.promptLine,
         fontFamily.promptLine,
-        typography.promptLine,
-        'Portrait orientation. No watermark. High quality marketing visual suitable for App Store and Google Play.',
     ];
 }
 

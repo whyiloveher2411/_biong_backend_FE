@@ -6,8 +6,7 @@ export const STORE_SCREENSHOT_API = 'plugin/vn4-e-learning/app-mobile/store-scre
 export const STORE_SCREENSHOT_STEPS = [
     { id: 'metadata', label: 'Metadata', description: 'Nhập title, mô tả và từ khóa' },
     { id: 'template', label: 'Template', description: 'Phong cách ảnh, màu brand, font và kích thước target' },
-    { id: 'upload', label: 'Upload', description: 'Upload ảnh, đặt tên và chọn phong cách headline từng ảnh' },
-    { id: 'mapping', label: 'Copy & ảnh AI', description: 'Sinh headline/subtitle, sao chép prompt ảnh và upload kết quả' },
+    { id: 'mapping', label: 'Copy & ảnh AI', description: 'Upload ảnh, gợi ý Gemini, chỉnh copy/visual và upload ảnh AI' },
     { id: 'preview', label: 'Preview', description: 'Xem ảnh AI đã upload' },
     { id: 'export', label: 'Export', description: 'Tải bộ ảnh zip' },
 ] as const;
@@ -15,8 +14,12 @@ export const STORE_SCREENSHOT_STEPS = [
 export const DEFAULT_STORE_SCREENSHOT_STEP_ID = STORE_SCREENSHOT_STEPS[0].id;
 
 export function normalizeStoreScreenshotStepId(stepId?: string | null): StoreScreenshotStepId {
-    if (stepId && STORE_SCREENSHOT_STEPS.some((step) => step.id === stepId)) {
-        return stepId as StoreScreenshotStepId;
+    const normalized = String(stepId || '').trim();
+    if (normalized === 'upload') {
+        return 'mapping';
+    }
+    if (normalized && STORE_SCREENSHOT_STEPS.some((step) => step.id === normalized)) {
+        return normalized as StoreScreenshotStepId;
     }
     return DEFAULT_STORE_SCREENSHOT_STEP_ID;
 }

@@ -34,7 +34,7 @@ import {
 const ARTICLE_REWRITE_OVERVIEW_STAGE = 'article_rewrite';
 
 /** Gemini web (tài khoản Pro) — thay Google Search AI mode do giới hạn overview. */
-const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
+const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
 
 function buildGeminiArticleRewriteUrl(
     postId: number,

@@ -117,6 +117,22 @@ export type CopyPromptWithImageResult = {
     imageError?: string;
 };
 
+export async function readTextFromClipboard(): Promise<string> {
+    if (navigator.clipboard?.readText) {
+        try {
+            return await navigator.clipboard.readText();
+        } catch (error) {
+            throw new Error(
+                error instanceof Error && error.message
+                    ? error.message
+                    : 'Không đọc được clipboard — cấp quyền trình duyệt hoặc dán thủ công',
+            );
+        }
+    }
+
+    throw new Error('Trình duyệt không hỗ trợ đọc clipboard');
+}
+
 export async function copyTextToClipboard(text: string): Promise<void> {
     const value = String(text || '').trim();
     if (!value) {

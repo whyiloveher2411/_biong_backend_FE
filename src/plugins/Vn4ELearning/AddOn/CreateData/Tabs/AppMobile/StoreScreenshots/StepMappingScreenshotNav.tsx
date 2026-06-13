@@ -1,17 +1,60 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { Box, Chip, Stack, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, type PaletteColor } from '@mui/material/styles';
 import React from 'react';
 import { encodeExternalImageUrl } from './storeScreenshotImageUtils';
-import type { EditableItem } from './stepMappingTypes';
 
-type Props = {
-    items: EditableItem[];
-    activeId: string;
-    onSelect: (id: string) => void;
+type StatusTone = 'info' | 'success';
+
+type StatusIndicatorProps = {
+    complete: boolean;
+    tone: StatusTone;
+    completeTitle: string;
+    pendingTitle: string;
 };
 
-function StepMappingScreenshotNav({ items, activeId, onSelect }: Props) {
+function StatusIndicator({
+    complete,
+    tone,
+    completeTitle,
+    pendingTitle,
+}: StatusIndicatorProps) {
+    const Icon = complete ? CheckCircleIcon : RadioButtonUncheckedIcon;
+
+    return (
+        <Icon
+            sx={(theme) => ({
+                width: 12,
+                height: 12,
+                color: (theme.palette[tone] as PaletteColor).main,
+            })}
+            titleAccess={complete ? completeTitle : pendingTitle}
+        />
+    );
+}
+
+export type ScreenshotNavItem = {
+    id: string;
+    order: number;
+    source_url: string;
+};
+
+type Props<T extends ScreenshotNavItem> = {
+    items: T[];
+    activeId: string;
+    onSelect: (id: string) => void;
+    isItemComplete?: (item: T) => boolean;
+    isItemHeadlineComplete?: (item: T) => boolean;
+};
+
+function StepMappingScreenshotNav<T extends ScreenshotNavItem>({
+    items,
+    activeId,
+    onSelect,
+    isItemComplete,
+    isItemHeadlineComplete,
+}: Props<T>) {
     return (
         <Box
             sx={{
@@ -49,7 +92,8 @@ function StepMappingScreenshotNav({ items, activeId, onSelect }: Props) {
             >
                 {items.map((item) => {
                     const selected = item.id === activeId;
-                    const hasAiImage = Boolean(item.ai_image_url);
+                    const isAiComplete = isItemComplete ? isItemComplete(item) : false;
+                    const isHeadlineComplete = isItemHeadlineComplete ? isItemHeadlineComplete(item) : false;
                     const previewUrl = encodeExternalImageUrl(item.source_url);
 
                     return (
@@ -107,9 +151,18 @@ function StepMappingScreenshotNav({ items, activeId, onSelect }: Props) {
                                 >
                                     #{item.order}
                                 </Typography>
-                                {hasAiImage ? (
-                                    <CheckCircleIcon sx={{ width: 14, height: 14, color: 'success.main' }} />
-                                ) : null}
+                                <StatusIndicator
+                                    complete={isHeadlineComplete}
+                                    tone="info"
+                                    completeTitle="Đã có headline"
+                                    pendingTitle="Chưa có headline"
+                                />
+                                <StatusIndicator
+                                    complete={isAiComplete}
+                                    tone="success"
+                                    completeTitle="Đã có ảnh AI"
+                                    pendingTitle="Chưa có ảnh AI"
+                                />
                             </Stack>
                             {selected ? (
                                 <Chip

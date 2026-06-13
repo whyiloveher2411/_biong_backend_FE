@@ -2,7 +2,7 @@ import { getAccessToken } from 'store/user/user.reducers';
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 
-const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/1/app?pageId=none';
+const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
 
 /** Khớp filters_custom post-type spacedev_app_marketing_post (extension auto bật filter này). */
 export const MARKETING_PIPELINE_FILTER_SAVED_NAME =

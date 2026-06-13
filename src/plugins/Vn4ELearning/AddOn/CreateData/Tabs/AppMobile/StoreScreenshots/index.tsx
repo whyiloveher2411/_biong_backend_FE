@@ -13,17 +13,17 @@ import {
 } from '@mui/material';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
-import ShortTextOutlinedIcon from '@mui/icons-material/ShortTextOutlined';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
 import PreviewOutlinedIcon from '@mui/icons-material/PreviewOutlined';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import StepMetadata from './StepMetadata';
-import StepUpload from './StepUpload';
 import StepMapping from './StepMapping';
 import StepTemplate from './StepTemplate';
 import StepPreview from './StepPreview';
+import StepPreviewToolbar from './StepPreviewToolbar';
+import type { GeminiLogoRegionsById } from './storeScreenshotGeminiLogoRegion';
 import StepExport from './StepExport';
 import {
     DEFAULT_STORE_METADATA,
@@ -34,6 +34,7 @@ import {
 import type {
     StoreMetadata,
     StoreScreenshotConfig,
+    StoreScreenshotGeminiRemoverStatus,
     StoreScreenshotProjectResponse,
     StoreScreenshotTarget,
 } from './storeScreenshotTypes';
@@ -59,9 +60,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STEP_ICONS: Record<string, React.ReactNode> = {
     metadata: <DescriptionOutlinedIcon fontSize="small" />,
-    upload: <CloudUploadOutlinedIcon fontSize="small" />,
     template: <PaletteOutlinedIcon fontSize="small" />,
-    mapping: <ShortTextOutlinedIcon fontSize="small" />,
+    mapping: <CloudUploadOutlinedIcon fontSize="small" />,
     preview: <PreviewOutlinedIcon fontSize="small" />,
     export: <ArchiveOutlinedIcon fontSize="small" />,
 };
@@ -77,6 +77,9 @@ function StoreScreenshots({ data }: Props) {
     const [storeMetadata, setStoreMetadata] = React.useState<StoreMetadata>(DEFAULT_STORE_METADATA);
     const [targets, setTargets] = React.useState<Record<string, StoreScreenshotTarget>>({});
     const [appLogoUrl, setAppLogoUrl] = React.useState('');
+    const [geminiRemover, setGeminiRemover] = React.useState<StoreScreenshotGeminiRemoverStatus | undefined>();
+    const [geminiLogoRegionsById, setGeminiLogoRegionsById] = React.useState<GeminiLogoRegionsById>({});
+    const [activeGeminiLogoSelectionId, setActiveGeminiLogoSelectionId] = React.useState<string | null>(null);
 
     const showMessageRef = React.useRef(showMessage);
     showMessageRef.current = showMessage;
@@ -100,6 +103,7 @@ function StoreScreenshots({ data }: Props) {
                 setStoreMetadata(result.store_metadata || DEFAULT_STORE_METADATA);
                 setTargets(result.targets || {});
                 setAppLogoUrl(String(result.app?.logo || ''));
+                setGeminiRemover(result.gemini_remover);
                 setActiveStepId(normalizeStoreScreenshotStepId(nextConfig.active_step_id));
             })
             .catch((error) => {
@@ -134,11 +138,29 @@ function StoreScreenshots({ data }: Props) {
         setStoreMetadata(result.store_metadata || DEFAULT_STORE_METADATA);
         setTargets(result.targets || {});
         setAppLogoUrl(String(result.app?.logo || ''));
+        setGeminiRemover(result.gemini_remover);
+    };
+
+    const handleSuccess = (message: string) => {
+        showMessage(message, 'success');
     };
 
     const handleError = (message: string) => {
         showMessage(message, 'error');
     };
+
+    const handleGeminiLogoRegionsCleared = React.useCallback((screenshotIds: string[]) => {
+        if (screenshotIds.length === 0) {
+            return;
+        }
+        setGeminiLogoRegionsById((prev) => {
+            const next = { ...prev };
+            screenshotIds.forEach((screenshotId) => {
+                delete next[screenshotId];
+            });
+            return next;
+        });
+    }, []);
 
     const persistActiveStep = React.useCallback((stepId: string) => {
         const safeStepId = normalizeStoreScreenshotStepId(stepId);
@@ -175,15 +197,6 @@ function StoreScreenshots({ data }: Props) {
                         onError={handleError}
                     />
                 );
-            case 'upload':
-                return (
-                    <StepUpload
-                        appMobileId={appMobileId}
-                        config={config}
-                        onUpdated={handleConfigUpdated}
-                        onError={handleError}
-                    />
-                );
             case 'template':
                 return (
                     <StepTemplate
@@ -210,7 +223,14 @@ function StoreScreenshots({ data }: Props) {
                 );
             case 'preview':
                 return (
-                    <StepPreview config={config} />
+                    <StepPreview
+                        config={config}
+                        regionsById={geminiLogoRegionsById}
+                        activeSelectionId={activeGeminiLogoSelectionId}
+                        geminiRemoverReady={geminiRemover?.ready ?? false}
+                        onRegionsChange={setGeminiLogoRegionsById}
+                        onActiveSelectionChange={setActiveGeminiLogoSelectionId}
+                    />
                 );
             case 'export':
                 return (
@@ -327,13 +347,35 @@ function StoreScreenshots({ data }: Props) {
                             minHeight: 420,
                         }}
                     >
-                        <Box sx={{ mb: 2 }}>
-                            <Typography variant="h6">
-                                Bước {(STORE_SCREENSHOT_STEPS.findIndex((step) => step.id === activeStepId) + 1) || 1}: {activeStep.label}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {activeStep.description}
-                            </Typography>
+                        <Box
+                            sx={{
+                                mb: 2,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                                gap: 2,
+                            }}
+                        >
+                            <Box>
+                                <Typography variant="h6">
+                                    Bước {(STORE_SCREENSHOT_STEPS.findIndex((step) => step.id === activeStepId) + 1) || 1}: {activeStep.label}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {activeStep.description}
+                                </Typography>
+                            </Box>
+                            {activeStepId === 'preview' && (
+                                <StepPreviewToolbar
+                                    appMobileId={appMobileId}
+                                    config={config}
+                                    geminiRemover={geminiRemover}
+                                    regionsById={geminiLogoRegionsById}
+                                    onProjectRefreshed={handleProjectRefreshed}
+                                    onRegionsCleared={handleGeminiLogoRegionsCleared}
+                                    onError={handleError}
+                                    onSuccess={handleSuccess}
+                                />
+                            )}
                         </Box>
                         {renderStepContent()}
                     </Box>

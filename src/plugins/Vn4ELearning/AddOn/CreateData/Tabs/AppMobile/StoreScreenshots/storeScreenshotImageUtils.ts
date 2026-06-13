@@ -1,4 +1,5 @@
 import type { ImageObjectProps } from 'helpers/image';
+import type { StoreScreenshotItem } from './storeScreenshotTypes';
 
 /** Encode path URL (khoảng trắng trong tên file → %20) để <img> load đúng. */
 export function encodeExternalImageUrl(url: string): string {
@@ -106,4 +107,55 @@ export function readImagePostFieldValue(
 
 export function getStoreScreenshotAiFieldName(screenshotId: string): string {
     return `store_screenshot_ai_${screenshotId}`;
+}
+
+export function resolveStoreScreenshotAiImageCacheBust(
+    item: Pick<StoreScreenshotItem, 'ai_image_version'>,
+): number | undefined {
+    const version = Number(item.ai_image_version || 0);
+    return version > 0 ? version : undefined;
+}
+
+/** Gỡ ?t= trước khi lưu server — chỉ dùng cho cache bust phía client. */
+export function stripImageUrlCacheBust(url: string): string {
+    const raw = String(url || '').trim();
+    if (!raw) {
+        return '';
+    }
+
+    try {
+        const parsed = new URL(raw);
+        parsed.searchParams.delete('t');
+        const query = parsed.searchParams.toString();
+        return query ? `${parsed.origin}${parsed.pathname}?${query}` : `${parsed.origin}${parsed.pathname}`;
+    } catch {
+        return raw
+            .replace(/([?&])t=\d+(?=&|$)/, '$1')
+            .replace(/[?&]$/, '');
+    }
+}
+
+export function stripImageObjectCacheBust(image: ImageObjectProps | null): ImageObjectProps | null {
+    if (!image?.link) {
+        return image;
+    }
+
+    return {
+        ...image,
+        link: stripImageUrlCacheBust(image.link),
+    };
+}
+
+export function resolveStoreScreenshotAiImageDisplayUrl(
+    item: Pick<StoreScreenshotItem, 'ai_image_url' | 'ai_image_version'>,
+): string {
+    const url = String(item.ai_image_url || '').trim();
+    if (!url) {
+        return '';
+    }
+
+    return encodeExternalImageUrlWithCacheBust(
+        url,
+        resolveStoreScreenshotAiImageCacheBust(item),
+    );
 }

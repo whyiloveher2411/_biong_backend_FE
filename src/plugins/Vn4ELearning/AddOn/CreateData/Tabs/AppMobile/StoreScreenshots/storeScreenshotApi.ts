@@ -7,6 +7,37 @@ import { STORE_SCREENSHOT_API } from './storeScreenshotConstants';
 
 const language = getLanguage();
 
+function extractStoreScreenshotApiErrorMessage(result: unknown): string {
+    if (!result || typeof result !== 'object') {
+        return 'Yêu cầu thất bại';
+    }
+
+    const payload = result as {
+        message?: string | { content?: string; text?: string };
+        results?: Array<{ status?: string; error?: string }>;
+    };
+
+    const { message } = payload;
+    if (typeof message === 'string' && message.trim()) {
+        return message;
+    }
+    if (message && typeof message === 'object') {
+        if (typeof message.content === 'string' && message.content.trim()) {
+            return message.content;
+        }
+        if (typeof message.text === 'string' && message.text.trim()) {
+            return message.text;
+        }
+    }
+
+    const failed = (payload.results || []).find((row) => row?.status === 'failed');
+    if (failed?.error) {
+        return failed.error;
+    }
+
+    return 'Yêu cầu thất bại';
+}
+
 type AjaxOptions = {
     url: string;
     data?: Record<string, unknown>;
@@ -41,10 +72,7 @@ async function postJson<T>(options: AjaxOptions): Promise<T> {
         throw new Error('Phiên đăng nhập hết hạn — hãy tải lại trang');
     }
     if (!response.ok || result?.success === false) {
-        const message = typeof result?.message === 'string'
-            ? result.message
-            : result?.message?.text || 'Yêu cầu thất bại';
-        throw new Error(message);
+        throw new Error(extractStoreScreenshotApiErrorMessage(result));
     }
 
     return result as T;
@@ -123,6 +151,61 @@ export async function saveStoreScreenshotCaptions(
     });
 }
 
+export type StoreScreenshotHeadlineVariantPayload = {
+    copy_style_id: string;
+    headline: Record<string, string>;
+    subtitle: Record<string, string>;
+};
+
+export type StoreScreenshotDecorPayload = {
+    background_pattern?: string;
+    background_color?: string;
+    floating_icons_enabled?: boolean;
+    icons?: string[];
+    background_motifs?: string[];
+};
+
+export async function saveStoreScreenshotHeadlineVariants(
+    appMobileId: number,
+    payload: {
+        id: string;
+        caption?: string;
+        headline_variants: StoreScreenshotHeadlineVariantPayload[];
+    } & StoreScreenshotDecorPayload,
+): Promise<StoreScreenshotProjectResponse> {
+    return postJson<StoreScreenshotProjectResponse>({
+        url: `${STORE_SCREENSHOT_API}/save-headline-variants`,
+        data: {
+            app_mobile: appMobileId,
+            id: payload.id,
+            caption: payload.caption,
+            headline_variants: payload.headline_variants,
+            background_pattern: payload.background_pattern,
+            background_color: payload.background_color,
+            floating_icons_enabled: payload.floating_icons_enabled,
+            icons: payload.icons,
+            background_motifs: payload.background_motifs,
+        },
+    });
+}
+
+export async function saveStoreScreenshotHeadlineSelection(
+    appMobileId: number,
+    payload: {
+        id: string;
+        copy_style_id: string;
+    },
+): Promise<StoreScreenshotProjectResponse> {
+    return postJson<StoreScreenshotProjectResponse>({
+        url: `${STORE_SCREENSHOT_API}/save-headline-selection`,
+        data: {
+            app_mobile: appMobileId,
+            id: payload.id,
+            copy_style_id: payload.copy_style_id,
+        },
+    });
+}
+
 export async function syncStoreScreenshotsFromImages(
     appMobileId: number,
     images: ImageObjectProps[],
@@ -177,6 +260,8 @@ export type StoreScreenshotAiContentPayload = {
     logo_placement?: string;
     floating_icons_enabled?: boolean;
     background_pattern?: string;
+    icons?: string[];
+    background_motifs?: string[];
     feature_highlight?: string;
     background_color?: string;
     ai_prompt: string;
@@ -245,6 +330,47 @@ export async function fetchStoreScreenshotSourceImageBlob(
     }
 
     return new Blob([bytes], { type: result.content_type || 'image/png' });
+}
+
+export type RemoveStoreScreenshotGeminiLogoOptions = {
+    regions?: Array<{
+        screenshot_id: string;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+    }>;
+    screenshotIds?: string[];
+};
+
+export async function removeStoreScreenshotGeminiLogo(
+    appMobileId: number,
+    options: RemoveStoreScreenshotGeminiLogoOptions = {},
+): Promise<StoreScreenshotProjectResponse> {
+    const data: Record<string, unknown> = {
+        app_mobile: appMobileId,
+    };
+
+    if (options.regions && options.regions.length > 0) {
+        data.regions = options.regions;
+    }
+    if (options.screenshotIds && options.screenshotIds.length > 0) {
+        data.screenshot_ids = options.screenshotIds;
+    }
+
+    return postJson<StoreScreenshotProjectResponse>({
+        url: `${STORE_SCREENSHOT_API}/remove-gemini-logo`,
+        data,
+    });
+}
+
+export async function restoreStoreScreenshotGeminiLogoOriginal(
+    appMobileId: number,
+): Promise<StoreScreenshotProjectResponse> {
+    return postJson<StoreScreenshotProjectResponse>({
+        url: `${STORE_SCREENSHOT_API}/restore-gemini-logo-original`,
+        data: { app_mobile: appMobileId },
+    });
 }
 
 export async function fetchStoreScreenshotAppLogoBlob(appMobileId: number): Promise<Blob> {

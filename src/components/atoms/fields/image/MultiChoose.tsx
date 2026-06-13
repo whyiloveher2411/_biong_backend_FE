@@ -17,7 +17,7 @@ import { default as DialogCustom } from 'components/molecules/Dialog';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { addClasses } from 'helpers/dom';
 import { __ } from 'helpers/i18n';
-import { ImageObjectProps } from 'helpers/image';
+import { copyImageUrlToClipboard, ImageObjectProps, openImagePopup } from 'helpers/image';
 import { convertToURL, validURL } from 'helpers/url';
 import useAjax from 'hook/useApi';
 import { useSnackbar } from 'notistack';
@@ -32,11 +32,15 @@ const Transition = React.forwardRef(function Transition(props: { [key: string]: 
 
 const useStyles = makeStyles((theme: Theme) => ({
 
-    removeImg: {
+    imageActionBtns: {
         position: 'absolute',
         top: 3,
         right: 3,
+        display: 'flex',
+        gap: 4,
         zIndex: 2,
+    },
+    imageActionBtn: {
         background: 'rgba(32,33,36,0.6)',
         '&:hover': {
             background: 'rgba(32,33,36,0.8)',
@@ -630,29 +634,88 @@ interface ImageResultProps {
 }
 
 const ImageResult = ({ classes, post, handleClickRemoveImage, handleClickOpenSourceDialog, name }: ImageResultProps) => {
+    const { enqueueSnackbar } = useSnackbar();
+
+    const notifyCopySuccess = () => {
+        enqueueSnackbar(__('Copied to clipboard.'), {
+            variant: 'success',
+            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+        });
+    };
+
+    const notifyCopyError = () => {
+        enqueueSnackbar(__('Cannot copy image to clipboard'), {
+            variant: 'error',
+            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+        });
+    };
+
     return <>
         {
-            post[name].map((ele: ImageObjectProps, index: number) => (
-                <div data-index={index} id={'div' + index} key={index} draggable={true} className={classes.gridListItem + ' gridListItem '}>
-                    <div className='inside'>
-                        <IconButton
-                            onClick={() => handleClickRemoveImage(index)}
-                            size="small"
-                            className={classes.removeImg}
-                            aria-label="Remove Image"
-                            component="span"
-                        >
-                            <Icon icon="HighlightOffOutlined" style={{ color: 'rgba(255,255,255,0.851)' }} />
-                        </IconButton>
-                        <img
-                            draggable={false}
-                            className={classes.image}
-                            src={validURL(ele.link) ? ele.link : convertToURL(process.env.REACT_APP_BASE_URL, ele.link)}
-                            alt="field"
-                        />
+            post[name].map((ele: ImageObjectProps, index: number) => {
+                const imageUrl = validURL(ele.link)
+                    ? ele.link
+                    : convertToURL(process.env.REACT_APP_BASE_URL, ele.link);
+
+                const handleClickPreviewImage = (event: React.MouseEvent<HTMLButtonElement>) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openImagePopup(imageUrl);
+                };
+
+                const handleClickCopyImage = async (event: React.MouseEvent<HTMLButtonElement>) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    try {
+                        await copyImageUrlToClipboard(imageUrl);
+                        notifyCopySuccess();
+                    } catch {
+                        notifyCopyError();
+                    }
+                };
+
+                return (
+                    <div data-index={index} id={'div' + index} key={index} draggable={true} className={classes.gridListItem + ' gridListItem '}>
+                        <div className='inside'>
+                            <Box className={classes.imageActionBtns}>
+                                <IconButton
+                                    className={classes.imageActionBtn}
+                                    onClick={handleClickPreviewImage}
+                                    size="small"
+                                    aria-label={__('Preview image')}
+                                    component="span"
+                                >
+                                    <Icon icon="Visibility" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                    className={classes.imageActionBtn}
+                                    onClick={handleClickCopyImage}
+                                    size="small"
+                                    aria-label={__('Copy image')}
+                                    component="span"
+                                >
+                                    <Icon icon="ContentCopy" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                    className={classes.imageActionBtn}
+                                    onClick={() => handleClickRemoveImage(index)}
+                                    size="small"
+                                    aria-label={__('Remove image')}
+                                    component="span"
+                                >
+                                    <Icon icon="HighlightOffOutlined" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                                </IconButton>
+                            </Box>
+                            <img
+                                draggable={false}
+                                className={classes.image}
+                                src={imageUrl}
+                                alt="field"
+                            />
+                        </div>
                     </div>
-                </div>
-            ))
+                );
+            })
         }
         <div draggable={false} className={classes.gridListItem + ' gridListItem uploadFile'}>
             <div className='inside' style={{ paddingTop: 0 }}>

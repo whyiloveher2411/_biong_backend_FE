@@ -205,6 +205,7 @@ export function buildBackgroundPatternPromptLines(
     patternId: BackgroundPatternId | string,
     template: StoreScreenshotTemplate,
     screenshotBackgroundColor?: string | null,
+    motifs?: string[],
 ): string[] {
     const resolvedId = normalizeBackgroundPatternId(patternId);
     const option = getBackgroundPatternOption(resolvedId);
@@ -215,35 +216,23 @@ export function buildBackgroundPatternPromptLines(
         ?? BACKGROUND_OPTIONS.find((item) => item.id === DEFAULT_STYLE_ADVANCED.background_mode)
         ?? BACKGROUND_OPTIONS[0];
 
+    const motifList = (motifs ?? []).map((item) => String(item || '').trim()).filter(Boolean);
+
+    const patternHint = getPatternStyleGuidance(resolvedId)[0] ?? option.description;
+    const colorHint = imageBg
+        ? `Tints from ${imageBg}, accent ${brandColor}.`
+        : `Harmonize with brand ${brandColor}.`;
+
     if (resolvedId === 'none') {
-        return [
-            '## Background pattern / texture',
-            `Selected: ${option.label} (${option.term}).`,
-            ...getPatternStyleGuidance('none'),
-        ];
+        return [`Background pattern: off — ${patternHint}`];
     }
 
     return [
-        '## Background pattern / texture (ENABLED)',
-        `Selected style: ${option.label} — ${option.term}.`,
-        `Design intent: ${option.description}`,
-        '',
-        'Background patterns sit on the deepest layer — behind device, floating icons, headline, and logo.',
-        'These are NOT floating app icons. Do not place patterns on the phone screen glass.',
-        '',
-        '### Style rules for this pattern',
-        ...getPatternStyleGuidance(resolvedId),
-        '',
-        '### Opacity & contrast (critical)',
-        'Keep patterns subtle — roughly 10–40% opacity unless the style explicitly needs slightly stronger grid lines.',
-        'Headline and in-app UI must remain the focal points; pattern must not "swallow" the main content.',
-        '',
-        ...(imageBg
-            ? [`Per-screenshot background anchor: ${imageBg} — pattern tints follow ${imageBg}, brand ${brandColor} as accent.`]
-            : [`Harmonize pattern tints with brand color ${brandColor}.`]),
-        `### Match template background mode: ${background.label}`,
-        getBackgroundModePatternGuidance(advanced.background_mode, brandColor, screenshotBackgroundColor),
-        '',
-        'Z-order: base fill → background pattern/texture → device mockup → floating icons (if any) → text/logo.',
+        `Background pattern: ${option.label} — ${patternHint}`,
+        ...(motifList.length > 0
+            ? [`Motifs: ${motifList.map((item, index) => `${index + 1}) ${item}`).join(' ')}`]
+            : []),
+        `Subtle 10–40% opacity; deepest layer only — not on phone glass. ${colorHint}`,
+        `Mode: ${background.label}. ${getBackgroundModePatternGuidance(advanced.background_mode, brandColor, screenshotBackgroundColor)}`,
     ];
 }

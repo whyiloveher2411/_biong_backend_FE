@@ -18,7 +18,7 @@ import Typography from 'components/atoms/Typography';
 import { default as DialogCustom } from 'components/molecules/Dialog';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { __ } from 'helpers/i18n';
-import { ImageObjectProps } from 'helpers/image';
+import { copyImageUrlToClipboard, ImageObjectProps, openImagePopup } from 'helpers/image';
 import { convertToURL, validURL } from 'helpers/url';
 import useAjax from 'hook/useApi';
 import { useSnackbar } from 'notistack';
@@ -42,10 +42,16 @@ const useStyles = makeCSS((theme: Theme) => ({
         flex: 1,
         color: '#fff'
     },
-    removeImg: {
+    imageActionBtns: {
         position: 'absolute',
         top: 3,
-        right: 3
+        right: 3,
+        display: 'flex',
+        gap: 4,
+        zIndex: 1,
+    },
+    imageActionBtn: {
+        background: 'rgba(32,33,36,0.6)',
     },
     uploadIcon: {
         color: theme.palette.text.secondary
@@ -489,16 +495,71 @@ interface ImageResultProps {
 }
 
 const ImageResult = ({ classes, post, handleClickRemoveImage, name, handleClickOpenSourceDialog }: ImageResultProps) => {
+    const { enqueueSnackbar } = useSnackbar();
+
     if (post[name].link) {
+        const imageUrl = validURL(post[name].link)
+            ? post[name].link
+            : convertToURL(process.env.REACT_APP_BASE_URL, post[name].link);
+
+        const handleClickPreviewImage = (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openImagePopup(imageUrl);
+        };
+
+        const handleClickCopyImage = async (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            try {
+                await copyImageUrlToClipboard(imageUrl);
+                enqueueSnackbar(__('Copied to clipboard.'), {
+                    variant: 'success',
+                    anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                });
+            } catch {
+                enqueueSnackbar(__('Cannot copy image to clipboard'), {
+                    variant: 'error',
+                    anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                });
+            }
+        };
+
         return <div style={{ position: 'relative' }} >
-            <IconButton style={{ background: 'rgba(32,33,36,0.6)' }} onClick={handleClickRemoveImage} size="small" className={classes.removeImg} aria-label="Remove Image" component="span">
-                <Icon icon="HighlightOffOutlined" style={{ color: 'rgba(255,255,255,0.851)' }} />
-            </IconButton>
+            <Box className={classes.imageActionBtns}>
+                <IconButton
+                    className={classes.imageActionBtn}
+                    onClick={handleClickPreviewImage}
+                    size="small"
+                    aria-label={__('Preview image')}
+                    component="span"
+                >
+                    <Icon icon="Visibility" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                </IconButton>
+                <IconButton
+                    className={classes.imageActionBtn}
+                    onClick={handleClickCopyImage}
+                    size="small"
+                    aria-label={__('Copy image')}
+                    component="span"
+                >
+                    <Icon icon="ContentCopy" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                </IconButton>
+                <IconButton
+                    className={classes.imageActionBtn}
+                    onClick={handleClickRemoveImage}
+                    size="small"
+                    aria-label={__('Remove image')}
+                    component="span"
+                >
+                    <Icon icon="HighlightOffOutlined" style={{ color: 'rgba(255,255,255,0.851)' }} fontSize="small" />
+                </IconButton>
+            </Box>
             <CardMedia
                 onClick={handleClickOpenSourceDialog}
                 style={{ maxWidth: '100%', width: 160, height: 160, cursor: 'pointer', background: 'url(/admin/fileExtension/trans.jpg)' }}
                 component="img"
-                image={validURL(post[name].link) ? post[name].link : convertToURL(process.env.REACT_APP_BASE_URL, post[name].link)}
+                image={imageUrl}
             />
         </div>
     }

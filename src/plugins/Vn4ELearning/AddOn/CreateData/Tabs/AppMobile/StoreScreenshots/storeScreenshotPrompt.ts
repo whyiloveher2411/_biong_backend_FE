@@ -4,7 +4,6 @@ import type {
     StoreScreenshotTemplate,
 } from './storeScreenshotTypes';
 import { buildCopyStylePromptLinesForScreenshot } from './storeScreenshotCopyStyleOptions';
-import { buildCropTargetPromptLines } from './storeScreenshotCropTarget';
 import {
     buildLogoAttachmentPromptLines,
     logoPlacementUsesLogo,
@@ -13,21 +12,20 @@ import {
 import { buildBackgroundColorPromptLines } from './storeScreenshotBackgroundColorPrompt';
 import { buildBackgroundPatternPromptLines } from './storeScreenshotBackgroundPattern';
 import { normalizeHexColor } from './storeScreenshotColorUtils';
-import {
-    normalizeFloatingIconsEnabled,
-} from './storeScreenshotDecorOptions';
+import { normalizeFloatingIconsEnabled } from './storeScreenshotDecorOptions';
 import { normalizeBackgroundPatternId } from './storeScreenshotBackgroundPattern';
 import { buildFloatingIconsPromptLines } from './storeScreenshotFloatingIconsPrompt';
 import { buildHeadlineTypographyPromptLines } from './storeScreenshotHeadlineTypographyPrompt';
 import { buildFeatureHighlightPromptLines } from './storeScreenshotFeatureHighlightPrompt';
+import { buildCropTargetPromptLines } from './storeScreenshotCropTarget';
 import { buildMainImagePromptLines, buildMainImageSizeOverrideLines } from './storeScreenshotMainImagePrompt';
+import { buildMainScreenFidelityPromptLines } from './storeScreenshotMainScreenFidelity';
 import { getPromptLangText } from './storeScreenshotMultilang';
-import { getImageAttachmentRoles } from './storeScreenshotImageAttachment';
 import {
-    buildLayoutReferenceCriticalWarningLines,
-    buildLayoutReferencePromptLines,
-    buildSeriesLayoutLockPromptLines,
-} from './storeScreenshotSeriesLayoutPrompt';
+    buildImageAttachmentPromptLines,
+    getImageAttachmentRoles,
+} from './storeScreenshotImageAttachment';
+import { buildSeriesLayoutLockPromptLines } from './storeScreenshotSeriesLayoutPrompt';
 import { buildStylePromptLines } from './storeScreenshotStyleOptions';
 
 type BuildPromptInput = {
@@ -60,70 +58,62 @@ export function buildStoreScreenshotAiPrompt({
     );
     const resolvedAppName = appTitle || storeMetadata.title || 'App';
     const imageRoles = getImageAttachmentRoles(usesLogo, hasLayoutReference);
+    const isLayoutAnchor = item.order === 1;
 
     const lines = [
-        'You are an expert mobile app store marketing designer with deep experience in App Store and Google Play screenshot creatives.',
-        'Your role is to turn raw in-app screenshots into polished, conversion-focused store listing visuals that feel native to iOS and Android storefronts.',
-        'Primary goal: maximize user attraction and download intent — the visual must stop the scroll and make the headline/subtitle irresistible.',
-        'Prioritize clarity, hierarchy, benefit-led messaging, and brand consistency. Do not add watermarks or unrelated decorative clutter.',
+        'Composite task: place the uploaded app screenshot inside a marketing phone frame with headline/subtitle/decor.',
+        'Do NOT redraw or invent in-app UI — composite Image roles below. Conversion-focused, no watermarks.',
         '',
-        '## Task',
-        'Create one professional app store marketing screenshot for a mobile app listing.',
+        ...buildImageAttachmentPromptLines(
+            imageRoles,
+            hasLayoutReference ? layoutReferenceOrder : undefined,
+        ),
         '',
-        `App name: ${resolvedAppName}`,
-        `Brand color: ${normalizeHexColor(template.brand_color, '#1A73E8')}`,
-        '',
-        `Screenshot #${item.order} of ${totalCount}`,
-        headline ? `Headline: ${headline}` : '',
-        subtitle ? `Subtitle: ${subtitle}` : '',
-        '',
-        ...(hasLayoutReference
-            ? buildLayoutReferenceCriticalWarningLines(imageRoles, layoutReferenceOrder)
-            : []),
-        ...buildLogoAttachmentPromptLines(logoPlacementId, resolvedAppName, imageRoles),
-        '',
-        ...(hasLayoutReference
-            ? [
-                ...buildLayoutReferencePromptLines(imageRoles, layoutReferenceOrder),
-                '',
-            ]
-            : []),
-        ...buildMainImagePromptLines(usesLogo, logoPlacementId, imageRoles),
-        '',
-        ...buildFeatureHighlightPromptLines(item.feature_highlight, imageRoles),
-        '',
-        ...buildFloatingIconsPromptLines(floatingIconsEnabled, imageRoles),
-        '',
-        ...buildBackgroundColorPromptLines(item.background_color, template),
-        '',
-        ...buildBackgroundPatternPromptLines(backgroundPatternId, template, item.background_color),
+        ...buildMainScreenFidelityPromptLines(imageRoles, { hasLayoutReference }),
         '',
         ...buildCropTargetPromptLines(item.crop_target_size, {
             includeLogoInSafeZone: usesLogo,
-            logoImageNum: imageRoles.logoNum ?? undefined,
+            logoImageNum: imageRoles.logoNum ?? 1,
         }),
         '',
-        '## Headline & title on image',
+        '## Brief',
+        `App: ${resolvedAppName} · Brand: ${normalizeHexColor(template.brand_color, '#1A73E8')} · #${item.order}/${totalCount}`,
+        headline ? `Headline: "${headline}"` : '',
+        subtitle ? `Subtitle: "${subtitle}"` : '',
+        '',
+        ...buildLogoAttachmentPromptLines(logoPlacementId, resolvedAppName, imageRoles),
+        '',
+        ...buildMainImagePromptLines(usesLogo, logoPlacementId, imageRoles, item.crop_target_size, {
+            isLayoutAnchor,
+            hasLayoutReference,
+        }),
+        '',
+        ...buildFeatureHighlightPromptLines(item.feature_highlight, imageRoles),
+        ...buildFloatingIconsPromptLines(floatingIconsEnabled, imageRoles, item.icons),
+        ...buildBackgroundColorPromptLines(item.background_color, template),
+        ...buildBackgroundPatternPromptLines(
+            backgroundPatternId,
+            template,
+            item.background_color,
+            item.background_motifs,
+        ),
+        '',
+        '## Copy & typography',
         ...buildCopyStylePromptLinesForScreenshot(item, template),
         ...buildHeadlineTypographyPromptLines(template),
-        headline
-            ? `Headline text to render: "${headline}" — apply typography rules above (accent keywords, shadow, hierarchy).`
-            : 'If no headline is provided, leave headline area minimal.',
-        subtitle
-            ? `Subtitle text to render: "${subtitle}" — secondary styling per rules above; stay inside safe zone.`
-            : '',
-        '',
-        '## Visual style',
         ...buildStylePromptLines(template, item.background_color),
-        'Global overrides: device mockup has NO drop shadow; logo/app name and floating icons have NO background containers or plates.',
         '',
         ...(totalCount > 1
             ? [
-                ...buildSeriesLayoutLockPromptLines(item.crop_target_size, resolvedAppName),
+                ...buildSeriesLayoutLockPromptLines(item.crop_target_size, resolvedAppName, {
+                    isLayoutAnchor,
+                }),
                 '',
             ]
             : []),
-        ...buildMainImageSizeOverrideLines(usesLogo, logoPlacementId, hasLayoutReference, imageRoles),
+        ...buildMainImageSizeOverrideLines(usesLogo, logoPlacementId, hasLayoutReference, imageRoles, {
+            isLayoutAnchor,
+        }),
     ];
 
     return lines.filter((line) => line !== '').join('\n');
