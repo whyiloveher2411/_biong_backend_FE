@@ -48,6 +48,8 @@ export type ShortVideoRenderManifest = {
     lang: string;
     duration_sec: number;
     scene_gap_sec?: number;
+    /** Template preset đã chọn trong CMS (classic, news, quote, …). */
+    template_id?: string;
     style: {
         bg: string;
         text: string;

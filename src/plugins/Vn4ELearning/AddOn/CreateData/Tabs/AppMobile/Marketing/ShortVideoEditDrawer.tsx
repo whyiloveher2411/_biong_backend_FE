@@ -4,6 +4,7 @@ import {
     Alert,
     Box,
     CircularProgress,
+    IconButton,
     Typography,
 } from '@mui/material';
 import Button from 'components/atoms/Button';
@@ -17,7 +18,9 @@ import {
     saveShortVideoRenderManifest,
 } from 'helpers/marketingShortVideoManifestApi';
 import {
+    applyShortVideoTemplateToManifest,
     clearSceneLayoutKeysInManifest,
+    getShortVideoRenderTemplate,
     parseShortVideoRenderManifest,
     resolveSceneActiveColor,
     resolveSceneHeadlineColor,
@@ -30,6 +33,7 @@ import {
     type ShortVideoManifestScene,
     type ShortVideoManifestSceneLayout,
     type ShortVideoRenderManifest,
+    type ShortVideoTemplateApplyMode,
 } from 'helpers/shortVideoRenderManifest';
 import {
     parseShortVideoSceneAudioMap,
@@ -45,6 +49,9 @@ import { buildVoiceoverPlaybackWordTimings } from 'helpers/shortVideoVoiceoverTi
 import { SHORT_VIDEO_RENDER_API_PATH } from 'helpers/marketingShortVideoRenderWorkflow';
 import ShortVideoVoiceoverKaraoke from './ShortVideoVoiceoverKaraoke';
 import ShortVideoSceneEditDrawer from './ShortVideoSceneEditDrawer';
+import ShortVideoGlobalSettingsDrawer, {
+    ShortVideoGlobalSettingsIcon,
+} from './ShortVideoGlobalSettingsDrawer';
 
 /** Tạm ẩn banner manifest info — bật lại khi cần. */
 const SHOW_MANIFEST_INFO_BANNER = false;
@@ -176,6 +183,7 @@ export default function ShortVideoEditDrawer({
     const [manifestRefreshing, setManifestRefreshing] = React.useState(false);
     const [manifestSaving, setManifestSaving] = React.useState(false);
     const [sceneEditId, setSceneEditId] = React.useState('');
+    const [globalSettingsOpen, setGlobalSettingsOpen] = React.useState(false);
     const [videoRendering, setVideoRendering] = React.useState(false);
     const savedManifestFingerprintRef = React.useRef('');
     const remotionPlayerRef = React.useRef<PlayerRef | null>(null);
@@ -251,6 +259,7 @@ export default function ShortVideoEditDrawer({
             setManifestInfo('');
             savedManifestFingerprintRef.current = '';
             setSceneEditId('');
+            setGlobalSettingsOpen(false);
             remotionPlayerRef.current = null;
             setRemotionPlayerInstance(null);
         }
@@ -335,6 +344,43 @@ export default function ShortVideoEditDrawer({
         },
         []
     );
+
+    const handleApplyGlobalTemplateAndSave = React.useCallback(
+        async (templateId: string, mode: ShortVideoTemplateApplyMode) => {
+            if (!manifest || shortVideoId <= 0) {
+                return;
+            }
+            const nextManifest = applyShortVideoTemplateToManifest(
+                manifest,
+                templateId,
+                mode
+            );
+            setManifestSaving(true);
+            setManifestError('');
+            try {
+                const result = await saveShortVideoRenderManifest(
+                    shortVideoId,
+                    nextManifest
+                );
+                applyManifestResult(result.manifest ?? nextManifest, false);
+                setGlobalSettingsOpen(false);
+            } catch (err: unknown) {
+                setManifestError(
+                    err instanceof Error ? err.message : 'Lưu manifest thất bại'
+                );
+            } finally {
+                setManifestSaving(false);
+            }
+        },
+        [manifest, shortVideoId, applyManifestResult]
+    );
+
+    const activeTemplateLabel = React.useMemo(() => {
+        if (!manifest?.template_id) {
+            return '';
+        }
+        return getShortVideoRenderTemplate(manifest.template_id)?.label ?? '';
+    }, [manifest?.template_id]);
 
     const handleSaveManifest = React.useCallback(async () => {
         if (!manifest || shortVideoId <= 0) {
@@ -571,13 +617,38 @@ export default function ShortVideoEditDrawer({
                                 bgcolor: 'background.paper',
                             }}
                         >
-                            <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-                                <Typography variant="subtitle2" fontWeight={600}>
-                                    Scenes
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {scenes.length} đoạn
-                                </Typography>
+                            <Box
+                                sx={{
+                                    px: 2,
+                                    py: 1.5,
+                                    borderBottom: 1,
+                                    borderColor: 'divider',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    justifyContent: 'space-between',
+                                    gap: 1,
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="subtitle2" fontWeight={600}>
+                                        Scenes
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {scenes.length} đoạn
+                                        {activeTemplateLabel
+                                            ? ` · ${activeTemplateLabel}`
+                                            : ''}
+                                    </Typography>
+                                </Box>
+                                <IconButton
+                                    size="small"
+                                    aria-label="Cài đặt video"
+                                    disabled={!manifest || manifestLoading}
+                                    onClick={() => setGlobalSettingsOpen(true)}
+                                    sx={{ mt: -0.25 }}
+                                >
+                                    <ShortVideoGlobalSettingsIcon fontSize="small" />
+                                </IconButton>
                             </Box>
                             <Box
                                 className="custom_scroll"
@@ -740,24 +811,26 @@ export default function ShortVideoEditDrawer({
                                             manifest={manifest}
                                             playerRef={remotionPlayerRef}
                                             playerInstance={remotionPlayerInstance}
+                                            rightSlot={renderActionButton}
                                         />
                                     </Suspense>
-                                ) : null}
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        justifyContent: 'flex-end',
-                                        flexShrink: 0,
-                                        pt: 1.5,
-                                        pb: 1.5,
-                                        px: 2,
-                                        borderTop: 1,
-                                        borderColor: 'divider',
-                                        bgcolor: 'background.paper',
-                                    }}
-                                >
-                                    {renderActionButton}
-                                </Box>
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            justifyContent: 'flex-end',
+                                            alignItems: 'center',
+                                            flexShrink: 0,
+                                            py: 1.5,
+                                            px: 2,
+                                            borderTop: 1,
+                                            borderColor: 'divider',
+                                            bgcolor: 'background.paper',
+                                        }}
+                                    >
+                                        {renderActionButton}
+                                    </Box>
+                                )}
                             </Box>
                         </Box>
                     </Box>
@@ -779,6 +852,15 @@ export default function ShortVideoEditDrawer({
                 onSave={handleSaveManifest}
                 onRefresh={handleRefreshManifest}
             />
+            {manifest ? (
+                <ShortVideoGlobalSettingsDrawer
+                    open={globalSettingsOpen}
+                    onClose={() => setGlobalSettingsOpen(false)}
+                    manifest={manifest}
+                    saving={manifestSaving}
+                    onApplyAndSave={handleApplyGlobalTemplateAndSave}
+                />
+            ) : null}
         </DrawerCustom>
     );
 }

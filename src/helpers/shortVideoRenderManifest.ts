@@ -259,6 +259,16 @@ export function clearSceneLayoutKeysInManifest(
     return updateSceneLayoutInManifest(manifest, sceneId, patch);
 }
 
+export {
+    applyShortVideoTemplateToManifest,
+    countScenesWithCustomLayout,
+    getShortVideoRenderTemplate,
+    sceneHasCustomLayout,
+    SHORT_VIDEO_RENDER_TEMPLATES,
+    type ShortVideoRenderTemplate,
+    type ShortVideoTemplateApplyMode,
+} from './shortVideoRenderTemplates';
+
 /** @deprecated Dùng updateSceneLayoutInManifest */
 export function updateSceneBackgroundInManifest(
     manifest: ShortVideoRenderManifest,

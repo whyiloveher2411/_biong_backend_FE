@@ -23,6 +23,7 @@ type PreviewProps = ManifestProps & {
 type TimelineBarProps = ManifestProps & {
     playerRef: PlayerRefHandle;
     playerInstance: PlayerRef | null;
+    rightSlot?: React.ReactNode;
 };
 
 function formatPlaybackClock(totalSec: number): string {
@@ -190,11 +191,12 @@ export function ShortVideoRemotionPreview({
     );
 }
 
-/** Box timeline + play/time — nằm trên box action (Render). */
+/** Box timeline + play/time; có thể gắn action (vd. Render) bên phải cùng hàng. */
 export function ShortVideoRemotionTimelineBar({
     manifest,
     playerRef,
     playerInstance,
+    rightSlot,
 }: TimelineBarProps) {
     const { fps, durationSec } = useManifestTiming(manifest);
     const {
@@ -217,12 +219,16 @@ export function ShortVideoRemotionTimelineBar({
                 borderColor: 'divider',
                 bgcolor: 'background.paper',
                 px: 2,
-                pt: 1.25,
-                pb: 1.5,
+                py: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
             }}
         >
             <Box
                 sx={{
+                    flex: 1,
+                    minWidth: 0,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
@@ -334,11 +340,16 @@ export function ShortVideoRemotionTimelineBar({
                     </Box>
                 </Box>
             </Box>
+            {rightSlot ? (
+                <Box sx={{ flexShrink: 0 }}>
+                    {rightSlot}
+                </Box>
+            ) : null}
         </Box>
     );
 }
 
-/** @deprecated Dùng ShortVideoRemotionTimelineBar + action bar riêng trong drawer. */
+/** @deprecated Dùng ShortVideoRemotionTimelineBar với prop rightSlot. */
 export function ShortVideoRemotionPlaybackBar({
     manifest,
     playerRef,
@@ -346,29 +357,12 @@ export function ShortVideoRemotionPlaybackBar({
     footerRight,
 }: TimelineBarProps & { footerRight?: React.ReactNode }) {
     return (
-        <>
-            <ShortVideoRemotionTimelineBar
-                manifest={manifest}
-                playerRef={playerRef}
-                playerInstance={playerInstance}
-            />
-            {footerRight ? (
-                <Box
-                    sx={{
-                        flexShrink: 0,
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        px: 2,
-                        py: 1.5,
-                        borderTop: 1,
-                        borderColor: 'divider',
-                        bgcolor: 'background.paper',
-                    }}
-                >
-                    {footerRight}
-                </Box>
-            ) : null}
-        </>
+        <ShortVideoRemotionTimelineBar
+            manifest={manifest}
+            playerRef={playerRef}
+            playerInstance={playerInstance}
+            rightSlot={footerRight}
+        />
     );
 }
 
