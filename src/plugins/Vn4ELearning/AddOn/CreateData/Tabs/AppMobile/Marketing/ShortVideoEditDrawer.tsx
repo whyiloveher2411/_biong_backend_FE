@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { Suspense } from 'react';
+import type { PlayerRef } from '@remotion/player';
 import {
     Alert,
     Box,
@@ -6,9 +7,30 @@ import {
     Typography,
 } from '@mui/material';
 import Button from 'components/atoms/Button';
+import LoadingButton from '@mui/lab/LoadingButton';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import useAjax from 'hook/useApi';
+import {
+    buildShortVideoRenderManifest,
+    refreshShortVideoRenderManifest,
+    saveShortVideoRenderManifest,
+} from 'helpers/marketingShortVideoManifestApi';
+import {
+    clearSceneLayoutKeysInManifest,
+    parseShortVideoRenderManifest,
+    resolveSceneActiveColor,
+    resolveSceneHeadlineColor,
+    resolveSceneHeadlineText,
+    resolveSceneShowHeadline,
+    resolveSceneShowKaraoke,
+    resolveSceneTextColor,
+    sceneBackgroundColor,
+    updateSceneLayoutInManifest,
+    type ShortVideoManifestScene,
+    type ShortVideoManifestSceneLayout,
+    type ShortVideoRenderManifest,
+} from 'helpers/shortVideoRenderManifest';
 import {
     parseShortVideoSceneAudioMap,
     parseShortVideoScriptScenes,
@@ -20,7 +42,26 @@ import {
     type ShortVideoRenderWord,
 } from 'helpers/shortVideoRenderJson';
 import { buildVoiceoverPlaybackWordTimings } from 'helpers/shortVideoVoiceoverTimings';
+import { SHORT_VIDEO_RENDER_API_PATH } from 'helpers/marketingShortVideoRenderWorkflow';
 import ShortVideoVoiceoverKaraoke from './ShortVideoVoiceoverKaraoke';
+import ShortVideoSceneEditDrawer from './ShortVideoSceneEditDrawer';
+
+/** Tạm ẩn banner manifest info — bật lại khi cần. */
+const SHOW_MANIFEST_INFO_BANNER = false;
+
+const loadRemotionPlayerModule = () => import('./ShortVideoRemotionPlayer');
+
+const ShortVideoRemotionPreview = React.lazy(() =>
+    loadRemotionPlayerModule().then((mod) => ({
+        default: mod.ShortVideoRemotionPreview,
+    }))
+);
+
+const ShortVideoRemotionTimelineBar = React.lazy(() =>
+    loadRemotionPlayerModule().then((mod) => ({
+        default: mod.ShortVideoRemotionTimelineBar,
+    }))
+);
 
 type Props = {
     open: boolean;
@@ -45,10 +86,79 @@ function parseApiMessage(res: unknown): string {
     return 'Yêu cầu thất bại';
 }
 
+function allScenesHaveAudio(
+    scenes: ShortVideoScriptScene[],
+    sceneAudioMap: ReturnType<typeof parseShortVideoSceneAudioMap>
+): boolean {
+    if (scenes.length === 0) {
+        return false;
+    }
+    return scenes.every((scene) => {
+        const url = sceneAudioMap[scene.id]?.url?.trim() || '';
+        return url.length > 0;
+    });
+}
+
+function manifestFingerprint(manifest: ShortVideoRenderManifest): string {
+    return JSON.stringify(manifest);
+}
+
+function manifestSceneForPreview(
+    scriptScene: ShortVideoScriptScene,
+    manifest: ShortVideoRenderManifest
+): ShortVideoManifestScene {
+    const matched = manifest.scenes.find((item) => item.id === scriptScene.id);
+    if (matched) {
+        return matched;
+    }
+    return {
+        id: scriptScene.id,
+        voiceover: scriptScene.voiceover,
+        on_screen_text: scriptScene.on_screen_text,
+        duration_hint_sec: scriptScene.duration_hint_sec,
+        visual: scriptScene.visual,
+        audio_url: '',
+        duration_sec: 0,
+        start_offset_sec: 0,
+        words: [],
+    };
+}
+
+function resolveSceneListPreviewStyles({
+    scriptScene,
+    manifest,
+}: {
+    scriptScene: ShortVideoScriptScene;
+    manifest: ShortVideoRenderManifest | null;
+}) {
+    if (!manifest) {
+        return {
+            backgroundColor: '#000000',
+            headlineColor: '#FFFFFF',
+            textColor: '#FFFFFF',
+            activeColor: '#E53935',
+            showHeadline: true,
+            showKaraoke: true,
+            headlineText: scriptScene.on_screen_text.trim(),
+        };
+    }
+    const previewScene = manifestSceneForPreview(scriptScene, manifest);
+    return {
+        backgroundColor: sceneBackgroundColor(previewScene, manifest),
+        headlineColor: resolveSceneHeadlineColor(previewScene, manifest),
+        textColor: resolveSceneTextColor(previewScene, manifest),
+        activeColor: resolveSceneActiveColor(previewScene, manifest),
+        showHeadline: resolveSceneShowHeadline(previewScene),
+        showKaraoke: resolveSceneShowKaraoke(previewScene),
+        headlineText: resolveSceneHeadlineText(previewScene),
+    };
+}
+
 export default function ShortVideoEditDrawer({
     open,
     onClose,
     data,
+    onRefreshPost,
 }: Props) {
     const api = useAjax();
     const apiAjaxRef = React.useRef(api.ajax);
@@ -59,6 +169,17 @@ export default function ShortVideoEditDrawer({
     const [error, setError] = React.useState('');
     const [post, setPost] = React.useState<DetailPost>({});
     const [selectedSceneId, setSelectedSceneId] = React.useState('');
+    const [manifest, setManifest] = React.useState<ShortVideoRenderManifest | null>(null);
+    const [manifestLoading, setManifestLoading] = React.useState(false);
+    const [manifestError, setManifestError] = React.useState('');
+    const [manifestInfo, setManifestInfo] = React.useState('');
+    const [manifestRefreshing, setManifestRefreshing] = React.useState(false);
+    const [manifestSaving, setManifestSaving] = React.useState(false);
+    const [sceneEditId, setSceneEditId] = React.useState('');
+    const [videoRendering, setVideoRendering] = React.useState(false);
+    const savedManifestFingerprintRef = React.useRef('');
+    const remotionPlayerRef = React.useRef<PlayerRef | null>(null);
+    const [remotionPlayerInstance, setRemotionPlayerInstance] = React.useState<PlayerRef | null>(null);
 
     const scenes = React.useMemo(
         () => parseShortVideoScriptScenes(post.script_json),
@@ -72,6 +193,16 @@ export default function ShortVideoEditDrawer({
         () => buildShortVideoRenderJsonSceneWordsMap(post.render_json),
         [post.render_json]
     );
+    const scenesReadyForPreview = React.useMemo(
+        () => allScenesHaveAudio(scenes, sceneAudioMap),
+        [scenes, sceneAudioMap]
+    );
+    const manifestDirty = React.useMemo(() => {
+        if (!manifest) {
+            return false;
+        }
+        return manifestFingerprint(manifest) !== savedManifestFingerprintRef.current;
+    }, [manifest]);
 
     const videoUrl = React.useMemo(() => {
         const raw = post.video_url;
@@ -115,8 +246,251 @@ export default function ShortVideoEditDrawer({
             setSelectedSceneId('');
             setPost({});
             setError('');
+            setManifest(null);
+            setManifestError('');
+            setManifestInfo('');
+            savedManifestFingerprintRef.current = '';
+            setSceneEditId('');
+            remotionPlayerRef.current = null;
+            setRemotionPlayerInstance(null);
         }
     }, [open]);
+
+    const applyManifestResult = React.useCallback(
+        (nextManifest: ShortVideoRenderManifest | undefined, rebuilt?: boolean) => {
+            const parsed = parseShortVideoRenderManifest(nextManifest);
+            if (!parsed) {
+                setManifest(null);
+                savedManifestFingerprintRef.current = '';
+                return;
+            }
+            setManifest(parsed);
+            savedManifestFingerprintRef.current = manifestFingerprint(parsed);
+            if (rebuilt) {
+                setManifestInfo('Đang chạy whisper — manifest đã được làm mới');
+            } else {
+                setManifestInfo('');
+            }
+        },
+        []
+    );
+
+    React.useEffect(() => {
+        if (!open || loading || shortVideoId <= 0 || !scenesReadyForPreview) {
+            return;
+        }
+        let cancelled = false;
+        setManifestLoading(true);
+        setManifestError('');
+        buildShortVideoRenderManifest(shortVideoId)
+            .then((result) => {
+                if (cancelled) {
+                    return;
+                }
+                applyManifestResult(result.manifest, result.rebuilt);
+                if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+                    setManifestInfo(result.warnings.join(' · '));
+                }
+            })
+            .catch((err: unknown) => {
+                if (cancelled) {
+                    return;
+                }
+                setManifest(null);
+                savedManifestFingerprintRef.current = '';
+                setManifestError(
+                    err instanceof Error ? err.message : 'Không tải được manifest'
+                );
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setManifestLoading(false);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, loading, shortVideoId, scenesReadyForPreview, applyManifestResult]);
+
+    const handleSceneLayoutChange = React.useCallback(
+        (sceneId: string, patch: Partial<ShortVideoManifestSceneLayout>) => {
+            setManifest((prev) => {
+                if (!prev) {
+                    return prev;
+                }
+                return updateSceneLayoutInManifest(prev, sceneId, patch);
+            });
+        },
+        []
+    );
+
+    const handleResetSceneLayoutGroup = React.useCallback(
+        (sceneId: string, keys: (keyof ShortVideoManifestSceneLayout)[]) => {
+            setManifest((prev) => {
+                if (!prev) {
+                    return prev;
+                }
+                return clearSceneLayoutKeysInManifest(prev, sceneId, keys);
+            });
+        },
+        []
+    );
+
+    const handleSaveManifest = React.useCallback(async () => {
+        if (!manifest || shortVideoId <= 0) {
+            return;
+        }
+        setManifestSaving(true);
+        setManifestError('');
+        try {
+            const result = await saveShortVideoRenderManifest(shortVideoId, manifest);
+            applyManifestResult(result.manifest ?? manifest, false);
+        } catch (err: unknown) {
+            setManifestError(
+                err instanceof Error ? err.message : 'Lưu manifest thất bại'
+            );
+        } finally {
+            setManifestSaving(false);
+        }
+    }, [manifest, shortVideoId, applyManifestResult]);
+
+    const handleRefreshManifest = React.useCallback(async () => {
+        if (shortVideoId <= 0) {
+            return;
+        }
+        const confirmed = window.confirm(
+            'Làm mới manifest? Whisper sẽ chạy lại; background đã chỉnh sẽ được giữ.'
+        );
+        if (!confirmed) {
+            return;
+        }
+        setManifestRefreshing(true);
+        setManifestError('');
+        setManifestInfo('Đang chạy whisper…');
+        try {
+            const result = await refreshShortVideoRenderManifest(shortVideoId);
+            applyManifestResult(result.manifest, true);
+            if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+                setManifestInfo(result.warnings.join(' · '));
+            }
+        } catch (err: unknown) {
+            setManifestInfo('');
+            setManifestError(
+                err instanceof Error ? err.message : 'Làm mới manifest thất bại'
+            );
+        } finally {
+            setManifestRefreshing(false);
+        }
+    }, [shortVideoId, applyManifestResult]);
+
+    const handleOpenSceneEdit = React.useCallback((sceneId: string) => {
+        setSelectedSceneId(sceneId);
+        setSceneEditId(sceneId);
+    }, []);
+
+    const handleCloseSceneEdit = React.useCallback(() => {
+        setSceneEditId('');
+    }, []);
+
+    const reloadPostDetail = React.useCallback(() => {
+        if (shortVideoId <= 0) {
+            return;
+        }
+        apiAjaxRef.current({
+            url: `post-type/detail/spacedev_app_short_video/${shortVideoId}`,
+            method: 'POST',
+            loading: false,
+            success: (result: { post?: DetailPost }) => {
+                setPost(result?.post && typeof result.post === 'object' ? result.post : {});
+            },
+        });
+    }, [shortVideoId]);
+
+    const handleRenderVideo = React.useCallback(() => {
+        if (shortVideoId <= 0) {
+            return;
+        }
+        if (!scenesReadyForPreview || !manifest) {
+            api.showMessage('Cần script, audio đầy đủ và manifest preview trước khi render', 'warning');
+            return;
+        }
+
+        const dirtyNote = manifestDirty
+            ? '\n\nThay đổi layout chưa lưu sẽ được lưu trước khi render.'
+            : '';
+        const confirmed = window.confirm(
+            `Render MP4 TikTok 9:16 bằng Remotion? Quá trình có thể mất vài phút.${dirtyNote}`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        const runRender = () => {
+            setVideoRendering(true);
+            apiAjaxRef.current({
+                url: SHORT_VIDEO_RENDER_API_PATH,
+                method: 'POST',
+                data: { short_video_id: shortVideoId, id: shortVideoId },
+                loading: false,
+                success: (result: { success?: boolean; video_url?: string }) => {
+                    if (!result?.success) {
+                        return;
+                    }
+                    reloadPostDetail();
+                    onRefreshPost?.();
+                },
+                finally: () => {
+                    setVideoRendering(false);
+                },
+            });
+        };
+
+        if (manifestDirty) {
+            setVideoRendering(true);
+            saveShortVideoRenderManifest(shortVideoId, manifest)
+                .then((saveResult) => {
+                    applyManifestResult(saveResult.manifest ?? manifest, false);
+                    runRender();
+                })
+                .catch((err: unknown) => {
+                    api.showMessage(
+                        err instanceof Error ? err.message : 'Lưu manifest trước render thất bại',
+                        'error'
+                    );
+                    setVideoRendering(false);
+                });
+            return;
+        }
+
+        runRender();
+    }, [
+        shortVideoId,
+        scenesReadyForPreview,
+        manifest,
+        manifestDirty,
+        applyManifestResult,
+        reloadPostDetail,
+        onRefreshPost,
+        api.showMessage,
+    ]);
+
+    const renderActionButton = (
+        <LoadingButton
+            variant="contained"
+            loading={videoRendering}
+            disabled={
+                !scenesReadyForPreview
+                || !manifest
+                || manifestLoading
+                || manifestRefreshing
+                || manifestSaving
+                || videoRendering
+            }
+            onClick={handleRenderVideo}
+        >
+            Render
+        </LoadingButton>
+    );
 
     React.useEffect(() => {
         if (scenes.length === 0) {
@@ -223,6 +597,7 @@ export default function ShortVideoEditDrawer({
                                             key={scene.id}
                                             scene={scene}
                                             index={index}
+                                            manifest={manifest}
                                             selected={selectedSceneId === scene.id}
                                             audioUrl={
                                                 sceneAudioMap[scene.id]?.url?.trim() || ''
@@ -230,7 +605,7 @@ export default function ShortVideoEditDrawer({
                                             whisperWords={
                                                 renderSceneWordsMap[scene.id] ?? []
                                             }
-                                            onSelect={() => setSelectedSceneId(scene.id)}
+                                            onSelect={() => handleOpenSceneEdit(scene.id)}
                                         />
                                     ))
                                 )}
@@ -255,10 +630,21 @@ export default function ShortVideoEditDrawer({
                                     display: 'flex',
                                     justifyContent: 'flex-end',
                                     alignItems: 'center',
+                                    gap: 1,
                                     flexShrink: 0,
                                     mb: 2,
                                 }}
                             >
+                                {scenesReadyForPreview ? (
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        disabled={manifestLoading || manifestRefreshing}
+                                        onClick={handleRefreshManifest}
+                                    >
+                                        Làm mới manifest
+                                    </Button>
+                                ) : null}
                                 {videoUrl ? (
                                     <Button
                                         variant="contained"
@@ -269,45 +655,130 @@ export default function ShortVideoEditDrawer({
                                     </Button>
                                 ) : null}
                             </Box>
+                            {manifestError && (
+                                <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
+                                    {manifestError}
+                                </Alert>
+                            )}
+                            {SHOW_MANIFEST_INFO_BANNER && manifestInfo && !manifestError && (
+                                <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
+                                    {manifestInfo}
+                                </Alert>
+                            )}
                             <Box
                                 sx={{
                                     flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
                                     minHeight: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden',
                                 }}
                             >
                                 <Box
                                     sx={{
-                                        width: '100%',
-                                        maxWidth: 720,
-                                        minHeight: 280,
-                                        border: 2,
-                                        borderStyle: 'dashed',
-                                        borderColor: 'divider',
-                                        borderRadius: 2,
+                                        flex: 1,
+                                        minHeight: 0,
+                                        overflowY: 'auto',
                                         display: 'flex',
+                                        flexDirection: 'column',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
+                                        justifyContent: 'flex-start',
+                                        py: 1,
+                                    }}
+                                    className="custom_scroll"
+                                >
+                                    {!scenesReadyForPreview ? (
+                                        <Alert severity="warning" sx={{ maxWidth: 480, width: '100%' }}>
+                                            Cần script và audio đầy đủ mọi scene trước khi xem preview Remotion
+                                        </Alert>
+                                    ) : manifestLoading ? (
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                gap: 2,
+                                                py: 6,
+                                            }}
+                                        >
+                                            <CircularProgress size={32} />
+                                            <Typography variant="body2" color="text.secondary">
+                                                Đang tải manifest preview…
+                                            </Typography>
+                                        </Box>
+                                    ) : manifest ? (
+                                        <Suspense
+                                            fallback={
+                                                <Box
+                                                    sx={{
+                                                        width: '100%',
+                                                        maxWidth: 320,
+                                                        display: 'flex',
+                                                        justifyContent: 'center',
+                                                        py: 4,
+                                                    }}
+                                                >
+                                                    <CircularProgress size={28} />
+                                                </Box>
+                                            }
+                                        >
+                                            <ShortVideoRemotionPreview
+                                                manifest={manifest}
+                                                playerRef={remotionPlayerRef}
+                                                onPlayerReady={setRemotionPlayerInstance}
+                                            />
+                                        </Suspense>
+                                    ) : (
+                                        <Alert severity="info" sx={{ maxWidth: 480, width: '100%' }}>
+                                            Chưa có manifest preview — thử làm mới manifest
+                                        </Alert>
+                                    )}
+                                </Box>
+                                {manifest && !manifestLoading ? (
+                                    <Suspense fallback={null}>
+                                        <ShortVideoRemotionTimelineBar
+                                            manifest={manifest}
+                                            playerRef={remotionPlayerRef}
+                                            playerInstance={remotionPlayerInstance}
+                                        />
+                                    </Suspense>
+                                ) : null}
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        justifyContent: 'flex-end',
+                                        flexShrink: 0,
+                                        pt: 1.5,
+                                        pb: 1.5,
+                                        px: 2,
+                                        borderTop: 1,
+                                        borderColor: 'divider',
                                         bgcolor: 'background.paper',
-                                        px: 3,
-                                        py: 4,
                                     }}
                                 >
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        align="left"
-                                    >
-                                        Vùng chỉnh sửa video — cập nhật sau
-                                    </Typography>
+                                    {renderActionButton}
                                 </Box>
                             </Box>
                         </Box>
                     </Box>
                 )}
             </Box>
+            <ShortVideoSceneEditDrawer
+                open={sceneEditId.length > 0}
+                onClose={handleCloseSceneEdit}
+                sceneId={sceneEditId}
+                manifest={manifest}
+                manifestLoading={manifestLoading}
+                manifestError={manifestError}
+                manifestInfo={manifestInfo}
+                saving={manifestSaving}
+                refreshing={manifestRefreshing}
+                dirty={manifestDirty}
+                onSceneLayoutChange={handleSceneLayoutChange}
+                onResetLayoutGroup={handleResetSceneLayoutGroup}
+                onSave={handleSaveManifest}
+                onRefresh={handleRefreshManifest}
+            />
         </DrawerCustom>
     );
 }
@@ -315,6 +786,7 @@ export default function ShortVideoEditDrawer({
 function SceneListItem({
     scene,
     index,
+    manifest,
     selected,
     audioUrl,
     whisperWords,
@@ -322,12 +794,14 @@ function SceneListItem({
 }: {
     scene: ShortVideoScriptScene;
     index: number;
+    manifest: ShortVideoRenderManifest | null;
     selected: boolean;
     audioUrl: string;
     whisperWords: ShortVideoRenderWord[];
     onSelect: () => void;
 }) {
     const voiceover = scene.voiceover.trim();
+    const previewStyles = resolveSceneListPreviewStyles({ scriptScene: scene, manifest });
     const hasPlayableAudio = audioUrl.length > 0;
 
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -384,7 +858,7 @@ function SceneListItem({
         return [];
     }, [whisperWords, voiceover, audioDurationSec]);
 
-    const showKaraoke = karaokeWords.length > 0;
+    const showKaraoke = previewStyles.showKaraoke && karaokeWords.length > 0;
 
     const setAudioRef = React.useCallback(
         (node: HTMLAudioElement | null) => {
@@ -461,15 +935,19 @@ function SceneListItem({
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
-                border: 1,
-                borderColor: selected ? 'primary.main' : 'divider',
+                border: 2,
+                borderColor: selected ? 'primary.main' : 'rgba(0,0,0,0.12)',
                 borderRadius: 1.5,
                 p: 1.25,
                 mb: 1,
                 cursor: 'pointer',
-                bgcolor: selected ? 'action.selected' : 'background.default',
+                bgcolor: previewStyles.backgroundColor,
+                boxShadow: selected
+                    ? '0 0 0 1px rgba(25, 118, 210, 0.35), 0 4px 12px rgba(0,0,0,0.12)'
+                    : '0 2px 8px rgba(0,0,0,0.08)',
+                transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
                 '&:hover': {
-                    bgcolor: selected ? 'action.selected' : 'action.hover',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.14)',
                 },
                 '&:focus-visible': {
                     outline: 2,
@@ -478,23 +956,44 @@ function SceneListItem({
                 },
             }}
         >
+            {previewStyles.showHeadline && previewStyles.headlineText ? (
+                <Typography
+                    variant="subtitle2"
+                    fontWeight={700}
+                    sx={{
+                        color: previewStyles.headlineColor,
+                        mb: 0.75,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.35,
+                    }}
+                >
+                    {previewStyles.headlineText}
+                </Typography>
+            ) : null}
             {showKaraoke ? (
                 <Box sx={{ mb: 1 }}>
                     <ShortVideoVoiceoverKaraoke
                         words={karaokeWords}
                         currentTimeSec={currentTimeSec}
                         playbackActive={playbackActive}
+                        textColor={previewStyles.textColor}
+                        activeColor={previewStyles.activeColor}
                     />
                 </Box>
             ) : (
                 <Typography
                     variant="body2"
                     sx={{
+                        color: previewStyles.textColor,
                         display: '-webkit-box',
                         WebkitLineClamp: 3,
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                         lineHeight: 1.4,
+                        mb: 1,
                     }}
                 >
                     {voiceover || '—'}
@@ -525,7 +1024,10 @@ function SceneListItem({
                         />
                     </Box>
                 ) : (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                        variant="caption"
+                        sx={{ color: previewStyles.textColor, opacity: 0.72 }}
+                    >
                         Chưa có audio — sinh audio VieNeu cho scene này
                     </Typography>
                 )}

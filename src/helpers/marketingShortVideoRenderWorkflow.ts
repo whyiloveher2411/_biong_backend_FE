@@ -1,21 +1,22 @@
-import { getAccessToken } from 'store/user/user.reducers';
-import { getApiHost } from 'helpers/apiHost';
+import { ajax } from 'hook/useApi';
+import { getAdminApiPrefix } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
+import { parseShortVideoApiMessage } from 'helpers/shortVideoApiMessage';
 
 export type ShortVideoRenderResult = {
     success?: boolean;
-    message?: string;
+    message?: string | { content?: string };
     short_video_id?: number;
     video_url?: string;
     video_s3_key?: string;
     generate_status?: string;
 };
 
+export const SHORT_VIDEO_RENDER_API_PATH =
+    'plugin/vn4-e-learning/app-mobile/marketing/short-video/render-video';
+
 export function shortVideoRenderApiUrl(): string {
-    return convertToURL(
-        getApiHost(),
-        '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/short-video/render-video'
-    );
+    return convertToURL(getAdminApiPrefix(), SHORT_VIDEO_RENDER_API_PATH);
 }
 
 export async function triggerShortVideoRender(options: {
@@ -26,28 +27,18 @@ export async function triggerShortVideoRender(options: {
         throw new Error('Thiếu short video id');
     }
 
-    const token = getAccessToken() ?? '';
-    const url = new URL(shortVideoRenderApiUrl());
-    if (token) {
-        url.searchParams.set('access_token', token);
+    const result = (await ajax({
+        url: SHORT_VIDEO_RENDER_API_PATH,
+        data: { short_video_id: shortVideoId, id: shortVideoId },
+    })) as ShortVideoRenderResult;
+
+    if (!result?.success) {
+        throw new Error(
+            parseShortVideoApiMessage(result?.message, 'Render video thất bại')
+        );
     }
 
-    const res = await fetch(url.toString(), {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ short_video_id: shortVideoId, id: shortVideoId }),
-    });
-
-    const json = (await res.json()) as ShortVideoRenderResult;
-    if (!json?.success) {
-        throw new Error(json?.message || 'Render video thất bại');
-    }
-
-    return json;
+    return result;
 }
 
 export async function openShortVideoRenderWorkflow(options: {
