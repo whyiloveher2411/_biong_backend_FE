@@ -5,12 +5,14 @@ import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
+import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
     | 'drawer:MarketingArticleRewrite'
     | 'drawer:MarketingContentTranslate'
     | 'drawer:MarketingFacebookPreview'
+    | 'drawer:ShortVideoEdit'
     | 'drawer:ObjectStoreMigrate'
     | string;
 
@@ -71,6 +73,17 @@ function PostTypeClientActionDrawers({
                     fallbackThumbnail={data?.post?.thumbnail}
                 />
             </>
+        );
+    }
+
+    if (postType === 'spacedev_app_short_video') {
+        return (
+            <ShortVideoEditDrawer
+                open={activeDrawer === 'drawer:ShortVideoEdit'}
+                onClose={onClose}
+                data={data}
+                onRefreshPost={onRefreshPost}
+            />
         );
     }
 

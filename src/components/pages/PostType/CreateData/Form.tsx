@@ -26,6 +26,7 @@ import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateDa
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
+import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 
@@ -124,6 +125,7 @@ function Form({
     const [facebookPreviewDrawerOpen, setFacebookPreviewDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
+    const [shortVideoEditDrawerOpen, setShortVideoEditDrawerOpen] = React.useState(false);
 
     const classes = useStyles();
 
@@ -398,6 +400,9 @@ function Form({
                             if (action === 'drawer:ObjectStoreMigrate') {
                                 setObjectStoreMigrateDrawerOpen(true);
                             }
+                            if (action === 'drawer:ShortVideoEdit') {
+                                setShortVideoEditDrawerOpen(true);
+                            }
                         }}
                     />
                 )
@@ -441,6 +446,14 @@ function Form({
                     open={objectStoreMigrateDrawerOpen}
                     onClose={() => setObjectStoreMigrateDrawerOpen(false)}
                     data={data}
+                />
+            )}
+            {postType === 'spacedev_app_short_video' && (
+                <ShortVideoEditDrawer
+                    open={shortVideoEditDrawerOpen}
+                    onClose={() => setShortVideoEditDrawerOpen(false)}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
                 />
             )}
             {postType === 'app_local_notification' && (
