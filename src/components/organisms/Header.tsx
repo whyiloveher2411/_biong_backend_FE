@@ -1,23 +1,17 @@
 import { Theme } from '@mui/material/styles';
 import AppBar from 'components/atoms/AppBar';
-import Icon from 'components/atoms/Icon';
-import IconButton from 'components/atoms/IconButton';
 import makeCSS from 'components/atoms/makeCSS';
 import Toolbar from 'components/atoms/Toolbar';
-import Tooltip from 'components/atoms/Tooltip';
 import Typography from 'components/atoms/Typography';
 import Hook from "components/function/Hook";
 import Account from 'components/molecules/Header/Account';
 import ApiLinkManager from 'components/molecules/Header/ApiLinkManager';
 import CmsClients from 'components/molecules/Header/CmsClients';
-import Notification from 'components/molecules/Header/Notification';
 import Search from 'components/molecules/Header/Search';
 import Tools from 'components/molecules/Header/ToolList';
-import { __ } from "helpers/i18n";
-import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 import { RootState } from 'store/configureStore';
-import { refreshScreen } from "store/user/user.reducers";
 
 
 
@@ -54,15 +48,15 @@ export default function Header() {
 
     const settings = useSelector((state: RootState) => state.settings);
 
-    const navigate = useNavigate();
+    // const navigate = useNavigate();
 
     const classes = useStyles();
 
-    const dispatch = useDispatch();
+    // const dispatch = useDispatch();
 
-    const handleRefreshWebsite = () => {
-        dispatch(refreshScreen());
-    }
+    // const handleRefreshWebsite = () => {
+    //     dispatch(refreshScreen());
+    // }
 
     return (
         <AppBar className={classes.header + ' ' + classes.root} position="static" id="header-top">
@@ -82,7 +76,7 @@ export default function Header() {
                     <ApiLinkManager />
 
                     <CmsClients />
-
+{/* 
                     <Tooltip title={__("Refesh")}>
                         <IconButton
                             color="inherit"
@@ -91,13 +85,13 @@ export default function Header() {
                         >
                             <Icon icon="RefreshRounded" />
                         </IconButton>
-                    </Tooltip>
+                    </Tooltip> */}
 
                     <Tools />
 
-                    <Notification />
+                    {/* <Notification /> */}
 
-                    <Tooltip title={__("Apps")}>
+                    {/* <Tooltip title={__("Apps")}>
                         <IconButton
                             color="inherit"
                             onClick={() => navigate('/coming-soon')}
@@ -105,7 +99,7 @@ export default function Header() {
                         >
                             <Icon icon="Apps" />
                         </IconButton>
-                    </Tooltip>
+                    </Tooltip> */}
 
                     <Account />
 

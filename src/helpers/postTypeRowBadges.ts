@@ -8,11 +8,15 @@ export type PostTypeRowWorkflowBadge = {
         | 'content_markdown_format'
         | 'facebook_distribution'
         | 'pro_value_assessment'
-        | 'xai_tts';
+        | 'xai_tts'
+        | 'short_video_script'
+        | 'short_video_render'
+        | 'short_video_generate_vieneu_clone_audio';
     target_lang?: string | null;
     translate_scope?: 'text' | 'caption' | string | null;
     post_id: number;
-    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'done' | string;
+    short_video_id?: number | null;
+    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'script' | 'scene_audio_vieneu' | 'render' | 'done' | string;
     platform?: string | null;
     distribution_stage?: string | null;
 };

@@ -10,6 +10,12 @@ import {
     marketingWorkflowSaveApiUrl,
     openMarketingGeminiWorkflow,
 } from 'helpers/marketingGeminiWorkflow';
+import { openShortVideoGeminiWorkflow, shortVideoScriptSaveApiUrl } from 'helpers/marketingShortVideoGeminiWorkflow';
+import { openShortVideoRenderWorkflow, shortVideoRenderApiUrl } from 'helpers/marketingShortVideoRenderWorkflow';
+import {
+    openShortVideoVieneuTtsWorkflow,
+    shortVideoVieneuTtsApiUrl,
+} from 'helpers/marketingShortVideoVieneuTtsWorkflow';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { getAccessToken } from 'store/user/user.reducers';
 import React from 'react';
@@ -56,7 +62,64 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
         event.stopPropagation();
         event.preventDefault();
         const wf = badge.workflow;
-        if (!wf?.action || !wf.post_id) {
+        if (!wf?.action) {
+            return;
+        }
+        if (wf.action === 'short_video_script') {
+            const shortVideoId = Number(wf.short_video_id || rowPostId || 0);
+            if (!shortVideoId) {
+                return;
+            }
+            try {
+                await openShortVideoGeminiWorkflow({
+                    shortVideoId,
+                    marketingPostId: wf.post_id,
+                    lang: wf.target_lang,
+                });
+            } catch (e) {
+                window.alert(e instanceof Error ? e.message : String(e));
+            }
+            return;
+        }
+        if (wf.action === 'short_video_render') {
+            const shortVideoId = Number(wf.short_video_id || rowPostId || 0);
+            if (!shortVideoId) {
+                return;
+            }
+            try {
+                const result = await openShortVideoRenderWorkflow({ shortVideoId });
+                if (result.video_url) {
+                    window.alert(`Đã render video.\n${result.video_url}`);
+                } else {
+                    window.alert(result.message || 'Đã render video');
+                }
+                window.location.reload();
+            } catch (e) {
+                window.alert(e instanceof Error ? e.message : String(e));
+            }
+            return;
+        }
+        if (wf.action === 'short_video_generate_vieneu_clone_audio') {
+            const shortVideoId = Number(wf.short_video_id || rowPostId || 0);
+            if (!shortVideoId) {
+                return;
+            }
+            try {
+                const result = await openShortVideoVieneuTtsWorkflow({ shortVideoId });
+                const count = Array.isArray(result.scenes_generated)
+                    ? result.scenes_generated.length
+                    : 0;
+                window.alert(
+                    result.message ||
+                        `Đã sinh audio VieNeu cho ${count} scene.`
+                );
+                window.location.reload();
+            } catch (e) {
+                window.alert(e instanceof Error ? e.message : String(e));
+            }
+            return;
+        }
+        if (!wf.post_id) {
             return;
         }
         if (wf.action === 'xai_tts') {
@@ -132,17 +195,41 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                     const wf = badge.workflow;
                     const fbPreview = badge.facebook_preview;
                     const xaiTts = badge.xai_tts;
-                    const isWorkflow = !!wf?.action && !!wf.post_id;
+                    const isShortVideoScript = wf?.action === 'short_video_script';
+                    const isShortVideoRender = wf?.action === 'short_video_render';
+                    const isShortVideoVieneuTts =
+                        wf?.action === 'short_video_generate_vieneu_clone_audio';
+                    const isShortVideoWorkflow =
+                        isShortVideoScript ||
+                        isShortVideoRender ||
+                        isShortVideoVieneuTts;
+                    const isWorkflow =
+                        !!wf?.action &&
+                        (isShortVideoWorkflow
+                            ? !!wf.short_video_id || !!rowPostId
+                            : !!wf.post_id);
                     const isFacebookPreview = !!fbPreview?.post_id;
                     const isXaiTts = !!xaiTts?.post_id && !!xaiTts?.target_lang;
                     const postId = Number(
                         wf?.post_id || fbPreview?.post_id || xaiTts?.post_id || rowPostId || 0
                     );
+                    const shortVideoId = Number(wf?.short_video_id || rowPostId || 0);
                     const action = wf?.action;
                     const targetLang = wf?.target_lang
                         ? String(wf.target_lang).trim().toLowerCase()
                         : '';
-                    const apiUrl = action ? marketingWorkflowSaveApiUrl(action) : '';
+                    const apiUrl = isShortVideoScript
+                        ? shortVideoScriptSaveApiUrl()
+                        : isShortVideoRender
+                            ? shortVideoRenderApiUrl()
+                            : isShortVideoVieneuTts
+                                ? shortVideoVieneuTtsApiUrl()
+                                : action &&
+                                    action !== 'short_video_script' &&
+                                    action !== 'short_video_render' &&
+                                    action !== 'short_video_generate_vieneu_clone_audio'
+                                  ? marketingWorkflowSaveApiUrl(action)
+                                  : '';
                     const clickable = isWorkflow || isFacebookPreview || isXaiTts;
 
                     return (
@@ -160,7 +247,13 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                                         ? (e) => handleFacebookPreviewClick(e, badge)
                                         : undefined
                             }
-                            data-marketing-post-id={isWorkflow ? String(postId) : undefined}
+                            data-marketing-post-id={isWorkflow && !isShortVideoWorkflow ? String(postId) : undefined}
+                            data-marketing-short-video-id={
+                                isWorkflow && isShortVideoWorkflow ? String(shortVideoId) : undefined
+                            }
+                            data-marketing-short-video-workflow-action={
+                                isWorkflow && isShortVideoWorkflow ? action : undefined
+                            }
                             data-marketing-workflow-action={isWorkflow ? action : undefined}
                             data-marketing-target-lang={
                                 isWorkflow && targetLang ? targetLang : undefined
@@ -172,7 +265,11 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                             data-access-token={isWorkflow ? accessToken : undefined}
                             data-api-url={isWorkflow ? apiUrl : undefined}
                             className={
-                                isWorkflow ? 'marketing-post-workflow-chip' : undefined
+                                isWorkflow
+                                    ? isShortVideoWorkflow
+                                        ? 'marketing-short-video-workflow-chip'
+                                        : 'marketing-post-workflow-chip'
+                                    : undefined
                             }
                             sx={{
                                 ...getPostTypeRowBadgeSx(badge),

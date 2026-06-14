@@ -37,9 +37,11 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
+import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
+import MarketingShortVideoPanel from './MarketingShortVideoPanel';
 import MarketingCrawlAutoToggle from './MarketingCrawlAutoToggle';
 import MarketingSourcesDrawer from './MarketingSourcesDrawer';
 import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
@@ -47,7 +49,7 @@ import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
-type MarketingViewMode = 'calendar' | 'list' | 'crawl';
+type MarketingViewMode = 'calendar' | 'list' | 'crawl' | 'short_video';
 type CalendarViewMode = 'month' | 'week' | 'work_week' | 'day' | 'agenda';
 
 const localizer = momentLocalizer(moment);
@@ -86,6 +88,7 @@ const parseMarketingViewMode = (searchParams: URLSearchParams): MarketingViewMod
     const view = searchParams.get(MARKETING_VIEW_PARAM);
     if (view === 'list') return 'list';
     if (view === 'crawl') return 'crawl';
+    if (view === 'short_video') return 'short_video';
     return 'calendar';
 };
 
@@ -446,6 +449,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     );
     const [postsTableKey, setPostsTableKey] = useState(0);
     const [crawlTableKey, setCrawlTableKey] = useState(0);
+    const [shortVideoTableKey, setShortVideoTableKey] = useState(0);
     const [openDrawer, setOpenDrawer] = useState(false);
     const [drawerData, setDrawerData] = useState<DataResultApiProps | false>(false);
     const [openDrawerAi, setOpenDrawerAi] = useState(false);
@@ -636,6 +640,8 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                 setPostsTableKey((k) => k + 1);
             } else if (newView === 'crawl') {
                 setCrawlTableKey((k) => k + 1);
+            } else if (newView === 'short_video') {
+                setShortVideoTableKey((k) => k + 1);
             }
             handleViewModeChange(newView);
         },
@@ -693,6 +699,10 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         <ToggleButton value="calendar" aria-label="Calendar">
                             <CalendarTodayIcon fontSize="small" />
                             Calendar
+                        </ToggleButton>
+                        <ToggleButton value="short_video" aria-label="Short Video">
+                            <VideoLibraryOutlinedIcon fontSize="small" />
+                            Short video
                         </ToggleButton>
                     </ToggleButtonGroup>
 
@@ -879,6 +889,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             ) : viewMode === 'crawl' ? (
                 <MarketingSourceTablesPanel
                     key={crawlTableKey}
+                    appMobileId={Number(data?.post?.id || 0)}
+                />
+            ) : viewMode === 'short_video' ? (
+                <MarketingShortVideoPanel
+                    key={shortVideoTableKey}
                     appMobileId={Number(data?.post?.id || 0)}
                 />
             ) : (
