@@ -21,6 +21,7 @@ import PostTypeClientActionDrawers, {
 } from "./PostTypeClientActionDrawers";
 import { openMarketingXaiTtsWorkflow } from "helpers/marketingXaiTtsWorkflow";
 import { openExternalTabViaExtension } from "helpers/openExternalTabViaExtension";
+import { openMarketingPostAudioUrls } from "helpers/marketingPostAudioUrls";
 import {
     getPostTypeActionButtonColorProps,
     resolvePostTypeColor,
@@ -140,6 +141,11 @@ function ActionOnPost({
         item: IActionPostType,
         index: number
     ) => {
+        if (item.client_action === 'open_post_audios') {
+            openMarketingPostAudioUrls(post);
+            return;
+        }
+
         if (item.client_action === 'open_post_link') {
             const detailLink = String(post.link || '').trim();
             if (!detailLink) {
@@ -393,7 +399,7 @@ function ActionOnPost({
                         pr: 1,
                     }}
                 >
-                    {rowActions.length > 5 ? (
+                    {rowActions.length > 15 ? (
                         <MoreButton
                             actions={(() => {
                                 return groupActionsForMenu(rowActions.map((action, index) => ({
