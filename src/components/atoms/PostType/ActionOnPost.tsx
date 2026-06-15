@@ -140,6 +140,16 @@ function ActionOnPost({
         item: IActionPostType,
         index: number
     ) => {
+        if (item.client_action === 'open_post_link') {
+            const detailLink = String(post.link || '').trim();
+            if (!detailLink) {
+                window.alert(__('Không có link bài viết'));
+                return;
+            }
+            openExternalTabViaExtension(detailLink);
+            return;
+        }
+
         if (item.client_action?.startsWith('drawer:')) {
             if (!id) {
                 return;

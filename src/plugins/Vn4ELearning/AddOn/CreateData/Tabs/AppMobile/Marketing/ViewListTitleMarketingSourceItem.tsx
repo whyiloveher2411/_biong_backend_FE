@@ -4,6 +4,7 @@ import { FieldViewItemProps } from "components/atoms/fields/type";
 import { getAccessToken } from "store/user/user.reducers";
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from "helpers/url";
+import { openExternalTabViaExtension } from "helpers/openExternalTabViaExtension";
 
 function buildTranslateTrendApiUrls() {
     const host = getApiHost();
@@ -26,53 +27,21 @@ function ViewListTitleMarketingSourceItem(props: FieldViewItemProps) {
     const accessToken = getAccessToken() ?? "";
     const { updateApiUrl, promptApiUrl } = React.useMemo(() => buildTranslateTrendApiUrls(), []);
 
-    const openGoogleOverview = React.useCallback(async () => {
-        if (!sourceItemId) return;
-        try {
-            const promptUrl = new URL(promptApiUrl);
-            promptUrl.searchParams.set("source_item_id", sourceItemId);
-            if (accessToken) {
-                promptUrl.searchParams.set("access_token", accessToken);
-            }
-            const res = await fetch(promptUrl.toString(), {
-                method: "GET",
-                credentials: "include",
-                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-            });
-            const json = await res.json();
-            if (!json?.success) {
-                const msg = json?.message?.content || "Không lấy được prompt";
-                window.alert(msg);
-                return;
-            }
-            if (json.skipped) {
-                window.alert(json?.message?.content || "Item đã đủ dữ liệu dịch/chấm xu hướng");
-                return;
-            }
-            const prompt = String(json.prompt || "").trim();
-            const googleBase = String(json.google_ai_mode_url || "https://www.google.com/search?udm=50&hl=vi");
-            const url = new URL(googleBase);
-            const hashParams = new URLSearchParams();
-            hashParams.set("copy_translate_trend", "1");
-            hashParams.set("source_item_id", sourceItemId);
-            hashParams.set("access_token", accessToken);
-            hashParams.set("api_url", updateApiUrl);
-            if (prompt) {
-                hashParams.set("marketing_prompt", encodeURIComponent(prompt));
-            }
-            url.hash = hashParams.toString();
-            window.open(url.toString(), "_blank", "noopener,noreferrer");
-        } catch (e) {
-            window.alert("Lỗi mở Google Overview: " + (e instanceof Error ? e.message : String(e)));
+    const openDetailLink = React.useCallback(() => {
+        if (!link) {
+            window.alert("Không có link bài viết");
+            return;
         }
-    }, [accessToken, promptApiUrl, sourceItemId, updateApiUrl]);
+        openExternalTabViaExtension(link);
+    }, [link]);
 
     return (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Button
                 variant="text"
                 size="small"
-                onClick={openGoogleOverview}
+                onClick={openDetailLink}
+                disabled={!link}
                 className="marketing-source-item-title"
                 data-source-item-id={sourceItemId}
                 data-title={title}
@@ -84,6 +53,9 @@ function ViewListTitleMarketingSourceItem(props: FieldViewItemProps) {
                 sx={{
                     whiteSpace: "pre-wrap",
                     textAlign: "left",
+                    color: link ? "primary.main" : "text.primary",
+                    textDecoration: link ? "underline" : "none",
+                    textTransform: "none",
                 }}
             >
                 {props.content}
