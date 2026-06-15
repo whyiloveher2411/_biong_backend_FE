@@ -158,8 +158,22 @@ export function ShortVideoRemotionPreview({
         [playerRef, onPlayerReady]
     );
 
+    const handlePreviewClick = React.useCallback(() => {
+        playerRef.current?.toggle();
+    }, [playerRef]);
+
     return (
         <Box
+            onClick={handlePreviewClick}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handlePreviewClick();
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="Phát hoặc tạm dừng video"
             sx={{
                 width: '100%',
                 maxWidth: 320,
@@ -169,6 +183,7 @@ export function ShortVideoRemotionPreview({
                 overflow: 'hidden',
                 bgcolor: '#000',
                 boxShadow: 2,
+                cursor: 'pointer',
             }}
         >
             <Player
@@ -182,6 +197,7 @@ export function ShortVideoRemotionPreview({
                 style={{
                     width: '100%',
                     aspectRatio: `${width} / ${height}`,
+                    pointerEvents: 'none',
                 }}
                 controls={false}
                 initiallyMuted={false}

@@ -1,3 +1,5 @@
+export type ShortVideoSceneVisualType = 'none' | 'image' | 'video';
+
 export type ShortVideoManifestWord = {
     text: string;
     start: number;
@@ -18,8 +20,14 @@ export type ShortVideoManifestSceneLayout = {
     bottom_padding?: number;
     text_box_height?: number;
     show_karaoke?: boolean;
+    visual_type?: ShortVideoSceneVisualType;
     visual_ref?: string;
+    visual_youtube_id?: string;
+    /** Chỉ inject lúc preview/render — không lưu DB */
+    visual_playback_url?: string;
     visual_motion?: string;
+    /** Giây bắt đầu phát trong file video (chỉ visual_type = video) */
+    visual_start_sec?: number;
     show_visual?: boolean;
 };
 

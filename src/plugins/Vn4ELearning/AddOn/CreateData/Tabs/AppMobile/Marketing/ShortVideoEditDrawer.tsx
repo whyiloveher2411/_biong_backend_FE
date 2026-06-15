@@ -3,10 +3,13 @@ import type { PlayerRef } from '@remotion/player';
 import {
     Alert,
     Box,
+    Chip,
     CircularProgress,
     IconButton,
     Typography,
 } from '@mui/material';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import Button from 'components/atoms/Button';
 import LoadingButton from '@mui/lab/LoadingButton';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -15,19 +18,26 @@ import useAjax from 'hook/useApi';
 import {
     buildShortVideoRenderManifest,
     refreshShortVideoRenderManifest,
+    resolveShortVideoSceneVisual,
     saveShortVideoRenderManifest,
 } from 'helpers/marketingShortVideoManifestApi';
 import {
     applyShortVideoTemplateToManifest,
     clearSceneLayoutKeysInManifest,
     getShortVideoRenderTemplate,
+    injectSceneVisualPlaybackUrl,
     parseShortVideoRenderManifest,
+    reinjectVisualPlaybackFromCache,
     resolveSceneActiveColor,
     resolveSceneHeadlineColor,
     resolveSceneHeadlineText,
     resolveSceneShowHeadline,
     resolveSceneShowKaraoke,
+    resolveSceneShowVisual,
     resolveSceneTextColor,
+    resolveSceneVisualType,
+    resolveSceneVisualYoutubeId,
+    sanitizeManifestForPersist,
     sceneBackgroundColor,
     updateSceneLayoutInManifest,
     type ShortVideoManifestScene,
@@ -49,6 +59,7 @@ import { buildVoiceoverPlaybackWordTimings } from 'helpers/shortVideoVoiceoverTi
 import { SHORT_VIDEO_RENDER_API_PATH } from 'helpers/marketingShortVideoRenderWorkflow';
 import ShortVideoVoiceoverKaraoke from './ShortVideoVoiceoverKaraoke';
 import ShortVideoSceneEditDrawer from './ShortVideoSceneEditDrawer';
+import { HEADER_BUTTON_SX } from './ShortVideoSceneEditPanel';
 import ShortVideoGlobalSettingsDrawer, {
     ShortVideoGlobalSettingsIcon,
 } from './ShortVideoGlobalSettingsDrawer';
@@ -107,7 +118,28 @@ function allScenesHaveAudio(
 }
 
 function manifestFingerprint(manifest: ShortVideoRenderManifest): string {
-    return JSON.stringify(manifest);
+    return JSON.stringify(sanitizeManifestForPersist(manifest));
+}
+
+function resolveSceneMediaLabel(
+    scriptScene: ShortVideoScriptScene,
+    manifest: ShortVideoRenderManifest | null
+): string {
+    if (!manifest) {
+        return '';
+    }
+    const previewScene = manifestSceneForPreview(scriptScene, manifest);
+    if (!resolveSceneShowVisual(previewScene)) {
+        return '';
+    }
+    const visualType = resolveSceneVisualType(previewScene);
+    if (visualType === 'image') {
+        return 'Ảnh';
+    }
+    if (visualType === 'video') {
+        return 'Video';
+    }
+    return '';
 }
 
 function manifestSceneForPreview(
@@ -188,6 +220,27 @@ export default function ShortVideoEditDrawer({
     const savedManifestFingerprintRef = React.useRef('');
     const remotionPlayerRef = React.useRef<PlayerRef | null>(null);
     const [remotionPlayerInstance, setRemotionPlayerInstance] = React.useState<PlayerRef | null>(null);
+    const visualResolveCacheRef = React.useRef<Record<string, string>>({});
+    const visualResolveFailedRef = React.useRef<Record<string, string>>({});
+    const manifestRef = React.useRef<ShortVideoRenderManifest | null>(null);
+    const manifestInitialResolveDoneRef = React.useRef(false);
+    const visualResolveDebounceRef = React.useRef<Record<string, number>>({});
+
+    manifestRef.current = manifest;
+
+    const clearVisualResolveCacheForScene = React.useCallback((sceneId: string) => {
+        const prefix = `${sceneId}:`;
+        Object.keys(visualResolveCacheRef.current).forEach((key) => {
+            if (key.startsWith(prefix)) {
+                delete visualResolveCacheRef.current[key];
+            }
+        });
+        Object.keys(visualResolveFailedRef.current).forEach((key) => {
+            if (key.startsWith(prefix)) {
+                delete visualResolveFailedRef.current[key];
+            }
+        });
+    }, []);
 
     const scenes = React.useMemo(
         () => parseShortVideoScriptScenes(post.script_json),
@@ -262,6 +315,11 @@ export default function ShortVideoEditDrawer({
             setGlobalSettingsOpen(false);
             remotionPlayerRef.current = null;
             setRemotionPlayerInstance(null);
+            manifestInitialResolveDoneRef.current = false;
+            Object.values(visualResolveDebounceRef.current).forEach((timerId) => {
+                window.clearTimeout(timerId);
+            });
+            visualResolveDebounceRef.current = {};
         }
     }, [open]);
 
@@ -271,17 +329,102 @@ export default function ShortVideoEditDrawer({
             if (!parsed) {
                 setManifest(null);
                 savedManifestFingerprintRef.current = '';
+                visualResolveCacheRef.current = {};
                 return;
             }
-            setManifest(parsed);
-            savedManifestFingerprintRef.current = manifestFingerprint(parsed);
+            const withPlayback = reinjectVisualPlaybackFromCache(
+                parsed,
+                visualResolveCacheRef.current
+            );
+            setManifest(withPlayback);
+            savedManifestFingerprintRef.current = manifestFingerprint(withPlayback);
             if (rebuilt) {
+                visualResolveCacheRef.current = {};
+                manifestInitialResolveDoneRef.current = false;
                 setManifestInfo('Đang chạy whisper — manifest đã được làm mới');
             } else {
                 setManifestInfo('');
             }
         },
         []
+    );
+
+    const resolveVisualForScene = React.useCallback(
+        async (scene: ShortVideoManifestScene) => {
+            if (shortVideoId <= 0) {
+                return;
+            }
+            const youtubeId = resolveSceneVisualYoutubeId(scene);
+            if (!youtubeId) {
+                return;
+            }
+            const cacheKey = `${scene.id}:${youtubeId}`;
+            if (visualResolveCacheRef.current[cacheKey]) {
+                setManifest((prev) => {
+                    if (!prev || prev.scenes.find((item) => item.id === scene.id)?.layout?.visual_playback_url) {
+                        return prev;
+                    }
+                    return injectSceneVisualPlaybackUrl(
+                        prev,
+                        scene.id,
+                        visualResolveCacheRef.current[cacheKey]
+                    );
+                });
+                return;
+            }
+            if (visualResolveFailedRef.current[cacheKey]) {
+                return;
+            }
+            try {
+                const result = await resolveShortVideoSceneVisual({
+                    shortVideoId,
+                    youtubeId,
+                    visualRef: scene.layout?.visual_ref,
+                });
+                const playbackUrl = result.playback_url?.trim() || '';
+                if (!playbackUrl) {
+                    return;
+                }
+                visualResolveCacheRef.current[cacheKey] = playbackUrl;
+                delete visualResolveFailedRef.current[cacheKey];
+                setManifest((prev) => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    return injectSceneVisualPlaybackUrl(prev, scene.id, playbackUrl);
+                });
+                setManifestInfo('');
+            } catch (err: unknown) {
+                const message =
+                    err instanceof Error
+                        ? err.message
+                        : 'Không resolve được video YouTube cho preview';
+                visualResolveFailedRef.current[cacheKey] = message;
+                setManifestInfo(
+                    `Scene ${scene.id}: ${message}. Preview Remotion dùng thumbnail YouTube; render MP4 vẫn chạy trên server.`
+                );
+            }
+        },
+        [shortVideoId]
+    );
+
+    const scheduleResolveVisualForScene = React.useCallback(
+        (sceneId: string) => {
+            const existing = visualResolveDebounceRef.current[sceneId];
+            if (existing) {
+                window.clearTimeout(existing);
+            }
+            visualResolveDebounceRef.current[sceneId] = window.setTimeout(() => {
+                delete visualResolveDebounceRef.current[sceneId];
+                const current = manifestRef.current;
+                const scene = current?.scenes.find((item) => item.id === sceneId);
+                if (!scene || resolveSceneVisualType(scene) !== 'video') {
+                    return;
+                }
+                void resolveVisualForScene(scene);
+            }, 600);
+        },
+        [resolveVisualForScene]
     );
 
     React.useEffect(() => {
@@ -321,16 +464,83 @@ export default function ShortVideoEditDrawer({
         };
     }, [open, loading, shortVideoId, scenesReadyForPreview, applyManifestResult]);
 
+    React.useEffect(() => {
+        if (!open || manifestLoading || !manifest || shortVideoId <= 0) {
+            return;
+        }
+        if (manifestInitialResolveDoneRef.current) {
+            return;
+        }
+
+        const pending = manifest.scenes.filter((scene) => {
+            if (resolveSceneVisualType(scene) !== 'video') {
+                return false;
+            }
+            const youtubeId = resolveSceneVisualYoutubeId(scene);
+            if (!youtubeId) {
+                return false;
+            }
+            if (scene.layout?.visual_playback_url?.trim()) {
+                return false;
+            }
+            const cacheKey = `${scene.id}:${youtubeId}`;
+            if (visualResolveCacheRef.current[cacheKey]) {
+                return false;
+            }
+            if (visualResolveFailedRef.current[cacheKey]) {
+                return false;
+            }
+            return true;
+        });
+
+        manifestInitialResolveDoneRef.current = true;
+
+        if (pending.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+        (async () => {
+            for (const scene of pending) {
+                if (cancelled) {
+                    return;
+                }
+                await resolveVisualForScene(scene);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, shortVideoId, manifestLoading, manifest, resolveVisualForScene]);
+
     const handleSceneLayoutChange = React.useCallback(
         (sceneId: string, patch: Partial<ShortVideoManifestSceneLayout>) => {
+            const touchesVisual = (
+                'visual_type' in patch
+                || 'visual_ref' in patch
+                || 'visual_youtube_id' in patch
+                || 'show_visual' in patch
+            );
+            const touchesVideo = (
+                patch.visual_type === 'video'
+                || patch.visual_ref !== undefined
+                || patch.visual_youtube_id !== undefined
+            );
+            if (touchesVisual) {
+                clearVisualResolveCacheForScene(sceneId);
+            }
             setManifest((prev) => {
                 if (!prev) {
                     return prev;
                 }
                 return updateSceneLayoutInManifest(prev, sceneId, patch);
             });
+            if (touchesVideo) {
+                scheduleResolveVisualForScene(sceneId);
+            }
         },
-        []
+        [clearVisualResolveCacheForScene, scheduleResolveVisualForScene]
     );
 
     const handleResetSceneLayoutGroup = React.useCallback(
@@ -358,10 +568,10 @@ export default function ShortVideoEditDrawer({
             setManifestSaving(true);
             setManifestError('');
             try {
-                const result = await saveShortVideoRenderManifest(
-                    shortVideoId,
-                    nextManifest
-                );
+            const result = await saveShortVideoRenderManifest(
+                shortVideoId,
+                sanitizeManifestForPersist(nextManifest)
+            );
                 applyManifestResult(result.manifest ?? nextManifest, false);
                 setGlobalSettingsOpen(false);
             } catch (err: unknown) {
@@ -389,7 +599,10 @@ export default function ShortVideoEditDrawer({
         setManifestSaving(true);
         setManifestError('');
         try {
-            const result = await saveShortVideoRenderManifest(shortVideoId, manifest);
+            const result = await saveShortVideoRenderManifest(
+                shortVideoId,
+                sanitizeManifestForPersist(manifest)
+            );
             applyManifestResult(result.manifest ?? manifest, false);
         } catch (err: unknown) {
             setManifestError(
@@ -471,19 +684,35 @@ export default function ShortVideoEditDrawer({
             return;
         }
 
-        const runRender = () => {
+        const runRender = (manifestForRender: ShortVideoRenderManifest) => {
             setVideoRendering(true);
             apiAjaxRef.current({
                 url: SHORT_VIDEO_RENDER_API_PATH,
                 method: 'POST',
-                data: { short_video_id: shortVideoId, id: shortVideoId },
+                data: {
+                    short_video_id: shortVideoId,
+                    id: shortVideoId,
+                    manifest: sanitizeManifestForPersist(manifestForRender),
+                },
                 loading: false,
-                success: (result: { success?: boolean; video_url?: string }) => {
+                success: (result: { success?: boolean; video_url?: string; message?: string | { content?: string } }) => {
                     if (!result?.success) {
                         return;
                     }
                     reloadPostDetail();
                     onRefreshPost?.();
+                },
+                error: (response: Response) => {
+                    void response.json().then((body: { message?: string | { content?: string } }) => {
+                        const msg = typeof body?.message === 'string'
+                            ? body.message
+                            : body?.message?.content;
+                        if (msg) {
+                            api.showMessage(msg, 'error');
+                        }
+                    }).catch(() => {
+                        api.showMessage('Render video thất bại', 'error');
+                    });
                 },
                 finally: () => {
                     setVideoRendering(false);
@@ -493,10 +722,11 @@ export default function ShortVideoEditDrawer({
 
         if (manifestDirty) {
             setVideoRendering(true);
-            saveShortVideoRenderManifest(shortVideoId, manifest)
+            saveShortVideoRenderManifest(shortVideoId, sanitizeManifestForPersist(manifest))
                 .then((saveResult) => {
-                    applyManifestResult(saveResult.manifest ?? manifest, false);
-                    runRender();
+                    const savedManifest = saveResult.manifest ?? manifest;
+                    applyManifestResult(savedManifest, false);
+                    runRender(savedManifest);
                 })
                 .catch((err: unknown) => {
                     api.showMessage(
@@ -508,7 +738,7 @@ export default function ShortVideoEditDrawer({
             return;
         }
 
-        runRender();
+        runRender(manifest);
     }, [
         shortVideoId,
         scenesReadyForPreview,
@@ -556,6 +786,34 @@ export default function ShortVideoEditDrawer({
             ? String(data.post.title).trim()
             : `Short video #${shortVideoId}`;
 
+    const mainDrawerHeaderAction = (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+            {scenesReadyForPreview ? (
+                <LoadingButton
+                    size="small"
+                    variant="contained"
+                    loading={manifestRefreshing}
+                    disabled={manifestLoading || manifestRefreshing}
+                    onClick={handleRefreshManifest}
+                    sx={HEADER_BUTTON_SX}
+                >
+                    Làm mới manifest
+                </LoadingButton>
+            ) : null}
+            {videoUrl ? (
+                <Button
+                    size="small"
+                    variant="contained"
+                    onClick={handleOpenFinalVideo}
+                    sx={HEADER_BUTTON_SX}
+                    color='success'
+                >
+                    Video
+                </Button>
+            ) : null}
+        </Box>
+    );
+
     return (
         <DrawerCustom
             activeOnClose
@@ -563,6 +821,7 @@ export default function ShortVideoEditDrawer({
             onClose={onClose}
             title={title}
             width={1600}
+            headerAction={mainDrawerHeaderAction}
             restDialogContent={{
                 sx: {
                     height: 'calc(100vh - 64px)',
@@ -696,36 +955,6 @@ export default function ShortVideoEditDrawer({
                                         : 'grey.50',
                             }}
                         >
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    justifyContent: 'flex-end',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                    flexShrink: 0,
-                                    mb: 2,
-                                }}
-                            >
-                                {scenesReadyForPreview ? (
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        disabled={manifestLoading || manifestRefreshing}
-                                        onClick={handleRefreshManifest}
-                                    >
-                                        Làm mới manifest
-                                    </Button>
-                                ) : null}
-                                {videoUrl ? (
-                                    <Button
-                                        variant="contained"
-                                        size="small"
-                                        onClick={handleOpenFinalVideo}
-                                    >
-                                        Video
-                                    </Button>
-                                ) : null}
-                            </Box>
                             {manifestError && (
                                 <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
                                     {manifestError}
@@ -749,14 +978,12 @@ export default function ShortVideoEditDrawer({
                                     sx={{
                                         flex: 1,
                                         minHeight: 0,
-                                        overflowY: 'auto',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
-                                        justifyContent: 'flex-start',
-                                        py: 1,
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
                                     }}
-                                    className="custom_scroll"
                                 >
                                     {!scenesReadyForPreview ? (
                                         <Alert severity="warning" sx={{ maxWidth: 480, width: '100%' }}>
@@ -845,12 +1072,10 @@ export default function ShortVideoEditDrawer({
                 manifestError={manifestError}
                 manifestInfo={manifestInfo}
                 saving={manifestSaving}
-                refreshing={manifestRefreshing}
                 dirty={manifestDirty}
                 onSceneLayoutChange={handleSceneLayoutChange}
                 onResetLayoutGroup={handleResetSceneLayoutGroup}
                 onSave={handleSaveManifest}
-                onRefresh={handleRefreshManifest}
             />
             {manifest ? (
                 <ShortVideoGlobalSettingsDrawer
@@ -884,6 +1109,7 @@ function SceneListItem({
 }) {
     const voiceover = scene.voiceover.trim();
     const previewStyles = resolveSceneListPreviewStyles({ scriptScene: scene, manifest });
+    const mediaLabel = resolveSceneMediaLabel(scene, manifest);
     const hasPlayableAudio = audioUrl.length > 0;
 
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -1038,6 +1264,49 @@ function SceneListItem({
                 },
             }}
         >
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    mb: 0.75,
+                }}
+            >
+                <Typography variant="caption" sx={{ color: previewStyles.textColor, opacity: 0.8 }}>
+                    Scene {index + 1} · {scene.id}
+                </Typography>
+                {mediaLabel ? (
+                    <Chip
+                        size="small"
+                        variant="outlined"
+                        icon={
+                            mediaLabel === 'Video' ? (
+                                <VideocamOutlinedIcon sx={{ color: 'inherit !important' }} />
+                            ) : (
+                                <ImageOutlinedIcon sx={{ color: 'inherit !important' }} />
+                            )
+                        }
+                        label={mediaLabel}
+                        sx={{
+                            height: 22,
+                            pl: 0.5,
+                            pr: 0.5,
+                            color: previewStyles.textColor,
+                            borderColor: 'currentColor',
+                            opacity: 0.85,
+                            bgcolor: 'transparent',
+                            '& .MuiChip-label': {
+                                px: 0.75,
+                                color: 'inherit',
+                            },
+                            '& .MuiChip-icon': {
+                                color: 'inherit',
+                            },
+                        }}
+                    />
+                ) : null}
+            </Box>
             {previewStyles.showHeadline && previewStyles.headlineText ? (
                 <Typography
                     variant="subtitle2"

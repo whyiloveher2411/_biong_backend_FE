@@ -6,6 +6,8 @@ import {
     Paper,
     Slider,
     Switch,
+    Tab,
+    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
@@ -24,15 +26,15 @@ import {
     resolveSceneKaraokeFontSize,
     resolveSceneShowHeadline,
     resolveSceneShowKaraoke,
-    resolveSceneShowVisual,
     resolveSceneTextBoxHeight,
     resolveSceneTextColor,
-    resolveSceneVisualMotion,
     sceneBackgroundColor,
     type ShortVideoManifestScene,
     type ShortVideoManifestSceneLayout,
     type ShortVideoRenderManifest,
 } from 'helpers/shortVideoRenderManifest';
+import ShortVideoSceneMediaPreview from './ShortVideoSceneMediaPreview';
+import ShortVideoSceneMediaTab from './ShortVideoSceneMediaTab';
 
 type Props = {
     manifest: ShortVideoRenderManifest;
@@ -170,12 +172,15 @@ function patchOrClearString(
     return trimmed;
 }
 
+type TabKey = 'media' | 'text' | 'scene' | 'info';
+
 export default function ShortVideoSceneEditPanel({
     manifest,
     selectedSceneId,
     onSceneLayoutChange,
     onResetLayoutGroup,
 }: Props) {
+    const [activeTab, setActiveTab] = React.useState<TabKey>('media');
     const selectedScene = manifest.scenes.find((s) => s.id === selectedSceneId);
 
     if (!selectedScene) {
@@ -198,54 +203,93 @@ export default function ShortVideoSceneEditPanel({
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
-            <SceneEditGroup
-                title="Nền scene"
-                onReset={() => reset(SCENE_LAYOUT_BACKGROUND_KEYS)}
-            >
-                <ColorFieldControl
-                    label="Background"
-                    value={sceneBackgroundColor(selectedScene, manifest)}
-                    note={`Mặc định: ${manifest.style.bg}`}
-                    onChange={(color) => patch({ background: color })}
-                />
-            </SceneEditGroup>
+        <Box
+            sx={{
+                display: 'flex',
+                gap: 2,
+                width: '100%',
+                alignItems: 'flex-start',
+            }}
+        >
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_event, value: TabKey) => setActiveTab(value)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{ borderBottom: 1, borderColor: 'divider' }}
+                >
+                    <Tab label="Media" value="media" />
+                    <Tab label="Text" value="text" />
+                    <Tab label="Scene" value="scene" />
+                    <Tab label="Info" value="info" />
+                </Tabs>
 
-            <HeadlineGroup
-                scene={selectedScene}
-                manifest={manifest}
-                layout={layout}
-                patch={patch}
-                onReset={() => reset(SCENE_LAYOUT_HEADLINE_KEYS)}
-            />
+                {activeTab === 'media' ? (
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <ShortVideoSceneMediaTab
+                            scene={selectedScene}
+                            layout={layout}
+                            patch={patch}
+                            onReset={() => reset(SCENE_LAYOUT_VISUAL_KEYS)}
+                        />
+                    </Paper>
+                ) : null}
 
-            <KaraokeGroup
-                scene={selectedScene}
-                manifest={manifest}
-                layout={layout}
-                patch={patch}
-                onReset={() => reset(SCENE_LAYOUT_KARAOKE_KEYS)}
-            />
+                {activeTab === 'text' ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <HeadlineGroup
+                            scene={selectedScene}
+                            manifest={manifest}
+                            layout={layout}
+                            patch={patch}
+                            onReset={() => reset(SCENE_LAYOUT_HEADLINE_KEYS)}
+                        />
+                        <KaraokeGroup
+                            scene={selectedScene}
+                            manifest={manifest}
+                            layout={layout}
+                            patch={patch}
+                            onReset={() => reset(SCENE_LAYOUT_KARAOKE_KEYS)}
+                        />
+                    </Box>
+                ) : null}
 
-            <VisualGroup
-                scene={selectedScene}
-                layout={layout}
-                patch={patch}
-                onReset={() => reset(SCENE_LAYOUT_VISUAL_KEYS)}
-            />
+                {activeTab === 'scene' ? (
+                    <SceneEditGroup
+                        title="Nền scene"
+                        onReset={() => reset(SCENE_LAYOUT_BACKGROUND_KEYS)}
+                    >
+                        <ColorFieldControl
+                            label="Background"
+                            value={sceneBackgroundColor(selectedScene, manifest)}
+                            note={`Mặc định: ${manifest.style.bg}`}
+                            onChange={(color) => patch({ background: color })}
+                        />
+                    </SceneEditGroup>
+                ) : null}
 
-            <SceneEditGroup title="Thông tin scene" hideReset>
-                <ReadonlyField label="Scene id" value={selectedScene.id} />
-                <ReadonlyField label="Voiceover" value={selectedScene.voiceover} />
-                <ReadonlyField
-                    label="Thời lượng (giây)"
-                    value={String(selectedScene.duration_sec)}
-                />
-                <ReadonlyField
-                    label="Audio URL"
-                    value={selectedScene.audio_url || '—'}
-                />
-            </SceneEditGroup>
+                {activeTab === 'info' ? (
+                    <SceneEditGroup title="Thông tin scene" hideReset>
+                        <ReadonlyField label="Scene id" value={selectedScene.id} />
+                        <ReadonlyField label="Voiceover" value={selectedScene.voiceover} />
+                        <ReadonlyField
+                            label="Thời lượng (giây)"
+                            value={String(selectedScene.duration_sec)}
+                        />
+                        <ReadonlyField
+                            label="Audio URL"
+                            value={selectedScene.audio_url || '—'}
+                        />
+                        <ReadonlyField
+                            label="Visual script type"
+                            value={selectedScene.visual?.type || '—'}
+                        />
+                    </SceneEditGroup>
+                ) : null}
+            </Box>
+
+            <ShortVideoSceneMediaPreview scene={selectedScene} />
         </Box>
     );
 }
@@ -397,62 +441,6 @@ function KaraokeGroup({
                 defaultHint={`Mặc định: ${manifest.text_profile.text_box_height}`}
                 onChange={(value) => patch({ text_box_height: value })}
             />
-        </SceneEditGroup>
-    );
-}
-
-function VisualGroup({
-    scene,
-    layout,
-    patch,
-    onReset,
-}: {
-    scene: ShortVideoManifestScene;
-    layout: ShortVideoManifestSceneLayout;
-    patch: (next: Partial<ShortVideoManifestSceneLayout>) => void;
-    onReset: () => void;
-}) {
-    const originalRef = scene.visual?.ref?.trim() || '';
-    const motion = layout.visual_motion ?? resolveSceneVisualMotion(scene);
-
-    return (
-        <SceneEditGroup title="Hình ảnh" onReset={onReset}>
-            <FormControlLabel
-                control={
-                    <Switch
-                        checked={resolveSceneShowVisual(scene)}
-                        onChange={(e) =>
-                            patch({ show_visual: e.target.checked ? undefined : false })
-                        }
-                    />
-                }
-                label="Hiển thị hình ảnh"
-            />
-            <ReadonlyField label="Loại visual" value={scene.visual?.type || '—'} />
-            <ReadonlyField label="URL gốc" value={originalRef || '—'} />
-            <TextField
-                label="URL override"
-                size="small"
-                fullWidth
-                placeholder={originalRef || 'https://…'}
-                value={layout.visual_ref ?? ''}
-                onChange={(e) =>
-                    patch({
-                        visual_ref: patchOrClearString(layout.visual_ref, e.target.value),
-                    })
-                }
-            />
-            <TextField
-                select
-                label="Hiệu ứng"
-                size="small"
-                fullWidth
-                value={motion}
-                onChange={(e) => patch({ visual_motion: e.target.value })}
-            >
-                <MenuItem value="pop">Pop</MenuItem>
-                <MenuItem value="fade">Fade</MenuItem>
-            </TextField>
         </SceneEditGroup>
     );
 }

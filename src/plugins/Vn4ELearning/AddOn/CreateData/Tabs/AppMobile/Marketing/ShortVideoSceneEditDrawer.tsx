@@ -17,7 +17,6 @@ type Props = {
     manifestError: string;
     manifestInfo: string;
     saving: boolean;
-    refreshing: boolean;
     dirty: boolean;
     onSceneLayoutChange: (
         sceneId: string,
@@ -28,7 +27,6 @@ type Props = {
         keys: (keyof ShortVideoManifestSceneLayout)[]
     ) => void;
     onSave: () => void;
-    onRefresh: () => void;
 };
 
 export default function ShortVideoSceneEditDrawer({
@@ -40,12 +38,10 @@ export default function ShortVideoSceneEditDrawer({
     manifestError,
     manifestInfo,
     saving,
-    refreshing,
     dirty,
     onSceneLayoutChange,
     onResetLayoutGroup,
     onSave,
-    onRefresh,
 }: Props) {
     const sceneLabel = sceneId.trim() || '—';
 
@@ -65,19 +61,9 @@ export default function ShortVideoSceneEditDrawer({
             <LoadingButton
                 size="small"
                 variant="contained"
-                loading={refreshing}
-                disabled={saving || refreshing}
-                onClick={onRefresh}
-                sx={HEADER_BUTTON_SX}
-            >
-                Làm mới manifest
-            </LoadingButton>
-            <LoadingButton
-                size="small"
-                variant="contained"
                 color="success"
                 loading={saving}
-                disabled={!dirty || saving || refreshing}
+                disabled={!dirty || saving}
                 onClick={onSave}
                 sx={HEADER_BUTTON_SX}
             >
@@ -92,7 +78,7 @@ export default function ShortVideoSceneEditDrawer({
             open={open}
             onClose={onClose}
             title={`Chỉnh scene ${sceneLabel}`}
-            width={700}
+            width={960}
             headerAction={headerAction}
             restDialogContent={{
                 sx: {

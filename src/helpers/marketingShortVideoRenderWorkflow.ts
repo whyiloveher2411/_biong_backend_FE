@@ -2,6 +2,10 @@ import { ajax } from 'hook/useApi';
 import { getAdminApiPrefix } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 import { parseShortVideoApiMessage } from 'helpers/shortVideoApiMessage';
+import {
+    sanitizeManifestForPersist,
+    type ShortVideoRenderManifest,
+} from 'helpers/shortVideoRenderManifest';
 
 export type ShortVideoRenderResult = {
     success?: boolean;
@@ -21,15 +25,24 @@ export function shortVideoRenderApiUrl(): string {
 
 export async function triggerShortVideoRender(options: {
     shortVideoId: number;
+    manifest?: ShortVideoRenderManifest;
 }): Promise<ShortVideoRenderResult> {
     const shortVideoId = Number(options.shortVideoId || 0);
     if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
         throw new Error('Thiếu short video id');
     }
 
+    const data: Record<string, unknown> = {
+        short_video_id: shortVideoId,
+        id: shortVideoId,
+    };
+    if (options.manifest) {
+        data.manifest = sanitizeManifestForPersist(options.manifest);
+    }
+
     const result = (await ajax({
         url: SHORT_VIDEO_RENDER_API_PATH,
-        data: { short_video_id: shortVideoId, id: shortVideoId },
+        data,
     })) as ShortVideoRenderResult;
 
     if (!result?.success) {

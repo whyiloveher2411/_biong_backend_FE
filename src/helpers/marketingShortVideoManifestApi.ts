@@ -19,6 +19,7 @@ async function postManifestApi(
     const result = (await ajax({
         url: `plugin/vn4-e-learning/app-mobile/marketing/short-video/${path}`,
         data: body,
+        loading: false,
     })) as ManifestApiResult;
 
     if (!result?.success) {
@@ -57,4 +58,43 @@ export async function saveShortVideoRenderManifest(
         id: shortVideoId,
         manifest,
     });
+}
+
+export type ResolveSceneVisualResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    short_video_id?: number;
+    youtube_id?: string;
+    playback_url?: string;
+    thumbnail_url?: string;
+};
+
+export async function resolveShortVideoSceneVisual(options: {
+    shortVideoId: number;
+    visualRef?: string;
+    youtubeId?: string;
+}): Promise<ResolveSceneVisualResult> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
+        throw new Error('Thiếu short video id');
+    }
+
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/resolve-scene-visual',
+        data: {
+            short_video_id: shortVideoId,
+            id: shortVideoId,
+            visual_ref: options.visualRef?.trim() || '',
+            youtube_id: options.youtubeId?.trim() || '',
+        },
+        loading: false,
+    })) as ResolveSceneVisualResult;
+
+    if (!result?.success) {
+        throw new Error(
+            parseShortVideoApiMessage(result?.message, 'Resolve video thất bại')
+        );
+    }
+
+    return result;
 }
