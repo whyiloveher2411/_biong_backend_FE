@@ -31,14 +31,12 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
     return (
         <Box
             sx={{
-                width: 280,
-                flexShrink: 0,
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 1.5,
-                position: 'sticky',
-                top: 0,
-                alignSelf: 'flex-start',
             }}
         >
             <Typography variant="subtitle2" fontWeight={600}>
@@ -47,46 +45,56 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
             <Box
                 sx={{
                     width: '100%',
-                    aspectRatio: '9 / 16',
-                    maxHeight: 420,
+                    maxWidth: '100%',
+                    minWidth: 0,
                     borderRadius: 2,
                     overflow: 'hidden',
                     bgcolor: '#000',
                     border: 1,
                     borderColor: 'divider',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                 }}
             >
                 {!showVisual || visualType === 'none' ? (
-                    <Typography variant="caption" color="text.secondary" sx={{ px: 2, textAlign: 'left' }}>
-                        Chưa có media — chọn ảnh hoặc video trong tab Media
-                    </Typography>
+                    <Box
+                        sx={{ px: 2, py: 3, textAlign: 'left', width: '100%' }}
+                    >
+                        Chưa có media — chọn ảnh hoặc video trên timeline
+                    </Box>
                 ) : visualType === 'image' && isHttpsImageUrl(ref) ? (
                     <Box
                         component="img"
                         src={ref}
                         alt=""
                         sx={{
+                            display: 'block',
                             width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
+                            maxWidth: '100%',
+                            height: 'auto',
+                            objectFit: 'contain',
                         }}
                     />
                 ) : visualType === 'video' && youtubeId ? (
                     <Box
-                        component="iframe"
-                        key={embedUrl}
-                        src={embedUrl}
-                        title="YouTube preview"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         sx={{
                             width: '100%',
-                            height: '100%',
-                            border: 0,
+                            aspectRatio: '16 / 9',
+                            maxHeight: 200,
                         }}
-                    />
+                    >
+                        <Box
+                            component="iframe"
+                            key={embedUrl}
+                            src={embedUrl}
+                            title="YouTube preview"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            sx={{
+                                display: 'block',
+                                width: '100%',
+                                height: '100%',
+                                border: 0,
+                            }}
+                        />
+                    </Box>
                 ) : (
                     <Typography variant="caption" color="error" sx={{ px: 2, textAlign: 'left' }}>
                         URL media chưa hợp lệ
@@ -99,7 +107,10 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                     src={buildYoutubeThumbnailUrl(youtubeId)}
                     alt=""
                     sx={{
+                        display: 'block',
                         width: '100%',
+                        maxWidth: '100%',
+                        height: 'auto',
                         borderRadius: 1,
                         border: 1,
                         borderColor: 'divider',

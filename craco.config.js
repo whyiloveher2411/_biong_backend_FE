@@ -46,6 +46,10 @@ module.exports = {
   },
   webpack: {
     alias: {
+      '@spacedev/remotion-short-video/compositionTimeline': path.join(
+        remotionSrcPath,
+        'compositionTimeline.ts'
+      ),
       '@spacedev/remotion-short-video/ShortVideoComposition': path.join(
         remotionSrcPath,
         'ShortVideoComposition.tsx'

@@ -4,6 +4,7 @@ export type {
     ShortVideoManifestWord,
     ShortVideoRenderManifest,
     ShortVideoSceneVisualType,
+    ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 
 import type {
@@ -12,6 +13,7 @@ import type {
     ShortVideoRenderManifest,
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
+import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
 import { isHttpsImageUrl, parseYoutubeId } from './shortVideoYoutube';
 
 export const SCENE_LAYOUT_BACKGROUND_KEYS: (keyof ShortVideoManifestSceneLayout)[] = [
@@ -329,6 +331,7 @@ export function sanitizeManifestForPersist(
 ): ShortVideoRenderManifest {
     return {
         ...manifest,
+        visual_clips: sanitizeVisualClipsForPersist(manifest.visual_clips),
         scenes: manifest.scenes.map((scene) => {
             if (!scene.layout?.visual_playback_url) {
                 return scene;
@@ -348,7 +351,7 @@ export function reinjectVisualPlaybackFromCache(
     manifest: ShortVideoRenderManifest,
     cache: Record<string, string>
 ): ShortVideoRenderManifest {
-    let next = manifest;
+    let next = reinjectVisualClipPlaybackFromCache(manifest, cache);
     manifest.scenes.forEach((scene) => {
         if (scene.layout?.visual_playback_url?.trim()) {
             return;

@@ -2,7 +2,6 @@ import React from 'react';
 import {
     Box,
     FormControlLabel,
-    MenuItem,
     Paper,
     Slider,
     Switch,
@@ -17,7 +16,6 @@ import {
     SCENE_LAYOUT_BACKGROUND_KEYS,
     SCENE_LAYOUT_HEADLINE_KEYS,
     SCENE_LAYOUT_KARAOKE_KEYS,
-    SCENE_LAYOUT_VISUAL_KEYS,
     resolveSceneActiveColor,
     resolveSceneBottomPadding,
     resolveSceneHeadlineColor,
@@ -33,8 +31,6 @@ import {
     type ShortVideoManifestSceneLayout,
     type ShortVideoRenderManifest,
 } from 'helpers/shortVideoRenderManifest';
-import ShortVideoSceneMediaPreview from './ShortVideoSceneMediaPreview';
-import ShortVideoSceneMediaTab from './ShortVideoSceneMediaTab';
 
 type Props = {
     manifest: ShortVideoRenderManifest;
@@ -172,7 +168,7 @@ function patchOrClearString(
     return trimmed;
 }
 
-type TabKey = 'media' | 'text' | 'scene' | 'info';
+type TabKey = 'text' | 'scene' | 'info';
 
 export default function ShortVideoSceneEditPanel({
     manifest,
@@ -180,7 +176,7 @@ export default function ShortVideoSceneEditPanel({
     onSceneLayoutChange,
     onResetLayoutGroup,
 }: Props) {
-    const [activeTab, setActiveTab] = React.useState<TabKey>('media');
+    const [activeTab, setActiveTab] = React.useState<TabKey>('text');
     const selectedScene = manifest.scenes.find((s) => s.id === selectedSceneId);
 
     if (!selectedScene) {
@@ -219,22 +215,10 @@ export default function ShortVideoSceneEditPanel({
                     scrollButtons="auto"
                     sx={{ borderBottom: 1, borderColor: 'divider' }}
                 >
-                    <Tab label="Media" value="media" />
                     <Tab label="Text" value="text" />
                     <Tab label="Scene" value="scene" />
                     <Tab label="Info" value="info" />
                 </Tabs>
-
-                {activeTab === 'media' ? (
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                        <ShortVideoSceneMediaTab
-                            scene={selectedScene}
-                            layout={layout}
-                            patch={patch}
-                            onReset={() => reset(SCENE_LAYOUT_VISUAL_KEYS)}
-                        />
-                    </Paper>
-                ) : null}
 
                 {activeTab === 'text' ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -288,8 +272,6 @@ export default function ShortVideoSceneEditPanel({
                     </SceneEditGroup>
                 ) : null}
             </Box>
-
-            <ShortVideoSceneMediaPreview scene={selectedScene} />
         </Box>
     );
 }

@@ -144,6 +144,8 @@ export function ShortVideoRemotionPreview({
     onPlayerReady,
 }: PreviewProps) {
     const { fps, width, height, durationInFrames } = useManifestTiming(manifest);
+    const previewFrameRef = React.useRef<HTMLDivElement | null>(null);
+    const [frameSize, setFrameSize] = React.useState({ width: 0, height: 0 });
 
     const inputProps = React.useMemo(
         () => ({ manifest }),
@@ -162,8 +164,46 @@ export function ShortVideoRemotionPreview({
         playerRef.current?.toggle();
     }, [playerRef]);
 
+    React.useEffect(() => {
+        const node = previewFrameRef.current;
+        if (!node) {
+            return;
+        }
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) {
+                return;
+            }
+            const nextWidth = Math.max(0, entry.contentRect.width);
+            const nextHeight = Math.max(0, entry.contentRect.height);
+            setFrameSize((prev) => {
+                if (prev.width === nextWidth && prev.height === nextHeight) {
+                    return prev;
+                }
+                return { width: nextWidth, height: nextHeight };
+            });
+        });
+
+        observer.observe(node);
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    const playerSize = React.useMemo(() => {
+        if (frameSize.width <= 0 || frameSize.height <= 0 || width <= 0 || height <= 0) {
+            return null;
+        }
+        const scale = Math.min(frameSize.width / width, frameSize.height / height);
+        const nextWidth = Math.max(1, Math.floor(width * scale));
+        const nextHeight = Math.max(1, Math.floor(height * scale));
+        return { width: nextWidth, height: nextHeight };
+    }, [frameSize.height, frameSize.width, height, width]);
+
     return (
         <Box
+            ref={previewFrameRef}
             onClick={handlePreviewClick}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -176,33 +216,51 @@ export function ShortVideoRemotionPreview({
             aria-label="Phát hoặc tạm dừng video"
             sx={{
                 width: '100%',
-                maxWidth: 320,
-                flexShrink: 0,
-                mx: 'auto',
+                height: '100%',
+                minHeight: 0,
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 borderRadius: 2,
-                overflow: 'hidden',
-                bgcolor: '#000',
-                boxShadow: 2,
                 cursor: 'pointer',
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                '&:focus, &:focus-visible': {
+                    outline: 'none',
+                },
             }}
         >
-            <Player
-                ref={bindPlayerRef}
-                component={ShortVideoComposition}
-                inputProps={inputProps}
-                durationInFrames={durationInFrames}
-                fps={fps}
-                compositionWidth={width}
-                compositionHeight={height}
-                style={{
-                    width: '100%',
-                    aspectRatio: `${width} / ${height}`,
-                    pointerEvents: 'none',
-                }}
-                controls={false}
-                initiallyMuted={false}
-                clickToPlay={false}
-            />
+            {playerSize ? (
+                <Box
+                    sx={{
+                        width: playerSize.width,
+                        height: playerSize.height,
+                        borderRadius: 1,
+                        overflow: 'hidden',
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 6px 18px rgba(10,15,30,0.28)',
+                        bgcolor: '#000',
+                    }}
+                >
+                    <Player
+                        ref={bindPlayerRef}
+                        component={ShortVideoComposition}
+                        inputProps={inputProps}
+                        durationInFrames={durationInFrames}
+                        fps={fps}
+                        compositionWidth={width}
+                        compositionHeight={height}
+                        style={{
+                            width: playerSize.width,
+                            height: playerSize.height,
+                            pointerEvents: 'none',
+                        }}
+                        controls={false}
+                        initiallyMuted={false}
+                        clickToPlay={false}
+                    />
+                </Box>
+            ) : null}
         </Box>
     );
 }

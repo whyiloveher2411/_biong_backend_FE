@@ -1,5 +1,19 @@
 export type ShortVideoSceneVisualType = 'none' | 'image' | 'video';
 
+export type ShortVideoVisualClip = {
+    id: string;
+    type: ShortVideoSceneVisualType;
+    ref: string;
+    motion?: string;
+    start_sec: number;
+    duration_sec: number;
+    visual_start_sec?: number;
+    visual_youtube_id?: string;
+    /** Chỉ inject lúc preview/render — không lưu DB */
+    visual_playback_url?: string;
+    label?: string;
+};
+
 export type ShortVideoManifestWord = {
     text: string;
     start: number;
@@ -72,5 +86,6 @@ export type ShortVideoRenderManifest = {
     };
     alignment_mode: string;
     scenes: ShortVideoManifestScene[];
+    visual_clips?: ShortVideoVisualClip[];
     warnings: string[];
 };

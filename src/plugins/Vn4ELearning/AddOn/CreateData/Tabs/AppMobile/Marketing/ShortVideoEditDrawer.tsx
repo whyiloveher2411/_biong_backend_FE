@@ -3,13 +3,10 @@ import type { PlayerRef } from '@remotion/player';
 import {
     Alert,
     Box,
-    Chip,
     CircularProgress,
     IconButton,
     Typography,
 } from '@mui/material';
-import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import Button from 'components/atoms/Button';
 import LoadingButton from '@mui/lab/LoadingButton';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -17,6 +14,7 @@ import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import useAjax from 'hook/useApi';
 import {
     buildShortVideoRenderManifest,
+    generateShortVideoSceneAudioVieneu,
     refreshShortVideoRenderManifest,
     resolveShortVideoSceneVisual,
     saveShortVideoRenderManifest,
@@ -33,7 +31,6 @@ import {
     resolveSceneHeadlineText,
     resolveSceneShowHeadline,
     resolveSceneShowKaraoke,
-    resolveSceneShowVisual,
     resolveSceneTextColor,
     resolveSceneVisualType,
     resolveSceneVisualYoutubeId,
@@ -57,15 +54,61 @@ import {
 } from 'helpers/shortVideoRenderJson';
 import { buildVoiceoverPlaybackWordTimings } from 'helpers/shortVideoVoiceoverTimings';
 import { SHORT_VIDEO_RENDER_API_PATH } from 'helpers/marketingShortVideoRenderWorkflow';
+import {
+    injectVisualClipPlaybackUrl,
+    manifestUsesVisualClips,
+    resolveVisualClipYoutubeId,
+} from 'helpers/shortVideoVisualClips';
+import { getSceneCompositionRange, mergeRefreshedNarrationManifest } from 'helpers/shortVideoTimelineAdapter';
 import ShortVideoVoiceoverKaraoke from './ShortVideoVoiceoverKaraoke';
 import ShortVideoSceneEditDrawer from './ShortVideoSceneEditDrawer';
-import { HEADER_BUTTON_SX } from './ShortVideoSceneEditPanel';
 import ShortVideoGlobalSettingsDrawer, {
     ShortVideoGlobalSettingsIcon,
 } from './ShortVideoGlobalSettingsDrawer';
+import ShortVideoVisualClipInspector from './ShortVideoVisualClipInspector';
 
 /** Tạm ẩn banner manifest info — bật lại khi cần. */
 const SHOW_MANIFEST_INFO_BANNER = false;
+
+/** Nút header drawer chính — tách màu theo vai trò trên nền primary. */
+const MAIN_HEADER_REFRESH_BTN_SX = {
+    color: 'common.white',
+    bgcolor: 'rgba(255,255,255,0.14)',
+    border: '1px solid rgba(255,255,255,0.5)',
+    boxShadow: 'none',
+    '&:hover': {
+        bgcolor: 'rgba(255,255,255,0.24)',
+        borderColor: 'common.white',
+    },
+    '&.Mui-disabled': {
+        color: 'rgba(255,255,255,0.45)',
+        bgcolor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(255,255,255,0.25)',
+    },
+} as const;
+
+const MAIN_HEADER_RENDER_BTN_SX = {
+    color: 'grey.900',
+    bgcolor: 'warning.main',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+    '&:hover': {
+        bgcolor: 'warning.dark',
+        color: 'grey.900',
+    },
+    '&.Mui-disabled': {
+        color: 'rgba(0,0,0,0.38)',
+        bgcolor: 'rgba(255,255,255,0.3)',
+    },
+} as const;
+
+const MAIN_HEADER_VIDEO_BTN_SX = {
+    color: 'common.white',
+    bgcolor: 'success.main',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+    '&:hover': {
+        bgcolor: 'success.dark',
+    },
+} as const;
 
 const loadRemotionPlayerModule = () => import('./ShortVideoRemotionPlayer');
 
@@ -75,11 +118,7 @@ const ShortVideoRemotionPreview = React.lazy(() =>
     }))
 );
 
-const ShortVideoRemotionTimelineBar = React.lazy(() =>
-    loadRemotionPlayerModule().then((mod) => ({
-        default: mod.ShortVideoRemotionTimelineBar,
-    }))
-);
+const ShortVideoEditorTimeline = React.lazy(() => import('./ShortVideoEditorTimeline'));
 
 type Props = {
     open: boolean;
@@ -121,25 +160,39 @@ function manifestFingerprint(manifest: ShortVideoRenderManifest): string {
     return JSON.stringify(sanitizeManifestForPersist(manifest));
 }
 
-function resolveSceneMediaLabel(
-    scriptScene: ShortVideoScriptScene,
-    manifest: ShortVideoRenderManifest | null
-): string {
-    if (!manifest) {
-        return '';
+function sceneContentFingerprint(scene: ShortVideoManifestScene): string {
+    return JSON.stringify({
+        voiceover: scene.voiceover?.trim() || '',
+        on_screen_text: scene.on_screen_text?.trim() || '',
+    });
+}
+
+function buildSceneFingerprintMap(manifest: ShortVideoRenderManifest): Record<string, string> {
+    return manifest.scenes.reduce<Record<string, string>>((acc, scene) => {
+        acc[scene.id] = sceneContentFingerprint(scene);
+        return acc;
+    }, {});
+}
+
+function sceneIsReadyForPlayback(scene?: ShortVideoManifestScene): boolean {
+    if (!scene) {
+        return false;
     }
-    const previewScene = manifestSceneForPreview(scriptScene, manifest);
-    if (!resolveSceneShowVisual(previewScene)) {
-        return '';
+    return Boolean(scene.audio_url?.trim()) && Array.isArray(scene.words) && scene.words.length > 0;
+}
+
+function isKeyboardEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+        return false;
     }
-    const visualType = resolveSceneVisualType(previewScene);
-    if (visualType === 'image') {
-        return 'Ảnh';
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        return true;
     }
-    if (visualType === 'video') {
-        return 'Video';
+    if (target.isContentEditable) {
+        return true;
     }
-    return '';
+    return Boolean(target.closest('[contenteditable="true"]'));
 }
 
 function manifestSceneForPreview(
@@ -215,9 +268,14 @@ export default function ShortVideoEditDrawer({
     const [manifestRefreshing, setManifestRefreshing] = React.useState(false);
     const [manifestSaving, setManifestSaving] = React.useState(false);
     const [sceneEditId, setSceneEditId] = React.useState('');
+    const [selectedVisualClipId, setSelectedVisualClipId] = React.useState('');
     const [globalSettingsOpen, setGlobalSettingsOpen] = React.useState(false);
     const [videoRendering, setVideoRendering] = React.useState(false);
+    const [savingActivityCount, setSavingActivityCount] = React.useState(0);
+    const [narrationRunningSceneIds, setNarrationRunningSceneIds] = React.useState<string[]>([]);
     const savedManifestFingerprintRef = React.useRef('');
+    const savedSceneFingerprintMapRef = React.useRef<Record<string, string>>({});
+    const pollingAbortRef = React.useRef(false);
     const remotionPlayerRef = React.useRef<PlayerRef | null>(null);
     const [remotionPlayerInstance, setRemotionPlayerInstance] = React.useState<PlayerRef | null>(null);
     const visualResolveCacheRef = React.useRef<Record<string, string>>({});
@@ -225,8 +283,20 @@ export default function ShortVideoEditDrawer({
     const manifestRef = React.useRef<ShortVideoRenderManifest | null>(null);
     const manifestInitialResolveDoneRef = React.useRef(false);
     const visualResolveDebounceRef = React.useRef<Record<string, number>>({});
+    const timelineAutoSaveTimerRef = React.useRef<number | null>(null);
+    const savingActivityCountRef = React.useRef(0);
 
     manifestRef.current = manifest;
+
+    const beginSavingActivity = React.useCallback(() => {
+        savingActivityCountRef.current += 1;
+        setSavingActivityCount(savingActivityCountRef.current);
+    }, []);
+
+    const endSavingActivity = React.useCallback(() => {
+        savingActivityCountRef.current = Math.max(0, savingActivityCountRef.current - 1);
+        setSavingActivityCount(savingActivityCountRef.current);
+    }, []);
 
     const clearVisualResolveCacheForScene = React.useCallback((sceneId: string) => {
         const prefix = `${sceneId}:`;
@@ -258,6 +328,33 @@ export default function ShortVideoEditDrawer({
         () => allScenesHaveAudio(scenes, sceneAudioMap),
         [scenes, sceneAudioMap]
     );
+
+    React.useEffect(() => {
+        if (!open || !scenesReadyForPreview || !manifest || manifestLoading) {
+            return;
+        }
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space' && event.key !== ' ') {
+                return;
+            }
+            if (event.repeat || isKeyboardEditableTarget(event.target)) {
+                return;
+            }
+            if (!remotionPlayerRef.current) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            remotionPlayerRef.current.toggle();
+        };
+
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [open, scenesReadyForPreview, manifest, manifestLoading]);
+
     const manifestDirty = React.useMemo(() => {
         if (!manifest) {
             return false;
@@ -303,6 +400,10 @@ export default function ShortVideoEditDrawer({
     }, [open, shortVideoId]);
 
     React.useEffect(() => {
+        pollingAbortRef.current = !open;
+    }, [open]);
+
+    React.useEffect(() => {
         if (!open) {
             setSelectedSceneId('');
             setPost({});
@@ -312,7 +413,10 @@ export default function ShortVideoEditDrawer({
             setManifestInfo('');
             savedManifestFingerprintRef.current = '';
             setSceneEditId('');
+            setSelectedVisualClipId('');
             setGlobalSettingsOpen(false);
+            setNarrationRunningSceneIds([]);
+            pollingAbortRef.current = true;
             remotionPlayerRef.current = null;
             setRemotionPlayerInstance(null);
             manifestInitialResolveDoneRef.current = false;
@@ -320,6 +424,13 @@ export default function ShortVideoEditDrawer({
                 window.clearTimeout(timerId);
             });
             visualResolveDebounceRef.current = {};
+            if (timelineAutoSaveTimerRef.current) {
+                window.clearTimeout(timelineAutoSaveTimerRef.current);
+                timelineAutoSaveTimerRef.current = null;
+            }
+            savingActivityCountRef.current = 0;
+            setSavingActivityCount(0);
+            savedSceneFingerprintMapRef.current = {};
         }
     }, [open]);
 
@@ -338,6 +449,7 @@ export default function ShortVideoEditDrawer({
             );
             setManifest(withPlayback);
             savedManifestFingerprintRef.current = manifestFingerprint(withPlayback);
+            savedSceneFingerprintMapRef.current = buildSceneFingerprintMap(withPlayback);
             if (rebuilt) {
                 visualResolveCacheRef.current = {};
                 manifestInitialResolveDoneRef.current = false;
@@ -408,6 +520,64 @@ export default function ShortVideoEditDrawer({
         [shortVideoId]
     );
 
+    const resolveVisualForClip = React.useCallback(
+        async (clipId: string, youtubeId: string) => {
+            if (shortVideoId <= 0) {
+                return;
+            }
+            const cacheKey = `clip:${clipId}:${youtubeId}`;
+            if (visualResolveCacheRef.current[cacheKey]) {
+                setManifest((prev) => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    const clip = prev.visual_clips?.find((item) => item.id === clipId);
+                    if (clip?.visual_playback_url?.trim()) {
+                        return prev;
+                    }
+                    return injectVisualClipPlaybackUrl(
+                        prev,
+                        clipId,
+                        visualResolveCacheRef.current[cacheKey]
+                    );
+                });
+                return;
+            }
+            if (visualResolveFailedRef.current[cacheKey]) {
+                return;
+            }
+            try {
+                const result = await resolveShortVideoSceneVisual({
+                    shortVideoId,
+                    youtubeId,
+                });
+                const playbackUrl = result.playback_url?.trim() || '';
+                if (!playbackUrl) {
+                    return;
+                }
+                visualResolveCacheRef.current[cacheKey] = playbackUrl;
+                delete visualResolveFailedRef.current[cacheKey];
+                setManifest((prev) => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    return injectVisualClipPlaybackUrl(prev, clipId, playbackUrl);
+                });
+                setManifestInfo('');
+            } catch (err: unknown) {
+                const message =
+                    err instanceof Error
+                        ? err.message
+                        : 'Không resolve được video YouTube cho preview';
+                visualResolveFailedRef.current[cacheKey] = message;
+                setManifestInfo(
+                    `Clip ${clipId}: ${message}. Preview dùng thumbnail YouTube; render MP4 vẫn chạy trên server.`
+                );
+            }
+        },
+        [shortVideoId]
+    );
+
     const scheduleResolveVisualForScene = React.useCallback(
         (sceneId: string) => {
             const existing = visualResolveDebounceRef.current[sceneId];
@@ -472,47 +642,195 @@ export default function ShortVideoEditDrawer({
             return;
         }
 
-        const pending = manifest.scenes.filter((scene) => {
-            if (resolveSceneVisualType(scene) !== 'video') {
-                return false;
-            }
-            const youtubeId = resolveSceneVisualYoutubeId(scene);
-            if (!youtubeId) {
-                return false;
-            }
-            if (scene.layout?.visual_playback_url?.trim()) {
-                return false;
-            }
-            const cacheKey = `${scene.id}:${youtubeId}`;
-            if (visualResolveCacheRef.current[cacheKey]) {
-                return false;
-            }
-            if (visualResolveFailedRef.current[cacheKey]) {
-                return false;
-            }
-            return true;
-        });
+        const usesClips = manifestUsesVisualClips(manifest);
+
+        const pendingScenes = usesClips
+            ? []
+            : manifest.scenes.filter((scene) => {
+                if (resolveSceneVisualType(scene) !== 'video') {
+                    return false;
+                }
+                const youtubeId = resolveSceneVisualYoutubeId(scene);
+                if (!youtubeId) {
+                    return false;
+                }
+                if (scene.layout?.visual_playback_url?.trim()) {
+                    return false;
+                }
+                const cacheKey = `${scene.id}:${youtubeId}`;
+                if (visualResolveCacheRef.current[cacheKey]) {
+                    return false;
+                }
+                if (visualResolveFailedRef.current[cacheKey]) {
+                    return false;
+                }
+                return true;
+            });
+
+        const pendingClips = usesClips
+            ? (manifest.visual_clips ?? []).filter((clip) => {
+                if (clip.type !== 'video') {
+                    return false;
+                }
+                const youtubeId = resolveVisualClipYoutubeId(clip);
+                if (!youtubeId) {
+                    return false;
+                }
+                if (clip.visual_playback_url?.trim()) {
+                    return false;
+                }
+                const cacheKey = `clip:${clip.id}:${youtubeId}`;
+                if (visualResolveCacheRef.current[cacheKey]) {
+                    return false;
+                }
+                if (visualResolveFailedRef.current[cacheKey]) {
+                    return false;
+                }
+                return true;
+            })
+            : [];
 
         manifestInitialResolveDoneRef.current = true;
 
-        if (pending.length === 0) {
+        if (pendingScenes.length === 0 && pendingClips.length === 0) {
             return;
         }
 
         let cancelled = false;
         (async () => {
-            for (const scene of pending) {
+            for (const scene of pendingScenes) {
                 if (cancelled) {
                     return;
                 }
                 await resolveVisualForScene(scene);
+            }
+            for (const clip of pendingClips) {
+                if (cancelled) {
+                    return;
+                }
+                const youtubeId = resolveVisualClipYoutubeId(clip);
+                if (youtubeId) {
+                    await resolveVisualForClip(clip.id, youtubeId);
+                }
             }
         })();
 
         return () => {
             cancelled = true;
         };
-    }, [open, shortVideoId, manifestLoading, manifest, resolveVisualForScene]);
+    }, [open, shortVideoId, manifestLoading, manifest, resolveVisualForScene, resolveVisualForClip]);
+
+    const persistTimelineManifestAuto = React.useCallback(
+        async (nextManifest: ShortVideoRenderManifest) => {
+            if (shortVideoId <= 0) {
+                return;
+            }
+            const nextFingerprint = manifestFingerprint(nextManifest);
+            if (nextFingerprint === savedManifestFingerprintRef.current) {
+                return;
+            }
+            beginSavingActivity();
+            try {
+                await saveShortVideoRenderManifest(
+                    shortVideoId,
+                    sanitizeManifestForPersist(nextManifest)
+                );
+                savedManifestFingerprintRef.current = nextFingerprint;
+            } catch (err: unknown) {
+                setManifestError(
+                    err instanceof Error ? err.message : 'Tự động lưu timeline thất bại'
+                );
+            } finally {
+                endSavingActivity();
+            }
+        },
+        [shortVideoId, beginSavingActivity, endSavingActivity]
+    );
+
+    const scheduleTimelineAutoSave = React.useCallback(
+        (nextManifest: ShortVideoRenderManifest) => {
+            if (timelineAutoSaveTimerRef.current) {
+                window.clearTimeout(timelineAutoSaveTimerRef.current);
+            }
+            timelineAutoSaveTimerRef.current = window.setTimeout(() => {
+                timelineAutoSaveTimerRef.current = null;
+                void persistTimelineManifestAuto(nextManifest);
+            }, 700);
+        },
+        [persistTimelineManifestAuto]
+    );
+
+    const applyManifestVisualChange = React.useCallback(
+        (nextManifest: ShortVideoRenderManifest) => {
+            setManifest(nextManifest);
+            (nextManifest.visual_clips ?? []).forEach((clip) => {
+                if (clip.type !== 'video') {
+                    return;
+                }
+                const youtubeId = resolveVisualClipYoutubeId(clip);
+                if (!youtubeId || clip.visual_playback_url?.trim()) {
+                    return;
+                }
+                void resolveVisualForClip(clip.id, youtubeId);
+            });
+        },
+        [resolveVisualForClip]
+    );
+
+    const handleTimelineVisualChange = React.useCallback(
+        (nextManifest: ShortVideoRenderManifest) => {
+            applyManifestVisualChange(nextManifest);
+            scheduleTimelineAutoSave(nextManifest);
+        },
+        [applyManifestVisualChange, scheduleTimelineAutoSave]
+    );
+
+    const handleInspectorVisualChange = React.useCallback(
+        (nextManifest: ShortVideoRenderManifest) => {
+            if (!selectedSceneId) {
+                applyManifestVisualChange(nextManifest);
+                return;
+            }
+            const savedFingerprint = savedSceneFingerprintMapRef.current[selectedSceneId] || '';
+            const scene = nextManifest.scenes.find((item) => item.id === selectedSceneId);
+            const changed = scene ? sceneContentFingerprint(scene) !== savedFingerprint : false;
+            if (!changed) {
+                applyManifestVisualChange(nextManifest);
+                return;
+            }
+            const patchedManifest: ShortVideoRenderManifest = {
+                ...nextManifest,
+                scenes: nextManifest.scenes.map((item) => {
+                    if (item.id !== selectedSceneId) {
+                        return item;
+                    }
+                    return {
+                        ...item,
+                        audio_url: '',
+                        words: [],
+                    };
+                }),
+            };
+            applyManifestVisualChange(patchedManifest);
+        },
+        [applyManifestVisualChange, selectedSceneId]
+    );
+
+    const handleSeekToScene = React.useCallback(
+        (sceneId: string) => {
+            setSelectedSceneId(sceneId);
+            if (!manifest || !remotionPlayerRef.current) {
+                return;
+            }
+            const range = getSceneCompositionRange(manifest, sceneId);
+            if (!range) {
+                return;
+            }
+            const fps = manifest.fps || 30;
+            remotionPlayerRef.current.seekTo(Math.round(range.startSec * fps));
+        },
+        [manifest]
+    );
 
     const handleSceneLayoutChange = React.useCallback(
         (sceneId: string, patch: Partial<ShortVideoManifestSceneLayout>) => {
@@ -566,12 +884,13 @@ export default function ShortVideoEditDrawer({
                 mode
             );
             setManifestSaving(true);
+            beginSavingActivity();
             setManifestError('');
             try {
-            const result = await saveShortVideoRenderManifest(
-                shortVideoId,
-                sanitizeManifestForPersist(nextManifest)
-            );
+                const result = await saveShortVideoRenderManifest(
+                    shortVideoId,
+                    sanitizeManifestForPersist(nextManifest)
+                );
                 applyManifestResult(result.manifest ?? nextManifest, false);
                 setGlobalSettingsOpen(false);
             } catch (err: unknown) {
@@ -580,9 +899,10 @@ export default function ShortVideoEditDrawer({
                 );
             } finally {
                 setManifestSaving(false);
+                endSavingActivity();
             }
         },
-        [manifest, shortVideoId, applyManifestResult]
+        [manifest, shortVideoId, applyManifestResult, beginSavingActivity, endSavingActivity]
     );
 
     const activeTemplateLabel = React.useMemo(() => {
@@ -592,26 +912,109 @@ export default function ShortVideoEditDrawer({
         return getShortVideoRenderTemplate(manifest.template_id)?.label ?? '';
     }, [manifest?.template_id]);
 
+    const pollManifestUntilScenesReady = React.useCallback(
+        async (sceneIds: string[]) => {
+            if (shortVideoId <= 0 || sceneIds.length === 0) {
+                return;
+            }
+            const targetSet = new Set(sceneIds);
+            const maxAttempts = 45;
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+                if (pollingAbortRef.current) {
+                    break;
+                }
+                const refreshed = await refreshShortVideoRenderManifest(shortVideoId);
+                const nextManifest = refreshed.manifest;
+                if (nextManifest) {
+                    const localBefore = manifestRef.current;
+                    const merged = localBefore
+                        ? mergeRefreshedNarrationManifest(localBefore, nextManifest)
+                        : nextManifest;
+                    applyManifestResult(merged, true);
+                    const ready = sceneIds.every((sceneId) => {
+                        const scene = merged.scenes.find((item) => item.id === sceneId);
+                        return sceneIsReadyForPlayback(scene);
+                    });
+                    if (ready) {
+                        break;
+                    }
+                }
+                await new Promise((resolve) => window.setTimeout(resolve, 1800));
+            }
+            if (!pollingAbortRef.current) {
+                setNarrationRunningSceneIds((prev) => prev.filter((id) => !targetSet.has(id)));
+            }
+        },
+        [shortVideoId, applyManifestResult]
+    );
+
+    const runNarrationSceneQueue = React.useCallback(
+        async (sceneIds: string[]) => {
+            if (shortVideoId <= 0 || sceneIds.length === 0) {
+                return;
+            }
+            const unique = Array.from(new Set(sceneIds));
+            setNarrationRunningSceneIds((prev) => Array.from(new Set([...prev, ...unique])));
+            for (const sceneId of unique) {
+                if (pollingAbortRef.current) {
+                    break;
+                }
+                try {
+                    await generateShortVideoSceneAudioVieneu({
+                        shortVideoId,
+                        sceneId,
+                        force: true,
+                    });
+                } catch (err) {
+                    setManifestError(
+                        err instanceof Error ? err.message : `Không thể tạo audio scene ${sceneId}`
+                    );
+                }
+            }
+            await pollManifestUntilScenesReady(unique);
+        },
+        [shortVideoId, pollManifestUntilScenesReady]
+    );
+
     const handleSaveManifest = React.useCallback(async () => {
         if (!manifest || shortVideoId <= 0) {
             return;
         }
+        const changedSceneIds = manifest.scenes
+            .filter((scene) => {
+                const savedFingerprint = savedSceneFingerprintMapRef.current[scene.id] || '';
+                return sceneContentFingerprint(scene) !== savedFingerprint;
+            })
+            .map((scene) => scene.id);
         setManifestSaving(true);
+        beginSavingActivity();
         setManifestError('');
         try {
             const result = await saveShortVideoRenderManifest(
                 shortVideoId,
-                sanitizeManifestForPersist(manifest)
+                sanitizeManifestForPersist(manifest),
+                { changedSceneIds }
             );
             applyManifestResult(result.manifest ?? manifest, false);
+            if (changedSceneIds.length > 0) {
+                void runNarrationSceneQueue(changedSceneIds);
+            }
         } catch (err: unknown) {
             setManifestError(
                 err instanceof Error ? err.message : 'Lưu manifest thất bại'
             );
         } finally {
             setManifestSaving(false);
+            endSavingActivity();
         }
-    }, [manifest, shortVideoId, applyManifestResult]);
+    }, [
+        manifest,
+        shortVideoId,
+        applyManifestResult,
+        beginSavingActivity,
+        endSavingActivity,
+        runNarrationSceneQueue,
+    ]);
 
     const handleRefreshManifest = React.useCallback(async () => {
         if (shortVideoId <= 0) {
@@ -645,7 +1048,8 @@ export default function ShortVideoEditDrawer({
     const handleOpenSceneEdit = React.useCallback((sceneId: string) => {
         setSelectedSceneId(sceneId);
         setSceneEditId(sceneId);
-    }, []);
+        handleSeekToScene(sceneId);
+    }, [handleSeekToScene]);
 
     const handleCloseSceneEdit = React.useCallback(() => {
         setSceneEditId('');
@@ -722,6 +1126,7 @@ export default function ShortVideoEditDrawer({
 
         if (manifestDirty) {
             setVideoRendering(true);
+            beginSavingActivity();
             saveShortVideoRenderManifest(shortVideoId, sanitizeManifestForPersist(manifest))
                 .then((saveResult) => {
                     const savedManifest = saveResult.manifest ?? manifest;
@@ -734,6 +1139,9 @@ export default function ShortVideoEditDrawer({
                         'error'
                     );
                     setVideoRendering(false);
+                })
+                .finally(() => {
+                    endSavingActivity();
                 });
             return;
         }
@@ -748,25 +1156,9 @@ export default function ShortVideoEditDrawer({
         reloadPostDetail,
         onRefreshPost,
         api.showMessage,
+        beginSavingActivity,
+        endSavingActivity,
     ]);
-
-    const renderActionButton = (
-        <LoadingButton
-            variant="contained"
-            loading={videoRendering}
-            disabled={
-                !scenesReadyForPreview
-                || !manifest
-                || manifestLoading
-                || manifestRefreshing
-                || manifestSaving
-                || videoRendering
-            }
-            onClick={handleRenderVideo}
-        >
-            Render
-        </LoadingButton>
-    );
 
     React.useEffect(() => {
         if (scenes.length === 0) {
@@ -795,9 +1187,26 @@ export default function ShortVideoEditDrawer({
                     loading={manifestRefreshing}
                     disabled={manifestLoading || manifestRefreshing}
                     onClick={handleRefreshManifest}
-                    sx={HEADER_BUTTON_SX}
+                    sx={MAIN_HEADER_REFRESH_BTN_SX}
                 >
                     Làm mới manifest
+                </LoadingButton>
+            ) : null}
+            {scenesReadyForPreview && manifest ? (
+                <LoadingButton
+                    size="small"
+                    variant="contained"
+                    loading={videoRendering}
+                    disabled={
+                        manifestLoading
+                        || manifestRefreshing
+                        || manifestSaving
+                        || videoRendering
+                    }
+                    onClick={handleRenderVideo}
+                    sx={MAIN_HEADER_RENDER_BTN_SX}
+                >
+                    Render
                 </LoadingButton>
             ) : null}
             {videoUrl ? (
@@ -805,8 +1214,7 @@ export default function ShortVideoEditDrawer({
                     size="small"
                     variant="contained"
                     onClick={handleOpenFinalVideo}
-                    sx={HEADER_BUTTON_SX}
-                    color='success'
+                    sx={MAIN_HEADER_VIDEO_BTN_SX}
                 >
                     Video
                 </Button>
@@ -820,7 +1228,7 @@ export default function ShortVideoEditDrawer({
             open={open}
             onClose={onClose}
             title={title}
-            width={1600}
+            width={2600}
             headerAction={mainDrawerHeaderAction}
             restDialogContent={{
                 sx: {
@@ -860,120 +1268,134 @@ export default function ShortVideoEditDrawer({
                         sx={{
                             flex: 1,
                             display: 'flex',
+                            flexDirection: 'column',
                             minHeight: 0,
                             overflow: 'hidden',
                         }}
                     >
                         <Box
                             sx={{
-                                width: 320,
-                                flexShrink: 0,
-                                borderRight: 1,
-                                borderColor: 'divider',
+                                flex: 1,
                                 display: 'flex',
-                                flexDirection: 'column',
                                 minHeight: 0,
-                                bgcolor: 'background.paper',
+                                overflow: 'hidden',
                             }}
                         >
                             <Box
                                 sx={{
-                                    px: 2,
-                                    py: 1.5,
-                                    borderBottom: 1,
+                                    width: 320,
+                                    flexShrink: 0,
+                                    borderRight: 1,
                                     borderColor: 'divider',
                                     display: 'flex',
-                                    alignItems: 'flex-start',
-                                    justifyContent: 'space-between',
-                                    gap: 1,
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <Typography variant="subtitle2" fontWeight={600}>
-                                        Scenes
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {scenes.length} đoạn
-                                        {activeTemplateLabel
-                                            ? ` · ${activeTemplateLabel}`
-                                            : ''}
-                                    </Typography>
-                                </Box>
-                                <IconButton
-                                    size="small"
-                                    aria-label="Cài đặt video"
-                                    disabled={!manifest || manifestLoading}
-                                    onClick={() => setGlobalSettingsOpen(true)}
-                                    sx={{ mt: -0.25 }}
-                                >
-                                    <ShortVideoGlobalSettingsIcon fontSize="small" />
-                                </IconButton>
-                            </Box>
-                            <Box
-                                className="custom_scroll"
-                                sx={{
-                                    flex: 1,
-                                    overflow: 'auto',
-                                    p: 1,
-                                }}
-                            >
-                                {scenes.length === 0 ? (
-                                    <Alert severity="info" sx={{ m: 1 }}>
-                                        Chưa có script — sinh script TikTok trước khi chỉnh sửa video
-                                    </Alert>
-                                ) : (
-                                    scenes.map((scene, index) => (
-                                        <SceneListItem
-                                            key={scene.id}
-                                            scene={scene}
-                                            index={index}
-                                            manifest={manifest}
-                                            selected={selectedSceneId === scene.id}
-                                            audioUrl={
-                                                sceneAudioMap[scene.id]?.url?.trim() || ''
-                                            }
-                                            whisperWords={
-                                                renderSceneWordsMap[scene.id] ?? []
-                                            }
-                                            onSelect={() => handleOpenSceneEdit(scene.id)}
-                                        />
-                                    ))
-                                )}
-                            </Box>
-                        </Box>
-                        <Box
-                            sx={{
-                                flex: 1,
-                                minWidth: 0,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                minHeight: 0,
-                                p: 3,
-                                bgcolor: (theme) =>
-                                    theme.palette.mode === 'dark'
-                                        ? 'grey.900'
-                                        : 'grey.50',
-                            }}
-                        >
-                            {manifestError && (
-                                <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
-                                    {manifestError}
-                                </Alert>
-                            )}
-                            {SHOW_MANIFEST_INFO_BANNER && manifestInfo && !manifestError && (
-                                <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
-                                    {manifestInfo}
-                                </Alert>
-                            )}
-                            <Box
-                                sx={{
-                                    flex: 1,
+                                    flexDirection: 'column',
                                     minHeight: 0,
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        px: 2,
+                                        py: 1.5,
+                                        borderBottom: 1,
+                                        borderColor: 'divider',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        justifyContent: 'space-between',
+                                        gap: 1,
+                                    }}
+                                >
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="subtitle2" fontWeight={600}>
+                                            Lời thoại
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {scenes.length} đoạn
+                                            {activeTemplateLabel
+                                                ? ` · ${activeTemplateLabel}`
+                                                : ''}
+                                        </Typography>
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Cài đặt video"
+                                        disabled={!manifest || manifestLoading}
+                                        onClick={() => setGlobalSettingsOpen(true)}
+                                        sx={{ mt: -0.25 }}
+                                    >
+                                        <ShortVideoGlobalSettingsIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                                <Box
+                                    className="custom_scroll"
+                                    sx={{
+                                        flex: 1,
+                                        overflow: 'auto',
+                                        p: 1,
+                                    }}
+                                >
+                                    {scenes.length === 0 ? (
+                                        <Alert severity="info" sx={{ m: 1 }}>
+                                            Chưa có script — sinh script TikTok trước khi chỉnh sửa video
+                                        </Alert>
+                                    ) : (
+                                        scenes.map((scene, index) => (
+                                            (() => {
+                                                const manifestScene = manifest?.scenes.find((item) => item.id === scene.id);
+                                                const manifestReady = sceneIsReadyForPlayback(manifestScene);
+                                                const isRunning = narrationRunningSceneIds.includes(scene.id);
+                                                const audioUrl = manifestReady && !isRunning
+                                                    ? (manifestScene?.audio_url?.trim() || sceneAudioMap[scene.id]?.url?.trim() || '')
+                                                    : '';
+                                                const whisperWords = manifestReady && !isRunning
+                                                    ? (manifestScene?.words ?? renderSceneWordsMap[scene.id] ?? [])
+                                                    : [];
+                                                return (
+                                            <SceneListItem
+                                                key={scene.id}
+                                                scene={scene}
+                                                index={index}
+                                                manifest={manifest}
+                                                selected={selectedSceneId === scene.id}
+                                                audioUrl={audioUrl}
+                                                whisperWords={whisperWords}
+                                                onSelect={() => handleOpenSceneEdit(scene.id)}
+                                            />
+                                                );
+                                            })()
+                                        ))
+                                    )}
+                                </Box>
+                            </Box>
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    overflow: 'hidden',
+                                    minHeight: 0,
+                                    p: 3,
+                                    bgcolor: (theme) =>
+                                        theme.palette.mode === 'dark'
+                                            ? 'grey.900'
+                                            : 'grey.50',
                                 }}
                             >
+                                {manifestError && (
+                                    <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
+                                        {manifestError}
+                                    </Alert>
+                                )}
+                                {SHOW_MANIFEST_INFO_BANNER && manifestInfo && !manifestError && (
+                                    <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
+                                        {manifestInfo}
+                                    </Alert>
+                                )}
+                                {manifest && !manifestUsesVisualClips(manifest) && !manifestLoading ? (
+                                    <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
+                                        Timeline visual có sau khi làm mới manifest
+                                    </Alert>
+                                ) : null}
                                 <Box
                                     sx={{
                                         flex: 1,
@@ -1032,34 +1454,64 @@ export default function ShortVideoEditDrawer({
                                         </Alert>
                                     )}
                                 </Box>
-                                {manifest && !manifestLoading ? (
-                                    <Suspense fallback={null}>
-                                        <ShortVideoRemotionTimelineBar
-                                            manifest={manifest}
-                                            playerRef={remotionPlayerRef}
-                                            playerInstance={remotionPlayerInstance}
-                                            rightSlot={renderActionButton}
-                                        />
-                                    </Suspense>
-                                ) : (
-                                    <Box
-                                        sx={{
-                                            display: 'flex',
-                                            justifyContent: 'flex-end',
-                                            alignItems: 'center',
-                                            flexShrink: 0,
-                                            py: 1.5,
-                                            px: 2,
-                                            borderTop: 1,
-                                            borderColor: 'divider',
-                                            bgcolor: 'background.paper',
-                                        }}
-                                    >
-                                        {renderActionButton}
-                                    </Box>
-                                )}
                             </Box>
+                            {manifest && !manifestLoading ? (
+                                <Box
+                                    sx={{
+                                        width: 300,
+                                        flexShrink: 0,
+                                        borderLeft: 1,
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper',
+                                        minHeight: 0,
+                                        overflowX: 'hidden',
+                                        overflowY: 'auto',
+                                    }}
+                                    className="custom_scroll"
+                                >
+                                    <ShortVideoVisualClipInspector
+                                        manifest={manifest}
+                                        clipId={selectedVisualClipId}
+                                        sceneId={selectedSceneId}
+                                        onManifestChange={handleInspectorVisualChange}
+                                        onSave={handleSaveManifest}
+                                        saving={
+                                            manifestSaving
+                                            || narrationRunningSceneIds.includes(selectedSceneId)
+                                        }
+                                        dirty={manifestDirty}
+                                    />
+                                </Box>
+                            ) : null}
                         </Box>
+                        {manifest && !manifestLoading ? (
+                            <Suspense fallback={null}>
+                                <ShortVideoEditorTimeline
+                                    manifest={manifest}
+                                    playerRef={remotionPlayerRef}
+                                    playerInstance={remotionPlayerInstance}
+                                    selectedVisualClipId={selectedVisualClipId}
+                                    selectedNarrationSceneId={selectedSceneId}
+                                    onSelectVisualClip={(clipId) => {
+                                        setSelectedVisualClipId(clipId);
+                                        if (clipId) {
+                                            setSelectedSceneId('');
+                                        }
+                                    }}
+                                    onSelectNarrationScene={(sceneId) => {
+                                        setSelectedSceneId(sceneId);
+                                        if (sceneId) {
+                                            setSelectedVisualClipId('');
+                                        }
+                                    }}
+                                    onManifestChange={handleTimelineVisualChange}
+                                    onSeekScene={handleSeekToScene}
+                                    onSyncClick={handleSaveManifest}
+                                    saving={savingActivityCount > 0}
+                                    narrationRunningSceneIds={narrationRunningSceneIds}
+                                />
+                            </Suspense>
+                        ) : null}
                     </Box>
                 )}
             </Box>
@@ -1109,7 +1561,6 @@ function SceneListItem({
 }) {
     const voiceover = scene.voiceover.trim();
     const previewStyles = resolveSceneListPreviewStyles({ scriptScene: scene, manifest });
-    const mediaLabel = resolveSceneMediaLabel(scene, manifest);
     const hasPlayableAudio = audioUrl.length > 0;
 
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -1276,36 +1727,6 @@ function SceneListItem({
                 <Typography variant="caption" sx={{ color: previewStyles.textColor, opacity: 0.8 }}>
                     Scene {index + 1} · {scene.id}
                 </Typography>
-                {mediaLabel ? (
-                    <Chip
-                        size="small"
-                        variant="outlined"
-                        icon={
-                            mediaLabel === 'Video' ? (
-                                <VideocamOutlinedIcon sx={{ color: 'inherit !important' }} />
-                            ) : (
-                                <ImageOutlinedIcon sx={{ color: 'inherit !important' }} />
-                            )
-                        }
-                        label={mediaLabel}
-                        sx={{
-                            height: 22,
-                            pl: 0.5,
-                            pr: 0.5,
-                            color: previewStyles.textColor,
-                            borderColor: 'currentColor',
-                            opacity: 0.85,
-                            bgcolor: 'transparent',
-                            '& .MuiChip-label': {
-                                px: 0.75,
-                                color: 'inherit',
-                            },
-                            '& .MuiChip-icon': {
-                                color: 'inherit',
-                            },
-                        }}
-                    />
-                ) : null}
             </Box>
             {previewStyles.showHeadline && previewStyles.headlineText ? (
                 <Typography
