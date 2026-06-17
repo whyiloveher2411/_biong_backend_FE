@@ -20,6 +20,7 @@ import {
     type PlatformDistributionEntry,
 } from './platformDistributionConstants';
 import { buildGoogleImagesUrl, copyMarketingText } from './marketingImageUtils';
+import { MarketingCopyImageButton } from './MarketingPromptActionButtons';
 
 function normalizeImageUrl(url: string): string {
     const t = String(url || '').trim();
@@ -103,18 +104,60 @@ export function resolveDistributionPreviewImageUrl(
     return { url: '', source: 'none' };
 }
 
+export function resolveArticleTitleVi(post: Record<string, unknown>): string {
+    const explicit = String(post.title_vi ?? '').trim();
+    if (explicit) return explicit;
+
+    const titleRaw = post.title;
+    if (titleRaw && typeof titleRaw === 'object' && !Array.isArray(titleRaw)) {
+        return String((titleRaw as Record<string, unknown>).vi ?? '').trim();
+    }
+    if (typeof titleRaw === 'string') {
+        const t = titleRaw.trim();
+        if (!t) return '';
+        if (t.startsWith('{') || t.startsWith('[')) {
+            try {
+                const parsed = JSON.parse(t) as Record<string, unknown>;
+                const fromMap = String(parsed.vi ?? '').trim();
+                if (fromMap) return fromMap;
+            } catch {
+                // fallback plain string below
+            }
+        }
+        if (String(post.source_lang ?? '').toLowerCase() === 'vi') {
+            return t;
+        }
+    }
+
+    return '';
+}
+
 function buildPostClipboardText(parts: {
+    articleTitleVi?: string;
     title: string;
     mainCopy: string;
     hashtags: string;
     linkTeaser: string;
 }): string {
-    return [
-        parts.title,
-        parts.mainCopy,
-        parts.hashtags,
-        parts.linkTeaser,
-    ].filter(Boolean).join('\n\n');
+    const articleTitleVi = String(parts.articleTitleVi || '').trim();
+    const copyTitle = String(parts.title || '').trim();
+    const blocks: string[] = [];
+    if (articleTitleVi) {
+        blocks.push(articleTitleVi);
+    }
+    if (copyTitle && copyTitle !== articleTitleVi) {
+        blocks.push(copyTitle);
+    }
+    if (parts.mainCopy.trim()) {
+        blocks.push(parts.mainCopy.trim());
+    }
+    if (parts.hashtags.trim()) {
+        blocks.push(parts.hashtags.trim());
+    }
+    if (parts.linkTeaser.trim()) {
+        blocks.push(parts.linkTeaser.trim());
+    }
+    return blocks.join('\n\n');
 }
 
 function CopyableBlock({
@@ -176,6 +219,8 @@ interface Props {
     savingImage?: boolean;
     /** Chỉ xem & copy — ẩn form chỉnh URL ảnh (drawer list). */
     readOnly?: boolean;
+    /** Ẩn banner info đầu component (drawer đã có alert riêng). */
+    hideInfoAlert?: boolean;
 }
 
 export default function PlatformDistributionPreview({
@@ -188,6 +233,7 @@ export default function PlatformDistributionPreview({
     onSaveImageUrl,
     savingImage,
     readOnly = false,
+    hideInfoAlert = false,
 }: Props) {
     const platformLabel = PLATFORM_LABELS[platform] || platform;
     const strategy = entry.strategy || {};
@@ -209,6 +255,7 @@ export default function PlatformDistributionPreview({
         || '',
     ).trim();
     const title = String(copy.title || '').trim();
+    const articleTitleVi = resolveArticleTitleVi(post);
     const hashtags = Array.isArray(copy.hashtags)
         ? (copy.hashtags as string[]).map((h) => `#${String(h).replace(/^#/, '')}`).join(' ')
         : '';
@@ -221,6 +268,7 @@ export default function PlatformDistributionPreview({
     const altText = String(media.alt_text || '').trim();
 
     const fullPostText = buildPostClipboardText({
+        articleTitleVi,
         title,
         mainCopy,
         hashtags,
@@ -229,6 +277,10 @@ export default function PlatformDistributionPreview({
 
     const [postCopied, setPostCopied] = React.useState(false);
     const [thumbCopied, setThumbCopied] = React.useState(false);
+    const [imageCopyNotice, setImageCopyNotice] = React.useState('');
+    React.useEffect(() => {
+        setImageCopyNotice('');
+    }, [displayUrl]);
     const copyFullPost = async () => {
         if (!fullPostText.trim()) return;
         await copyMarketingText(fullPostText);
@@ -244,10 +296,12 @@ export default function PlatformDistributionPreview({
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Alert severity="info">
-                Xem trước toàn bộ nội dung sẽ đăng lên <strong>{platformLabel}</strong>.
-                Dùng nút sao chép để lấy text khi đăng thủ công lên nền tảng.
-            </Alert>
+            {!hideInfoAlert && (
+                <Alert severity="info">
+                    Xem trước toàn bộ nội dung sẽ đăng lên <strong>{platformLabel}</strong>.
+                    Dùng nút sao chép để lấy text khi đăng thủ công lên nền tảng.
+                </Alert>
+            )}
 
             {/* —— Thông tin & nội dung copy —— */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50' }}>
@@ -275,7 +329,8 @@ export default function PlatformDistributionPreview({
                 <Typography variant="overline" color="text.secondary" display="block" sx={{ mb: 1 }}>
                     Copy đăng bài
                 </Typography>
-                <CopyableBlock label="Tiêu đề" value={title} />
+                <CopyableBlock label="Tiêu đề bài viết (VI)" value={articleTitleVi} />
+                <CopyableBlock label="Tiêu đề đăng (copy)" value={title} />
                 <CopyableBlock label="Nội dung / Caption" value={mainCopy} multiline />
                 <CopyableBlock label="Hashtag" value={hashtags} />
                 <CopyableBlock label="Link / teaser" value={linkTeaser} />
@@ -304,16 +359,33 @@ export default function PlatformDistributionPreview({
                     </Typography>
                 </Box>
 
-                {fullPostText && (
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<ContentCopyIcon />}
-                        onClick={copyFullPost}
-                        sx={{ mt: 1 }}
-                    >
-                        {postCopied ? 'Đã copy toàn bộ bài đăng' : 'Copy toàn bộ bài đăng'}
-                    </Button>
+                {(fullPostText || displayUrl) && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1, alignItems: 'center' }}>
+                        {fullPostText && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<ContentCopyIcon />}
+                                onClick={copyFullPost}
+                            >
+                                {postCopied ? 'Đã copy toàn bộ bài đăng' : 'Copy toàn bộ bài đăng'}
+                            </Button>
+                        )}
+                        {displayUrl && (
+                            <MarketingCopyImageButton
+                                imageUrl={displayUrl}
+                                size="small"
+                                onCopyNotice={setImageCopyNotice}
+                            >
+                                Copy ảnh đăng
+                            </MarketingCopyImageButton>
+                        )}
+                    </Box>
+                )}
+                {imageCopyNotice && (
+                    <Alert severity="warning" sx={{ mt: 1 }} onClose={() => setImageCopyNotice('')}>
+                        {imageCopyNotice}
+                    </Alert>
                 )}
             </Paper>
 
@@ -393,6 +465,16 @@ export default function PlatformDistributionPreview({
                 )}
 
                 <Box sx={{ p: 2.5 }}>
+                    {articleTitleVi && (
+                        <Box sx={{ mb: title || mainCopy ? 1.5 : 0 }}>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                Tiêu đề bài viết (VI)
+                            </Typography>
+                            <Typography variant="subtitle1" sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
+                                {articleTitleVi}
+                            </Typography>
+                        </Box>
+                    )}
                     {title && (
                         <Typography variant="h6" sx={{ fontSize: 17, fontWeight: 700, mb: 1 }}>
                             {title}
@@ -413,7 +495,7 @@ export default function PlatformDistributionPreview({
                             {linkTeaser}
                         </Typography>
                     )}
-                    {!title && !mainCopy && !hashtags && !linkTeaser && (
+                    {!articleTitleVi && !title && !mainCopy && !hashtags && !linkTeaser && (
                         <Typography variant="body2" color="text.secondary" fontStyle="italic">
                             Chưa có nội dung copy — hoàn thành bước Copy đăng bài trước.
                         </Typography>

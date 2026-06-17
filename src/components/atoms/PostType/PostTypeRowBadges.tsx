@@ -22,6 +22,7 @@ import React from 'react';
 
 type PostTypeRowBadgesProps = {
     row: { id?: number | string; _row_badges?: PostTypeRowBadge[] };
+    onListRefresh?: () => void;
 };
 
 function PostTypeRowBadgeLabel({ content }: { content: string }) {
@@ -44,7 +45,7 @@ function PostTypeRowBadgeLabel({ content }: { content: string }) {
     );
 }
 
-export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
+export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBadgesProps) {
     const badges = getPostTypeRowBadges(row);
     const [previewPostId, setPreviewPostId] = React.useState(0);
 
@@ -295,6 +296,7 @@ export default function PostTypeRowBadges({ row }: PostTypeRowBadgesProps) {
                 open={previewPostId > 0}
                 postId={previewPostId}
                 onClose={() => setPreviewPostId(0)}
+                onSaved={onListRefresh}
             />
         </>
     );

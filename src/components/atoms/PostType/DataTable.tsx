@@ -372,7 +372,7 @@ function DataTable(props: DataTableProps) {
                                                                 config={config.showFields[key]}
                                                                 component={config.showFields[key].view}
                                                                 post={customer} content={customer[key]} />
-                                                            <PostTypeRowBadges row={customer} />
+                                                            <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
                                                     ) : (
                                                         <FieldView
@@ -394,7 +394,7 @@ function DataTable(props: DataTableProps) {
                                                                 component={data.config.fields[key].view ?? 'text'}
                                                                 post={customer} content={customer[key]}
                                                             />
-                                                            <PostTypeRowBadges row={customer} />
+                                                            <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
                                                     ) : (
                                                         <FieldView

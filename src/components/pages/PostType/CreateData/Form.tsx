@@ -463,6 +463,7 @@ function Form({
                         onClose={() => setFacebookPreviewDrawerOpen(false)}
                         postId={Number(data?.post?.id || 0)}
                         fallbackThumbnail={data?.post?.thumbnail}
+                        onSaved={onRefreshPost}
                     />
                 </>
             )}

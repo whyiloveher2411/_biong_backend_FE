@@ -1,3 +1,5 @@
+import { resolveImagePngBlob } from 'helpers/image';
+
 async function imageElementToPngBlob(img: HTMLImageElement): Promise<Blob> {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
@@ -76,20 +78,7 @@ export async function resolveStoreScreenshotImagePngBlob(
         throw new Error('Thiếu URL ảnh');
     }
 
-    try {
-        const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
-        if (response.ok) {
-            const blob = await response.blob();
-            if (blob.type.startsWith('image/')) {
-                return blobToPngBlob(blob);
-            }
-        }
-    } catch {
-        // fallback Image() — thường fail nếu CDN không có CORS
-    }
-
-    const img = await loadImageElement(url, true);
-    return imageElementToPngBlob(img);
+    return resolveImagePngBlob(url);
 }
 
 export async function copyImageBlobToClipboard(blob: Blob): Promise<void> {

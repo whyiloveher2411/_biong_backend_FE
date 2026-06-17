@@ -533,7 +533,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                                         })()
                                                                     }
                                                                 </Box>
-                                                                <PostTypeRowBadges row={customer} />
+                                                                <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                             </Box>
                                                         </TableCell>
                                                         :

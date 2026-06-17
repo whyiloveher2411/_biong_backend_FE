@@ -7,6 +7,7 @@ import {
 import useAjax from 'hook/useApi';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import PlatformDistributionPreview from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/PlatformDistributionPreview';
+import MarketingFacebookPreviewWorkflow from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingFacebookPreviewWorkflow';
 import type { PlatformDistributionEntry } from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/platformDistributionConstants';
 
 function parseFacebookCopyField(raw: unknown): Record<string, unknown> {
@@ -29,6 +30,20 @@ function parseFacebookCopyField(raw: unknown): Record<string, unknown> {
     return {};
 }
 
+function mergeFacebookEntry(
+    pipelineDist: Record<string, PlatformDistributionEntry> | undefined,
+    copyFromField: Record<string, unknown>,
+): PlatformDistributionEntry {
+    const fbPipeline = (pipelineDist?.facebook || {}) as PlatformDistributionEntry;
+    return {
+        ...fbPipeline,
+        copy: {
+            ...(fbPipeline.copy || {}),
+            ...copyFromField,
+        },
+    };
+}
+
 type PrepareResponse = {
     success?: boolean;
     post?: Record<string, unknown>;
@@ -43,6 +58,7 @@ type Props = {
     postId: number;
     onClose: () => void;
     fallbackThumbnail?: unknown;
+    onSaved?: () => void;
 };
 
 export default function MarketingFacebookPreviewDrawer({
@@ -50,6 +66,7 @@ export default function MarketingFacebookPreviewDrawer({
     postId,
     onClose,
     fallbackThumbnail,
+    onSaved,
 }: Props) {
     const api = useAjax();
     const apiAjaxRef = React.useRef(api.ajax);
@@ -59,11 +76,11 @@ export default function MarketingFacebookPreviewDrawer({
     const [error, setError] = React.useState('');
     const [post, setPost] = React.useState<Record<string, unknown>>({});
     const [entry, setEntry] = React.useState<PlatformDistributionEntry>({});
+    const [facebookPosted, setFacebookPosted] = React.useState(false);
+    const [facebookPostedAt, setFacebookPostedAt] = React.useState('');
 
-    React.useEffect(() => {
-        if (!open || !postId) {
-            return;
-        }
+    const loadPrepare = React.useCallback(() => {
+        if (!postId) return;
         setLoading(true);
         setError('');
         apiAjaxRef.current({
@@ -84,21 +101,14 @@ export default function MarketingFacebookPreviewDrawer({
                 const postData = (res.post || {}) as Record<string, unknown>;
                 const pipeline = res.pipeline || {};
                 const dist = pipeline.platform_distribution || {};
-                const fbPipeline = (dist.facebook || {}) as PlatformDistributionEntry;
                 const fromField = parseFacebookCopyField(postData.marketing_facebook_copy_json);
-                const fb: PlatformDistributionEntry = {
-                    ...fbPipeline,
-                    copy: {
-                        ...(fbPipeline.copy || {}),
-                        ...fromField,
-                    },
-                };
                 setPost({
                     ...postData,
-                    // API prepare không trả thumbnail; ưu tiên thumbnail từ row list (ngoài post pipeline).
                     thumbnail: postData.thumbnail ?? fallbackThumbnail ?? '',
                 });
-                setEntry(fb);
+                setEntry(mergeFacebookEntry(dist, fromField));
+                setFacebookPosted(Boolean(postData.facebook_posted));
+                setFacebookPostedAt(String(postData.facebook_posted_at || ''));
             },
             error: (err: unknown) => {
                 setLoading(false);
@@ -106,7 +116,27 @@ export default function MarketingFacebookPreviewDrawer({
                 setError(r?.message?.content || 'Không tải được dữ liệu bài');
             },
         });
-    }, [open, postId, fallbackThumbnail]);
+    }, [postId, fallbackThumbnail]);
+
+    React.useEffect(() => {
+        if (!open || !postId) {
+            return;
+        }
+        loadPrepare();
+    }, [open, postId, loadPrepare]);
+
+    const handleCopySaved = React.useCallback((pipeline: {
+        platform_distribution?: Record<string, PlatformDistributionEntry>;
+    }) => {
+        const dist = pipeline.platform_distribution || {};
+        const fbPipeline = (dist.facebook || {}) as PlatformDistributionEntry;
+        const copy = fbPipeline.copy || {};
+        setEntry((prev) => mergeFacebookEntry(dist, copy as Record<string, unknown>));
+        setPost((prev) => ({
+            ...prev,
+            marketing_facebook_copy_json: copy,
+        }));
+    }, []);
 
     return (
         <DrawerCustom
@@ -118,7 +148,7 @@ export default function MarketingFacebookPreviewDrawer({
                 sx: { p: 2 },
             }}
         >
-            <Box sx={{ minHeight: '100%', py: 1 }}>
+            <Box sx={{ minHeight: '100%', py: 1, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 {loading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
                         <CircularProgress size={32} />
@@ -128,12 +158,30 @@ export default function MarketingFacebookPreviewDrawer({
                     <Alert severity="error">{error}</Alert>
                 )}
                 {!loading && !error && (
-                    <PlatformDistributionPreview
-                        platform="facebook"
-                        entry={entry}
-                        post={post}
-                        readOnly
-                    />
+                    <>
+                        <Alert severity="info">
+                            Xem trước nội dung đăng Facebook. Dùng workflow bên dưới để sinh copy bằng AI,
+                            sau đó sao chép và đăng thủ công lên nền tảng.
+                        </Alert>
+                        <MarketingFacebookPreviewWorkflow
+                            postId={postId}
+                            facebookPosted={facebookPosted}
+                            facebookPostedAt={facebookPostedAt}
+                            onFacebookPostedChange={(posted, postedAt) => {
+                                setFacebookPosted(posted);
+                                setFacebookPostedAt(postedAt);
+                            }}
+                            onCopySaved={handleCopySaved}
+                            onSaved={onSaved}
+                        />
+                        <PlatformDistributionPreview
+                            platform="facebook"
+                            entry={entry}
+                            post={post}
+                            readOnly
+                            hideInfoAlert
+                        />
+                    </>
                 )}
             </Box>
         </DrawerCustom>

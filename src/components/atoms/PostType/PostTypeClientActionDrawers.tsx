@@ -71,6 +71,7 @@ function PostTypeClientActionDrawers({
                     onClose={onClose}
                     postId={Number(data?.post?.id || 0)}
                     fallbackThumbnail={data?.post?.thumbnail}
+                    onSaved={onRefreshPost}
                 />
             </>
         );

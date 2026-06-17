@@ -158,7 +158,7 @@ function isSameOriginImageUrl(url: string): boolean {
     }
 }
 
-async function resolveImagePngBlob(url: string): Promise<Blob> {
+export async function resolveImagePngBlob(url: string): Promise<Blob> {
     const trimmedUrl = String(url || '').trim();
     if (!trimmedUrl) {
         throw new Error('Thiếu URL ảnh');
