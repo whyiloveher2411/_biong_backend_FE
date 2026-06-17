@@ -4,6 +4,7 @@ export type {
     ShortVideoManifestWord,
     ShortVideoRenderManifest,
     ShortVideoSceneVisualType,
+    ShortVideoTimelineTrack,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 
@@ -14,6 +15,7 @@ import type {
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
+import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
 import { isHttpsImageUrl, parseYoutubeId } from './shortVideoYoutube';
 
 export const SCENE_LAYOUT_BACKGROUND_KEYS: (keyof ShortVideoManifestSceneLayout)[] = [
@@ -41,6 +43,7 @@ export const SCENE_LAYOUT_VISUAL_KEYS: (keyof ShortVideoManifestSceneLayout)[] =
     'visual_type',
     'visual_ref',
     'visual_youtube_id',
+    'visual_youtube_muted',
     'visual_motion',
     'visual_start_sec',
     'show_visual',
@@ -221,6 +224,10 @@ export function resolveSceneVisualStartSec(scene: ShortVideoManifestScene): numb
     return 0;
 }
 
+export function resolveSceneVisualYoutubeMuted(scene: ShortVideoManifestScene): boolean {
+    return scene.layout?.visual_youtube_muted !== false;
+}
+
 function isEmptyLayoutValue(value: unknown): boolean {
     if (value === undefined || value === null) {
         return true;
@@ -329,10 +336,11 @@ export function clearSceneLayoutKeysInManifest(
 export function sanitizeManifestForPersist(
     manifest: ShortVideoRenderManifest
 ): ShortVideoRenderManifest {
+    const normalized = ensureManifestTimelineTracks(manifest);
     return {
-        ...manifest,
-        visual_clips: sanitizeVisualClipsForPersist(manifest.visual_clips),
-        scenes: manifest.scenes.map((scene) => {
+        ...normalized,
+        visual_clips: sanitizeVisualClipsForPersist(normalized.visual_clips),
+        scenes: normalized.scenes.map((scene) => {
             if (!scene.layout?.visual_playback_url) {
                 return scene;
             }

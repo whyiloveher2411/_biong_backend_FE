@@ -175,7 +175,7 @@ export default function MarketingContentTranslateDrawer({ open, onClose, data, o
                 });
 
                 let msg =
-                    `Đã mở Gemini web — dịch ${lang.toUpperCase()} (title + text + caption). ` +
+                    `Đã mở Gemini web — dịch ${lang.toUpperCase()} (text + caption). ` +
                     'Extension lưu batch và đóng tab; quay lại drawer để xem tiến độ.';
                 if (batchCount > 1) {
                     msg += ` (Batch ${batchIndex + 1}/${batchCount}.)`;

@@ -1,11 +1,27 @@
 declare module '@spacedev/remotion-short-video/compositionTimeline' {
     import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
 
+    export function getProjectTimelineDurationSec(
+        manifest: ShortVideoRenderManifest
+    ): number;
+
+    export function isProjectTimeInRange(
+        startSec: number,
+        durationSec: number,
+        timeSec: number
+    ): boolean;
+
+    export function sceneTimelineDurationSec(
+        scene: ShortVideoRenderManifest['scenes'][number]
+    ): number;
+
+    /** @deprecated Timeline NLE: identity mapping — giữ để tương thích import cũ. */
     export function manifestSecToCompositionSec(
         manifest: ShortVideoRenderManifest,
         manifestSec: number
     ): number;
 
+    /** @deprecated Timeline NLE: identity mapping — giữ để tương thích import cũ. */
     export function compositionSecToManifestSec(
         manifest: ShortVideoRenderManifest,
         compositionSec: number
@@ -35,6 +51,14 @@ declare module '@spacedev/remotion-short-video/ShortVideoComposition' {
 
     export function calcCompositionDurationInFrames(
         manifest: ShortVideoRenderManifest
+    ): number;
+
+    export function getProjectTimelineDurationSec(
+        manifest: ShortVideoRenderManifest
+    ): number;
+
+    export function sceneTimelineDurationSec(
+        scene: ShortVideoRenderManifest['scenes'][number]
     ): number;
 }
 

@@ -16,7 +16,7 @@ import useConfirmDialog from 'hook/useConfirmDialog';
 import { HandleUpdateDataProps } from 'hook/useForm';
 import { usePermission } from 'hook/usePermission';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreatePostTypeData } from '.';
 import SectionInfo from './SectionInfo';
 import SectionStatus from './SectionStatus';
@@ -29,6 +29,10 @@ import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
+import {
+    parseShortVideoEditIdFromSearch,
+    setShortVideoEditIdInSearchParams,
+} from 'helpers/shortVideoEditDrawerUrl';
 
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -126,6 +130,22 @@ function Form({
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
     const [shortVideoEditDrawerOpen, setShortVideoEditDrawerOpen] = React.useState(false);
+
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const closeShortVideoEditDrawer = React.useCallback(() => {
+        setShortVideoEditDrawerOpen(false);
+        const next = setShortVideoEditIdInSearchParams(searchParams, null);
+        setSearchParams(next, { replace: true });
+    }, [searchParams, setSearchParams]);
+
+    React.useEffect(() => {
+        const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
+        const postId = Number(data?.post?.id || 0);
+        if (editId && postId > 0 && editId === postId) {
+            setShortVideoEditDrawerOpen(true);
+        }
+    }, [data?.post?.id, searchParams]);
 
     const classes = useStyles();
 
@@ -402,6 +422,11 @@ function Form({
                             }
                             if (action === 'drawer:ShortVideoEdit') {
                                 setShortVideoEditDrawerOpen(true);
+                                const postId = Number(data?.post?.id || 0);
+                                if (postId > 0) {
+                                    const next = setShortVideoEditIdInSearchParams(searchParams, postId);
+                                    setSearchParams(next, { replace: true });
+                                }
                             }
                         }}
                     />
@@ -451,7 +476,7 @@ function Form({
             {postType === 'spacedev_app_short_video' && (
                 <ShortVideoEditDrawer
                     open={shortVideoEditDrawerOpen}
-                    onClose={() => setShortVideoEditDrawerOpen(false)}
+                    onClose={closeShortVideoEditDrawer}
                     data={data}
                     onRefreshPost={onRefreshPost}
                 />

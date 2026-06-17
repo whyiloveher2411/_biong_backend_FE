@@ -20,6 +20,8 @@ export function isYoutubeUrl(input: string): boolean {
 export type YoutubeEmbedOptions = {
     startSec?: number;
     autoplay?: boolean;
+    /** Mặc định true — chỉ bỏ mute khi false */
+    muted?: boolean;
 };
 
 export function buildYoutubeEmbedUrl(id: string, options?: YoutubeEmbedOptions): string {
@@ -31,7 +33,9 @@ export function buildYoutubeEmbedUrl(id: string, options?: YoutubeEmbedOptions):
     }
     if (options?.autoplay) {
         params.set('autoplay', '1');
-        params.set('mute', '1');
+        if (options.muted !== false) {
+            params.set('mute', '1');
+        }
     }
     const query = params.toString();
     return query

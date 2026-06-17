@@ -9,9 +9,13 @@ export type ShortVideoVisualClip = {
     duration_sec: number;
     visual_start_sec?: number;
     visual_youtube_id?: string;
+    /** false = phát tiếng YouTube; undefined/true = tắt tiếng (mặc định) */
+    visual_youtube_muted?: boolean;
     /** Chỉ inject lúc preview/render — không lưu DB */
     visual_playback_url?: string;
     label?: string;
+    /** Track timeline chứa clip visual */
+    timeline_track_id?: string;
 };
 
 export type ShortVideoManifestWord = {
@@ -37,6 +41,8 @@ export type ShortVideoManifestSceneLayout = {
     visual_type?: ShortVideoSceneVisualType;
     visual_ref?: string;
     visual_youtube_id?: string;
+    /** false = phát tiếng YouTube; undefined/true = tắt tiếng (mặc định) */
+    visual_youtube_muted?: boolean;
     /** Chỉ inject lúc preview/render — không lưu DB */
     visual_playback_url?: string;
     visual_motion?: string;
@@ -59,7 +65,17 @@ export type ShortVideoManifestScene = {
     duration_sec: number;
     start_offset_sec: number;
     words: ShortVideoManifestWord[];
+    /** Nhãn hiển thị trên timeline NLE — tách khỏi voiceover / on_screen_text */
+    timeline_label?: string;
+    /** Track timeline chứa scene narration */
+    timeline_track_id?: string;
     layout?: ShortVideoManifestSceneLayout;
+};
+
+export type ShortVideoTimelineTrack = {
+    id: string;
+    name: string;
+    order: number;
 };
 
 export type ShortVideoRenderManifest = {
@@ -87,5 +103,7 @@ export type ShortVideoRenderManifest = {
     alignment_mode: string;
     scenes: ShortVideoManifestScene[];
     visual_clips?: ShortVideoVisualClip[];
+    /** Cấu trúc track timeline NLE — persist khi user tạo/đổi tên track */
+    timeline_tracks?: ShortVideoTimelineTrack[];
     warnings: string[];
 };

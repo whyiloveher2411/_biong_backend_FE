@@ -36,6 +36,7 @@ import Button from 'components/atoms/Button';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
+import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
 
 const useStyles = makeCSS({
     tr: {
@@ -461,6 +462,15 @@ function DataTable(props: DataTableProps) {
                     acctionPost({ delete: [confirmDelete] }); closeDialogConfirmDelete();
                 }}
             />
+
+            <ShortVideoEditDrawerUrlFallback
+                postType={String(data.type)}
+                rows={data?.rows?.data}
+                config={data.config}
+                isLoadedData={Boolean(data?.rows)}
+                onRefreshList={() => acctionPost({})}
+            />
+
             {Loading}
         </Box>
     )

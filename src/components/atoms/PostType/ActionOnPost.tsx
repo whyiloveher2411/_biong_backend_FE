@@ -8,7 +8,7 @@ import { ShowPostTypeData } from "components/pages/PostType/ShowData";
 import { __ } from "helpers/i18n";
 import { usePermission } from "hook/usePermission";
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import MoreButton from "../MoreButton";
 import { IActionPostType } from "components/pages/PostType/CreateData/Form";
 import useAjax from "hook/useApi";
@@ -26,6 +26,10 @@ import {
     getPostTypeActionButtonColorProps,
     resolvePostTypeColor,
 } from "helpers/postTypeColor";
+import {
+    parseShortVideoEditIdFromSearch,
+    setShortVideoEditIdInSearchParams,
+} from "helpers/shortVideoEditDrawerUrl";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -80,6 +84,7 @@ function ActionOnPost({
     const classes = useStyles();
 
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const permission = usePermission(
         post.type + "_edit",
@@ -111,6 +116,23 @@ function ActionOnPost({
         () => buildCreatePostTypeDataFromListRow(post, postType, config),
         [post, postType, config]
     );
+
+    const closeClientDrawer = React.useCallback(() => {
+        setActiveClientDrawer(null);
+        const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
+        if (editId && Number(post.id) === editId) {
+            const next = setShortVideoEditIdInSearchParams(searchParams, null);
+            setSearchParams(next, { replace: true });
+        }
+    }, [post.id, searchParams, setSearchParams]);
+
+    React.useEffect(() => {
+        const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
+        if (!editId || Number(post.id) !== editId) {
+            return;
+        }
+        setActiveClientDrawer('drawer:ShortVideoEdit');
+    }, [post.id, searchParams]);
 
     const useAjaxAction = useAjax();
     const confirm = useConfirmDialog();
@@ -161,6 +183,10 @@ function ActionOnPost({
                 return;
             }
             setActiveClientDrawer(item.client_action);
+            if (item.client_action === 'drawer:ShortVideoEdit') {
+                const next = setShortVideoEditIdInSearchParams(searchParams, Number(id));
+                setSearchParams(next, { replace: true });
+            }
             return;
         }
 
@@ -568,7 +594,7 @@ function ActionOnPost({
                 postType={postType || String(post.type)}
                 data={drawerData}
                 activeDrawer={activeClientDrawer}
-                onClose={() => setActiveClientDrawer(null)}
+                onClose={closeClientDrawer}
                 onRefreshPost={() => acctionPost({})}
             />
         </div>

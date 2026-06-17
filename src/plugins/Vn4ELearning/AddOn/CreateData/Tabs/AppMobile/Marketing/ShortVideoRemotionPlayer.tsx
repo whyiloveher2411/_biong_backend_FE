@@ -27,10 +27,12 @@ type TimelineBarProps = ManifestProps & {
 };
 
 function formatPlaybackClock(totalSec: number): string {
-    const sec = Math.max(0, Math.floor(totalSec));
-    const minutes = Math.floor(sec / 60);
-    const remainder = sec % 60;
-    return `${minutes}:${String(remainder).padStart(2, '0')}`;
+    const clamped = Math.max(0, totalSec);
+    const minutes = Math.floor(clamped / 60);
+    const remainder = clamped % 60;
+    const wholeSec = Math.floor(remainder);
+    const tenths = Math.floor((remainder - wholeSec) * 10);
+    return `${minutes}:${String(wholeSec).padStart(2, '0')}.${tenths}`;
 }
 
 function useManifestTiming(manifest: ShortVideoRenderManifest) {

@@ -59,7 +59,11 @@ import {
     manifestUsesVisualClips,
     resolveVisualClipYoutubeId,
 } from 'helpers/shortVideoVisualClips';
-import { getSceneCompositionRange, mergeRefreshedNarrationManifest } from 'helpers/shortVideoTimelineAdapter';
+import { mergeRefreshedNarrationManifest } from 'helpers/shortVideoTimelineAdapter';
+import {
+    shortVideoTimelineDebug,
+    summarizeManifestLayout,
+} from 'helpers/shortVideoTimelineDebug';
 import ShortVideoVoiceoverKaraoke from './ShortVideoVoiceoverKaraoke';
 import ShortVideoSceneEditDrawer from './ShortVideoSceneEditDrawer';
 import ShortVideoGlobalSettingsDrawer, {
@@ -143,7 +147,16 @@ function parseApiMessage(res: unknown): string {
     return 'Yêu cầu thất bại';
 }
 
-function allScenesHaveAudio(
+function sceneHasScriptContent(scene: {
+    voiceover?: string;
+    on_screen_text?: string;
+}): boolean {
+    const voiceover = scene.voiceover?.trim() || '';
+    const onScreenText = scene.on_screen_text?.trim() || '';
+    return voiceover.length > 0 || onScreenText.length > 0;
+}
+
+function allContentScenesHaveAudio(
     scenes: ShortVideoScriptScene[],
     sceneAudioMap: ReturnType<typeof parseShortVideoSceneAudioMap>
 ): boolean {
@@ -151,8 +164,23 @@ function allScenesHaveAudio(
         return false;
     }
     return scenes.every((scene) => {
+        if (!sceneHasScriptContent(scene)) {
+            return true;
+        }
         const url = sceneAudioMap[scene.id]?.url?.trim() || '';
         return url.length > 0;
+    });
+}
+
+function manifestReadyForRender(manifest: ShortVideoRenderManifest): boolean {
+    if (manifest.scenes.length === 0) {
+        return false;
+    }
+    return manifest.scenes.every((scene) => {
+        if (!sceneHasScriptContent(scene)) {
+            return true;
+        }
+        return sceneIsReadyForPlayback(scene);
     });
 }
 
@@ -283,7 +311,8 @@ export default function ShortVideoEditDrawer({
     const manifestRef = React.useRef<ShortVideoRenderManifest | null>(null);
     const manifestInitialResolveDoneRef = React.useRef(false);
     const visualResolveDebounceRef = React.useRef<Record<string, number>>({});
-    const timelineAutoSaveTimerRef = React.useRef<number | null>(null);
+    const timelineSaveChainRef = React.useRef<Promise<void>>(Promise.resolve());
+    const pendingTimelineSaveManifestRef = React.useRef<ShortVideoRenderManifest | null>(null);
     const savingActivityCountRef = React.useRef(0);
 
     manifestRef.current = manifest;
@@ -324,13 +353,18 @@ export default function ShortVideoEditDrawer({
         () => buildShortVideoRenderJsonSceneWordsMap(post.render_json),
         [post.render_json]
     );
-    const scenesReadyForPreview = React.useMemo(
-        () => allScenesHaveAudio(scenes, sceneAudioMap),
+    const hasScriptContent = scenes.length > 0;
+    const scenesReadyForRender = React.useMemo(
+        () => allContentScenesHaveAudio(scenes, sceneAudioMap),
         [scenes, sceneAudioMap]
+    );
+    const manifestRenderReady = React.useMemo(
+        () => (manifest ? manifestReadyForRender(manifest) : false),
+        [manifest]
     );
 
     React.useEffect(() => {
-        if (!open || !scenesReadyForPreview || !manifest || manifestLoading) {
+        if (!open || !hasScriptContent || !manifest || manifestLoading) {
             return;
         }
 
@@ -353,7 +387,7 @@ export default function ShortVideoEditDrawer({
         return () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
-    }, [open, scenesReadyForPreview, manifest, manifestLoading]);
+    }, [open, hasScriptContent, manifest, manifestLoading]);
 
     const manifestDirty = React.useMemo(() => {
         if (!manifest) {
@@ -424,10 +458,8 @@ export default function ShortVideoEditDrawer({
                 window.clearTimeout(timerId);
             });
             visualResolveDebounceRef.current = {};
-            if (timelineAutoSaveTimerRef.current) {
-                window.clearTimeout(timelineAutoSaveTimerRef.current);
-                timelineAutoSaveTimerRef.current = null;
-            }
+            timelineSaveChainRef.current = Promise.resolve();
+            pendingTimelineSaveManifestRef.current = null;
             savingActivityCountRef.current = 0;
             setSavingActivityCount(0);
             savedSceneFingerprintMapRef.current = {};
@@ -598,7 +630,7 @@ export default function ShortVideoEditDrawer({
     );
 
     React.useEffect(() => {
-        if (!open || loading || shortVideoId <= 0 || !scenesReadyForPreview) {
+        if (!open || loading || shortVideoId <= 0 || !hasScriptContent) {
             return;
         }
         let cancelled = false;
@@ -632,7 +664,7 @@ export default function ShortVideoEditDrawer({
         return () => {
             cancelled = true;
         };
-    }, [open, loading, shortVideoId, scenesReadyForPreview, applyManifestResult]);
+    }, [open, loading, shortVideoId, hasScriptContent, applyManifestResult]);
 
     React.useEffect(() => {
         if (!open || manifestLoading || !manifest || shortVideoId <= 0) {
@@ -727,8 +759,12 @@ export default function ShortVideoEditDrawer({
             }
             const nextFingerprint = manifestFingerprint(nextManifest);
             if (nextFingerprint === savedManifestFingerprintRef.current) {
+                shortVideoTimelineDebug('EditDrawer', 'save.skip', { reason: 'same fingerprint' });
                 return;
             }
+            shortVideoTimelineDebug('EditDrawer', 'save.start', {
+                layout: summarizeManifestLayout(nextManifest),
+            });
             beginSavingActivity();
             try {
                 await saveShortVideoRenderManifest(
@@ -736,7 +772,11 @@ export default function ShortVideoEditDrawer({
                     sanitizeManifestForPersist(nextManifest)
                 );
                 savedManifestFingerprintRef.current = nextFingerprint;
+                shortVideoTimelineDebug('EditDrawer', 'save.done', {});
             } catch (err: unknown) {
+                shortVideoTimelineDebug('EditDrawer', 'save.error', {
+                    message: err instanceof Error ? err.message : String(err),
+                });
                 setManifestError(
                     err instanceof Error ? err.message : 'Tự động lưu timeline thất bại'
                 );
@@ -749,19 +789,26 @@ export default function ShortVideoEditDrawer({
 
     const scheduleTimelineAutoSave = React.useCallback(
         (nextManifest: ShortVideoRenderManifest) => {
-            if (timelineAutoSaveTimerRef.current) {
-                window.clearTimeout(timelineAutoSaveTimerRef.current);
-            }
-            timelineAutoSaveTimerRef.current = window.setTimeout(() => {
-                timelineAutoSaveTimerRef.current = null;
-                void persistTimelineManifestAuto(nextManifest);
-            }, 700);
+            pendingTimelineSaveManifestRef.current = nextManifest;
+            timelineSaveChainRef.current = timelineSaveChainRef.current
+                .catch(() => undefined)
+                .then(async () => {
+                    while (pendingTimelineSaveManifestRef.current) {
+                        const toSave = pendingTimelineSaveManifestRef.current;
+                        pendingTimelineSaveManifestRef.current = null;
+                        await persistTimelineManifestAuto(toSave);
+                    }
+                });
         },
         [persistTimelineManifestAuto]
     );
 
     const applyManifestVisualChange = React.useCallback(
-        (nextManifest: ShortVideoRenderManifest) => {
+        (nextManifest: ShortVideoRenderManifest, source = 'unknown') => {
+            shortVideoTimelineDebug('EditDrawer', 'setManifest', {
+                source,
+                layout: summarizeManifestLayout(nextManifest),
+            });
             setManifest(nextManifest);
             (nextManifest.visual_clips ?? []).forEach((clip) => {
                 if (clip.type !== 'video') {
@@ -779,7 +826,7 @@ export default function ShortVideoEditDrawer({
 
     const handleTimelineVisualChange = React.useCallback(
         (nextManifest: ShortVideoRenderManifest) => {
-            applyManifestVisualChange(nextManifest);
+            applyManifestVisualChange(nextManifest, 'timeline');
             scheduleTimelineAutoSave(nextManifest);
         },
         [applyManifestVisualChange, scheduleTimelineAutoSave]
@@ -822,12 +869,12 @@ export default function ShortVideoEditDrawer({
             if (!manifest || !remotionPlayerRef.current) {
                 return;
             }
-            const range = getSceneCompositionRange(manifest, sceneId);
-            if (!range) {
+            const scene = manifest.scenes.find((item) => item.id === sceneId);
+            if (!scene) {
                 return;
             }
             const fps = manifest.fps || 30;
-            remotionPlayerRef.current.seekTo(Math.round(range.startSec * fps));
+            remotionPlayerRef.current.seekTo(Math.round(Math.max(0, scene.start_offset_sec) * fps));
         },
         [manifest]
     );
@@ -1073,8 +1120,8 @@ export default function ShortVideoEditDrawer({
         if (shortVideoId <= 0) {
             return;
         }
-        if (!scenesReadyForPreview || !manifest) {
-            api.showMessage('Cần script, audio đầy đủ và manifest preview trước khi render', 'warning');
+        if (!scenesReadyForRender || !manifestRenderReady || !manifest) {
+            api.showMessage('Cần audio đầy đủ cho mọi scene có lời thoại trước khi render', 'warning');
             return;
         }
 
@@ -1149,7 +1196,8 @@ export default function ShortVideoEditDrawer({
         runRender(manifest);
     }, [
         shortVideoId,
-        scenesReadyForPreview,
+        scenesReadyForRender,
+        manifestRenderReady,
         manifest,
         manifestDirty,
         applyManifestResult,
@@ -1180,7 +1228,7 @@ export default function ShortVideoEditDrawer({
 
     const mainDrawerHeaderAction = (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-            {scenesReadyForPreview ? (
+            {hasScriptContent ? (
                 <LoadingButton
                     size="small"
                     variant="contained"
@@ -1192,7 +1240,7 @@ export default function ShortVideoEditDrawer({
                     Làm mới manifest
                 </LoadingButton>
             ) : null}
-            {scenesReadyForPreview && manifest ? (
+            {hasScriptContent && manifest && scenesReadyForRender && manifestRenderReady ? (
                 <LoadingButton
                     size="small"
                     variant="contained"
@@ -1343,13 +1391,22 @@ export default function ShortVideoEditDrawer({
                                             (() => {
                                                 const manifestScene = manifest?.scenes.find((item) => item.id === scene.id);
                                                 const manifestReady = sceneIsReadyForPlayback(manifestScene);
+                                                const hasContent = sceneHasScriptContent(scene);
                                                 const isRunning = narrationRunningSceneIds.includes(scene.id);
-                                                const audioUrl = manifestReady && !isRunning
-                                                    ? (manifestScene?.audio_url?.trim() || sceneAudioMap[scene.id]?.url?.trim() || '')
-                                                    : '';
-                                                const whisperWords = manifestReady && !isRunning
-                                                    ? (manifestScene?.words ?? renderSceneWordsMap[scene.id] ?? [])
-                                                    : [];
+                                                const audioUrl = isRunning
+                                                    ? ''
+                                                    : (
+                                                        manifestScene?.audio_url?.trim()
+                                                        || sceneAudioMap[scene.id]?.url?.trim()
+                                                        || ''
+                                                    );
+                                                const whisperWords = isRunning
+                                                    ? []
+                                                    : (
+                                                        manifestReady
+                                                            ? (manifestScene?.words ?? renderSceneWordsMap[scene.id] ?? [])
+                                                            : (renderSceneWordsMap[scene.id] ?? [])
+                                                    );
                                                 return (
                                             <SceneListItem
                                                 key={scene.id}
@@ -1359,6 +1416,7 @@ export default function ShortVideoEditDrawer({
                                                 selected={selectedSceneId === scene.id}
                                                 audioUrl={audioUrl}
                                                 whisperWords={whisperWords}
+                                                hasScriptContent={hasContent}
                                                 onSelect={() => handleOpenSceneEdit(scene.id)}
                                             />
                                                 );
@@ -1382,7 +1440,10 @@ export default function ShortVideoEditDrawer({
                                 }}
                             >
                                 {manifestError && (
-                                    <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
+                                    <Alert
+                                        severity={manifest ? 'warning' : 'error'}
+                                        sx={{ mb: 2, flexShrink: 0 }}
+                                    >
                                         {manifestError}
                                     </Alert>
                                 )}
@@ -1407,9 +1468,9 @@ export default function ShortVideoEditDrawer({
                                         overflow: 'hidden',
                                     }}
                                 >
-                                    {!scenesReadyForPreview ? (
+                                    {!hasScriptContent ? (
                                         <Alert severity="warning" sx={{ maxWidth: 480, width: '100%' }}>
-                                            Cần script và audio đầy đủ mọi scene trước khi xem preview Remotion
+                                            Cần script trước khi xem preview Remotion
                                         </Alert>
                                     ) : manifestLoading ? (
                                         <Box
@@ -1549,6 +1610,7 @@ function SceneListItem({
     selected,
     audioUrl,
     whisperWords,
+    hasScriptContent,
     onSelect,
 }: {
     scene: ShortVideoScriptScene;
@@ -1557,6 +1619,7 @@ function SceneListItem({
     selected: boolean;
     audioUrl: string;
     whisperWords: ShortVideoRenderWord[];
+    hasScriptContent: boolean;
     onSelect: () => void;
 }) {
     const voiceover = scene.voiceover.trim();
@@ -1800,7 +1863,9 @@ function SceneListItem({
                         variant="caption"
                         sx={{ color: previewStyles.textColor, opacity: 0.72 }}
                     >
-                        Chưa có audio — sinh audio VieNeu cho scene này
+                        {hasScriptContent
+                            ? 'Chưa có audio — sinh audio VieNeu cho scene này'
+                            : 'Scene trống — thêm lời thoại khi cần'}
                     </Typography>
                 )}
             </Box>

@@ -160,6 +160,9 @@ export function sceneToVisualClip(
         if (playback) {
             clip.visual_playback_url = playback;
         }
+        if (scene.layout?.visual_youtube_muted === false) {
+            clip.visual_youtube_muted = false;
+        }
     }
 
     return clip;
@@ -179,17 +182,19 @@ export function buildVisualClipsFromScenes(manifest: ShortVideoRenderManifest): 
 
 export function clampClipTiming(
     clip: ShortVideoVisualClip,
-    manifestDurationSec: number
+    maxDurationSec?: number
 ): ShortVideoVisualClip {
-    const maxDuration = Math.max(MIN_CLIP_DURATION_SEC, manifestDurationSec);
     let startSec = Math.max(0, clip.start_sec);
     let durationSec = Math.max(MIN_CLIP_DURATION_SEC, clip.duration_sec);
-    if (startSec + durationSec > maxDuration) {
-        durationSec = Math.max(MIN_CLIP_DURATION_SEC, maxDuration - startSec);
-    }
-    if (startSec >= maxDuration) {
-        startSec = Math.max(0, maxDuration - MIN_CLIP_DURATION_SEC);
-        durationSec = MIN_CLIP_DURATION_SEC;
+    if (typeof maxDurationSec === 'number' && Number.isFinite(maxDurationSec)) {
+        const maxDuration = Math.max(MIN_CLIP_DURATION_SEC, maxDurationSec);
+        if (startSec + durationSec > maxDuration) {
+            durationSec = Math.max(MIN_CLIP_DURATION_SEC, maxDuration - startSec);
+        }
+        if (startSec >= maxDuration) {
+            startSec = Math.max(0, maxDuration - MIN_CLIP_DURATION_SEC);
+            durationSec = MIN_CLIP_DURATION_SEC;
+        }
     }
     return {
         ...clip,
@@ -211,7 +216,7 @@ export function updateVisualClipInManifest(
                 return clip;
             }
             const merged = { ...clip, ...patch };
-            return clampClipTiming(merged, manifest.duration_sec);
+            return clampClipTiming(merged);
         }),
     };
 }
@@ -219,11 +224,11 @@ export function updateVisualClipInManifest(
 export function addVisualClipAtSec(
     manifest: ShortVideoRenderManifest,
     startSec: number,
-    defaults?: Partial<Pick<ShortVideoVisualClip, 'type' | 'ref' | 'motion' | 'label'>>
+    defaults?: Partial<Pick<ShortVideoVisualClip, 'type' | 'ref' | 'motion' | 'label' | 'timeline_track_id'>>
 ): ShortVideoRenderManifest {
     const existing = manifest.visual_clips ?? [];
     const index = existing.length + 1;
-    const durationSec = Math.min(4, Math.max(MIN_CLIP_DURATION_SEC, manifest.duration_sec - startSec));
+    const durationSec = 4;
     const clip = clampClipTiming(
         {
             id: `vc_new_${index}_${Date.now()}`,
@@ -233,8 +238,8 @@ export function addVisualClipAtSec(
             start_sec: Math.max(0, startSec),
             duration_sec: durationSec,
             label: defaults?.label ?? `Visual ${index}`,
-        },
-        manifest.duration_sec
+            timeline_track_id: defaults?.timeline_track_id,
+        }
     );
     return {
         ...manifest,
@@ -258,7 +263,7 @@ export function setVisualClipsInManifest(
 ): ShortVideoRenderManifest {
     return {
         ...manifest,
-        visual_clips: clips.map((clip) => clampClipTiming(clip, manifest.duration_sec)),
+        visual_clips: clips.map((clip) => clampClipTiming(clip)),
     };
 }
 
@@ -305,6 +310,10 @@ export function resolveVisualClipStartInFile(clip: ShortVideoVisualClip): number
         return value;
     }
     return 0;
+}
+
+export function resolveVisualClipYoutubeMuted(clip: ShortVideoVisualClip): boolean {
+    return clip.visual_youtube_muted !== false;
 }
 
 export function sanitizeVisualClipsForPersist(

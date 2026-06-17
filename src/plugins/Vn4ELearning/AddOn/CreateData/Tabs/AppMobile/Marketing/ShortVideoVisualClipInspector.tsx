@@ -5,7 +5,9 @@ import {
     Button,
     Chip,
     Divider,
+    FormControlLabel,
     MenuItem,
+    Switch,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
@@ -52,6 +54,7 @@ function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifes
             visual_type: clip.type,
             visual_ref: clip.ref,
             visual_youtube_id: clip.visual_youtube_id,
+            visual_youtube_muted: clip.visual_youtube_muted,
             visual_playback_url: clip.visual_playback_url,
             visual_motion: clip.motion,
             visual_start_sec: clip.visual_start_sec,
@@ -315,22 +318,38 @@ export default function ShortVideoVisualClipInspector({
                             </Alert>
                         ) : null}
                         {visualType === 'video' ? (
-                            <TextField
-                                label="Vị trí bắt đầu trong file (giây)"
-                                type="number"
-                                size="small"
-                                fullWidth
-                                value={clip.visual_start_sec ?? 0}
-                                onChange={(e) => {
-                                    const parsed = Number.parseFloat(e.target.value);
-                                    if (!Number.isFinite(parsed)) {
-                                        patch({ visual_start_sec: undefined });
-                                        return;
-                                    }
-                                    patch({ visual_start_sec: Math.max(0, parsed) });
-                                }}
-                                inputProps={{ min: 0, step: 0.1 }}
-                            />
+                            <>
+                                <TextField
+                                    label="Vị trí bắt đầu trong file (giây)"
+                                    type="number"
+                                    size="small"
+                                    fullWidth
+                                    value={clip.visual_start_sec ?? 0}
+                                    onChange={(e) => {
+                                        const parsed = Number.parseFloat(e.target.value);
+                                        if (!Number.isFinite(parsed)) {
+                                            patch({ visual_start_sec: undefined });
+                                            return;
+                                        }
+                                        patch({ visual_start_sec: Math.max(0, parsed) });
+                                    }}
+                                    inputProps={{ min: 0, step: 0.1 }}
+                                />
+                                <FormControlLabel
+                                    control={(
+                                        <Switch
+                                            size="small"
+                                            checked={clip.visual_youtube_muted === false}
+                                            onChange={(e) => {
+                                                patch({
+                                                    visual_youtube_muted: e.target.checked ? false : true,
+                                                });
+                                            }}
+                                        />
+                                    )}
+                                    label="Phát tiếng YouTube"
+                                />
+                            </>
                         ) : null}
                         <TextField
                             select

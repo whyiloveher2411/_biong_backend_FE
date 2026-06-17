@@ -40,6 +40,7 @@ import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
+import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
@@ -625,6 +626,14 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                 acctionPost={acctionPost}
                 selected={selectedCustomers}
                 setSelectedCustomers={setSelectedCustomers}
+            />
+
+            <ShortVideoEditDrawerUrlFallback
+                postType={postType}
+                rows={data?.rows?.data}
+                config={data.config}
+                isLoadedData={isLoadedData}
+                onRefreshList={() => acctionPost({})}
             />
 
             {/* <DrawerEditPost

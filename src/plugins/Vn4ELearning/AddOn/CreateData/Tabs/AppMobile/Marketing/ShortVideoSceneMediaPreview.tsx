@@ -6,6 +6,7 @@ import {
     resolveSceneVisualStartSec,
     resolveSceneVisualType,
     resolveSceneVisualYoutubeId,
+    resolveSceneVisualYoutubeMuted,
     type ShortVideoManifestScene,
 } from 'helpers/shortVideoRenderManifest';
 import {
@@ -24,8 +25,9 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
     const ref = resolveSceneVisualRef(scene);
     const youtubeId = resolveSceneVisualYoutubeId(scene);
     const startSec = resolveSceneVisualStartSec(scene);
+    const youtubeMuted = resolveSceneVisualYoutubeMuted(scene);
     const embedUrl = youtubeId
-        ? buildYoutubeEmbedUrl(youtubeId, { startSec, autoplay: true })
+        ? buildYoutubeEmbedUrl(youtubeId, { startSec, autoplay: true, muted: youtubeMuted })
         : '';
 
     return (
@@ -102,9 +104,15 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                 )}
             </Box>
             {visualType === 'video' && youtubeId ? (
-                <Box
-                    component="img"
-                    src={buildYoutubeThumbnailUrl(youtubeId)}
+                <>
+                    {!youtubeMuted ? (
+                        <Typography variant="caption" color="text.secondary">
+                            Trình duyệt có thể yêu cầu tương tác để phát tiếng
+                        </Typography>
+                    ) : null}
+                    <Box
+                        component="img"
+                        src={buildYoutubeThumbnailUrl(youtubeId)}
                     alt=""
                     sx={{
                         display: 'block',
@@ -116,6 +124,7 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                         borderColor: 'divider',
                     }}
                 />
+                </>
             ) : null}
         </Box>
     );
