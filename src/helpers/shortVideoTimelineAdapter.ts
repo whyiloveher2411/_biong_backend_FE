@@ -14,6 +14,7 @@ import {
     resolveTimelineTracks,
     TIMELINE_DEFAULT_TRACK_NARRATION_ID,
     TIMELINE_DEFAULT_TRACK_VISUAL_ID,
+    TIMELINE_NARRATION_TRACK_ROW_HEIGHT,
     TIMELINE_TRACK_ROW_HEIGHT,
 } from './shortVideoTimelineTracks';
 
@@ -26,6 +27,7 @@ export {
     resolveTrackRowIdFromPointer,
     TIMELINE_DEFAULT_TRACK_NARRATION_ID,
     TIMELINE_DEFAULT_TRACK_VISUAL_ID,
+    TIMELINE_NARRATION_TRACK_ROW_HEIGHT,
     TIMELINE_TRACK_ROW_HEIGHT,
     updateTimelineTrackNameInManifest,
 } from './shortVideoTimelineTracks';
@@ -50,7 +52,7 @@ export const TIMELINE_ROW_VISUAL = TIMELINE_DEFAULT_TRACK_VISUAL_ID;
 export const TIMELINE_SPARE_ROW_IDS = [] as const;
 export const TIMELINE_SPARE_ROW_COUNT = 0;
 export const TIMELINE_SPARE_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
-export const TIMELINE_NARRATION_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
+export const TIMELINE_NARRATION_ROW_HEIGHT = TIMELINE_NARRATION_TRACK_ROW_HEIGHT;
 export const TIMELINE_VISUAL_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
 export const TIMELINE_RULER_HEIGHT = 32;
 /** Khoảng cách mặc định giữa ruler và vùng track (khớp `.timeline-editor-edit-area { margin-top }`). */
@@ -69,6 +71,7 @@ export type ShortVideoTimelineActionData = {
     status?: 'ready' | 'pending' | 'running';
     thumbnailUrl?: string;
     visualType?: string;
+    audioPeaks?: number[];
 };
 
 export type ShortVideoTimelineAction = TimelineAction & {
@@ -323,6 +326,7 @@ export function manifestToTimelineRows(
                 status: runningSceneSet.has(scene.id)
                     ? 'running'
                     : (isSceneReadyForTimeline(scene) ? 'ready' : 'pending'),
+                audioPeaks: scene.audio_peaks?.length ? scene.audio_peaks : undefined,
             },
         };
         actionsByTrack.get(trackId)?.push(action);
@@ -647,7 +651,9 @@ export function mergeRefreshedNarrationManifest(
     serverManifest: ShortVideoRenderManifest
 ): ShortVideoRenderManifest {
     const serverById = new Map(serverManifest.scenes.map((scene) => [scene.id, scene] as const));
-    const mergedScenes = localManifest.scenes.map((localScene) => {
+    const localSceneIds = new Set(localManifest.scenes.map((scene) => scene.id));
+
+    const mergedScenes: ShortVideoRenderManifest['scenes'] = localManifest.scenes.map((localScene) => {
         const serverScene = serverById.get(localScene.id);
         if (!serverScene) {
             return localScene;
@@ -656,22 +662,39 @@ export function mergeRefreshedNarrationManifest(
             ...localScene,
             audio_url: serverScene.audio_url,
             words: serverScene.words,
+            audio_peaks: serverScene.audio_peaks,
             duration_sec: serverScene.duration_sec,
             duration_hint_sec: serverScene.duration_hint_sec || serverScene.duration_sec,
-            start_offset_sec: localScene.start_offset_sec,
         };
     });
 
+    serverManifest.scenes.forEach((serverScene) => {
+        if (!localSceneIds.has(serverScene.id)) {
+            mergedScenes.push(serverScene);
+        }
+    });
+
+    const localClips = localManifest.visual_clips ?? [];
+    const serverClips = serverManifest.visual_clips ?? [];
+    const visualClips = manifestHasEditableVisualTimeline(localManifest) && localClips.length > 0
+        ? localClips
+        : (serverClips.length > 0 ? serverClips : localClips);
+
     const merged: ShortVideoRenderManifest = {
         ...localManifest,
-        duration_sec: serverManifest.duration_sec || localManifest.duration_sec,
         scene_gap_sec: serverManifest.scene_gap_sec ?? localManifest.scene_gap_sec,
         scenes: mergedScenes,
-        visual_clips: serverManifest.visual_clips ?? localManifest.visual_clips,
+        visual_clips: visualClips.length > 0 ? visualClips : undefined,
+        timeline_tracks: localManifest.timeline_tracks ?? serverManifest.timeline_tracks,
         warnings: serverManifest.warnings ?? localManifest.warnings,
     };
 
-    return reconcileNarrationDurationPush(localManifest, merged);
+    const withDuration: ShortVideoRenderManifest = {
+        ...merged,
+        duration_sec: getProjectTimelineDurationSec(merged),
+    };
+
+    return reconcileNarrationDurationPush(localManifest, withDuration);
 }
 
 export function narrationSnapPointsSec(manifest: ShortVideoRenderManifest): number[] {

@@ -44,6 +44,7 @@ import {
     type TimelineRow,
 } from 'helpers/shortVideoTimelineAdapter';
 import { timelineLayoutFingerprint } from 'helpers/shortVideoTimelineLayout';
+import ShortVideoAudioWaveform from 'helpers/shortVideoAudioWaveform';
 import {
     isShortVideoTimelineDebugEnabled,
     shortVideoTimelineDebug,
@@ -378,15 +379,18 @@ function NarrationActionBlock({
 }) {
     const label = action.data?.label || action.id;
     const status = action.data?.status;
+    const audioPeaks = action.data?.audioPeaks;
     const isPending = status === 'pending';
     const isRunning = status === 'running';
     const isActive = Boolean(action.selected);
+    const showWaveform = status === 'ready' && Array.isArray(audioPeaks) && audioPeaks.length > 0;
     return (
         <Box
             title={isPending ? 'Chưa có audio — cần sinh TTS hoặc thêm lời thoại' : undefined}
             sx={{
                 width: '100%',
                 height: '100%',
+                position: 'relative',
                 px: 1,
                 display: 'flex',
                 alignItems: 'center',
@@ -410,14 +414,34 @@ function NarrationActionBlock({
                 zIndex: previewOffsetY !== 0 ? 20 : undefined,
             }}
         >
-            <TimelineItemLabelEditor
-                editing={editing}
-                editValue={editValue}
-                label={label}
-                onEditChange={onEditChange}
-                onEditBlur={onEditBlur}
-                onEditKeyDown={onEditKeyDown}
-            />
+            {showWaveform ? <ShortVideoAudioWaveform peaks={audioPeaks} /> : null}
+            <Box
+                sx={{
+                    position: 'relative',
+                    zIndex: 1,
+                    minWidth: 0,
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    ...(showWaveform
+                        ? {
+                            px: 0.5,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            background: 'linear-gradient(90deg, rgba(55, 65, 81, 0.72) 0%, rgba(55, 65, 81, 0.45) 100%)',
+                        }
+                        : undefined),
+                }}
+            >
+                <TimelineItemLabelEditor
+                    editing={editing}
+                    editValue={editValue}
+                    label={label}
+                    onEditChange={onEditChange}
+                    onEditBlur={onEditBlur}
+                    onEditKeyDown={onEditKeyDown}
+                />
+            </Box>
         </Box>
     );
 }

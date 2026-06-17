@@ -8,6 +8,7 @@ import type {
 export const TIMELINE_DEFAULT_TRACK_NARRATION_ID = 'narration';
 export const TIMELINE_DEFAULT_TRACK_VISUAL_ID = 'visual';
 export const TIMELINE_TRACK_ROW_HEIGHT = 40;
+export const TIMELINE_NARRATION_TRACK_ROW_HEIGHT = 48;
 
 export const DEFAULT_TIMELINE_TRACKS: ShortVideoTimelineTrack[] = [
     { id: TIMELINE_DEFAULT_TRACK_NARRATION_ID, name: 'Lời thoại', order: 0 },
@@ -136,7 +137,10 @@ export function updateTimelineTrackNameInManifest(
     };
 }
 
-export function getTrackRowHeight(_trackId: string): number {
+export function getTrackRowHeight(trackId: string): number {
+    if (trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID) {
+        return TIMELINE_NARRATION_TRACK_ROW_HEIGHT;
+    }
     return TIMELINE_TRACK_ROW_HEIGHT;
 }
 

@@ -1078,7 +1078,11 @@ export default function ShortVideoEditDrawer({
         setManifestInfo('Đang chạy whisper…');
         try {
             const result = await refreshShortVideoRenderManifest(shortVideoId);
-            applyManifestResult(result.manifest, true);
+            const localBefore = manifestRef.current;
+            const merged = localBefore && result.manifest
+                ? mergeRefreshedNarrationManifest(localBefore, result.manifest)
+                : result.manifest;
+            applyManifestResult(merged, true);
             if (Array.isArray(result.warnings) && result.warnings.length > 0) {
                 setManifestInfo(result.warnings.join(' · '));
             }

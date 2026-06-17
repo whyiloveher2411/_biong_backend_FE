@@ -65,6 +65,8 @@ export type ShortVideoManifestScene = {
     duration_sec: number;
     start_offset_sec: number;
     words: ShortVideoManifestWord[];
+    /** Biên độ sóng âm chuẩn hoá 0..1 — dùng timeline waveform */
+    audio_peaks?: number[];
     /** Nhãn hiển thị trên timeline NLE — tách khỏi voiceover / on_screen_text */
     timeline_label?: string;
     /** Track timeline chứa scene narration */

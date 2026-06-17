@@ -14,6 +14,7 @@ export type ShortVideoSceneAudioEntry = {
     url?: string;
     status?: string;
     duration_sec?: number;
+    audio_peaks?: number[];
 };
 
 function parseJsonField(raw: unknown): Record<string, unknown> | null {
@@ -103,6 +104,11 @@ export function parseShortVideoSceneAudioMap(raw: unknown): Record<string, Short
                 typeof row.duration_sec === 'number' && Number.isFinite(row.duration_sec)
                     ? row.duration_sec
                     : undefined,
+            audio_peaks: Array.isArray(row.audio_peaks)
+                ? row.audio_peaks
+                    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+                    .map((value) => Math.max(0, Math.min(1, value)))
+                : undefined,
         };
     });
     return map;
