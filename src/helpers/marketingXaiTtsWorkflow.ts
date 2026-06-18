@@ -85,8 +85,6 @@ export function buildMarketingXaiTtsOpenLink(options: {
         marketing_post_id: String(postId),
         target_lang: targetLang.trim().toLowerCase(),
         payload_api_url: marketingXaiTtsPayloadApiUrl(),
-        upload_api_url: marketingXaiTtsUploadApiUrl(),
-        upload_part_api_url: marketingXaiTtsUploadPartApiUrl(),
     });
     if (accessToken) {
         hashParams.set('access_token', accessToken);
