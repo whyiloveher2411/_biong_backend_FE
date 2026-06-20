@@ -4,6 +4,7 @@ import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobil
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
+import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/MarketingOmniVoiceSegmentsPreviewDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 
@@ -12,6 +13,7 @@ export type PostTypeClientDrawerAction =
     | 'drawer:MarketingArticleRewrite'
     | 'drawer:MarketingContentTranslate'
     | 'drawer:MarketingFacebookPreview'
+    | 'drawer:MarketingOmniVoiceSegmentsPreview'
     | 'drawer:ShortVideoEdit'
     | 'drawer:ObjectStoreMigrate'
     | string;
@@ -72,6 +74,11 @@ function PostTypeClientActionDrawers({
                     postId={Number(data?.post?.id || 0)}
                     fallbackThumbnail={data?.post?.thumbnail}
                     onSaved={onRefreshPost}
+                />
+                <MarketingOmniVoiceSegmentsPreviewDrawer
+                    open={activeDrawer === 'drawer:MarketingOmniVoiceSegmentsPreview'}
+                    onClose={onClose}
+                    postId={Number(data?.post?.id || 0)}
                 />
             </>
         );

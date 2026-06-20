@@ -132,10 +132,20 @@ export default function useAjax(props?: Props): UseAjaxProps {
                 showMessage(__('Custom API link is invalid. Reverted to default from env.'), 'warning');
                 return runFetch(convertToURL(getAdminApiPrefix(), url))
                     .then(async (response) => callbackSuccess(params, response))
-                    .catch(callbackError);
+                    .catch(function (retryError) {
+                        if (params.error) {
+                            params.error(retryError);
+                        } else {
+                            callbackError(retryError);
+                        }
+                    });
             }
 
-            callbackError(error);
+            if (params.error) {
+                params.error(error);
+            } else {
+                callbackError(error);
+            }
         }).finally(() => {
             callbackFinally(params);
         });

@@ -24,6 +24,7 @@ import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobil
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
+import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/MarketingOmniVoiceSegmentsPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
@@ -127,6 +128,7 @@ function Form({
     const [articleRewriteDrawerOpen, setArticleRewriteDrawerOpen] = React.useState(false);
     const [contentTranslateDrawerOpen, setContentTranslateDrawerOpen] = React.useState(false);
     const [facebookPreviewDrawerOpen, setFacebookPreviewDrawerOpen] = React.useState(false);
+    const [omnivoiceSegmentsPreviewDrawerOpen, setOmnivoiceSegmentsPreviewDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
     const [shortVideoEditDrawerOpen, setShortVideoEditDrawerOpen] = React.useState(false);
@@ -414,6 +416,9 @@ function Form({
                             if (action === 'drawer:MarketingFacebookPreview') {
                                 setFacebookPreviewDrawerOpen(true);
                             }
+                            if (action === 'drawer:MarketingOmniVoiceSegmentsPreview') {
+                                setOmnivoiceSegmentsPreviewDrawerOpen(true);
+                            }
                             if (action === 'drawer:NotificationAi') {
                                 setNotificationAiDrawerOpen(true);
                             }
@@ -464,6 +469,11 @@ function Form({
                         postId={Number(data?.post?.id || 0)}
                         fallbackThumbnail={data?.post?.thumbnail}
                         onSaved={onRefreshPost}
+                    />
+                    <MarketingOmniVoiceSegmentsPreviewDrawer
+                        open={omnivoiceSegmentsPreviewDrawerOpen}
+                        onClose={() => setOmnivoiceSegmentsPreviewDrawerOpen(false)}
+                        postId={Number(data?.post?.id || 0)}
                     />
                 </>
             )}
