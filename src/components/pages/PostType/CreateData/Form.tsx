@@ -24,6 +24,7 @@ import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobil
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
 import MarketingContentTranslateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/MarketingContentTranslateDrawer';
 import MarketingFacebookPreviewDrawer from 'components/atoms/PostType/MarketingFacebookPreviewDrawer';
+import MarketingManualAudioDrawer from 'components/atoms/PostType/MarketingManualAudioDrawer';
 import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/MarketingOmniVoiceSegmentsPreviewDrawer';
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
@@ -128,6 +129,7 @@ function Form({
     const [articleRewriteDrawerOpen, setArticleRewriteDrawerOpen] = React.useState(false);
     const [contentTranslateDrawerOpen, setContentTranslateDrawerOpen] = React.useState(false);
     const [facebookPreviewDrawerOpen, setFacebookPreviewDrawerOpen] = React.useState(false);
+    const [manualAudioDrawerOpen, setManualAudioDrawerOpen] = React.useState(false);
     const [omnivoiceSegmentsPreviewDrawerOpen, setOmnivoiceSegmentsPreviewDrawerOpen] = React.useState(false);
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
@@ -399,6 +401,7 @@ function Form({
                         confirmMessage={item.confirm_message}
                         confirmConfig={item.confirm}
                         checkProgress={item.check_progress}
+                        skipProgress={item.skip_progress}
                         skipConfirm={item.skip_confirm}
                         color={item.color}
                         clientAction={item.client_action}
@@ -415,6 +418,9 @@ function Form({
                             }
                             if (action === 'drawer:MarketingFacebookPreview') {
                                 setFacebookPreviewDrawerOpen(true);
+                            }
+                            if (action === 'drawer:MarketingManualAudio') {
+                                setManualAudioDrawerOpen(true);
                             }
                             if (action === 'drawer:MarketingOmniVoiceSegmentsPreview') {
                                 setOmnivoiceSegmentsPreviewDrawerOpen(true);
@@ -469,6 +475,12 @@ function Form({
                         postId={Number(data?.post?.id || 0)}
                         fallbackThumbnail={data?.post?.thumbnail}
                         onSaved={onRefreshPost}
+                    />
+                    <MarketingManualAudioDrawer
+                        open={manualAudioDrawerOpen}
+                        onClose={() => setManualAudioDrawerOpen(false)}
+                        postId={Number(data?.post?.id || 0)}
+                        onUploaded={onRefreshPost}
                     />
                     <MarketingOmniVoiceSegmentsPreviewDrawer
                         open={omnivoiceSegmentsPreviewDrawerOpen}
@@ -892,6 +904,7 @@ function ButtonAction({
     confirmMessage,
     confirmConfig,
     checkProgress,
+    skipProgress,
     skipConfirm,
     color,
     clientAction,
@@ -910,6 +923,7 @@ function ButtonAction({
     },
     id: ID,
     checkProgress?: boolean,
+    skipProgress?: boolean,
     skipConfirm?: boolean,
     color?: string,
     clientAction?: string,
@@ -921,8 +935,50 @@ function ButtonAction({
 
     const confirm = useConfirmDialog();
 
-    const [progressButton,] = React.useState<number>(0);
+    const [progressButton, setProgressButton] = React.useState<number | undefined>(undefined);
+    const pollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const actionColorProps = getPostTypeActionButtonColorProps(color);
+
+    React.useEffect(() => {
+        return () => {
+            if (pollTimerRef.current) {
+                clearTimeout(pollTimerRef.current);
+            }
+        };
+    }, []);
+
+    const startOmnivoiceProgressPoll = (jobId?: number) => {
+        if (!checkProgress || !id) {
+            return;
+        }
+
+        const callCheckProgress = () => {
+            useAjaxAction.ajax({
+                url: link,
+                method: 'POST',
+                loading: false,
+                data: {
+                    id,
+                    post_type: postType,
+                    check_progress: true,
+                    job_id: jobId && jobId > 0 ? jobId : undefined,
+                },
+                success: (result) => {
+                    if (result?.finished || result?.progress === undefined) {
+                        setProgressButton(undefined);
+                        onActionSuccess?.();
+                        return;
+                    }
+                    if (typeof result.progress === 'number') {
+                        setProgressButton(result.progress);
+                    }
+                    pollTimerRef.current = setTimeout(callCheckProgress, 10000);
+                },
+            });
+        };
+
+        pollTimerRef.current = setTimeout(callCheckProgress, 10000);
+    };
 
     const handleActionEvent = () => {
         if (clientAction && clientAction.startsWith('drawer:') && onClientDrawer) {
@@ -973,30 +1029,15 @@ function ButtonAction({
             useAjaxAction.ajax({
                 url: link,
                 method: 'POST',
+                loading: !skipProgress,
                 data: actionPayload,
-                success: () => {
+                success: (result) => {
+                    if (checkProgress && (result?.queued || result?.job_id)) {
+                        startOmnivoiceProgressPoll(Number(result?.job_id || 0));
+                    }
                     onActionSuccess?.();
                 },
             });
-
-            if (checkProgress) {
-
-                const callCheckProgress = () => {
-                    useAjaxAction.ajax({
-                        url: link,
-                        method: 'POST',
-                        data: {
-                            ...actionPayload,
-                            check_progress: true
-                        },
-                        success: (result) => {
-                            // 
-                        }
-                    });
-                };
-
-                callCheckProgress();
-            }
         };
 
         if (skipConfirm) {
@@ -1017,7 +1058,7 @@ function ButtonAction({
 
     return <>
         {confirm.component}
-        {useAjaxAction.open && checkProgress ? <Box
+        {progressButton !== undefined ? <Box
             sx={{
                 display: 'flex',
                 alignItems: 'center',
