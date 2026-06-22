@@ -68,23 +68,72 @@ type Props = {
     peaks: number[];
     lowThreshold?: number;
     className?: string;
+    /** Giây bắt đầu cắt trong file audio gốc */
+    trimStartSec?: number;
+    /** Thời lượng file audio gốc */
+    sourceDurationSec?: number;
+    /** Thời lượng clip hiện tại trên timeline */
+    clipDurationSec?: number;
 };
+
+function slicePeaksForTrim(
+    peaks: number[],
+    trimStartSec: number,
+    sourceDurationSec: number,
+    clipDurationSec: number
+): number[] {
+    if (
+        peaks.length === 0
+        || !Number.isFinite(trimStartSec)
+        || !Number.isFinite(sourceDurationSec)
+        || sourceDurationSec <= 0
+        || !Number.isFinite(clipDurationSec)
+        || clipDurationSec <= 0
+    ) {
+        return peaks;
+    }
+
+    const trimStart = Math.max(0, trimStartSec);
+    const trimEnd = Math.min(sourceDurationSec, trimStart + clipDurationSec);
+    if (trimEnd <= trimStart) {
+        return peaks;
+    }
+
+    const startIndex = Math.floor((trimStart / sourceDurationSec) * peaks.length);
+    const endIndex = Math.max(startIndex + 1, Math.ceil((trimEnd / sourceDurationSec) * peaks.length));
+    return peaks.slice(startIndex, endIndex);
+}
 
 export default function ShortVideoAudioWaveform({
     peaks,
     lowThreshold = DEFAULT_LOW_THRESHOLD,
     className,
+    trimStartSec,
+    sourceDurationSec,
+    clipDurationSec,
 }: Props) {
     const hostRef = React.useRef<HTMLDivElement | null>(null);
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+    const displayPeaks = React.useMemo(() => {
+        if (
+            typeof trimStartSec === 'number'
+            && typeof sourceDurationSec === 'number'
+            && typeof clipDurationSec === 'number'
+            && sourceDurationSec > 0
+            && clipDurationSec > 0
+        ) {
+            return slicePeaksForTrim(peaks, trimStartSec, sourceDurationSec, clipDurationSec);
+        }
+        return peaks;
+    }, [clipDurationSec, peaks, sourceDurationSec, trimStartSec]);
 
     const redraw = React.useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas || peaks.length === 0) {
+        if (!canvas || displayPeaks.length === 0) {
             return;
         }
-        drawWaveform(canvas, peaks, lowThreshold);
-    }, [lowThreshold, peaks]);
+        drawWaveform(canvas, displayPeaks, lowThreshold);
+    }, [displayPeaks, lowThreshold]);
 
     React.useLayoutEffect(() => {
         redraw();
@@ -104,7 +153,7 @@ export default function ShortVideoAudioWaveform({
         };
     }, [redraw]);
 
-    if (peaks.length === 0) {
+    if (displayPeaks.length === 0) {
         return null;
     }
 

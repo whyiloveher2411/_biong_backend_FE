@@ -4,7 +4,7 @@ import type {
     ShortVideoRenderManifest,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
-import { resolveSceneHeadlineText } from './shortVideoRenderManifest';
+import { resolveDefaultSceneAudioTtsSettings, resolveSceneHeadlineText } from './shortVideoRenderManifest';
 import { clampClipTiming, setVisualClipsInManifest } from './shortVideoVisualClips';
 import {
     ensureManifestTimelineTracks,
@@ -20,9 +20,14 @@ import {
 
 export {
     addTimelineTrack,
+    countTrackItems,
     DEFAULT_TIMELINE_TRACKS,
     ensureManifestTimelineTracks,
     getTrackRowHeight,
+    isDefaultTimelineTrack,
+    removeTimelineTrackFromManifest,
+    resolveClipTrackId,
+    resolveSceneTrackId,
     resolveTimelineTracks,
     resolveTrackRowIdFromPointer,
     TIMELINE_DEFAULT_TRACK_NARRATION_ID,
@@ -31,6 +36,7 @@ export {
     TIMELINE_TRACK_ROW_HEIGHT,
     updateTimelineTrackNameInManifest,
 } from './shortVideoTimelineTracks';
+export type { TimelineTrackItemCount } from './shortVideoTimelineTracks';
 export type { ShortVideoTimelineTrack } from './shortVideoRenderManifestTypes';
 
 export { timelineLayoutFingerprint } from './shortVideoTimelineLayout';
@@ -72,6 +78,8 @@ export type ShortVideoTimelineActionData = {
     thumbnailUrl?: string;
     visualType?: string;
     audioPeaks?: number[];
+    audioTrimStartSec?: number;
+    audioSourceDurationSec?: number;
 };
 
 export type ShortVideoTimelineAction = TimelineAction & {
@@ -109,6 +117,175 @@ function narrationSceneDurationSec(scene: ShortVideoManifestScene): number {
         return Math.max(MIN_ACTION_DURATION_SEC, explicitDuration);
     }
     return DEFAULT_NEW_NARRATION_DURATION_SEC;
+}
+
+const TIMELINE_MOVE_EPSILON_SEC = 0.02;
+
+export function resolveNarrationAudioTrimStartSec(scene: ShortVideoManifestScene): number {
+    const trimStart = scene.audio_trim_start_sec;
+    if (typeof trimStart === 'number' && Number.isFinite(trimStart) && trimStart >= 0) {
+        return trimStart;
+    }
+    return 0;
+}
+
+export function resolveNarrationAudioSourceDurationSec(
+    scene: ShortVideoManifestScene,
+    fallbackScene?: ShortVideoManifestScene
+): number | null {
+    if (!isSceneReadyForTimeline(scene)) {
+        return null;
+    }
+
+    const stored = scene.audio_source_duration_sec;
+    if (typeof stored === 'number' && Number.isFinite(stored) && stored > MIN_ACTION_DURATION_SEC) {
+        return stored;
+    }
+
+    const fallbackStored = fallbackScene?.audio_source_duration_sec;
+    if (
+        typeof fallbackStored === 'number'
+        && Number.isFinite(fallbackStored)
+        && fallbackStored > MIN_ACTION_DURATION_SEC
+    ) {
+        return fallbackStored;
+    }
+
+    const wordEnds = scene.words.map((word) => word.end).filter((value) => Number.isFinite(value));
+    if (wordEnds.length > 0) {
+        return Math.max(MIN_ACTION_DURATION_SEC, ...wordEnds);
+    }
+
+    const trimStart = resolveNarrationAudioTrimStartSec(scene);
+    const duration = narrationSceneDurationSec(scene);
+    return Math.max(MIN_ACTION_DURATION_SEC, trimStart + duration);
+}
+
+function clampNarrationAudioTrim(
+    trimStartSec: number,
+    durationSec: number,
+    sourceDurationSec: number
+): { trimStartSec: number; durationSec: number } {
+    const sourceDuration = Math.max(MIN_ACTION_DURATION_SEC, sourceDurationSec);
+    let trimStart = Math.max(0, trimStartSec);
+    let duration = Math.max(MIN_ACTION_DURATION_SEC, durationSec);
+
+    if (trimStart + duration > sourceDuration + 0.001) {
+        if (duration > sourceDuration - trimStart) {
+            duration = Math.max(MIN_ACTION_DURATION_SEC, sourceDuration - trimStart);
+        }
+        if (trimStart + duration > sourceDuration + 0.001) {
+            trimStart = Math.max(0, sourceDuration - duration);
+        }
+    }
+
+    return {
+        trimStartSec: Number(trimStart.toFixed(3)),
+        durationSec: Number(duration.toFixed(3)),
+    };
+}
+
+function clampNarrationActionToSourceLimits(
+    timelineStart: number,
+    timelineEnd: number,
+    prevScene: ShortVideoManifestScene,
+    sourceDurationSec: number
+): { start: number; end: number } {
+    const prevTimelineStart = narrationManifestStartSec(prevScene);
+    const prevDuration = narrationSceneDurationSec(prevScene);
+    const prevTrimStart = resolveNarrationAudioTrimStartSec(prevScene);
+    const prevTimelineEnd = prevTimelineStart + prevDuration;
+
+    const deltaStart = timelineStart - prevTimelineStart;
+    const deltaEnd = timelineEnd - prevTimelineEnd;
+    const isMove = Math.abs(deltaStart - deltaEnd) <= TIMELINE_MOVE_EPSILON_SEC;
+
+    if (isMove) {
+        return {
+            start: Math.max(0, timelineStart),
+            end: Math.max(timelineStart + MIN_ACTION_DURATION_SEC, timelineStart + prevDuration),
+        };
+    }
+
+    let trimStartSec = prevTrimStart + deltaStart;
+    let durationSec = Math.max(MIN_ACTION_DURATION_SEC, timelineEnd - timelineStart);
+    const clamped = clampNarrationAudioTrim(trimStartSec, durationSec, sourceDurationSec);
+
+    return {
+        start: Math.max(0, timelineStart),
+        end: Math.max(
+            timelineStart + MIN_ACTION_DURATION_SEC,
+            timelineStart + clamped.durationSec
+        ),
+    };
+}
+
+function applyNarrationActionToScene(
+    scene: ShortVideoManifestScene,
+    action: TimelineAction,
+    trackId: string,
+    previousScene?: ShortVideoManifestScene
+): ShortVideoManifestScene {
+    const prevScene = previousScene ?? scene;
+    const sourceDurationSec = resolveNarrationAudioSourceDurationSec(scene, prevScene);
+
+    let newTimelineStart = Math.max(0, action.start);
+    let newEnd = Math.max(newTimelineStart + MIN_ACTION_DURATION_SEC, action.end);
+
+    if (sourceDurationSec !== null) {
+        const clamped = clampNarrationActionToSourceLimits(
+            newTimelineStart,
+            newEnd,
+            prevScene,
+            sourceDurationSec
+        );
+        newTimelineStart = clamped.start;
+        newEnd = clamped.end;
+    }
+
+    const newDuration = Math.max(MIN_ACTION_DURATION_SEC, newEnd - newTimelineStart);
+
+    if (sourceDurationSec === null) {
+        return {
+            ...scene,
+            start_offset_sec: Number(newTimelineStart.toFixed(3)),
+            duration_sec: Number(newDuration.toFixed(3)),
+            duration_hint_sec: Number(newDuration.toFixed(3)),
+            timeline_track_id: trackId,
+        };
+    }
+
+    const prevTimelineStart = narrationManifestStartSec(prevScene);
+    const prevDuration = narrationSceneDurationSec(prevScene);
+    const prevTrimStart = resolveNarrationAudioTrimStartSec(prevScene);
+    const prevTimelineEnd = prevTimelineStart + prevDuration;
+
+    const deltaStart = newTimelineStart - prevTimelineStart;
+    const deltaEnd = newEnd - prevTimelineEnd;
+    const isMove = Math.abs(deltaStart - deltaEnd) <= TIMELINE_MOVE_EPSILON_SEC;
+
+    let trimStartSec = prevTrimStart;
+    let durationSec = newDuration;
+
+    if (isMove) {
+        durationSec = prevDuration;
+        trimStartSec = prevTrimStart;
+    } else {
+        trimStartSec = prevTrimStart + deltaStart;
+        durationSec = newDuration;
+    }
+
+    const clamped = clampNarrationAudioTrim(trimStartSec, durationSec, sourceDurationSec);
+
+    return {
+        ...scene,
+        start_offset_sec: Number(newTimelineStart.toFixed(3)),
+        duration_sec: clamped.durationSec,
+        duration_hint_sec: clamped.durationSec,
+        audio_trim_start_sec: clamped.trimStartSec,
+        audio_source_duration_sec: Number(sourceDurationSec.toFixed(3)),
+        timeline_track_id: trackId,
+    };
 }
 
 function maxItemEndSecFromManifest(manifest: ShortVideoRenderManifest): number {
@@ -309,6 +486,8 @@ export function manifestToTimelineRows(
         const trackId = resolveSceneTrackId(scene, tracks);
         const start = narrationManifestStartSec(scene);
         const end = narrationManifestEndSec(scene);
+        const sourceDurationSec = resolveNarrationAudioSourceDurationSec(scene);
+        const trimStartSec = resolveNarrationAudioTrimStartSec(scene);
         const action: ShortVideoTimelineAction = {
             id: `narr_${scene.id}`,
             start: Math.max(0, start),
@@ -327,6 +506,8 @@ export function manifestToTimelineRows(
                     ? 'running'
                     : (isSceneReadyForTimeline(scene) ? 'ready' : 'pending'),
                 audioPeaks: scene.audio_peaks?.length ? scene.audio_peaks : undefined,
+                audioTrimStartSec: sourceDurationSec !== null ? trimStartSec : undefined,
+                audioSourceDurationSec: sourceDurationSec ?? undefined,
             },
         };
         actionsByTrack.get(trackId)?.push(action);
@@ -410,9 +591,13 @@ export function timelineRowsToVisualClips(
 
 function timelineRowsToNarrationScenes(
     rows: TimelineRow[],
-    manifest: ShortVideoRenderManifest
+    manifest: ShortVideoRenderManifest,
+    previousManifest?: ShortVideoRenderManifest
 ): ShortVideoManifestScene[] {
     const tracks = resolveTimelineTracks(manifest);
+    const prevById = new Map(
+        (previousManifest ?? manifest).scenes.map((scene) => [scene.id, scene] as const)
+    );
     const actionBySceneId = new Map<string, { action: TimelineAction; trackId: string }>();
 
     rows.forEach((row) => {
@@ -437,16 +622,7 @@ function timelineRowsToNarrationScenes(
             return scene;
         }
         const { action, trackId } = mapped;
-        const startSec = Math.max(0, action.start);
-        const endSec = Math.max(startSec + MIN_ACTION_DURATION_SEC, action.end);
-        const durationSec = Math.max(MIN_ACTION_DURATION_SEC, endSec - startSec);
-        return {
-            ...scene,
-            start_offset_sec: Number(startSec.toFixed(3)),
-            duration_sec: Number(durationSec.toFixed(3)),
-            duration_hint_sec: Number(durationSec.toFixed(3)),
-            timeline_track_id: trackId,
-        };
+        return applyNarrationActionToScene(scene, action, trackId, prevById.get(scene.id));
     });
 }
 
@@ -465,7 +641,7 @@ export function applyTimelineRowsToManifest(
             timelineRowsToVisualClips(rows, dragBase)
         );
         const scenes = sortScenesByTimelineOrder(
-            timelineRowsToNarrationScenes(rows, next)
+            timelineRowsToNarrationScenes(rows, next, dragBase)
         );
         next = { ...next, scenes };
     }
@@ -658,13 +834,22 @@ export function mergeRefreshedNarrationManifest(
         if (!serverScene) {
             return localScene;
         }
+        const audioUrlChanged = localScene.audio_url?.trim() !== serverScene.audio_url?.trim();
+        const serverSourceDuration = resolveNarrationAudioSourceDurationSec(serverScene) ?? serverScene.duration_sec;
         return {
             ...localScene,
             audio_url: serverScene.audio_url,
             words: serverScene.words,
             audio_peaks: serverScene.audio_peaks,
-            duration_sec: serverScene.duration_sec,
-            duration_hint_sec: serverScene.duration_hint_sec || serverScene.duration_sec,
+            duration_sec: audioUrlChanged ? serverScene.duration_sec : localScene.duration_sec,
+            duration_hint_sec: audioUrlChanged
+                ? (serverScene.duration_hint_sec || serverScene.duration_sec)
+                : (localScene.duration_hint_sec || localScene.duration_sec),
+            audio_trim_start_sec: audioUrlChanged ? 0 : resolveNarrationAudioTrimStartSec(localScene),
+            audio_source_duration_sec: audioUrlChanged
+                ? serverSourceDuration
+                : (localScene.audio_source_duration_sec ?? serverSourceDuration),
+            audio_tts_settings: localScene.audio_tts_settings ?? serverScene.audio_tts_settings,
         };
     });
 
@@ -755,6 +940,7 @@ function buildNewNarrationScene(
         duration_sec: roundedDuration,
         start_offset_sec: roundedStart,
         words: [],
+        audio_tts_settings: resolveDefaultSceneAudioTtsSettings(manifest.lang),
         layout: {
             show_headline: true,
             show_karaoke: true,

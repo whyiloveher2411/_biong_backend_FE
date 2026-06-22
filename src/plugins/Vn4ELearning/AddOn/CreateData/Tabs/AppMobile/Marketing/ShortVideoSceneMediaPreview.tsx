@@ -27,7 +27,7 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
     const startSec = resolveSceneVisualStartSec(scene);
     const youtubeMuted = resolveSceneVisualYoutubeMuted(scene);
     const embedUrl = youtubeId
-        ? buildYoutubeEmbedUrl(youtubeId, { startSec, autoplay: true, muted: youtubeMuted })
+        ? buildYoutubeEmbedUrl(youtubeId, { startSec, autoplay: false, muted: youtubeMuted })
         : '';
 
     return (

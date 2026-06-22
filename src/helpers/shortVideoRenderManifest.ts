@@ -3,6 +3,7 @@ export type {
     ShortVideoManifestSceneLayout,
     ShortVideoManifestWord,
     ShortVideoRenderManifest,
+    ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
     ShortVideoTimelineTrack,
     ShortVideoVisualClip,
@@ -12,6 +13,7 @@ import type {
     ShortVideoManifestScene,
     ShortVideoManifestSceneLayout,
     ShortVideoRenderManifest,
+    ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
@@ -330,6 +332,32 @@ export function clearSceneLayoutKeysInManifest(
         patch[key] = undefined;
     });
     return updateSceneLayoutInManifest(manifest, sceneId, patch);
+}
+
+export function resolveDefaultSceneAudioTtsSettings(
+    manifestLang?: string
+): ShortVideoSceneAudioTtsSettings {
+    const lang = manifestLang?.trim().toLowerCase() || 'vi';
+    return {
+        provider: 'saydi',
+        lang_code: lang,
+        voice_sample: 'adam-11labs-vi',
+    };
+}
+
+export function resolveSceneAudioTtsSettings(
+    scene: ShortVideoManifestScene,
+    manifestLang?: string
+): ShortVideoSceneAudioTtsSettings {
+    const stored = scene.audio_tts_settings;
+    if (stored?.provider === 'saydi') {
+        return {
+            provider: 'saydi',
+            lang_code: stored.lang_code?.trim() || manifestLang?.trim() || 'vi',
+            voice_sample: stored.voice_sample?.trim() || 'adam-11labs-vi',
+        };
+    }
+    return resolveDefaultSceneAudioTtsSettings(manifestLang);
 }
 
 /** Bỏ field transient trước khi so sánh fingerprint / lưu. */

@@ -41,6 +41,7 @@ const useStyles = makeCSS((theme: Theme) => ({
         backgroundColor: theme.palette.background.default,
         transform: "translateY(-50%)",
         opacity: 0,
+        pointerEvents: "none",
         display: "flex",
         zIndex: 9999,
         justifyContent: "flex-end",

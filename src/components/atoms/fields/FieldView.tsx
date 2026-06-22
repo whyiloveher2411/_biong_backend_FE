@@ -8,8 +8,11 @@ function FieldView(props: FieldViewProps) {
     try {
 
         if (props.config.inlineEdit) {
-            return <div onClick={e => e.stopPropagation()}>
-                <FieldForm {...props} onReview={(value, key) => props.actionLiveEdit ? props.actionLiveEdit(value, key ?? props.name, props.post) : ''} inlineEdit />
+            return <div
+                onClick={e => e.stopPropagation()}
+                onMouseDown={e => e.stopPropagation()}
+            >
+                <FieldForm {...props} onReview={(value, key) => props.actionLiveEdit?.(value, key ?? props.name, props.post)} inlineEdit />
             </div>
         }
 

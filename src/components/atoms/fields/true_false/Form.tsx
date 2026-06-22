@@ -28,7 +28,7 @@ export default React.memo(function TrueFalseForm({ config, post, onReview, name,
             style={{ marginRight: 24 }}
             control={<Checkbox
                 onChange={(_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
-                    onReview(checked ? 1 : 0);
+                    onReview(checked ? 1 : 0, name);
                 }} defaultChecked={Boolean(post[name])} color="primary" />}
             label={config.title}
         />
@@ -51,7 +51,12 @@ export default React.memo(function TrueFalseForm({ config, post, onReview, name,
                     <Switch
                         color="primary"
                         name={name}
-                        onChange={e => { setValue(value + 1); post[name] = e.target.checked ? 1 : 0; onReview(e.target.checked ? 1 : 0); }}
+                        onChange={e => {
+                            setValue(value + 1);
+                            const nextValue = e.target.checked ? 1 : 0;
+                            post[name] = nextValue;
+                            onReview(nextValue, name);
+                        }}
                         checked={checked}
                         inputProps={{ 'aria-label': config.title }}
                     />

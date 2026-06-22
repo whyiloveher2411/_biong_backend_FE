@@ -34,6 +34,7 @@ import { Search } from '@mui/icons-material';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import Button from 'components/atoms/Button';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
+import { createPostInlineEditHandler } from 'helpers/postTypeInlineEdit';
 import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
@@ -41,17 +42,26 @@ import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVide
 const useStyles = makeCSS({
     tr: {
         cursor: 'pointer',
-        '&:hover': {
-            '& .actionPost': {
-                opacity: 1
-            }
-        },
         '&>td': {
             padding: '8px 16px'
         },
         '&>.MuiTableCell-paddingCheckbox': {
             padding: '0 0 0 4px'
         }
+    },
+    actionsCell: {
+        position: 'relative',
+        padding: 16,
+        '&:hover .actionPost': {
+            opacity: 1,
+            pointerEvents: 'auto',
+        },
+    },
+    rowActionsRevealed: {
+        '& .actionPost': {
+            opacity: 1,
+            pointerEvents: 'auto',
+        },
     },
     dFlex: {
         display: 'flex',
@@ -76,6 +86,8 @@ function DataTable(props: DataTableProps) {
     const { showMessage } = useFloatingMessages();
 
     const [openDrawer, setOpenDrawer] = React.useState(false);
+
+    const [revealedActionsRowId, setRevealedActionsRowId] = React.useState<string | null>(null);
 
     const [dataDrawer, setDataDrawer] = React.useState<DataResultApiProps | false>(false);
 
@@ -203,6 +215,17 @@ function DataTable(props: DataTableProps) {
             }
         });
     };
+
+    const actionLiveEdit = React.useCallback(
+        createPostInlineEditHandler(ajax, {
+            onSuccess: (result) => {
+                if (result.post?.id) {
+                    acctionPost({});
+                }
+            },
+        }),
+        [ajax, acctionPost]
+    );
 
 
     const handleSubmit = () => {
@@ -354,9 +377,14 @@ function DataTable(props: DataTableProps) {
                                 return (
                                 <TableRow
                                     hover
-                                    className={classes.tr}
+                                    className={
+                                        revealedActionsRowId === String(customer.id)
+                                            ? `${classes.tr} ${classes.rowActionsRevealed}`
+                                            : classes.tr
+                                    }
                                     style={getPostTypeRowStyle(customer)}
                                     onClick={e => eventClickRow(customer.type, customer.id)}
+                                    onMouseLeave={() => setRevealedActionsRowId(null)}
                                     data-id={customer.id}
                                     key={customer.id}
                                 >
@@ -371,7 +399,9 @@ function DataTable(props: DataTableProps) {
                                                                 name={key}
                                                                 config={config.showFields[key]}
                                                                 component={config.showFields[key].view}
-                                                                post={customer} content={customer[key]} />
+                                                                post={customer} content={customer[key]}
+                                                                actionLiveEdit={actionLiveEdit}
+                                                            />
                                                             <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
                                                     ) : (
@@ -379,7 +409,9 @@ function DataTable(props: DataTableProps) {
                                                             name={key}
                                                             config={config.showFields[key]}
                                                             component={config.showFields[key].view}
-                                                            post={customer} content={customer[key]} />
+                                                            post={customer} content={customer[key]}
+                                                            actionLiveEdit={actionLiveEdit}
+                                                        />
                                                     )}
                                                 </TableCell>
                                             ))
@@ -393,6 +425,7 @@ function DataTable(props: DataTableProps) {
                                                                 config={data.config.fields[key]}
                                                                 component={data.config.fields[key].view ?? 'text'}
                                                                 post={customer} content={customer[key]}
+                                                                actionLiveEdit={actionLiveEdit}
                                                             />
                                                             <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
@@ -402,12 +435,17 @@ function DataTable(props: DataTableProps) {
                                                             config={data.config.fields[key]}
                                                             component={data.config.fields[key].view ?? 'text'}
                                                             post={customer} content={customer[key]}
+                                                            actionLiveEdit={actionLiveEdit}
                                                         />
                                                     )}
                                                 </TableCell>
                                             ))
                                     }
-                                    <TableCell style={{ position: 'relative', padding: 16 }} align='right'>
+                                    <TableCell
+                                        className={classes.actionsCell}
+                                        align='right'
+                                        onMouseEnter={() => setRevealedActionsRowId(String(customer.id))}
+                                    >
                                         <LabelPost post={customer} />
                                         <ActionOnPost
                                             fromLayout="dataTable"

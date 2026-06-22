@@ -65,6 +65,81 @@ export async function saveShortVideoRenderManifest(
     });
 }
 
+export type SaydiTtsSelectOption = {
+    value: string;
+    label: string;
+    lang_code?: string;
+};
+
+export type SaydiTtsCatalogResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    languages?: SaydiTtsSelectOption[];
+    default_lang_code?: string;
+    voice_samples?: SaydiTtsSelectOption[];
+    default_voice_sample?: string;
+};
+
+/** @deprecated Dùng SaydiTtsCatalogResult */
+export type SaydiVoiceSampleOption = SaydiTtsSelectOption;
+
+/** @deprecated Dùng SaydiTtsCatalogResult */
+export type SaydiVoiceSamplesResult = SaydiTtsCatalogResult;
+
+export async function fetchSaydiTtsCatalog(): Promise<SaydiTtsCatalogResult> {
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/get-saydi-tts-catalog',
+        data: {},
+        loading: false,
+    })) as SaydiTtsCatalogResult;
+
+    if (!result?.success) {
+        throw new Error(
+            parseShortVideoApiMessage(result?.message, 'Không tải được danh mục TTS Saydi')
+        );
+    }
+
+    return result;
+}
+
+/** @deprecated Dùng fetchSaydiTtsCatalog */
+export async function fetchSaydiVoiceSamples(): Promise<SaydiTtsCatalogResult> {
+    return fetchSaydiTtsCatalog();
+}
+
+export async function generateShortVideoSceneAudioSaydi(options: {
+    shortVideoId: number;
+    sceneId: string;
+    langCode?: string;
+    voiceSample?: string;
+    force?: boolean;
+}): Promise<{ success?: boolean; message?: string | { content?: string } }> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const sceneId = String(options.sceneId || '').trim();
+    if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
+        throw new Error('Thiếu short video id');
+    }
+    if (!sceneId) {
+        throw new Error('Thiếu scene id');
+    }
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/generate-audio-saydi',
+        data: {
+            short_video_id: shortVideoId,
+            id: shortVideoId,
+            scene_id: sceneId,
+            lang_code: options.langCode?.trim() || '',
+            voice_sample: options.voiceSample?.trim() || '',
+            force: options.force ?? true,
+        },
+        loading: false,
+    })) as { success?: boolean; message?: string | { content?: string } };
+    if (!result?.success) {
+        throw new Error(parseShortVideoApiMessage(result?.message, 'Render audio Saydi thất bại'));
+    }
+    return result;
+}
+
 export async function generateShortVideoSceneAudioVieneu(options: {
     shortVideoId: number;
     sceneId: string;

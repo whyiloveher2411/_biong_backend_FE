@@ -51,6 +51,12 @@ export type ShortVideoManifestSceneLayout = {
     show_visual?: boolean;
 };
 
+export type ShortVideoSceneAudioTtsSettings = {
+    provider: 'saydi';
+    lang_code: string;
+    voice_sample: string;
+};
+
 export type ShortVideoManifestScene = {
     id: string;
     voiceover: string;
@@ -71,6 +77,12 @@ export type ShortVideoManifestScene = {
     timeline_label?: string;
     /** Track timeline chứa scene narration */
     timeline_track_id?: string;
+    /** Giây bắt đầu phát trong file audio gốc — dùng khi cắt clip trên timeline */
+    audio_trim_start_sec?: number;
+    /** Thời lượng file audio gốc — giới hạn kéo dài clip trên timeline */
+    audio_source_duration_sec?: number;
+    /** Cấu hình TTS khi render audio — lưu per scene */
+    audio_tts_settings?: ShortVideoSceneAudioTtsSettings;
     layout?: ShortVideoManifestSceneLayout;
 };
 

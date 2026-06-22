@@ -137,6 +137,69 @@ export function updateTimelineTrackNameInManifest(
     };
 }
 
+export function isDefaultTimelineTrack(trackId: string): boolean {
+    return trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID
+        || trackId === TIMELINE_DEFAULT_TRACK_VISUAL_ID;
+}
+
+export type TimelineTrackItemCount = {
+    sceneCount: number;
+    clipCount: number;
+    total: number;
+};
+
+export function countTrackItems(
+    manifest: ShortVideoRenderManifest,
+    trackId: string
+): TimelineTrackItemCount {
+    const tracks = resolveTimelineTracks(manifest);
+    const sceneCount = manifest.scenes.filter(
+        (scene) => resolveSceneTrackId(scene, tracks) === trackId
+    ).length;
+    const clipCount = (manifest.visual_clips ?? []).filter(
+        (clip) => resolveClipTrackId(clip, tracks) === trackId
+    ).length;
+
+    return {
+        sceneCount,
+        clipCount,
+        total: sceneCount + clipCount,
+    };
+}
+
+export function removeTimelineTrackFromManifest(
+    manifest: ShortVideoRenderManifest,
+    trackId: string
+): ShortVideoRenderManifest {
+    if (isDefaultTimelineTrack(trackId)) {
+        return manifest;
+    }
+
+    const tracksBeforeDelete = resolveTimelineTracks(manifest);
+    if (!tracksBeforeDelete.some((track) => track.id === trackId)) {
+        return manifest;
+    }
+
+    const remainingTracks = tracksBeforeDelete
+        .filter((track) => track.id !== trackId)
+        .map((track, index) => ({ ...track, order: index }));
+
+    const scenes = manifest.scenes.filter(
+        (scene) => resolveSceneTrackId(scene, tracksBeforeDelete) !== trackId
+    );
+
+    const visualClips = (manifest.visual_clips ?? []).filter(
+        (clip) => resolveClipTrackId(clip, tracksBeforeDelete) !== trackId
+    );
+
+    return {
+        ...manifest,
+        timeline_tracks: remainingTracks,
+        scenes,
+        visual_clips: visualClips.length > 0 ? visualClips : undefined,
+    };
+}
+
 export function getTrackRowHeight(trackId: string): number {
     if (trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID) {
         return TIMELINE_NARRATION_TRACK_ROW_HEIGHT;

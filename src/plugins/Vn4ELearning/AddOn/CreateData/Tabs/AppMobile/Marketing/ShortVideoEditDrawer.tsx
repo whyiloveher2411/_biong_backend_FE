@@ -14,7 +14,7 @@ import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import useAjax from 'hook/useApi';
 import {
     buildShortVideoRenderManifest,
-    generateShortVideoSceneAudioVieneu,
+    generateShortVideoSceneAudioSaydi,
     refreshShortVideoRenderManifest,
     resolveShortVideoSceneVisual,
     saveShortVideoRenderManifest,
@@ -27,6 +27,7 @@ import {
     parseShortVideoRenderManifest,
     reinjectVisualPlaybackFromCache,
     resolveSceneActiveColor,
+    resolveSceneAudioTtsSettings,
     resolveSceneHeadlineColor,
     resolveSceneHeadlineText,
     resolveSceneShowHeadline,
@@ -301,6 +302,7 @@ export default function ShortVideoEditDrawer({
     const [videoRendering, setVideoRendering] = React.useState(false);
     const [savingActivityCount, setSavingActivityCount] = React.useState(0);
     const [narrationRunningSceneIds, setNarrationRunningSceneIds] = React.useState<string[]>([]);
+    const [sceneAudioRenderingId, setSceneAudioRenderingId] = React.useState('');
     const savedManifestFingerprintRef = React.useRef('');
     const savedSceneFingerprintMapRef = React.useRef<Record<string, string>>({});
     const pollingAbortRef = React.useRef(false);
@@ -995,34 +997,6 @@ export default function ShortVideoEditDrawer({
         [shortVideoId, applyManifestResult]
     );
 
-    const runNarrationSceneQueue = React.useCallback(
-        async (sceneIds: string[]) => {
-            if (shortVideoId <= 0 || sceneIds.length === 0) {
-                return;
-            }
-            const unique = Array.from(new Set(sceneIds));
-            setNarrationRunningSceneIds((prev) => Array.from(new Set([...prev, ...unique])));
-            for (const sceneId of unique) {
-                if (pollingAbortRef.current) {
-                    break;
-                }
-                try {
-                    await generateShortVideoSceneAudioVieneu({
-                        shortVideoId,
-                        sceneId,
-                        force: true,
-                    });
-                } catch (err) {
-                    setManifestError(
-                        err instanceof Error ? err.message : `Không thể tạo audio scene ${sceneId}`
-                    );
-                }
-            }
-            await pollManifestUntilScenesReady(unique);
-        },
-        [shortVideoId, pollManifestUntilScenesReady]
-    );
-
     const handleSaveManifest = React.useCallback(async () => {
         if (!manifest || shortVideoId <= 0) {
             return;
@@ -1043,9 +1017,6 @@ export default function ShortVideoEditDrawer({
                 { changedSceneIds }
             );
             applyManifestResult(result.manifest ?? manifest, false);
-            if (changedSceneIds.length > 0) {
-                void runNarrationSceneQueue(changedSceneIds);
-            }
         } catch (err: unknown) {
             setManifestError(
                 err instanceof Error ? err.message : 'Lưu manifest thất bại'
@@ -1060,7 +1031,65 @@ export default function ShortVideoEditDrawer({
         applyManifestResult,
         beginSavingActivity,
         endSavingActivity,
-        runNarrationSceneQueue,
+    ]);
+
+    const handleRenderSceneAudio = React.useCallback(async () => {
+        if (!manifest || shortVideoId <= 0 || !selectedSceneId) {
+            return;
+        }
+        const scene = manifest.scenes.find((item) => item.id === selectedSceneId);
+        if (!scene) {
+            return;
+        }
+        const voiceover = scene.voiceover?.trim() || '';
+        if (!voiceover) {
+            setManifestError('Cần nhập voiceover trước khi render audio');
+            return;
+        }
+
+        const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang);
+        const changedSceneIds = sceneContentFingerprint(scene)
+            !== (savedSceneFingerprintMapRef.current[scene.id] || '')
+            ? [scene.id]
+            : [];
+
+        setSceneAudioRenderingId(selectedSceneId);
+        setNarrationRunningSceneIds((prev) => Array.from(new Set([...prev, selectedSceneId])));
+        beginSavingActivity();
+        setManifestError('');
+        try {
+            const saveResult = await saveShortVideoRenderManifest(
+                shortVideoId,
+                sanitizeManifestForPersist(manifest),
+                { changedSceneIds }
+            );
+            applyManifestResult(saveResult.manifest ?? manifest, false);
+
+            await generateShortVideoSceneAudioSaydi({
+                shortVideoId,
+                sceneId: selectedSceneId,
+                langCode: ttsSettings.lang_code,
+                voiceSample: ttsSettings.voice_sample,
+                force: true,
+            });
+            await pollManifestUntilScenesReady([selectedSceneId]);
+        } catch (err: unknown) {
+            setManifestError(
+                err instanceof Error ? err.message : 'Render audio thất bại'
+            );
+        } finally {
+            setSceneAudioRenderingId('');
+            setNarrationRunningSceneIds((prev) => prev.filter((id) => id !== selectedSceneId));
+            endSavingActivity();
+        }
+    }, [
+        manifest,
+        shortVideoId,
+        selectedSceneId,
+        applyManifestResult,
+        beginSavingActivity,
+        endSavingActivity,
+        pollManifestUntilScenesReady,
     ]);
 
     const handleRefreshManifest = React.useCallback(async () => {
@@ -1540,8 +1569,10 @@ export default function ShortVideoEditDrawer({
                                         sceneId={selectedSceneId}
                                         onManifestChange={handleInspectorVisualChange}
                                         onSave={handleSaveManifest}
-                                        saving={
-                                            manifestSaving
+                                        onRenderAudio={handleRenderSceneAudio}
+                                        saving={manifestSaving}
+                                        rendering={
+                                            sceneAudioRenderingId === selectedSceneId
                                             || narrationRunningSceneIds.includes(selectedSceneId)
                                         }
                                         dirty={manifestDirty}

@@ -2,13 +2,14 @@ import React from 'react';
 import type { PlayerRef } from '@remotion/player';
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
-import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SyncIcon from '@mui/icons-material/Sync';
-import { Box, Button, CircularProgress, IconButton, Menu, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, Menu, MenuItem, Popover, TextField, Tooltip, Typography } from '@mui/material';
 import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
 import { resolveSceneHeadlineText } from 'helpers/shortVideoRenderManifest';
 import {
@@ -21,10 +22,15 @@ import {
     addNarrationSceneAtCompositionSec,
     addTimelineTrack,
     applyTimelineRowsToManifest,
+    countTrackItems,
     getProjectTimelineDurationSec,
     getTrackRowHeight,
+    isDefaultTimelineTrack,
     moveActionBetweenRows,
     packTimelineTrackSequential,
+    removeTimelineTrackFromManifest,
+    resolveClipTrackId,
+    resolveSceneTrackId,
     resolveTimelineTracks,
     resolveTrackRowIdFromPointer,
     timelineEditorWorkspaceEndSec,
@@ -68,7 +74,34 @@ type Props = {
     narrationRunningSceneIds?: string[];
 };
 
+type DeleteTrackDialogState = {
+    trackId: string;
+    trackName: string;
+    sceneCount: number;
+    clipCount: number;
+};
+
 const TIMELINE_HEIGHT_STORAGE_KEY = 'short_video_editor_timeline_extra_height_v1';
+const TRACK_LABELS_COLUMN_WIDTH_STORAGE_KEY = 'short_video_editor_track_labels_column_width_v1';
+const DEFAULT_TRACK_LABELS_COLUMN_WIDTH = 100;
+const MIN_TRACK_LABELS_COLUMN_WIDTH = 80;
+const MAX_TRACK_LABELS_COLUMN_WIDTH = 360;
+
+function clampTrackLabelsColumnWidth(value: number): number {
+    return Math.max(MIN_TRACK_LABELS_COLUMN_WIDTH, Math.min(MAX_TRACK_LABELS_COLUMN_WIDTH, value));
+}
+
+function readTrackLabelsColumnWidth(): number {
+    if (typeof window === 'undefined') {
+        return DEFAULT_TRACK_LABELS_COLUMN_WIDTH;
+    }
+    const raw = window.localStorage.getItem(TRACK_LABELS_COLUMN_WIDTH_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : DEFAULT_TRACK_LABELS_COLUMN_WIDTH;
+    if (!Number.isFinite(parsed)) {
+        return DEFAULT_TRACK_LABELS_COLUMN_WIDTH;
+    }
+    return clampTrackLabelsColumnWidth(parsed);
+}
 
 function getTimelineScrollGrids(host: HTMLElement): HTMLElement[] {
     const timeGrid = host.querySelector(
@@ -109,32 +142,107 @@ function formatPackGapLabel(gapSec: number): string {
 }
 
 function TrackLabelRow({
+    trackId,
     label,
     height,
     packMenuTitle,
     onPackWithGap,
+    onTrackNameChange,
+    onDeleteTrack,
     packDisabled,
-    editing,
-    editValue,
-    onEditChange,
-    onEditBlur,
-    onEditKeyDown,
-    onRename,
+    canDeleteTrack = false,
 }: {
+    trackId: string;
     label: string;
     height: number;
     packMenuTitle: string;
     onPackWithGap: (gapSec: number) => void;
+    onTrackNameChange?: (trackId: string, name: string) => void;
+    onDeleteTrack?: () => void;
     packDisabled?: boolean;
-    editing?: boolean;
-    editValue?: string;
-    onEditChange?: (value: string) => void;
-    onEditBlur?: () => void;
-    onEditKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-    onRename?: () => void;
+    canDeleteTrack?: boolean;
 }) {
     const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
+    const [packSubmenuAnchor, setPackSubmenuAnchor] = React.useState<null | HTMLElement>(null);
+    const [isRenaming, setIsRenaming] = React.useState(false);
+    const [renameDraft, setRenameDraft] = React.useState(label);
+    const renameInputRef = React.useRef<HTMLInputElement | null>(null);
+    const ignoreBlurUntilRef = React.useRef(0);
     const menuOpen = Boolean(menuAnchor);
+    const packSubmenuOpen = Boolean(packSubmenuAnchor) && menuOpen;
+    const canRename = Boolean(onTrackNameChange);
+
+    const closeMenus = React.useCallback(() => {
+        setMenuAnchor(null);
+        setPackSubmenuAnchor(null);
+    }, []);
+
+    React.useEffect(() => {
+        if (!isRenaming) {
+            setRenameDraft(label);
+        }
+    }, [isRenaming, label]);
+
+    React.useEffect(() => {
+        if (!isRenaming) {
+            return;
+        }
+        const frameId = window.requestAnimationFrame(() => {
+            const input = renameInputRef.current;
+            if (!input) {
+                return;
+            }
+            input.focus();
+            input.select();
+        });
+        return () => window.cancelAnimationFrame(frameId);
+    }, [isRenaming]);
+
+    const startRename = React.useCallback(() => {
+        if (!canRename) {
+            return;
+        }
+        closeMenus();
+        setRenameDraft(label);
+        ignoreBlurUntilRef.current = Date.now() + 300;
+        window.setTimeout(() => {
+            setIsRenaming(true);
+        }, 0);
+    }, [canRename, closeMenus, label]);
+
+    const cancelRename = React.useCallback(() => {
+        setIsRenaming(false);
+        setRenameDraft(label);
+    }, [label]);
+
+    const commitRename = React.useCallback(() => {
+        if (Date.now() < ignoreBlurUntilRef.current) {
+            renameInputRef.current?.focus();
+            return;
+        }
+        setIsRenaming(false);
+        const trimmed = renameDraft.trim();
+        if (!trimmed || trimmed === label) {
+            setRenameDraft(label);
+            return;
+        }
+        onTrackNameChange?.(trackId, trimmed);
+    }, [label, onTrackNameChange, renameDraft, trackId]);
+
+    const handleRenameKeyDown = React.useCallback(
+        (event: React.KeyboardEvent<HTMLInputElement>) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                ignoreBlurUntilRef.current = 0;
+                commitRename();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                ignoreBlurUntilRef.current = 0;
+                cancelRename();
+            }
+        },
+        [cancelRename, commitRename]
+    );
 
     return (
         <Box
@@ -147,16 +255,21 @@ function TrackLabelRow({
                 minWidth: 0,
             }}
         >
-            {editing ? (
+            {isRenaming ? (
                 <TextField
-                    autoFocus
                     size="small"
                     variant="outlined"
-                    value={editValue ?? ''}
-                    onChange={(event) => onEditChange?.(event.target.value)}
-                    onBlur={onEditBlur}
-                    onKeyDown={onEditKeyDown}
+                    value={renameDraft}
+                    inputRef={renameInputRef}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onBlur={() => {
+                        window.setTimeout(() => {
+                            commitRename();
+                        }, 0);
+                    }}
+                    onKeyDown={handleRenameKeyDown}
                     onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                     inputProps={{
                         maxLength: 80,
                         style: {
@@ -200,8 +313,10 @@ function TrackLabelRow({
                     <IconButton
                         size="small"
                         aria-label="Tùy chọn track"
-                        disabled={packDisabled && !onRename}
-                        onClick={(event) => setMenuAnchor(event.currentTarget)}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setMenuAnchor(event.currentTarget);
+                        }}
                         sx={{
                             width: 22,
                             height: 22,
@@ -217,36 +332,87 @@ function TrackLabelRow({
             <Menu
                 anchorEl={menuAnchor}
                 open={menuOpen}
-                onClose={() => setMenuAnchor(null)}
+                onClose={closeMenus}
+                disableRestoreFocus
+                disableAutoFocus
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 slotProps={{
                     paper: {
-                        sx: { minWidth: 180, mt: 0.5 },
+                        sx: { minWidth: 200, mt: 0.5 },
                     },
                 }}
             >
                 <MenuItem
-                    disabled={!onRename}
-                    onClick={() => {
-                        onRename?.();
-                        setMenuAnchor(null);
+                    disabled={!canRename}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        startRename();
                     }}
                 >
                     Đổi tên track
                 </MenuItem>
-                <MenuItem disabled sx={{ opacity: 1, fontSize: 12, color: 'text.secondary' }}>
+                <MenuItem
+                    disabled={packDisabled}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!packDisabled) {
+                            setPackSubmenuAnchor(event.currentTarget);
+                        }
+                    }}
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                    }}
+                >
                     {packMenuTitle}
+                    <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                 </MenuItem>
+                {canDeleteTrack ? (
+                    <>
+                        <Divider sx={{ my: 0.5 }} />
+                        <MenuItem
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                closeMenus();
+                                onDeleteTrack?.();
+                            }}
+                            sx={{ color: 'error.main' }}
+                        >
+                            Xóa track
+                        </MenuItem>
+                    </>
+                ) : null}
+            </Menu>
+            <Menu
+                anchorEl={packSubmenuAnchor}
+                open={packSubmenuOpen}
+                onClose={() => setPackSubmenuAnchor(null)}
+                disableRestoreFocus
+                disableAutoFocus
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                slotProps={{
+                    paper: {
+                        sx: { minWidth: 168 },
+                    },
+                }}
+            >
                 {TIMELINE_PACK_GAP_OPTIONS_SEC.map((gapSec) => (
                     <MenuItem
                         key={gapSec}
                         disabled={packDisabled}
                         onClick={() => {
                             onPackWithGap(gapSec);
-                            setMenuAnchor(null);
+                            closeMenus();
                         }}
-                        sx={{ pl: 3 }}
                     >
                         {formatPackGapLabel(gapSec)}
                     </MenuItem>
@@ -380,6 +546,8 @@ function NarrationActionBlock({
     const label = action.data?.label || action.id;
     const status = action.data?.status;
     const audioPeaks = action.data?.audioPeaks;
+    const audioTrimStartSec = action.data?.audioTrimStartSec;
+    const audioSourceDurationSec = action.data?.audioSourceDurationSec;
     const isPending = status === 'pending';
     const isRunning = status === 'running';
     const isActive = Boolean(action.selected);
@@ -414,7 +582,14 @@ function NarrationActionBlock({
                 zIndex: previewOffsetY !== 0 ? 20 : undefined,
             }}
         >
-            {showWaveform ? <ShortVideoAudioWaveform peaks={audioPeaks} /> : null}
+            {showWaveform ? (
+                <ShortVideoAudioWaveform
+                    peaks={audioPeaks}
+                    trimStartSec={audioTrimStartSec}
+                    sourceDurationSec={audioSourceDurationSec}
+                    clipDurationSec={Math.max(0, action.end - action.start)}
+                />
+            ) : null}
             <Box
                 sx={{
                     position: 'relative',
@@ -631,9 +806,9 @@ export default function ShortVideoEditorTimeline({
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [editingActionKey, setEditingActionKey] = React.useState('');
     const [editingLabelDraft, setEditingLabelDraft] = React.useState('');
-    const [editingTrackId, setEditingTrackId] = React.useState('');
-    const [editingTrackNameDraft, setEditingTrackNameDraft] = React.useState('');
     const [dragPreviewTarget, setDragPreviewTarget] = React.useState<{ actionId: string; rowId: string } | null>(null);
+    const [deleteTrackDialog, setDeleteTrackDialog] = React.useState<DeleteTrackDialogState | null>(null);
+    const [deleteWithItemsConfirmAnchor, setDeleteWithItemsConfirmAnchor] = React.useState<HTMLElement | null>(null);
     const [showSyncLoading, setShowSyncLoading] = React.useState(false);
     const syncLoadingShownAtRef = React.useRef(0);
     const hideSyncLoadingTimerRef = React.useRef<number | null>(null);
@@ -645,6 +820,9 @@ export default function ShortVideoEditorTimeline({
         const parsed = raw ? Number(raw) : 0;
         return Number.isFinite(parsed) ? parsed : 0;
     });
+    const [trackLabelsColumnWidth, setTrackLabelsColumnWidth] = React.useState(readTrackLabelsColumnWidth);
+    const trackLabelsColumnWidthRef = React.useRef(trackLabelsColumnWidth);
+    trackLabelsColumnWidthRef.current = trackLabelsColumnWidth;
 
     React.useEffect(() => {
         if (saving) {
@@ -1057,51 +1235,96 @@ export default function ShortVideoEditorTimeline({
         commitPackedManifest(next);
     }, [commitPackedManifest]);
 
-    const handleStartRenameTrack = React.useCallback((trackId: string) => {
-        const track = resolveTimelineTracks(manifestRef.current).find((entry) => entry.id === trackId);
-        setEditingTrackId(trackId);
-        setEditingTrackNameDraft(track?.name ?? '');
+    const handleTrackNameChange = React.useCallback((trackId: string, name: string) => {
+        commitManifestChange(
+            updateTimelineTrackNameInManifest(manifestRef.current, trackId, name)
+        );
+    }, [commitManifestChange]);
+
+    const closeDeleteWithItemsConfirm = React.useCallback(() => {
+        setDeleteWithItemsConfirmAnchor(null);
     }, []);
 
-    const handleCommitRenameTrack = React.useCallback(() => {
-        if (!editingTrackId) {
+    const closeDeleteTrackDialogs = React.useCallback(() => {
+        setDeleteTrackDialog(null);
+        setDeleteWithItemsConfirmAnchor(null);
+    }, []);
+
+    const applyTrackDelete = React.useCallback((trackId: string) => {
+        const source = manifestRef.current;
+        const tracksBeforeDelete = resolveTimelineTracks(source);
+        const deletedSceneIds = new Set(
+            source.scenes
+                .filter((scene) => resolveSceneTrackId(scene, tracksBeforeDelete) === trackId)
+                .map((scene) => scene.id)
+        );
+        const deletedClipIds = new Set(
+            (source.visual_clips ?? [])
+                .filter((clip) => resolveClipTrackId(clip, tracksBeforeDelete) === trackId)
+                .map((clip) => clip.id)
+        );
+
+        const removed = removeTimelineTrackFromManifest(source, trackId);
+        const next: ShortVideoRenderManifest = {
+            ...removed,
+            duration_sec: getProjectTimelineDurationSec(removed),
+        };
+        commitPackedManifest(next);
+
+        if (selectedNarrationSceneId && deletedSceneIds.has(selectedNarrationSceneId)) {
+            onSelectNarrationScene?.('');
+        }
+        if (selectedVisualClipId && deletedClipIds.has(selectedVisualClipId)) {
+            onSelectVisualClip('');
+        }
+    }, [
+        commitPackedManifest,
+        onSelectNarrationScene,
+        onSelectVisualClip,
+        selectedNarrationSceneId,
+        selectedVisualClipId,
+    ]);
+
+    const handleRequestDeleteTrack = React.useCallback((trackId: string) => {
+        if (isDefaultTimelineTrack(trackId)) {
             return;
         }
-        const trimmed = editingTrackNameDraft.trim();
-        const tracks = resolveTimelineTracks(manifestRef.current);
-        const current = tracks.find((entry) => entry.id === editingTrackId);
-        if (current && trimmed && trimmed !== current.name) {
-            commitManifestChange(
-                updateTimelineTrackNameInManifest(manifestRef.current, editingTrackId, trimmed)
-            );
+        const source = manifestRef.current;
+        const track = resolveTimelineTracks(source).find((entry) => entry.id === trackId);
+        if (!track) {
+            return;
         }
-        setEditingTrackId('');
-        setEditingTrackNameDraft('');
-    }, [commitManifestChange, editingTrackId, editingTrackNameDraft]);
+        const { sceneCount, clipCount } = countTrackItems(source, trackId);
+        setDeleteTrackDialog({
+            trackId,
+            trackName: track.name,
+            sceneCount,
+            clipCount,
+        });
+    }, []);
 
-    const handleTrackRenameKeyDown = React.useCallback(
-        (event: React.KeyboardEvent<HTMLInputElement>) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                handleCommitRenameTrack();
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                setEditingTrackId('');
-                setEditingTrackNameDraft('');
-            }
+    const handleDeleteTrackWithItemsClick = React.useCallback(
+        (event: React.MouseEvent<HTMLButtonElement>) => {
+            setDeleteWithItemsConfirmAnchor(event.currentTarget);
         },
-        [handleCommitRenameTrack]
+        []
     );
 
-    const countTrackItems = React.useCallback((trackId: string, source: ShortVideoRenderManifest = manifestRef.current) => {
-        const sceneCount = source.scenes.filter(
-            (scene) => (scene.timeline_track_id?.trim() || TIMELINE_DEFAULT_TRACK_NARRATION_ID) === trackId
-        ).length;
-        const clipCount = (source.visual_clips ?? []).filter(
-            (clip) => (clip.timeline_track_id?.trim() || TIMELINE_DEFAULT_TRACK_VISUAL_ID) === trackId
-        ).length;
-        return sceneCount + clipCount;
-    }, []);
+    const handleConfirmDeleteTrackWithItems = React.useCallback(() => {
+        if (!deleteTrackDialog) {
+            return;
+        }
+        applyTrackDelete(deleteTrackDialog.trackId);
+        closeDeleteTrackDialogs();
+    }, [applyTrackDelete, closeDeleteTrackDialogs, deleteTrackDialog]);
+
+    const handleDeleteEmptyTrack = React.useCallback(() => {
+        if (!deleteTrackDialog) {
+            return;
+        }
+        applyTrackDelete(deleteTrackDialog.trackId);
+        closeDeleteTrackDialogs();
+    }, [applyTrackDelete, closeDeleteTrackDialogs, deleteTrackDialog]);
 
     const handleCursorDrag = React.useCallback(
         (time: number) => {
@@ -1211,19 +1434,6 @@ export default function ShortVideoEditorTimeline({
         },
         [onSeekScene, onSelectNarrationScene, onSelectVisualClip, syncPlayerTime]
     );
-
-    const handleAddVisual = React.useCallback(() => {
-        if (!manifestHasEditableVisualTimeline(manifest)) {
-            return;
-        }
-        const added = addVisualClipAtSec(manifest, currentTimeSec);
-        const next = { ...added, duration_sec: getProjectTimelineDurationSec(added) };
-        commitManifestChange(next);
-        const newClip = next.visual_clips?.[next.visual_clips.length - 1];
-        if (newClip?.id) {
-            onSelectVisualClip(newClip.id);
-        }
-    }, [commitManifestChange, currentTimeSec, manifest, onSelectVisualClip]);
 
     const handleCreateNarrationAtSec = React.useCallback(
         (manifestTimelineSec: number, trackId = TIMELINE_DEFAULT_TRACK_NARRATION_ID) => {
@@ -1384,11 +1594,16 @@ export default function ShortVideoEditorTimeline({
     const cursorHeadOverflow = 10;
     const maxTimelineExtraHeight = 320;
     const minTimelineCollapsedContentHeight = 8;
+    /** Chiều cao vùng track mặc định (2 track ban đầu) — viewport không tăng khi thêm track. */
+    const baselineTracksViewportHeight =
+        TIMELINE_EDIT_AREA_TOP_GAP
+        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_NARRATION_ID)
+        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_VISUAL_ID);
     const tracksHeight =
         TIMELINE_EDIT_AREA_TOP_GAP
         + timelineTracks.reduce((sum, track) => sum + getTrackRowHeight(track.id), 0);
-    const baseTimelineContentHeight = rulerHeight + tracksHeight;
-    const minTimelineExtraHeight = minTimelineCollapsedContentHeight - baseTimelineContentHeight;
+    const minTracksViewportHeight = Math.max(0, minTimelineCollapsedContentHeight - rulerHeight);
+    const minTimelineExtraHeight = minTracksViewportHeight - baselineTracksViewportHeight;
     const clampTimelineExtraHeight = React.useCallback(
         (value: number) => Math.max(minTimelineExtraHeight, Math.min(maxTimelineExtraHeight, value)),
         [minTimelineExtraHeight]
@@ -1396,12 +1611,12 @@ export default function ShortVideoEditorTimeline({
     /** Luôn dành chỗ cho scrollbar ngang — tránh nhảy layout khi hover (lib ẩn scrollbar mặc định). */
     const horizontalScrollbarHeight = 12;
     const clampedTimelineExtraHeight = clampTimelineExtraHeight(timelineExtraHeight);
-    const timelineContentHeight = Math.max(
-        minTimelineCollapsedContentHeight,
-        baseTimelineContentHeight + clampedTimelineExtraHeight
+    const tracksViewportHeight = Math.max(
+        minTracksViewportHeight,
+        baselineTracksViewportHeight + clampedTimelineExtraHeight
     );
+    const timelineContentHeight = rulerHeight + tracksViewportHeight;
     const timelineTotalHeight = timelineContentHeight + horizontalScrollbarHeight + cursorHeadOverflow;
-    const tracksViewportHeight = Math.max(0, timelineContentHeight - rulerHeight);
     const isTimelineCollapsed = timelineContentHeight <= minTimelineCollapsedContentHeight + 2;
 
     React.useEffect(() => {
@@ -1501,6 +1716,39 @@ export default function ShortVideoEditorTimeline({
         window.localStorage.setItem(TIMELINE_HEIGHT_STORAGE_KEY, String(clampedTimelineExtraHeight));
     }, [clampedTimelineExtraHeight]);
 
+    const handleResizeTrackLabelsColumn = React.useCallback(
+        (event: React.MouseEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const startX = event.clientX;
+            const startWidth = trackLabelsColumnWidthRef.current;
+
+            const onMouseMove = (moveEvent: MouseEvent) => {
+                const deltaX = moveEvent.clientX - startX;
+                setTrackLabelsColumnWidth(clampTrackLabelsColumnWidth(startWidth + deltaX));
+            };
+
+            const onMouseUp = () => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                if (typeof window !== 'undefined') {
+                    window.localStorage.setItem(
+                        TRACK_LABELS_COLUMN_WIDTH_STORAGE_KEY,
+                        String(trackLabelsColumnWidthRef.current)
+                    );
+                }
+            };
+
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        },
+        []
+    );
+
     const handleResizeTimelineHeight = React.useCallback(
         (event: React.MouseEvent<HTMLDivElement>) => {
             event.preventDefault();
@@ -1563,13 +1811,6 @@ export default function ShortVideoEditorTimeline({
                     <>
                         <IconButton
                             size="small"
-                            aria-label="Thêm visual tại playhead"
-                            onClick={handleAddVisual}
-                        >
-                            <AddIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            size="small"
                             aria-label="Xóa visual đang chọn"
                             disabled={!selectedVisualClipId}
                             onClick={handleDeleteVisual}
@@ -1625,7 +1866,7 @@ export default function ShortVideoEditorTimeline({
             >
                 <Box
                     sx={{
-                        width: 100,
+                        width: trackLabelsColumnWidth,
                         flexShrink: 0,
                         display: 'flex',
                         flexDirection: 'column',
@@ -1697,21 +1938,50 @@ export default function ShortVideoEditorTimeline({
                             {timelineTracks.map((track) => (
                                 <TrackLabelRow
                                     key={track.id}
+                                    trackId={track.id}
                                     label={track.name}
                                     height={getTrackRowHeight(track.id)}
-                                    packMenuTitle="Sắp xếp nối tiếp theo thời gian"
+                                    packMenuTitle="Sắp xếp nối tiếp"
                                     onPackWithGap={(gapSec) => handlePackTrack(track.id, gapSec)}
-                                    packDisabled={countTrackItems(track.id, manifest) < 2}
-                                    editing={editingTrackId === track.id}
-                                    editValue={editingTrackNameDraft}
-                                    onEditChange={setEditingTrackNameDraft}
-                                    onEditBlur={handleCommitRenameTrack}
-                                    onEditKeyDown={handleTrackRenameKeyDown}
-                                    onRename={() => handleStartRenameTrack(track.id)}
+                                    onTrackNameChange={handleTrackNameChange}
+                                    onDeleteTrack={() => handleRequestDeleteTrack(track.id)}
+                                    canDeleteTrack={!isDefaultTimelineTrack(track.id)}
+                                    packDisabled={countTrackItems(manifest, track.id).total < 2}
                                 />
                             ))}
                         </Box>
                     </Box>
+                    <Box
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label="Kéo để đổi độ rộng cột tên track"
+                        onMouseDown={handleResizeTrackLabelsColumn}
+                        sx={{
+                            position: 'absolute',
+                            top: 0,
+                            right: -4,
+                            width: 8,
+                            height: '100%',
+                            cursor: 'col-resize',
+                            zIndex: 130,
+                            touchAction: 'none',
+                            '&::after': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0,
+                                bottom: 0,
+                                left: '50%',
+                                width: '1px',
+                                transform: 'translateX(-50%)',
+                                bgcolor: 'rgba(255,255,255,0.08)',
+                                transition: 'background-color 0.15s ease, width 0.15s ease',
+                            },
+                            '&:hover::after': {
+                                width: '2px',
+                                bgcolor: 'rgba(96, 165, 250, 0.75)',
+                            },
+                        }}
+                    />
                 </Box>
                 <Box
                     ref={timelineHostRef}
@@ -1893,6 +2163,112 @@ export default function ShortVideoEditorTimeline({
                     onMouseDown={handleResizeTimelineHeight}
                 />
             ) : null}
+            <Dialog
+                open={deleteTrackDialog !== null}
+                onClose={closeDeleteTrackDialogs}
+            >
+                <DialogTitle sx={{ backgroundColor: 'unset', color: 'text.primary' }}>
+                    {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0
+                        ? 'Track còn item'
+                        : 'Xóa track'}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0 ? (
+                            <>
+                                Track &quot;{deleteTrackDialog.trackName}&quot; còn{' '}
+                                {deleteTrackDialog.sceneCount > 0
+                                    ? `${deleteTrackDialog.sceneCount} lời thoại`
+                                    : null}
+                                {deleteTrackDialog.sceneCount > 0 && deleteTrackDialog.clipCount > 0
+                                    ? ' và '
+                                    : null}
+                                {deleteTrackDialog.clipCount > 0
+                                    ? `${deleteTrackDialog.clipCount} visual clip`
+                                    : null}
+                                . Hãy di chuyển các item sang track khác trước khi xóa track.
+                            </>
+                        ) : (
+                            'Bạn có chắc muốn xóa không?'
+                        )}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeDeleteTrackDialogs}>Hủy</Button>
+                    {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0 ? (
+                        <Button
+                            color="error"
+                            onClick={handleDeleteTrackWithItemsClick}
+                        >
+                            Xóa cùng item
+                        </Button>
+                    ) : (
+                        <Button color="error" onClick={handleDeleteEmptyTrack}>
+                            Xóa track
+                        </Button>
+                    )}
+                </DialogActions>
+            </Dialog>
+            <Popover
+                open={Boolean(deleteWithItemsConfirmAnchor)}
+                anchorEl={deleteWithItemsConfirmAnchor}
+                onClose={closeDeleteWithItemsConfirm}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+                slotProps={{
+                    root: {
+                        sx: { zIndex: 1400 },
+                    },
+                    paper: {
+                        sx: {
+                            p: 1.5,
+                            mt: 0.75,
+                            maxWidth: 300,
+                            borderRadius: 1.5,
+                            boxShadow: 3,
+                        },
+                    },
+                }}
+            >
+                {deleteTrackDialog ? (
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                        <WarningAmberOutlinedIcon
+                            color="warning"
+                            sx={{ fontSize: 20, mt: 0.15, flexShrink: 0 }}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ lineHeight: 1.45 }}>
+                                Bạn có chắc muốn xóa track &quot;{deleteTrackDialog.trackName}&quot; và{' '}
+                                {deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount} item?
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    gap: 1,
+                                    mt: 1.5,
+                                }}
+                            >
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={closeDeleteWithItemsConfirm}
+                                >
+                                    Hủy
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="error"
+                                    onClick={handleConfirmDeleteTrackWithItems}
+                                >
+                                    Xóa
+                                </Button>
+                            </Box>
+                        </Box>
+                    </Box>
+                ) : null}
+            </Popover>
         </Box>
     );
 }

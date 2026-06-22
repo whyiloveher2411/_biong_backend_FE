@@ -39,6 +39,7 @@ import ArrowDropUpOutlinedIcon from '@mui/icons-material/ArrowDropUpOutlined';
 import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
+import { createPostInlineEditHandler } from 'helpers/postTypeInlineEdit';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
 
@@ -103,19 +104,34 @@ const useStyles = makeCSS((theme: Theme) => ({
         paddingRight: 8,
         cursor: 'pointer',
     },
-    rowRecord: {
-        cursor: 'pointer',
-        '&:hover': {
-            '& .actionPost': {
-                opacity: 1,
-                '& .MuiIconButton-root': {
-                    opacity: 0.7,
-                    '&:hover': {
-                        opacity: 1
-                    }
+    actionsCell: {
+        position: 'relative',
+        padding: 16,
+        '&:hover .actionPost': {
+            opacity: 1,
+            pointerEvents: 'auto',
+            '& .MuiIconButton-root': {
+                opacity: 0.7,
+                '&:hover': {
+                    opacity: 1
                 }
             }
         },
+    },
+    rowActionsRevealed: {
+        '& .actionPost': {
+            opacity: 1,
+            pointerEvents: 'auto',
+            '& .MuiIconButton-root': {
+                opacity: 0.7,
+                '&:hover': {
+                    opacity: 1
+                }
+            }
+        },
+    },
+    rowRecord: {
+        cursor: 'pointer',
         '&>td': {
             padding: 8,
             position: 'relative',
@@ -161,6 +177,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
     };
 
     const [render, setRender] = useState(0);
+    const [revealedActionsRowId, setRevealedActionsRowId] = useState<string | null>(null);
     const tableScrollRef = React.useRef<HTMLDivElement>(null);
 
     useScrollPostTypeTableOnQueryChange(tableScrollRef, queryUrl, {
@@ -183,6 +200,7 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
 
     React.useEffect(() => {
         setSelectedCustomers([]);
+        setRevealedActionsRowId(null);
     }, [postType]);
 
     const handleSelectOne = (_event: React.ChangeEvent<HTMLInputElement>, id: string) => {
@@ -228,17 +246,16 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
         setRender(render + 1);
     }
 
-    const actionLiveEdit = (key: ANY, value: ANY, post: JsonFormat) => {
-        ajax({
-            url: 'post-type/post-inline-edit',
-            data: {
-                post: post,
-                key: key,
-                value: value,
-            }
-        });
-
-    };
+    const actionLiveEdit = React.useCallback(
+        createPostInlineEditHandler(ajax, {
+            onSuccess: (result) => {
+                if (result.post?.id) {
+                    acctionPost({});
+                }
+            },
+        }),
+        [ajax, acctionPost]
+    );
 
     // const handleSubmit = () => {
 
@@ -442,9 +459,14 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                         <TableRow
                                             hover
                                             onClick={(e: React.MouseEvent<HTMLTableRowElement>) => eventClickRow(e, customer.id)}
+                                            onMouseLeave={() => setRevealedActionsRowId(null)}
                                             data-id={customer.id}
                                             key={customer.id}
-                                            className={classes.rowRecord}
+                                            className={
+                                                revealedActionsRowId === String(customer.id)
+                                                    ? `${classes.rowRecord} ${classes.rowActionsRevealed}`
+                                                    : classes.rowRecord
+                                            }
                                             style={getPostTypeRowStyle(customer)}
                                             selected={
                                                 selectedCustomers.indexOf(
@@ -554,7 +576,11 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
                                                     <TableCell align='right'>{dateTimeFormat(customer.created_at)}</TableCell>
                                                     : null
                                             }
-                                            <TableCell style={{ position: 'relative', padding: 16 }} align='right'>
+                                            <TableCell
+                                                className={classes.actionsCell}
+                                                align='right'
+                                                onMouseEnter={() => setRevealedActionsRowId(String(customer.id))}
+                                            >
                                                 <LabelPost post={customer} />
                                                 <ActionOnPost
                                                     fromLayout="list"
