@@ -56,5 +56,35 @@ export function isHttpsImageUrl(input: string): boolean {
     if (!/^https:\/\//i.test(trimmed)) {
         return false;
     }
-    return !isYoutubeUrl(trimmed);
+    return !isYoutubeUrl(trimmed) && !isHttpsVideoUrl(trimmed);
+}
+
+const HTTPS_VIDEO_EXTENSION_REGEX = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+export function isHttpsVideoUrl(input: string): boolean {
+    const trimmed = input.trim();
+    if (!trimmed) {
+        return false;
+    }
+    if (!/^https:\/\//i.test(trimmed)) {
+        return false;
+    }
+    if (isYoutubeUrl(trimmed)) {
+        return false;
+    }
+    if (HTTPS_VIDEO_EXTENSION_REGEX.test(trimmed)) {
+        return true;
+    }
+    if (/videos\.pexels\.com/i.test(trimmed)) {
+        return true;
+    }
+    return false;
+}
+
+export function isValidVideoRef(input: string): boolean {
+    const trimmed = input.trim();
+    if (!trimmed) {
+        return false;
+    }
+    return parseYoutubeId(trimmed) !== null || isHttpsVideoUrl(trimmed);
 }

@@ -4,7 +4,16 @@ import type {
     ShortVideoSceneVisualType,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
-import { isHttpsImageUrl, parseYoutubeId } from './shortVideoYoutube';
+import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
+import {
+    resolveSceneVisualImageRef,
+    resolveSceneVisualRefByType,
+    resolveSceneVisualVideoRef,
+    resolveVisualClipVideoRef,
+    sceneVisualRefIsValid,
+    syncClipActiveRef,
+} from './shortVideoVisualRefHelpers';
+import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from './shortVideoYoutube';
 
 export type { ShortVideoVisualClip } from './shortVideoRenderManifestTypes';
 
@@ -16,7 +25,7 @@ function inferVisualTypeFromScript(scene: ShortVideoManifestScene): ShortVideoSc
         const ref = scene.visual?.ref?.trim() || '';
         return ref && isHttpsImageUrl(ref) ? 'image' : 'none';
     }
-    if (scriptType === 'video' || parseYoutubeId(scene.visual?.ref?.trim() || '')) {
+    if (scriptType === 'video' || parseYoutubeId(scene.visual?.ref?.trim() || '') || isValidVideoRef(scene.visual?.ref?.trim() || '')) {
         return 'video';
     }
     return 'none';
@@ -31,11 +40,7 @@ function resolveSceneVisualTypeLocal(scene: ShortVideoManifestScene): ShortVideo
 }
 
 function resolveSceneVisualRefLocal(scene: ShortVideoManifestScene): string {
-    const override = scene.layout?.visual_ref?.trim();
-    if (override) {
-        return override;
-    }
-    return scene.visual?.ref?.trim() || '';
+    return resolveSceneVisualRefByType(scene, resolveSceneVisualTypeLocal(scene));
 }
 
 function resolveSceneVisualYoutubeIdLocal(scene: ShortVideoManifestScene): string | null {
@@ -46,7 +51,7 @@ function resolveSceneVisualYoutubeIdLocal(scene: ShortVideoManifestScene): strin
     if (resolveSceneVisualTypeLocal(scene) !== 'video') {
         return null;
     }
-    const ref = resolveSceneVisualRefLocal(scene);
+    const ref = resolveSceneVisualVideoRef(scene);
     return ref ? parseYoutubeId(ref) : null;
 }
 
@@ -58,17 +63,7 @@ function resolveSceneShowVisualLocal(scene: ShortVideoManifestScene): boolean {
     if (visualType === 'none') {
         return false;
     }
-    const ref = resolveSceneVisualRefLocal(scene);
-    if (!ref) {
-        return false;
-    }
-    if (visualType === 'image') {
-        return isHttpsImageUrl(ref);
-    }
-    if (visualType === 'video') {
-        return resolveSceneVisualYoutubeIdLocal(scene) !== null;
-    }
-    return false;
+    return sceneVisualRefIsValid(scene, visualType);
 }
 
 function resolveSceneVisualMotionLocal(scene: ShortVideoManifestScene): string {
@@ -147,6 +142,19 @@ export function sceneToVisualClip(
         label: resolveClipLabel(scene),
     };
 
+    const imageRef = resolveSceneVisualImageRef(scene);
+    if (imageRef) {
+        clip.image_ref = imageRef;
+    }
+    const videoRef = resolveSceneVisualVideoRef(scene);
+    if (videoRef) {
+        clip.video_ref = videoRef;
+    }
+    const videoPreview = scene.layout?.visual_video_preview_url?.trim();
+    if (videoPreview) {
+        clip.video_preview_url = videoPreview;
+    }
+
     if (type === 'video') {
         const youtubeId = resolveSceneVisualYoutubeIdLocal(scene);
         if (youtubeId) {
@@ -215,7 +223,7 @@ export function updateVisualClipInManifest(
             if (clip.id !== clipId) {
                 return clip;
             }
-            const merged = { ...clip, ...patch };
+            const merged = syncClipActiveRef({ ...clip, ...patch });
             return clampClipTiming(merged);
         }),
     };
@@ -293,8 +301,16 @@ export function resolveVisualClipYoutubeId(clip: ShortVideoVisualClip): string |
     if (clip.type !== 'video') {
         return null;
     }
-    return clip.ref ? parseYoutubeId(clip.ref) : null;
+    const ref = resolveVisualClipVideoRef(clip);
+    return ref ? parseYoutubeId(ref) : null;
 }
+
+export {
+    resolveVisualClipImageRef,
+    resolveVisualClipRef,
+    resolveVisualClipVideoPreviewUrl,
+    resolveVisualClipVideoRef,
+} from './shortVideoVisualRefHelpers';
 
 export function resolveVisualClipPlaybackUrl(clip: ShortVideoVisualClip): string {
     return clip.visual_playback_url?.trim() || '';
@@ -312,8 +328,36 @@ export function resolveVisualClipStartInFile(clip: ShortVideoVisualClip): number
     return 0;
 }
 
+export function resolveVisualClipAudioVolume(clip: ShortVideoVisualClip): number {
+    const stored = clip.audio_volume;
+    if (typeof stored === 'number' && Number.isFinite(stored)) {
+        return clampAudioVolume(stored);
+    }
+    if (clip.visual_youtube_muted === false) {
+        return 1;
+    }
+    return 0;
+}
+
 export function resolveVisualClipYoutubeMuted(clip: ShortVideoVisualClip): boolean {
+    if (typeof clip.audio_volume === 'number') {
+        return resolveVisualClipAudioVolume(clip) <= AUDIO_VOLUME_EPSILON;
+    }
     return clip.visual_youtube_muted !== false;
+}
+
+/** Patch volume từ slider UI (0–100) — đồng bộ visual_youtube_muted */
+export function patchVisualClipAudioVolumeFromPercent(
+    percent: number
+): Pick<ShortVideoVisualClip, 'audio_volume' | 'visual_youtube_muted'> {
+    const volume = clampAudioVolume(percent / 100);
+    if (volume <= AUDIO_VOLUME_EPSILON) {
+        return { audio_volume: 0 };
+    }
+    return {
+        audio_volume: volume,
+        visual_youtube_muted: false,
+    };
 }
 
 export function sanitizeVisualClipsForPersist(

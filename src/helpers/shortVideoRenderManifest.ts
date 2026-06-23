@@ -16,9 +16,17 @@ import type {
     ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
+import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
 import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
-import { isHttpsImageUrl, parseYoutubeId } from './shortVideoYoutube';
+import {
+    resolveSceneVisualImageRef,
+    resolveSceneVisualRefByType,
+    resolveSceneVisualVideoRef,
+    sceneVisualRefIsValid,
+    syncLayoutActiveVisualRef,
+} from './shortVideoVisualRefHelpers';
+import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from './shortVideoYoutube';
 
 export const SCENE_LAYOUT_BACKGROUND_KEYS: (keyof ShortVideoManifestSceneLayout)[] = [
     'background',
@@ -44,12 +52,37 @@ export const SCENE_LAYOUT_KARAOKE_KEYS: (keyof ShortVideoManifestSceneLayout)[] 
 export const SCENE_LAYOUT_VISUAL_KEYS: (keyof ShortVideoManifestSceneLayout)[] = [
     'visual_type',
     'visual_ref',
+    'visual_image_ref',
+    'visual_video_ref',
+    'visual_video_preview_url',
     'visual_youtube_id',
     'visual_youtube_muted',
+    'visual_audio_volume',
     'visual_motion',
     'visual_start_sec',
     'show_visual',
 ];
+
+export { clampAudioVolume, audioVolumePercent, audioVolumeFromPercent } from './shortVideoAudioVolume';
+
+export function resolveSceneAudioVolume(scene: ShortVideoManifestScene): number {
+    const stored = scene.audio_volume;
+    if (typeof stored === 'number' && Number.isFinite(stored)) {
+        return clampAudioVolume(stored);
+    }
+    return 1;
+}
+
+export function resolveSceneVisualAudioVolume(scene: ShortVideoManifestScene): number {
+    const stored = scene.layout?.visual_audio_volume;
+    if (typeof stored === 'number' && Number.isFinite(stored)) {
+        return clampAudioVolume(stored);
+    }
+    if (scene.layout?.visual_youtube_muted === false) {
+        return 1;
+    }
+    return 0;
+}
 
 export function sceneBackgroundColor(
     scene: ShortVideoManifestScene,
@@ -86,17 +119,7 @@ export function resolveSceneShowVisual(scene: ShortVideoManifestScene): boolean 
     if (visualType === 'none') {
         return false;
     }
-    const ref = resolveSceneVisualRef(scene);
-    if (!ref) {
-        return false;
-    }
-    if (visualType === 'image') {
-        return isHttpsImageUrl(ref);
-    }
-    if (visualType === 'video') {
-        return resolveSceneVisualYoutubeId(scene) !== null;
-    }
-    return false;
+    return sceneVisualRefIsValid(scene, visualType);
 }
 
 function inferVisualTypeFromScript(scene: ShortVideoManifestScene): ShortVideoSceneVisualType {
@@ -124,7 +147,7 @@ export function resolveSceneVisualYoutubeId(scene: ShortVideoManifestScene): str
     if (resolveSceneVisualType(scene) !== 'video') {
         return null;
     }
-    const ref = resolveSceneVisualRef(scene);
+    const ref = resolveSceneVisualVideoRef(scene);
     return ref ? parseYoutubeId(ref) : null;
 }
 
@@ -203,12 +226,10 @@ export function resolveSceneTextBoxHeight(
 }
 
 export function resolveSceneVisualRef(scene: ShortVideoManifestScene): string {
-    const override = scene.layout?.visual_ref?.trim();
-    if (override) {
-        return override;
-    }
-    return scene.visual?.ref?.trim() || '';
+    return resolveSceneVisualRefByType(scene, resolveSceneVisualType(scene));
 }
+
+export { resolveSceneVisualImageRef, resolveSceneVisualVideoRef } from './shortVideoVisualRefHelpers';
 
 export function resolveSceneVisualMotion(scene: ShortVideoManifestScene): string {
     const override = scene.layout?.visual_motion?.trim();
@@ -227,6 +248,9 @@ export function resolveSceneVisualStartSec(scene: ShortVideoManifestScene): numb
 }
 
 export function resolveSceneVisualYoutubeMuted(scene: ShortVideoManifestScene): boolean {
+    if (typeof scene.layout?.visual_audio_volume === 'number') {
+        return resolveSceneVisualAudioVolume(scene) <= AUDIO_VOLUME_EPSILON;
+    }
     return scene.layout?.visual_youtube_muted !== false;
 }
 
@@ -316,7 +340,7 @@ export function updateSceneLayoutInManifest(
             );
             return {
                 ...scene,
-                layout: pruneLayout(layout),
+                layout: pruneLayout(syncLayoutActiveVisualRef(layout)),
             };
         }),
     };

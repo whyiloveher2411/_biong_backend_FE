@@ -885,12 +885,16 @@ export default function ShortVideoEditDrawer({
             const touchesVisual = (
                 'visual_type' in patch
                 || 'visual_ref' in patch
+                || 'visual_image_ref' in patch
+                || 'visual_video_ref' in patch
+                || 'visual_video_preview_url' in patch
                 || 'visual_youtube_id' in patch
                 || 'show_visual' in patch
             );
             const touchesVideo = (
                 patch.visual_type === 'video'
                 || patch.visual_ref !== undefined
+                || patch.visual_video_ref !== undefined
                 || patch.visual_youtube_id !== undefined
             );
             if (touchesVisual) {

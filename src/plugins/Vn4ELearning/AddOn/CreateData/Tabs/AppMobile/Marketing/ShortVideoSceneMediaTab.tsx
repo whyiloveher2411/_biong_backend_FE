@@ -1,35 +1,30 @@
 import React from 'react';
-import {
-    Alert,
-    Box,
-    ToggleButton,
-    ToggleButtonGroup,
-    Typography,
-} from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import Button from 'components/atoms/Button';
 import {
+    resolveSceneVisualImageRef,
     resolveSceneVisualMotion,
-    resolveSceneVisualRef,
     resolveSceneVisualStartSec,
     resolveSceneVisualType,
+    resolveSceneVisualVideoRef,
+    resolveSceneVisualAudioVolume,
     resolveSceneVisualYoutubeId,
     type ShortVideoManifestScene,
     type ShortVideoManifestSceneLayout,
 } from 'helpers/shortVideoRenderManifest';
+import { audioVolumeFromPercent, audioVolumePercent } from 'helpers/shortVideoAudioVolume';
 import {
     isHttpsImageUrl,
-    isYoutubeUrl,
+    isValidVideoRef,
     parseYoutubeId,
 } from 'helpers/shortVideoYoutube';
 import {
     InspectorPanelBody,
     InspectorPanelTabs,
     InspectorPropertyGroup,
-    InspectorPropertyReadonly,
-    InspectorPropertyRow,
     InspectorPropertySelect,
-    InspectorPropertyText,
 } from './ShortVideoInspectorFields';
+import ShortVideoVisualMediaFields from './ShortVideoVisualMediaFields';
 
 type Props = {
     scene: ShortVideoManifestScene;
@@ -70,6 +65,22 @@ function resolveEditorVisualType(scene: ShortVideoManifestScene): EditorVisualTy
     return resolveSceneVisualType(scene) === 'video' ? 'video' : 'image';
 }
 
+function validateImageUrl(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return 'Cần nhập URL';
+    }
+    return isHttpsImageUrl(trimmed) ? '' : 'URL ảnh phải bắt đầu bằng https://';
+}
+
+function validateVideoUrl(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return 'Cần nhập URL';
+    }
+    return isValidVideoRef(trimmed) ? '' : 'URL video không hợp lệ (YouTube hoặc mp4/webm HTTPS)';
+}
+
 export default function ShortVideoSceneMediaTab({
     scene,
     layout,
@@ -78,23 +89,19 @@ export default function ShortVideoSceneMediaTab({
 }: Props) {
     const [activeTab, setActiveTab] = React.useState<number>(MEDIA_TAB.properties);
     const visualType = resolveEditorVisualType(scene);
-    const urlValue = layout.visual_ref ?? resolveSceneVisualRef(scene);
+    const imageUrl = layout.visual_image_ref ?? resolveSceneVisualImageRef(scene);
+    const videoUrl = layout.visual_video_ref ?? resolveSceneVisualVideoRef(scene);
     const motion = layout.visual_motion ?? resolveSceneVisualMotion(scene);
     const scriptRef = scene.visual?.ref?.trim() || '';
 
-    const validationError = React.useMemo(() => {
-        const trimmed = urlValue.trim();
-        if (!trimmed) {
-            return 'Cần nhập URL';
-        }
-        if (visualType === 'image') {
-            return isHttpsImageUrl(trimmed) ? '' : 'URL ảnh phải bắt đầu bằng https://';
-        }
-        if (visualType === 'video') {
-            return parseYoutubeId(trimmed) ? '' : 'Link YouTube không hợp lệ';
-        }
-        return '';
-    }, [visualType, urlValue]);
+    const imageValidationError = React.useMemo(
+        () => validateImageUrl(imageUrl),
+        [imageUrl]
+    );
+    const videoValidationError = React.useMemo(
+        () => validateVideoUrl(videoUrl),
+        [videoUrl]
+    );
 
     const handleTypeChange = (
         _event: React.MouseEvent<HTMLElement>,
@@ -119,32 +126,55 @@ export default function ShortVideoSceneMediaTab({
         });
     };
 
-    const handleUrlChange = (value: string) => {
+    const handleImageUrlChange = (value: string) => {
         const trimmed = value.trim();
-        if (visualType === 'video') {
-            const parsedYoutubeId = parseYoutubeId(trimmed);
-            patch({
-                visual_ref: patchOrClearString(layout.visual_ref, value),
-                visual_youtube_id: parsedYoutubeId ?? undefined,
-                visual_playback_url: undefined,
-                show_visual: parsedYoutubeId ? true : undefined,
-            });
-            return;
-        }
         patch({
-            visual_ref: patchOrClearString(layout.visual_ref, value),
+            visual_image_ref: patchOrClearString(layout.visual_image_ref, value),
             visual_playback_url: undefined,
             show_visual: trimmed && isHttpsImageUrl(trimmed) ? true : undefined,
         });
     };
 
-    const handleClearMedia = () => {
+    const handleVideoUrlChange = (value: string) => {
+        const trimmed = value.trim();
+        const parsedYoutubeId = parseYoutubeId(trimmed);
         patch({
-            visual_ref: undefined,
+            visual_video_ref: patchOrClearString(layout.visual_video_ref, value),
+            visual_youtube_id: parsedYoutubeId ?? undefined,
+            visual_playback_url: undefined,
+            visual_video_preview_url: trimmed ? layout.visual_video_preview_url : undefined,
+            show_visual: trimmed && isValidVideoRef(trimmed) ? true : undefined,
+        });
+    };
+
+    const handleStockVideoSelect = (url: string, previewUrl: string) => {
+        const parsedYoutubeId = parseYoutubeId(url);
+        patch({
+            visual_video_ref: url.trim(),
+            visual_video_preview_url: previewUrl.trim() || undefined,
+            visual_youtube_id: parsedYoutubeId ?? undefined,
+            visual_playback_url: undefined,
+            show_visual: true,
+        });
+    };
+
+    const handleClearMedia = () => {
+        if (visualType === 'image') {
+            patch({
+                visual_image_ref: undefined,
+                visual_playback_url: undefined,
+                show_visual: Boolean(videoUrl.trim() && isValidVideoRef(videoUrl)),
+                visual_type: visualType,
+            });
+            return;
+        }
+        patch({
+            visual_video_ref: undefined,
+            visual_video_preview_url: undefined,
             visual_youtube_id: undefined,
             visual_playback_url: undefined,
             visual_start_sec: undefined,
-            show_visual: true,
+            show_visual: Boolean(imageUrl.trim() && isHttpsImageUrl(imageUrl)),
             visual_type: visualType,
         });
     };
@@ -164,9 +194,20 @@ export default function ShortVideoSceneMediaTab({
         patch({ visual_start_sec: Math.max(0, parsed) });
     };
 
+    const hasCustomImageRef = Boolean(layout.visual_image_ref?.trim());
+    const hasCustomVideoRef = Boolean(layout.visual_video_ref?.trim());
+
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    mb: 1,
+                }}
+            >
                 <Typography variant="subtitle2" fontWeight={600}>
                     Hình ảnh & video
                 </Typography>
@@ -186,87 +227,43 @@ export default function ShortVideoSceneMediaTab({
 
             <InspectorPanelBody>
                 {activeTab === MEDIA_TAB.properties ? (
-                    <>
-                        <InspectorPropertyGroup title="Hiển thị">
-                            <InspectorPropertyRow label="Loại media" fullWidthControl>
-                                <ToggleButtonGroup
-                                    exclusive
-                                    size="small"
-                                    fullWidth
-                                    value={visualType}
-                                    onChange={handleTypeChange}
-                                >
-                                    <ToggleButton value="image" sx={{ flex: 1, textTransform: 'none' }}>
-                                        Ảnh
-                                    </ToggleButton>
-                                    <ToggleButton value="video" sx={{ flex: 1, textTransform: 'none' }}>
-                                        Video
-                                    </ToggleButton>
-                                </ToggleButtonGroup>
-                            </InspectorPropertyRow>
-                        </InspectorPropertyGroup>
-
-                        <InspectorPropertyGroup title="Nguồn media">
-                                <InspectorPropertyText
-                                    label={visualType === 'video' ? 'Link YouTube' : 'URL ảnh'}
-                                    value={urlValue}
-                                    onChange={handleUrlChange}
-                                    placeholder={
-                                        visualType === 'video'
-                                            ? 'https://www.youtube.com/watch?v=…'
-                                            : scriptRef || 'https://…'
-                                    }
-                                    error={Boolean(validationError)}
-                                    helperText={
-                                        validationError
-                                            || (visualType === 'video'
-                                                ? 'Hỗ trợ watch, youtu.be và embed'
-                                                : 'URL public https://')
-                                    }
-                                />
-                                {visualType === 'video' && youtubeId ? (
-                                    <InspectorPropertyReadonly
-                                        label="YouTube ID"
-                                        value={youtubeId}
-                                    />
-                                ) : null}
-                                {scriptRef && !layout.visual_ref ? (
-                                    <InspectorPropertyReadonly
-                                        label="URL gốc script"
-                                        value={isYoutubeUrl(scriptRef) ? scriptRef : scriptRef}
-                                    />
-                                ) : null}
-                                {validationError ? (
-                                    <Box sx={{ px: 0.25, pb: 1 }}>
-                                        <Alert severity="warning" sx={{ py: 0.5 }}>
-                                            {validationError}
-                                        </Alert>
-                                    </Box>
-                                ) : null}
-                                <Box sx={{ px: 0.25, pb: 1 }}>
-                                    <Button size="small" variant="outlined" fullWidth onClick={handleClearMedia}>
-                                        Xóa media
-                                    </Button>
-                                </Box>
-                        </InspectorPropertyGroup>
-
-                        {visualType === 'video' ? (
-                            <InspectorPropertyGroup title="Phát lại video">
-                                <InspectorPropertyText
-                                    label="Vị trí bắt đầu"
-                                    description="Giây bắt đầu trong file đã tải"
-                                    value={String(startSec)}
-                                    type="number"
-                                    onChange={handleStartSecChange}
-                                    inputProps={{ min: 0, step: 0.1 }}
-                                />
-                            </InspectorPropertyGroup>
-                        ) : null}
-                    </>
+                    <ShortVideoVisualMediaFields
+                        visualType={visualType}
+                        imageUrl={imageUrl}
+                        videoUrl={videoUrl}
+                        imageValidationError={imageValidationError}
+                        videoValidationError={videoValidationError}
+                        youtubeId={youtubeId}
+                        onTypeChange={handleTypeChange}
+                        onImageUrlChange={handleImageUrlChange}
+                        onVideoUrlChange={handleVideoUrlChange}
+                        onStockVideoSelect={handleStockVideoSelect}
+                        imageUrlPlaceholder={scriptRef || 'https://…'}
+                        showScriptRef={Boolean(scriptRef && !hasCustomImageRef && !hasCustomVideoRef)}
+                        scriptRef={scriptRef}
+                        onClearMedia={handleClearMedia}
+                        startSec={startSec}
+                        onStartSecChange={handleStartSecChange}
+                        audioVolumePercent={audioVolumePercent(resolveSceneVisualAudioVolume(scene))}
+                        onAudioVolumePercentChange={(percent) => {
+                            const volume = audioVolumeFromPercent(percent);
+                            if (volume <= 0) {
+                                patch({
+                                    visual_audio_volume: 0,
+                                    visual_youtube_muted: undefined,
+                                });
+                                return;
+                            }
+                            patch({
+                                visual_audio_volume: volume,
+                                visual_youtube_muted: false,
+                            });
+                        }}
+                    />
                 ) : null}
 
                 {activeTab === MEDIA_TAB.animation ? (
-                    <InspectorPropertyGroup title="Chuyển động">
+                    <InspectorPropertyGroup title="Chuyển động" collapsible={false}>
                         <InspectorPropertySelect
                             label="Hiệu ứng vào"
                             description="Cách media xuất hiện trên màn hình"

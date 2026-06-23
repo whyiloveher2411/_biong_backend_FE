@@ -5,8 +5,8 @@ import type {
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 import { resolveDefaultSceneAudioTtsSettings, resolveSceneHeadlineText } from './shortVideoRenderManifest';
-import { clampClipTiming, resolveVisualClipYoutubeId, setVisualClipsInManifest } from './shortVideoVisualClips';
-import { buildYoutubeThumbnailUrl } from './shortVideoYoutube';
+import { clampClipTiming, resolveVisualClipImageRef, resolveVisualClipVideoPreviewUrl, resolveVisualClipVideoRef, resolveVisualClipYoutubeId, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { buildYoutubeThumbnailUrl, isHttpsVideoUrl } from './shortVideoYoutube';
 import {
     ensureManifestTimelineTracks,
     getTrackRowHeight,
@@ -77,6 +77,8 @@ export type ShortVideoTimelineActionData = {
     label?: string;
     status?: 'ready' | 'pending' | 'running';
     thumbnailUrl?: string;
+    /** URL video HTTPS — dùng làm poster khi không có thumbnailUrl */
+    videoSrc?: string;
     visualType?: string;
     audioPeaks?: number[];
     audioTrimStartSec?: number;
@@ -404,15 +406,38 @@ export function updateSceneTimelineLabelInManifest(
     };
 }
 
-function clipThumbnailUrl(clip: ShortVideoVisualClip): string | undefined {
-    if (clip.type === 'image' && /^https:\/\//i.test(clip.ref.trim())) {
-        return clip.ref.trim();
+function clipVisualPosterUrl(clip: ShortVideoVisualClip): string | undefined {
+    if (clip.type === 'image') {
+        const imageRef = resolveVisualClipImageRef(clip);
+        if (/^https:\/\//i.test(imageRef)) {
+            return imageRef;
+        }
+        return undefined;
     }
     if (clip.type === 'video') {
         const youtubeId = resolveVisualClipYoutubeId(clip);
         if (youtubeId) {
             return buildYoutubeThumbnailUrl(youtubeId);
         }
+        const previewUrl = resolveVisualClipVideoPreviewUrl(clip);
+        if (previewUrl) {
+            return previewUrl;
+        }
+    }
+    return undefined;
+}
+
+function clipVisualVideoSrc(clip: ShortVideoVisualClip): string | undefined {
+    if (clip.type !== 'video') {
+        return undefined;
+    }
+    const ref = resolveVisualClipVideoRef(clip);
+    if (ref && isHttpsVideoUrl(ref)) {
+        return ref;
+    }
+    const playback = clip.visual_playback_url?.trim();
+    if (playback && /^https?:\/\//i.test(playback)) {
+        return playback;
     }
     return undefined;
 }
@@ -538,7 +563,8 @@ export function manifestToTimelineRows(
                 kind: 'visual',
                 clipId: clip.id,
                 label: clip.label?.trim() || clip.id,
-                thumbnailUrl: clipThumbnailUrl(clip),
+                thumbnailUrl: clipVisualPosterUrl(clip),
+                videoSrc: clipVisualVideoSrc(clip),
                 visualType: clip.type,
             },
         };

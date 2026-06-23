@@ -6,6 +6,7 @@ import {
     IconButton,
     Link,
     MenuItem,
+    Slider,
     Switch,
     Tab,
     Tabs,
@@ -13,15 +14,32 @@ import {
     Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SearchIcon from '@mui/icons-material/Search';
+import ShortVideoStockMediaSearchDrawer from './ShortVideoStockMediaSearchDrawer';
+import type { StockVideoSearchItem } from 'helpers/marketingStockImageApi';
 
 export const INSPECTOR_PANEL_TAB_SX = {
     minHeight: 36,
     py: 0.75,
-    px: 1,
-    fontSize: 13,
+    px: 0.75,
+    fontSize: 12,
     fontWeight: 500,
     textTransform: 'none',
-    minWidth: 0,
+    minWidth: 'auto',
+} as const;
+
+export const INSPECTOR_TOGGLE_BUTTON_SX = {
+    flex: 1,
+    textTransform: 'none',
+    fontSize: 13,
+    fontWeight: 500,
+    py: 0.75,
+} as const;
+
+export const INSPECTOR_SHELL_CONTENT_SX = {
+    px: 2,
+    pt: 1,
+    pb: 2,
 } as const;
 
 type InspectorPanelTabsProps = {
@@ -35,13 +53,16 @@ export function InspectorPanelTabs({ value, onChange, tabs }: InspectorPanelTabs
         <Tabs
             value={value}
             onChange={(_event, next) => onChange(next)}
-            variant="fullWidth"
+            variant="scrollable"
+            scrollButtons="auto"
             sx={{
                 minHeight: 36,
+                mb: 1.5,
                 borderBottom: 1,
                 borderColor: 'divider',
                 '& .MuiTabs-indicator': {
                     height: 2,
+                    borderRadius: 1,
                 },
             }}
         >
@@ -55,6 +76,7 @@ export function InspectorPanelTabs({ value, onChange, tabs }: InspectorPanelTabs
 type InspectorPropertyGroupProps = {
     title: string;
     defaultExpanded?: boolean;
+    collapsible?: boolean;
     action?: React.ReactNode;
     onExpandedChange?: (expanded: boolean) => void;
     children: React.ReactNode;
@@ -63,71 +85,93 @@ type InspectorPropertyGroupProps = {
 export function InspectorPropertyGroup({
     title,
     defaultExpanded = true,
+    collapsible = true,
     action,
     onExpandedChange,
     children,
 }: InspectorPropertyGroupProps) {
     const [expanded, setExpanded] = React.useState(defaultExpanded);
+    const isExpanded = collapsible ? expanded : true;
 
     const toggleExpanded = React.useCallback(() => {
+        if (!collapsible) {
+            return;
+        }
         setExpanded((prev) => {
             const next = !prev;
             onExpandedChange?.(next);
             return next;
         });
-    }, [onExpandedChange]);
+    }, [collapsible, onExpandedChange]);
 
     return (
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Box
+            sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                mb: 1.5,
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+            }}
+        >
             <Box
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 0.5,
-                    py: 0.75,
-                    px: 0.25,
+                    px: 1.5,
+                    py: 1,
+                    borderBottom: isExpanded ? 1 : 0,
+                    borderColor: 'divider',
+                    bgcolor: 'action.hover',
                 }}
             >
                 <Box
-                    role="button"
-                    tabIndex={0}
-                    onClick={toggleExpanded}
-                    onKeyDown={(e) => {
+                    role={collapsible ? 'button' : undefined}
+                    tabIndex={collapsible ? 0 : undefined}
+                    onClick={collapsible ? toggleExpanded : undefined}
+                    onKeyDown={collapsible ? (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             toggleExpanded();
                         }
-                    }}
+                    } : undefined}
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 0.25,
+                        gap: 0.5,
                         flex: 1,
                         minWidth: 0,
-                        cursor: 'pointer',
+                        cursor: collapsible ? 'pointer' : 'default',
                         userSelect: 'none',
                     }}
                 >
-                    <IconButton
-                        size="small"
-                        aria-label={expanded ? 'Thu gọn' : 'Mở rộng'}
-                        sx={{
-                            p: 0.25,
-                            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                            transition: 'transform 0.2s ease',
-                        }}
-                    >
-                        <ExpandMoreIcon fontSize="small" />
-                    </IconButton>
-                    <Typography variant="body2" fontWeight={600} noWrap>
+                    {collapsible ? (
+                        <IconButton
+                            size="small"
+                            aria-label={isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                            sx={{
+                                p: 0.25,
+                                ml: -0.25,
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.2s ease',
+                            }}
+                        >
+                            <ExpandMoreIcon fontSize="small" />
+                        </IconButton>
+                    ) : null}
+                    <Typography variant="subtitle2" fontWeight={600} fontSize={13} noWrap>
                         {title}
                     </Typography>
                 </Box>
                 {action}
             </Box>
-            <Collapse in={expanded}>
-                <Box sx={{ pb: 0.5 }}>{children}</Box>
+            <Collapse in={isExpanded}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {children}
+                </Box>
             </Collapse>
         </Box>
     );
@@ -162,16 +206,22 @@ export function InspectorPropertyRow({
                 alignItems: fullWidthControl ? 'stretch' : 'center',
                 justifyContent: 'space-between',
                 gap: fullWidthControl ? 0.75 : 1,
-                py: 1,
-                px: 0.25,
-                borderBottom: 1,
-                borderColor: 'divider',
+                py: 1.25,
+                px: 1.5,
                 opacity: disabled ? 0.55 : 1,
                 transition: 'opacity 0.15s ease',
             }}
         >
             <Box sx={{ minWidth: 0, flex: fullWidthControl ? undefined : 1 }}>
-                <Typography variant="body2" sx={{ lineHeight: 1.35 }}>
+                <Typography
+                    variant={fullWidthControl ? 'caption' : 'body2'}
+                    color={fullWidthControl ? 'text.secondary' : 'text.primary'}
+                    sx={{
+                        lineHeight: 1.35,
+                        fontWeight: fullWidthControl ? 600 : 400,
+                        display: 'block',
+                    }}
+                >
                     {label}
                 </Typography>
                 {description ? (
@@ -291,6 +341,7 @@ type InspectorPropertyTextProps = {
     error?: boolean;
     helperText?: string;
     inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
+    endAdornment?: React.ReactNode;
 };
 
 export function InspectorPropertyText({
@@ -305,6 +356,7 @@ export function InspectorPropertyText({
     error = false,
     helperText,
     inputProps,
+    endAdornment,
 }: InspectorPropertyTextProps) {
     return (
         <InspectorPropertyRow
@@ -324,8 +376,75 @@ export function InspectorPropertyText({
                 helperText={!description ? helperText : undefined}
                 onChange={(e) => onChange(e.target.value)}
                 inputProps={inputProps}
+                InputProps={endAdornment ? { endAdornment } : undefined}
             />
         </InspectorPropertyRow>
+    );
+}
+
+type InspectorPropertyImageUrlProps = Omit<InspectorPropertyTextProps, 'endAdornment' | 'type'>;
+
+export function InspectorPropertyImageUrl(props: InspectorPropertyImageUrlProps) {
+    const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+    return (
+        <>
+            <InspectorPropertyText
+                {...props}
+                endAdornment={(
+                    <IconButton
+                        size="small"
+                        aria-label="Tìm ảnh stock"
+                        edge="end"
+                        onClick={() => setDrawerOpen(true)}
+                    >
+                        <SearchIcon fontSize="small" />
+                    </IconButton>
+                )}
+            />
+            <ShortVideoStockMediaSearchDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                mediaType="image"
+                onSelectImage={(url) => props.onChange(url)}
+            />
+        </>
+    );
+}
+
+type InspectorPropertyVideoUrlProps = Omit<InspectorPropertyTextProps, 'endAdornment' | 'type'> & {
+    onStockVideoSelect?: (url: string, item: StockVideoSearchItem) => void;
+};
+
+export function InspectorPropertyVideoUrl(props: InspectorPropertyVideoUrlProps) {
+    const { onStockVideoSelect, ...textProps } = props;
+    const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+    return (
+        <>
+            <InspectorPropertyText
+                {...textProps}
+                endAdornment={(
+                    <IconButton
+                        size="small"
+                        aria-label="Tìm video stock"
+                        edge="end"
+                        onClick={() => setDrawerOpen(true)}
+                    >
+                        <SearchIcon fontSize="small" />
+                    </IconButton>
+                )}
+            />
+            <ShortVideoStockMediaSearchDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                mediaType="video"
+                onSelectVideo={(url, item) => {
+                    textProps.onChange(url);
+                    onStockVideoSelect?.(url, item);
+                }}
+            />
+        </>
     );
 }
 
@@ -409,12 +528,11 @@ export function InspectorPropertyColor({ label, value, onChange }: InspectorProp
                     display: 'block',
                 }}
             >
-                <Box
-                    component="input"
+                <input
                     type="color"
                     value={pickerColor}
-                    onChange={(e) => onChange(e.target.value)}
-                    sx={{
+                    onChange={(event) => onChange(event.target.value)}
+                    style={{
                         position: 'absolute',
                         inset: 0,
                         opacity: 0,
@@ -471,6 +589,69 @@ export function InspectorPropertyNumber({
                     },
                 }}
             />
+        </InspectorPropertyRow>
+    );
+}
+
+type InspectorPropertyVolumeProps = {
+    label: string;
+    description?: string;
+    valuePercent: number;
+    onChange: (percent: number) => void;
+    disabled?: boolean;
+};
+
+export function InspectorPropertyVolume({
+    label,
+    description,
+    valuePercent,
+    onChange,
+    disabled = false,
+}: InspectorPropertyVolumeProps) {
+    const clampedPercent = Math.max(0, Math.min(100, Math.round(valuePercent)));
+
+    return (
+        <InspectorPropertyRow label={label} description={description} fullWidthControl>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: '100%', px: 0.25 }}>
+                <Slider
+                    size="small"
+                    value={clampedPercent}
+                    min={0}
+                    max={100}
+                    step={1}
+                    disabled={disabled}
+                    onChange={(_event, next) => {
+                        if (typeof next === 'number') {
+                            onChange(next);
+                        }
+                    }}
+                    aria-label={label}
+                    sx={{
+                        flex: 1,
+                        color: 'text.secondary',
+                        height: 4,
+                        py: 0.75,
+                        '& .MuiSlider-thumb': {
+                            width: 12,
+                            height: 12,
+                        },
+                        '& .MuiSlider-rail': {
+                            opacity: 0.35,
+                        },
+                    }}
+                />
+                <Typography
+                    variant="caption"
+                    sx={{
+                        minWidth: 36,
+                        textAlign: 'right',
+                        fontVariantNumeric: 'tabular-nums',
+                        color: 'text.secondary',
+                    }}
+                >
+                    {clampedPercent}%
+                </Typography>
+            </Box>
         </InspectorPropertyRow>
     );
 }

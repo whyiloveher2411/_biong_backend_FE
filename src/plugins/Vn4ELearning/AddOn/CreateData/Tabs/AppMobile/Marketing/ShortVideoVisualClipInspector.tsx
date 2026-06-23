@@ -8,8 +8,6 @@ import {
     Tab,
     Tabs,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import type {
@@ -21,13 +19,18 @@ import {
     resolveSceneAudioTtsSettings,
     resolveDefaultSceneAudioTtsSettings,
     resolveDefaultVbeeSceneAudioTtsSettings,
+    resolveSceneAudioVolume,
 } from 'helpers/shortVideoRenderManifest';
 import type { ShortVideoSceneAudioTtsSettings } from 'helpers/shortVideoRenderManifest';
-import { updateVisualClipInManifest } from 'helpers/shortVideoVisualClips';
 import {
+    patchVisualClipAudioVolumeFromPercent,
+    resolveVisualClipImageRef,
+    resolveVisualClipVideoRef,
     resolveVisualClipYoutubeId,
+    updateVisualClipInManifest,
 } from 'helpers/shortVideoVisualClips';
-import { isHttpsImageUrl, parseYoutubeId } from 'helpers/shortVideoYoutube';
+import { audioVolumeFromPercent, audioVolumePercent } from 'helpers/shortVideoAudioVolume';
+import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from 'helpers/shortVideoYoutube';
 import {
     fetchSaydiTtsCatalog,
     fetchVbeeTtsAccountCredits,
@@ -38,15 +41,15 @@ import {
 } from 'helpers/marketingShortVideoManifestApi';
 import ShortVideoSceneEditPanel from './ShortVideoSceneEditPanel';
 import ShortVideoSceneMediaPreview from './ShortVideoSceneMediaPreview';
+import ShortVideoVisualMediaFields, { resolveVisualMediaVolumePercent } from './ShortVideoVisualMediaFields';
 import {
+    INSPECTOR_SHELL_CONTENT_SX,
     InspectorPanelBody,
     InspectorPanelTabs,
     InspectorPropertyGroup,
     InspectorPropertyReadonly,
-    InspectorPropertyRow,
     InspectorPropertySelect,
-    InspectorPropertySwitch,
-    InspectorPropertyText,
+    InspectorPropertyVolume,
 } from './ShortVideoInspectorFields';
 
 type Props = {
@@ -80,6 +83,9 @@ const VISUAL_CLIP_TAB = {
 } as const;
 
 function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifest['scenes'][number] {
+    const imageRef = resolveVisualClipImageRef(clip);
+    const videoRef = resolveVisualClipVideoRef(clip);
+    const activeRef = clip.type === 'video' ? videoRef : imageRef;
     return {
         id: clip.id,
         voiceover: '',
@@ -87,7 +93,7 @@ function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifes
         duration_hint_sec: clip.duration_sec,
         visual: {
             type: clip.type === 'image' ? 'image' : clip.type === 'video' ? 'video' : 'kinetic_text',
-            ref: clip.ref,
+            ref: activeRef,
             motion: clip.motion || 'pop',
         },
         audio_url: '',
@@ -96,9 +102,13 @@ function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifes
         words: [],
         layout: {
             visual_type: clip.type,
-            visual_ref: clip.ref,
+            visual_ref: activeRef,
+            visual_image_ref: imageRef || undefined,
+            visual_video_ref: videoRef || undefined,
+            visual_video_preview_url: clip.video_preview_url,
             visual_youtube_id: clip.visual_youtube_id,
             visual_youtube_muted: clip.visual_youtube_muted,
+            visual_audio_volume: clip.audio_volume,
             visual_playback_url: clip.visual_playback_url,
             visual_motion: clip.motion,
             visual_start_sec: clip.visual_start_sec,
@@ -238,6 +248,8 @@ type NarrationAudioSettingsPanelProps = {
     hasWhisper: boolean;
     wordsCount: number;
     durationSec: number;
+    narrationVolumePercent: number;
+    onNarrationVolumeChange: (percent: number) => void;
     vbeeCredits: VbeeTtsAccountCredits | null;
     vbeeCreditsLoading: boolean;
     vbeeCreditsError: string;
@@ -260,6 +272,8 @@ function NarrationAudioSettingsPanel({
     hasWhisper,
     wordsCount,
     durationSec,
+    narrationVolumePercent,
+    onNarrationVolumeChange,
     vbeeCredits,
     vbeeCreditsLoading,
     vbeeCreditsError,
@@ -384,6 +398,15 @@ function NarrationAudioSettingsPanel({
                 )}
             </InspectorPropertyGroup>
 
+            <InspectorPropertyGroup title="Âm lượng" collapsible={false}>
+                <InspectorPropertyVolume
+                    label="Voiceover"
+                    description="Âm lượng lời thoại trên track narration"
+                    valuePercent={narrationVolumePercent}
+                    onChange={onNarrationVolumeChange}
+                />
+            </InspectorPropertyGroup>
+
             <InspectorPropertyGroup title="Trạng thái output" defaultExpanded={false}>
                 <InspectorPropertyReadonly
                     label="Audio"
@@ -447,11 +470,6 @@ function NarrationSceneInspector({
     const pending = !hasAudio || !hasWhisper;
     const voiceoverTrimmed = scene.voiceover?.trim() || '';
     const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang);
-
-    const sceneIndex = manifest.scenes.findIndex((item) => item.id === scene.id);
-    const sceneTitle = sceneIndex >= 0
-        ? `Scene ${sceneIndex + 1} · ${scene.id}`
-        : scene.id;
 
     const refreshVbeeCredits = React.useCallback(() => {
         setVbeeCreditsLoading(true);
@@ -603,22 +621,7 @@ function NarrationSceneInspector({
 
     return (
         <Box sx={INSPECTOR_SHELL_SX} className="custom_scroll">
-            <Box sx={{ px: 2, pt: 2, pb: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1.25 }}>
-                    <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle2" fontWeight={600} noWrap>
-                            {sceneTitle}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            Chỉnh nội dung và hiển thị
-                        </Typography>
-                    </Box>
-                    {pending ? (
-                        <Chip size="small" color="warning" label="Chưa có audio" sx={{ flexShrink: 0 }} />
-                    ) : (
-                        <Chip size="small" color="success" label="Sẵn sàng" sx={{ flexShrink: 0 }} />
-                    )}
-                </Box>
+            <Box sx={INSPECTOR_SHELL_CONTENT_SX}>
                 <Tabs
                     value={activeTab}
                     onChange={(_event, next) => setActiveTab(next)}
@@ -627,6 +630,8 @@ function NarrationSceneInspector({
                     sx={{
                         minHeight: 36,
                         mb: 1.5,
+                        borderBottom: 1,
+                        borderColor: 'divider',
                         '& .MuiTabs-indicator': {
                             height: 2,
                             borderRadius: 1,
@@ -641,6 +646,11 @@ function NarrationSceneInspector({
             <Box sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
                 {activeTab === NARRATION_TAB.content ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {pending ? (
+                            <Chip size="small" color="warning" label="Chưa có audio" sx={{ alignSelf: 'flex-start' }} />
+                        ) : (
+                            <Chip size="small" color="success" label="Sẵn sàng" sx={{ alignSelf: 'flex-start' }} />
+                        )}
                         <InspectorSection
                             title="Nội dung scene"
                             description="Nhãn hiển thị trên timeline và văn bản TTS."
@@ -702,6 +712,10 @@ function NarrationSceneInspector({
                             hasWhisper={hasWhisper}
                             wordsCount={scene.words?.length ?? 0}
                             durationSec={scene.duration_sec}
+                            narrationVolumePercent={audioVolumePercent(resolveSceneAudioVolume(scene))}
+                            onNarrationVolumeChange={(percent) => {
+                                patchScene({ audio_volume: audioVolumeFromPercent(percent) });
+                            }}
                             vbeeCredits={vbeeCredits}
                             vbeeCreditsLoading={vbeeCreditsLoading}
                             vbeeCreditsError={vbeeCreditsError}
@@ -767,7 +781,8 @@ function NarrationSceneInspector({
 
 type VisualClipMediaInspectorProps = {
     clip: ShortVideoVisualClip;
-    validationError: string;
+    imageValidationError: string;
+    videoValidationError: string;
     dirty: boolean;
     saving: boolean;
     onSave?: () => void;
@@ -776,7 +791,8 @@ type VisualClipMediaInspectorProps = {
 
 function VisualClipMediaInspector({
     clip,
-    validationError,
+    imageValidationError,
+    videoValidationError,
     dirty,
     saving,
     onSave,
@@ -784,7 +800,8 @@ function VisualClipMediaInspector({
 }: VisualClipMediaInspectorProps) {
     const [visualTab, setVisualTab] = React.useState<number>(VISUAL_CLIP_TAB.properties);
     const visualType: 'image' | 'video' = clip.type === 'video' ? 'video' : 'image';
-    const urlValue = clip.ref ?? '';
+    const imageUrl = clip.image_ref ?? resolveVisualClipImageRef(clip);
+    const videoUrl = clip.video_ref ?? resolveVisualClipVideoRef(clip);
     const motion = clip.motion || 'pop';
     const youtubeId = resolveVisualClipYoutubeId(clip);
 
@@ -802,33 +819,37 @@ function VisualClipMediaInspector({
         });
     };
 
-    const handleUrlChange = (value: string) => {
-        const trimmed = value.trim();
-        if (visualType === 'video') {
-            const parsedYoutubeId = parseYoutubeId(trimmed);
-            onPatch({
-                ref: trimmed,
-                visual_youtube_id: parsedYoutubeId ?? undefined,
-                visual_playback_url: undefined,
-            });
-            return;
-        }
+    const handleImageUrlChange = (value: string) => {
         onPatch({
-            ref: trimmed,
+            image_ref: value.trim() || undefined,
+            visual_playback_url: undefined,
+        });
+    };
+
+    const handleVideoUrlChange = (value: string) => {
+        const trimmed = value.trim();
+        const parsedYoutubeId = parseYoutubeId(trimmed);
+        onPatch({
+            video_ref: trimmed || undefined,
+            video_preview_url: trimmed ? clip.video_preview_url : undefined,
+            visual_youtube_id: parsedYoutubeId ?? undefined,
+            visual_playback_url: undefined,
+        });
+    };
+
+    const handleStockVideoSelect = (url: string, previewUrl: string) => {
+        const parsedYoutubeId = parseYoutubeId(url);
+        onPatch({
+            video_ref: url.trim(),
+            video_preview_url: previewUrl.trim() || undefined,
+            visual_youtube_id: parsedYoutubeId ?? undefined,
             visual_playback_url: undefined,
         });
     };
 
     return (
         <Box sx={INSPECTOR_SHELL_SX} className="custom_scroll">
-            <Box sx={{ px: 2, pt: 2, pb: 0 }}>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
-                    Visual clip
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    {clip.label || clip.id}
-                </Typography>
-
+            <Box sx={INSPECTOR_SHELL_CONTENT_SX}>
                 <InspectorPanelTabs
                     value={visualTab}
                     onChange={setVisualTab}
@@ -837,91 +858,41 @@ function VisualClipMediaInspector({
                         { label: 'Hiệu ứng' },
                     ]}
                 />
-            </Box>
 
-            <Box sx={{ px: 2, pb: 1.5 }}>
                 <InspectorPanelBody>
                     {visualTab === VISUAL_CLIP_TAB.properties ? (
-                        <>
-                            <InspectorPropertyGroup title="Hiển thị">
-                                <InspectorPropertyRow label="Loại media" fullWidthControl>
-                                    <ToggleButtonGroup
-                                        exclusive
-                                        size="small"
-                                        fullWidth
-                                        value={visualType}
-                                        onChange={handleTypeChange}
-                                    >
-                                        <ToggleButton value="image" sx={{ flex: 1, textTransform: 'none' }}>
-                                            Ảnh
-                                        </ToggleButton>
-                                        <ToggleButton value="video" sx={{ flex: 1, textTransform: 'none' }}>
-                                            Video
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
-                                </InspectorPropertyRow>
-                            </InspectorPropertyGroup>
-
-                            <InspectorPropertyGroup title="Nguồn media">
-                                    <InspectorPropertyText
-                                        label={visualType === 'video' ? 'Link YouTube' : 'URL ảnh'}
-                                        value={urlValue}
-                                        onChange={handleUrlChange}
-                                        error={Boolean(validationError)}
-                                        helperText={validationError || 'URL public https://'}
-                                    />
-                                    {visualType === 'video' && youtubeId ? (
-                                        <InspectorPropertyReadonly
-                                            label="YouTube ID"
-                                            value={youtubeId}
-                                        />
-                                    ) : null}
-                                    {validationError ? (
-                                        <Box sx={{ px: 0.25, pb: 1 }}>
-                                            <Alert severity="warning" sx={{ py: 0.5 }}>
-                                                {validationError}
-                                            </Alert>
-                                        </Box>
-                                    ) : null}
-                            </InspectorPropertyGroup>
-
-                            {visualType === 'video' ? (
-                                <InspectorPropertyGroup title="Phát lại video">
-                                    <InspectorPropertyText
-                                        label="Vị trí bắt đầu"
-                                        description="Giây bắt đầu trong file đã tải"
-                                        value={String(clip.visual_start_sec ?? 0)}
-                                        type="number"
-                                        onChange={(raw) => {
-                                            if (raw.trim() === '') {
-                                                onPatch({ visual_start_sec: undefined });
-                                                return;
-                                            }
-                                            const parsed = Number.parseFloat(raw);
-                                            if (!Number.isFinite(parsed)) {
-                                                return;
-                                            }
-                                            onPatch({ visual_start_sec: Math.max(0, parsed) });
-                                        }}
-                                        inputProps={{ min: 0, step: 0.1 }}
-                                    />
-                                    <InspectorPropertySwitch
-                                        label="Phát tiếng YouTube"
-                                        description="Tắt để chỉ dùng audio voiceover"
-                                        checked={clip.visual_youtube_muted === false}
-                                        onChange={(checked) => {
-                                            onPatch({
-                                                visual_youtube_muted: checked ? false : true,
-                                            });
-                                        }}
-                                    />
-                                </InspectorPropertyGroup>
-                            ) : null}
-                        </>
+                        <ShortVideoVisualMediaFields
+                            visualType={visualType}
+                            imageUrl={imageUrl}
+                            videoUrl={videoUrl}
+                            imageValidationError={imageValidationError}
+                            videoValidationError={videoValidationError}
+                            youtubeId={youtubeId}
+                            onTypeChange={handleTypeChange}
+                            onImageUrlChange={handleImageUrlChange}
+                            onVideoUrlChange={handleVideoUrlChange}
+                            onStockVideoSelect={handleStockVideoSelect}
+                            startSec={clip.visual_start_sec ?? 0}
+                            onStartSecChange={(raw) => {
+                                if (raw.trim() === '') {
+                                    onPatch({ visual_start_sec: undefined });
+                                    return;
+                                }
+                                const parsed = Number.parseFloat(raw);
+                                if (!Number.isFinite(parsed)) {
+                                    return;
+                                }
+                                onPatch({ visual_start_sec: Math.max(0, parsed) });
+                            }}
+                            audioVolumePercent={resolveVisualMediaVolumePercent(clip)}
+                            onAudioVolumePercentChange={(percent) => {
+                                onPatch(patchVisualClipAudioVolumeFromPercent(percent));
+                            }}
+                        />
                     ) : null}
 
                     {visualTab === VISUAL_CLIP_TAB.animation ? (
-                        <InspectorPropertyGroup title="Chuyển động">
+                        <InspectorPropertyGroup title="Chuyển động" collapsible={false}>
                             <InspectorPropertySelect
                                 label="Hiệu ứng vào"
                                 description="Cách media xuất hiện trên màn hình"
@@ -990,25 +961,24 @@ export default function ShortVideoVisualClipInspector({
         [clipId, manifest, onManifestChange]
     );
 
-    const visualType: 'image' | 'video' = clip?.type === 'video' ? 'video' : 'image';
-    const urlValue = clip?.ref ?? '';
+    const imageUrl = clip?.image_ref ?? (clip ? resolveVisualClipImageRef(clip) : '');
+    const videoUrl = clip?.video_ref ?? (clip ? resolveVisualClipVideoRef(clip) : '');
 
-    const validationError = React.useMemo(() => {
-        if (!clip) {
-            return '';
-        }
-        const trimmed = urlValue.trim();
+    const imageValidationError = React.useMemo(() => {
+        const trimmed = imageUrl.trim();
         if (!trimmed) {
             return 'Cần nhập URL';
         }
-        if (visualType === 'image') {
-            return isHttpsImageUrl(trimmed) ? '' : 'URL ảnh phải bắt đầu bằng https://';
+        return isHttpsImageUrl(trimmed) ? '' : 'URL ảnh phải bắt đầu bằng https://';
+    }, [imageUrl]);
+
+    const videoValidationError = React.useMemo(() => {
+        const trimmed = videoUrl.trim();
+        if (!trimmed) {
+            return 'Cần nhập URL';
         }
-        if (visualType === 'video') {
-            return parseYoutubeId(trimmed) ? '' : 'Link YouTube không hợp lệ';
-        }
-        return '';
-    }, [clip, visualType, urlValue]);
+        return isValidVideoRef(trimmed) ? '' : 'URL video không hợp lệ (YouTube hoặc mp4/webm HTTPS)';
+    }, [videoUrl]);
 
     if (!clip && !scene) {
         return <EmptyInspector />;
@@ -1038,7 +1008,8 @@ export default function ShortVideoVisualClipInspector({
     return (
         <VisualClipMediaInspector
             clip={clip}
-            validationError={validationError}
+            imageValidationError={imageValidationError}
+            videoValidationError={videoValidationError}
             dirty={dirty}
             saving={saving}
             onSave={onSave}

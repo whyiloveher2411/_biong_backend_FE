@@ -4,13 +4,18 @@ export type ShortVideoVisualClip = {
     id: string;
     type: ShortVideoSceneVisualType;
     ref: string;
+    image_ref?: string;
+    video_ref?: string;
+    video_preview_url?: string;
     motion?: string;
     start_sec: number;
     duration_sec: number;
     visual_start_sec?: number;
     visual_youtube_id?: string;
-    /** false = phát tiếng YouTube; undefined/true = tắt tiếng (mặc định) */
+    /** false = phát tiếng video; undefined/true = tắt tiếng (mặc định) */
     visual_youtube_muted?: boolean;
+    /** Âm lượng audio nhúng trong video clip — 0..1 */
+    audio_volume?: number;
     /** Chỉ inject lúc preview/render — không lưu DB */
     visual_playback_url?: string;
     label?: string;
@@ -40,9 +45,14 @@ export type ShortVideoManifestSceneLayout = {
     show_karaoke?: boolean;
     visual_type?: ShortVideoSceneVisualType;
     visual_ref?: string;
+    visual_image_ref?: string;
+    visual_video_ref?: string;
+    visual_video_preview_url?: string;
     visual_youtube_id?: string;
-    /** false = phát tiếng YouTube; undefined/true = tắt tiếng (mặc định) */
+    /** false = phát tiếng video; undefined/true = tắt tiếng (mặc định) */
     visual_youtube_muted?: boolean;
+    /** Âm lượng audio nhúng trong video scene (legacy layout) — 0..1 */
+    visual_audio_volume?: number;
     /** Chỉ inject lúc preview/render — không lưu DB */
     visual_playback_url?: string;
     visual_motion?: string;
@@ -93,6 +103,8 @@ export type ShortVideoManifestScene = {
     audio_source_duration_sec?: number;
     /** Cấu hình TTS khi render audio — lưu per scene */
     audio_tts_settings?: ShortVideoSceneAudioTtsSettings;
+    /** Âm lượng narration/voiceover — 0..1, mặc định 1 */
+    audio_volume?: number;
     layout?: ShortVideoManifestSceneLayout;
 };
 

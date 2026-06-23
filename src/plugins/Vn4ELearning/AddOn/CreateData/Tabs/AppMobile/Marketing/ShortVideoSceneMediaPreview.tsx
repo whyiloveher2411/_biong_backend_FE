@@ -2,32 +2,89 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import {
     resolveSceneShowVisual,
+    resolveSceneVisualAudioVolume,
+    resolveSceneVisualImageRef,
+    resolveSceneVisualPlaybackUrl,
     resolveSceneVisualRef,
     resolveSceneVisualStartSec,
     resolveSceneVisualType,
+    resolveSceneVisualVideoRef,
     resolveSceneVisualYoutubeId,
     resolveSceneVisualYoutubeMuted,
     type ShortVideoManifestScene,
 } from 'helpers/shortVideoRenderManifest';
+import { resolveSceneVisualVideoPreviewUrl } from 'helpers/shortVideoVisualRefHelpers';
 import {
     buildYoutubeEmbedUrl,
     isHttpsImageUrl,
+    isHttpsVideoUrl,
 } from 'helpers/shortVideoYoutube';
 
 type Props = {
     scene: ShortVideoManifestScene;
 };
 
+function resolveDirectPreviewVideoUrl(scene: ShortVideoManifestScene): string {
+    const youtubeId = resolveSceneVisualYoutubeId(scene);
+    if (youtubeId) {
+        return '';
+    }
+    const playback = resolveSceneVisualPlaybackUrl(scene);
+    if (playback && /^https?:\/\//i.test(playback)) {
+        return playback;
+    }
+    const videoRef = resolveSceneVisualVideoRef(scene);
+    if (videoRef && isHttpsVideoUrl(videoRef)) {
+        return videoRef;
+    }
+    return '';
+}
+
 export default function ShortVideoSceneMediaPreview({ scene }: Props) {
     const visualType = resolveSceneVisualType(scene);
     const showVisual = resolveSceneShowVisual(scene);
+    const imageRef = resolveSceneVisualImageRef(scene);
     const ref = resolveSceneVisualRef(scene);
     const youtubeId = resolveSceneVisualYoutubeId(scene);
     const startSec = resolveSceneVisualStartSec(scene);
     const youtubeMuted = resolveSceneVisualYoutubeMuted(scene);
+    const videoVolume = resolveSceneVisualAudioVolume(scene);
+    const directVideoUrl = visualType === 'video' ? resolveDirectPreviewVideoUrl(scene) : '';
     const embedUrl = youtubeId
         ? buildYoutubeEmbedUrl(youtubeId, { startSec, autoplay: false, muted: youtubeMuted })
         : '';
+
+    const videoRefElement = React.useRef<HTMLVideoElement | null>(null);
+
+    React.useEffect(() => {
+        const element = videoRefElement.current;
+        if (!element || !directVideoUrl) {
+            return;
+        }
+        if (startSec > 0) {
+            const applyStart = () => {
+                try {
+                    element.currentTime = startSec;
+                } catch {
+                    // ignore seek errors before metadata loads
+                }
+            };
+            if (element.readyState >= 1) {
+                applyStart();
+            } else {
+                element.addEventListener('loadedmetadata', applyStart, { once: true });
+            }
+        }
+    }, [directVideoUrl, startSec]);
+
+    React.useEffect(() => {
+        const element = videoRefElement.current;
+        if (!element || !directVideoUrl) {
+            return;
+        }
+        element.volume = videoVolume;
+        element.muted = videoVolume <= 0.001;
+    }, [directVideoUrl, videoVolume]);
 
     return (
         <Box
@@ -61,10 +118,10 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                     >
                         Chưa có media — chọn ảnh hoặc video trên timeline
                     </Box>
-                ) : visualType === 'image' && isHttpsImageUrl(ref) ? (
+                ) : visualType === 'image' && isHttpsImageUrl(imageRef || ref) ? (
                     <Box
                         component="img"
-                        src={ref}
+                        src={imageRef || ref}
                         alt=""
                         sx={{
                             display: 'block',
@@ -96,13 +153,30 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                             }}
                         />
                     </Box>
+                ) : visualType === 'video' && directVideoUrl ? (
+                    <video
+                        ref={videoRefElement}
+                        key={directVideoUrl}
+                        src={directVideoUrl}
+                        controls
+                        playsInline
+                        muted={videoVolume <= 0.001}
+                        poster={resolveSceneVisualVideoPreviewUrl(scene) || undefined}
+                        style={{
+                            display: 'block',
+                            width: '100%',
+                            maxWidth: '100%',
+                            maxHeight: 200,
+                            objectFit: 'contain',
+                        }}
+                    />
                 ) : (
                     <Typography variant="caption" color="error" sx={{ px: 2, textAlign: 'left' }}>
                         URL media chưa hợp lệ
                     </Typography>
                 )}
             </Box>
-            {visualType === 'video' && youtubeId && !youtubeMuted ? (
+            {visualType === 'video' && (youtubeId || directVideoUrl) && videoVolume > 0.001 ? (
                 <Typography variant="caption" color="text.secondary">
                     Trình duyệt có thể yêu cầu tương tác để phát tiếng
                 </Typography>
