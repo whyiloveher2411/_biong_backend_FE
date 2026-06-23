@@ -11,7 +11,6 @@ import {
 } from 'helpers/shortVideoRenderManifest';
 import {
     buildYoutubeEmbedUrl,
-    buildYoutubeThumbnailUrl,
     isHttpsImageUrl,
 } from 'helpers/shortVideoYoutube';
 
@@ -103,28 +102,10 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                     </Typography>
                 )}
             </Box>
-            {visualType === 'video' && youtubeId ? (
-                <>
-                    {!youtubeMuted ? (
-                        <Typography variant="caption" color="text.secondary">
-                            Trình duyệt có thể yêu cầu tương tác để phát tiếng
-                        </Typography>
-                    ) : null}
-                    <Box
-                        component="img"
-                        src={buildYoutubeThumbnailUrl(youtubeId)}
-                    alt=""
-                    sx={{
-                        display: 'block',
-                        width: '100%',
-                        maxWidth: '100%',
-                        height: 'auto',
-                        borderRadius: 1,
-                        border: 1,
-                        borderColor: 'divider',
-                    }}
-                />
-                </>
+            {visualType === 'video' && youtubeId && !youtubeMuted ? (
+                <Typography variant="caption" color="text.secondary">
+                    Trình duyệt có thể yêu cầu tương tác để phát tiếng
+                </Typography>
             ) : null}
         </Box>
     );

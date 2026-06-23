@@ -458,6 +458,7 @@ export default React.memo(function RelationshipOneToManyShowForm({ config, post 
                         }
                     >
                         <DataTable
+                            rowClickMode="drawer"
                             setQueryUrl={setQueryUrl}
                             queryUrl={queryUrl}
                             data={data}
@@ -517,6 +518,7 @@ export interface DataResultApiProps {
     action: string,
     type: string,
     post?: JsonFormat,
+    updatePost?: Date,
     author: null | string | number,
     editor: Array<{
         first_name: string,

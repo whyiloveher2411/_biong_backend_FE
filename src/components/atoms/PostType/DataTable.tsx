@@ -18,6 +18,7 @@ import PostTypeRowBadges from 'components/atoms/PostType/PostTypeRowBadges';
 import { postTypeEmbeddedTableSx } from 'components/atoms/PostType/PostTypeTablePanel';
 import useAjax from 'hook/useApi';
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ImageProps } from '../Avatar';
 import FieldView from '../fields/FieldView';
 import { DataResultApiProps } from '../fields/relationship_onetomany_show/Form';
@@ -35,6 +36,11 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import Button from 'components/atoms/Button';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 import { createPostInlineEditHandler } from 'helpers/postTypeInlineEdit';
+import {
+    openPostTypeRowByNavigate,
+    openPostTypeRowInDrawer,
+    PostTypeRowClickMode,
+} from 'helpers/postTypeRowClick';
 import { POST_TYPE_QUERY_REFETCH_KEY } from 'hook/usePostTypeTableQueryUrl';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
@@ -80,7 +86,15 @@ const useStyles = makeCSS({
 function DataTable(props: DataTableProps) {
 
     const classes = useStyles();
-    const { data, setQueryUrl, queryUrl, config, embeddedInPanel } = props;
+    const navigate = useNavigate();
+    const {
+        data,
+        setQueryUrl,
+        queryUrl,
+        config,
+        embeddedInPanel,
+        rowClickMode = 'drawer',
+    } = props;
 
     const { ajax, Loading, open } = useAjax();
     const { showMessage } = useFloatingMessages();
@@ -113,21 +127,31 @@ function DataTable(props: DataTableProps) {
         setConfirmDelete(0);
     };
 
-    const eventClickRow = (type: string, id: ID) => {
+    const eventClickRow = (
+        e: React.MouseEvent,
+        postTypeSlug: string,
+        id: ID
+    ) => {
+        e.stopPropagation();
 
-        ajax({
-            url: `post-type/detail/${queryUrl.object}/${id}`,
-            method: 'POST',
-            success: function (result) {
-                if (result.post) {
-                    result.type = queryUrl.object;
-                    result.updatePost = new Date();
-                    setDataDrawer({ ...result });
-                    setOpenDrawer(true);
-                }
-            }
+        const objectType = String(
+            queryUrl.object || data.type || config?.object || postTypeSlug
+        );
+
+        if (rowClickMode === 'navigate') {
+            openPostTypeRowByNavigate(navigate, objectType, id);
+            return;
+        }
+
+        openPostTypeRowInDrawer({
+            ajax,
+            postType: objectType,
+            postId: id,
+            onOpen: (result) => {
+                setDataDrawer(result);
+                setOpenDrawer(true);
+            },
         });
-
     };
 
     const handleSort = (key: string) => {
@@ -383,7 +407,7 @@ function DataTable(props: DataTableProps) {
                                             : classes.tr
                                     }
                                     style={getPostTypeRowStyle(customer)}
-                                    onClick={e => eventClickRow(customer.type, customer.id)}
+                                    onClick={(e) => eventClickRow(e, customer.type, customer.id)}
                                     onMouseLeave={() => setRevealedActionsRowId(null)}
                                     data-id={customer.id}
                                     key={customer.id}
@@ -527,6 +551,8 @@ export interface DataTableProps {
     hideToolbar?: boolean,
     /** Bảng nằm trong PostTypeTablePanel — không tạo card riêng. */
     embeddedInPanel?: boolean,
+    /** Relationship show: mở DrawerEditPost. Full list dùng Results + navigate. */
+    rowClickMode?: PostTypeRowClickMode,
 }
 
 

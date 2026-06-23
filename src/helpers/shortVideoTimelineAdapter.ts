@@ -5,7 +5,8 @@ import type {
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 import { resolveDefaultSceneAudioTtsSettings, resolveSceneHeadlineText } from './shortVideoRenderManifest';
-import { clampClipTiming, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { clampClipTiming, resolveVisualClipYoutubeId, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { buildYoutubeThumbnailUrl } from './shortVideoYoutube';
 import {
     ensureManifestTimelineTracks,
     getTrackRowHeight,
@@ -406,6 +407,12 @@ export function updateSceneTimelineLabelInManifest(
 function clipThumbnailUrl(clip: ShortVideoVisualClip): string | undefined {
     if (clip.type === 'image' && /^https:\/\//i.test(clip.ref.trim())) {
         return clip.ref.trim();
+    }
+    if (clip.type === 'video') {
+        const youtubeId = resolveVisualClipYoutubeId(clip);
+        if (youtubeId) {
+            return buildYoutubeThumbnailUrl(youtubeId);
+        }
     }
     return undefined;
 }
@@ -836,19 +843,28 @@ export function mergeRefreshedNarrationManifest(
         }
         const audioUrlChanged = localScene.audio_url?.trim() !== serverScene.audio_url?.trim();
         const serverSourceDuration = resolveNarrationAudioSourceDurationSec(serverScene) ?? serverScene.duration_sec;
+        const localSourceDuration = localScene.audio_source_duration_sec ?? serverSourceDuration;
+        const mergedSourceDuration = Math.max(serverSourceDuration, localSourceDuration);
+        const wasFullClip = localScene.duration_sec >= localSourceDuration - 0.1;
+        const shouldExpandDuration = wasFullClip
+            && mergedSourceDuration > localSourceDuration + 0.05;
+        const nextDurationSec = audioUrlChanged
+            ? serverScene.duration_sec
+            : (shouldExpandDuration ? mergedSourceDuration : localScene.duration_sec);
+
         return {
             ...localScene,
             audio_url: serverScene.audio_url,
             words: serverScene.words,
             audio_peaks: serverScene.audio_peaks,
-            duration_sec: audioUrlChanged ? serverScene.duration_sec : localScene.duration_sec,
+            duration_sec: nextDurationSec,
             duration_hint_sec: audioUrlChanged
                 ? (serverScene.duration_hint_sec || serverScene.duration_sec)
-                : (localScene.duration_hint_sec || localScene.duration_sec),
+                : (shouldExpandDuration
+                    ? mergedSourceDuration
+                    : (localScene.duration_hint_sec || localScene.duration_sec)),
             audio_trim_start_sec: audioUrlChanged ? 0 : resolveNarrationAudioTrimStartSec(localScene),
-            audio_source_duration_sec: audioUrlChanged
-                ? serverSourceDuration
-                : (localScene.audio_source_duration_sec ?? serverSourceDuration),
+            audio_source_duration_sec: Number(mergedSourceDuration.toFixed(3)),
             audio_tts_settings: localScene.audio_tts_settings ?? serverScene.audio_tts_settings,
         };
     });

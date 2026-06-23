@@ -621,6 +621,76 @@ function NarrationActionBlock({
     );
 }
 
+function VisualThumbnailPreview({
+    thumb,
+    isVideo,
+}: {
+    thumb: string;
+    isVideo: boolean;
+}) {
+    if (!isVideo) {
+        return (
+            <Box
+                component="img"
+                src={thumb}
+                alt=""
+                sx={{
+                    width: 28,
+                    height: 28,
+                    objectFit: 'cover',
+                    borderRadius: 0.5,
+                    flexShrink: 0,
+                }}
+            />
+        );
+    }
+    return (
+        <Box
+            sx={{
+                width: 28,
+                height: 28,
+                flexShrink: 0,
+                position: 'relative',
+                borderRadius: 0.5,
+                overflow: 'hidden',
+            }}
+        >
+            <Box
+                component="img"
+                src={thumb}
+                alt=""
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    filter: 'blur(2px)',
+                    transform: 'scale(1.15)',
+                }}
+            />
+            <Box
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    bgcolor: 'rgba(0,0,0,0.45)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <PlayArrowIcon
+                    sx={{
+                        fontSize: 16,
+                        color: '#fff',
+                        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.55))',
+                    }}
+                />
+            </Box>
+        </Box>
+    );
+}
+
 function VisualActionBlock({
     action,
     editing,
@@ -640,6 +710,7 @@ function VisualActionBlock({
 }) {
     const label = action.data?.label || action.id;
     const thumb = action.data?.thumbnailUrl;
+    const isVideo = action.data?.visualType === 'video';
     return (
         <Box
             sx={{
@@ -665,18 +736,7 @@ function VisualActionBlock({
             }}
         >
             {thumb ? (
-                <Box
-                    component="img"
-                    src={thumb}
-                    alt=""
-                    sx={{
-                        width: 28,
-                        height: 28,
-                        objectFit: 'cover',
-                        borderRadius: 0.5,
-                        flexShrink: 0,
-                    }}
-                />
+                <VisualThumbnailPreview thumb={thumb} isVideo={isVideo} />
             ) : null}
             <TimelineItemLabelEditor
                 editing={editing}

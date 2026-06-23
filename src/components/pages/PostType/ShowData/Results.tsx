@@ -40,6 +40,10 @@ import ArrowDropDownOutlinedIcon from '@mui/icons-material/ArrowDropDownOutlined
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { requestCopyUniqueColumnValues } from 'helpers/copyPostTypeUniqueColumn';
 import { createPostInlineEditHandler } from 'helpers/postTypeInlineEdit';
+import {
+    openPostTypeRowByNavigate,
+    PostTypeRowClickMode,
+} from 'helpers/postTypeRowClick';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
 
@@ -153,11 +157,26 @@ interface ShowDataTableProps {
     acctionPost: (payload: JsonFormat, success?: ((result: JsonFormat) => void) | undefined) => void,
     selectedCustomers: string[],
     setSelectedCustomers: React.Dispatch<React.SetStateAction<string[]>>,
+    /** Full list: luôn navigate sang trang edit (không mở drawer). */
+    rowClickMode?: PostTypeRowClickMode,
     /** Bảng nằm trong PostTypeTablePanel — không tạo card riêng. */
     embeddedInPanel?: boolean,
 }
 
-const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData, acctionPost, selectedCustomers, setSelectedCustomers, embeddedInPanel = false, ...rest }: ShowDataTableProps) => {
+const Results = ({
+    data,
+    postType,
+    loading,
+    queryUrl,
+    setQueryUrl,
+    isLoadedData,
+    acctionPost,
+    selectedCustomers,
+    setSelectedCustomers,
+    embeddedInPanel = false,
+    rowClickMode = 'navigate',
+    ...rest
+}: ShowDataTableProps) => {
 
     const classes = useStyles();
 
@@ -302,28 +321,12 @@ const Results = ({ data, postType, loading, queryUrl, setQueryUrl, isLoadedData,
         });
     };
 
-    const eventClickRow = (_e: React.MouseEvent<HTMLTableRowElement>, id: string) => {
-
-        if (id) {
-            navigate(`/post-type/${postType}/edit?post_id=${id}`);
+    const eventClickRow = (e: React.MouseEvent<HTMLTableRowElement>, id: string) => {
+        if (!id || rowClickMode !== 'navigate') {
+            return;
         }
-
-        // setOpen(true);
-        // // console.log(data);
-        // ajax({
-        //     url: `post-type/detail/${postType}/${id}`,
-        //     method: 'POST',
-        //     isGetData: false,
-        //     success: function (result) {
-        //         if (result.post) {
-        //             result.type = postType;
-        //             result.updatePost = new Date();
-        //             setDataDrawer(prev => ({ ...result }));
-        //             setOpenDrawer(true);
-        //         }
-        //     }
-        // });
-
+        e.stopPropagation();
+        openPostTypeRowByNavigate(navigate, postType, id);
     };
 
 

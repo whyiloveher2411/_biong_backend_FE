@@ -107,6 +107,102 @@ export async function fetchSaydiVoiceSamples(): Promise<SaydiTtsCatalogResult> {
     return fetchSaydiTtsCatalog();
 }
 
+export type VbeeTtsSelectOption = {
+    value: string;
+    label: string;
+    voice_code?: string;
+};
+
+export type VbeeTtsCatalogResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    voice_codes?: VbeeTtsSelectOption[];
+    default_voice_code?: string;
+    default_speed?: number;
+};
+
+export type VbeeTtsAccountCredits = {
+    remaining_characters: number;
+    bonus_characters: number;
+    lock_characters: number;
+    total_studio_characters: number;
+    available_characters: number;
+    regular_daily_credits: number;
+    package_code: string;
+    sync_characters_at: string;
+};
+
+export type VbeeTtsAccountResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    credits?: VbeeTtsAccountCredits;
+};
+
+export async function fetchVbeeTtsAccountCredits(): Promise<VbeeTtsAccountResult> {
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/get-vbee-tts-account',
+        data: {},
+        loading: false,
+    })) as VbeeTtsAccountResult;
+
+    if (!result?.success) {
+        throw new Error(
+            parseShortVideoApiMessage(result?.message, 'Không tải được credit Vbee')
+        );
+    }
+
+    return result;
+}
+
+export async function fetchVbeeTtsCatalog(): Promise<VbeeTtsCatalogResult> {
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/get-vbee-tts-catalog',
+        data: {},
+        loading: false,
+    })) as VbeeTtsCatalogResult;
+
+    if (!result?.success) {
+        throw new Error(
+            parseShortVideoApiMessage(result?.message, 'Không tải được danh mục TTS Vbee')
+        );
+    }
+
+    return result;
+}
+
+export async function generateShortVideoSceneAudioVbee(options: {
+    shortVideoId: number;
+    sceneId: string;
+    voiceCode?: string;
+    speed?: number;
+    force?: boolean;
+}): Promise<{ success?: boolean; message?: string | { content?: string } }> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const sceneId = String(options.sceneId || '').trim();
+    if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
+        throw new Error('Thiếu short video id');
+    }
+    if (!sceneId) {
+        throw new Error('Thiếu scene id');
+    }
+    const result = (await ajax({
+        url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/generate-audio-vbee',
+        data: {
+            short_video_id: shortVideoId,
+            id: shortVideoId,
+            scene_id: sceneId,
+            voice_code: options.voiceCode?.trim() || '',
+            speed: options.speed ?? '',
+            force: options.force ?? true,
+        },
+        loading: false,
+    })) as { success?: boolean; message?: string | { content?: string } };
+    if (!result?.success) {
+        throw new Error(parseShortVideoApiMessage(result?.message, 'Render audio Vbee thất bại'));
+    }
+    return result;
+}
+
 export async function generateShortVideoSceneAudioSaydi(options: {
     shortVideoId: number;
     sceneId: string;

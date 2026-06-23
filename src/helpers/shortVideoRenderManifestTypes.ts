@@ -51,11 +51,21 @@ export type ShortVideoManifestSceneLayout = {
     show_visual?: boolean;
 };
 
-export type ShortVideoSceneAudioTtsSettings = {
+export type ShortVideoSaydiAudioTtsSettings = {
     provider: 'saydi';
     lang_code: string;
     voice_sample: string;
 };
+
+export type ShortVideoVbeeAudioTtsSettings = {
+    provider: 'vbee';
+    voice_code: string;
+    speed?: number;
+};
+
+export type ShortVideoSceneAudioTtsSettings =
+    | ShortVideoSaydiAudioTtsSettings
+    | ShortVideoVbeeAudioTtsSettings;
 
 export type ShortVideoManifestScene = {
     id: string;

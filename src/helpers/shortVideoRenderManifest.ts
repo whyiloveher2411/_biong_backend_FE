@@ -345,11 +345,26 @@ export function resolveDefaultSceneAudioTtsSettings(
     };
 }
 
+export function resolveDefaultVbeeSceneAudioTtsSettings(): ShortVideoSceneAudioTtsSettings {
+    return {
+        provider: 'vbee',
+        voice_code: 's_sg_male_thientam_ytstable_vc',
+        speed: 1,
+    };
+}
+
 export function resolveSceneAudioTtsSettings(
     scene: ShortVideoManifestScene,
     manifestLang?: string
 ): ShortVideoSceneAudioTtsSettings {
     const stored = scene.audio_tts_settings;
+    if (stored?.provider === 'vbee') {
+        return {
+            provider: 'vbee',
+            voice_code: stored.voice_code?.trim() || 's_sg_male_thientam_ytstable_vc',
+            speed: typeof stored.speed === 'number' && stored.speed > 0 ? stored.speed : 1,
+        };
+    }
     if (stored?.provider === 'saydi') {
         return {
             provider: 'saydi',

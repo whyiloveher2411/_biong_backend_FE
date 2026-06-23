@@ -319,6 +319,7 @@ const ShowData = ({ type, enableNewInline, onSelectPosts }: { type: string, acti
                     {data !== false && (
                         <Results
                             embeddedInPanel
+                            rowClickMode="navigate"
                             data={data}
                             loading={showLoading}
                             queryUrl={queryUrl}
