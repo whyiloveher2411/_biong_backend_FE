@@ -3,7 +3,6 @@ import type { PlayerRef } from '@remotion/player';
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
@@ -11,10 +10,22 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SyncIcon from '@mui/icons-material/Sync';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, Menu, MenuItem, Popover, Slider, TextField, Tooltip, Typography } from '@mui/material';
+import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
+import ShortVideoTextClipAnimationDurationBars from './ShortVideoTextClipAnimationDurationBars';
 import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
 import { resolveSceneHeadlineText } from 'helpers/shortVideoRenderManifest';
+import {
+    addTextClipAtSec,
+    parseTextClipDragPayload,
+    removeTextClipFromManifest,
+    resolveTextClipPresetByDragKind,
+    SHORT_VIDEO_TEXT_DRAG_MIME,
+    updateTextClipInManifest,
+} from 'helpers/shortVideoTextClips';
 import {
     addVisualClipAtSec,
     manifestUsesVisualClips,
@@ -31,12 +42,15 @@ import {
     isDefaultTimelineTrack,
     moveActionBetweenRows,
     packTimelineTrackSequential,
+    removeNarrationSceneFromManifest,
     removeTimelineTrackFromManifest,
     reorderTimelineTracksInManifest,
     resolveClipTrackId,
     resolveSceneTrackId,
+    resolveTextClipTrackId,
     resolveTimelineTracks,
     resolveTrackRowIdFromPointer,
+    resolveTimelineSecFromClientX,
     timelineEditorWorkspaceEndSec,
     manifestHasEditableVisualTimeline,
     manifestToTimelineRows,
@@ -53,6 +67,13 @@ import {
     type ShortVideoTimelineAction,
     type TimelineRow,
 } from 'helpers/shortVideoTimelineAdapter';
+import {
+    isTimelineTrackHidden,
+    toggleTextClipHiddenInManifest,
+    toggleTimelineSceneHiddenInManifest,
+    toggleTimelineTrackHiddenInManifest,
+    toggleVisualClipHiddenInManifest,
+} from 'helpers/shortVideoTimelineVisibility';
 import { timelineLayoutFingerprint } from 'helpers/shortVideoTimelineLayout';
 import ShortVideoAudioWaveform from 'helpers/shortVideoAudioWaveform';
 import {
@@ -67,8 +88,10 @@ type Props = {
     playerRef: React.MutableRefObject<PlayerRef | null>;
     playerInstance: PlayerRef | null;
     selectedVisualClipId: string;
+    selectedTextClipId?: string;
     selectedNarrationSceneId?: string;
     onSelectVisualClip: (clipId: string) => void;
+    onSelectTextClip?: (clipId: string) => void;
     onManifestChange: (manifest: ShortVideoRenderManifest) => void;
     onSeekScene?: (sceneId: string) => void;
     rightSlot?: React.ReactNode;
@@ -83,6 +106,7 @@ type DeleteTrackDialogState = {
     trackName: string;
     sceneCount: number;
     clipCount: number;
+    textClipCount: number;
 };
 
 const TIMELINE_HEIGHT_STORAGE_KEY = 'short_video_editor_timeline_extra_height_v1';
@@ -253,6 +277,135 @@ function formatPackGapLabel(gapSec: number): string {
     return `Gap ${text}s`;
 }
 
+function timelineHiddenEffectiveSx(effectivelyHidden: boolean) {
+    if (!effectivelyHidden) {
+        return {};
+    }
+    return {
+        opacity: 0.38,
+        position: 'relative' as const,
+        '&::after': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            background: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.14) 0px, rgba(255,255,255,0.14) 2px, transparent 2px, transparent 6px)',
+            borderRadius: 'inherit',
+        },
+    };
+}
+
+const timelineHoverVisibilityRootSx = {
+    position: 'relative' as const,
+    '&:hover .timeline-visibility-btn, &:focus-within .timeline-visibility-btn': {
+        opacity: 1,
+        pointerEvents: 'auto' as const,
+    },
+    '&:hover .timeline-track-menu-btn, &:focus-within .timeline-track-menu-btn': {
+        opacity: 1,
+        pointerEvents: 'auto' as const,
+    },
+};
+
+function timelineTrackMenuOverlaySx() {
+    return {
+        className: 'timeline-track-menu-btn',
+        sx: {
+            position: 'absolute' as const,
+            top: '50%',
+            right: 2,
+            transform: 'translateY(-50%)',
+            opacity: 0,
+            pointerEvents: 'none' as const,
+            transition: 'opacity 0.12s ease',
+            zIndex: 5,
+        },
+    };
+}
+
+const timelineActionBlockShellSx = {
+    width: '100%',
+    height: '100%',
+    position: 'relative' as const,
+    overflow: 'hidden',
+    borderRadius: 1,
+    boxSizing: 'border-box' as const,
+    border: '2px solid',
+};
+
+function timelineSelectedBorderColor(selected: boolean, defaultColor: string): string {
+    return selected ? '#fbbf24' : defaultColor;
+}
+
+function timelineVisibilityBtnOverlaySx(placement: 'track' | 'item') {
+    return {
+        className: 'timeline-visibility-btn',
+        sx: {
+            position: 'absolute' as const,
+            top: '50%',
+            right: placement === 'track' ? 24 : 4,
+            transform: 'translateY(-50%)',
+            opacity: 0,
+            pointerEvents: 'none' as const,
+            transition: 'opacity 0.12s ease',
+            zIndex: 5,
+        },
+    };
+}
+
+function TimelineVisibilityButton({
+    hidden,
+    onToggle,
+    labelShow,
+    labelHide,
+    size = 'item',
+}: {
+    hidden: boolean;
+    onToggle: () => void;
+    labelShow: string;
+    labelHide: string;
+    size?: 'track' | 'item';
+}) {
+    const dimension = size === 'track' ? 20 : 18;
+    return (
+        <Tooltip title={hidden ? labelShow : labelHide}>
+            <span>
+                <IconButton
+                    size="small"
+                    aria-label={hidden ? labelShow : labelHide}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        onToggle();
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    sx={{
+                        width: dimension,
+                        height: dimension,
+                        p: 0,
+                        color: '#f3f4f6',
+                        opacity: 1,
+                        position: 'relative',
+                        zIndex: 4,
+                        bgcolor: 'rgba(15, 23, 42, 0.72)',
+                        '&:hover': {
+                            color: '#ffffff',
+                            bgcolor: 'rgba(15, 23, 42, 0.9)',
+                        },
+                    }}
+                >
+                    {hidden ? (
+                        <VisibilityOffIcon sx={{ fontSize: size === 'track' ? 15 : 14 }} />
+                    ) : (
+                        <VisibilityIcon sx={{ fontSize: size === 'track' ? 15 : 14 }} />
+                    )}
+                </IconButton>
+            </span>
+        </Tooltip>
+    );
+}
+
 function TrackLabelRow({
     trackId,
     label,
@@ -266,6 +419,8 @@ function TrackLabelRow({
     canDeleteTrack = false,
     isDragging = false,
     isDropTarget = false,
+    visibilityHidden = false,
+    onToggleVisibility,
 }: {
     trackId: string;
     label: string;
@@ -279,6 +434,8 @@ function TrackLabelRow({
     canDeleteTrack?: boolean;
     isDragging?: boolean;
     isDropTarget?: boolean;
+    visibilityHidden?: boolean;
+    onToggleVisibility?: () => void;
 }) {
     const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [packSubmenuAnchor, setPackSubmenuAnchor] = React.useState<null | HTMLElement>(null);
@@ -368,13 +525,15 @@ function TrackLabelRow({
                 height,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.25,
-                px: 0.5,
+                gap: 0.5,
+                pl: 0.75,
+                pr: 0.25,
                 minWidth: 0,
                 opacity: isDragging ? 0.45 : 1,
-                borderTop: isDropTarget ? '2px solid #60a5fa' : '2px solid transparent',
+                borderBottom: isDropTarget ? '2px solid #60a5fa' : '1px solid rgba(255,255,255,0.06)',
                 boxSizing: 'border-box',
                 transition: 'opacity 0.12s ease',
+                ...timelineHoverVisibilityRootSx,
             }}
         >
             <Tooltip title="Kéo để đổi thứ tự track">
@@ -391,18 +550,18 @@ function TrackLabelRow({
                             onDragHandlePointerDown(trackId, event);
                         }}
                         sx={{
-                            width: 20,
-                            height: 20,
+                            width: 18,
+                            height: 18,
                             p: 0,
-                            color: 'grey.500',
+                            color: 'grey.600',
                             flexShrink: 0,
                             cursor: isRenaming ? 'default' : 'grab',
                             touchAction: 'none',
                             '&:active': { cursor: 'grabbing' },
-                            '&:hover': { color: 'grey.300', bgcolor: 'rgba(255,255,255,0.06)' },
+                            '&:hover': { color: 'grey.400' },
                         }}
                     >
-                        <DragIndicatorIcon sx={{ fontSize: 16 }} />
+                        <DragIndicatorIcon sx={{ fontSize: 15 }} />
                     </IconButton>
                 </span>
             </Tooltip>
@@ -447,9 +606,9 @@ function TrackLabelRow({
                     component="span"
                     sx={{
                         flex: 1,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: 'grey.200',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: 'grey.300',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -459,27 +618,41 @@ function TrackLabelRow({
                     {label}
                 </Typography>
             )}
-            <Tooltip title="Tùy chọn track">
-                <span>
-                    <IconButton
-                        size="small"
-                        aria-label="Tùy chọn track"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            setMenuAnchor(event.currentTarget);
-                        }}
-                        sx={{
-                            width: 22,
-                            height: 22,
-                            color: 'grey.400',
-                            flexShrink: 0,
-                            '&:hover': { color: 'grey.200', bgcolor: 'rgba(255,255,255,0.08)' },
-                        }}
-                    >
-                        <MoreHorizIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                </span>
-            </Tooltip>
+            {onToggleVisibility ? (
+                <Box {...timelineVisibilityBtnOverlaySx('track')}>
+                    <TimelineVisibilityButton
+                        hidden={visibilityHidden}
+                        onToggle={onToggleVisibility}
+                        labelHide="Ẩn track"
+                        labelShow="Hiện track"
+                        size="track"
+                    />
+                </Box>
+            ) : null}
+            <Box {...timelineTrackMenuOverlaySx()}>
+                <Tooltip title="Tùy chọn track">
+                    <span>
+                        <IconButton
+                            size="small"
+                            aria-label="Tùy chọn track"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setMenuAnchor(event.currentTarget);
+                            }}
+                            sx={{
+                                width: 20,
+                                height: 20,
+                                p: 0,
+                                color: '#e5e7eb',
+                                bgcolor: 'rgba(15, 23, 42, 0.72)',
+                                '&:hover': { color: '#ffffff', bgcolor: 'rgba(15, 23, 42, 0.9)' },
+                            }}
+                        >
+                            <MoreHorizIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                    </span>
+                </Tooltip>
+            </Box>
             <Menu
                 anchorEl={menuAnchor}
                 open={menuOpen}
@@ -576,7 +749,8 @@ function TrackLabelRow({
 function applyRowSelection(
     rows: TimelineRow[],
     selectedVisualClipId: string,
-    selectedNarrationSceneId: string
+    selectedNarrationSceneId: string,
+    selectedTextClipId: string
 ): TimelineRow[] {
     return rows.map((row) => ({
         ...row,
@@ -586,6 +760,10 @@ function applyRowSelection(
             if (kind === 'visual') {
                 const clipId = extended.data?.clipId || action.id;
                 return { ...action, selected: clipId === selectedVisualClipId };
+            }
+            if (kind === 'text') {
+                const clipId = extended.data?.textClipId || action.id;
+                return { ...action, selected: clipId === selectedTextClipId };
             }
             if (kind === 'narration') {
                 const sceneId = extended.data?.sceneId || action.id.replace(/^narr_/, '');
@@ -685,6 +863,9 @@ function NarrationActionBlock({
     onEditBlur,
     onEditKeyDown,
     previewOffsetY = 0,
+    timelineHidden = false,
+    timelineEffectivelyHidden = false,
+    onToggleVisibility,
 }: {
     action: ShortVideoTimelineAction;
     editing: boolean;
@@ -693,6 +874,9 @@ function NarrationActionBlock({
     onEditBlur: () => void;
     onEditKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
     previewOffsetY?: number;
+    timelineHidden?: boolean;
+    timelineEffectivelyHidden?: boolean;
+    onToggleVisibility?: () => void;
 }) {
     const label = action.data?.label || action.id;
     const status = action.data?.status;
@@ -707,67 +891,86 @@ function NarrationActionBlock({
         <Box
             title={isPending ? 'Chưa có audio — cần sinh TTS hoặc thêm lời thoại' : undefined}
             sx={{
-                width: '100%',
-                height: '100%',
-                position: 'relative',
-                px: 1,
-                display: 'flex',
-                alignItems: 'center',
-                bgcolor: isPending
-                    ? 'rgba(185, 28, 28, 0.68)'
-                    : (isRunning ? 'rgba(30, 58, 95, 0.68)' : 'rgba(107, 114, 128, 0.68)'),
-                color: isPending ? '#fee2e2' : '#f3f4f6',
-                fontSize: 11,
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-                borderRadius: 1,
-                border: isActive
-                    ? '2px solid #fbbf24'
-                    : isPending
-                        ? '1px solid #fca5a5'
-                        : (isRunning ? '1px dashed rgba(96, 165, 250, 0.9)' : '1px solid rgba(255,255,255,0.16)'),
+                ...timelineActionBlockShellSx,
+                borderStyle: isRunning && !isActive ? 'dashed' : 'solid',
+                borderColor: timelineSelectedBorderColor(
+                    isActive,
+                    isPending
+                        ? '#fca5a5'
+                        : (isRunning ? 'rgba(96, 165, 250, 0.9)' : 'rgba(255,255,255,0.16)')
+                ),
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
-                backdropFilter: 'saturate(110%)',
                 transform: previewOffsetY !== 0 ? `translateY(${previewOffsetY}px)` : undefined,
                 zIndex: previewOffsetY !== 0 ? 20 : undefined,
+                ...timelineHoverVisibilityRootSx,
             }}
         >
-            {showWaveform ? (
-                <ShortVideoAudioWaveform
-                    peaks={audioPeaks}
-                    trimStartSec={audioTrimStartSec}
-                    sourceDurationSec={audioSourceDurationSec}
-                    clipDurationSec={Math.max(0, action.end - action.start)}
-                />
-            ) : null}
             <Box
                 sx={{
-                    position: 'relative',
-                    zIndex: 1,
-                    minWidth: 0,
-                    flex: 1,
+                    width: '100%',
+                    height: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    ...(showWaveform
-                        ? {
-                            px: 0.5,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            background: 'linear-gradient(90deg, rgba(55, 65, 81, 0.72) 0%, rgba(55, 65, 81, 0.45) 100%)',
-                        }
-                        : undefined),
+                    px: 0.5,
+                    bgcolor: isPending
+                        ? 'rgba(185, 28, 28, 0.68)'
+                        : (isRunning ? 'rgba(30, 58, 95, 0.68)' : 'rgba(107, 114, 128, 0.68)'),
+                    color: isPending ? '#fee2e2' : '#f3f4f6',
+                    fontSize: 11,
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                    borderRadius: 0.75,
+                    backdropFilter: 'saturate(110%)',
+                    ...timelineHiddenEffectiveSx(timelineEffectivelyHidden),
                 }}
             >
-                <TimelineItemLabelEditor
-                    editing={editing}
-                    editValue={editValue}
-                    label={label}
-                    onEditChange={onEditChange}
-                    onEditBlur={onEditBlur}
-                    onEditKeyDown={onEditKeyDown}
-                />
+                {showWaveform ? (
+                    <ShortVideoAudioWaveform
+                        peaks={audioPeaks}
+                        trimStartSec={audioTrimStartSec}
+                        sourceDurationSec={audioSourceDurationSec}
+                        clipDurationSec={Math.max(0, action.end - action.start)}
+                    />
+                ) : null}
+                <Box
+                    sx={{
+                        position: 'relative',
+                        zIndex: 1,
+                        minWidth: 0,
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        ...(showWaveform
+                            ? {
+                                px: 0.5,
+                                py: 0.25,
+                                borderRadius: 0.5,
+                                background: 'linear-gradient(90deg, rgba(55, 65, 81, 0.72) 0%, rgba(55, 65, 81, 0.45) 100%)',
+                            }
+                            : undefined),
+                    }}
+                >
+                    <TimelineItemLabelEditor
+                        editing={editing}
+                        editValue={editValue}
+                        label={label}
+                        onEditChange={onEditChange}
+                        onEditBlur={onEditBlur}
+                        onEditKeyDown={onEditKeyDown}
+                    />
+                </Box>
             </Box>
+            {onToggleVisibility ? (
+                <Box {...timelineVisibilityBtnOverlaySx('item')}>
+                    <TimelineVisibilityButton
+                        hidden={timelineHidden}
+                        onToggle={onToggleVisibility}
+                        labelHide="Ẩn clip"
+                        labelShow="Hiện clip"
+                    />
+                </Box>
+            ) : null}
         </Box>
     );
 }
@@ -903,6 +1106,9 @@ function VisualActionBlock({
     onEditBlur,
     onEditKeyDown,
     previewOffsetY = 0,
+    timelineHidden = false,
+    timelineEffectivelyHidden = false,
+    onToggleVisibility,
 }: {
     action: ShortVideoTimelineAction;
     editing: boolean;
@@ -911,6 +1117,9 @@ function VisualActionBlock({
     onEditBlur: () => void;
     onEditKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
     previewOffsetY?: number;
+    timelineHidden?: boolean;
+    timelineEffectivelyHidden?: boolean;
+    onToggleVisibility?: () => void;
 }) {
     const label = action.data?.label || action.id;
     const thumb = action.data?.thumbnailUrl;
@@ -919,40 +1128,173 @@ function VisualActionBlock({
     return (
         <Box
             sx={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.75,
-                px: 0.75,
-                bgcolor: 'rgba(30, 58, 138, 0.72)',
-                color: '#eff6ff',
-                fontSize: 11,
-                overflow: 'hidden',
-                borderRadius: 1,
-                border: action.selected
-                    ? '2px solid'
-                    : '1px solid',
-                borderColor: action.selected ? 'warning.main' : 'rgba(147, 197, 253, 0.45)',
+                ...timelineActionBlockShellSx,
+                borderColor: timelineSelectedBorderColor(
+                    Boolean(action.selected),
+                    'rgba(147, 197, 253, 0.45)'
+                ),
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
-                backdropFilter: 'saturate(115%)',
                 transform: previewOffsetY !== 0 ? `translateY(${previewOffsetY}px)` : undefined,
                 zIndex: previewOffsetY !== 0 ? 20 : undefined,
+                ...timelineHoverVisibilityRootSx,
             }}
         >
-            {isVideo ? (
-                <VisualThumbnailPreview thumb={thumb} videoSrc={videoSrc} isVideo />
-            ) : thumb ? (
-                <VisualThumbnailPreview thumb={thumb} isVideo={false} />
+            <Box
+                sx={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    px: 0.75,
+                    bgcolor: 'rgba(30, 58, 138, 0.72)',
+                    color: '#eff6ff',
+                    fontSize: 11,
+                    overflow: 'hidden',
+                    borderRadius: 0.75,
+                    backdropFilter: 'saturate(115%)',
+                    ...timelineHiddenEffectiveSx(timelineEffectivelyHidden),
+                }}
+            >
+                {isVideo ? (
+                    <VisualThumbnailPreview thumb={thumb} videoSrc={videoSrc} isVideo />
+                ) : thumb ? (
+                    <VisualThumbnailPreview thumb={thumb} isVideo={false} />
+                ) : null}
+                <TimelineItemLabelEditor
+                    editing={editing}
+                    editValue={editValue}
+                    label={label}
+                    onEditChange={onEditChange}
+                    onEditBlur={onEditBlur}
+                    onEditKeyDown={onEditKeyDown}
+                />
+            </Box>
+            {onToggleVisibility ? (
+                <Box {...timelineVisibilityBtnOverlaySx('item')}>
+                    <TimelineVisibilityButton
+                        hidden={timelineHidden}
+                        onToggle={onToggleVisibility}
+                        labelHide="Ẩn clip"
+                        labelShow="Hiện clip"
+                    />
+                </Box>
             ) : null}
-            <TimelineItemLabelEditor
-                editing={editing}
-                editValue={editValue}
-                label={label}
-                onEditChange={onEditChange}
-                onEditBlur={onEditBlur}
-                onEditKeyDown={onEditKeyDown}
-            />
+        </Box>
+    );
+}
+
+function TextActionBlock({
+    action,
+    editing,
+    editValue,
+    onEditChange,
+    onEditBlur,
+    onEditKeyDown,
+    previewOffsetY = 0,
+    timelineHidden = false,
+    timelineEffectivelyHidden = false,
+    onToggleVisibility,
+    timelineScaleWidth,
+    onCommitEnterDuration,
+    onCommitExitDuration,
+}: {
+    action: ShortVideoTimelineAction;
+    editing: boolean;
+    editValue: string;
+    onEditChange: (value: string) => void;
+    onEditBlur: () => void;
+    onEditKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+    previewOffsetY?: number;
+    timelineHidden?: boolean;
+    timelineEffectivelyHidden?: boolean;
+    onToggleVisibility?: () => void;
+    timelineScaleWidth: number;
+    onCommitEnterDuration?: (durationSec: number) => void;
+    onCommitExitDuration?: (durationSec: number) => void;
+}) {
+    const label = action.data?.label || action.id;
+    const showAnimationBar = typeof action.data?.clipDurationSec === 'number'
+        && (Boolean(onCommitEnterDuration) || Boolean(onCommitExitDuration));
+    return (
+        <Box
+            sx={{
+                ...timelineActionBlockShellSx,
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                borderColor: timelineSelectedBorderColor(
+                    Boolean(action.selected),
+                    'rgba(251, 191, 36, 0.45)'
+                ),
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
+                transform: previewOffsetY !== 0 ? `translateY(${previewOffsetY}px)` : undefined,
+                zIndex: previewOffsetY !== 0 ? 20 : undefined,
+                bgcolor: 'rgba(120, 53, 15, 0.78)',
+                color: '#fff7ed',
+                borderRadius: 0.75,
+                overflow: 'hidden',
+                backdropFilter: 'saturate(115%)',
+                ...timelineHiddenEffectiveSx(timelineEffectivelyHidden),
+                ...timelineHoverVisibilityRootSx,
+            }}
+        >
+            <Box
+                sx={{
+                    width: '100%',
+                    flex: showAnimationBar ? '1 1 0' : '1 1 auto',
+                    minHeight: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    px: 1,
+                    fontSize: 11,
+                    overflow: 'hidden',
+                }}
+            >
+                <Typography component="span" sx={{ fontWeight: 700, fontSize: 12, opacity: 0.9 }}>
+                    T
+                </Typography>
+                <TimelineItemLabelEditor
+                    editing={editing}
+                    editValue={editValue}
+                    label={label}
+                    onEditChange={onEditChange}
+                    onEditBlur={onEditBlur}
+                    onEditKeyDown={onEditKeyDown}
+                />
+            </Box>
+            {showAnimationBar ? (
+                <Box
+                    sx={{
+                        width: '100%',
+                        flex: '0 0 12px',
+                        minHeight: 12,
+                        borderTop: '1px solid rgba(255,255,255,0.12)',
+                    }}
+                >
+                    <ShortVideoTextClipAnimationDurationBars
+                        motion={action.data?.motion}
+                        enterDurationSec={action.data?.enterDurationSec}
+                        exitMotion={action.data?.exitMotion}
+                        exitDurationSec={action.data?.exitDurationSec}
+                        clipDurationSec={action.data?.clipDurationSec ?? 0.1}
+                        timelineScaleWidth={timelineScaleWidth}
+                        onCommitEnterDuration={onCommitEnterDuration}
+                        onCommitExitDuration={onCommitExitDuration}
+                    />
+                </Box>
+            ) : null}
+            {onToggleVisibility ? (
+                <Box {...timelineVisibilityBtnOverlaySx('item')}>
+                    <TimelineVisibilityButton
+                        hidden={timelineHidden}
+                        onToggle={onToggleVisibility}
+                        labelHide="Ẩn clip"
+                        labelShow="Hiện clip"
+                    />
+                </Box>
+            ) : null}
         </Box>
     );
 }
@@ -965,6 +1307,9 @@ function GenericTimelineActionBlock({
     onEditBlur,
     onEditKeyDown,
     previewOffsetY = 0,
+    timelineHidden = false,
+    timelineEffectivelyHidden = false,
+    onToggleVisibility,
 }: {
     action: ShortVideoTimelineAction;
     editing: boolean;
@@ -973,36 +1318,60 @@ function GenericTimelineActionBlock({
     onEditBlur: () => void;
     onEditKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
     previewOffsetY?: number;
+    timelineHidden?: boolean;
+    timelineEffectivelyHidden?: boolean;
+    onToggleVisibility?: () => void;
 }) {
     const label = action.data?.label || action.id;
     return (
         <Box
             sx={{
-                width: '100%',
-                height: '100%',
-                px: 1,
-                display: 'flex',
-                alignItems: 'center',
-                bgcolor: 'rgba(55, 65, 81, 0.68)',
-                color: '#f3f4f6',
-                fontSize: 11,
-                overflow: 'hidden',
-                borderRadius: 1,
-                border: action.selected ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.16)',
+                ...timelineActionBlockShellSx,
+                borderColor: timelineSelectedBorderColor(
+                    Boolean(action.selected),
+                    'rgba(255,255,255,0.16)'
+                ),
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
-                backdropFilter: 'saturate(110%)',
                 transform: previewOffsetY !== 0 ? `translateY(${previewOffsetY}px)` : undefined,
                 zIndex: previewOffsetY !== 0 ? 20 : undefined,
+                ...timelineHoverVisibilityRootSx,
             }}
         >
-            <TimelineItemLabelEditor
-                editing={editing}
-                editValue={editValue}
-                label={label}
-                onEditChange={onEditChange}
-                onEditBlur={onEditBlur}
-                onEditKeyDown={onEditKeyDown}
-            />
+            <Box
+                sx={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 1,
+                    bgcolor: 'rgba(55, 65, 81, 0.68)',
+                    color: '#f3f4f6',
+                    fontSize: 11,
+                    overflow: 'hidden',
+                    borderRadius: 0.75,
+                    backdropFilter: 'saturate(110%)',
+                    ...timelineHiddenEffectiveSx(timelineEffectivelyHidden),
+                }}
+            >
+                <TimelineItemLabelEditor
+                    editing={editing}
+                    editValue={editValue}
+                    label={label}
+                    onEditChange={onEditChange}
+                    onEditBlur={onEditBlur}
+                    onEditKeyDown={onEditKeyDown}
+                />
+            </Box>
+            {onToggleVisibility ? (
+                <Box {...timelineVisibilityBtnOverlaySx('item')}>
+                    <TimelineVisibilityButton
+                        hidden={timelineHidden}
+                        onToggle={onToggleVisibility}
+                        labelHide="Ẩn clip"
+                        labelShow="Hiện clip"
+                    />
+                </Box>
+            ) : null}
         </Box>
     );
 }
@@ -1016,6 +1385,10 @@ function resolveTimelineItemLabelForEdit(
     if (action.data?.kind === 'visual') {
         const clip = (manifest.visual_clips ?? []).find((entry) => entry.id === itemId);
         return clip?.label?.trim() || itemId;
+    }
+    if (action.data?.kind === 'text') {
+        const clip = (manifest.text_clips ?? []).find((entry) => entry.id === itemId);
+        return clip?.label?.trim() || 'Text';
     }
     if (action.data?.kind === 'narration') {
         const scene = manifest.scenes.find((entry) => entry.id === itemId);
@@ -1049,8 +1422,10 @@ export default function ShortVideoEditorTimeline({
     playerRef,
     playerInstance,
     selectedVisualClipId,
+    selectedTextClipId = '',
     selectedNarrationSceneId = '',
     onSelectVisualClip,
+    onSelectTextClip,
     onManifestChange,
     onSeekScene,
     rightSlot,
@@ -1074,6 +1449,7 @@ export default function ShortVideoEditorTimeline({
     const [editingActionKey, setEditingActionKey] = React.useState('');
     const [editingLabelDraft, setEditingLabelDraft] = React.useState('');
     const [dragPreviewTarget, setDragPreviewTarget] = React.useState<{ actionId: string; rowId: string } | null>(null);
+    const [textDropTargetTrackId, setTextDropTargetTrackId] = React.useState<string | null>(null);
     const [trackDragState, setTrackDragState] = React.useState<{ trackId: string; hoverIndex: number } | null>(null);
     const trackDragStateRef = React.useRef(trackDragState);
     trackDragStateRef.current = trackDragState;
@@ -1161,19 +1537,22 @@ export default function ShortVideoEditorTimeline({
             return applyRowSelection(
                 committedRowsOverlay,
                 selectedVisualClipId,
-                selectedNarrationSceneId
+                selectedNarrationSceneId,
+                selectedTextClipId
             );
         }
         return manifestToTimelineRows(
             displayManifest,
             selectedVisualClipId,
             narrationRunningSceneIds,
-            selectedNarrationSceneId
+            selectedNarrationSceneId,
+            selectedTextClipId
         );
     }, [
         committedRowsOverlay,
         displayManifest,
         selectedVisualClipId,
+        selectedTextClipId,
         narrationRunningSceneIds,
         selectedNarrationSceneId,
     ]);
@@ -1409,7 +1788,7 @@ export default function ShortVideoEditorTimeline({
             for (let i = sourceIndex; i < targetIndex; i += 1) {
                 const rowId = timelineTracks[i]?.id;
                 if (rowId) {
-                    offset += getTrackRowHeight(rowId);
+                    offset += getTrackRowHeight(rowId, manifest);
                 }
             }
             return offset;
@@ -1417,11 +1796,11 @@ export default function ShortVideoEditorTimeline({
         for (let i = targetIndex; i < sourceIndex; i += 1) {
             const rowId = timelineTracks[i]?.id;
             if (rowId) {
-                offset -= getTrackRowHeight(rowId);
+                offset -= getTrackRowHeight(rowId, manifest);
             }
         }
         return offset;
-    }, [dragPreviewTarget, rowIndexById, timelineTracks]);
+    }, [dragPreviewTarget, manifest, rowIndexById, timelineTracks]);
 
     const applyCrossRowMoveIfNeeded = React.useCallback((rows: TimelineRow[]): TimelineRow[] => {
         const session = actionDragSessionRef.current;
@@ -1445,6 +1824,8 @@ export default function ShortVideoEditorTimeline({
             manifestRef.current = next;
             if (rowsFromTimeline) {
                 setCommittedRowsOverlay(rowsFromTimeline);
+            } else {
+                setCommittedRowsOverlay(null);
             }
             setCommittedOverlayManifest(next);
             shortVideoTimelineDebug('Timeline', 'commit', {
@@ -1455,6 +1836,49 @@ export default function ShortVideoEditorTimeline({
             onManifestChange(next);
         },
         [manifest, onManifestChange]
+    );
+
+    const handleToggleTrackVisibility = React.useCallback(
+        (trackId: string) => {
+            const next = toggleTimelineTrackHiddenInManifest(manifestRef.current, trackId);
+            commitManifestChange(next);
+        },
+        [commitManifestChange]
+    );
+
+    const handleToggleItemVisibility = React.useCallback(
+        (kind: 'narration' | 'visual' | 'text', itemId: string) => {
+            let next = manifestRef.current;
+            if (kind === 'narration') {
+                next = toggleTimelineSceneHiddenInManifest(next, itemId);
+            } else if (kind === 'visual') {
+                next = toggleVisualClipHiddenInManifest(next, itemId);
+            } else {
+                next = toggleTextClipHiddenInManifest(next, itemId);
+            }
+            commitManifestChange(next);
+        },
+        [commitManifestChange]
+    );
+
+    const handlePatchTextEnterDuration = React.useCallback(
+        (textClipId: string, enterDurationSec: number) => {
+            const nextManifest = updateTextClipInManifest(manifestRef.current, textClipId, {
+                enter_duration_sec: enterDurationSec,
+            });
+            commitManifestChange(nextManifest);
+        },
+        [commitManifestChange]
+    );
+
+    const handlePatchTextExitDuration = React.useCallback(
+        (textClipId: string, exitDurationSec: number) => {
+            const nextManifest = updateTextClipInManifest(manifestRef.current, textClipId, {
+                exit_duration_sec: exitDurationSec,
+            });
+            commitManifestChange(nextManifest);
+        },
+        [commitManifestChange]
     );
 
     const handleTimelineChange = React.useCallback(
@@ -1477,12 +1901,13 @@ export default function ShortVideoEditorTimeline({
                 selectedVisualClipId,
                 narrationRunningSceneIds,
                 selectedNarrationSceneId,
+                selectedTextClipId,
                 rowsAfterCrossMove
             );
             commitManifestChange(next, overlayRows);
             return true;
         },
-        [commitManifestChange, narrationRunningSceneIds, selectedNarrationSceneId, selectedVisualClipId, applyCrossRowMoveIfNeeded]
+        [commitManifestChange, narrationRunningSceneIds, selectedNarrationSceneId, selectedTextClipId, selectedVisualClipId, applyCrossRowMoveIfNeeded]
     );
 
     const commitPackedManifest = React.useCallback(
@@ -1491,7 +1916,8 @@ export default function ShortVideoEditorTimeline({
                 next,
                 selectedVisualClipId,
                 narrationRunningSceneIds,
-                selectedNarrationSceneId
+                selectedNarrationSceneId,
+                selectedTextClipId
             );
             commitManifestChange(next, overlayRows);
         },
@@ -1499,6 +1925,7 @@ export default function ShortVideoEditorTimeline({
             commitManifestChange,
             narrationRunningSceneIds,
             selectedNarrationSceneId,
+            selectedTextClipId,
             selectedVisualClipId,
         ]
     );
@@ -1623,6 +2050,11 @@ export default function ShortVideoEditorTimeline({
                 .filter((clip) => resolveClipTrackId(clip, tracksBeforeDelete) === trackId)
                 .map((clip) => clip.id)
         );
+        const deletedTextClipIds = new Set(
+            (source.text_clips ?? [])
+                .filter((clip) => resolveTextClipTrackId(clip, tracksBeforeDelete) === trackId)
+                .map((clip) => clip.id)
+        );
 
         const removed = removeTimelineTrackFromManifest(source, trackId);
         const next: ShortVideoRenderManifest = {
@@ -1637,11 +2069,16 @@ export default function ShortVideoEditorTimeline({
         if (selectedVisualClipId && deletedClipIds.has(selectedVisualClipId)) {
             onSelectVisualClip('');
         }
+        if (selectedTextClipId && deletedTextClipIds.has(selectedTextClipId)) {
+            onSelectTextClip?.('');
+        }
     }, [
         commitPackedManifest,
         onSelectNarrationScene,
+        onSelectTextClip,
         onSelectVisualClip,
         selectedNarrationSceneId,
+        selectedTextClipId,
         selectedVisualClipId,
     ]);
 
@@ -1654,12 +2091,13 @@ export default function ShortVideoEditorTimeline({
         if (!track) {
             return;
         }
-        const { sceneCount, clipCount } = countTrackItems(source, trackId);
+        const { sceneCount, clipCount, textClipCount } = countTrackItems(source, trackId);
         setDeleteTrackDialog({
             trackId,
             trackName: track.name,
             sceneCount,
             clipCount,
+            textClipCount,
         });
     }, []);
 
@@ -1696,13 +2134,20 @@ export default function ShortVideoEditorTimeline({
         [syncPlayerTime]
     );
 
+    const clearTimelineSelection = React.useCallback(() => {
+        onSelectVisualClip('');
+        onSelectTextClip?.('');
+        onSelectNarrationScene?.('');
+    }, [onSelectNarrationScene, onSelectTextClip, onSelectVisualClip]);
+
     const handleClickTimeArea = React.useCallback(
         (time: number) => {
+            clearTimelineSelection();
             syncPlayerTime(time);
             syncTimelineCursor(time);
             return true;
         },
-        [syncPlayerTime, syncTimelineCursor]
+        [clearTimelineSelection, syncPlayerTime, syncTimelineCursor]
     );
 
     const timelineScale = 1;
@@ -1745,6 +2190,24 @@ export default function ShortVideoEditorTimeline({
             }
 
             const target = event.target as HTMLElement | null;
+            const isOnAction = Boolean(target?.closest('.timeline-editor-action'));
+            const isOnFormControl = Boolean(target?.closest('button, input, textarea, select, [role="menu"]'));
+            const isOnOverlay = Boolean(target?.closest('.MuiDialog-root, .MuiPopover-root, .MuiMenu-root'));
+            const inTimeline = Boolean(target?.closest('.timeline-editor'));
+            const inEditArea = Boolean(target?.closest('.timeline-editor-edit-area'));
+            const inTimeArea = Boolean(target?.closest('.timeline-editor-time-area'));
+            const inTrackLabels = Boolean(target?.closest('[data-timeline-track-labels]'));
+
+            if (
+                inTimeline
+                && !isOnAction
+                && !isOnFormControl
+                && !isOnOverlay
+                && (inEditArea || inTimeArea || inTrackLabels)
+            ) {
+                clearTimelineSelection();
+            }
+
             const interactArea = target?.closest('.timeline-editor-time-area-interact') as HTMLElement | null;
             if (!interactArea) {
                 return;
@@ -1771,7 +2234,119 @@ export default function ShortVideoEditorTimeline({
         return () => {
             host.removeEventListener('mousedown', onMouseDown);
         };
-    }, [updateTimeFromClientX]);
+    }, [clearTimelineSelection, updateTimeFromClientX]);
+
+    React.useEffect(() => {
+        const host = timelineHostRef.current;
+        if (!host) {
+            return;
+        }
+
+        const isTextDrag = (event: DragEvent) => (
+            Array.from(event.dataTransfer?.types ?? []).includes(SHORT_VIDEO_TEXT_DRAG_MIME)
+        );
+
+        const resolveDropTrackId = (clientY: number): string | null => {
+            const editGrid = getTimelineEditGrid(host);
+            if (!editGrid) {
+                return null;
+            }
+            return resolveTrackRowIdFromPointer(
+                manifestRef.current,
+                clientY,
+                editGrid,
+                TIMELINE_EDIT_AREA_TOP_GAP
+            );
+        };
+
+        const handleDragOver = (event: DragEvent) => {
+            if (!isTextDrag(event)) {
+                return;
+            }
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'copy';
+            }
+            const targetTrackId = resolveDropTrackId(event.clientY);
+            setTextDropTargetTrackId(targetTrackId);
+        };
+
+        const handleDragLeave = (event: DragEvent) => {
+            const related = event.relatedTarget as Node | null;
+            if (!related || !host.contains(related)) {
+                setTextDropTargetTrackId(null);
+            }
+        };
+
+        const handleDrop = (event: DragEvent) => {
+            if (!isTextDrag(event)) {
+                return;
+            }
+            event.preventDefault();
+            setTextDropTargetTrackId(null);
+
+            const raw = event.dataTransfer?.getData(SHORT_VIDEO_TEXT_DRAG_MIME);
+            if (!raw) {
+                return;
+            }
+            const presetKind = parseTextClipDragPayload(raw);
+            if (!presetKind) {
+                return;
+            }
+
+            const interactArea = host.querySelector(
+                '.timeline-editor-time-area-interact'
+            ) as HTMLElement | null;
+            const trackId = resolveDropTrackId(event.clientY);
+            if (!interactArea || !trackId) {
+                return;
+            }
+
+            const startSec = resolveTimelineSecFromClientX(
+                event.clientX,
+                interactArea,
+                getTimelineHorizontalScrollLeft(host),
+                {
+                    timelineStartLeft,
+                    timelineScaleWidth,
+                    timelineScale,
+                    maxSec: timelineWorkspaceEndSec,
+                }
+            );
+
+            const preset = resolveTextClipPresetByDragKind(presetKind);
+            const added = addTextClipAtSec(manifestRef.current, startSec, {
+                ...preset,
+                timeline_track_id: trackId,
+            });
+            const next = { ...added, duration_sec: getProjectTimelineDurationSec(added) };
+            commitManifestChange(next);
+            const newClip = next.text_clips?.[next.text_clips.length - 1];
+            if (newClip?.id) {
+                onSelectVisualClip('');
+                onSelectNarrationScene?.('');
+                onSelectTextClip?.(newClip.id);
+            }
+        };
+
+        host.addEventListener('dragover', handleDragOver);
+        host.addEventListener('dragleave', handleDragLeave);
+        host.addEventListener('drop', handleDrop);
+        return () => {
+            host.removeEventListener('dragover', handleDragOver);
+            host.removeEventListener('dragleave', handleDragLeave);
+            host.removeEventListener('drop', handleDrop);
+        };
+    }, [
+        commitManifestChange,
+        onSelectNarrationScene,
+        onSelectTextClip,
+        onSelectVisualClip,
+        timelineScale,
+        timelineScaleWidth,
+        timelineStartLeft,
+        timelineWorkspaceEndSec,
+    ]);
 
     const handleClickActionOnly = React.useCallback(
         (
@@ -1780,18 +2355,23 @@ export default function ShortVideoEditorTimeline({
         ) => {
             const action = param.action as ShortVideoTimelineAction;
             if (action.data?.kind === 'visual' && action.data.clipId) {
+                onSelectTextClip?.('');
                 onSelectVisualClip(action.data.clipId);
-                syncPlayerTime(action.start);
+                return;
+            }
+            if (action.data?.kind === 'text' && action.data.textClipId) {
+                onSelectVisualClip('');
+                onSelectNarrationScene?.('');
+                onSelectTextClip?.(action.data.textClipId);
                 return;
             }
             if (action.data?.kind === 'narration' && action.data.sceneId) {
                 onSelectVisualClip('');
+                onSelectTextClip?.('');
                 onSelectNarrationScene?.(action.data.sceneId);
-                onSeekScene?.(action.data.sceneId);
-                syncPlayerTime(action.start);
             }
         },
-        [onSeekScene, onSelectNarrationScene, onSelectVisualClip, syncPlayerTime]
+        [onSelectNarrationScene, onSelectTextClip, onSelectVisualClip]
     );
 
     const handleCreateNarrationAtSec = React.useCallback(
@@ -1799,21 +2379,78 @@ export default function ShortVideoEditorTimeline({
             const created = addNarrationSceneAtCompositionSec(manifest, manifestTimelineSec, trackId);
             commitManifestChange(created.manifest);
             onSelectVisualClip('');
+            onSelectTextClip?.('');
             onSelectNarrationScene?.(created.createdSceneId);
             onSeekScene?.(created.createdSceneId);
             syncPlayerTime(manifestTimelineSec);
         },
-        [commitManifestChange, manifest, onSeekScene, onSelectNarrationScene, onSelectVisualClip, syncPlayerTime]
+        [commitManifestChange, manifest, onSeekScene, onSelectNarrationScene, onSelectTextClip, onSelectVisualClip, syncPlayerTime]
     );
 
-    const handleDeleteVisual = React.useCallback(() => {
-        if (!selectedVisualClipId) {
-            return;
+    const handleDeleteSelectedItem = React.useCallback(() => {
+        if (selectedVisualClipId) {
+            const next = removeVisualClipFromManifest(manifest, selectedVisualClipId);
+            commitManifestChange(next);
+            clearTimelineSelection();
+            return true;
         }
-        const next = removeVisualClipFromManifest(manifest, selectedVisualClipId);
-        commitManifestChange(next);
-        onSelectVisualClip('');
-    }, [commitManifestChange, manifest, onSelectVisualClip, selectedVisualClipId]);
+        if (selectedTextClipId) {
+            const next = removeTextClipFromManifest(manifest, selectedTextClipId);
+            commitManifestChange({
+                ...next,
+                duration_sec: getProjectTimelineDurationSec(next),
+            });
+            clearTimelineSelection();
+            return true;
+        }
+        if (selectedNarrationSceneId) {
+            const next = removeNarrationSceneFromManifest(manifest, selectedNarrationSceneId);
+            commitManifestChange(next);
+            clearTimelineSelection();
+            return true;
+        }
+        return false;
+    }, [
+        clearTimelineSelection,
+        commitManifestChange,
+        manifest,
+        selectedNarrationSceneId,
+        selectedTextClipId,
+        selectedVisualClipId,
+    ]);
+
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Delete' && event.key !== 'Backspace') {
+                return;
+            }
+            if (isKeyboardEditableTarget(event.target)) {
+                return;
+            }
+            if (editingActionKey) {
+                return;
+            }
+            if (!selectedVisualClipId && !selectedTextClipId && !selectedNarrationSceneId) {
+                return;
+            }
+            const deleted = handleDeleteSelectedItem();
+            if (deleted) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [
+        editingActionKey,
+        handleDeleteSelectedItem,
+        selectedNarrationSceneId,
+        selectedTextClipId,
+        selectedVisualClipId,
+    ]);
 
     const handleStartRenameItem = React.useCallback((
         rowId: string,
@@ -1838,6 +2475,7 @@ export default function ShortVideoEditorTimeline({
         const nextLabel = editingLabelDraft.trim();
         const currentManifest = manifestRef.current;
         const isVisualItem = (currentManifest.visual_clips ?? []).some((entry) => entry.id === itemId);
+        const isTextItem = (currentManifest.text_clips ?? []).some((entry) => entry.id === itemId);
 
         if (isVisualItem) {
             const pseudoAction = {
@@ -1851,6 +2489,22 @@ export default function ShortVideoEditorTimeline({
             );
             if (previousLabel !== nextLabel) {
                 const nextManifest = updateVisualClipInManifest(currentManifest, itemId, {
+                    label: nextLabel || undefined,
+                });
+                commitManifestChange(nextManifest);
+            }
+        } else if (isTextItem) {
+            const pseudoAction = {
+                id: itemId,
+                data: { kind: 'text' as const, textClipId: itemId },
+            } as ShortVideoTimelineAction;
+            const previousLabel = resolveTimelineItemLabelForEdit(
+                currentManifest,
+                rowId,
+                pseudoAction
+            );
+            if (previousLabel !== nextLabel) {
+                const nextManifest = updateTextClipInManifest(currentManifest, itemId, {
                     label: nextLabel || undefined,
                 });
                 commitManifestChange(nextManifest);
@@ -1956,11 +2610,14 @@ export default function ShortVideoEditorTimeline({
     /** Chiều cao vùng track mặc định (2 track ban đầu) — viewport không tăng khi thêm track. */
     const baselineTracksViewportHeight =
         TIMELINE_EDIT_AREA_TOP_GAP
-        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_NARRATION_ID)
-        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_VISUAL_ID);
+        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_NARRATION_ID, manifest)
+        + getTrackRowHeight(TIMELINE_DEFAULT_TRACK_VISUAL_ID, manifest);
     const tracksHeight =
         TIMELINE_EDIT_AREA_TOP_GAP
-        + timelineTracks.reduce((sum, track) => sum + getTrackRowHeight(track.id), 0);
+        + timelineTracks.reduce(
+            (sum, track) => sum + getTrackRowHeight(track.id, manifest),
+            0
+        );
     const minTracksViewportHeight = Math.max(0, minTimelineCollapsedContentHeight - rulerHeight);
     const minTimelineExtraHeight = minTracksViewportHeight - baselineTracksViewportHeight;
     const clampTimelineExtraHeight = React.useCallback(
@@ -2174,14 +2831,6 @@ export default function ShortVideoEditorTimeline({
                     <>
                         <IconButton
                             size="small"
-                            aria-label="Xóa visual đang chọn"
-                            disabled={!selectedVisualClipId}
-                            onClick={handleDeleteVisual}
-                        >
-                            <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                            size="small"
                             aria-label="Đồng bộ lưu manifest"
                             onClick={onSyncClick}
                             disabled={showSyncLoading}
@@ -2303,7 +2952,7 @@ export default function ShortVideoEditorTimeline({
                                     key={track.id}
                                     trackId={track.id}
                                     label={track.name}
-                                    height={getTrackRowHeight(track.id)}
+                                    height={getTrackRowHeight(track.id, manifest)}
                                     packMenuTitle="Sắp xếp nối tiếp"
                                     onPackWithGap={(gapSec) => handlePackTrack(track.id, gapSec)}
                                     onTrackNameChange={handleTrackNameChange}
@@ -2311,12 +2960,15 @@ export default function ShortVideoEditorTimeline({
                                     onDragHandlePointerDown={handleTrackDragHandlePointerDown}
                                     isDragging={trackDragState?.trackId === track.id}
                                     isDropTarget={
-                                        trackDragState != null
-                                        && trackDragState.trackId !== track.id
-                                        && trackDragState.hoverIndex === trackIndex
+                                        (trackDragState != null
+                                            && trackDragState.trackId !== track.id
+                                            && trackDragState.hoverIndex === trackIndex)
+                                        || textDropTargetTrackId === track.id
                                     }
                                     canDeleteTrack={!isDefaultTimelineTrack(track.id)}
                                     packDisabled={countTrackItems(manifest, track.id).total < 2}
+                                    visibilityHidden={isTimelineTrackHidden(track)}
+                                    onToggleVisibility={() => handleToggleTrackVisibility(track.id)}
                                 />
                             ))}
                         </Box>
@@ -2488,19 +3140,56 @@ export default function ShortVideoEditorTimeline({
                                 onEditKeyDown: handleRenameKeyDown,
                                 previewOffsetY,
                             };
-                            if (extended.data?.kind === 'narration') {
+                            const visibilityProps = {
+                                timelineHidden: extended.data?.timelineHidden === true,
+                                timelineEffectivelyHidden: extended.data?.timelineEffectivelyHidden === true,
+                            };
+                            if (extended.data?.kind === 'narration' && extended.data.sceneId) {
+                                const sceneId = extended.data.sceneId;
                                 return (
                                     <NarrationActionBlock
                                         action={extended}
                                         {...labelEditorProps}
+                                        {...visibilityProps}
+                                        onToggleVisibility={() => handleToggleItemVisibility(
+                                            'narration',
+                                            sceneId
+                                        )}
                                     />
                                 );
                             }
-                            if (extended.data?.kind === 'visual') {
+                            if (extended.data?.kind === 'visual' && extended.data.clipId) {
+                                const clipId = extended.data.clipId;
                                 return (
                                     <VisualActionBlock
                                         action={extended}
                                         {...labelEditorProps}
+                                        {...visibilityProps}
+                                        onToggleVisibility={() => handleToggleItemVisibility(
+                                            'visual',
+                                            clipId
+                                        )}
+                                    />
+                                );
+                            }
+                            if (extended.data?.kind === 'text' && extended.data.textClipId) {
+                                const textClipId = extended.data.textClipId;
+                                return (
+                                    <TextActionBlock
+                                        action={extended}
+                                        {...labelEditorProps}
+                                        {...visibilityProps}
+                                        timelineScaleWidth={timelineScaleWidth}
+                                        onCommitEnterDuration={(durationSec) => {
+                                            handlePatchTextEnterDuration(textClipId, durationSec);
+                                        }}
+                                        onCommitExitDuration={(durationSec) => {
+                                            handlePatchTextExitDuration(textClipId, durationSec);
+                                        }}
+                                        onToggleVisibility={() => handleToggleItemVisibility(
+                                            'text',
+                                            textClipId
+                                        )}
                                     />
                                 );
                             }
@@ -2508,6 +3197,7 @@ export default function ShortVideoEditorTimeline({
                                 <GenericTimelineActionBlock
                                     action={extended}
                                     {...labelEditorProps}
+                                    {...visibilityProps}
                                 />
                             );
                         }}
@@ -2538,23 +3228,32 @@ export default function ShortVideoEditorTimeline({
                 onClose={closeDeleteTrackDialogs}
             >
                 <DialogTitle sx={{ backgroundColor: 'unset', color: 'text.primary' }}>
-                    {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0
+                    {deleteTrackDialog
+                        && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount + deleteTrackDialog.textClipCount > 0
                         ? 'Track còn item'
                         : 'Xóa track'}
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0 ? (
+                        {deleteTrackDialog
+                            && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount + deleteTrackDialog.textClipCount > 0 ? (
                             <>
                                 Track &quot;{deleteTrackDialog.trackName}&quot; còn{' '}
                                 {deleteTrackDialog.sceneCount > 0
                                     ? `${deleteTrackDialog.sceneCount} lời thoại`
                                     : null}
-                                {deleteTrackDialog.sceneCount > 0 && deleteTrackDialog.clipCount > 0
-                                    ? ' và '
+                                {deleteTrackDialog.sceneCount > 0
+                                    && (deleteTrackDialog.clipCount > 0 || deleteTrackDialog.textClipCount > 0)
+                                    ? ', '
                                     : null}
                                 {deleteTrackDialog.clipCount > 0
                                     ? `${deleteTrackDialog.clipCount} visual clip`
+                                    : null}
+                                {deleteTrackDialog.clipCount > 0 && deleteTrackDialog.textClipCount > 0
+                                    ? ', '
+                                    : null}
+                                {deleteTrackDialog.textClipCount > 0
+                                    ? `${deleteTrackDialog.textClipCount} text clip`
                                     : null}
                                 . Hãy di chuyển các item sang track khác trước khi xóa track.
                             </>
@@ -2565,7 +3264,8 @@ export default function ShortVideoEditorTimeline({
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={closeDeleteTrackDialogs}>Hủy</Button>
-                    {deleteTrackDialog && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount > 0 ? (
+                    {deleteTrackDialog
+                        && deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount + deleteTrackDialog.textClipCount > 0 ? (
                         <Button
                             color="error"
                             onClick={handleDeleteTrackWithItemsClick}
@@ -2609,7 +3309,7 @@ export default function ShortVideoEditorTimeline({
                         <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" sx={{ lineHeight: 1.45 }}>
                                 Bạn có chắc muốn xóa track &quot;{deleteTrackDialog.trackName}&quot; và{' '}
-                                {deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount} item?
+                                {deleteTrackDialog.sceneCount + deleteTrackDialog.clipCount + deleteTrackDialog.textClipCount} item?
                             </Typography>
                             <Box
                                 sx={{

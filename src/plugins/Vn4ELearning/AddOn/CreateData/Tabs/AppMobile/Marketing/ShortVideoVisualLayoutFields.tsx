@@ -51,6 +51,7 @@ import {
     InspectorPropertyNumber,
     InspectorPropertyRow,
 } from './ShortVideoInspectorFields';
+import ShortVideoInspectorZIndexGroup from './ShortVideoInspectorZIndexGroup';
 
 type Props = {
     clip: ShortVideoVisualClip;
@@ -65,7 +66,9 @@ function normalizePickerColor(value: string): string {
         return trimmed;
     }
     if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
-        const [, r, g, b] = trimmed;
+        const r = trimmed[1];
+        const g = trimmed[2];
+        const b = trimmed[3];
         return `#${r}${r}${g}${g}${b}${b}`;
     }
     return '#000000';
@@ -519,7 +522,7 @@ export default function ShortVideoVisualLayoutFields({ clip, onPatch }: Props) {
 
     return (
         <>
-            <InspectorPropertyGroup title="Vị trí" collapsible={false}>
+            <InspectorPropertyGroup title="Vị trí">
                 <InspectorPropertyRow label="Căn dọc" fullWidthControl>
                     <ToggleButtonGroup
                         exclusive
@@ -569,7 +572,7 @@ export default function ShortVideoVisualLayoutFields({ clip, onPatch }: Props) {
                 ) : null}
             </InspectorPropertyGroup>
 
-            <InspectorPropertyGroup title="Nền" collapsible={false}>
+            <InspectorPropertyGroup title="Nền">
                 <InspectorPropertyRow label="Loại nền" fullWidthControl>
                     <ToggleButtonGroup
                         exclusive
@@ -736,6 +739,11 @@ export default function ShortVideoVisualLayoutFields({ clip, onPatch }: Props) {
                     </>
                 ) : null}
             </InspectorPropertyGroup>
+
+            <ShortVideoInspectorZIndexGroup
+                zIndex={clip.z_index}
+                onChange={(value) => onPatch({ z_index: value })}
+            />
         </>
     );
 }

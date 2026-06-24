@@ -52,6 +52,8 @@
   },
   "scripts": {
     "start": "craco start",
+    "start:with-remotion": "node scripts/dev-with-remotion.mjs",
+    "remotion:build": "npm run build --prefix ../_biong_backend/resources/views/plugins/vn4-e-learning/services/remotion-short-video",
     "build": "craco build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

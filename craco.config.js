@@ -19,6 +19,35 @@ function applyRemotionWebpackAliases(webpackConfig) {
   webpackConfig.resolve.alias = alias;
 }
 
+function includeRemotionInBabel(webpackConfig) {
+  const oneOfRule = webpackConfig.module.rules.find((rule) => rule.oneOf);
+  if (!oneOfRule || !Array.isArray(oneOfRule.oneOf)) {
+    return;
+  }
+
+  oneOfRule.oneOf.forEach((rule) => {
+    if (
+      rule.loader
+      && typeof rule.loader === 'string'
+      && rule.loader.includes('babel-loader')
+      && rule.include
+    ) {
+      const existingInclude = rule.include;
+      rule.include = Array.isArray(existingInclude)
+        ? [...existingInclude, remotionSrcPath]
+        : [existingInclude, remotionSrcPath];
+    }
+  });
+}
+
+function enableRemotionWatch(webpackConfig) {
+  webpackConfig.watchOptions = {
+    ...(webpackConfig.watchOptions || {}),
+    followSymlinks: true,
+    ignored: /node_modules/,
+  };
+}
+
 module.exports = {
   devServer: (devServerConfig) => {
     devServerConfig.headers = {
@@ -40,7 +69,24 @@ module.exports = {
         pathname: socketPath,
         port: socketPort,
       },
+      overlay: {
+        ...(devServerConfig.client?.overlay || {}),
+        errors: true,
+        warnings: false,
+      },
     };
+
+    // File Remotion nằm ngoài src/ FE — bắt buộc watch để HMR/reload khi sửa composition.
+    devServerConfig.watchFiles = [
+      ...(Array.isArray(devServerConfig.watchFiles) ? devServerConfig.watchFiles : []),
+      {
+        paths: [path.join(remotionSrcPath, '**/*')],
+        options: {
+          usePolling: process.env.REMOTION_WATCH_POLLING === '1',
+          interval: 300,
+        },
+      },
+    ];
 
     return devServerConfig;
   },
@@ -55,6 +101,10 @@ module.exports = {
         'ShortVideoComposition.tsx'
       ),
       '@spacedev/remotion-short-video/types': path.join(remotionSrcPath, 'types.ts'),
+      '@spacedev/remotion-short-video/visualBackgroundGradient': path.join(
+        remotionSrcPath,
+        'visualBackgroundGradient.ts'
+      ),
       '@spacedev/remotion-short-video': remotionSrcPath,
     },
     configure: (webpackConfig) => {
@@ -63,28 +113,20 @@ module.exports = {
       );
 
       applyRemotionWebpackAliases(webpackConfig);
+      includeRemotionInBabel(webpackConfig);
+      enableRemotionWatch(webpackConfig);
 
       webpackConfig.resolve.modules = [
         feNodeModules,
         ...(webpackConfig.resolve.modules || ['node_modules']),
       ];
 
-      const oneOfRule = webpackConfig.module.rules.find((rule) => rule.oneOf);
-      if (oneOfRule && Array.isArray(oneOfRule.oneOf)) {
-        const babelRule = oneOfRule.oneOf.find(
-          (rule) =>
-            rule.loader &&
-            typeof rule.loader === 'string' &&
-            rule.loader.includes('babel-loader') &&
-            rule.include
-        );
-        if (babelRule) {
-          const existingInclude = babelRule.include;
-          babelRule.include = Array.isArray(existingInclude)
-            ? [...existingInclude, remotionSrcPath]
-            : [existingInclude, remotionSrcPath];
-        }
-      }
+      webpackConfig.resolve.extensions = [
+        ...(webpackConfig.resolve.extensions || []),
+        '.ts',
+        '.tsx',
+      ];
+
       return webpackConfig;
     },
   },

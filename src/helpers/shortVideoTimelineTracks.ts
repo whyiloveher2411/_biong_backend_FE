@@ -1,14 +1,19 @@
 import type {
     ShortVideoManifestScene,
     ShortVideoRenderManifest,
+    ShortVideoTextClip,
     ShortVideoTimelineTrack,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 
 export const TIMELINE_DEFAULT_TRACK_NARRATION_ID = 'narration';
 export const TIMELINE_DEFAULT_TRACK_VISUAL_ID = 'visual';
+export const TIMELINE_DEFAULT_TRACK_TEXT_ID = 'text';
 export const TIMELINE_TRACK_ROW_HEIGHT = 40;
-export const TIMELINE_NARRATION_TRACK_ROW_HEIGHT = 48;
+/** @deprecated Mọi track dùng TIMELINE_TRACK_ROW_HEIGHT — animation bar nằm trong clip. */
+export const TIMELINE_TEXT_ROW_HEIGHT_WITH_ANIMATION = TIMELINE_TRACK_ROW_HEIGHT;
+/** @deprecated Dùng TIMELINE_TRACK_ROW_HEIGHT — mọi track cùng chiều cao. */
+export const TIMELINE_NARRATION_TRACK_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
 
 export const DEFAULT_TIMELINE_TRACKS: ShortVideoTimelineTrack[] = [
     { id: TIMELINE_DEFAULT_TRACK_NARRATION_ID, name: 'Lời thoại', order: 0 },
@@ -28,7 +33,11 @@ export function resolveTimelineTracks(manifest: ShortVideoRenderManifest): Short
             }
             const name = String(track?.name ?? '').trim() || id;
             const order = Number.isFinite(track?.order) ? Number(track.order) : index;
-            return { id, name, order };
+            const entry: ShortVideoTimelineTrack = { id, name, order };
+            if (track?.timeline_hidden === true) {
+                entry.timeline_hidden = true;
+            }
+            return entry;
         })
         .filter(Boolean) as ShortVideoTimelineTrack[];
 
@@ -51,6 +60,13 @@ export function resolveTimelineTracks(manifest: ShortVideoRenderManifest): Short
     });
 }
 
+/** Track đầu mảng = layer trên cùng khi render (khớp Remotion). */
+export function resolveTimelineTracksForRender(
+    manifest: ShortVideoRenderManifest
+): ShortVideoTimelineTrack[] {
+    return [...resolveTimelineTracks(manifest)].reverse();
+}
+
 export function resolveSceneTrackId(
     scene: ShortVideoManifestScene,
     tracks: ShortVideoTimelineTrack[] = []
@@ -69,6 +85,20 @@ export function resolveClipTrackId(
     const trackId = clip.timeline_track_id?.trim();
     if (trackId && tracks.some((track) => track.id === trackId)) {
         return trackId;
+    }
+    return TIMELINE_DEFAULT_TRACK_VISUAL_ID;
+}
+
+export function resolveTextClipTrackId(
+    clip: Pick<ShortVideoTextClip, 'timeline_track_id'>,
+    tracks: ShortVideoTimelineTrack[] = []
+): string {
+    const trackId = clip.timeline_track_id?.trim();
+    if (trackId && tracks.some((track) => track.id === trackId)) {
+        return trackId;
+    }
+    if (tracks.some((track) => track.id === TIMELINE_DEFAULT_TRACK_TEXT_ID)) {
+        return TIMELINE_DEFAULT_TRACK_TEXT_ID;
     }
     return TIMELINE_DEFAULT_TRACK_VISUAL_ID;
 }
@@ -94,11 +124,20 @@ export function ensureManifestTimelineTracks(
         return { ...clip, timeline_track_id: trackId };
     });
 
+    const textClips = (manifest.text_clips ?? []).map((clip) => {
+        const trackId = resolveTextClipTrackId(clip, tracks);
+        if (clip.timeline_track_id === trackId) {
+            return clip;
+        }
+        return { ...clip, timeline_track_id: trackId };
+    });
+
     return {
         ...manifest,
         timeline_tracks: tracks,
         scenes,
         visual_clips: visualClips.length > 0 ? visualClips : manifest.visual_clips,
+        text_clips: textClips.length > 0 ? textClips : manifest.text_clips,
     };
 }
 
@@ -166,6 +205,7 @@ export function isDefaultTimelineTrack(trackId: string): boolean {
 export type TimelineTrackItemCount = {
     sceneCount: number;
     clipCount: number;
+    textClipCount: number;
     total: number;
 };
 
@@ -180,11 +220,15 @@ export function countTrackItems(
     const clipCount = (manifest.visual_clips ?? []).filter(
         (clip) => resolveClipTrackId(clip, tracks) === trackId
     ).length;
+    const textClipCount = (manifest.text_clips ?? []).filter(
+        (clip) => resolveTextClipTrackId(clip, tracks) === trackId
+    ).length;
 
     return {
         sceneCount,
         clipCount,
-        total: sceneCount + clipCount,
+        textClipCount,
+        total: sceneCount + clipCount + textClipCount,
     };
 }
 
@@ -213,18 +257,23 @@ export function removeTimelineTrackFromManifest(
         (clip) => resolveClipTrackId(clip, tracksBeforeDelete) !== trackId
     );
 
+    const textClips = (manifest.text_clips ?? []).filter(
+        (clip) => resolveTextClipTrackId(clip, tracksBeforeDelete) !== trackId
+    );
+
     return {
         ...manifest,
         timeline_tracks: remainingTracks,
         scenes,
         visual_clips: visualClips.length > 0 ? visualClips : undefined,
+        text_clips: textClips.length > 0 ? textClips : undefined,
     };
 }
 
-export function getTrackRowHeight(trackId: string): number {
-    if (trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID) {
-        return TIMELINE_NARRATION_TRACK_ROW_HEIGHT;
-    }
+export function getTrackRowHeight(
+    _trackId?: string,
+    _manifest?: ShortVideoRenderManifest
+): number {
     return TIMELINE_TRACK_ROW_HEIGHT;
 }
 
@@ -246,7 +295,7 @@ export function resolveTrackRowIdFromPointer(
 
     let cursor = 0;
     for (const track of tracks) {
-        const height = getTrackRowHeight(track.id);
+        const height = getTrackRowHeight(track.id, manifest);
         if (relativeY >= cursor && relativeY < cursor + height) {
             return track.id;
         }

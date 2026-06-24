@@ -4,10 +4,6 @@ import {
     Box,
     Button,
     Chip,
-    Paper,
-    Tab,
-    Tabs,
-    TextField,
     Typography,
 } from '@mui/material';
 import type {
@@ -44,6 +40,7 @@ import ShortVideoSceneEditPanel from './ShortVideoSceneEditPanel';
 import ShortVideoSceneMediaPreview from './ShortVideoSceneMediaPreview';
 import ShortVideoVisualMediaFields, { resolveVisualMediaVolumePercent } from './ShortVideoVisualMediaFields';
 import ShortVideoVisualLayoutFields from './ShortVideoVisualLayoutFields';
+import ShortVideoInspectorZIndexGroup from './ShortVideoInspectorZIndexGroup';
 import {
     INSPECTOR_SHELL_CONTENT_SX,
     InspectorPanelBody,
@@ -51,6 +48,7 @@ import {
     InspectorPropertyGroup,
     InspectorPropertyReadonly,
     InspectorPropertySelect,
+    InspectorPropertyText,
     InspectorPropertyVolume,
 } from './ShortVideoInspectorFields';
 
@@ -171,16 +169,6 @@ function noopResetLayoutGroup(
     return undefined;
 }
 
-const INSPECTOR_TAB_SX = {
-    minHeight: 36,
-    py: 0.75,
-    px: 0.75,
-    fontSize: 12,
-    fontWeight: 500,
-    textTransform: 'none',
-    minWidth: 0,
-} as const;
-
 const INSPECTOR_SHELL_SX = {
     width: 300,
     flexShrink: 0,
@@ -191,43 +179,8 @@ const INSPECTOR_SHELL_SX = {
     minHeight: 0,
     overflowX: 'hidden',
     overflowY: 'auto',
+    bgcolor: 'background.paper',
 } as const;
-
-function InspectorSection({
-    title,
-    description,
-    children,
-}: {
-    title: string;
-    description?: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <Paper
-            variant="outlined"
-            sx={{
-                p: 1.75,
-                borderRadius: 2,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-                bgcolor: 'background.paper',
-            }}
-        >
-            <Box>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ lineHeight: 1.3 }}>
-                    {title}
-                </Typography>
-                {description ? (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35 }}>
-                        {description}
-                    </Typography>
-                ) : null}
-            </Box>
-            {children}
-        </Paper>
-    );
-}
 
 function EmptyInspector() {
     return (
@@ -303,7 +256,6 @@ function NarrationAudioSettingsPanel({
         <InspectorPanelBody>
             <InspectorPropertyGroup
                 title={`Cài đặt audio · ${providerLabel}`}
-                defaultExpanded={false}
                 onExpandedChange={handleAudioSettingsExpanded}
             >
                 <InspectorPropertySelect
@@ -408,7 +360,7 @@ function NarrationAudioSettingsPanel({
                 )}
             </InspectorPropertyGroup>
 
-            <InspectorPropertyGroup title="Âm lượng" collapsible={false}>
+            <InspectorPropertyGroup title="Âm lượng">
                 <InspectorPropertyVolume
                     label="Voiceover"
                     description="Âm lượng lời thoại trên track narration"
@@ -417,7 +369,7 @@ function NarrationAudioSettingsPanel({
                 />
             </InspectorPropertyGroup>
 
-            <InspectorPropertyGroup title="Trạng thái output" defaultExpanded={false}>
+            <InspectorPropertyGroup title="Trạng thái output">
                 <InspectorPropertyReadonly
                     label="Audio"
                     value={hasAudio ? 'Đã render' : 'Chưa có'}
@@ -631,82 +583,69 @@ function NarrationSceneInspector({
 
     return (
         <Box sx={INSPECTOR_SHELL_SX} className="custom_scroll">
-            <Box sx={INSPECTOR_SHELL_CONTENT_SX}>
-                <Tabs
-                    value={activeTab}
-                    onChange={(_event, next) => setActiveTab(next)}
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    sx={{
-                        minHeight: 36,
-                        mb: 1.5,
-                        borderBottom: 1,
-                        borderColor: 'divider',
-                        '& .MuiTabs-indicator': {
-                            height: 2,
-                            borderRadius: 1,
-                        },
-                    }}
-                >
-                    <Tab label="Nội dung" sx={INSPECTOR_TAB_SX} />
-                    <Tab label="Hiển thị" sx={INSPECTOR_TAB_SX} />
-                </Tabs>
-            </Box>
+            <InspectorPanelTabs
+                value={activeTab}
+                onChange={setActiveTab}
+                tabs={[
+                    { label: 'Nội dung' },
+                    { label: 'Hiển thị' },
+                ]}
+            />
 
-            <Box sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                 {activeTab === NARRATION_TAB.content ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        {pending ? (
-                            <Chip size="small" color="warning" label="Chưa có audio" sx={{ alignSelf: 'flex-start' }} />
-                        ) : (
-                            <Chip size="small" color="success" label="Sẵn sàng" sx={{ alignSelf: 'flex-start' }} />
-                        )}
-                        <InspectorSection
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                            {pending ? (
+                                <Chip size="small" color="warning" label="Chưa có audio" />
+                            ) : (
+                                <Chip size="small" color="success" label="Sẵn sàng" />
+                            )}
+                        </Box>
+                        <InspectorPropertyGroup
                             title="Nội dung scene"
-                            description="Nhãn hiển thị trên timeline và văn bản TTS."
+                            subtitle="Nhãn hiển thị trên timeline và văn bản TTS."
                         >
-                            <TextField
+                            <InspectorPropertyText
                                 label="Nhãn hiển thị trên track"
-                                size="small"
-                                fullWidth
                                 value={scene.on_screen_text || ''}
-                                onChange={(e) => patchScene({ on_screen_text: e.target.value })}
+                                onChange={(value) => patchScene({ on_screen_text: value })}
                             />
-                            <TextField
+                            <InspectorPropertyText
                                 label="Voiceover"
-                                size="small"
-                                fullWidth
+                                value={scene.voiceover || ''}
+                                onChange={(value) => patchScene({ voiceover: value })}
+                                placeholder="Nhập lời thoại cần chuyển thành audio..."
                                 multiline
                                 minRows={5}
-                                value={scene.voiceover || ''}
-                                onChange={(e) => patchScene({ voiceover: e.target.value })}
-                                placeholder="Nhập lời thoại cần chuyển thành audio..."
                             />
-                            <Button
-                                variant="contained"
-                                fullWidth
-                                size="medium"
-                                disabled={!voiceoverTrimmed || rendering}
-                                onClick={onRenderAudio}
-                                sx={{
-                                    py: 1,
-                                    fontWeight: 600,
-                                    textTransform: 'none',
-                                    borderRadius: 1.5,
-                                }}
-                            >
-                                {rendering ? 'Đang render audio...' : 'Render audio'}
-                            </Button>
-                            {!voiceoverTrimmed ? (
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ display: 'block', textAlign: 'center' }}
+                            <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                                <Button
+                                    variant="contained"
+                                    fullWidth
+                                    size="medium"
+                                    disabled={!voiceoverTrimmed || rendering}
+                                    onClick={onRenderAudio}
+                                    sx={{
+                                        py: 1,
+                                        fontWeight: 600,
+                                        textTransform: 'none',
+                                        borderRadius: 1,
+                                    }}
                                 >
-                                    Cần nhập voiceover trước khi render
-                                </Typography>
-                            ) : null}
-                        </InspectorSection>
+                                    {rendering ? 'Đang render audio...' : 'Render audio'}
+                                </Button>
+                                {!voiceoverTrimmed ? (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ display: 'block', textAlign: 'center', mt: 0.75 }}
+                                    >
+                                        Cần nhập voiceover trước khi render
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                        </InspectorPropertyGroup>
 
                         <NarrationAudioSettingsPanel
                             ttsSettings={ttsSettings}
@@ -734,9 +673,16 @@ function NarrationSceneInspector({
                             onRefreshVbeeCredits={refreshVbeeCredits}
                         />
 
-                        <Alert severity="info" sx={{ py: 0.5, alignItems: 'center' }}>
-                            Sửa voiceover cần render lại audio. Sửa nhãn hoặc hiển thị thì bấm Lưu.
-                        </Alert>
+                        <ShortVideoInspectorZIndexGroup
+                            zIndex={scene.z_index}
+                            onChange={(value) => patchScene({ z_index: value })}
+                        />
+
+                        <Box sx={{ px: 2, py: 1.25 }}>
+                            <Alert severity="info" sx={{ py: 0.5, alignItems: 'center' }}>
+                                Sửa voiceover cần render lại audio. Sửa nhãn hoặc hiển thị thì bấm Lưu.
+                            </Alert>
+                        </Box>
                     </Box>
                 ) : null}
 
@@ -907,7 +853,7 @@ function VisualClipMediaInspector({
                     ) : null}
 
                     {visualTab === VISUAL_CLIP_TAB.animation ? (
-                        <InspectorPropertyGroup title="Chuyển động" collapsible={false}>
+                        <InspectorPropertyGroup title="Chuyển động">
                             <InspectorPropertySelect
                                 label="Hiệu ứng vào"
                                 description="Cách media xuất hiện trên màn hình"

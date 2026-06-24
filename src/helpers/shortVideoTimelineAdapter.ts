@@ -2,20 +2,30 @@ import type { TimelineAction, TimelineEffect, TimelineRow } from '@xzdarcy/timel
 import type {
     ShortVideoManifestScene,
     ShortVideoRenderManifest,
+    ShortVideoTextClip,
+    ShortVideoTextClipMotion,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 import { resolveDefaultSceneAudioTtsSettings, resolveSceneHeadlineText } from './shortVideoRenderManifest';
 import { clampClipTiming, resolveVisualClipImageRef, resolveVisualClipVideoPreviewUrl, resolveVisualClipVideoRef, resolveVisualClipYoutubeId, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { clampTextClipTiming, resolveTextClipEnterDurationSec, resolveTextClipExitDurationSec, resolveTextClipTimelineLabel, setTextClipsInManifest } from './shortVideoTextClips';
+import {
+    isSceneEffectivelyHidden,
+    isTextClipEffectivelyHidden,
+    isTimelineItemHidden,
+    isVisualClipEffectivelyHidden,
+} from './shortVideoTimelineVisibility';
 import { buildYoutubeThumbnailUrl, isHttpsVideoUrl } from './shortVideoYoutube';
 import {
     ensureManifestTimelineTracks,
     getTrackRowHeight,
     resolveClipTrackId,
     resolveSceneTrackId,
+    resolveTextClipTrackId,
     resolveTimelineTracks,
     TIMELINE_DEFAULT_TRACK_NARRATION_ID,
+    TIMELINE_DEFAULT_TRACK_TEXT_ID,
     TIMELINE_DEFAULT_TRACK_VISUAL_ID,
-    TIMELINE_NARRATION_TRACK_ROW_HEIGHT,
     TIMELINE_TRACK_ROW_HEIGHT,
 } from './shortVideoTimelineTracks';
 
@@ -30,9 +40,11 @@ export {
     reorderTimelineTracksInManifest,
     resolveClipTrackId,
     resolveSceneTrackId,
+    resolveTextClipTrackId,
     resolveTimelineTracks,
     resolveTrackRowIdFromPointer,
     TIMELINE_DEFAULT_TRACK_NARRATION_ID,
+    TIMELINE_DEFAULT_TRACK_TEXT_ID,
     TIMELINE_DEFAULT_TRACK_VISUAL_ID,
     TIMELINE_NARRATION_TRACK_ROW_HEIGHT,
     TIMELINE_TRACK_ROW_HEIGHT,
@@ -55,12 +67,13 @@ export {
 
 export const TIMELINE_ROW_NARRATION = TIMELINE_DEFAULT_TRACK_NARRATION_ID;
 export const TIMELINE_ROW_VISUAL = TIMELINE_DEFAULT_TRACK_VISUAL_ID;
+export const TIMELINE_ROW_TEXT = TIMELINE_DEFAULT_TRACK_TEXT_ID;
 
 /** @deprecated Dùng track động từ manifest.timeline_tracks */
 export const TIMELINE_SPARE_ROW_IDS = [] as const;
 export const TIMELINE_SPARE_ROW_COUNT = 0;
 export const TIMELINE_SPARE_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
-export const TIMELINE_NARRATION_ROW_HEIGHT = TIMELINE_NARRATION_TRACK_ROW_HEIGHT;
+export const TIMELINE_NARRATION_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
 export const TIMELINE_VISUAL_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
 export const TIMELINE_RULER_HEIGHT = 32;
 /** Khoảng cách mặc định giữa ruler và vùng track (khớp `.timeline-editor-edit-area { margin-top }`). */
@@ -69,12 +82,14 @@ export const TIMELINE_EDIT_AREA_TOP_GAP = 10;
 export const SHORT_VIDEO_TIMELINE_EFFECTS: Record<string, TimelineEffect> = {
     narration: { id: 'narration', name: 'Lời thoại' },
     visual: { id: 'visual', name: 'Visual' },
+    text: { id: 'text', name: 'Text' },
 };
 
 export type ShortVideoTimelineActionData = {
-    kind: 'narration' | 'visual';
+    kind: 'narration' | 'visual' | 'text';
     sceneId?: string;
     clipId?: string;
+    textClipId?: string;
     label?: string;
     status?: 'ready' | 'pending' | 'running';
     thumbnailUrl?: string;
@@ -84,6 +99,15 @@ export type ShortVideoTimelineActionData = {
     audioPeaks?: number[];
     audioTrimStartSec?: number;
     audioSourceDurationSec?: number;
+    /** Flag ẩn riêng của item — dùng nút mắt trên clip */
+    timelineHidden?: boolean;
+    /** Track hoặc item ẩn — dùng style mờ trên timeline + skip render */
+    timelineEffectivelyHidden?: boolean;
+    motion?: ShortVideoTextClipMotion;
+    enterDurationSec?: number;
+    exitMotion?: ShortVideoTextClipMotion | 'none';
+    exitDurationSec?: number;
+    clipDurationSec?: number;
 };
 
 export type ShortVideoTimelineAction = TimelineAction & {
@@ -299,7 +323,10 @@ function maxItemEndSecFromManifest(manifest: ShortVideoRenderManifest): number {
     const clipEnds = (manifest.visual_clips ?? []).map(
         (clip) => clip.start_sec + clip.duration_sec
     );
-    const allEnds = [...sceneEnds, ...clipEnds];
+    const textClipEnds = (manifest.text_clips ?? []).map(
+        (clip) => clip.start_sec + clip.duration_sec
+    );
+    const allEnds = [...sceneEnds, ...clipEnds, ...textClipEnds];
     if (allEnds.length === 0) {
         return MIN_ACTION_DURATION_SEC;
     }
@@ -319,6 +346,25 @@ export function getProjectTimelineDurationSec(manifest: ShortVideoRenderManifest
 export function timelineEditorWorkspaceEndSec(contentDurationSec: number): number {
     const content = Math.max(MIN_ACTION_DURATION_SEC, contentDurationSec);
     return Math.max(content + 120, 180);
+}
+
+/** Tính thời điểm timeline (giây) từ tọa độ X con trỏ — dùng khi thả text từ panel Tài nguyên. */
+export function resolveTimelineSecFromClientX(
+    clientX: number,
+    interactArea: HTMLElement,
+    scrollLeft: number,
+    options: {
+        timelineStartLeft: number;
+        timelineScaleWidth: number;
+        timelineScale: number;
+        maxSec: number;
+    }
+): number {
+    const rect = interactArea.getBoundingClientRect();
+    const localX = clientX - rect.left;
+    const absoluteLeft = Math.max(options.timelineStartLeft, localX + scrollLeft);
+    const time = ((absoluteLeft - options.timelineStartLeft) / options.timelineScaleWidth) * options.timelineScale;
+    return Math.max(0, Math.min(time, options.maxSec));
 }
 
 function maxActionEndSecFromRows(rows: TimelineRow[]): number {
@@ -373,7 +419,10 @@ function sceneNarrationLabel(scene: ShortVideoRenderManifest['scenes'][number]):
 
 /** Khóa chỉnh nhãn timeline: `{rowId}:{itemId}` — dùng chung mọi loại track. */
 export function timelineActionEditKey(rowId: string, action: ShortVideoTimelineAction): string {
-    const itemId = action.data?.clipId || action.data?.sceneId || action.id;
+    const itemId = action.data?.clipId
+        || action.data?.textClipId
+        || action.data?.sceneId
+        || action.id;
     return `${rowId}:${itemId}`;
 }
 
@@ -452,14 +501,14 @@ function hasTimelineRowsDragChanges(
     expected.forEach((row) => {
         row.actions.forEach((action) => {
             const extended = action as ShortVideoTimelineAction;
-            const key = `${extended.data?.kind || 'unknown'}:${extended.data?.clipId || extended.data?.sceneId || action.id}`;
+            const key = `${extended.data?.kind || 'unknown'}:${extended.data?.clipId || extended.data?.textClipId || extended.data?.sceneId || action.id}`;
             expectedByKey.set(key, { start: action.start, end: action.end, rowId: row.id });
         });
     });
 
     return rows.some((row) => row.actions.some((action) => {
         const extended = action as ShortVideoTimelineAction;
-        const key = `${extended.data?.kind || 'unknown'}:${extended.data?.clipId || extended.data?.sceneId || action.id}`;
+        const key = `${extended.data?.kind || 'unknown'}:${extended.data?.clipId || extended.data?.textClipId || extended.data?.sceneId || action.id}`;
         const expectedAction = expectedByKey.get(key);
         if (!expectedAction) {
             return false;
@@ -506,6 +555,7 @@ export function manifestToTimelineRows(
     selectedClipId?: string,
     runningSceneIds: string[] = [],
     selectedNarrationSceneId = '',
+    selectedTextClipId = '',
     dragRows?: TimelineRow[]
 ): TimelineRow[] {
     const normalizedManifest = ensureManifestTimelineTracks(manifest);
@@ -541,6 +591,8 @@ export function manifestToTimelineRows(
                 audioPeaks: scene.audio_peaks?.length ? scene.audio_peaks : undefined,
                 audioTrimStartSec: sourceDurationSec !== null ? trimStartSec : undefined,
                 audioSourceDurationSec: sourceDurationSec ?? undefined,
+                timelineHidden: isTimelineItemHidden(scene),
+                timelineEffectivelyHidden: isSceneEffectivelyHidden(normalizedManifest, scene, tracks),
             },
         };
         actionsByTrack.get(trackId)?.push(action);
@@ -567,6 +619,39 @@ export function manifestToTimelineRows(
                 thumbnailUrl: clipVisualPosterUrl(clip),
                 videoSrc: clipVisualVideoSrc(clip),
                 visualType: clip.type,
+                timelineHidden: isTimelineItemHidden(clip),
+                timelineEffectivelyHidden: isVisualClipEffectivelyHidden(normalizedManifest, clip, tracks),
+            },
+        };
+        actionsByTrack.get(trackId)?.push(action);
+    });
+
+    (normalizedManifest.text_clips ?? []).forEach((clip) => {
+        const trackId = resolveTextClipTrackId(clip, tracks);
+        const start = Math.max(0, clip.start_sec);
+        const end = Math.max(start + MIN_ACTION_DURATION_SEC, start + clip.duration_sec);
+        const label = resolveTextClipTimelineLabel(clip);
+        const action: ShortVideoTimelineAction = {
+            id: clip.id,
+            start,
+            end,
+            effectId: 'text',
+            movable: true,
+            flexible: true,
+            minStart: 0,
+            maxEnd: editorMaxEndSec,
+            selected: selectedTextClipId === clip.id,
+            data: {
+                kind: 'text',
+                textClipId: clip.id,
+                label: label.length > 28 ? `${label.slice(0, 28)}…` : label,
+                timelineHidden: isTimelineItemHidden(clip),
+                timelineEffectivelyHidden: isTextClipEffectivelyHidden(normalizedManifest, clip, tracks),
+                motion: clip.motion,
+                enterDurationSec: resolveTextClipEnterDurationSec(clip),
+                exitMotion: clip.exit_motion,
+                exitDurationSec: resolveTextClipExitDurationSec(clip),
+                clipDurationSec: Math.max(MIN_ACTION_DURATION_SEC, clip.duration_sec),
             },
         };
         actionsByTrack.get(trackId)?.push(action);
@@ -575,7 +660,7 @@ export function manifestToTimelineRows(
     return tracks.map((track) => ({
         id: track.id,
         actions: actionsByTrack.get(track.id) ?? [],
-        rowHeight: getTrackRowHeight(track.id),
+        rowHeight: getTrackRowHeight(track.id, normalizedManifest),
     }));
 }
 
@@ -611,6 +696,50 @@ export function timelineRowsToVisualClips(
             const durationSec = Math.max(MIN_ACTION_DURATION_SEC, manifestEndSec - manifestStartSec);
             clips.push(
                 clampClipTiming({
+                    ...existing,
+                    start_sec: manifestStartSec,
+                    duration_sec: durationSec,
+                    timeline_track_id: row.id,
+                })
+            );
+        });
+    });
+
+    return clips;
+}
+
+export function timelineRowsToTextClips(
+    rows: TimelineRow[],
+    manifest: ShortVideoRenderManifest
+): ShortVideoTextClip[] {
+    const tracks = resolveTimelineTracks(manifest);
+    const existingById = new Map(
+        (manifest.text_clips ?? []).map((clip) => [clip.id, clip] as const)
+    );
+
+    const clips: ShortVideoTextClip[] = [];
+    rows.forEach((row) => {
+        if (!tracks.some((track) => track.id === row.id)) {
+            return;
+        }
+        row.actions.forEach((action: TimelineAction) => {
+            const extended = action as ShortVideoTimelineAction;
+            if (extended.data?.kind !== 'text') {
+                return;
+            }
+            const clipId = extended.data?.textClipId || action.id;
+            const existing = existingById.get(clipId);
+            if (!existing) {
+                return;
+            }
+            const manifestStartSec = Math.max(0, action.start);
+            const manifestEndSec = Math.max(
+                manifestStartSec + MIN_ACTION_DURATION_SEC,
+                action.end
+            );
+            const durationSec = Math.max(MIN_ACTION_DURATION_SEC, manifestEndSec - manifestStartSec);
+            clips.push(
+                clampTextClipTiming({
                     ...existing,
                     start_sec: manifestStartSec,
                     duration_sec: durationSec,
@@ -674,6 +803,10 @@ export function applyTimelineRowsToManifest(
             next,
             timelineRowsToVisualClips(rows, dragBase)
         );
+        next = setTextClipsInManifest(
+            next,
+            timelineRowsToTextClips(rows, dragBase)
+        );
         const scenes = sortScenesByTimelineOrder(
             timelineRowsToNarrationScenes(rows, next, dragBase)
         );
@@ -707,7 +840,8 @@ export function packTimelineTrackSequential(
 
     type PackItem =
         | { kind: 'narration'; sceneId: string; startSec: number; durationSec: number }
-        | { kind: 'visual'; clipId: string; startSec: number; durationSec: number };
+        | { kind: 'visual'; clipId: string; startSec: number; durationSec: number }
+        | { kind: 'text'; textClipId: string; startSec: number; durationSec: number };
 
     const items: PackItem[] = [];
     manifest.scenes.forEach((scene) => {
@@ -732,14 +866,29 @@ export function packTimelineTrackSequential(
             durationSec: Math.max(MIN_ACTION_DURATION_SEC, clip.duration_sec),
         });
     });
+    (manifest.text_clips ?? []).forEach((clip) => {
+        if (resolveTextClipTrackId(clip, tracks) !== trackId) {
+            return;
+        }
+        items.push({
+            kind: 'text',
+            textClipId: clip.id,
+            startSec: clip.start_sec,
+            durationSec: Math.max(MIN_ACTION_DURATION_SEC, clip.duration_sec),
+        });
+    });
 
     items.sort((a, b) => {
         const startDiff = a.startSec - b.startSec;
         if (Math.abs(startDiff) > 0.0001) {
             return startDiff;
         }
-        const aId = a.kind === 'narration' ? a.sceneId : a.clipId;
-        const bId = b.kind === 'narration' ? b.sceneId : b.clipId;
+        const aId = a.kind === 'narration'
+            ? a.sceneId
+            : (a.kind === 'visual' ? a.clipId : a.textClipId);
+        const bId = b.kind === 'narration'
+            ? b.sceneId
+            : (b.kind === 'visual' ? b.clipId : b.textClipId);
         return aId.localeCompare(bId);
     });
 
@@ -748,7 +897,9 @@ export function packTimelineTrackSequential(
     items.forEach((item, index) => {
         const gapBefore = index === 0 ? 0 : gap;
         const startSec = Number((cursorSec + gapBefore).toFixed(3));
-        const key = item.kind === 'narration' ? `narration:${item.sceneId}` : `visual:${item.clipId}`;
+        const key = item.kind === 'narration'
+            ? `narration:${item.sceneId}`
+            : (item.kind === 'visual' ? `visual:${item.clipId}` : `text:${item.textClipId}`);
         packedStarts.set(key, startSec);
         cursorSec = startSec + item.durationSec;
     });
@@ -783,6 +934,20 @@ export function packTimelineTrackSequential(
         };
     });
     next = setVisualClipsInManifest(next, packedClips);
+
+    const packedTextClips = (manifest.text_clips ?? []).map((clip) => {
+        const packedStart = packedStarts.get(`text:${clip.id}`);
+        if (packedStart === undefined) {
+            return clip;
+        }
+        const durationSec = Math.max(MIN_ACTION_DURATION_SEC, clip.duration_sec);
+        return {
+            ...clip,
+            start_sec: packedStart,
+            duration_sec: Number(durationSec.toFixed(3)),
+        };
+    });
+    next = setTextClipsInManifest(next, packedTextClips);
 
     return {
         ...next,
@@ -908,11 +1073,18 @@ export function mergeRefreshedNarrationManifest(
         ? localClips
         : (serverClips.length > 0 ? serverClips : localClips);
 
+    const localTextClips = localManifest.text_clips ?? [];
+    const serverTextClips = serverManifest.text_clips ?? [];
+    const textClips = localTextClips.length > 0
+        ? localTextClips
+        : (serverTextClips.length > 0 ? serverTextClips : localTextClips);
+
     const merged: ShortVideoRenderManifest = {
         ...localManifest,
         scene_gap_sec: serverManifest.scene_gap_sec ?? localManifest.scene_gap_sec,
         scenes: mergedScenes,
         visual_clips: visualClips.length > 0 ? visualClips : undefined,
+        text_clips: textClips.length > 0 ? textClips : undefined,
         timeline_tracks: localManifest.timeline_tracks ?? serverManifest.timeline_tracks,
         warnings: serverManifest.warnings ?? localManifest.warnings,
     };
@@ -1068,5 +1240,27 @@ export function addNarrationSceneAtCompositionSec(
             timeline_tracks: resolveTimelineTracks(manifest),
         },
         createdSceneId: newScene.id,
+    };
+}
+
+export function removeNarrationSceneFromManifest(
+    manifest: ShortVideoRenderManifest,
+    sceneId: string
+): ShortVideoRenderManifest {
+    const trimmedId = sceneId.trim();
+    if (!trimmedId) {
+        return manifest;
+    }
+    const scenes = manifest.scenes.filter((scene) => scene.id !== trimmedId);
+    if (scenes.length === manifest.scenes.length) {
+        return manifest;
+    }
+    const next = {
+        ...manifest,
+        scenes,
+    };
+    return {
+        ...next,
+        duration_sec: getProjectTimelineDurationSec(next),
     };
 }

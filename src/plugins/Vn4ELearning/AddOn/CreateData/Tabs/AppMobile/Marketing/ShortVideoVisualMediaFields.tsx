@@ -80,7 +80,7 @@ export default function ShortVideoVisualMediaFields({
 
     return (
         <>
-            <InspectorPropertyGroup title="Nguồn media" collapsible={false}>
+            <InspectorPropertyGroup title="Nguồn media">
                 <InspectorPropertyRow label="Loại media" fullWidthControl>
                     <ToggleButtonGroup
                         exclusive
@@ -151,7 +151,7 @@ export default function ShortVideoVisualMediaFields({
             </InspectorPropertyGroup>
 
             {visualType === 'video' && onStartSecChange ? (
-                <InspectorPropertyGroup title="Phát lại video" collapsible={false}>
+                <InspectorPropertyGroup title="Phát lại video">
                     <InspectorPropertyText
                         label="Vị trí bắt đầu"
                         description="Giây bắt đầu trong file đã tải"

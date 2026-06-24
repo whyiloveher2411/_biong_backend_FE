@@ -5,6 +5,7 @@ import type {
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
+import { normalizeItemZIndex } from './shortVideoTimelineItemZIndex';
 import {
     resolveSceneVisualImageRef,
     resolveSceneVisualRefByType,
@@ -214,6 +215,7 @@ export function clampClipTiming(
         ...clip,
         start_sec: startSec,
         duration_sec: durationSec,
+        z_index: normalizeItemZIndex(clip.z_index),
     };
 }
 

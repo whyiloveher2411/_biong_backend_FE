@@ -4,28 +4,34 @@ import {
     Checkbox,
     Collapse,
     IconButton,
+    InputAdornment,
     Link,
     MenuItem,
     Slider,
-    Switch,
     Tab,
     Tabs,
     TextField,
     Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import SearchIcon from '@mui/icons-material/Search';
 import ShortVideoStockMediaSearchDrawer from './ShortVideoStockMediaSearchDrawer';
 import type { StockVideoSearchItem } from 'helpers/marketingStockImageApi';
 
 export const INSPECTOR_PANEL_TAB_SX = {
-    minHeight: 36,
-    py: 0.75,
-    px: 0.75,
-    fontSize: 12,
+    minHeight: 40,
+    py: 0,
+    px: 0,
+    mr: 2.5,
+    fontSize: 13,
     fontWeight: 500,
     textTransform: 'none',
     minWidth: 'auto',
+    color: 'text.secondary',
+    '&.Mui-selected': {
+        color: 'text.primary',
+        fontWeight: 600,
+    },
 } as const;
 
 export const INSPECTOR_TOGGLE_BUTTON_SX = {
@@ -37,9 +43,19 @@ export const INSPECTOR_TOGGLE_BUTTON_SX = {
 } as const;
 
 export const INSPECTOR_SHELL_CONTENT_SX = {
+    px: 0,
+    pt: 0,
+    pb: 0,
+} as const;
+
+const INSPECTOR_ROW_DIVIDER_SX = {
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+} as const;
+
+const INSPECTOR_ROW_PADDING_SX = {
     px: 2,
-    pt: 1,
-    pb: 2,
+    py: 1.25,
 } as const;
 
 type InspectorPanelTabsProps = {
@@ -53,16 +69,15 @@ export function InspectorPanelTabs({ value, onChange, tabs }: InspectorPanelTabs
         <Tabs
             value={value}
             onChange={(_event, next) => onChange(next)}
-            variant="scrollable"
-            scrollButtons="auto"
+            variant="standard"
+            scrollButtons={false}
             sx={{
-                minHeight: 36,
-                mb: 1.5,
-                borderBottom: 1,
-                borderColor: 'divider',
+                minHeight: 40,
+                px: 2,
+                ...INSPECTOR_ROW_DIVIDER_SX,
                 '& .MuiTabs-indicator': {
                     height: 2,
-                    borderRadius: 1,
+                    bgcolor: 'text.primary',
                 },
             }}
         >
@@ -75,6 +90,7 @@ export function InspectorPanelTabs({ value, onChange, tabs }: InspectorPanelTabs
 
 type InspectorPropertyGroupProps = {
     title: string;
+    subtitle?: string;
     defaultExpanded?: boolean;
     collapsible?: boolean;
     action?: React.ReactNode;
@@ -84,7 +100,8 @@ type InspectorPropertyGroupProps = {
 
 export function InspectorPropertyGroup({
     title,
-    defaultExpanded = true,
+    subtitle,
+    defaultExpanded = false,
     collapsible = true,
     action,
     onExpandedChange,
@@ -105,68 +122,50 @@ export function InspectorPropertyGroup({
     }, [collapsible, onExpandedChange]);
 
     return (
-        <Box
-            sx={{
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1.5,
-                mb: 1.5,
-                overflow: 'hidden',
-                bgcolor: 'background.paper',
-            }}
-        >
+        <Box sx={INSPECTOR_ROW_DIVIDER_SX}>
             <Box
+                role={collapsible ? 'button' : undefined}
+                tabIndex={collapsible ? 0 : undefined}
+                onClick={collapsible ? toggleExpanded : undefined}
+                onKeyDown={collapsible ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleExpanded();
+                    }
+                } : undefined}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: 0.5,
-                    px: 1.5,
-                    py: 1,
-                    borderBottom: isExpanded ? 1 : 0,
-                    borderColor: 'divider',
-                    bgcolor: 'action.hover',
+                    gap: 1,
+                    ...INSPECTOR_ROW_PADDING_SX,
+                    cursor: collapsible ? 'pointer' : 'default',
+                    userSelect: 'none',
                 }}
             >
-                <Box
-                    role={collapsible ? 'button' : undefined}
-                    tabIndex={collapsible ? 0 : undefined}
-                    onClick={collapsible ? toggleExpanded : undefined}
-                    onKeyDown={collapsible ? (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleExpanded();
-                        }
-                    } : undefined}
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        flex: 1,
-                        minWidth: 0,
-                        cursor: collapsible ? 'pointer' : 'default',
-                        userSelect: 'none',
-                    }}
-                >
-                    {collapsible ? (
-                        <IconButton
-                            size="small"
-                            aria-label={isExpanded ? 'Thu gọn' : 'Mở rộng'}
-                            sx={{
-                                p: 0.25,
-                                ml: -0.25,
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.2s ease',
-                            }}
-                        >
-                            <ExpandMoreIcon fontSize="small" />
-                        </IconButton>
-                    ) : null}
-                    <Typography variant="subtitle2" fontWeight={600} fontSize={13} noWrap>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" fontWeight={600} fontSize={13} lineHeight={1.35}>
                         {title}
                     </Typography>
+                    {subtitle ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                            {subtitle}
+                        </Typography>
+                    ) : null}
                 </Box>
-                {action}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                    {action}
+                    {collapsible ? (
+                        <ChevronRightIcon
+                            sx={{
+                                fontSize: 18,
+                                color: 'text.secondary',
+                                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.15s ease',
+                            }}
+                        />
+                    ) : null}
+                </Box>
             </Box>
             <Collapse in={isExpanded}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -206,19 +205,20 @@ export function InspectorPropertyRow({
                 alignItems: fullWidthControl ? 'stretch' : 'center',
                 justifyContent: 'space-between',
                 gap: fullWidthControl ? 0.75 : 1,
-                py: 1.25,
-                px: 1.5,
+                ...INSPECTOR_ROW_PADDING_SX,
+                ...INSPECTOR_ROW_DIVIDER_SX,
                 opacity: disabled ? 0.55 : 1,
                 transition: 'opacity 0.15s ease',
             }}
         >
             <Box sx={{ minWidth: 0, flex: fullWidthControl ? undefined : 1 }}>
                 <Typography
-                    variant={fullWidthControl ? 'caption' : 'body2'}
-                    color={fullWidthControl ? 'text.secondary' : 'text.primary'}
+                    variant="body2"
+                    color="text.primary"
                     sx={{
                         lineHeight: 1.35,
-                        fontWeight: fullWidthControl ? 600 : 400,
+                        fontWeight: 500,
+                        fontSize: 13,
                         display: 'block',
                     }}
                 >
@@ -235,7 +235,7 @@ export function InspectorPropertyRow({
                     size="small"
                     checked={enabled}
                     onChange={(e) => onEnabledChange?.(e.target.checked)}
-                    sx={{ p: 0.25, flexShrink: 0 }}
+                    sx={{ p: 0, flexShrink: 0, color: 'text.secondary' }}
                 />
             ) : null}
             {!showToggle && children ? (
@@ -280,13 +280,121 @@ export function InspectorPropertySwitch({
     onChange,
 }: InspectorPropertySwitchProps) {
     return (
-        <InspectorPropertyRow label={label} description={description}>
-            <Switch
+        <InspectorPropertyRow
+            label={label}
+            description={description}
+            showToggle
+            enabled={checked}
+            onEnabledChange={onChange}
+        />
+    );
+}
+
+type InspectorPropertyZIndexProps = {
+    value: number;
+    enabled: boolean;
+    onEnabledChange: (enabled: boolean) => void;
+    onValueChange: (value: number) => void;
+};
+
+export function InspectorPropertyZIndex({
+    value,
+    enabled,
+    onEnabledChange,
+    onValueChange,
+}: InspectorPropertyZIndexProps) {
+    const [draft, setDraft] = React.useState(String(value));
+    const [isEditing, setIsEditing] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!isEditing) {
+            setDraft(String(value));
+        }
+    }, [isEditing, value]);
+
+    const commitDraft = React.useCallback(() => {
+        const parsed = Number.parseInt(draft, 10);
+        if (!Number.isFinite(parsed)) {
+            setDraft(String(value));
+            return;
+        }
+        const clamped = Math.max(-999, Math.min(999, parsed));
+        onValueChange(clamped);
+        setDraft(String(clamped));
+    }, [draft, onValueChange, value]);
+
+    return (
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                ...INSPECTOR_ROW_PADDING_SX,
+                ...INSPECTOR_ROW_DIVIDER_SX,
+            }}
+        >
+            <Typography
+                variant="body2"
+                color="text.primary"
+                sx={{
+                    flex: 1,
+                    lineHeight: 1.35,
+                    fontWeight: 500,
+                    fontSize: 13,
+                }}
+            >
+                Z-Index
+            </Typography>
+            <Box
+                sx={{
+                    width: 72,
+                    flexShrink: 0,
+                    visibility: enabled ? 'visible' : 'hidden',
+                }}
+            >
+                <TextField
+                    type="number"
+                    size="small"
+                    disabled={!enabled}
+                    value={isEditing ? draft : String(value)}
+                    onFocus={() => {
+                        setIsEditing(true);
+                        setDraft(String(value));
+                    }}
+                    onChange={(event) => {
+                        setDraft(event.target.value);
+                    }}
+                    onBlur={() => {
+                        setIsEditing(false);
+                        commitDraft();
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            event.currentTarget.blur();
+                        }
+                        if (event.key === 'Escape') {
+                            setDraft(String(value));
+                            event.currentTarget.blur();
+                        }
+                    }}
+                    inputProps={{ min: -999, max: 999, step: 1 }}
+                    sx={{
+                        width: '100%',
+                        '& .MuiInputBase-input': {
+                            textAlign: 'right',
+                            py: 0.75,
+                            px: 1,
+                        },
+                    }}
+                />
+            </Box>
+            <Checkbox
                 size="small"
-                checked={checked}
-                onChange={(e) => onChange(e.target.checked)}
+                checked={enabled}
+                onChange={(event) => onEnabledChange(event.target.checked)}
+                sx={{ p: 0, flexShrink: 0, color: 'text.secondary' }}
             />
-        </InspectorPropertyRow>
+        </Box>
     );
 }
 
@@ -566,22 +674,150 @@ export function InspectorPropertyNumber({
     max = 96,
     step = 1,
 }: InspectorPropertyNumberProps) {
+    const [draft, setDraft] = React.useState(String(value));
+    const [isEditing, setIsEditing] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!isEditing) {
+            setDraft(String(value));
+        }
+    }, [isEditing, value]);
+
+    const commitDraft = React.useCallback(() => {
+        const parsed = Number.parseInt(draft, 10);
+        if (!Number.isFinite(parsed)) {
+            setDraft(String(value));
+            return;
+        }
+        const clamped = Math.min(max, Math.max(min, parsed));
+        onChange(clamped);
+        setDraft(String(clamped));
+    }, [draft, max, min, onChange, value]);
+
     return (
         <InspectorPropertyRow label={label}>
             <TextField
                 type="number"
                 size="small"
-                value={value}
+                value={isEditing ? draft : String(value)}
+                onFocus={() => {
+                    setIsEditing(true);
+                    setDraft(String(value));
+                }}
                 onChange={(e) => {
-                    const parsed = Number.parseInt(e.target.value, 10);
-                    if (!Number.isFinite(parsed)) {
-                        return;
+                    setDraft(e.target.value);
+                }}
+                onBlur={() => {
+                    setIsEditing(false);
+                    commitDraft();
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.currentTarget.blur();
                     }
-                    onChange(Math.min(max, Math.max(min, parsed)));
+                    if (event.key === 'Escape') {
+                        setDraft(String(value));
+                        event.currentTarget.blur();
+                    }
                 }}
                 inputProps={{ min, max, step }}
                 sx={{
                     width: 72,
+                    '& .MuiInputBase-input': {
+                        textAlign: 'right',
+                        py: 0.75,
+                        px: 1,
+                    },
+                }}
+            />
+        </InspectorPropertyRow>
+    );
+}
+
+type InspectorPropertyDecimalNumberProps = {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+    decimals?: number;
+    suffix?: string;
+};
+
+export function InspectorPropertyDecimalNumber({
+    label,
+    value,
+    onChange,
+    min = 0,
+    max = 100,
+    step = 0.01,
+    decimals = 2,
+    suffix,
+}: InspectorPropertyDecimalNumberProps) {
+    const formatValue = React.useCallback(
+        (next: number) => next.toFixed(decimals),
+        [decimals]
+    );
+    const [draft, setDraft] = React.useState(formatValue(value));
+    const [isEditing, setIsEditing] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!isEditing) {
+            setDraft(formatValue(value));
+        }
+    }, [formatValue, isEditing, value]);
+
+    const commitDraft = React.useCallback(() => {
+        const parsed = Number.parseFloat(draft);
+        if (!Number.isFinite(parsed)) {
+            setDraft(formatValue(value));
+            return;
+        }
+        const clamped = Math.min(max, Math.max(min, parsed));
+        const rounded = Math.round(clamped * (10 ** decimals)) / (10 ** decimals);
+        onChange(rounded);
+        setDraft(formatValue(rounded));
+    }, [decimals, draft, formatValue, max, min, onChange, value]);
+
+    return (
+        <InspectorPropertyRow label={label}>
+            <TextField
+                type="number"
+                size="small"
+                value={isEditing ? draft : formatValue(value)}
+                onFocus={() => {
+                    setIsEditing(true);
+                    setDraft(formatValue(value));
+                }}
+                onChange={(e) => {
+                    setDraft(e.target.value);
+                }}
+                onBlur={() => {
+                    setIsEditing(false);
+                    commitDraft();
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.currentTarget.blur();
+                    }
+                    if (event.key === 'Escape') {
+                        setDraft(formatValue(value));
+                        event.currentTarget.blur();
+                    }
+                }}
+                inputProps={{ min, max, step }}
+                InputProps={suffix ? {
+                    endAdornment: (
+                        <InputAdornment position="end">
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+                                {suffix}
+                            </Typography>
+                        </InputAdornment>
+                    ),
+                } : undefined}
+                sx={{
+                    width: suffix ? 88 : 72,
                     '& .MuiInputBase-input': {
                         textAlign: 'right',
                         py: 0.75,

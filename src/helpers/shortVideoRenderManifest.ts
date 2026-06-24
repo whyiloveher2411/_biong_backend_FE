@@ -5,14 +5,22 @@ export type {
     ShortVideoRenderManifest,
     ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
+    ShortVideoTextClip,
+    ShortVideoTextAlign,
+    ShortVideoTextClipMotion,
+    ShortVideoTextFontWeight,
+    ShortVideoTextTransform,
     ShortVideoTimelineTrack,
     ShortVideoVisualBackgroundMode,
     ShortVideoVisualBackgroundGradient,
     ShortVideoVisualClip,
+    ShortVideoVisualGradientDirection,
     ShortVideoVisualGradientStop,
     ShortVideoVisualLayoutFields,
     ShortVideoVisualVerticalAlign,
 } from './shortVideoRenderManifestTypes';
+
+export { TEXT_CLIP_SLIDE_ENTER_MOTIONS, TEXT_CLIP_ENTER_SLIDE_OPTIONS, TEXT_CLIP_ENTER_SLIDE_GROUP, TEXT_CLIP_EXIT_SLIDE_GROUP } from './shortVideoRenderManifestTypes';
 
 import type {
     ShortVideoManifestScene,
@@ -23,6 +31,7 @@ import type {
 } from './shortVideoRenderManifestTypes';
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
+import { sanitizeTextClipsForPersist } from './shortVideoTextClips';
 import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
 import {
     resolveSceneVisualRefByType,
@@ -411,6 +420,8 @@ export function sanitizeManifestForPersist(
     return {
         ...normalized,
         visual_clips: sanitizeVisualClipsForPersist(normalized.visual_clips),
+        text_clips: sanitizeTextClipsForPersist(normalized.text_clips),
+        preview_suppress_text_clip_ids: undefined,
         scenes: normalized.scenes.map((scene) => {
             if (!scene.layout?.visual_playback_url) {
                 return scene;

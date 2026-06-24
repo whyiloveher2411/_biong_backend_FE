@@ -9,6 +9,8 @@ import {
     resolveSceneVisualVideoRef,
     resolveSceneVisualAudioVolume,
     resolveSceneVisualYoutubeId,
+    audioVolumeFromPercent,
+    audioVolumePercent,
     type ShortVideoManifestScene,
     type ShortVideoManifestSceneLayout,
 } from 'helpers/shortVideoRenderManifest';
@@ -263,7 +265,7 @@ export default function ShortVideoSceneMediaTab({
                 ) : null}
 
                 {activeTab === MEDIA_TAB.animation ? (
-                    <InspectorPropertyGroup title="Chuyển động" collapsible={false}>
+                    <InspectorPropertyGroup title="Chuyển động">
                         <InspectorPropertySelect
                             label="Hiệu ứng vào"
                             description="Cách media xuất hiện trên màn hình"

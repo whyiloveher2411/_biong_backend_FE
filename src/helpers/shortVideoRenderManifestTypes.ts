@@ -56,7 +56,116 @@ export type ShortVideoVisualClip = {
     label?: string;
     /** Track timeline chứa clip visual */
     timeline_track_id?: string;
+    /** Ẩn clip khỏi preview/export — toggle từ timeline editor */
+    timeline_hidden?: boolean;
+    /** z-index trong cùng track — undefined = auto theo loại item */
+    z_index?: number;
 } & ShortVideoVisualLayoutFields;
+
+export type ShortVideoTextClipMotion =
+    | 'none'
+    | 'fade'
+    | 'pop'
+    | 'slide_up'
+    | 'slide_down'
+    | 'slide_left'
+    | 'slide_right';
+
+export const TEXT_CLIP_SLIDE_ENTER_MOTIONS: ShortVideoTextClipMotion[] = [
+    'slide_up',
+    'slide_down',
+    'slide_left',
+    'slide_right',
+];
+
+export const TEXT_CLIP_ENTER_SLIDE_OPTIONS: ReadonlyArray<{
+    value: ShortVideoTextClipMotion;
+    label: string;
+}> = [
+    { value: 'slide_up', label: 'Slide up' },
+    { value: 'slide_down', label: 'Slide down' },
+    { value: 'slide_left', label: 'Slide left' },
+    { value: 'slide_right', label: 'Slide right' },
+];
+
+export const TEXT_CLIP_ENTER_SLIDE_GROUP = {
+    id: 'slide',
+    label: 'Slide',
+    options: TEXT_CLIP_ENTER_SLIDE_OPTIONS,
+} as const;
+
+export const TEXT_CLIP_EXIT_SLIDE_OPTIONS = TEXT_CLIP_ENTER_SLIDE_OPTIONS;
+
+export const TEXT_CLIP_EXIT_SLIDE_GROUP = {
+    id: 'slide',
+    label: 'Slide',
+    options: TEXT_CLIP_EXIT_SLIDE_OPTIONS,
+} as const;
+
+export type ShortVideoTextAlign = 'left' | 'center' | 'right';
+
+export type ShortVideoTextTransform = 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+
+export type ShortVideoTextFontWeight = 400 | 600 | 700 | 800 | 900;
+
+export type ShortVideoTextClipBackgroundEffect =
+    | 'disabled'
+    | 'sliding'
+    | 'scaling'
+    | 'scaling_w_clip';
+
+export const TEXT_CLIP_BACKGROUND_EFFECT_OPTIONS: ReadonlyArray<{
+    value: ShortVideoTextClipBackgroundEffect;
+    label: string;
+}> = [
+    { value: 'disabled', label: 'Tắt' },
+    { value: 'sliding', label: 'Trượt' },
+    { value: 'scaling', label: 'Thu phóng' },
+    { value: 'scaling_w_clip', label: 'Thu phóng theo clip' },
+] as const;
+
+export type ShortVideoTextClip = {
+    id: string;
+    content: string;
+    start_sec: number;
+    duration_sec: number;
+    timeline_track_id?: string;
+    label?: string;
+    font_size?: number;
+    font_weight?: ShortVideoTextFontWeight;
+    color?: string;
+    opacity?: number;
+    text_align?: ShortVideoTextAlign;
+    /** Chiều cao dòng — % của cỡ chữ, vd. 100 = line-height 1.0 */
+    line_height_percent?: number;
+    /** Khoảng cách chữ (px canvas) */
+    letter_spacing_px?: number;
+    /** Nghiêng ngang toàn box (độ), vd. -7 giống Creatomate x_skew */
+    skew_x_deg?: number;
+    text_transform?: ShortVideoTextTransform;
+    /** Chiều rộng tối đa box text — % chiều rộng canvas, mặc định 92 */
+    box_max_width_percent?: number;
+    background_color?: string;
+    background_opacity?: number;
+    /** Hiệu ứng nền khi animate — undefined = legacy (nền + chữ cùng transform) */
+    background_effect?: ShortVideoTextClipBackgroundEffect;
+    padding_x?: number;
+    padding_y?: number;
+    border_radius?: number;
+    position_x?: number;
+    position_y?: number;
+    motion?: ShortVideoTextClipMotion;
+    /** Thời lượng enter animation (giây) — mặc định 0.5 khi undefined */
+    enter_duration_sec?: number;
+    /** Hiệu ứng exit — none = không có exit animation */
+    exit_motion?: ShortVideoTextClipMotion | 'none';
+    /** Thời lượng exit animation (giây) — mặc định 0.5 khi undefined */
+    exit_duration_sec?: number;
+    /** Ẩn clip khỏi preview/export — toggle từ timeline editor */
+    timeline_hidden?: boolean;
+    /** z-index trong cùng track — undefined = auto theo loại item */
+    z_index?: number;
+};
 
 export type ShortVideoManifestWord = {
     text: string;
@@ -141,12 +250,18 @@ export type ShortVideoManifestScene = {
     /** Âm lượng narration/voiceover — 0..1, mặc định 1 */
     audio_volume?: number;
     layout?: ShortVideoManifestSceneLayout;
+    /** Ẩn scene khỏi preview/export — toggle từ timeline editor */
+    timeline_hidden?: boolean;
+    /** z-index trong cùng track — undefined = auto theo loại item */
+    z_index?: number;
 };
 
 export type ShortVideoTimelineTrack = {
     id: string;
     name: string;
     order: number;
+    /** Ẩn toàn bộ item trên track khỏi preview/export */
+    timeline_hidden?: boolean;
 };
 
 export type ShortVideoRenderManifest = {
@@ -174,7 +289,10 @@ export type ShortVideoRenderManifest = {
     alignment_mode: string;
     scenes: ShortVideoManifestScene[];
     visual_clips?: ShortVideoVisualClip[];
+    text_clips?: ShortVideoTextClip[];
     /** Cấu trúc track timeline NLE — persist khi user tạo/đổi tên track */
     timeline_tracks?: ShortVideoTimelineTrack[];
     warnings: string[];
+    /** Chỉ dùng lúc preview editor — ẩn text clip khỏi Remotion khi render overlay HTML */
+    preview_suppress_text_clip_ids?: string[];
 };

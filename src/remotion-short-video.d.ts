@@ -70,3 +70,86 @@ declare module '@spacedev/remotion-short-video/types' {
         ShortVideoManifestSceneLayout,
     } from 'helpers/shortVideoRenderManifestTypes';
 }
+
+declare module '@spacedev/remotion-short-video/visualBackgroundGradient' {
+    import type {
+        ShortVideoVisualBackgroundGradient,
+        ShortVideoVisualGradientDirection,
+        ShortVideoVisualGradientStop,
+    } from 'helpers/shortVideoRenderManifestTypes';
+    import type { ShortVideoVisualClip, ShortVideoManifestSceneLayout } from 'helpers/shortVideoRenderManifestTypes';
+
+    type VisualLayoutSource = Pick<
+        ShortVideoVisualClip,
+        'visual_background_mode' | 'visual_background_color' | 'visual_background_gradient'
+    >;
+
+    export const VISUAL_GRADIENT_DIRECTION_OPTIONS: Array<{
+        value: ShortVideoVisualGradientDirection;
+        label: string;
+    }>;
+
+    export const DEFAULT_VISUAL_BACKGROUND_GRADIENT: ShortVideoVisualBackgroundGradient;
+
+    export function buildLinearGradientCss(
+        gradient: ShortVideoVisualBackgroundGradient
+    ): string;
+
+    export function createDefaultVisualBackgroundGradient(): ShortVideoVisualBackgroundGradient;
+
+    export function createGradientFromSolidColor(
+        color: string,
+        direction?: ShortVideoVisualGradientDirection
+    ): ShortVideoVisualBackgroundGradient;
+
+    export function getGradientStopEdgeLabel(
+        direction: ShortVideoVisualGradientDirection,
+        index: number,
+        total: number
+    ): string;
+
+    export function getGradientStopMarkerCoords(
+        direction: ShortVideoVisualGradientDirection,
+        position: number
+    ): { leftPercent: number; topPercent: number };
+
+    export function isColorBackgroundGradient(
+        source: VisualLayoutSource | ShortVideoManifestSceneLayout | undefined
+    ): boolean;
+
+    export function normalizeTwoStopPositions(
+        gradient: ShortVideoVisualBackgroundGradient
+    ): ShortVideoVisualBackgroundGradient;
+
+    export function normalizeVisualBackgroundGradient(
+        raw: Partial<ShortVideoVisualBackgroundGradient> | undefined
+    ): ShortVideoVisualBackgroundGradient;
+
+    export function resolveActiveColorGradient(
+        source: VisualLayoutSource | ShortVideoManifestSceneLayout | undefined
+    ): ShortVideoVisualBackgroundGradient | null;
+
+    export function resolveGradientPreviewAxis(
+        direction: ShortVideoVisualGradientDirection
+    ): 'vertical' | 'horizontal' | 'diagonal';
+
+    export function resolveGradientStopPositionFromPointer(
+        direction: ShortVideoVisualGradientDirection,
+        rect: DOMRect,
+        clientX: number,
+        clientY: number
+    ): number;
+
+    export function resolveVisualBackgroundGradient(
+        source: VisualLayoutSource | ShortVideoManifestSceneLayout | undefined
+    ): ShortVideoVisualBackgroundGradient;
+
+    export function sortGradientStops(
+        stops: ShortVideoVisualGradientStop[]
+    ): ShortVideoVisualGradientStop[];
+
+    export function stopColorToRgba(stop: ShortVideoVisualGradientStop): string;
+}
+
+/** Subpath mới trong remotion-short-video/src — tránh lỗi TS khi thêm module Remotion. */
+declare module '@spacedev/remotion-short-video/*';

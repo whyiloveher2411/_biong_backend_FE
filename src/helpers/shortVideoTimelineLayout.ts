@@ -27,16 +27,19 @@ function sortScenesByTimelineOrder(scenes: ShortVideoManifestScene[]): ShortVide
     });
 }
 
-/** Fingerprint layout timeline (scene + visual clip) — so sánh đồng bộ overlay ↔ manifest prop. */
+/** Fingerprint layout timeline — so sánh đồng bộ overlay ↔ manifest prop. */
 export function timelineLayoutFingerprint(manifest: ShortVideoRenderManifest): string {
     const trackParts = (manifest.timeline_tracks ?? []).map(
-        (track) => `${track.id}:${track.name}:${track.order}`
+        (track) => `${track.id}:${track.name}:${track.order}:${track.timeline_hidden === true ? 1 : 0}`
     );
     const sceneParts = sortScenesByTimelineOrder(manifest.scenes).map(
-        (scene) => `${scene.id}:${scene.timeline_track_id || ''}:${scene.start_offset_sec.toFixed(3)}:${narrationSceneDurationSec(scene).toFixed(3)}`
+        (scene) => `${scene.id}:${scene.timeline_track_id || ''}:${scene.start_offset_sec.toFixed(3)}:${narrationSceneDurationSec(scene).toFixed(3)}:${scene.z_index ?? ''}:${scene.timeline_hidden === true ? 1 : 0}`
     );
     const clipParts = (manifest.visual_clips ?? []).map(
-        (clip) => `${clip.id}:${clip.timeline_track_id || ''}:${clip.start_sec.toFixed(3)}:${clip.duration_sec.toFixed(3)}`
+        (clip) => `${clip.id}:${clip.timeline_track_id || ''}:${clip.start_sec.toFixed(3)}:${clip.duration_sec.toFixed(3)}:${clip.z_index ?? ''}:${clip.timeline_hidden === true ? 1 : 0}`
     );
-    return `${trackParts.join('|')};;${sceneParts.join('|')};;${clipParts.join('|')}`;
+    const textClipParts = (manifest.text_clips ?? []).map(
+        (clip) => `${clip.id}:${clip.timeline_track_id || ''}:${clip.start_sec.toFixed(3)}:${clip.duration_sec.toFixed(3)}:${clip.motion || ''}:${clip.enter_duration_sec?.toFixed(3) ?? ''}:${clip.exit_motion || ''}:${clip.exit_duration_sec?.toFixed(3) ?? ''}:${clip.background_effect || ''}:${clip.z_index ?? ''}:${clip.timeline_hidden === true ? 1 : 0}`
+    );
+    return `${trackParts.join('|')};;${sceneParts.join('|')};;${clipParts.join('|')};;${textClipParts.join('|')}`;
 }
