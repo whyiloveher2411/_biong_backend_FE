@@ -27,6 +27,7 @@ export {
     getTrackRowHeight,
     isDefaultTimelineTrack,
     removeTimelineTrackFromManifest,
+    reorderTimelineTracksInManifest,
     resolveClipTrackId,
     resolveSceneTrackId,
     resolveTimelineTracks,

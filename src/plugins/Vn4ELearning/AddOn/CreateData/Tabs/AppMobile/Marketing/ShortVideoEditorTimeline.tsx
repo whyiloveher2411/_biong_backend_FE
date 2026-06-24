@@ -5,6 +5,7 @@ import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -31,6 +32,7 @@ import {
     moveActionBetweenRows,
     packTimelineTrackSequential,
     removeTimelineTrackFromManifest,
+    reorderTimelineTracksInManifest,
     resolveClipTrackId,
     resolveSceneTrackId,
     resolveTimelineTracks,
@@ -259,8 +261,11 @@ function TrackLabelRow({
     onPackWithGap,
     onTrackNameChange,
     onDeleteTrack,
+    onDragHandlePointerDown,
     packDisabled,
     canDeleteTrack = false,
+    isDragging = false,
+    isDropTarget = false,
 }: {
     trackId: string;
     label: string;
@@ -269,8 +274,11 @@ function TrackLabelRow({
     onPackWithGap: (gapSec: number) => void;
     onTrackNameChange?: (trackId: string, name: string) => void;
     onDeleteTrack?: () => void;
+    onDragHandlePointerDown?: (trackId: string, event: React.PointerEvent<HTMLButtonElement>) => void;
     packDisabled?: boolean;
     canDeleteTrack?: boolean;
+    isDragging?: boolean;
+    isDropTarget?: boolean;
 }) {
     const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [packSubmenuAnchor, setPackSubmenuAnchor] = React.useState<null | HTMLElement>(null);
@@ -363,8 +371,41 @@ function TrackLabelRow({
                 gap: 0.25,
                 px: 0.5,
                 minWidth: 0,
+                opacity: isDragging ? 0.45 : 1,
+                borderTop: isDropTarget ? '2px solid #60a5fa' : '2px solid transparent',
+                boxSizing: 'border-box',
+                transition: 'opacity 0.12s ease',
             }}
         >
+            <Tooltip title="Kéo để đổi thứ tự track">
+                <span>
+                    <IconButton
+                        size="small"
+                        aria-label="Kéo để đổi thứ tự track"
+                        disabled={isRenaming || !onDragHandlePointerDown}
+                        onPointerDown={(event) => {
+                            if (isRenaming || !onDragHandlePointerDown) {
+                                return;
+                            }
+                            event.stopPropagation();
+                            onDragHandlePointerDown(trackId, event);
+                        }}
+                        sx={{
+                            width: 20,
+                            height: 20,
+                            p: 0,
+                            color: 'grey.500',
+                            flexShrink: 0,
+                            cursor: isRenaming ? 'default' : 'grab',
+                            touchAction: 'none',
+                            '&:active': { cursor: 'grabbing' },
+                            '&:hover': { color: 'grey.300', bgcolor: 'rgba(255,255,255,0.06)' },
+                        }}
+                    >
+                        <DragIndicatorIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </span>
+            </Tooltip>
             {isRenaming ? (
                 <TextField
                     size="small"
@@ -1033,6 +1074,9 @@ export default function ShortVideoEditorTimeline({
     const [editingActionKey, setEditingActionKey] = React.useState('');
     const [editingLabelDraft, setEditingLabelDraft] = React.useState('');
     const [dragPreviewTarget, setDragPreviewTarget] = React.useState<{ actionId: string; rowId: string } | null>(null);
+    const [trackDragState, setTrackDragState] = React.useState<{ trackId: string; hoverIndex: number } | null>(null);
+    const trackDragStateRef = React.useRef(trackDragState);
+    trackDragStateRef.current = trackDragState;
     const [deleteTrackDialog, setDeleteTrackDialog] = React.useState<DeleteTrackDialogState | null>(null);
     const [deleteWithItemsConfirmAnchor, setDeleteWithItemsConfirmAnchor] = React.useState<HTMLElement | null>(null);
     const [showSyncLoading, setShowSyncLoading] = React.useState(false);
@@ -1474,6 +1518,88 @@ export default function ShortVideoEditorTimeline({
             updateTimelineTrackNameInManifest(manifestRef.current, trackId, name)
         );
     }, [commitManifestChange]);
+
+    const stopTrackDragSession = React.useCallback((cleanup?: () => void) => {
+        cleanup?.();
+        setTrackDragState(null);
+    }, []);
+
+    const handleTrackDragHandlePointerDown = React.useCallback((
+        trackId: string,
+        event: React.PointerEvent<HTMLButtonElement>
+    ) => {
+        const labelsEl = trackLabelsScrollRef.current;
+        if (!labelsEl) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const tracks = resolveTimelineTracks(manifestRef.current);
+        const fromIndex = tracks.findIndex((track) => track.id === trackId);
+        if (fromIndex < 0) {
+            return;
+        }
+
+        setTrackDragState({ trackId, hoverIndex: fromIndex });
+
+        const resolveHoverIndex = (clientY: number) => {
+            const targetTrackId = resolveTrackRowIdFromPointer(
+                manifestRef.current,
+                clientY,
+                labelsEl,
+                TIMELINE_EDIT_AREA_TOP_GAP
+            );
+            if (!targetTrackId) {
+                return fromIndex;
+            }
+            const targetIndex = resolveTimelineTracks(manifestRef.current)
+                .findIndex((track) => track.id === targetTrackId);
+            return targetIndex >= 0 ? targetIndex : fromIndex;
+        };
+
+        const onPointerMove = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== event.pointerId) {
+                return;
+            }
+            const hoverIndex = resolveHoverIndex(moveEvent.clientY);
+            setTrackDragState((prev) => (
+                prev?.trackId === trackId && prev.hoverIndex === hoverIndex
+                    ? prev
+                    : { trackId, hoverIndex }
+            ));
+        };
+
+        const onPointerUp = (upEvent: PointerEvent) => {
+            if (upEvent.pointerId !== event.pointerId) {
+                return;
+            }
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+            document.removeEventListener('pointercancel', onPointerUp);
+
+            const dragState = trackDragStateRef.current;
+            stopTrackDragSession();
+
+            if (!dragState || dragState.trackId !== trackId) {
+                return;
+            }
+
+            const targetIndex = resolveHoverIndex(upEvent.clientY);
+            if (targetIndex === fromIndex) {
+                return;
+            }
+
+            commitPackedManifest(
+                reorderTimelineTracksInManifest(manifestRef.current, trackId, targetIndex)
+            );
+        };
+
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+        document.addEventListener('pointercancel', onPointerUp);
+    }, [commitPackedManifest, stopTrackDragSession]);
 
     const closeDeleteWithItemsConfirm = React.useCallback(() => {
         setDeleteWithItemsConfirmAnchor(null);
@@ -2172,7 +2298,7 @@ export default function ShortVideoEditorTimeline({
                                 boxSizing: 'border-box',
                             }}
                         >
-                            {timelineTracks.map((track) => (
+                            {timelineTracks.map((track, trackIndex) => (
                                 <TrackLabelRow
                                     key={track.id}
                                     trackId={track.id}
@@ -2182,6 +2308,13 @@ export default function ShortVideoEditorTimeline({
                                     onPackWithGap={(gapSec) => handlePackTrack(track.id, gapSec)}
                                     onTrackNameChange={handleTrackNameChange}
                                     onDeleteTrack={() => handleRequestDeleteTrack(track.id)}
+                                    onDragHandlePointerDown={handleTrackDragHandlePointerDown}
+                                    isDragging={trackDragState?.trackId === track.id}
+                                    isDropTarget={
+                                        trackDragState != null
+                                        && trackDragState.trackId !== track.id
+                                        && trackDragState.hoverIndex === trackIndex
+                                    }
                                     canDeleteTrack={!isDefaultTimelineTrack(track.id)}
                                     packDisabled={countTrackItems(manifest, track.id).total < 2}
                                 />

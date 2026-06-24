@@ -28,6 +28,7 @@ import {
     resolveVisualClipVideoRef,
     resolveVisualClipYoutubeId,
     updateVisualClipInManifest,
+    VISUAL_CLIP_MOTION_OPTIONS,
 } from 'helpers/shortVideoVisualClips';
 import { audioVolumeFromPercent, audioVolumePercent } from 'helpers/shortVideoAudioVolume';
 import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from 'helpers/shortVideoYoutube';
@@ -42,6 +43,7 @@ import {
 import ShortVideoSceneEditPanel from './ShortVideoSceneEditPanel';
 import ShortVideoSceneMediaPreview from './ShortVideoSceneMediaPreview';
 import ShortVideoVisualMediaFields, { resolveVisualMediaVolumePercent } from './ShortVideoVisualMediaFields';
+import ShortVideoVisualLayoutFields from './ShortVideoVisualLayoutFields';
 import {
     INSPECTOR_SHELL_CONTENT_SX,
     InspectorPanelBody,
@@ -79,7 +81,8 @@ const NARRATION_TAB = {
 
 const VISUAL_CLIP_TAB = {
     properties: 0,
-    animation: 1,
+    layout: 1,
+    animation: 2,
 } as const;
 
 function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifest['scenes'][number] {
@@ -113,6 +116,13 @@ function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifes
             visual_motion: clip.motion,
             visual_start_sec: clip.visual_start_sec,
             show_visual: clip.type !== 'none',
+            visual_vertical_align: clip.visual_vertical_align,
+            visual_inset_top: clip.visual_inset_top,
+            visual_inset_bottom: clip.visual_inset_bottom,
+            visual_background_mode: clip.visual_background_mode,
+            visual_background_color: clip.visual_background_color,
+            visual_background_gradient: clip.visual_background_gradient,
+            visual_background_blur: clip.visual_background_blur,
         },
     };
 }
@@ -855,6 +865,7 @@ function VisualClipMediaInspector({
                     onChange={setVisualTab}
                     tabs={[
                         { label: 'Thuộc tính' },
+                        { label: 'Bố cục' },
                         { label: 'Hiệu ứng' },
                     ]}
                 />
@@ -891,6 +902,10 @@ function VisualClipMediaInspector({
                         />
                     ) : null}
 
+                    {visualTab === VISUAL_CLIP_TAB.layout ? (
+                        <ShortVideoVisualLayoutFields clip={clip} onPatch={onPatch} />
+                    ) : null}
+
                     {visualTab === VISUAL_CLIP_TAB.animation ? (
                         <InspectorPropertyGroup title="Chuyển động" collapsible={false}>
                             <InspectorPropertySelect
@@ -898,10 +913,7 @@ function VisualClipMediaInspector({
                                 description="Cách media xuất hiện trên màn hình"
                                 value={motion}
                                 onChange={(value) => onPatch({ motion: value })}
-                                options={[
-                                    { value: 'pop', label: 'Pop' },
-                                    { value: 'fade', label: 'Fade' },
-                                ]}
+                                options={[...VISUAL_CLIP_MOTION_OPTIONS]}
                             />
                         </InspectorPropertyGroup>
                     ) : null}

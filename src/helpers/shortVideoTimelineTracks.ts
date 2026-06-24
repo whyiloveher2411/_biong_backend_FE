@@ -137,6 +137,27 @@ export function updateTimelineTrackNameInManifest(
     };
 }
 
+export function reorderTimelineTracksInManifest(
+    manifest: ShortVideoRenderManifest,
+    activeTrackId: string,
+    targetIndex: number
+): ShortVideoRenderManifest {
+    const tracks = resolveTimelineTracks(manifest);
+    const fromIndex = tracks.findIndex((track) => track.id === activeTrackId);
+    if (fromIndex < 0 || targetIndex < 0 || targetIndex >= tracks.length || fromIndex === targetIndex) {
+        return manifest;
+    }
+
+    const reordered = [...tracks];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    return {
+        ...manifest,
+        timeline_tracks: reordered.map((track, index) => ({ ...track, order: index })),
+    };
+}
+
 export function isDefaultTimelineTrack(trackId: string): boolean {
     return trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID
         || trackId === TIMELINE_DEFAULT_TRACK_VISUAL_ID;

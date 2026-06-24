@@ -1,5 +1,40 @@
 export type ShortVideoSceneVisualType = 'none' | 'image' | 'video';
 
+export type ShortVideoVisualVerticalAlign = 'top' | 'center' | 'bottom';
+
+export type ShortVideoVisualBackgroundMode = 'none' | 'color' | 'gradient' | 'media_blur';
+
+export type ShortVideoVisualGradientDirection =
+    | 'to_bottom'
+    | 'to_top'
+    | 'to_left'
+    | 'to_right'
+    | 'to_bottom_right'
+    | 'to_bottom_left'
+    | 'to_top_right'
+    | 'to_top_left';
+
+export type ShortVideoVisualGradientStop = {
+    color: string;
+    opacity?: number;
+    position: number;
+};
+
+export type ShortVideoVisualBackgroundGradient = {
+    direction: ShortVideoVisualGradientDirection;
+    stops: ShortVideoVisualGradientStop[];
+};
+
+export type ShortVideoVisualLayoutFields = {
+    visual_vertical_align?: ShortVideoVisualVerticalAlign;
+    visual_inset_top?: number;
+    visual_inset_bottom?: number;
+    visual_background_mode?: ShortVideoVisualBackgroundMode;
+    visual_background_color?: string;
+    visual_background_gradient?: ShortVideoVisualBackgroundGradient;
+    visual_background_blur?: number;
+};
+
 export type ShortVideoVisualClip = {
     id: string;
     type: ShortVideoSceneVisualType;
@@ -21,7 +56,7 @@ export type ShortVideoVisualClip = {
     label?: string;
     /** Track timeline chứa clip visual */
     timeline_track_id?: string;
-};
+} & ShortVideoVisualLayoutFields;
 
 export type ShortVideoManifestWord = {
     text: string;
@@ -59,7 +94,7 @@ export type ShortVideoManifestSceneLayout = {
     /** Giây bắt đầu phát trong file video (chỉ visual_type = video) */
     visual_start_sec?: number;
     show_visual?: boolean;
-};
+} & ShortVideoVisualLayoutFields;
 
 export type ShortVideoSaydiAudioTtsSettings = {
     provider: 'saydi';

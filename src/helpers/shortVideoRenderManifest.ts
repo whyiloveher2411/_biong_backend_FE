@@ -6,7 +6,12 @@ export type {
     ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
     ShortVideoTimelineTrack,
+    ShortVideoVisualBackgroundMode,
+    ShortVideoVisualBackgroundGradient,
     ShortVideoVisualClip,
+    ShortVideoVisualGradientStop,
+    ShortVideoVisualLayoutFields,
+    ShortVideoVisualVerticalAlign,
 } from './shortVideoRenderManifestTypes';
 
 import type {
@@ -20,13 +25,12 @@ import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume'
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
 import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
 import {
-    resolveSceneVisualImageRef,
     resolveSceneVisualRefByType,
     resolveSceneVisualVideoRef,
     sceneVisualRefIsValid,
     syncLayoutActiveVisualRef,
 } from './shortVideoVisualRefHelpers';
-import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from './shortVideoYoutube';
+import { isHttpsImageUrl, parseYoutubeId } from './shortVideoYoutube';
 
 export const SCENE_LAYOUT_BACKGROUND_KEYS: (keyof ShortVideoManifestSceneLayout)[] = [
     'background',

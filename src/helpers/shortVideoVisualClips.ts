@@ -17,6 +17,12 @@ import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from './shortVideoYo
 
 export type { ShortVideoVisualClip } from './shortVideoRenderManifestTypes';
 
+export const VISUAL_CLIP_MOTION_OPTIONS = [
+    { value: 'none', label: 'Không hiệu ứng' },
+    { value: 'fade', label: 'Fade' },
+    { value: 'pop', label: 'Pop' },
+] as const;
+
 const MIN_CLIP_DURATION_SEC = 0.1;
 
 function inferVisualTypeFromScript(scene: ShortVideoManifestScene): ShortVideoSceneVisualType {

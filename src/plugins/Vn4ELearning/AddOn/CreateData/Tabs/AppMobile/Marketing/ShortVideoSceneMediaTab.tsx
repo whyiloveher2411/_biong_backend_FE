@@ -12,7 +12,7 @@ import {
     type ShortVideoManifestScene,
     type ShortVideoManifestSceneLayout,
 } from 'helpers/shortVideoRenderManifest';
-import { audioVolumeFromPercent, audioVolumePercent } from 'helpers/shortVideoAudioVolume';
+import { VISUAL_CLIP_MOTION_OPTIONS } from 'helpers/shortVideoVisualClips';
 import {
     isHttpsImageUrl,
     isValidVideoRef,
@@ -269,10 +269,7 @@ export default function ShortVideoSceneMediaTab({
                             description="Cách media xuất hiện trên màn hình"
                             value={motion}
                             onChange={(value) => patch({ visual_motion: value })}
-                            options={[
-                                { value: 'pop', label: 'Pop' },
-                                { value: 'fade', label: 'Fade' },
-                            ]}
+                            options={[...VISUAL_CLIP_MOTION_OPTIONS]}
                         />
                     </InspectorPropertyGroup>
                 ) : null}
