@@ -911,7 +911,7 @@ export function applyTimelineRowsToManifest(
 }
 
 /** Các khoảng cách khi sắp xếp nối tiếp track timeline. */
-export const TIMELINE_PACK_GAP_OPTIONS_SEC = [0, 0.5, 1, 1.5, 2, 3] as const;
+export const TIMELINE_PACK_GAP_OPTIONS_SEC = [0, 0.3, 0.5, 1, 1.5, 2, 3] as const;
 
 export type TimelinePackGapSec = (typeof TIMELINE_PACK_GAP_OPTIONS_SEC)[number];
 

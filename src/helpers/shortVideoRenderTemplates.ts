@@ -1,6 +1,7 @@
-import type {
-    ShortVideoManifestSceneLayout,
-    ShortVideoRenderManifest,
+import {
+    type ShortVideoManifestSceneLayout,
+    type ShortVideoRenderManifest,
+    SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
 } from './shortVideoRenderManifestTypes';
 
 export type ShortVideoTemplateApplyMode = 'replace_all_scenes' | 'keep_scene_overrides';
@@ -32,7 +33,7 @@ export const SHORT_VIDEO_RENDER_TEMPLATES: ShortVideoRenderTemplate[] = [
             text_box_height: 480,
             bottom_padding: 280,
         },
-        scene_gap_sec: 1,
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
         defaultSceneLayout: {
             headline_top: 180,
             headline_font_size: 56,
@@ -58,7 +59,7 @@ export const SHORT_VIDEO_RENDER_TEMPLATES: ShortVideoRenderTemplate[] = [
             text_box_height: 480,
             bottom_padding: 280,
         },
-        scene_gap_sec: 1,
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
         defaultSceneLayout: {
             headline_top: 160,
             headline_font_size: 56,
@@ -84,7 +85,7 @@ export const SHORT_VIDEO_RENDER_TEMPLATES: ShortVideoRenderTemplate[] = [
             text_box_height: 400,
             bottom_padding: 320,
         },
-        scene_gap_sec: 1,
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
         defaultSceneLayout: {
             headline_top: 420,
             headline_font_size: 64,
@@ -110,7 +111,7 @@ export const SHORT_VIDEO_RENDER_TEMPLATES: ShortVideoRenderTemplate[] = [
             text_box_height: 460,
             bottom_padding: 260,
         },
-        scene_gap_sec: 1,
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
         defaultSceneLayout: {
             headline_top: 200,
             headline_font_size: 52,

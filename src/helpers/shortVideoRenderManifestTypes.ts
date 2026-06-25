@@ -280,6 +280,9 @@ export type ShortVideoTimelineTrack = {
     timeline_hidden?: boolean;
 };
 
+/** Khoảng im lặng mặc định giữa các scene narration trên timeline (giây). */
+export const SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC = 0.3;
+
 export type ShortVideoRenderManifest = {
     schema_version: string;
     width: number;
