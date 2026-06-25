@@ -1,3 +1,6 @@
+import { getAccessToken } from 'store/user/user.reducers';
+import { convertToURL } from 'helpers/url';
+import { getApiHost } from 'helpers/apiHost';
 import type {
     ShortVideoManifestScene,
     ShortVideoRenderManifest,
@@ -7,9 +10,11 @@ import type {
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
 import { normalizeItemZIndex } from './shortVideoTimelineItemZIndex';
 import {
+    clipActsAsImage,
     resolveSceneVisualImageRef,
     resolveSceneVisualRefByType,
     resolveSceneVisualVideoRef,
+    resolveVisualClipImageRef,
     resolveVisualClipVideoRef,
     sceneVisualRefIsValid,
     syncClipActiveRef,
@@ -389,8 +394,9 @@ export function injectVisualClipPlaybackUrl(
     clipId: string,
     playbackUrl: string
 ): ShortVideoRenderManifest {
+    const normalized = resolveVisualPlaybackPreviewUrl(playbackUrl) || playbackUrl.trim();
     return updateVisualClipInManifest(manifest, clipId, {
-        visual_playback_url: playbackUrl.trim(),
+        visual_playback_url: normalized,
     });
 }
 
@@ -415,6 +421,151 @@ export function reinjectVisualClipPlaybackFromCache(
             return;
         }
         next = injectVisualClipPlaybackUrl(next, clip.id, playback);
+    });
+    return next;
+}
+
+/** URL preview cho file render-cache (Remotion Player không dùng được staticFile trong CMS). */
+export function resolveRenderCachePreviewAssetUrl(relativePath: string): string {
+    const trimmed = relativePath.trim();
+    if (!trimmed) {
+        return '';
+    }
+    if (/^https?:\/\//i.test(trimmed) && trimmed.includes('render-cache-asset')) {
+        const token = getAccessToken();
+        if (!token) {
+            return trimmed;
+        }
+        const url = new URL(trimmed);
+        if (!url.searchParams.get('access_token')) {
+            url.searchParams.set('access_token', token);
+        }
+        return url.toString();
+    }
+    if (trimmed.startsWith('/api/') && trimmed.includes('render-cache-asset')) {
+        const url = new URL(convertToURL(getApiHost(), trimmed.split('?')[0]));
+        const query = trimmed.includes('?') ? trimmed.split('?')[1] : '';
+        const params = new URLSearchParams(query);
+        const file = params.get('file')?.trim() || '';
+        if (!file) {
+            return convertToURL(getApiHost(), trimmed);
+        }
+        url.searchParams.set('file', file);
+        const token = getAccessToken();
+        if (token) {
+            url.searchParams.set('access_token', token);
+        }
+        return url.toString();
+    }
+    const file = trimmed.includes('render-cache/')
+        ? trimmed.split('/').pop() ?? ''
+        : trimmed;
+    if (!file) {
+        return '';
+    }
+    const url = new URL(
+        convertToURL(
+            getApiHost(),
+            '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/short-video/render-cache-asset'
+        )
+    );
+    url.searchParams.set('file', file);
+    const token = getAccessToken();
+    if (token) {
+        url.searchParams.set('access_token', token);
+    }
+    return url.toString();
+}
+
+/**
+ * URL playback cho preview CMS — luôn thêm access_token cho render-cache API.
+ * Dùng chung timeline thumbnail, Remotion Player, inspector.
+ */
+export function resolveVisualPlaybackPreviewUrl(playback: string): string {
+    const trimmed = playback.trim();
+    if (!trimmed) {
+        return '';
+    }
+    if (
+        trimmed.includes('render-cache-asset')
+        || trimmed.includes('render-cache/')
+        || trimmed.startsWith('/api/')
+    ) {
+        return resolveRenderCachePreviewAssetUrl(trimmed);
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+        if (trimmed.includes('render-cache-asset')) {
+            return resolveRenderCachePreviewAssetUrl(trimmed);
+        }
+        return trimmed;
+    }
+    return trimmed;
+}
+
+function isUnifiedTimelineClipId(clipId: string): boolean {
+    return clipId.startsWith('uv_')
+        || clipId.startsWith('html_ut_')
+        || clipId.startsWith('html_ai_');
+}
+
+export function manifestHasUnifiedTimelineClipIds(
+    clips: ShortVideoVisualClip[] | undefined
+): boolean {
+    return (clips ?? []).some((clip) => isUnifiedTimelineClipId(clip.id));
+}
+
+/** Inject visual_playback_url cho preview — HTTPS hoặc render-cache qua API CMS (có token). */
+export function injectVisualPlaybackUrlsForPreview(
+    manifest: ShortVideoRenderManifest
+): ShortVideoRenderManifest {
+    let next = injectImagePlaybackForPreview(manifest);
+    if (manifestUsesVisualClips(next)) {
+        (next.visual_clips ?? []).forEach((clip) => {
+            const playback = clip.visual_playback_url?.trim() || '';
+            if (!playback) {
+                return;
+            }
+            next = injectVisualClipPlaybackUrl(next, clip.id, playback);
+        });
+    }
+    let scenesChanged = false;
+    const scenes = next.scenes.map((scene) => {
+        const playback = scene.layout?.visual_playback_url?.trim() || '';
+        if (!playback) {
+            return scene;
+        }
+        const normalized = resolveVisualPlaybackPreviewUrl(playback) || playback;
+        if (normalized === scene.layout?.visual_playback_url) {
+            return scene;
+        }
+        scenesChanged = true;
+        return {
+            ...scene,
+            layout: { ...(scene.layout ?? {}), visual_playback_url: normalized },
+        };
+    });
+    if (scenesChanged) {
+        next = { ...next, scenes };
+    }
+    return next;
+}
+
+/** Fallback client: inject URL ảnh HTTPS khi manifest API chưa có visual_playback_url (transient). */
+export function injectImagePlaybackForPreview(
+    manifest: ShortVideoRenderManifest
+): ShortVideoRenderManifest {
+    if (!manifestUsesVisualClips(manifest)) {
+        return manifest;
+    }
+    let next = manifest;
+    (manifest.visual_clips ?? []).forEach((clip) => {
+        if (!clipActsAsImage(clip.type) || clip.visual_playback_url?.trim()) {
+            return;
+        }
+        const ref = resolveVisualClipImageRef(clip);
+        if (ref && isHttpsImageUrl(ref)) {
+            next = injectVisualClipPlaybackUrl(next, clip.id, ref);
+        }
     });
     return next;
 }

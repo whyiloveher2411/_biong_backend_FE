@@ -8,7 +8,8 @@ import type {
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
 import { resolveDefaultSceneAudioTtsSettings, resolveSceneHeadlineText } from './shortVideoRenderManifest';
-import { clampClipTiming, resolveVisualClipImageRef, resolveVisualClipVideoPreviewUrl, resolveVisualClipVideoRef, resolveVisualClipYoutubeId, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { clampClipTiming, manifestHasUnifiedTimelineClipIds, resolveVisualClipImageRef, resolveVisualClipVideoPreviewUrl, resolveVisualClipVideoRef, resolveVisualClipYoutubeId, resolveVisualPlaybackPreviewUrl, setVisualClipsInManifest } from './shortVideoVisualClips';
+import { clipActsAsImage } from './shortVideoVisualRefHelpers';
 import { clampHtmlClipTiming, resolveHtmlClipTimelineLabel, setHtmlClipsInManifest } from './shortVideoHtmlClips';
 import { clampTextClipTiming, resolveTextClipEnterDurationSec, resolveTextClipExitDurationSec, resolveTextClipTimelineLabel, setTextClipsInManifest } from './shortVideoTextClips';
 import {
@@ -470,12 +471,18 @@ export function updateSceneTimelineLabelInManifest(
 }
 
 function clipVisualPosterUrl(clip: ShortVideoVisualClip): string | undefined {
-    if (clip.type === 'image') {
+    const playback = clip.visual_playback_url?.trim() || '';
+    if (playback) {
+        const resolved = resolveVisualPlaybackPreviewUrl(playback);
+        if (resolved) {
+            return resolved;
+        }
+    }
+    if (clipActsAsImage(clip.type)) {
         const imageRef = resolveVisualClipImageRef(clip);
         if (/^https:\/\//i.test(imageRef)) {
             return imageRef;
         }
-        return undefined;
     }
     if (clip.type === 'video') {
         const youtubeId = resolveVisualClipYoutubeId(clip);
@@ -499,8 +506,11 @@ function clipVisualVideoSrc(clip: ShortVideoVisualClip): string | undefined {
         return ref;
     }
     const playback = clip.visual_playback_url?.trim();
-    if (playback && /^https?:\/\//i.test(playback)) {
-        return playback;
+    if (playback) {
+        const resolved = resolveVisualPlaybackPreviewUrl(playback);
+        if (resolved && /^https?:\/\//i.test(resolved)) {
+            return resolved;
+        }
     }
     return undefined;
 }
@@ -1190,8 +1200,10 @@ export function mergeRefreshedNarrationManifest(
 
     const localClips = localManifest.visual_clips ?? [];
     const serverClips = serverManifest.visual_clips ?? [];
+    const serverHasUnifiedClips = manifestHasUnifiedTimelineClipIds(serverClips);
+    const localHasUnifiedClips = manifestHasUnifiedTimelineClipIds(localClips);
     const visualClips = manifestHasEditableVisualTimeline(localManifest) && localClips.length > 0
-        ? localClips
+        ? (serverHasUnifiedClips && !localHasUnifiedClips ? serverClips : localClips)
         : (serverClips.length > 0 ? serverClips : localClips);
 
     const localTextClips = localManifest.text_clips ?? [];

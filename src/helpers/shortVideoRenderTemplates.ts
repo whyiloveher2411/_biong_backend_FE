@@ -10,6 +10,7 @@ export type ShortVideoRenderTemplate = {
     id: string;
     label: string;
     description: string;
+    layout_archetype?: 'default' | 'full_bleed' | 'split_card' | 'quote_only';
     style: ShortVideoRenderManifest['style'];
     text_profile: ShortVideoRenderManifest['text_profile'];
     scene_gap_sec?: number;
@@ -118,6 +119,93 @@ export const SHORT_VIDEO_RENDER_TEMPLATES: ShortVideoRenderTemplate[] = [
             show_headline: true,
             show_karaoke: true,
             show_visual: true,
+            visual_motion: 'fade',
+        },
+    },
+    {
+        id: 'full-bleed',
+        label: 'Full bleed',
+        description: 'Ảnh phủ toàn màn, headline overlay — kiểu TikTok hyperframe.',
+        layout_archetype: 'full_bleed',
+        style: {
+            bg: '#000000',
+            text: '#FFFFFF',
+            active: '#FF3331',
+            reveal: 'progressive',
+        },
+        text_profile: {
+            font_size: 48,
+            max_lines: 2,
+            text_box_height: 360,
+            bottom_padding: 220,
+        },
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
+        defaultSceneLayout: {
+            headline_top: 120,
+            headline_font_size: 52,
+            show_headline: true,
+            show_karaoke: true,
+            show_visual: true,
+            visual_motion: 'ken_burns',
+            visual_inset_top: 0,
+            visual_inset_bottom: 0,
+            visual_vertical_align: 'center',
+        },
+    },
+    {
+        id: 'split-card',
+        label: 'Split card',
+        description: 'Ảnh phía trên, text card phía dưới.',
+        layout_archetype: 'split_card',
+        style: {
+            bg: '#0B0B0F',
+            text: '#FFFFFF',
+            active: '#FF3B30',
+            reveal: 'progressive',
+        },
+        text_profile: {
+            font_size: 44,
+            max_lines: 3,
+            text_box_height: 420,
+            bottom_padding: 200,
+        },
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
+        defaultSceneLayout: {
+            headline_top: 920,
+            headline_font_size: 48,
+            show_headline: true,
+            show_karaoke: true,
+            show_visual: true,
+            visual_motion: 'zoom_in',
+            visual_inset_top: 120,
+            visual_inset_bottom: 520,
+            visual_vertical_align: 'top',
+        },
+    },
+    {
+        id: 'quote-only',
+        label: 'Quote only',
+        description: 'Typography lớn, không ảnh — insight / trích dẫn.',
+        layout_archetype: 'quote_only',
+        style: {
+            bg: '#1A1A2E',
+            text: '#F5F5F5',
+            active: '#FFB800',
+            reveal: 'progressive',
+        },
+        text_profile: {
+            font_size: 56,
+            max_lines: 4,
+            text_box_height: 520,
+            bottom_padding: 280,
+        },
+        scene_gap_sec: SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC,
+        defaultSceneLayout: {
+            headline_top: 380,
+            headline_font_size: 72,
+            show_headline: true,
+            show_karaoke: true,
+            show_visual: false,
             visual_motion: 'fade',
         },
     },

@@ -13,10 +13,13 @@ import {
     resolveSceneVisualYoutubeMuted,
     type ShortVideoManifestScene,
 } from 'helpers/shortVideoRenderManifest';
+import {
+    resolveSceneImagePreviewUrl,
+    sceneImagePreviewUrlIsLoadable,
+} from 'helpers/shortVideoVisualPreview';
 import { resolveSceneVisualVideoPreviewUrl } from 'helpers/shortVideoVisualRefHelpers';
 import {
     buildYoutubeEmbedUrl,
-    isHttpsImageUrl,
     isHttpsVideoUrl,
 } from 'helpers/shortVideoYoutube';
 
@@ -43,6 +46,7 @@ function resolveDirectPreviewVideoUrl(scene: ShortVideoManifestScene): string {
 export default function ShortVideoSceneMediaPreview({ scene }: Props) {
     const visualType = resolveSceneVisualType(scene);
     const showVisual = resolveSceneShowVisual(scene);
+    const imagePreviewUrl = visualType === 'image' ? resolveSceneImagePreviewUrl(scene) : '';
     const imageRef = resolveSceneVisualImageRef(scene);
     const ref = resolveSceneVisualRef(scene);
     const youtubeId = resolveSceneVisualYoutubeId(scene);
@@ -118,10 +122,10 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                     >
                         Chưa có media — chọn ảnh hoặc video trên timeline
                     </Box>
-                ) : visualType === 'image' && isHttpsImageUrl(imageRef || ref) ? (
+                ) : visualType === 'image' && sceneImagePreviewUrlIsLoadable(imagePreviewUrl) ? (
                     <Box
                         component="img"
-                        src={imageRef || ref}
+                        src={imagePreviewUrl}
                         alt=""
                         sx={{
                             display: 'block',
@@ -171,8 +175,10 @@ export default function ShortVideoSceneMediaPreview({ scene }: Props) {
                         }}
                     />
                 ) : (
-                    <Typography variant="caption" color="error" sx={{ px: 2, textAlign: 'left' }}>
-                        URL media chưa hợp lệ
+                    <Typography variant="caption" color="error" sx={{ px: 2, py: 2, textAlign: 'left', display: 'block' }}>
+                        {visualType === 'image' && (imageRef || ref)
+                            ? 'Ảnh nguồn bài báo cần proxy — bấm Làm mới manifest để tải qua render-cache'
+                            : 'URL media chưa hợp lệ'}
                     </Typography>
                 )}
             </Box>

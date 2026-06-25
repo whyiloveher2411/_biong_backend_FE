@@ -70,6 +70,20 @@ export function resolveTimelineTracksForRender(
     return [...resolveTimelineTracks(manifest)].reverse();
 }
 
+/**
+ * Iframe HTML overlay (z-index trên Player) chỉ khi track HTML nằm TRÊN track Visual.
+ * Khi HTML ở dưới Visual: HtmlClipLayer trong Remotion Player render iframe live theo z-index track.
+ */
+export function resolveHtmlClipPreviewUsesIframe(manifest: ShortVideoRenderManifest): boolean {
+    const tracks = resolveTimelineTracks(manifest);
+    const visualTrack = tracks.find((track) => track.id === TIMELINE_DEFAULT_TRACK_VISUAL_ID);
+    const htmlTrack = tracks.find((track) => track.id === TIMELINE_DEFAULT_TRACK_HTML_ID);
+    if (!visualTrack || !htmlTrack) {
+        return false;
+    }
+    return htmlTrack.order < visualTrack.order;
+}
+
 export function resolveSceneTrackId(
     scene: ShortVideoManifestScene,
     tracks: ShortVideoTimelineTrack[] = []

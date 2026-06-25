@@ -26,6 +26,7 @@ import {
     updateVisualClipInManifest,
     VISUAL_CLIP_MOTION_OPTIONS,
 } from 'helpers/shortVideoVisualClips';
+import { clipActsAsImage } from 'helpers/shortVideoVisualRefHelpers';
 import { audioVolumeFromPercent, audioVolumePercent } from 'helpers/shortVideoAudioVolume';
 import { isHttpsImageUrl, isValidVideoRef, parseYoutubeId } from 'helpers/shortVideoYoutube';
 import {
@@ -86,14 +87,24 @@ const VISUAL_CLIP_TAB = {
 function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifest['scenes'][number] {
     const imageRef = resolveVisualClipImageRef(clip);
     const videoRef = resolveVisualClipVideoRef(clip);
-    const activeRef = clip.type === 'video' ? videoRef : imageRef;
+    const previewType = clip.type === 'video'
+        ? 'video'
+        : clipActsAsImage(clip.type)
+            ? 'image'
+            : clip.type;
+    const activeRef = previewType === 'video' ? videoRef : imageRef;
+    const layoutVisualType = previewType === 'video'
+        ? 'video'
+        : previewType === 'image'
+            ? 'image'
+            : 'none';
     return {
         id: clip.id,
         voiceover: '',
         on_screen_text: clip.label || '',
         duration_hint_sec: clip.duration_sec,
         visual: {
-            type: clip.type === 'image' ? 'image' : clip.type === 'video' ? 'video' : 'kinetic_text',
+            type: previewType === 'image' ? 'image' : previewType === 'video' ? 'video' : 'kinetic_text',
             ref: activeRef,
             motion: clip.motion || 'pop',
         },
@@ -102,7 +113,7 @@ function clipAsPreviewScene(clip: ShortVideoVisualClip): ShortVideoRenderManifes
         start_offset_sec: clip.start_sec,
         words: [],
         layout: {
-            visual_type: clip.type,
+            visual_type: layoutVisualType,
             visual_ref: activeRef,
             visual_image_ref: imageRef || undefined,
             visual_video_ref: videoRef || undefined,

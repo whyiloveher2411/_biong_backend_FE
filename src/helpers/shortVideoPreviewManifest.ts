@@ -3,6 +3,7 @@ import type { PlayerRef } from '@remotion/player';
 import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
 import { buildPreviewManifestWithHtmlOverlay, resolveActiveHtmlClipsAtSec } from 'helpers/shortVideoHtmlClips';
 import { buildPreviewManifestWithTextOverlay, resolveActiveTextClipsAtSec } from 'helpers/shortVideoTextClips';
+import { resolveHtmlClipPreviewUsesIframe } from 'helpers/shortVideoTimelineTracks';
 
 export function usePreviewCurrentTimeSec(
     playerRef: React.MutableRefObject<PlayerRef | null>,
@@ -43,9 +44,9 @@ function buildPreviewSuppressKey(
     timeSec: number,
     selectedTextClipId: string
 ): string {
-    const htmlIds = resolveActiveHtmlClipsAtSec(manifest, timeSec)
-        .map((clip) => clip.id)
-        .join(',');
+    const htmlIds = resolveHtmlClipPreviewUsesIframe(manifest)
+        ? resolveActiveHtmlClipsAtSec(manifest, timeSec).map((clip) => clip.id).join(',')
+        : '';
     const textIds = !selectedTextClipId
         ? ''
         : resolveActiveTextClipsAtSec(manifest, timeSec).map((clip) => clip.id).join(',');
@@ -58,7 +59,9 @@ function composePreviewManifest(
     selectedTextClipId: string
 ): ShortVideoRenderManifest {
     let next = manifest;
-    next = buildPreviewManifestWithHtmlOverlay(next, timeSec);
+    if (resolveHtmlClipPreviewUsesIframe(manifest)) {
+        next = buildPreviewManifestWithHtmlOverlay(next, timeSec);
+    }
     next = buildPreviewManifestWithTextOverlay(next, timeSec, selectedTextClipId);
     return next;
 }

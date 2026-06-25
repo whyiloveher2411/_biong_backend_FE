@@ -1,11 +1,11 @@
 import React from 'react';
-import type { PlayerRef } from '@remotion/player';
 import { Box } from '@mui/material';
 import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
 import type { ShortVideoHtmlClip } from 'helpers/shortVideoRenderManifestTypes';
+import { resolveHtmlClipPreviewUsesIframe } from 'helpers/shortVideoTimelineTracks';
 import {
     buildHtmlClipSrcDoc,
-    resolveActiveHtmlClipsAtSec,
+    resolvePrimaryHtmlClipAtSec,
     seekHtmlClipIframeTime,
 } from 'helpers/shortVideoHtmlClips';
 
@@ -90,19 +90,24 @@ export default function ShortVideoPreviewHtmlOverlay({
         return () => observer.disconnect();
     }, [compositionHeight, compositionWidth]);
 
-    const activeClips = React.useMemo(
-        () => resolveActiveHtmlClipsAtSec(manifest, timeSec),
+    const activeClip = React.useMemo(
+        () => (
+            resolveHtmlClipPreviewUsesIframe(manifest)
+                ? resolvePrimaryHtmlClipAtSec(manifest, timeSec)
+                : null
+        ),
         [manifest, timeSec]
     );
 
     React.useEffect(() => {
-        activeClips.forEach((clip) => {
-            const localTimeSec = timeSec - clip.start_sec;
-            seekHtmlClipIframeTime(iframeRefs.current[clip.id], localTimeSec);
-        });
-    }, [activeClips, timeSec]);
+        if (!activeClip) {
+            return;
+        }
+        const localTimeSec = timeSec - activeClip.start_sec;
+        seekHtmlClipIframeTime(iframeRefs.current[activeClip.id], localTimeSec);
+    }, [activeClip, timeSec]);
 
-    if (activeClips.length === 0 || !layout) {
+    if (!activeClip || !layout) {
         return (
             <Box
                 ref={hostRef}
@@ -144,18 +149,18 @@ export default function ShortVideoPreviewHtmlOverlay({
                         transformOrigin: 'top left',
                     }}
                 >
-                    {activeClips.map((clip) => (
+                    {activeClip ? (
                         <Box
-                            key={clip.id}
+                            key={activeClip.id}
                             component="iframe"
                             ref={(node: HTMLIFrameElement | null) => {
-                                iframeRefs.current[clip.id] = node;
+                                iframeRefs.current[activeClip.id] = node;
                             }}
-                            title={clip.label || clip.id}
+                            title={activeClip.label || activeClip.id}
                             sandbox="allow-scripts"
-                            srcDoc={srcDocByClipId.get(clip.id)}
+                            srcDoc={srcDocByClipId.get(activeClip.id)}
                             onLoad={(event: React.SyntheticEvent<HTMLIFrameElement>) => {
-                                const localTimeSec = timeSec - clip.start_sec;
+                                const localTimeSec = timeSec - activeClip.start_sec;
                                 seekHtmlClipIframeTime(event.currentTarget, localTimeSec);
                             }}
                             sx={{
@@ -168,7 +173,7 @@ export default function ShortVideoPreviewHtmlOverlay({
                                 bgcolor: 'transparent',
                             }}
                         />
-                    ))}
+                    ) : null}
                 </Box>
             </Box>
         </Box>

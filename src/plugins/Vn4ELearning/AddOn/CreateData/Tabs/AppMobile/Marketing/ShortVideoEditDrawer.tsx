@@ -4,6 +4,7 @@ import {
     Alert,
     Box,
     CircularProgress,
+    LinearProgress,
     Typography,
 } from '@mui/material';
 import Button from 'components/atoms/Button';
@@ -46,6 +47,7 @@ import {
 } from 'helpers/marketingShortVideoWorkflowApi';
 import {
     injectVisualClipPlaybackUrl,
+    injectVisualPlaybackUrlsForPreview,
     manifestUsesVisualClips,
     resolveVisualClipYoutubeId,
 } from 'helpers/shortVideoVisualClips';
@@ -74,6 +76,26 @@ import { getProjectTimelineDurationSec } from 'helpers/shortVideoTimelineAdapter
 
 /** Tạm ẩn banner manifest info — bật lại khi cần. */
 const SHOW_MANIFEST_INFO_BANNER = false;
+
+const WORKFLOW_STAGE_LABELS: Record<string, string> = {
+    script: 'Đang viết kịch bản',
+    scene_audio: 'Đang tạo giọng nói',
+    scene_audio_vieneu: 'Đang tạo giọng nói',
+    timeline_plan: 'Đang dựng timeline',
+    manifest: 'Đang dựng manifest',
+    render: 'Đang render video',
+    assets: 'Hoàn tất',
+    done: 'Hoàn tất',
+    blocked: 'Bị chặn',
+};
+
+function resolveWorkflowStageLabel(stage: string): string {
+    const key = stage.trim().toLowerCase();
+    if (!key) {
+        return 'Đang chạy pipeline…';
+    }
+    return WORKFLOW_STAGE_LABELS[key] ?? `Pipeline: ${stage}`;
+}
 
 /** Nút header drawer chính — tách màu theo vai trò trên nền primary. */
 const MAIN_HEADER_REFRESH_BTN_SX = {
@@ -388,6 +410,15 @@ export default function ShortVideoEditDrawer({
         [post.scene_audio_json]
     );
     const hasScriptContent = scenes.length > 0;
+    const postPipelineFingerprint = React.useMemo(
+        () => [
+            String(post.script_json ?? ''),
+            String(post.scene_audio_json ?? ''),
+            String(post.video_url ?? ''),
+            String(post.render_json ?? ''),
+        ].join('||'),
+        [post.script_json, post.scene_audio_json, post.video_url, post.render_json]
+    );
     const scenesReadyForRender = React.useMemo(
         () => allContentScenesHaveAudio(scenes, sceneAudioMap),
         [scenes, sceneAudioMap]
@@ -513,9 +544,8 @@ export default function ShortVideoEditDrawer({
                 visualResolveCacheRef.current = {};
                 return;
             }
-            const withPlayback = reinjectVisualPlaybackFromCache(
-                parsed,
-                visualResolveCacheRef.current
+            const withPlayback = injectVisualPlaybackUrlsForPreview(
+                reinjectVisualPlaybackFromCache(parsed, visualResolveCacheRef.current)
             );
             setManifest(withPlayback);
             savedManifestFingerprintRef.current = manifestFingerprint(withPlayback);
@@ -702,7 +732,7 @@ export default function ShortVideoEditDrawer({
         return () => {
             cancelled = true;
         };
-    }, [open, loading, shortVideoId, hasScriptContent, applyManifestResult]);
+    }, [open, loading, shortVideoId, hasScriptContent, postPipelineFingerprint, applyManifestResult]);
 
     React.useEffect(() => {
         if (!open || manifestLoading || !manifest || shortVideoId <= 0) {
@@ -1151,19 +1181,48 @@ export default function ShortVideoEditDrawer({
         }
     }, [shortVideoId, applyManifestResult]);
 
-    const reloadPostDetail = React.useCallback(() => {
+    const reloadPostDetail = React.useCallback((): Promise<DetailPost | null> => {
+        if (shortVideoId <= 0) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            apiAjaxRef.current({
+                url: `post-type/detail/spacedev_app_short_video/${shortVideoId}`,
+                method: 'POST',
+                loading: false,
+                success: (result: { post?: DetailPost }) => {
+                    const nextPost = result?.post && typeof result.post === 'object' ? result.post : {};
+                    setPost(nextPost);
+                    resolve(nextPost);
+                },
+                error: () => {
+                    resolve(null);
+                },
+            });
+        });
+    }, [shortVideoId]);
+
+    const reloadManifestAfterPipeline = React.useCallback(async () => {
         if (shortVideoId <= 0) {
             return;
         }
-        apiAjaxRef.current({
-            url: `post-type/detail/spacedev_app_short_video/${shortVideoId}`,
-            method: 'POST',
-            loading: false,
-            success: (result: { post?: DetailPost }) => {
-                setPost(result?.post && typeof result.post === 'object' ? result.post : {});
-            },
-        });
-    }, [shortVideoId]);
+        setManifestLoading(true);
+        setManifestError('');
+        try {
+            const result = await buildShortVideoRenderManifest(shortVideoId);
+            applyManifestResult(result.manifest, result.rebuilt);
+            manifestInitialResolveDoneRef.current = false;
+            if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+                setManifestInfo(result.warnings.join(' · '));
+            }
+        } catch (err: unknown) {
+            setManifestError(
+                err instanceof Error ? err.message : 'Không tải được manifest sau pipeline'
+            );
+        } finally {
+            setManifestLoading(false);
+        }
+    }, [shortVideoId, applyManifestResult]);
 
     const handleRunAutoPipeline = React.useCallback(async () => {
         if (shortVideoId <= 0) {
@@ -1184,12 +1243,17 @@ export default function ShortVideoEditDrawer({
                 shortVideoId,
                 onProgress: (status) => {
                     setWorkflowStage(String(status.stage || ''));
+                    if (Array.isArray(status.pending_scene_ids)) {
+                        setNarrationRunningSceneIds(status.pending_scene_ids);
+                    }
                 },
             });
-            reloadPostDetail();
+            await reloadPostDetail();
+            await reloadManifestAfterPipeline();
             onRefreshPost?.();
             const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
             setWorkflowStage(String(refreshed.stage || ''));
+            setNarrationRunningSceneIds([]);
             api.showMessage('Đã chạy pipeline tự động', 'success');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Pipeline tự động thất bại';
@@ -1197,11 +1261,13 @@ export default function ShortVideoEditDrawer({
             api.showMessage(message, 'error');
         } finally {
             setPipelineRunning(false);
+            setNarrationRunningSceneIds([]);
             endSavingActivity();
         }
     }, [
         shortVideoId,
         reloadPostDetail,
+        reloadManifestAfterPipeline,
         onRefreshPost,
         api.showMessage,
         beginSavingActivity,
@@ -1238,26 +1304,34 @@ export default function ShortVideoEditDrawer({
                 shortVideoId,
                 onProgress: (status) => {
                     setWorkflowStage(String(status.stage || ''));
+                    if (Array.isArray(status.pending_scene_ids)) {
+                        setNarrationRunningSceneIds(status.pending_scene_ids);
+                    }
                 },
             });
-            reloadPostDetail();
+            await reloadPostDetail();
+            await reloadManifestAfterPipeline();
             onRefreshPost?.();
             const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
             setWorkflowStage(String(refreshed.stage || ''));
+            setNarrationRunningSceneIds([]);
             api.showMessage('Đã làm lại pipeline từ đầu', 'success');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Làm lại pipeline thất bại';
             setWorkflowStatusError(message);
             api.showMessage(message, 'error');
-            reloadPostDetail();
+            await reloadPostDetail();
+            await reloadManifestAfterPipeline();
         } finally {
             setPipelineRunning(false);
+            setNarrationRunningSceneIds([]);
             endSavingActivity();
         }
     }, [
         shortVideoId,
         scriptSource,
         reloadPostDetail,
+        reloadManifestAfterPipeline,
         onRefreshPost,
         api.showMessage,
         beginSavingActivity,
@@ -1315,11 +1389,12 @@ export default function ShortVideoEditDrawer({
                     manifest: sanitizeManifestForPersist(manifestForRender),
                 },
                 loading: false,
-                success: (result: { success?: boolean; video_url?: string; message?: string | { content?: string } }) => {
+                success: async (result: { success?: boolean; video_url?: string; message?: string | { content?: string } }) => {
                     if (!result?.success) {
                         return;
                     }
-                    reloadPostDetail();
+                    await reloadPostDetail();
+                    await reloadManifestAfterPipeline();
                     onRefreshPost?.();
                 },
                 error: (response: Response) => {
@@ -1371,6 +1446,7 @@ export default function ShortVideoEditDrawer({
         manifestDirty,
         applyManifestResult,
         reloadPostDetail,
+        reloadManifestAfterPipeline,
         onRefreshPost,
         api.showMessage,
         beginSavingActivity,
@@ -1410,8 +1486,8 @@ export default function ShortVideoEditDrawer({
                 onClick={handleRestartPipeline}
                 sx={MAIN_HEADER_RESTART_BTN_SX}
             >
-                {pipelineRunning && workflowStage
-                    ? `Pipeline: ${workflowStage}`
+                {pipelineRunning
+                    ? resolveWorkflowStageLabel(workflowStage)
                     : 'Làm lại pipeline'}
             </LoadingButton>
             {!videoUrl ? (
@@ -1428,8 +1504,8 @@ export default function ShortVideoEditDrawer({
                     onClick={handleRunAutoPipeline}
                     sx={MAIN_HEADER_REFRESH_BTN_SX}
                 >
-                    {pipelineRunning && workflowStage
-                        ? `Pipeline: ${workflowStage}`
+                    {pipelineRunning
+                        ? resolveWorkflowStageLabel(workflowStage)
                         : 'Chạy pipeline tự động'}
                 </LoadingButton>
             ) : null}
@@ -1499,6 +1575,14 @@ export default function ShortVideoEditDrawer({
                     minHeight: 0,
                 }}
             >
+                {pipelineRunning ? (
+                    <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
+                        <LinearProgress />
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {resolveWorkflowStageLabel(workflowStage)}
+                        </Typography>
+                    </Box>
+                ) : null}
                 {error && (
                     <Alert severity="error" sx={{ m: 2, flexShrink: 0 }}>
                         {error}

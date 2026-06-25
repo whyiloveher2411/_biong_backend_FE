@@ -31,11 +31,12 @@ import type {
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
-import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
+import { reinjectVisualClipPlaybackFromCache, resolveVisualPlaybackPreviewUrl, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
 import { sanitizeTextClipsForPersist } from './shortVideoTextClips';
 import { sanitizeHtmlClipsForPersist } from './shortVideoHtmlClips';
 import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
 import {
+    resolveSceneVisualImageRef,
     resolveSceneVisualRefByType,
     resolveSceneVisualVideoRef,
     sceneVisualRefIsValid,
@@ -148,6 +149,17 @@ function inferVisualTypeFromScript(scene: ShortVideoManifestScene): ShortVideoSc
 
 export function resolveSceneVisualType(scene: ShortVideoManifestScene): ShortVideoSceneVisualType {
     const override = scene.layout?.visual_type;
+    if (override === 'stock' || override === 'article_image' || override === 'thumbnail') {
+        const playback = scene.layout?.visual_playback_url?.trim() || '';
+        if (playback) {
+            return 'image';
+        }
+        const ref = resolveSceneVisualImageRef(scene) || scene.layout?.visual_ref?.trim() || '';
+        if (ref && isHttpsImageUrl(ref)) {
+            return 'image';
+        }
+        return 'none';
+    }
     if (override === 'none' || override === 'image' || override === 'video') {
         return override;
     }
@@ -468,13 +480,14 @@ export function injectSceneVisualPlaybackUrl(
     sceneId: string,
     playbackUrl: string
 ): ShortVideoRenderManifest {
+    const normalized = resolveVisualPlaybackPreviewUrl(playbackUrl) || playbackUrl.trim();
     return {
         ...manifest,
         scenes: manifest.scenes.map((scene) => {
             if (scene.id !== sceneId) {
                 return scene;
             }
-            const layout = { ...(scene.layout ?? {}), visual_playback_url: playbackUrl.trim() };
+            const layout = { ...(scene.layout ?? {}), visual_playback_url: normalized };
             return { ...scene, layout };
         }),
     };

@@ -1,4 +1,4 @@
-export type ShortVideoSceneVisualType = 'none' | 'image' | 'video';
+export type ShortVideoSceneVisualType = 'none' | 'image' | 'video' | 'stock' | 'article_image' | 'thumbnail';
 
 export type ShortVideoVisualVerticalAlign = 'top' | 'center' | 'bottom';
 

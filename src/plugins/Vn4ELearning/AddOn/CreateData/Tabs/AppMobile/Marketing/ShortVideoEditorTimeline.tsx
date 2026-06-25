@@ -938,7 +938,7 @@ function NarrationActionBlock({
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    px: 0.5,
+                    px: showWaveform ? 0 : 0.5,
                     bgcolor: isPending
                         ? 'rgba(185, 28, 28, 0.68)'
                         : (isRunning ? 'rgba(30, 58, 95, 0.68)' : 'rgba(107, 114, 128, 0.68)'),
@@ -959,25 +959,7 @@ function NarrationActionBlock({
                         sourceDurationSec={audioSourceDurationSec}
                         clipDurationSec={Math.max(0, action.end - action.start)}
                     />
-                ) : null}
-                <Box
-                    sx={{
-                        position: 'relative',
-                        zIndex: 1,
-                        minWidth: 0,
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        ...(showWaveform
-                            ? {
-                                px: 0.5,
-                                py: 0.25,
-                                borderRadius: 0.5,
-                                background: 'linear-gradient(90deg, rgba(55, 65, 81, 0.72) 0%, rgba(55, 65, 81, 0.45) 100%)',
-                            }
-                            : undefined),
-                    }}
-                >
+                ) : (
                     <TimelineItemLabelEditor
                         editing={editing}
                         editValue={editValue}
@@ -986,7 +968,7 @@ function NarrationActionBlock({
                         onEditBlur={onEditBlur}
                         onEditKeyDown={onEditKeyDown}
                     />
-                </Box>
+                )}
             </Box>
             {onToggleVisibility ? (
                 <Box {...timelineVisibilityBtnOverlaySx('item')}>

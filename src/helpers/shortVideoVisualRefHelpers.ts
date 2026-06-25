@@ -29,6 +29,10 @@ function inferRefKind(ref: string): 'image' | 'video' | 'unknown' {
     return 'unknown';
 }
 
+export function clipActsAsImage(type: ShortVideoSceneVisualType | string): boolean {
+    return type === 'image' || type === 'stock' || type === 'article_image' || type === 'thumbnail';
+}
+
 export function resolveSceneVisualImageRef(scene: ShortVideoManifestScene): string {
     const stored = scene.layout?.visual_image_ref?.trim();
     if (stored) {
@@ -42,7 +46,7 @@ export function resolveSceneVisualImageRef(scene: ShortVideoManifestScene): stri
         return '';
     }
     const visualType = scene.layout?.visual_type;
-    if (visualType === 'image' || inferRefKind(legacy) === 'image') {
+    if (visualType === 'image' || visualType === 'stock' || inferRefKind(legacy) === 'image') {
         return legacy;
     }
     return '';
@@ -96,7 +100,7 @@ export function resolveVisualClipImageRef(clip: ShortVideoVisualClip): string {
     if (clip.video_ref?.trim()) {
         return '';
     }
-    if (clip.type === 'image' || inferRefKind(legacy) === 'image') {
+    if (clipActsAsImage(clip.type) || inferRefKind(legacy) === 'image') {
         return legacy;
     }
     return '';
@@ -121,7 +125,7 @@ export function resolveVisualClipVideoRef(clip: ShortVideoVisualClip): string {
 }
 
 export function resolveVisualClipRef(clip: ShortVideoVisualClip): string {
-    if (clip.type === 'image') {
+    if (clipActsAsImage(clip.type)) {
         return resolveVisualClipImageRef(clip);
     }
     if (clip.type === 'video') {
@@ -162,6 +166,10 @@ export function sceneVisualRefIsValid(
     visualType: ShortVideoSceneVisualType
 ): boolean {
     if (visualType === 'image') {
+        const playback = scene.layout?.visual_playback_url?.trim() || '';
+        if (playback && /^https?:\/\//i.test(playback)) {
+            return true;
+        }
         const ref = resolveSceneVisualImageRef(scene);
         return Boolean(ref && isHttpsImageUrl(ref));
     }
@@ -173,7 +181,11 @@ export function sceneVisualRefIsValid(
 }
 
 export function clipVisualRefIsValid(clip: ShortVideoVisualClip): boolean {
-    if (clip.type === 'image') {
+    if (clipActsAsImage(clip.type)) {
+        const playback = clip.visual_playback_url?.trim() || '';
+        if (playback && /^https?:\/\//i.test(playback)) {
+            return true;
+        }
         const ref = resolveVisualClipImageRef(clip);
         return Boolean(ref && isHttpsImageUrl(ref));
     }

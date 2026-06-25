@@ -8,6 +8,8 @@ import { isHtmlClipEffectivelyHidden } from './shortVideoTimelineVisibility';
 import { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
 
 export { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
+export { resolveShortVideoHtmlTemplatePreset, SHORT_VIDEO_HTML_TEMPLATE_IDS } from './shortVideoHtmlTemplatePresets';
+export type { ShortVideoHtmlTemplateData, ShortVideoHtmlTemplateId } from './shortVideoHtmlTemplatePresets';
 
 export type { ShortVideoHtmlClip } from './shortVideoRenderManifestTypes';
 
@@ -238,6 +240,39 @@ export function resolveActiveHtmlClipsAtSec(
     });
 }
 
+/** Chỉ hiển thị 1 HTML overlay tại một thời điểm — tránh chồng nhiều full-screen iframe. */
+export function resolvePrimaryHtmlClipAtSec(
+    manifest: ShortVideoRenderManifest,
+    timeSec: number
+): ShortVideoHtmlClip | null {
+    const active = resolveActiveHtmlClipsAtSec(manifest, timeSec);
+    if (active.length === 0) {
+        return null;
+    }
+    if (active.length === 1) {
+        return active[0];
+    }
+    const sorted = [...active].sort((a, b) => {
+        const labelA = (a.label || '').toLowerCase();
+        const labelB = (b.label || '').toLowerCase();
+        const score = (label: string) => {
+            if (label.includes('stats') || label.includes('big')) {
+                return 3;
+            }
+            if (label.includes('brand') || label.includes('hook')) {
+                return 2;
+            }
+            return 1;
+        };
+        const scoreDiff = score(labelB) - score(labelA);
+        if (scoreDiff !== 0) {
+            return scoreDiff;
+        }
+        return b.duration_sec - a.duration_sec || b.start_sec - a.start_sec;
+    });
+    return sorted[0];
+}
+
 export function resolveActiveHtmlClipAtSec(
     manifest: ShortVideoRenderManifest,
     timeSec: number,
@@ -273,8 +308,12 @@ export function buildPreviewManifestWithHtmlOverlay(
     manifest: ShortVideoRenderManifest,
     timeSec: number
 ): ShortVideoRenderManifest {
-    const activeIds = resolveActiveHtmlClipsAtSec(manifest, timeSec).map((clip) => clip.id);
-    return mergePreviewSuppressIds(manifest, 'preview_suppress_html_clip_ids', activeIds);
+    const active = resolveActiveHtmlClipsAtSec(manifest, timeSec);
+    return mergePreviewSuppressIds(
+        manifest,
+        'preview_suppress_html_clip_ids',
+        active.map((clip) => clip.id)
+    );
 }
 
 export function sanitizeHtmlClipsForPersist(
@@ -285,7 +324,8 @@ export function sanitizeHtmlClipsForPersist(
     }
     return clips.map((clip) => {
         const normalized = clampHtmlClipTiming(clip);
-        const { prerender_playback_url: _ignored, ...rest } = normalized;
+        const rest = { ...normalized };
+        delete rest.prerender_playback_url;
         return rest as ShortVideoHtmlClip;
     });
 }
