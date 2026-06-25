@@ -5,11 +5,9 @@ import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest'
 import type { ShortVideoHtmlClip } from 'helpers/shortVideoRenderManifestTypes';
 import {
     buildHtmlClipSrcDoc,
-    buildPreviewManifestWithHtmlOverlay,
     resolveActiveHtmlClipsAtSec,
     seekHtmlClipIframeTime,
 } from 'helpers/shortVideoHtmlClips';
-import { clonePreviewManifestIntoTree } from 'helpers/shortVideoPreviewManifestClone';
 
 type PlayerLayout = {
     offsetX: number;
@@ -20,9 +18,7 @@ type PlayerLayout = {
 
 type Props = {
     manifest: ShortVideoRenderManifest;
-    playerRef: React.MutableRefObject<PlayerRef | null>;
-    playerInstance: PlayerRef | null;
-    children: React.ReactNode;
+    timeSec: number;
 };
 
 function computePlayerLayout(
@@ -56,15 +52,11 @@ function buildClipSrcDocMap(
 
 export default function ShortVideoPreviewHtmlOverlay({
     manifest,
-    playerRef,
-    playerInstance,
-    children,
+    timeSec,
 }: Props) {
     const hostRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRefs = React.useRef<Record<string, HTMLIFrameElement | null>>({});
     const [layout, setLayout] = React.useState<PlayerLayout | null>(null);
-    const [timeSec, setTimeSec] = React.useState(0);
-    const fps = manifest.fps || 30;
     const compositionWidth = manifest.width || 1080;
     const compositionHeight = manifest.height || 1920;
 
@@ -98,25 +90,6 @@ export default function ShortVideoPreviewHtmlOverlay({
         return () => observer.disconnect();
     }, [compositionHeight, compositionWidth]);
 
-    React.useEffect(() => {
-        const player = playerInstance;
-        if (!player) {
-            setTimeSec(0);
-            return undefined;
-        }
-        const sync = () => {
-            const frame = player.getCurrentFrame?.() ?? 0;
-            setTimeSec(frame / fps);
-        };
-        sync();
-        player.addEventListener?.('frameupdate', sync);
-        const id = window.setInterval(sync, 1000 / fps);
-        return () => {
-            window.clearInterval(id);
-            player.removeEventListener?.('frameupdate', sync);
-        };
-    }, [fps, playerInstance]);
-
     const activeClips = React.useMemo(
         () => resolveActiveHtmlClipsAtSec(manifest, timeSec),
         [manifest, timeSec]
@@ -129,78 +102,75 @@ export default function ShortVideoPreviewHtmlOverlay({
         });
     }, [activeClips, timeSec]);
 
-    const previewManifest = React.useMemo(
-        () => buildPreviewManifestWithHtmlOverlay(manifest, timeSec),
-        [manifest, timeSec]
-    );
-
-    const previewChild = clonePreviewManifestIntoTree(children, previewManifest);
+    if (activeClips.length === 0 || !layout) {
+        return (
+            <Box
+                ref={hostRef}
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    pointerEvents: 'none',
+                }}
+            />
+        );
+    }
 
     return (
         <Box
             ref={hostRef}
             sx={{
-                position: 'relative',
-                width: '100%',
-                height: '100%',
-                minHeight: 0,
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                zIndex: 12,
             }}
         >
-            {previewChild}
-            {layout && activeClips.length > 0 ? (
+            <Box
+                sx={{
+                    position: 'absolute',
+                    left: layout.offsetX,
+                    top: layout.offsetY,
+                    width: layout.width,
+                    height: layout.height,
+                    overflow: 'hidden',
+                }}
+            >
                 <Box
                     sx={{
-                        position: 'absolute',
-                        left: layout.offsetX,
-                        top: layout.offsetY,
-                        width: layout.width,
-                        height: layout.height,
-                        pointerEvents: 'none',
-                        zIndex: 12,
-                        overflow: 'hidden',
+                        position: 'relative',
+                        width: compositionWidth,
+                        height: compositionHeight,
+                        transform: `scale(${layout.width / compositionWidth})`,
+                        transformOrigin: 'top left',
                     }}
                 >
-                    <Box
-                        sx={{
-                            position: 'relative',
-                            width: compositionWidth,
-                            height: compositionHeight,
-                            transform: `scale(${layout.width / compositionWidth})`,
-                            transformOrigin: 'top left',
-                        }}
-                    >
-                        {activeClips.map((clip) => (
-                            <Box
-                                key={clip.id}
-                                component="iframe"
-                                ref={(node: HTMLIFrameElement | null) => {
-                                    iframeRefs.current[clip.id] = node;
-                                }}
-                                title={clip.label || clip.id}
-                                sandbox="allow-scripts"
-                                srcDoc={srcDocByClipId.get(clip.id)}
-                                onLoad={(event: React.SyntheticEvent<HTMLIFrameElement>) => {
-                                    const localTimeSec = timeSec - clip.start_sec;
-                                    seekHtmlClipIframeTime(event.currentTarget, localTimeSec);
-                                }}
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    width: compositionWidth,
-                                    height: compositionHeight,
-                                    border: 0,
-                                    display: 'block',
-                                    bgcolor: 'transparent',
-                                }}
-                            />
-                        ))}
-                    </Box>
+                    {activeClips.map((clip) => (
+                        <Box
+                            key={clip.id}
+                            component="iframe"
+                            ref={(node: HTMLIFrameElement | null) => {
+                                iframeRefs.current[clip.id] = node;
+                            }}
+                            title={clip.label || clip.id}
+                            sandbox="allow-scripts"
+                            srcDoc={srcDocByClipId.get(clip.id)}
+                            onLoad={(event: React.SyntheticEvent<HTMLIFrameElement>) => {
+                                const localTimeSec = timeSec - clip.start_sec;
+                                seekHtmlClipIframeTime(event.currentTarget, localTimeSec);
+                            }}
+                            sx={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: compositionWidth,
+                                height: compositionHeight,
+                                border: 0,
+                                display: 'block',
+                                bgcolor: 'transparent',
+                            }}
+                        />
+                    ))}
                 </Box>
-            ) : null}
+            </Box>
         </Box>
     );
 }

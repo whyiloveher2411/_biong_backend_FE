@@ -2,6 +2,7 @@ import type {
     ShortVideoHtmlClip,
     ShortVideoRenderManifest,
 } from './shortVideoRenderManifestTypes';
+import { mergePreviewSuppressIds } from './shortVideoPreviewManifestClone';
 import { normalizeItemZIndex } from './shortVideoTimelineItemZIndex';
 import { isHtmlClipEffectivelyHidden } from './shortVideoTimelineVisibility';
 import { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
@@ -273,16 +274,7 @@ export function buildPreviewManifestWithHtmlOverlay(
     timeSec: number
 ): ShortVideoRenderManifest {
     const activeIds = resolveActiveHtmlClipsAtSec(manifest, timeSec).map((clip) => clip.id);
-    if (activeIds.length === 0) {
-        return {
-            ...manifest,
-            preview_suppress_html_clip_ids: undefined,
-        };
-    }
-    return {
-        ...manifest,
-        preview_suppress_html_clip_ids: activeIds,
-    };
+    return mergePreviewSuppressIds(manifest, 'preview_suppress_html_clip_ids', activeIds);
 }
 
 export function sanitizeHtmlClipsForPersist(

@@ -140,7 +140,7 @@ function useRemotionPlayback(
     };
 }
 
-export function ShortVideoRemotionPreview({
+export const ShortVideoRemotionPreview = React.memo(function ShortVideoRemotionPreview({
     manifest,
     playerRef,
     onPlayerReady,
@@ -265,7 +265,11 @@ export function ShortVideoRemotionPreview({
             ) : null}
         </Box>
     );
-}
+}, (prev, next) => (
+    prev.manifest === next.manifest
+    && prev.playerRef === next.playerRef
+    && prev.onPlayerReady === next.onPlayerReady
+));
 
 /** Box timeline + play/time; có thể gắn action (vd. Render) bên phải cùng hàng. */
 export function ShortVideoRemotionTimelineBar({

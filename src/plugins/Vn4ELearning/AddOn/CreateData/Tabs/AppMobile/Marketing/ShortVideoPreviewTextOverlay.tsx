@@ -1,8 +1,6 @@
 import React from 'react';
-import type { PlayerRef } from '@remotion/player';
 import { Box } from '@mui/material';
 import type { ShortVideoRenderManifest, ShortVideoTextClip } from 'helpers/shortVideoRenderManifest';
-import { clonePreviewManifestIntoTree } from 'helpers/shortVideoPreviewManifestClone';
 import {
     buildPreviewManifestWithTextOverlay,
     resolveActiveTextClipsAtSec,
@@ -32,6 +30,8 @@ import {
     resolveTextClipExitDurationSec,
 } from 'helpers/shortVideoTextClips';
 
+export { usePreviewCurrentTimeSec } from 'helpers/shortVideoPreviewManifest';
+
 type PlayerLayout = {
     offsetX: number;
     offsetY: number;
@@ -42,11 +42,9 @@ type PlayerLayout = {
 type Props = {
     manifest: ShortVideoRenderManifest;
     selectedTextClipId: string;
-    playerRef: React.MutableRefObject<PlayerRef | null>;
-    playerInstance: PlayerRef | null;
+    timeSec: number;
     onPositionChange: (clipId: string, positionX: number, positionY: number) => void;
     onClearSelection?: () => void;
-    children: React.ReactNode;
 };
 
 function computePlayerLayout(
@@ -78,37 +76,6 @@ function hexToRgba(hex: string, alpha: number): string {
     const g = Number.parseInt(expanded.slice(2, 4), 16);
     const b = Number.parseInt(expanded.slice(4, 6), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-export function usePreviewCurrentTimeSec(
-    playerRef: React.MutableRefObject<PlayerRef | null>,
-    playerInstance: PlayerRef | null,
-    fps: number
-): number {
-    const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
-
-    React.useEffect(() => {
-        const player = playerInstance;
-        if (!player) {
-            setCurrentTimeSec(0);
-            return;
-        }
-        const syncTime = () => {
-            const frame = playerRef.current?.getCurrentFrame() ?? 0;
-            setCurrentTimeSec(frame / fps);
-        };
-        syncTime();
-        player.addEventListener('timeupdate', syncTime);
-        player.addEventListener('frameupdate', syncTime);
-        player.addEventListener('seeked', syncTime);
-        return () => {
-            player.removeEventListener('timeupdate', syncTime);
-            player.removeEventListener('frameupdate', syncTime);
-            player.removeEventListener('seeked', syncTime);
-        };
-    }, [fps, playerInstance, playerRef]);
-
-    return currentTimeSec;
 }
 
 type TextClipOverlayItemProps = {
@@ -303,15 +270,12 @@ function TextClipOverlayItem({
 export default function ShortVideoPreviewTextOverlay({
     manifest,
     selectedTextClipId,
-    playerRef,
-    playerInstance,
+    timeSec,
     onPositionChange,
     onClearSelection,
-    children,
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
-    const currentTimeSec = usePreviewCurrentTimeSec(playerRef, playerInstance, manifest.fps || 30);
     const dragStateRef = React.useRef<{
         clipId: string;
         pointerId: number;
@@ -331,16 +295,16 @@ export default function ShortVideoPreviewTextOverlay({
     );
 
     const previewManifest = React.useMemo(
-        () => buildPreviewManifestWithTextOverlay(manifest, currentTimeSec, selectedTextClipId),
-        [currentTimeSec, manifest, selectedTextClipId]
+        () => buildPreviewManifestWithTextOverlay(manifest, timeSec, selectedTextClipId),
+        [timeSec, manifest, selectedTextClipId]
     );
 
     const overlayClips = React.useMemo(() => {
         if (!selectedTextClipId) {
             return [];
         }
-        return resolveActiveTextClipsAtSec(manifest, currentTimeSec);
-    }, [currentTimeSec, manifest, selectedTextClipId]);
+        return resolveActiveTextClipsAtSec(manifest, timeSec);
+    }, [timeSec, manifest, selectedTextClipId]);
 
     React.useEffect(() => {
         const node = containerRef.current;
@@ -407,55 +371,59 @@ export default function ShortVideoPreviewTextOverlay({
         }
     }, [onClearSelection]);
 
-    const previewChild = clonePreviewManifestIntoTree(children, previewManifest);
+    if (overlayClips.length === 0 || !playerLayout) {
+        return (
+            <Box
+                ref={containerRef}
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    pointerEvents: 'none',
+                }}
+            />
+        );
+    }
 
     return (
         <Box
             ref={containerRef}
+            onClick={handleOverlayBackgroundClick}
             sx={{
-                position: 'relative',
-                width: '100%',
-                height: '100%',
-                minHeight: 0,
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                zIndex: 13,
             }}
         >
-            {previewChild}
-            {overlayClips.length > 0 && playerLayout ? (
-                <Box
-                    onClick={handleOverlayBackgroundClick}
-                    sx={{
-                        position: 'absolute',
-                        left: playerLayout.offsetX,
-                        top: playerLayout.offsetY,
-                        width: playerLayout.width,
-                        height: playerLayout.height,
-                        pointerEvents: 'none',
-                    }}
-                >
-                    {overlayClips.map((clip) => {
-                        const isSelected = clip.id === selectedTextClipId;
-                        return (
-                            <TextClipOverlayItem
-                                key={clip.id}
-                                clip={clip}
-                                manifest={manifest}
-                                playerLayout={playerLayout}
-                                compositionWidth={compositionWidth}
-                                compositionHeight={compositionHeight}
-                                currentTimeSec={currentTimeSec}
-                                isSelected={isSelected}
-                                onPointerDown={isSelected ? handlePointerDown(clip.id) : undefined}
-                                onPointerMove={isSelected ? handlePointerMove : undefined}
-                                onPointerUp={isSelected ? handlePointerUp : undefined}
-                            />
-                        );
-                    })}
-                </Box>
-            ) : null}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    left: playerLayout.offsetX,
+                    top: playerLayout.offsetY,
+                    width: playerLayout.width,
+                    height: playerLayout.height,
+                    pointerEvents: 'none',
+                }}
+            >
+                {overlayClips.map((clip) => {
+                    const isSelected = clip.id === selectedTextClipId;
+                    return (
+                        <TextClipOverlayItem
+                            key={clip.id}
+                            clip={clip}
+                            manifest={previewManifest}
+                            playerLayout={playerLayout}
+                            compositionWidth={compositionWidth}
+                            compositionHeight={compositionHeight}
+                            currentTimeSec={timeSec}
+                            isSelected={isSelected}
+                            onPointerDown={isSelected ? handlePointerDown(clip.id) : undefined}
+                            onPointerMove={isSelected ? handlePointerMove : undefined}
+                            onPointerUp={isSelected ? handlePointerUp : undefined}
+                        />
+                    );
+                })}
+            </Box>
         </Box>
     );
 }

@@ -15,6 +15,7 @@ import {
     normalizeItemZIndex,
     resolveTextClipOverlayZIndex,
 } from './shortVideoTimelineItemZIndex';
+import { mergePreviewSuppressIds } from './shortVideoPreviewManifestClone';
 import { isTextClipEffectivelyHidden } from './shortVideoTimelineVisibility';
 
 export type { ShortVideoTextClip } from './shortVideoRenderManifestTypes';
@@ -533,25 +534,10 @@ export function buildPreviewManifestWithTextOverlay(
     selectedTextClipId: string
 ): ShortVideoRenderManifest {
     if (!selectedTextClipId) {
-        if (!manifest.preview_suppress_text_clip_ids?.length) {
-            return manifest;
-        }
-        return {
-            ...manifest,
-            preview_suppress_text_clip_ids: undefined,
-        };
+        return mergePreviewSuppressIds(manifest, 'preview_suppress_text_clip_ids', []);
     }
     const activeIds = resolveActiveTextClipsAtSec(manifest, timeSec).map((clip) => clip.id);
-    if (activeIds.length === 0) {
-        return {
-            ...manifest,
-            preview_suppress_text_clip_ids: undefined,
-        };
-    }
-    return {
-        ...manifest,
-        preview_suppress_text_clip_ids: activeIds,
-    };
+    return mergePreviewSuppressIds(manifest, 'preview_suppress_text_clip_ids', activeIds);
 }
 
 export function resolveActiveTextClipAtSec(

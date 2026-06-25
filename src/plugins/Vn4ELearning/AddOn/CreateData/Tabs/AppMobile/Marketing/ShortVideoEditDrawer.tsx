@@ -40,6 +40,11 @@ import {
 } from 'helpers/shortVideoScriptScenes';
 import { SHORT_VIDEO_RENDER_API_PATH } from 'helpers/marketingShortVideoRenderWorkflow';
 import {
+    fetchShortVideoWorkflowStatus,
+    restartShortVideoPipeline,
+    runShortVideoAutoPipeline,
+} from 'helpers/marketingShortVideoWorkflowApi';
+import {
     injectVisualClipPlaybackUrl,
     manifestUsesVisualClips,
     resolveVisualClipYoutubeId,
@@ -60,6 +65,10 @@ import ShortVideoHtmlClipInspector from './ShortVideoHtmlClipInspector';
 import ShortVideoResourcePanel from './ShortVideoResourcePanel';
 import ShortVideoPreviewTextOverlay from './ShortVideoPreviewTextOverlay';
 import ShortVideoPreviewHtmlOverlay from './ShortVideoPreviewHtmlOverlay';
+import {
+    usePreviewCurrentTimeSec,
+    useStablePreviewManifest,
+} from 'helpers/shortVideoPreviewManifest';
 import { updateTextClipInManifest } from 'helpers/shortVideoTextClips';
 import { getProjectTimelineDurationSec } from 'helpers/shortVideoTimelineAdapter';
 
@@ -79,6 +88,22 @@ const MAIN_HEADER_REFRESH_BTN_SX = {
     '&.Mui-disabled': {
         color: 'rgba(255,255,255,0.45)',
         bgcolor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(255,255,255,0.25)',
+    },
+} as const;
+
+const MAIN_HEADER_RESTART_BTN_SX = {
+    color: 'common.white',
+    bgcolor: 'transparent',
+    border: '1px solid rgba(255,255,255,0.65)',
+    boxShadow: 'none',
+    '&:hover': {
+        bgcolor: 'rgba(255,255,255,0.12)',
+        borderColor: 'common.white',
+    },
+    '&.Mui-disabled': {
+        color: 'rgba(255,255,255,0.45)',
+        bgcolor: 'transparent',
         borderColor: 'rgba(255,255,255,0.25)',
     },
 } as const;
@@ -249,6 +274,9 @@ export default function ShortVideoEditDrawer({
     const [selectedTextClipId, setSelectedTextClipId] = React.useState('');
     const [selectedHtmlClipId, setSelectedHtmlClipId] = React.useState('');
     const [videoRendering, setVideoRendering] = React.useState(false);
+    const [pipelineRunning, setPipelineRunning] = React.useState(false);
+    const [workflowStage, setWorkflowStage] = React.useState('');
+    const [workflowStatusError, setWorkflowStatusError] = React.useState('');
     const [savingActivityCount, setSavingActivityCount] = React.useState(0);
     const [narrationRunningSceneIds, setNarrationRunningSceneIds] = React.useState<string[]>([]);
     const [sceneAudioRenderingId, setSceneAudioRenderingId] = React.useState('');
@@ -257,6 +285,16 @@ export default function ShortVideoEditDrawer({
     const pollingAbortRef = React.useRef(false);
     const remotionPlayerRef = React.useRef<PlayerRef | null>(null);
     const [remotionPlayerInstance, setRemotionPlayerInstance] = React.useState<PlayerRef | null>(null);
+    const previewTimeSec = usePreviewCurrentTimeSec(
+        remotionPlayerRef,
+        remotionPlayerInstance,
+        manifest?.fps || 30
+    );
+    const previewManifest = useStablePreviewManifest(
+        manifest,
+        previewTimeSec,
+        selectedTextClipId
+    );
     const visualResolveCacheRef = React.useRef<Record<string, string>>({});
     const visualResolveFailedRef = React.useRef<Record<string, string>>({});
     const manifestRef = React.useRef<ShortVideoRenderManifest | null>(null);
@@ -399,6 +437,11 @@ export default function ShortVideoEditDrawer({
         }
         return '';
     }, [post.video_url]);
+
+    const scriptSource = React.useMemo(() => {
+        const raw = post.script_source;
+        return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+    }, [post.script_source]);
 
     const handleOpenFinalVideo = React.useCallback(() => {
         if (!videoUrl) {
@@ -1122,6 +1165,126 @@ export default function ShortVideoEditDrawer({
         });
     }, [shortVideoId]);
 
+    const handleRunAutoPipeline = React.useCallback(async () => {
+        if (shortVideoId <= 0) {
+            return;
+        }
+        const confirmed = window.confirm(
+            'Chạy pipeline tự động (script → audio → manifest → render)? Quá trình có thể mất vài phút.'
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        setPipelineRunning(true);
+        setWorkflowStatusError('');
+        beginSavingActivity();
+        try {
+            await runShortVideoAutoPipeline({
+                shortVideoId,
+                onProgress: (status) => {
+                    setWorkflowStage(String(status.stage || ''));
+                },
+            });
+            reloadPostDetail();
+            onRefreshPost?.();
+            const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
+            setWorkflowStage(String(refreshed.stage || ''));
+            api.showMessage('Đã chạy pipeline tự động', 'success');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Pipeline tự động thất bại';
+            setWorkflowStatusError(message);
+            api.showMessage(message, 'error');
+        } finally {
+            setPipelineRunning(false);
+            endSavingActivity();
+        }
+    }, [
+        shortVideoId,
+        reloadPostDetail,
+        onRefreshPost,
+        api.showMessage,
+        beginSavingActivity,
+        endSavingActivity,
+    ]);
+
+    const handleRestartPipeline = React.useCallback(async () => {
+        if (shortVideoId <= 0) {
+            return;
+        }
+
+        const scriptNote = scriptSource === 'manual'
+            ? 'Script thủ công sẽ được giữ.'
+            : 'Script sẽ được sinh lại bằng DeepSeek.';
+        const confirmed = window.confirm(
+            `Làm lại pipeline từ đầu trên short video này?\n\n${scriptNote} Audio, manifest và video hiện tại sẽ bị xóa. Quá trình có thể mất vài phút.`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        setPipelineRunning(true);
+        setWorkflowStatusError('');
+        beginSavingActivity();
+        try {
+            setManifest(null);
+            setManifestError('');
+            setManifestInfo('');
+            savedManifestFingerprintRef.current = '';
+            visualResolveCacheRef.current = {};
+            manifestInitialResolveDoneRef.current = false;
+
+            await restartShortVideoPipeline({
+                shortVideoId,
+                onProgress: (status) => {
+                    setWorkflowStage(String(status.stage || ''));
+                },
+            });
+            reloadPostDetail();
+            onRefreshPost?.();
+            const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
+            setWorkflowStage(String(refreshed.stage || ''));
+            api.showMessage('Đã làm lại pipeline từ đầu', 'success');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Làm lại pipeline thất bại';
+            setWorkflowStatusError(message);
+            api.showMessage(message, 'error');
+            reloadPostDetail();
+        } finally {
+            setPipelineRunning(false);
+            endSavingActivity();
+        }
+    }, [
+        shortVideoId,
+        scriptSource,
+        reloadPostDetail,
+        onRefreshPost,
+        api.showMessage,
+        beginSavingActivity,
+        endSavingActivity,
+    ]);
+
+    React.useEffect(() => {
+        if (!open || shortVideoId <= 0) {
+            return undefined;
+        }
+        let cancelled = false;
+        fetchShortVideoWorkflowStatus(shortVideoId)
+            .then((status) => {
+                if (!cancelled) {
+                    setWorkflowStage(String(status.stage || ''));
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setWorkflowStage('');
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, shortVideoId, post]);
+
     const handleRenderVideo = React.useCallback(() => {
         if (shortVideoId <= 0) {
             return;
@@ -1234,6 +1397,42 @@ export default function ShortVideoEditDrawer({
 
     const mainDrawerHeaderAction = (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+            <LoadingButton
+                size="small"
+                variant="outlined"
+                loading={pipelineRunning}
+                disabled={
+                    pipelineRunning
+                    || videoRendering
+                    || manifestRefreshing
+                    || shortVideoId <= 0
+                }
+                onClick={handleRestartPipeline}
+                sx={MAIN_HEADER_RESTART_BTN_SX}
+            >
+                {pipelineRunning && workflowStage
+                    ? `Pipeline: ${workflowStage}`
+                    : 'Làm lại pipeline'}
+            </LoadingButton>
+            {!videoUrl ? (
+                <LoadingButton
+                    size="small"
+                    variant="contained"
+                    loading={pipelineRunning}
+                    disabled={
+                        pipelineRunning
+                        || videoRendering
+                        || manifestRefreshing
+                        || shortVideoId <= 0
+                    }
+                    onClick={handleRunAutoPipeline}
+                    sx={MAIN_HEADER_REFRESH_BTN_SX}
+                >
+                    {pipelineRunning && workflowStage
+                        ? `Pipeline: ${workflowStage}`
+                        : 'Chạy pipeline tự động'}
+                </LoadingButton>
+            ) : null}
             {hasScriptContent ? (
                 <LoadingButton
                     size="small"
@@ -1382,6 +1581,11 @@ export default function ShortVideoEditDrawer({
                                         {manifestError}
                                     </Alert>
                                 )}
+                                {workflowStatusError ? (
+                                    <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
+                                        {workflowStatusError}
+                                    </Alert>
+                                ) : null}
                                 {SHOW_MANIFEST_INFO_BANNER && manifestInfo && !manifestError && (
                                     <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
                                         {manifestInfo}
@@ -1422,43 +1626,52 @@ export default function ShortVideoEditDrawer({
                                                 Đang tải manifest preview…
                                             </Typography>
                                         </Box>
-                                    ) : manifest ? (
-                                        <ShortVideoPreviewHtmlOverlay
-                                            manifest={manifest}
-                                            playerRef={remotionPlayerRef}
-                                            playerInstance={remotionPlayerInstance}
+                                    ) : manifest && previewManifest ? (
+                                        <Box
+                                            sx={{
+                                                position: 'relative',
+                                                width: '100%',
+                                                height: '100%',
+                                                minHeight: 0,
+                                                flex: 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
                                         >
+                                            <Suspense
+                                                fallback={
+                                                    <Box
+                                                        sx={{
+                                                            width: '100%',
+                                                            maxWidth: 320,
+                                                            display: 'flex',
+                                                            justifyContent: 'center',
+                                                            py: 4,
+                                                        }}
+                                                    >
+                                                        <CircularProgress size={28} />
+                                                    </Box>
+                                                }
+                                            >
+                                                <ShortVideoRemotionPreview
+                                                    manifest={previewManifest}
+                                                    playerRef={remotionPlayerRef}
+                                                    onPlayerReady={setRemotionPlayerInstance}
+                                                />
+                                            </Suspense>
+                                            <ShortVideoPreviewHtmlOverlay
+                                                manifest={manifest}
+                                                timeSec={previewTimeSec}
+                                            />
                                             <ShortVideoPreviewTextOverlay
                                                 manifest={manifest}
                                                 selectedTextClipId={selectedTextClipId}
-                                                playerRef={remotionPlayerRef}
-                                                playerInstance={remotionPlayerInstance}
+                                                timeSec={previewTimeSec}
                                                 onPositionChange={handleTextClipPositionChange}
                                                 onClearSelection={() => setSelectedTextClipId('')}
-                                            >
-                                                <Suspense
-                                                    fallback={
-                                                        <Box
-                                                            sx={{
-                                                                width: '100%',
-                                                                maxWidth: 320,
-                                                                display: 'flex',
-                                                                justifyContent: 'center',
-                                                                py: 4,
-                                                            }}
-                                                        >
-                                                            <CircularProgress size={28} />
-                                                        </Box>
-                                                    }
-                                                >
-                                                    <ShortVideoRemotionPreview
-                                                        manifest={manifest}
-                                                        playerRef={remotionPlayerRef}
-                                                        onPlayerReady={setRemotionPlayerInstance}
-                                                    />
-                                                </Suspense>
-                                            </ShortVideoPreviewTextOverlay>
-                                        </ShortVideoPreviewHtmlOverlay>
+                                            />
+                                        </Box>
                                     ) : (
                                         <Alert severity="info" sx={{ maxWidth: 480, width: '100%' }}>
                                             Chưa có manifest preview — thử làm mới manifest

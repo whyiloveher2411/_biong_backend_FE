@@ -11,12 +11,13 @@ export type PostTypeRowWorkflowBadge = {
         | 'xai_tts'
         | 'short_video_script'
         | 'short_video_render'
+        | 'short_video_generate_scene_audio'
         | 'short_video_generate_vieneu_clone_audio';
     target_lang?: string | null;
     translate_scope?: 'text' | 'caption' | string | null;
     post_id: number;
     short_video_id?: number | null;
-    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'script' | 'scene_audio_vieneu' | 'render' | 'done' | string;
+    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'script' | 'scene_audio' | 'scene_audio_vieneu' | 'render' | 'done' | string;
     platform?: string | null;
     distribution_stage?: string | null;
 };

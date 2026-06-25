@@ -13,9 +13,9 @@ import {
 import { openShortVideoGeminiWorkflow, shortVideoScriptSaveApiUrl } from 'helpers/marketingShortVideoGeminiWorkflow';
 import { openShortVideoRenderWorkflow, shortVideoRenderApiUrl } from 'helpers/marketingShortVideoRenderWorkflow';
 import {
-    openShortVideoVieneuTtsWorkflow,
-    shortVideoVieneuTtsApiUrl,
-} from 'helpers/marketingShortVideoVieneuTtsWorkflow';
+    openShortVideoSceneAudioWorkflow,
+    shortVideoSceneAudioBatchApiUrl,
+} from 'helpers/marketingShortVideoSceneAudioWorkflow';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { getAccessToken } from 'store/user/user.reducers';
 import React from 'react';
@@ -100,19 +100,24 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
             }
             return;
         }
-        if (wf.action === 'short_video_generate_vieneu_clone_audio') {
+        if (wf.action === 'short_video_generate_scene_audio'
+            || wf.action === 'short_video_generate_vieneu_clone_audio') {
             const shortVideoId = Number(wf.short_video_id || rowPostId || 0);
             if (!shortVideoId) {
                 return;
             }
             try {
-                const result = await openShortVideoVieneuTtsWorkflow({ shortVideoId });
+                const result = await openShortVideoSceneAudioWorkflow({ shortVideoId });
                 const count = Array.isArray(result.scenes_generated)
                     ? result.scenes_generated.length
                     : 0;
+                const providers = result.providers_used;
+                const providerNote = providers
+                    ? ` (Saydi: ${providers.saydi ?? 0}, Vbee: ${providers.vbee ?? 0})`
+                    : '';
                 window.alert(
                     result.message ||
-                        `Đã sinh audio VieNeu cho ${count} scene.`
+                        `Đã sinh audio cho ${count} scene${providerNote}.`
                 );
                 window.location.reload();
             } catch (e) {
@@ -198,12 +203,13 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                     const xaiTts = badge.xai_tts;
                     const isShortVideoScript = wf?.action === 'short_video_script';
                     const isShortVideoRender = wf?.action === 'short_video_render';
-                    const isShortVideoVieneuTts =
-                        wf?.action === 'short_video_generate_vieneu_clone_audio';
+                    const isShortVideoSceneAudio =
+                        wf?.action === 'short_video_generate_scene_audio'
+                        || wf?.action === 'short_video_generate_vieneu_clone_audio';
                     const isShortVideoWorkflow =
                         isShortVideoScript ||
                         isShortVideoRender ||
-                        isShortVideoVieneuTts;
+                        isShortVideoSceneAudio;
                     const isWorkflow =
                         !!wf?.action &&
                         (isShortVideoWorkflow
@@ -223,11 +229,12 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                         ? shortVideoScriptSaveApiUrl()
                         : isShortVideoRender
                             ? shortVideoRenderApiUrl()
-                            : isShortVideoVieneuTts
-                                ? shortVideoVieneuTtsApiUrl()
+                            : isShortVideoSceneAudio
+                                ? shortVideoSceneAudioBatchApiUrl()
                                 : action &&
                                     action !== 'short_video_script' &&
                                     action !== 'short_video_render' &&
+                                    action !== 'short_video_generate_scene_audio' &&
                                     action !== 'short_video_generate_vieneu_clone_audio'
                                   ? marketingWorkflowSaveApiUrl(action)
                                   : '';
