@@ -1,4 +1,5 @@
 import type {
+    ShortVideoHtmlClip,
     ShortVideoManifestScene,
     ShortVideoRenderManifest,
     ShortVideoTextClip,
@@ -8,6 +9,7 @@ import type {
 
 export const TIMELINE_DEFAULT_TRACK_NARRATION_ID = 'narration';
 export const TIMELINE_DEFAULT_TRACK_VISUAL_ID = 'visual';
+export const TIMELINE_DEFAULT_TRACK_HTML_ID = 'html';
 export const TIMELINE_DEFAULT_TRACK_TEXT_ID = 'text';
 export const TIMELINE_TRACK_ROW_HEIGHT = 40;
 /** @deprecated Mọi track dùng TIMELINE_TRACK_ROW_HEIGHT — animation bar nằm trong clip. */
@@ -18,6 +20,7 @@ export const TIMELINE_NARRATION_TRACK_ROW_HEIGHT = TIMELINE_TRACK_ROW_HEIGHT;
 export const DEFAULT_TIMELINE_TRACKS: ShortVideoTimelineTrack[] = [
     { id: TIMELINE_DEFAULT_TRACK_NARRATION_ID, name: 'Lời thoại', order: 0 },
     { id: TIMELINE_DEFAULT_TRACK_VISUAL_ID, name: 'Visual', order: 1 },
+    { id: TIMELINE_DEFAULT_TRACK_HTML_ID, name: 'HTML', order: 2 },
 ];
 
 export function resolveTimelineTracks(manifest: ShortVideoRenderManifest): ShortVideoTimelineTrack[] {
@@ -89,6 +92,17 @@ export function resolveClipTrackId(
     return TIMELINE_DEFAULT_TRACK_VISUAL_ID;
 }
 
+export function resolveHtmlClipTrackId(
+    clip: Pick<ShortVideoHtmlClip, 'timeline_track_id'>,
+    tracks: ShortVideoTimelineTrack[] = []
+): string {
+    const trackId = clip.timeline_track_id?.trim();
+    if (trackId && tracks.some((track) => track.id === trackId)) {
+        return trackId;
+    }
+    return TIMELINE_DEFAULT_TRACK_HTML_ID;
+}
+
 export function resolveTextClipTrackId(
     clip: Pick<ShortVideoTextClip, 'timeline_track_id'>,
     tracks: ShortVideoTimelineTrack[] = []
@@ -132,12 +146,21 @@ export function ensureManifestTimelineTracks(
         return { ...clip, timeline_track_id: trackId };
     });
 
+    const htmlClips = (manifest.html_clips ?? []).map((clip) => {
+        const trackId = resolveHtmlClipTrackId(clip, tracks);
+        if (clip.timeline_track_id === trackId) {
+            return clip;
+        }
+        return { ...clip, timeline_track_id: trackId };
+    });
+
     return {
         ...manifest,
         timeline_tracks: tracks,
         scenes,
         visual_clips: visualClips.length > 0 ? visualClips : manifest.visual_clips,
         text_clips: textClips.length > 0 ? textClips : manifest.text_clips,
+        html_clips: htmlClips.length > 0 ? htmlClips : manifest.html_clips,
     };
 }
 
@@ -199,13 +222,15 @@ export function reorderTimelineTracksInManifest(
 
 export function isDefaultTimelineTrack(trackId: string): boolean {
     return trackId === TIMELINE_DEFAULT_TRACK_NARRATION_ID
-        || trackId === TIMELINE_DEFAULT_TRACK_VISUAL_ID;
+        || trackId === TIMELINE_DEFAULT_TRACK_VISUAL_ID
+        || trackId === TIMELINE_DEFAULT_TRACK_HTML_ID;
 }
 
 export type TimelineTrackItemCount = {
     sceneCount: number;
     clipCount: number;
     textClipCount: number;
+    htmlClipCount: number;
     total: number;
 };
 
@@ -223,12 +248,16 @@ export function countTrackItems(
     const textClipCount = (manifest.text_clips ?? []).filter(
         (clip) => resolveTextClipTrackId(clip, tracks) === trackId
     ).length;
+    const htmlClipCount = (manifest.html_clips ?? []).filter(
+        (clip) => resolveHtmlClipTrackId(clip, tracks) === trackId
+    ).length;
 
     return {
         sceneCount,
         clipCount,
         textClipCount,
-        total: sceneCount + clipCount + textClipCount,
+        htmlClipCount,
+        total: sceneCount + clipCount + textClipCount + htmlClipCount,
     };
 }
 
@@ -261,12 +290,17 @@ export function removeTimelineTrackFromManifest(
         (clip) => resolveTextClipTrackId(clip, tracksBeforeDelete) !== trackId
     );
 
+    const htmlClips = (manifest.html_clips ?? []).filter(
+        (clip) => resolveHtmlClipTrackId(clip, tracksBeforeDelete) !== trackId
+    );
+
     return {
         ...manifest,
         timeline_tracks: remainingTracks,
         scenes,
         visual_clips: visualClips.length > 0 ? visualClips : undefined,
         text_clips: textClips.length > 0 ? textClips : undefined,
+        html_clips: htmlClips.length > 0 ? htmlClips : undefined,
     };
 }
 

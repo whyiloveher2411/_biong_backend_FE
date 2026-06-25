@@ -56,8 +56,10 @@ import {
 } from 'helpers/shortVideoTimelineDebug';
 import ShortVideoVisualClipInspector from './ShortVideoVisualClipInspector';
 import ShortVideoTextClipInspector from './ShortVideoTextClipInspector';
+import ShortVideoHtmlClipInspector from './ShortVideoHtmlClipInspector';
 import ShortVideoResourcePanel from './ShortVideoResourcePanel';
 import ShortVideoPreviewTextOverlay from './ShortVideoPreviewTextOverlay';
+import ShortVideoPreviewHtmlOverlay from './ShortVideoPreviewHtmlOverlay';
 import { updateTextClipInManifest } from 'helpers/shortVideoTextClips';
 import { getProjectTimelineDurationSec } from 'helpers/shortVideoTimelineAdapter';
 
@@ -245,6 +247,7 @@ export default function ShortVideoEditDrawer({
     const [manifestSaving, setManifestSaving] = React.useState(false);
     const [selectedVisualClipId, setSelectedVisualClipId] = React.useState('');
     const [selectedTextClipId, setSelectedTextClipId] = React.useState('');
+    const [selectedHtmlClipId, setSelectedHtmlClipId] = React.useState('');
     const [videoRendering, setVideoRendering] = React.useState(false);
     const [savingActivityCount, setSavingActivityCount] = React.useState(0);
     const [narrationRunningSceneIds, setNarrationRunningSceneIds] = React.useState<string[]>([]);
@@ -1420,36 +1423,42 @@ export default function ShortVideoEditDrawer({
                                             </Typography>
                                         </Box>
                                     ) : manifest ? (
-                                        <ShortVideoPreviewTextOverlay
+                                        <ShortVideoPreviewHtmlOverlay
                                             manifest={manifest}
-                                            selectedTextClipId={selectedTextClipId}
                                             playerRef={remotionPlayerRef}
                                             playerInstance={remotionPlayerInstance}
-                                            onPositionChange={handleTextClipPositionChange}
-                                            onClearSelection={() => setSelectedTextClipId('')}
                                         >
-                                            <Suspense
-                                                fallback={
-                                                    <Box
-                                                        sx={{
-                                                            width: '100%',
-                                                            maxWidth: 320,
-                                                            display: 'flex',
-                                                            justifyContent: 'center',
-                                                            py: 4,
-                                                        }}
-                                                    >
-                                                        <CircularProgress size={28} />
-                                                    </Box>
-                                                }
+                                            <ShortVideoPreviewTextOverlay
+                                                manifest={manifest}
+                                                selectedTextClipId={selectedTextClipId}
+                                                playerRef={remotionPlayerRef}
+                                                playerInstance={remotionPlayerInstance}
+                                                onPositionChange={handleTextClipPositionChange}
+                                                onClearSelection={() => setSelectedTextClipId('')}
                                             >
-                                                <ShortVideoRemotionPreview
-                                                    manifest={manifest}
-                                                    playerRef={remotionPlayerRef}
-                                                    onPlayerReady={setRemotionPlayerInstance}
-                                                />
-                                            </Suspense>
-                                        </ShortVideoPreviewTextOverlay>
+                                                <Suspense
+                                                    fallback={
+                                                        <Box
+                                                            sx={{
+                                                                width: '100%',
+                                                                maxWidth: 320,
+                                                                display: 'flex',
+                                                                justifyContent: 'center',
+                                                                py: 4,
+                                                            }}
+                                                        >
+                                                            <CircularProgress size={28} />
+                                                        </Box>
+                                                    }
+                                                >
+                                                    <ShortVideoRemotionPreview
+                                                        manifest={manifest}
+                                                        playerRef={remotionPlayerRef}
+                                                        onPlayerReady={setRemotionPlayerInstance}
+                                                    />
+                                                </Suspense>
+                                            </ShortVideoPreviewTextOverlay>
+                                        </ShortVideoPreviewHtmlOverlay>
                                     ) : (
                                         <Alert severity="info" sx={{ maxWidth: 480, width: '100%' }}>
                                             Chưa có manifest preview — thử làm mới manifest
@@ -1471,7 +1480,21 @@ export default function ShortVideoEditDrawer({
                                     }}
                                     className="custom_scroll"
                                 >
-                                    {selectedTextClipId ? (
+                                    {selectedHtmlClipId ? (
+                                        <ShortVideoHtmlClipInspector
+                                            manifest={manifest}
+                                            clipId={selectedHtmlClipId}
+                                            onManifestChange={handleInspectorVisualChange}
+                                            onPreviewClip={(clipId) => {
+                                                const clip = (manifest.html_clips ?? []).find((item) => item.id === clipId);
+                                                if (!clip || !remotionPlayerRef.current) {
+                                                    return;
+                                                }
+                                                const fps = manifest.fps || 30;
+                                                remotionPlayerRef.current.seekTo(Math.round(clip.start_sec * fps));
+                                            }}
+                                        />
+                                    ) : selectedTextClipId ? (
                                         <ShortVideoTextClipInspector
                                             manifest={manifest}
                                             clipId={selectedTextClipId}
@@ -1509,12 +1532,14 @@ export default function ShortVideoEditDrawer({
                                     playerInstance={remotionPlayerInstance}
                                     selectedVisualClipId={selectedVisualClipId}
                                     selectedTextClipId={selectedTextClipId}
+                                    selectedHtmlClipId={selectedHtmlClipId}
                                     selectedNarrationSceneId={selectedSceneId}
                                     onSelectVisualClip={(clipId) => {
                                         setSelectedVisualClipId(clipId);
                                         if (clipId) {
                                             setSelectedSceneId('');
                                             setSelectedTextClipId('');
+                                            setSelectedHtmlClipId('');
                                         }
                                     }}
                                     onSelectTextClip={(clipId) => {
@@ -1522,6 +1547,15 @@ export default function ShortVideoEditDrawer({
                                         if (clipId) {
                                             setSelectedSceneId('');
                                             setSelectedVisualClipId('');
+                                            setSelectedHtmlClipId('');
+                                        }
+                                    }}
+                                    onSelectHtmlClip={(clipId) => {
+                                        setSelectedHtmlClipId(clipId);
+                                        if (clipId) {
+                                            setSelectedSceneId('');
+                                            setSelectedVisualClipId('');
+                                            setSelectedTextClipId('');
                                         }
                                     }}
                                     onSelectNarrationScene={(sceneId) => {
@@ -1529,6 +1563,7 @@ export default function ShortVideoEditDrawer({
                                         if (sceneId) {
                                             setSelectedVisualClipId('');
                                             setSelectedTextClipId('');
+                                            setSelectedHtmlClipId('');
                                         }
                                     }}
                                     onManifestChange={handleTimelineVisualChange}

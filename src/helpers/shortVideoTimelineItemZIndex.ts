@@ -4,7 +4,7 @@ import {
     resolveTimelineTracksForRender,
 } from './shortVideoTimelineTracks';
 
-export type TimelineItemKind = 'visual' | 'text' | 'scene';
+export type TimelineItemKind = 'visual' | 'html' | 'text' | 'scene';
 
 export const TIMELINE_ITEM_Z_INDEX_MIN = -999;
 export const TIMELINE_ITEM_Z_INDEX_MAX = 999;
@@ -12,6 +12,7 @@ export const TIMELINE_TRACK_Z_INDEX_STEP = 1000;
 
 const TIMELINE_ITEM_Z_TIER: Record<TimelineItemKind, number> = {
     visual: 0,
+    html: 50,
     text: 100,
     scene: 200,
 };

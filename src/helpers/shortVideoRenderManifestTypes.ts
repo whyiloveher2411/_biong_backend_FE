@@ -256,6 +256,22 @@ export type ShortVideoManifestScene = {
     z_index?: number;
 };
 
+export type ShortVideoHtmlClip = {
+    id: string;
+    start_sec: number;
+    duration_sec: number;
+    /** Fragment body hoặc full document */
+    html: string;
+    css?: string;
+    js?: string;
+    label?: string;
+    timeline_track_id?: string;
+    timeline_hidden?: boolean;
+    z_index?: number;
+    /** Transient — inject lúc render, không lưu DB */
+    prerender_playback_url?: string;
+};
+
 export type ShortVideoTimelineTrack = {
     id: string;
     name: string;
@@ -290,9 +306,12 @@ export type ShortVideoRenderManifest = {
     scenes: ShortVideoManifestScene[];
     visual_clips?: ShortVideoVisualClip[];
     text_clips?: ShortVideoTextClip[];
+    html_clips?: ShortVideoHtmlClip[];
     /** Cấu trúc track timeline NLE — persist khi user tạo/đổi tên track */
     timeline_tracks?: ShortVideoTimelineTrack[];
     warnings: string[];
     /** Chỉ dùng lúc preview editor — ẩn text clip khỏi Remotion khi render overlay HTML */
     preview_suppress_text_clip_ids?: string[];
+    /** Chỉ dùng lúc preview editor — ẩn html clip khỏi Remotion khi render overlay iframe */
+    preview_suppress_html_clip_ids?: string[];
 };

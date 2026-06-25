@@ -41,5 +41,8 @@ export function timelineLayoutFingerprint(manifest: ShortVideoRenderManifest): s
     const textClipParts = (manifest.text_clips ?? []).map(
         (clip) => `${clip.id}:${clip.timeline_track_id || ''}:${clip.start_sec.toFixed(3)}:${clip.duration_sec.toFixed(3)}:${clip.motion || ''}:${clip.enter_duration_sec?.toFixed(3) ?? ''}:${clip.exit_motion || ''}:${clip.exit_duration_sec?.toFixed(3) ?? ''}:${clip.background_effect || ''}:${clip.z_index ?? ''}:${clip.timeline_hidden === true ? 1 : 0}`
     );
-    return `${trackParts.join('|')};;${sceneParts.join('|')};;${clipParts.join('|')};;${textClipParts.join('|')}`;
+    const htmlClipParts = (manifest.html_clips ?? []).map(
+        (clip) => `${clip.id}:${clip.timeline_track_id || ''}:${clip.start_sec.toFixed(3)}:${clip.duration_sec.toFixed(3)}:${clip.z_index ?? ''}:${clip.timeline_hidden === true ? 1 : 0}`
+    );
+    return `${trackParts.join('|')};;${sceneParts.join('|')};;${clipParts.join('|')};;${textClipParts.join('|')};;${htmlClipParts.join('|')}`;
 }

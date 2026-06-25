@@ -6,6 +6,7 @@ export type {
     ShortVideoSceneAudioTtsSettings,
     ShortVideoSceneVisualType,
     ShortVideoTextClip,
+    ShortVideoHtmlClip,
     ShortVideoTextAlign,
     ShortVideoTextClipMotion,
     ShortVideoTextFontWeight,
@@ -32,6 +33,7 @@ import type {
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
 import { reinjectVisualClipPlaybackFromCache, sanitizeVisualClipsForPersist } from './shortVideoVisualClips';
 import { sanitizeTextClipsForPersist } from './shortVideoTextClips';
+import { sanitizeHtmlClipsForPersist } from './shortVideoHtmlClips';
 import { ensureManifestTimelineTracks } from './shortVideoTimelineTracks';
 import {
     resolveSceneVisualRefByType,
@@ -421,7 +423,9 @@ export function sanitizeManifestForPersist(
         ...normalized,
         visual_clips: sanitizeVisualClipsForPersist(normalized.visual_clips),
         text_clips: sanitizeTextClipsForPersist(normalized.text_clips),
+        html_clips: sanitizeHtmlClipsForPersist(normalized.html_clips),
         preview_suppress_text_clip_ids: undefined,
+        preview_suppress_html_clip_ids: undefined,
         scenes: normalized.scenes.map((scene) => {
             if (!scene.layout?.visual_playback_url) {
                 return scene;

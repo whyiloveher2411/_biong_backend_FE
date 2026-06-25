@@ -1,11 +1,12 @@
 import type {
+    ShortVideoHtmlClip,
     ShortVideoManifestScene,
     ShortVideoRenderManifest,
     ShortVideoTextClip,
     ShortVideoTimelineTrack,
     ShortVideoVisualClip,
 } from './shortVideoRenderManifestTypes';
-import { resolveClipTrackId, resolveSceneTrackId, resolveTextClipTrackId, resolveTimelineTracks } from './shortVideoTimelineTracks';
+import { resolveClipTrackId, resolveHtmlClipTrackId, resolveSceneTrackId, resolveTextClipTrackId, resolveTimelineTracks } from './shortVideoTimelineTracks';
 
 type TimelineHiddenField = { timeline_hidden?: boolean };
 
@@ -117,6 +118,22 @@ export function toggleTextClipHiddenInManifest(
     };
 }
 
+export function toggleHtmlClipHiddenInManifest(
+    manifest: ShortVideoRenderManifest,
+    clipId: string
+): ShortVideoRenderManifest {
+    const htmlClips = manifest.html_clips ?? [];
+    if (htmlClips.length === 0) {
+        return manifest;
+    }
+    return {
+        ...manifest,
+        html_clips: htmlClips.map((clip) => (
+            clip.id === clipId ? toggleItemHidden(clip) : clip
+        )),
+    };
+}
+
 export function isSceneEffectivelyHidden(
     manifest: ShortVideoRenderManifest,
     scene: ShortVideoManifestScene,
@@ -149,6 +166,19 @@ export function isTextClipEffectivelyHidden(
     tracks: ShortVideoTimelineTrack[] = resolveTimelineTracks(manifest)
 ): boolean {
     const trackId = resolveTextClipTrackId(clip, tracks);
+    const track = tracks.find((entry) => entry.id === trackId);
+    return isTimelineItemEffectivelyHidden(
+        isTimelineItemHidden(clip),
+        isTimelineTrackHidden(track)
+    );
+}
+
+export function isHtmlClipEffectivelyHidden(
+    manifest: ShortVideoRenderManifest,
+    clip: ShortVideoHtmlClip,
+    tracks: ShortVideoTimelineTrack[] = resolveTimelineTracks(manifest)
+): boolean {
+    const trackId = resolveHtmlClipTrackId(clip, tracks);
     const track = tracks.find((entry) => entry.id === trackId);
     return isTimelineItemEffectivelyHidden(
         isTimelineItemHidden(clip),

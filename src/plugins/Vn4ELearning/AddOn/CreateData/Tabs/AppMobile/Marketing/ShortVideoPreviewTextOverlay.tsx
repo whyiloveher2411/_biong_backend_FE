@@ -2,6 +2,7 @@ import React from 'react';
 import type { PlayerRef } from '@remotion/player';
 import { Box } from '@mui/material';
 import type { ShortVideoRenderManifest, ShortVideoTextClip } from 'helpers/shortVideoRenderManifest';
+import { clonePreviewManifestIntoTree } from 'helpers/shortVideoPreviewManifestClone';
 import {
     buildPreviewManifestWithTextOverlay,
     resolveActiveTextClipsAtSec,
@@ -406,9 +407,7 @@ export default function ShortVideoPreviewTextOverlay({
         }
     }, [onClearSelection]);
 
-    const previewChild = React.isValidElement(children)
-        ? React.cloneElement(children, { manifest: previewManifest } as { manifest: ShortVideoRenderManifest })
-        : children;
+    const previewChild = clonePreviewManifestIntoTree(children, previewManifest);
 
     return (
         <Box
