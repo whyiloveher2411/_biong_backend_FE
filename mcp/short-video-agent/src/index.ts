@@ -89,12 +89,12 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.4.0',
+  version: '1.5.0',
 });
 
 server.tool(
   'short_video_get_context',
-  'Lấy creative brief từ marketing post (nguồn chính). KHÔNG dùng script_json/scene_audio_json CMS để dựng video — chỉ sáng tạo tự do từ nội dung bài marketing.',
+  'Lấy creative brief + production_playbook (beat map, animation, caption sync, palette social). Nguồn: marketing post. KHÔNG dùng script_json/scene_audio_json CMS. Mặc định video đa dạng/high-energy — không ép Biennale Yellow.',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
