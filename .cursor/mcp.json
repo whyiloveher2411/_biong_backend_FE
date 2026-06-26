@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "biong-short-video": {
+      "command": "bash",
+      "args": ["mcp/short-video-agent/start.sh"],
+      "env": {
+        "BIONG_API_BASE_URL": "http://localhost:9999",
+        "BIONG_MCP_TOKEN": "7f56fe5029955c86e583238300f2f223aee2f85fa6409619bf88c4824d12ff48"
+      }
+    }
+  }
+}

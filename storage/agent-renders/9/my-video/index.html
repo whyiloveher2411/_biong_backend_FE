@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Short Video #9 — AI Skepticism</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #E9E5DB;
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #E9E5DB;
+        color: #1B2566;
+        font-family: Archivo, system-ui, sans-serif;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        background: #E9E5DB;
+        overflow: hidden;
+        container-type: size;
+      }
+      .sun-bloom {
+        position: absolute;
+        z-index: 0;
+        width: 58cqw;
+        height: 58cqw;
+        background: radial-gradient(circle at 42% 38%, #F1EE2E 0%, #F8F39B 38%, #F0DA7C 62%, transparent 78%);
+        opacity: 0.95;
+        pointer-events: none;
+      }
+      .sun-bloom--left { left: -8cqw; top: 18cqh; }
+      .sun-bloom--center {
+        left: 50%;
+        top: 38%;
+        transform: translate(-50%, -50%);
+      }
+      .ember-bloom {
+        position: absolute;
+        z-index: 1;
+        width: 36cqw;
+        height: 36cqw;
+        right: 0;
+        bottom: 12cqh;
+        background: radial-gradient(circle at 60% 60%, #E26B4A 0%, transparent 72%);
+        opacity: 0.18;
+        pointer-events: none;
+      }
+      .frame-content {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 4cqw;
+        box-sizing: border-box;
+      }
+      .pagenum {
+        position: absolute;
+        right: 4cqw;
+        bottom: 3.2cqw;
+        z-index: 5;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: #1B2566;
+        opacity: 0.75;
+      }
+      .micro-label {
+        margin: 0 0 2cqw;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #1B2566;
+      }
+      .rail-label {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        margin-bottom: 3cqw;
+      }
+      .type-display {
+        margin: 0;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-weight: 400;
+        font-size: clamp(4.6cqw, 12cqw, 12cqw);
+        line-height: 1.06;
+        letter-spacing: -0.005em;
+        color: #1B2566;
+        max-width: 88cqw;
+      }
+      .type-display--sm {
+        font-size: clamp(2.9cqw, 5.5cqw, 5.5cqw);
+        line-height: 1.1;
+      }
+      .type-display-it {
+        margin: 0;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: clamp(4cqw, 7cqw, 7cqw);
+        line-height: 1.04;
+        letter-spacing: -0.005em;
+        text-align: center;
+        max-width: 82cqw;
+      }
+      .type-numeral-jumbo {
+        margin: 0;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-weight: 400;
+        font-size: clamp(14cqw, 22cqw, 22cqw);
+        line-height: 0.84;
+        letter-spacing: -0.04em;
+        color: #1B2566;
+      }
+      .type-body {
+        margin: 0;
+        font-size: clamp(1.4cqw, 2.8cqw, 2.8cqw);
+        line-height: 1.5;
+        color: #1B2566;
+        max-width: 78cqw;
+      }
+      .date-rail {
+        position: absolute;
+        right: 4cqw;
+        top: 4cqw;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: clamp(3cqw, 5cqw, 5cqw);
+        line-height: 0.96;
+        letter-spacing: -0.005em;
+        z-index: 3;
+      }
+      .footer-band {
+        margin-top: auto;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2cqw;
+        padding-top: 2.5cqw;
+        border-top: 1px solid #1B2566;
+      }
+      .footer-band__cell .type-body { font-size: clamp(1.2cqw, 2cqw, 2cqw); }
+      .yellow-panel {
+        background: #F1EE2E;
+        color: #1B2566;
+        padding: 4cqw;
+        box-sizing: border-box;
+      }
+      .yellow-panel--bottom {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        min-height: 38cqh;
+        z-index: 1;
+      }
+      .quote-mark {
+        margin: 0 0 2cqw;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: clamp(6cqw, 10cqw, 10cqw);
+        line-height: 0.9;
+        text-align: center;
+      }
+      .scene-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 0;
+        transform-origin: center center;
+      }
+      .scene-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        background: linear-gradient(180deg, rgba(233,229,219,0.55) 0%, rgba(233,229,219,0.88) 55%, rgba(233,229,219,0.96) 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 4cqw;
+        padding-bottom: 10cqw;
+        box-sizing: border-box;
+      }
+      .center-stack {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .hairline-rule {
+        width: 100%;
+        height: 0;
+        border: none;
+        border-top: 1px solid #1B2566;
+        margin: 2.5cqw 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-width="1080"
+      data-height="1920"
+      data-duration="31.68"
+      data-fps="30"
+    >
+      <!-- Scene 1: Hook cover -->
+      <section id="scene-s1" class="clip scene" data-start="0" data-duration="5.54" data-track-index="1">
+        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
+        <div class="ember-bloom" aria-hidden="true"></div>
+        <p class="date-rail s1-date">49%</p>
+        <div class="frame-content">
+          <p class="micro-label s1-kicker">Pew Research · 2026</p>
+          <h1 class="type-display s1-title">Người Mỹ dùng AI nhiều hơn bao giờ hết — <em>49%</em> đã chat với bot</h1>
+          <div class="footer-band s1-footer">
+            <div class="footer-band__cell"><p class="type-body">Nhưng đoán xem?</p></div>
+            <div class="footer-band__cell"><p class="type-body">49% dùng AI? Ồ!</p></div>
+          </div>
+        </div>
+        <span class="pagenum">01</span>
+      </section>
+
+      <!-- Scene 2: Young skeptical -->
+      <section id="scene-s2" class="clip scene" data-start="5.54" data-duration="5.45" data-track-index="1">
+        <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
+        <div class="ember-bloom" aria-hidden="true"></div>
+        <div class="frame-content">
+          <p class="rail-label s2-rail">Người trẻ</p>
+          <div class="center-stack">
+            <p class="type-numeral-jumbo s2-num">66%</p>
+            <p class="type-display--sm s2-title" style="margin-top:2cqw">dùng AI</p>
+            <div class="hairline-rule" style="width:40cqw;margin:3cqw auto"></div>
+            <p class="type-body s2-sub" style="text-align:center">48% nghi ngờ tác động xấu</p>
+          </div>
+        </div>
+        <span class="pagenum">02</span>
+      </section>
+
+      <!-- Scene 3: Article image + stat -->
+      <section id="scene-s3" class="clip scene" data-start="11" data-duration="4.93" data-track-index="1">
+        <img
+          class="scene-bg s3-img"
+          src="https://s.yimg.com/lo/mysterio/api/cc6ba14af9d0c7f63a3363e6c9638363da3c32815fce1ccd07d010b168dfa077/lightyear_networkapi/resizefill_w976;quality_80;format_webp/https:%2F%2Fmedia.zenfs.com%2Fen%2Fforbes_contributor_845%2F3d85c55930c85cfad080bb4c252924d6"
+          alt=""
+          crossorigin="anonymous"
+        />
+        <div class="scene-overlay">
+          <p class="micro-label s3-kicker">Dự đoán xã hội</p>
+          <p class="type-numeral-jumbo s3-num" style="font-size:clamp(12cqw,18cqw,18cqw)">48%</p>
+          <p class="type-display--sm s3-title" style="margin-top:1.5cqw">nghĩ AI sẽ gây hại</p>
+        </div>
+        <span class="pagenum">03</span>
+      </section>
+
+      <!-- Scene 4: Privacy concern -->
+      <section id="scene-s4" class="clip scene" data-start="15.93" data-duration="3.64" data-track-index="1">
+        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
+        <div class="ember-bloom" aria-hidden="true"></div>
+        <div class="frame-content">
+          <p class="micro-label s4-kicker">An toàn dữ liệu</p>
+          <div class="center-stack">
+            <p class="type-numeral-jumbo s4-num">71%</p>
+            <p class="type-display--sm s4-title" style="margin-top:2cqw">lo AI làm lộ thông tin cá nhân</p>
+          </div>
+        </div>
+        <span class="pagenum">04</span>
+      </section>
+
+      <!-- Scene 5: Older optimistic -->
+      <section id="scene-s5" class="clip scene" data-start="19.57" data-duration="5.11" data-track-index="1">
+        <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
+        <div class="ember-bloom" aria-hidden="true"></div>
+        <div class="frame-content">
+          <p class="rail-label s5-rail">Trên 50 tuổi</p>
+          <div class="center-stack">
+            <p class="type-numeral-jumbo s5-num">30%</p>
+            <p class="type-display--sm s5-title" style="margin-top:2cqw">nghĩ xấu về AI</p>
+            <p class="type-body s5-sub" style="margin-top:3cqw;text-align:center;max-width:70cqw">Dùng ít hơn, nhưng lạc quan hơn nhiều</p>
+          </div>
+        </div>
+        <span class="pagenum">05</span>
+      </section>
+
+      <!-- Scene 6: Manifesto -->
+      <section id="scene-s6" class="clip scene" data-start="24.68" data-duration="3.87" data-track-index="1">
+        <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
+        <div class="frame-content">
+          <div class="center-stack">
+            <p class="quote-mark s6-quote">"</p>
+            <p class="type-display-it s6-text">Dùng AI nhiều không có nghĩa là tin tưởng</p>
+            <p class="micro-label s6-attr" style="margin-top:3cqw;text-align:center">Bạn thuộc nhóm nào?</p>
+          </div>
+        </div>
+        <span class="pagenum">06</span>
+      </section>
+
+      <!-- Scene 7: CTA -->
+      <section id="scene-s7" class="clip scene" data-start="28.55" data-duration="3.13" data-track-index="1">
+        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
+        <div class="yellow-panel yellow-panel--bottom s7-panel">
+          <p class="micro-label s7-kicker">Học AI cùng Spacedev</p>
+          <h1 class="type-display--sm s7-headline">Tải Spacedev ngay</h1>
+          <p class="type-body s7-sub" style="margin-top:2cqw">Link trong bio</p>
+        </div>
+        <span class="pagenum">07</span>
+      </section>
+
+      <!-- Narration audio (Saydi via MCP backend) -->
+      <audio id="audio-s1" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s1.mp3?v=1782469495" data-start="0" data-duration="5.54" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s2" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s2.mp3?v=1782469497" data-start="5.54" data-duration="5.45" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s3" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s3.mp3?v=1782469498" data-start="11" data-duration="4.93" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s4" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s4.mp3?v=1782469500" data-start="15.93" data-duration="3.64" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s5" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s5.mp3?v=1782469501" data-start="19.57" data-duration="5.11" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s6" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s6.mp3?v=1782469503" data-start="24.68" data-duration="3.87" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+      <audio id="audio-s7" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s7.mp3?v=1782469505" data-start="28.55" data-duration="3.13" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Scene 1
+      tl.from(".s1-kicker", { y: 24, opacity: 0, duration: 0.5, ease: "power3.out" }, 0.15);
+      tl.from(".s1-title", { y: 40, opacity: 0, duration: 0.65, ease: "power3.out" }, 0.35);
+      tl.from(".s1-date", { x: 30, opacity: 0, duration: 0.55, ease: "power2.out" }, 0.25);
+      tl.from(".s1-footer", { y: 20, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.7);
+
+      // Scene 2
+      tl.from(".s2-rail", { y: -16, opacity: 0, duration: 0.4, ease: "power2.out" }, 5.7);
+      tl.from(".s2-num", { scale: 0.85, opacity: 0, duration: 0.7, ease: "power3.out" }, 5.85);
+      tl.from(".s2-title", { y: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 6.2);
+      tl.from(".s2-sub", { y: 20, opacity: 0, duration: 0.45, ease: "power2.out" }, 6.55);
+
+      // Scene 3 — ken burns
+      tl.fromTo(".s3-img", { scale: 1.08 }, { scale: 1, duration: 4.93, ease: "none" }, 11);
+      tl.from(".scene-overlay > *", { y: 30, opacity: 0, duration: 0.55, stagger: 0.12, ease: "power3.out" }, 11.2);
+
+      // Scene 4
+      tl.from(".s4-kicker", { y: 20, opacity: 0, duration: 0.4, ease: "power2.out" }, 16.1);
+      tl.from(".s4-num", { scale: 0.9, opacity: 0, duration: 0.6, ease: "back.out(1.4)" }, 16.25);
+      tl.from(".s4-title", { y: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 16.55);
+
+      // Scene 5
+      tl.from(".s5-rail", { y: -16, opacity: 0, duration: 0.4, ease: "power2.out" }, 19.75);
+      tl.from(".s5-num", { scale: 0.88, opacity: 0, duration: 0.65, ease: "power3.out" }, 19.9);
+      tl.from(".s5-title", { y: 20, opacity: 0, duration: 0.45, ease: "power2.out" }, 20.25);
+      tl.from(".s5-sub", { y: 18, opacity: 0, duration: 0.45, ease: "power2.out" }, 20.55);
+
+      // Scene 6
+      tl.from(".s6-quote", { scale: 0.6, opacity: 0, duration: 0.45, ease: "power2.out" }, 24.85);
+      tl.from(".s6-text", { y: 28, opacity: 0, duration: 0.6, ease: "power3.out" }, 25.05);
+      tl.from(".s6-attr", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 25.45);
+
+      // Scene 7
+      tl.from(".s7-panel", { y: 80, opacity: 0, duration: 0.55, ease: "power3.out" }, 28.7);
+      tl.from(".s7-kicker", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 28.95);
+      tl.from(".s7-headline", { y: 24, opacity: 0, duration: 0.5, ease: "power3.out" }, 29.15);
+      tl.from(".s7-sub", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, 29.4);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
