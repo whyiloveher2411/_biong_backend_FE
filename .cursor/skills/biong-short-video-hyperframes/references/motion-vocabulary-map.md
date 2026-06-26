@@ -15,7 +15,22 @@ Agent map lệnh tự nhiên sang GSAP/CSS theo skill HyperFrames. Contract rend
 | linear scroll | `none` | Marquee, progress bar fill |
 | impact | `back.out(2.2)` | Kinetic slam (xem motion-graphics vocabulary) |
 
+**Cấm entrance:** `ease: "none"` / `linear` — chỉ `none` cho progress/marquee fill.
+
 Tham khảo: `.agents/skills/motion-graphics/references/motion-vocabulary.md`
+
+---
+
+## 3D depth + cinematic glow
+
+| Hiệu ứng | GSAP / CSS |
+|----------|------------|
+| Zoom in | `from({ scale: 0.8, opacity: 0, ease: "power3.out" })` |
+| Tilt card | `rotation: 5` hoặc `-5` |
+| Border glow | gradient `box-shadow` + ambient pulse |
+| Exit blur | `filter: blur(8px)` + `opacity: 0` (decorative exit) |
+
+Chi tiết: [motion-complexity-activation.md](motion-complexity-activation.md)
 
 ---
 

@@ -31,6 +31,8 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 - Registry key = `data-composition-id` trên root
 - Duration từ `data-duration` trên root — **không** pad timeline rỗng
 - Repeat **hữu hạn** (không `-1`)
+- **Cấm** `ease: "none"` / linear cho entrance — dùng `power3.out`, `back.out(1.7)`, `elastic.out`
+- **data-duration** root = độ dài beat theo audio — timeline không kết thúc sớm hơn clip
 
 ---
 
@@ -78,6 +80,9 @@ window.__timelines["beat_1"] = tl;
 ## Anti-patterns
 
 - Slide tĩnh (0 tween)
+- Entrance linear / `ease: "none"`
+- Video đứng hình — animation xong trước khi beat audio kết thúc
+- Output an toàn: chỉ text + đổi nền
 - Mọi element cùng `from({ y: 30, opacity: 0 })`
 - Decorative không motion
 - `tl.play()` trong HyperFrames render

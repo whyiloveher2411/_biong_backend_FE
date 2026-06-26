@@ -38,7 +38,19 @@ npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --ski
 - `.cursor/skills/biong-short-video-hyperframes/references/layout-9x16-zones.md`
 - `.cursor/skills/biong-short-video-hyperframes/references/gsap-beat-checklist.md`
 
-`get_context.production_playbook` trả: `skill_routing`, `composition_contract`, `motion_vocabulary`, `post_render_audit`.
+`get_context.production_playbook` trả: `motion_complexity_activation`, `registry_blocks`, `timeline_sync`, `render_settings`, `skill_routing`, ...
+
+## Ép video cinematic (không đơn sơ)
+
+Agent mặc định output an toàn (text + nền). Copy prompt bước 2 đã ép:
+
+- Đọc `motion-complexity-activation.md`
+- `npx hyperframes add` registry blocks (caption + transition)
+- GSAP: no linear, stagger, 3D depth
+- Timeline sync: `data-duration` khớp audio
+- Render: `--quality high` (không draft)
+
+Doc: `.cursor/skills/biong-short-video-hyperframes/references/motion-complexity-activation.md`
 
 ## Workflow
 

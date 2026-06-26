@@ -1,6 +1,6 @@
 ---
 name: biong-short-video-hyperframes
-description: Agent short video marketing 2 bước — phase 1 save audio_script; admin upload MP3; phase 2 render HyperFrames từ audio_file với full HF skill routing.
+description: Agent short video marketing 2 bước — phase 1 save audio_script; phase 2 render cinematic HyperFrames từ audio_file (registry blocks + motion complexity ép).
 ---
 
 # Biong Short Video — HyperFrames Agent (2 bước)
@@ -9,113 +9,77 @@ description: Agent short video marketing 2 bước — phase 1 save audio_script
 
 | Bước | Ai làm | MCP | Kết quả |
 |------|--------|-----|---------|
-| **1** | Agent | `get_context` + `save_audio_script` | `audio_script` trong CMS |
-| **Giữa** | Admin | Upload MP3 qua CMS (drawer Agent audio) | `audio_file` URL |
-| **2** | Agent | `get_context` + render + `upload_agent_video` | `agent_video_url` MP4 |
+| **1** | Agent | `get_context` + `save_audio_script` | `audio_script` |
+| **Giữa** | Admin | Upload MP3 (drawer Agent audio) | `audio_file` |
+| **2** | Agent | render cinematic + `upload_agent_video` | `agent_video_url` |
 
-Admin copy prompt từ CMS (nút **Copy prompt bước 1/2**) và dán vào Cursor.
-
-**Skills HF:** Cài repo-level qua `npx skills add heygen-com/hyperframes --all` → `.agents/skills/`
+**Ép cinematic:** [motion-complexity-activation.md](references/motion-complexity-activation.md) — không để agent output "an toàn" tối giản.
 
 ---
 
-## Phase 1 — Chỉ sinh kịch bản audio
+## Phase 2 — Motion complexity (bắt buộc)
 
-```text
-short_video_get_context({ short_video_id })
-short_video_save_audio_script({ short_video_id, text: "toàn bộ lời thoại..." })
+### Vai trò
+
+**Senior Motion Graphics** — dynamic, cinematic. Cấm slide text + đổi nền.
+
+### Registry blocks (ưu tiên)
+
+```bash
+cd storage/agent-renders/{id}/my-video
+npx hyperframes add caption-pill-karaoke
+npx hyperframes add caption-kinetic-slam
 ```
 
-**Làm:**
-1. Đọc `creative_brief` + `production_playbook.skill_routing`
-2. Borrow `/faceless-explainer` scriptwriting: hook → problem → insight → proof → CTA (30–90s)
-3. Lưu qua `save_audio_script` → **DỪNG**
+Dùng block cho caption + transition — customize, không viết từ đầu. Skill: `/hyperframes-registry`.
 
-**CẤM:** TTS, render, `upload_agent_video`, faceless-explainer full pipeline
+### GSAP ép
+
+- **Cấm** linear entrance → `power3.out`, `back.out(1.7)`, `elastic.out(1, 0.3)`
+- **Stagger** `0.1` trên lists/words/cards
+- **3D depth:** scale 0.8→1, rotate ±5°, gradient border glow
+- **Sync:** `paused: true` → `window.__timelines[id]`; `data-duration` khớp audio beat
+
+### Render final
+
+```bash
+npx hyperframes render --output output.mp4 --quality high --fps 30
+```
+
+Không upload bản `--quality draft`.
 
 ---
 
-## Phase 2 — Render video từ audio có sẵn
+## Tài liệu (đọc theo thứ tự)
 
-### Gate
+1. [motion-complexity-activation.md](references/motion-complexity-activation.md) — **đọc đầu tiên**
+2. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+3. [layout-9x16-zones.md](references/layout-9x16-zones.md)
+4. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
+5. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
-- `agent_workflow.ready_for_video === true`
-- `audio_file` có URL
+---
 
-### Skill routing (đọc trước khi code)
-
-[references/hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+## Skill routing
 
 | Vai trò | Skill |
 |---------|-------|
 | Orchestrator | `/general-video` |
-| Visual marketing | `/product-launch-video` |
-| Caption karaoke | `/embedded-captions` |
-| Clip contract | `/hyperframes-core` |
-| GSAP + blueprints | `/hyperframes-animation` |
-| Palette + audio-reactive | `/hyperframes-creative` |
-| Transcribe MP3 | `/hyperframes-media` |
-| Accent stingers | `/motion-graphics` (tùy chọn) |
-| URL capture | `/website-to-video` (nếu brief có URL) |
-
-### Tài liệu Biong (bắt buộc)
-
-1. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
-2. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
-3. [layout-9x16-zones.md](references/layout-9x16-zones.md)
-4. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
-
-### Composition contract
-
-Mọi visual clip:
-
-```html
-<div class="clip" data-start="0" data-duration="4" data-track-index="0">...</div>
-```
-
-Caption: `compositions/captions.html` qua `data-composition-src` — tách khỏi beat HTML.
-
-GSAP: `paused: true` → `window.__timelines["beat_N"]` — xem gsap-beat-checklist.
-
-### Quy trình
-
-1. `hyperframes init --skip-skills` trong `storage/agent-renders/{id}/`
-2. Transcribe MP3 → beat map 4–8 beat
-3. Mỗi beat: layout zones → HTML clips → GSAP + motion vocabulary
-4. `embedded-captions` sub-composition
-5. `animation-map.mjs` audit + `hyperframes lint` + overlap preflight
-6. Render → `upload_agent_video`
+| Visual | `/product-launch-video` |
+| Registry | `/hyperframes-registry` |
+| Caption | `/embedded-captions` |
+| GSAP | `/hyperframes-animation` + gsap-skills |
 
 ---
 
-## Motion vocabulary
+## Quality gates
 
-[references/motion-vocabulary-map.md](references/motion-vocabulary-map.md)
-
-- smooth → `power2.out` | bouncy → `back.out(1.6)` | springy → `elastic.out(1, 0.3)`
-- highlight / circle → `hyperframes/references/css-patterns.md`
-- bass pulse → scale | treble → glow (audio-reactive nhẹ)
-
----
-
-## Context quan trọng
-
-| Dùng | Bỏ qua |
-|------|--------|
-| `production_playbook` (skill_routing, composition_contract) | `script_json`, `scene_audio_json` |
-| `audio_script`, `audio_file` | `generate_narration_tts` |
-| `.agents/skills/*` repo-level | faceless TTS pipeline |
-
----
-
-## Quality gates (phase 2)
-
-- [ ] `audio_file` từ admin
-- [ ] Skill routing đúng (general-video + product-launch visual)
-- [ ] `class="clip"` + data attrs trên visual elements
-- [ ] Hero top-center — caption band tách, không overlap
-- [ ] `window.__timelines` mỗi beat + motion vocabulary đa dạng
-- [ ] `animation-map.mjs` + `hyperframes lint` pass
+- [ ] Registry blocks installed + wired
+- [ ] Không linear entrance; stagger mỗi beat
+- [ ] `window.__timelines` + `data-duration` khớp audio
+- [ ] `animation-map.mjs` — không dead zone >1.5s
+- [ ] Render `--quality high`
+- [ ] Caption band tách — không overlap
 - [ ] Upload MP4 qua MCP
 
 ---
@@ -123,7 +87,7 @@ GSAP: `paused: true` → `window.__timelines["beat_N"]` — xem gsap-beat-checkl
 ## Lệnh mẫu
 
 ```
-Render video agent short video ID 9 (phase 2). audio_file đã upload.
-get_context → hyperframes-skill-routing + motion-vocabulary-map.
-general-video + product-launch visual. embedded-captions tách file. upload_agent_video.
+Render video agent ID 9 (phase 2). Đọc motion-complexity-activation.md.
+Senior Motion Graphics. hyperframes add registry blocks. stagger + no linear.
+Render --quality high. upload_agent_video.
 ```

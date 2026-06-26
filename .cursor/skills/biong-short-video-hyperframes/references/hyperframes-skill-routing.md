@@ -46,6 +46,7 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 | 9 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
 | 10 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
 | 11 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
+| 12 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 
@@ -75,6 +76,19 @@ Mọi visual element trong beat:
 - Sub-composition caption: `data-composition-src="compositions/captions.html"` — **tách file**
 - GSAP: `gsap.timeline({ paused: true })` → `window.__timelines["beat_N"]` — key = `data-composition-id`
 - Chi tiết: `.agents/skills/hyperframes-core/references/tracks-and-clips.md`
+
+---
+
+## Registry blocks (trước khi viết beat)
+
+```bash
+cd storage/agent-renders/{id}/my-video
+npx hyperframes add caption-pill-karaoke
+npx hyperframes add caption-kinetic-slam
+# + transition/VFX block theo beat map
+```
+
+Chi tiết: [motion-complexity-activation.md](motion-complexity-activation.md)
 
 ---
 
