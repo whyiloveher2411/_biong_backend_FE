@@ -1,11 +1,24 @@
 ---
 name: biong-short-video-hyperframes
-description: Agent short video marketing 2 bước — phase 1 save audio_script; phase 2 render cinematic HyperFrames từ audio_file (registry blocks + motion complexity ép).
+description: Agent short video marketing — manual 2 bước hoặc auto TTS full pipeline (VieNeu→Saydi→Vbee) + render cinematic HyperFrames.
 ---
 
-# Biong Short Video — HyperFrames Agent (2 bước)
+# Biong Short Video — HyperFrames Agent
 
-## Tổng quan
+## Hai chế độ workflow
+
+| Chế độ | `agent_tts_auto` | Copy prompt CMS | Luồng |
+|--------|------------------|-----------------|-------|
+| **Manual 2 bước** | `false` (mặc định) | Bước 1 + bước 2 | script → admin upload MP3 → render |
+| **Auto TTS full** | `true` | Một prompt toàn pipeline | script → `generate_narration_tts` → render → upload |
+
+Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu TTS lỗi → upload MP3 fallback.
+
+`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: VieNeu → Saydi → Vbee.
+
+---
+
+## Manual 2 bước (mặc định)
 
 | Bước | Ai làm | MCP | Kết quả |
 |------|--------|-----|---------|
@@ -13,7 +26,20 @@ description: Agent short video marketing 2 bước — phase 1 save audio_script
 | **Giữa** | Admin | Upload MP3 (drawer Agent audio) | `audio_file` |
 | **2** | Agent | render cinematic + `upload_agent_video` | `agent_video_url` |
 
-**Ép cinematic phase 2:** [motion-complexity-activation.md](references/motion-complexity-activation.md)
+**Cấm** `generate_narration_tts` trong manual mode.
+
+---
+
+## Auto TTS full pipeline
+
+| Bước | MCP | Kết quả |
+|------|-----|---------|
+| Script | `save_audio_script` | `audio_script` + markers |
+| TTS | `generate_narration_tts` (strip `[SFX]`/`[Dừng]`) | `audio_file` |
+| Render | HyperFrames cinematic | `output.mp4` |
+| Upload | `upload_agent_video` | `agent_video_url` |
+
+Chain TTS: **VieNeu → Saydi → Vbee** — response `tts_provider_used`.
 
 ---
 
@@ -42,7 +68,7 @@ short_video_save_audio_script({
 })
 ```
 
-**DỪNG** — admin upload MP3.
+**DỪNG** (manual) — admin upload MP3. **Auto TTS:** tiếp tục `generate_narration_tts`.
 
 ---
 

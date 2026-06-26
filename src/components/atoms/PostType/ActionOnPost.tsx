@@ -22,7 +22,7 @@ import PostTypeClientActionDrawers, {
 import { openMarketingXaiTtsWorkflow } from "helpers/marketingXaiTtsWorkflow";
 import { openExternalTabViaExtension } from "helpers/openExternalTabViaExtension";
 import { openMarketingPostAudioUrls } from "helpers/marketingPostAudioUrls";
-import { copyShortVideoAgentPromptToClipboard } from "helpers/marketingShortVideoAgentPrompt";
+import { copyShortVideoAgentPromptToClipboard, resolveAgentPromptPhaseFromAction } from "helpers/marketingShortVideoAgentPrompt";
 import {
     getPostTypeActionButtonColorProps,
     resolvePostTypeColor,
@@ -197,7 +197,7 @@ function ActionOnPost({
                 return;
             }
             const phaseKey = item.client_action.replace('copy_agent_prompt:', '');
-            const phase = phaseKey === 'render_video' ? '2' : '1';
+            const phase = resolveAgentPromptPhaseFromAction(phaseKey);
             const runCopy = async () => {
                 setLoadingStateButton((prev) => ({
                     ...prev,

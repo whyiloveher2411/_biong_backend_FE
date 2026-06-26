@@ -89,12 +89,12 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.6.0',
+  version: '1.7.0',
 });
 
 server.tool(
   'short_video_get_context',
-  'Lấy creative brief + audio_script/audio_file + agent_workflow (phase 1 script / phase 2 video). Nguồn: marketing post. Phase 2 cần audio_file (admin upload). KHÔNG dùng script_json/scene_audio_json CMS.',
+  'Lấy creative brief + audio_script/audio_file + agent_workflow. Trả agent_tts_auto, workflow_mode (manual_2_step | auto_tts_full), tts_chain. Phase 2 / full pipeline cần audio_file.',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
@@ -111,7 +111,7 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Phase 1: Lưu kịch bản audio viral (sau /extract-core-signals + /viral-audio-script). Truyền metadata: core_signals, markers, estimated_duration_sec. Admin upload MP3 thủ công sau đó.',
+  'Lưu kịch bản audio viral (sau /extract-core-signals + /viral-audio-script). Truyền metadata: core_signals, markers, estimated_duration_sec. Manual mode: admin upload MP3 sau. Auto TTS: tiếp tục generate_narration_tts.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Script có [SFX]/[BGM]/[Dừng Ns] — viết cho tai nghe'),
@@ -134,7 +134,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  '[Legacy — không dùng workflow 2 bước] Sinh voiceover qua TTS CMS Saydi → Vbee. Luồng chính: admin upload MP3 vào audio_file.',
+  'Sinh voiceover TTS và ghi audio_file. Chain VieNeu → Saydi → Vbee; strip [SFX]/[Dừng] tags. Dùng khi agent_tts_auto=true (workflow auto_tts_full). KHÔNG dùng trong manual_2_step.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

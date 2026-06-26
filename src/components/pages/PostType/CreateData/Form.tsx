@@ -32,7 +32,7 @@ import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
-import { copyShortVideoAgentPromptToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
+import { copyShortVideoAgentPromptToClipboard, resolveAgentPromptPhaseFromAction } from 'helpers/marketingShortVideoAgentPrompt';
 import {
     parseShortVideoEditIdFromSearch,
     setShortVideoEditIdInSearchParams,
@@ -1008,7 +1008,7 @@ function ButtonAction({
                 return;
             }
             const phaseKey = clientAction.replace('copy_agent_prompt:', '');
-            const phase = phaseKey === 'render_video' ? '2' : '1';
+            const phase = resolveAgentPromptPhaseFromAction(phaseKey);
             const runCopy = async () => {
                 try {
                     const result = await copyShortVideoAgentPromptToClipboard(Number(id), phase);

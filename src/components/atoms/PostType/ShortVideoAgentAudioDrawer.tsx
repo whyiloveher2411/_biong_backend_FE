@@ -3,7 +3,9 @@ import {
     Alert,
     Box,
     Chip,
+    FormControlLabel,
     Stack,
+    Switch,
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -33,6 +35,20 @@ type UploadResponse = {
     duration_sec?: number;
 };
 
+type AgentAudioContentResponse = {
+    success?: boolean;
+    title?: string;
+    audio_script?: string;
+    audio_file?: string;
+    audio_file_duration_sec?: number;
+    agent_tts_auto?: boolean;
+    workflow_mode?: string;
+    agent_workflow?: {
+        ready_for_video?: boolean;
+        has_script?: boolean;
+    };
+};
+
 function parseMessage(message: UploadResponse['message']): string {
     if (typeof message === 'object' && message?.content) {
         return String(message.content);
@@ -44,16 +60,26 @@ function parseMessage(message: UploadResponse['message']): string {
 }
 
 function workflowChip(
+    agentTtsAuto: boolean,
     hasScript: boolean,
     hasAudio: boolean,
-): { label: string; color: 'default' | 'warning' | 'success' } {
+): { label: string; color: 'default' | 'warning' | 'success' | 'info' } {
     if (hasAudio) {
-        return { label: 'Sẵn sàng render video (bước 2)', color: 'success' };
+        return {
+            label: agentTtsAuto ? 'Audio TTS sẵn sàng — render video' : 'Sẵn sàng render video (bước 2)',
+            color: 'success',
+        };
+    }
+    if (hasScript && agentTtsAuto) {
+        return { label: 'Có script — agent sẽ TTS qua MCP', color: 'info' };
     }
     if (hasScript) {
         return { label: 'Chờ admin upload MP3', color: 'warning' };
     }
-    return { label: 'Chưa có script — chạy agent bước 1', color: 'default' };
+    return {
+        label: agentTtsAuto ? 'Chưa có script — chạy agent toàn pipeline' : 'Chưa có script — chạy agent bước 1',
+        color: 'default',
+    };
 }
 
 async function uploadAgentAudioMp3(shortVideoId: number, file: File): Promise<UploadResponse> {
@@ -91,6 +117,33 @@ async function uploadAgentAudioMp3(shortVideoId: number, file: File): Promise<Up
     return result;
 }
 
+async function saveAgentTtsAuto(shortVideoId: number, enabled: boolean): Promise<JsonFormat> {
+    const token = getAccessToken() ?? '';
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-tts-mode',
+        ),
+        {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+                short_video_id: shortVideoId,
+                id: shortVideoId,
+                agent_tts_auto: enabled ? '1' : '0',
+                access_token: token,
+            }),
+        },
+    );
+
+    return response.json() as Promise<JsonFormat>;
+}
+
 export default function ShortVideoAgentAudioDrawer({
     open,
     shortVideoId,
@@ -102,6 +155,8 @@ export default function ShortVideoAgentAudioDrawer({
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
     const [uploading, setUploading] = React.useState(false);
+    const [savingTtsMode, setSavingTtsMode] = React.useState(false);
+    const [agentTtsAuto, setAgentTtsAuto] = React.useState(false);
     const [audioScript, setAudioScript] = React.useState('');
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
     const [audioDurationSec, setAudioDurationSec] = React.useState<number | null>(null);
@@ -119,13 +174,14 @@ export default function ShortVideoAgentAudioDrawer({
                 id: shortVideoId,
             },
             loading: false,
-            success: (res: JsonFormat) => {
+            success: (res: AgentAudioContentResponse) => {
                 if (!res?.success) {
                     return;
                 }
                 setTitle(String(res?.title || '').trim());
                 setAudioScript(String(res?.audio_script || '').trim());
                 setAudioFileUrl(String(res?.audio_file || '').trim());
+                setAgentTtsAuto(Boolean(res?.agent_tts_auto));
                 const dur = Number(res?.audio_file_duration_sec || 0);
                 setAudioDurationSec(dur > 0 ? dur : null);
             },
@@ -138,7 +194,7 @@ export default function ShortVideoAgentAudioDrawer({
 
     const hasScript = audioScript.length > 0;
     const hasAudio = audioFileUrl.length > 0;
-    const statusChip = workflowChip(hasScript, hasAudio);
+    const statusChip = workflowChip(agentTtsAuto, hasScript, hasAudio);
 
     const handleCopyScript = async () => {
         if (!audioScript) {
@@ -153,9 +209,31 @@ export default function ShortVideoAgentAudioDrawer({
         }
     };
 
-    const handleCopyPrompt = async (phase: '1' | '2') => {
+    const handleCopyPrompt = async (phase: '1' | '2' | 'full') => {
         const result = await copyShortVideoAgentPromptToClipboard(shortVideoId, phase);
         showMessage(result.message, result.ok ? 'success' : 'error');
+    };
+
+    const handleTtsAutoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const next = event.target.checked;
+        setSavingTtsMode(true);
+        try {
+            const res = await saveAgentTtsAuto(shortVideoId, next);
+            if (!res?.success) {
+                showMessage(parseMessage(res?.message as UploadResponse['message']) || 'Không lưu được chế độ TTS', 'error');
+                return;
+            }
+            setAgentTtsAuto(next);
+            showMessage(
+                next ? 'Đã bật TTS tự động (VieNeu → Saydi → Vbee)' : 'Đã tắt TTS tự động — workflow 2 bước',
+                'success',
+            );
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingTtsMode(false);
+        }
     };
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,25 +276,49 @@ export default function ShortVideoAgentAudioDrawer({
                     {title ? ` — ${title}` : ''}
                 </Typography>
 
+                <FormControlLabel
+                    control={(
+                        <Switch
+                            checked={agentTtsAuto}
+                            disabled={savingTtsMode}
+                            onChange={(e) => { void handleTtsAutoChange(e); }}
+                        />
+                    )}
+                    label="TTS tự động (VieNeu → Saydi → Vbee)"
+                />
+
                 <Chip label={statusChip.label} color={statusChip.color} size="small" sx={{ alignSelf: 'flex-start' }} />
 
                 <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<ContentCopyIcon />}
-                        onClick={() => { void handleCopyPrompt('1'); }}
-                    >
-                        Copy prompt bước 1
-                    </Button>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={!hasAudio}
-                        onClick={() => { void handleCopyPrompt('2'); }}
-                    >
-                        Copy prompt bước 2
-                    </Button>
+                    {agentTtsAuto ? (
+                        <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => { void handleCopyPrompt('full'); }}
+                        >
+                            Copy prompt toàn bộ
+                        </Button>
+                    ) : (
+                        <>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<ContentCopyIcon />}
+                                onClick={() => { void handleCopyPrompt('1'); }}
+                            >
+                                Copy prompt bước 1
+                            </Button>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={!hasAudio}
+                                onClick={() => { void handleCopyPrompt('2'); }}
+                            >
+                                Copy prompt bước 2
+                            </Button>
+                        </>
+                    )}
                 </Stack>
 
                 <Box>
@@ -248,14 +350,16 @@ export default function ShortVideoAgentAudioDrawer({
                         </Typography>
                     ) : (
                         <Alert severity="info">
-                            Chưa có script. Copy prompt bước 1 và chạy agent trong Cursor.
+                            {agentTtsAuto
+                                ? 'Chưa có script. Copy prompt toàn bộ và chạy agent trong Cursor.'
+                                : 'Chưa có script. Copy prompt bước 1 và chạy agent trong Cursor.'}
                         </Alert>
                     )}
                 </Box>
 
                 <Box>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Audio file (MP3 admin upload)
+                        Audio file (MP3 — TTS hoặc upload thủ công)
                     </Typography>
                     {hasAudio ? (
                         <Stack spacing={1}>
@@ -270,7 +374,9 @@ export default function ShortVideoAgentAudioDrawer({
                         </Stack>
                     ) : (
                         <Alert severity="warning" sx={{ mb: 1 }}>
-                            Chưa có MP3. Dùng script ở trên để tạo audio (Saydi/Vbee/studio), nghe thử rồi upload.
+                            {agentTtsAuto
+                                ? 'Chưa có MP3. Agent sẽ sinh qua MCP; nếu TTS lỗi, upload MP3 fallback ở đây.'
+                                : 'Chưa có MP3. Dùng script ở trên để tạo audio (Saydi/Vbee/studio), nghe thử rồi upload.'}
                         </Alert>
                     )}
 

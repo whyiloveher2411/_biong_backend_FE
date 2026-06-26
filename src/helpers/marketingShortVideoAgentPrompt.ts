@@ -2,17 +2,29 @@ import { getAccessToken } from 'store/user/user.reducers';
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 
+export type ShortVideoAgentPromptPhase =
+    | '1'
+    | '2'
+    | 'audio_script'
+    | 'render_video'
+    | 'full'
+    | 'full_pipeline'
+    | 'pipeline';
+
 export type ShortVideoAgentPromptResponse = {
     success?: boolean;
     prompt?: string;
     phase?: string;
     stage?: string;
     short_video_id?: number;
+    workflow_mode?: 'manual_2_step' | 'auto_tts_full';
     agent_workflow?: {
         phase?: string;
         has_script?: boolean;
         ready_for_video?: boolean;
         has_agent_video?: boolean;
+        agent_tts_auto?: boolean;
+        workflow_mode?: string;
     };
     message?: { content?: string } | string;
 };
@@ -21,12 +33,35 @@ function pluginApiPath(suffix: string): string {
     return convertToURL(getApiHost(), `/api/admin/plugin/vn4-e-learning/app-mobile/marketing/${suffix}`);
 }
 
+function normalizePromptPhase(phase: ShortVideoAgentPromptPhase): string {
+    if (phase === 'audio_script' || phase === '1') {
+        return '1';
+    }
+    if (phase === 'render_video' || phase === '2') {
+        return '2';
+    }
+    if (phase === 'full' || phase === 'full_pipeline' || phase === 'pipeline') {
+        return 'full';
+    }
+    return phase;
+}
+
+export function resolveAgentPromptPhaseFromAction(phaseKey: string): ShortVideoAgentPromptPhase {
+    if (phaseKey === 'full_pipeline' || phaseKey === 'full' || phaseKey === 'pipeline') {
+        return 'full';
+    }
+    if (phaseKey === 'render_video') {
+        return '2';
+    }
+    return '1';
+}
+
 export async function fetchShortVideoAgentPrompt(
     shortVideoId: number,
-    phase: '1' | '2' | 'audio_script' | 'render_video',
+    phase: ShortVideoAgentPromptPhase,
 ): Promise<ShortVideoAgentPromptResponse> {
     const token = getAccessToken() ?? '';
-    const normalizedPhase = phase === 'audio_script' || phase === '1' ? '1' : '2';
+    const normalizedPhase = normalizePromptPhase(phase);
 
     const res = await fetch(pluginApiPath('short-video/get-agent-prompt'), {
         method: 'POST',
@@ -59,7 +94,7 @@ function parseMessage(message: ShortVideoAgentPromptResponse['message']): string
 
 export async function copyShortVideoAgentPromptToClipboard(
     shortVideoId: number,
-    phase: '1' | '2' | 'audio_script' | 'render_video',
+    phase: ShortVideoAgentPromptPhase,
 ): Promise<{ ok: boolean; message: string }> {
     const res = await fetchShortVideoAgentPrompt(shortVideoId, phase);
     if (!res?.success || !res.prompt?.trim()) {
@@ -95,7 +130,10 @@ export async function copyShortVideoAgentPromptToClipboard(
     }
 }
 
-function normalizedPhaseLabel(phase: '1' | '2' | 'audio_script' | 'render_video'): string {
+function normalizedPhaseLabel(phase: ShortVideoAgentPromptPhase): string {
+    if (phase === 'full' || phase === 'full_pipeline' || phase === 'pipeline') {
+        return 'Đã copy prompt agent toàn pipeline vào clipboard';
+    }
     if (phase === '1' || phase === 'audio_script') {
         return 'Đã copy prompt agent bước 1 (script) vào clipboard';
     }

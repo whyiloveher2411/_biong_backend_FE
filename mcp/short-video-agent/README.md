@@ -1,8 +1,17 @@
 # Biong Short Video Agent MCP
 
-MCP server cho Cursor agent — workflow **2 bước**: (1) sinh `audio_script`; (2) render video từ `audio_file` admin upload.
+MCP server cho Cursor agent — **hai chế độ**: manual 2 bước (upload MP3) hoặc auto TTS full pipeline (VieNeu → Saydi → Vbee).
 
-**Phiên bản:** 1.6.0
+**Phiên bản:** 1.7.0
+
+## Chế độ workflow
+
+| `agent_tts_auto` | Workflow | Copy prompt CMS |
+|------------------|----------|-----------------|
+| `false` (mặc định) | Script → admin MP3 → render | Bước 1 + bước 2 |
+| `true` | Script → TTS MCP → render → upload | Một prompt toàn pipeline |
+
+Bật/tắt qua drawer **Agent audio** hoặc field `agent_tts_auto` trên short video.
 
 ## Cài HyperFrames skills (một lần)
 
@@ -18,7 +27,7 @@ Skills cài vào `.agents/skills/` (repo-level). Init project render:
 npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --skip-skills --example=blank
 ```
 
-## Skill groups (phase 2)
+## Skill groups (render)
 
 | Nhóm | Skills |
 |------|--------|
@@ -38,40 +47,51 @@ npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --ski
 - `.cursor/skills/biong-short-video-hyperframes/references/layout-9x16-zones.md`
 - `.cursor/skills/biong-short-video-hyperframes/references/gsap-beat-checklist.md`
 
-`get_context.production_playbook` trả: `motion_complexity_activation`, `registry_blocks`, `timeline_sync`, `render_settings`, `skill_routing`, ...
+`get_context` trả: `agent_tts_auto`, `workflow_mode`, `tts_chain`, `tts_providers`, `production_playbook.workflow_modes`.
 
-## Phase 1 — Script viral
+## Script viral
 
 `get_context` → `/extract-core-signals` → `/viral-audio-script` → `save_audio_script` (kèm `metadata.markers`)
 
 Docs: `references/extract-core-signals.md`, `references/viral-audio-script.md`
 
-Skills: `.cursor/skills/extract-core-signals/`, `.cursor/skills/viral-audio-script/`
+## Auto TTS
 
-## Ép video cinematic (phase 2)
+```text
+short_video_generate_narration_tts({ short_video_id, text })
+```
 
-Agent mặc định output an toàn (text + nền). Copy prompt bước 2 đã ép:
+- Chain: VieNeu → Saydi → Vbee
+- Strip `[SFX]` / `[Dừng Ns]` trước TTS
+- Ghi `audio_file` + `tts_provider_used`
+- Fallback: admin upload MP3 qua CMS
+
+## Ép video cinematic
 
 - Đọc `motion-complexity-activation.md`
 - `npx hyperframes add` registry blocks (caption + transition)
 - GSAP: no linear, stagger, 3D depth
-- Timeline sync: `data-duration` khớp audio
 - Render: `--quality high` (không draft)
 
-Doc: `.cursor/skills/biong-short-video-hyperframes/references/motion-complexity-activation.md`
-
-## Workflow
+## Workflow manual
 
 1. **Bước 1:** `get_context` → `save_audio_script` → dừng
 2. **Admin:** Upload MP3 → `audio_file`
-3. **Bước 2:** `get_context` → HyperFrames render (skill routing) → `upload_agent_video`
+3. **Bước 2:** HyperFrames render → `upload_agent_video`
+
+## Workflow auto TTS
+
+1. `get_context` → `save_audio_script` → `generate_narration_tts`
+2. Xác nhận `audio_file` / `ready_for_video`
+3. HyperFrames render → `upload_agent_video`
 
 ## Tools
 
 | Tool | Mô tả |
 |------|--------|
-| `short_video_get_context` | Creative brief + production_playbook (skill routing) |
-| `short_video_save_audio_script` | Phase 1 — script viral + metadata markers |
+| `short_video_get_context` | Creative brief + workflow_mode + production_playbook |
+| `short_video_save_audio_script` | Script viral + metadata markers |
+| `short_video_generate_narration_tts` | TTS auto — VieNeu→Saydi→Vbee → `audio_file` |
 | `short_video_upload_agent_video` | Upload MP4 → S3 |
 
 ## Cài đặt MCP
@@ -80,6 +100,4 @@ Doc: `.cursor/skills/biong-short-video-hyperframes/references/motion-complexity-
 cd mcp/short-video-agent && npm install && npm run build
 ```
 
-Reload MCP `biong-short-video-agent` trong Cursor.
-
-Skill: `.cursor/skills/biong-short-video-hyperframes/SKILL.md`
+Cấu hình Cursor MCP: `BIONG_API_BASE_URL`, `BIONG_MCP_TOKEN`.
