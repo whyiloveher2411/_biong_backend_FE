@@ -1295,7 +1295,7 @@ function buildNewNarrationScene(
         duration_sec: roundedDuration,
         start_offset_sec: roundedStart,
         words: [],
-        audio_tts_settings: resolveDefaultSceneAudioTtsSettings(manifest.lang),
+        audio_tts_settings: resolveDefaultSceneAudioTtsSettings(manifest.lang, manifest.voice_config),
         layout: {
             show_headline: true,
             show_karaoke: true,

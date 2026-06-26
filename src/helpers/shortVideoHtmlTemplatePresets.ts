@@ -2,6 +2,7 @@ import type { ShortVideoHtmlClip } from './shortVideoRenderManifestTypes';
 import {
     buildFrameBaseCss,
     buildFrameShellHtml,
+    type FrameShellOptions,
 } from './shortVideoFrameDesignTokens';
 
 export type ShortVideoHtmlTemplateId =
@@ -103,7 +104,7 @@ function framePreset(
     innerHtml: string,
     extraCss = '',
     js = '',
-    shellOptions?: { pagenum?: string }
+    shellOptions?: FrameShellOptions
 ): Partial<ShortVideoHtmlClip> {
     return {
         label,
@@ -112,6 +113,18 @@ function framePreset(
         js,
     };
 }
+
+const OVER_BROLL_LOWER_THIRD_INNER = {
+    hook: (title: string) => (
+        `<div class="lower-third frame-stagger-1"><h1 class="type-display">${title}</h1></div>`
+    ),
+    bigNumber: (number: string, label: string) => (
+        `<div class="lower-third frame-stagger-1"><p class="type-numeral-jumbo frame-stagger-2">${number}</p>${label ? `<p class="type-body frame-stagger-3" style="margin-top:1.5cqw">${label}</p>` : ''}</div>`
+    ),
+    progress: (percent: number) => (
+        `<div class="lower-third frame-stagger-1"><div class="progress-track"><div class="progress-fill" id="fill"></div></div><p class="progress-pct frame-stagger-2">${percent}%</p></div>`
+    ),
+};
 
 function buildFooterBand(cells: string[]): string {
     const slice = cells.slice(0, 4);
@@ -139,7 +152,7 @@ function buildStrandRows(items: ShortVideoHtmlStrandItem[] | string[]): string {
         .slice(0, 4)
         .map(
             (row) =>
-                `<div class="strand-row"><p class="strand-row__title">${escapeHtml(row.numeral ?? '')} · ${escapeHtml(row.title)}</p>${row.body ? `<p class="strand-row__body">${escapeHtml(row.body)}</p>` : ''}</div>`
+                `<div class="strand-row"><p class="strand-row__title">${escapeHtml(row.numeral ?? '')} · ${escapeHtml(row.title ?? '')}</p>${row.body ? `<p class="strand-row__body">${escapeHtml(row.body)}</p>` : ''}</div>`
         )
         .join('');
 }
@@ -165,7 +178,7 @@ function resolveFrameCover(data: ShortVideoHtmlTemplateData): Partial<ShortVideo
         ? `${title} <em>${accentWord}</em>`
         : title;
 
-    const inner = `${kicker ? `<p class="micro-label">${kicker}</p>` : ''}<h1 class="type-display">${titleHtml}</h1>${data.subtitle ? `<p class="type-body" style="margin-top:2.5cqw;max-width:78cqw">${escapeHtml(String(data.subtitle))}</p>` : ''}${footerCells.length > 0 ? buildFooterBand(footerCells) : ''}`;
+    const inner = `${kicker ? `<p class="micro-label frame-stagger-1">${kicker}</p>` : ''}<h1 class="type-display frame-stagger-2">${titleHtml}</h1>${data.subtitle ? `<p class="type-body frame-stagger-3" style="margin-top:2.5cqw;max-width:78cqw">${escapeHtml(String(data.subtitle))}</p>` : ''}${footerCells.length > 0 ? buildFooterBand(footerCells) : ''}`;
 
     return framePreset(
         'Frame cover',
@@ -269,7 +282,7 @@ export function resolveShortVideoHtmlTemplatePreset(
         case 'hook_text':
             return framePreset(
                 'Hook text',
-                `<h1 class="type-display">${title || 'Hook'}</h1>`,
+                OVER_BROLL_LOWER_THIRD_INNER.hook(title || 'Hook'),
                 '',
                 '',
                 { pagenum: data.pagenum }
@@ -277,8 +290,8 @@ export function resolveShortVideoHtmlTemplatePreset(
         case 'big_number':
             return framePreset(
                 'Big number',
-                `<div style="flex:1;display:flex;flex-direction:column;justify-content:center"><p class="type-numeral-jumbo">${number || '— figure —'}</p>${label ? `<p class="type-body" style="margin-top:2cqw">${label}</p>` : ''}</div>`,
-                '.sun-bloom--left{display:none}.sun-bloom--center{display:block}',
+                OVER_BROLL_LOWER_THIRD_INNER.bigNumber(number || '— figure —', label),
+                '.sun-bloom--left{display:none}',
                 '',
                 { pagenum: data.pagenum }
             );
@@ -311,9 +324,9 @@ export function resolveShortVideoHtmlTemplatePreset(
         case 'progress_bar':
             return framePreset(
                 'Progress',
-                `<div style="flex:1;display:flex;flex-direction:column;justify-content:center"><div class="progress-track"><div class="progress-fill" id="fill"></div></div><p class="progress-pct">${percent}%</p></div>`,
+                OVER_BROLL_LOWER_THIRD_INNER.progress(percent),
                 '',
-                `(function(){var p=${percent};var el=document.getElementById("fill");function seek(t){if(el)el.style.width=Math.min(100,p*(t/2))+"%";}window.addEventListener("shortvideo:seek",function(e){seek(e.detail&&e.detail.timeSec||0);});})();`,
+                `(function(){var p=${percent};var el=document.getElementById("fill");var dur=Math.max(0.5,Number(window.__shortVideoClipDurationSec)||2);function seek(t){if(!el)return;var ratio=Math.min(1,Math.max(0,t/dur));el.style.width=(p*ratio)+"%";}window.addEventListener("shortvideo:seek",function(e){seek(e.detail&&e.detail.timeSec||0);});})();`,
                 { pagenum: data.pagenum }
             );
         case 'intro':

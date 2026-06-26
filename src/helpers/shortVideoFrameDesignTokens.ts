@@ -285,11 +285,57 @@ export function buildFrameBaseCss(): string {
   to{opacity:1;transform:translateY(0)}
 }
 .frame-animate-in{animation:frameFadeIn 0.55s ease-out both;}
+@keyframes frameStaggerIn{
+  from{opacity:0;transform:translateY(2cqw)}
+  to{opacity:1;transform:translateY(0)}
+}
+.frame-stagger-1{animation:frameStaggerIn 0.5s ease-out 0.08s both;}
+.frame-stagger-2{animation:frameStaggerIn 0.5s ease-out 0.18s both;}
+.frame-stagger-3{animation:frameStaggerIn 0.5s ease-out 0.28s both;}
+#frame[data-overlay="over_broll"] .sun-bloom,
+#frame[data-overlay="over_broll"] .ember-bloom{display:none!important}
+#frame[data-overlay="over_broll"] .frame-content{
+  justify-content:flex-end;
+  padding-bottom:10cqw;
+  padding-top:52cqh;
+}
+#frame[data-overlay="over_broll"] .frame-over-broll-slot{
+  width:100%;
+  max-width:88cqw;
+}
+#frame[data-overlay="over_broll"] .type-numeral-jumbo{
+  font-size:clamp(8cqw,14cqw,14cqw);
+  line-height:0.9;
+}
+#frame[data-overlay="over_broll"] .type-display{
+  font-size:clamp(3.2cqw,6.8cqw,6.8cqw);
+  line-height:1.08;
+}
+#frame[data-overlay="over_broll"] .lower-third{
+  margin-top:0;
+  padding:2.5cqw 3cqw;
+  background:linear-gradient(180deg,rgba(233,229,219,0) 0%,rgba(233,229,219,0.92) 28%,rgba(233,229,219,0.96) 100%);
+  border-top:1px solid rgba(27,37,102,0.25);
+}
 `.trim();
 }
 
-export function buildFrameShellHtml(innerHtml: string, options?: { pagenum?: string }): string {
+/** CSS bổ sung khi patch clip cũ sang over_broll (đã có trong buildFrameBaseCss — marker để tránh duplicate). */
+export const FRAME_OVER_BROLL_MARKER = 'data-overlay="over_broll"';
+
+export type FrameShellOptions = {
+    pagenum?: string;
+    overBroll?: boolean;
+};
+
+export function buildFrameShellHtml(innerHtml: string, options?: FrameShellOptions): string {
     const pagenum = options?.pagenum ?? '—';
+    const overBroll = options?.overBroll === true;
+    if (overBroll) {
+        return `<div id="frame" data-frame="1" data-overlay="over_broll">
+<div class="frame-content frame-animate-in frame-over-broll-slot">${innerHtml}</div>
+</div>`;
+    }
     return `<div id="frame" data-frame="1">
 <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
 <div class="ember-bloom" aria-hidden="true"></div>

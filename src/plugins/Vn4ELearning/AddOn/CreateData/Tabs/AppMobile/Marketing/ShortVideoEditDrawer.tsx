@@ -4,7 +4,6 @@ import {
     Alert,
     Box,
     CircularProgress,
-    LinearProgress,
     Typography,
 } from '@mui/material';
 import Button from 'components/atoms/Button';
@@ -44,6 +43,7 @@ import {
     fetchShortVideoWorkflowStatus,
     restartShortVideoPipeline,
     runShortVideoAutoPipeline,
+    type ShortVideoWorkflowStatus,
 } from 'helpers/marketingShortVideoWorkflowApi';
 import {
     injectVisualClipPlaybackUrl,
@@ -72,30 +72,14 @@ import {
     useStablePreviewManifest,
 } from 'helpers/shortVideoPreviewManifest';
 import { updateTextClipInManifest } from 'helpers/shortVideoTextClips';
+import { normalizeManifestHtmlOverlayModes } from 'helpers/shortVideoHtmlOverlay';
 import { getProjectTimelineDurationSec } from 'helpers/shortVideoTimelineAdapter';
+import ShortVideoPipelineProgressPanel, {
+    resolveWorkflowDisplayStage,
+} from './ShortVideoPipelineProgressPanel';
 
 /** Tạm ẩn banner manifest info — bật lại khi cần. */
 const SHOW_MANIFEST_INFO_BANNER = false;
-
-const WORKFLOW_STAGE_LABELS: Record<string, string> = {
-    script: 'Đang viết kịch bản',
-    scene_audio: 'Đang tạo giọng nói',
-    scene_audio_vieneu: 'Đang tạo giọng nói',
-    timeline_plan: 'Đang dựng timeline',
-    manifest: 'Đang dựng manifest',
-    render: 'Đang render video',
-    assets: 'Hoàn tất',
-    done: 'Hoàn tất',
-    blocked: 'Bị chặn',
-};
-
-function resolveWorkflowStageLabel(stage: string): string {
-    const key = stage.trim().toLowerCase();
-    if (!key) {
-        return 'Đang chạy pipeline…';
-    }
-    return WORKFLOW_STAGE_LABELS[key] ?? `Pipeline: ${stage}`;
-}
 
 /** Nút header drawer chính — tách màu theo vai trò trên nền primary. */
 const MAIN_HEADER_REFRESH_BTN_SX = {
@@ -298,6 +282,7 @@ export default function ShortVideoEditDrawer({
     const [videoRendering, setVideoRendering] = React.useState(false);
     const [pipelineRunning, setPipelineRunning] = React.useState(false);
     const [workflowStage, setWorkflowStage] = React.useState('');
+    const [workflowStatus, setWorkflowStatus] = React.useState<ShortVideoWorkflowStatus | null>(null);
     const [workflowStatusError, setWorkflowStatusError] = React.useState('');
     const [savingActivityCount, setSavingActivityCount] = React.useState(0);
     const [narrationRunningSceneIds, setNarrationRunningSceneIds] = React.useState<string[]>([]);
@@ -547,9 +532,10 @@ export default function ShortVideoEditDrawer({
             const withPlayback = injectVisualPlaybackUrlsForPreview(
                 reinjectVisualPlaybackFromCache(parsed, visualResolveCacheRef.current)
             );
-            setManifest(withPlayback);
-            savedManifestFingerprintRef.current = manifestFingerprint(withPlayback);
-            savedSceneFingerprintMapRef.current = buildSceneFingerprintMap(withPlayback);
+            const withOverlay = normalizeManifestHtmlOverlayModes(withPlayback);
+            setManifest(withOverlay);
+            savedManifestFingerprintRef.current = manifestFingerprint(withOverlay);
+            savedSceneFingerprintMapRef.current = buildSceneFingerprintMap(withOverlay);
             if (rebuilt) {
                 visualResolveCacheRef.current = {};
                 manifestInitialResolveDoneRef.current = false;
@@ -1096,7 +1082,7 @@ export default function ShortVideoEditDrawer({
             return;
         }
 
-        const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang);
+        const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang, manifest.voice_config);
         const changedSceneIds = [selectedSceneId];
 
         setSceneAudioRenderingId(selectedSceneId);
@@ -1237,11 +1223,13 @@ export default function ShortVideoEditDrawer({
 
         setPipelineRunning(true);
         setWorkflowStatusError('');
+        setWorkflowStatus(null);
         beginSavingActivity();
         try {
             await runShortVideoAutoPipeline({
                 shortVideoId,
                 onProgress: (status) => {
+                    setWorkflowStatus(status);
                     setWorkflowStage(String(status.stage || ''));
                     if (Array.isArray(status.pending_scene_ids)) {
                         setNarrationRunningSceneIds(status.pending_scene_ids);
@@ -1252,6 +1240,7 @@ export default function ShortVideoEditDrawer({
             await reloadManifestAfterPipeline();
             onRefreshPost?.();
             const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
+            setWorkflowStatus(refreshed);
             setWorkflowStage(String(refreshed.stage || ''));
             setNarrationRunningSceneIds([]);
             api.showMessage('Đã chạy pipeline tự động', 'success');
@@ -1261,6 +1250,7 @@ export default function ShortVideoEditDrawer({
             api.showMessage(message, 'error');
         } finally {
             setPipelineRunning(false);
+            setWorkflowStatus(null);
             setNarrationRunningSceneIds([]);
             endSavingActivity();
         }
@@ -1291,6 +1281,7 @@ export default function ShortVideoEditDrawer({
 
         setPipelineRunning(true);
         setWorkflowStatusError('');
+        setWorkflowStatus(null);
         beginSavingActivity();
         try {
             setManifest(null);
@@ -1303,6 +1294,7 @@ export default function ShortVideoEditDrawer({
             await restartShortVideoPipeline({
                 shortVideoId,
                 onProgress: (status) => {
+                    setWorkflowStatus(status);
                     setWorkflowStage(String(status.stage || ''));
                     if (Array.isArray(status.pending_scene_ids)) {
                         setNarrationRunningSceneIds(status.pending_scene_ids);
@@ -1313,6 +1305,7 @@ export default function ShortVideoEditDrawer({
             await reloadManifestAfterPipeline();
             onRefreshPost?.();
             const refreshed = await fetchShortVideoWorkflowStatus(shortVideoId);
+            setWorkflowStatus(refreshed);
             setWorkflowStage(String(refreshed.stage || ''));
             setNarrationRunningSceneIds([]);
             api.showMessage('Đã làm lại pipeline từ đầu', 'success');
@@ -1324,6 +1317,7 @@ export default function ShortVideoEditDrawer({
             await reloadManifestAfterPipeline();
         } finally {
             setPipelineRunning(false);
+            setWorkflowStatus(null);
             setNarrationRunningSceneIds([]);
             endSavingActivity();
         }
@@ -1487,7 +1481,7 @@ export default function ShortVideoEditDrawer({
                 sx={MAIN_HEADER_RESTART_BTN_SX}
             >
                 {pipelineRunning
-                    ? resolveWorkflowStageLabel(workflowStage)
+                    ? resolveWorkflowDisplayStage(workflowStatus, workflowStage)
                     : 'Làm lại pipeline'}
             </LoadingButton>
             {!videoUrl ? (
@@ -1505,7 +1499,7 @@ export default function ShortVideoEditDrawer({
                     sx={MAIN_HEADER_REFRESH_BTN_SX}
                 >
                     {pipelineRunning
-                        ? resolveWorkflowStageLabel(workflowStage)
+                        ? resolveWorkflowDisplayStage(workflowStatus, workflowStage)
                         : 'Chạy pipeline tự động'}
                 </LoadingButton>
             ) : null}
@@ -1576,12 +1570,7 @@ export default function ShortVideoEditDrawer({
                 }}
             >
                 {pipelineRunning ? (
-                    <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
-                        <LinearProgress />
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                            {resolveWorkflowStageLabel(workflowStage)}
-                        </Typography>
-                    </Box>
+                    <ShortVideoPipelineProgressPanel status={workflowStatus} />
                 ) : null}
                 {error && (
                     <Alert severity="error" sx={{ m: 2, flexShrink: 0 }}>
@@ -1803,6 +1792,7 @@ export default function ShortVideoEditDrawer({
                                     ) : (
                                         <ShortVideoVisualClipInspector
                                             manifest={manifest}
+                                            shortVideoId={shortVideoId}
                                             clipId={selectedVisualClipId}
                                             sceneId={selectedSceneId}
                                             onManifestChange={handleInspectorVisualChange}

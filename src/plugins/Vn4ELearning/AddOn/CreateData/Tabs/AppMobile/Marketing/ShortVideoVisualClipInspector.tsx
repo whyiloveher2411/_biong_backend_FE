@@ -55,6 +55,7 @@ import {
 
 type Props = {
     manifest: ShortVideoRenderManifest;
+    shortVideoId?: number;
     clipId: string;
     sceneId?: string;
     onManifestChange: (manifest: ShortVideoRenderManifest) => void;
@@ -401,6 +402,7 @@ function NarrationAudioSettingsPanel({
 
 type NarrationInspectorProps = {
     manifest: ShortVideoRenderManifest;
+    shortVideoId?: number;
     scene: ShortVideoRenderManifest['scenes'][number];
     onManifestChange: (manifest: ShortVideoRenderManifest) => void;
     onSave?: () => void;
@@ -420,6 +422,7 @@ type NarrationInspectorProps = {
 
 function NarrationSceneInspector({
     manifest,
+    shortVideoId = 0,
     scene,
     onManifestChange,
     onSave,
@@ -442,7 +445,9 @@ function NarrationSceneInspector({
     const hasWhisper = Array.isArray(scene.words) && scene.words.length > 0;
     const pending = !hasAudio || !hasWhisper;
     const voiceoverTrimmed = scene.voiceover?.trim() || '';
-    const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang);
+    const ttsSettings = resolveSceneAudioTtsSettings(scene, manifest.lang, manifest.voice_config);
+    const [saydiCatalogDefault, setSaydiCatalogDefault] = React.useState('');
+    const [vbeeCatalogDefault, setVbeeCatalogDefault] = React.useState('');
 
     const refreshVbeeCredits = React.useCallback(() => {
         setVbeeCreditsLoading(true);
@@ -475,20 +480,22 @@ function NarrationSceneInspector({
         }
 
         const loadCatalog = ttsSettings.provider === 'vbee'
-            ? fetchVbeeTtsCatalog().then((result) => {
+            ? fetchVbeeTtsCatalog(shortVideoId).then((result) => {
                 if (cancelled) {
                     return;
                 }
                 setVbeeVoiceOptions(Array.isArray(result.voice_codes) ? result.voice_codes : []);
+                setVbeeCatalogDefault(result.default_voice_code?.trim() || '');
                 setLangOptions([]);
                 setVoiceSampleOptions([]);
             })
-            : fetchSaydiTtsCatalog().then((result) => {
+            : fetchSaydiTtsCatalog(shortVideoId).then((result) => {
                 if (cancelled) {
                     return;
                 }
                 setLangOptions(Array.isArray(result.languages) ? result.languages : []);
                 setVoiceSampleOptions(Array.isArray(result.voice_samples) ? result.voice_samples : []);
+                setSaydiCatalogDefault(result.default_voice_sample?.trim() || '');
                 setVbeeVoiceOptions([]);
             });
 
@@ -509,7 +516,7 @@ function NarrationSceneInspector({
         return () => {
             cancelled = true;
         };
-    }, [ttsSettings.provider, refreshVbeeCredits]);
+    }, [ttsSettings.provider, refreshVbeeCredits, shortVideoId]);
 
     const selectedLangCode = React.useMemo(() => {
         if (ttsSettings.provider !== 'saydi') {
@@ -546,8 +553,8 @@ function NarrationSceneInspector({
         if (voiceOptionsForLang.length > 0) {
             return voiceOptionsForLang[0].value;
         }
-        return current;
-    }, [ttsSettings, voiceOptionsForLang]);
+        return current || saydiCatalogDefault || '';
+    }, [ttsSettings, voiceOptionsForLang, saydiCatalogDefault]);
 
     const selectedVbeeVoiceCode = React.useMemo(() => {
         if (ttsSettings.provider !== 'vbee') {
@@ -560,8 +567,8 @@ function NarrationSceneInspector({
         if (vbeeVoiceOptions.length > 0) {
             return vbeeVoiceOptions[0].value;
         }
-        return current || 's_sg_male_thientam_ytstable_vc';
-    }, [ttsSettings, vbeeVoiceOptions]);
+        return current || vbeeCatalogDefault || '';
+    }, [ttsSettings, vbeeVoiceOptions, vbeeCatalogDefault]);
 
     const patchScene = React.useCallback(
         (patchData: Partial<ShortVideoRenderManifest['scenes'][number]>) => {
@@ -586,11 +593,11 @@ function NarrationSceneInspector({
 
     const handleProviderChange = React.useCallback((provider: 'saydi' | 'vbee') => {
         if (provider === 'vbee') {
-            patchTtsSettings(resolveDefaultVbeeSceneAudioTtsSettings());
+            patchTtsSettings(resolveDefaultVbeeSceneAudioTtsSettings(manifest.voice_config));
             return;
         }
-        patchTtsSettings(resolveDefaultSceneAudioTtsSettings(manifest.lang));
-    }, [manifest.lang, patchTtsSettings]);
+        patchTtsSettings(resolveDefaultSceneAudioTtsSettings(manifest.lang, manifest.voice_config));
+    }, [manifest.lang, manifest.voice_config, patchTtsSettings]);
 
     return (
         <Box sx={INSPECTOR_SHELL_SX} className="custom_scroll">
@@ -906,6 +913,7 @@ function VisualClipMediaInspector({
 
 export default function ShortVideoVisualClipInspector({
     manifest,
+    shortVideoId = 0,
     clipId,
     sceneId = '',
     onManifestChange,
@@ -957,6 +965,7 @@ export default function ShortVideoVisualClipInspector({
         return (
             <NarrationSceneInspector
                 manifest={manifest}
+                shortVideoId={shortVideoId}
                 scene={scene}
                 onManifestChange={onManifestChange}
                 onSave={onSave}

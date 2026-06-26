@@ -5,6 +5,12 @@ import { clipUsesFrameDesign, FRAME_FONTS_GOOGLE_URL } from './shortVideoFrameDe
  * Mọi animation (CSS/JS) nên lắng nghe `shortvideo:seek` hoặc đọc `window.__shortVideoClipTimeSec`.
  */
 export const HTML_CLIP_RUNTIME_BOOTSTRAP = `(function () {
+  function flushPaint(callback) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(callback);
+    });
+  }
+
   function seekCssAnimations(timeSec) {
     var timeMs = Math.max(0, timeSec) * 1000;
     if (typeof document.getAnimations === 'function') {
@@ -36,10 +42,15 @@ export const HTML_CLIP_RUNTIME_BOOTSTRAP = `(function () {
   window.__shortVideoSeekTo = function (timeSec) {
     var nextSec = Math.max(0, Number(timeSec) || 0);
     window.__shortVideoClipTimeSec = nextSec;
+    if (document.documentElement) {
+      document.documentElement.style.setProperty('--clip-time', String(nextSec));
+    }
     seekCssAnimations(nextSec);
-    window.dispatchEvent(new CustomEvent('shortvideo:seek', {
-      detail: { timeSec: nextSec },
-    }));
+    flushPaint(function () {
+      window.dispatchEvent(new CustomEvent('shortvideo:seek', {
+        detail: { timeSec: nextSec },
+      }));
+    });
   };
 
   window.addEventListener('message', function (event) {
@@ -66,12 +77,22 @@ function buildHtmlClipHeadExtras(css: string, html: string): string {
     return `<link rel="stylesheet" href="${FRAME_FONTS_GOOGLE_URL}" />\n`;
 }
 
+export type HtmlClipDocumentOptions = {
+    width?: number;
+    height?: number;
+    durationSec?: number;
+};
+
 export function buildHtmlClipDocument(
     clip: { html?: string; css?: string; js?: string },
-    options?: { width?: number; height?: number }
+    options?: HtmlClipDocumentOptions
 ): string {
     const width = options?.width ?? 1080;
     const height = options?.height ?? 1920;
+    const durationSec = Math.max(0.1, options?.durationSec ?? 0);
+    const durationBootstrap = durationSec > 0
+        ? `<script>window.__shortVideoClipDurationSec=${durationSec};</script>`
+        : '';
     const htmlBody = clip.html?.trim() || '<div id="app"></div>';
     const css = clip.css?.trim() || '';
     const js = clip.js?.trim() || '';
@@ -81,7 +102,7 @@ export function buildHtmlClipDocument(
         if (htmlBody.includes('__shortVideoSeekTo')) {
             return htmlBody;
         }
-        const injectScript = `<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}</script>`;
+        const injectScript = `${durationBootstrap}<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}</script>`;
         const bodyClosePattern = new RegExp('</body>', 'i');
         if (bodyClosePattern.test(htmlBody)) {
             return htmlBody.replace(bodyClosePattern, `${injectScript}</body>`);
@@ -103,6 +124,7 @@ ${css}
 </style>
 </head>
 <body>
+${durationBootstrap}
 ${htmlBody}
 <script>${HTML_CLIP_RUNTIME_BOOTSTRAP}</script>
 ${js ? `<script>${js}</script>` : ''}

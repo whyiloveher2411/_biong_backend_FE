@@ -4,9 +4,13 @@ export type {
     ShortVideoManifestWord,
     ShortVideoRenderManifest,
     ShortVideoSceneAudioTtsSettings,
+    ShortVideoSaydiAudioTtsSettings,
+    ShortVideoVbeeAudioTtsSettings,
+    ShortVideoVoiceConfig,
     ShortVideoSceneVisualType,
     ShortVideoTextClip,
     ShortVideoHtmlClip,
+    ShortVideoHtmlOverlayMode,
     ShortVideoTextAlign,
     ShortVideoTextClipMotion,
     ShortVideoTextFontWeight,
@@ -28,6 +32,9 @@ import type {
     ShortVideoManifestSceneLayout,
     ShortVideoRenderManifest,
     ShortVideoSceneAudioTtsSettings,
+    ShortVideoSaydiAudioTtsSettings,
+    ShortVideoVbeeAudioTtsSettings,
+    ShortVideoVoiceConfig,
     ShortVideoSceneVisualType,
 } from './shortVideoRenderManifestTypes';
 import { AUDIO_VOLUME_EPSILON, clampAudioVolume } from './shortVideoAudioVolume';
@@ -388,33 +395,41 @@ export function clearSceneLayoutKeysInManifest(
 }
 
 export function resolveDefaultSceneAudioTtsSettings(
-    manifestLang?: string
-): ShortVideoSceneAudioTtsSettings {
+    manifestLang?: string,
+    voiceConfig?: ShortVideoVoiceConfig | null,
+): ShortVideoSaydiAudioTtsSettings {
     const lang = manifestLang?.trim().toLowerCase() || 'vi';
+    const voiceSample = voiceConfig?.voice_saydi?.trim() || '';
     return {
         provider: 'saydi',
         lang_code: lang,
-        voice_sample: 'adam-11labs-vi',
+        voice_sample: voiceSample,
     };
 }
 
-export function resolveDefaultVbeeSceneAudioTtsSettings(): ShortVideoSceneAudioTtsSettings {
+export function resolveDefaultVbeeSceneAudioTtsSettings(
+    voiceConfig?: ShortVideoVoiceConfig | null,
+): ShortVideoVbeeAudioTtsSettings {
+    const voiceCode = voiceConfig?.voice_vbee?.trim() || '';
     return {
         provider: 'vbee',
-        voice_code: 's_sg_male_thientam_ytstable_vc',
+        voice_code: voiceCode,
         speed: 1,
     };
 }
 
 export function resolveSceneAudioTtsSettings(
     scene: ShortVideoManifestScene,
-    manifestLang?: string
+    manifestLang?: string,
+    voiceConfig?: ShortVideoVoiceConfig | null,
 ): ShortVideoSceneAudioTtsSettings {
+    const saydiDefaults = resolveDefaultSceneAudioTtsSettings(manifestLang, voiceConfig);
+    const vbeeDefaults = resolveDefaultVbeeSceneAudioTtsSettings(voiceConfig);
     const stored = scene.audio_tts_settings;
     if (stored?.provider === 'vbee') {
         return {
             provider: 'vbee',
-            voice_code: stored.voice_code?.trim() || 's_sg_male_thientam_ytstable_vc',
+            voice_code: stored.voice_code?.trim() || vbeeDefaults.voice_code || '',
             speed: typeof stored.speed === 'number' && stored.speed > 0 ? stored.speed : 1,
         };
     }
@@ -422,10 +437,10 @@ export function resolveSceneAudioTtsSettings(
         return {
             provider: 'saydi',
             lang_code: stored.lang_code?.trim() || manifestLang?.trim() || 'vi',
-            voice_sample: stored.voice_sample?.trim() || 'adam-11labs-vi',
+            voice_sample: stored.voice_sample?.trim() || saydiDefaults.voice_sample || '',
         };
     }
-    return resolveDefaultSceneAudioTtsSettings(manifestLang);
+    return saydiDefaults;
 }
 
 /** Bỏ field transient trước khi so sánh fingerprint / lưu. */

@@ -7,13 +7,14 @@ import { normalizeItemZIndex } from './shortVideoTimelineItemZIndex';
 import { isHtmlClipEffectivelyHidden } from './shortVideoTimelineVisibility';
 import { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
 import { buildFrameBaseCss, buildFrameShellHtml } from './shortVideoFrameDesignTokens';
+import { applyHtmlClipOverlayLayout, normalizeManifestHtmlOverlayModes, resolveHtmlClipOverlayMode } from './shortVideoHtmlOverlay';
 import { resolveShortVideoHtmlTemplatePreset } from './shortVideoHtmlTemplatePresets';
 
 export { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
 export { resolveShortVideoHtmlTemplatePreset, SHORT_VIDEO_HTML_TEMPLATE_IDS } from './shortVideoHtmlTemplatePresets';
 export type { ShortVideoHtmlTemplateData, ShortVideoHtmlTemplateId } from './shortVideoHtmlTemplatePresets';
 
-export type { ShortVideoHtmlClip } from './shortVideoRenderManifestTypes';
+export type { ShortVideoHtmlClip, ShortVideoHtmlOverlayMode } from './shortVideoRenderManifestTypes';
 
 const MIN_CLIP_DURATION_SEC = 0.1;
 const DEFAULT_HTML_DURATION_SEC = 5;
@@ -111,10 +112,13 @@ function clampFieldSize(value: string, maxBytes: number): string {
 }
 
 export function buildHtmlClipSrcDoc(
-    clip: Pick<ShortVideoHtmlClip, 'html' | 'css' | 'js'>,
+    clip: Pick<ShortVideoHtmlClip, 'html' | 'css' | 'js' | 'duration_sec'>,
     options?: { width?: number; height?: number }
 ): string {
-    return buildHtmlClipDocument(clip, options);
+    return buildHtmlClipDocument(clip, {
+        ...options,
+        durationSec: clip.duration_sec,
+    });
 }
 
 export function seekHtmlClipIframeTime(
@@ -146,7 +150,7 @@ export function normalizeHtmlClip(clip: ShortVideoHtmlClip): ShortVideoHtmlClip 
         ? clampFieldSize(String(clip.js), MAX_HTML_FIELD_BYTES)
         : undefined;
     const label = resolveHtmlClipTimelineLabel({ ...clip, html });
-    return {
+    const normalizedBase: ShortVideoHtmlClip = {
         ...clip,
         html: html.trim() || '<div id="app"></div>',
         css: css?.trim() ? css : undefined,
@@ -155,8 +159,19 @@ export function normalizeHtmlClip(clip: ShortVideoHtmlClip): ShortVideoHtmlClip 
         start_sec: Math.max(0, clip.start_sec),
         duration_sec: Math.max(MIN_CLIP_DURATION_SEC, clip.duration_sec),
         z_index: normalizeItemZIndex(clip.z_index),
+        overlay_mode: clip.overlay_mode,
         prerender_playback_url: clip.prerender_playback_url?.trim() || undefined,
     };
+    return normalizedBase;
+}
+
+export function normalizeHtmlClipWithManifest(
+    clip: ShortVideoHtmlClip,
+    manifest: ShortVideoRenderManifest
+): ShortVideoHtmlClip {
+    const base = normalizeHtmlClip(clip);
+    const mode = resolveHtmlClipOverlayMode(base, manifest);
+    return applyHtmlClipOverlayLayout(base, mode);
 }
 
 export function clampHtmlClipTiming(clip: ShortVideoHtmlClip): ShortVideoHtmlClip {
@@ -171,10 +186,12 @@ export function setHtmlClipsInManifest(
     manifest: ShortVideoRenderManifest,
     clips: ShortVideoHtmlClip[]
 ): ShortVideoRenderManifest {
-    return {
+    const timed = clips.map((clip) => clampHtmlClipTiming(clip));
+    const withOverlay = {
         ...manifest,
-        html_clips: clips.map((clip) => clampHtmlClipTiming(clip)),
+        html_clips: timed,
     };
+    return normalizeManifestHtmlOverlayModes(withOverlay);
 }
 
 export function updateHtmlClipInManifest(
@@ -222,10 +239,16 @@ export function addHtmlClipAtSec(
         ...preset,
         timeline_track_id: trackId,
     });
-    return {
+    const draft = {
         ...manifest,
         html_clips: [...existing, clip],
     };
+    const mode = resolveHtmlClipOverlayMode(clip, draft);
+    const layoutClip = applyHtmlClipOverlayLayout(clip, mode);
+    return normalizeManifestHtmlOverlayModes({
+        ...manifest,
+        html_clips: [...existing, layoutClip],
+    });
 }
 
 export function resolveActiveHtmlClipsAtSec(

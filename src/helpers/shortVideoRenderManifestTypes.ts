@@ -256,6 +256,9 @@ export type ShortVideoManifestScene = {
     z_index?: number;
 };
 
+/** full_frame = FRAME parchment đầy khung; over_broll = overlay trong suốt trên B-roll */
+export type ShortVideoHtmlOverlayMode = 'full_frame' | 'over_broll';
+
 export type ShortVideoHtmlClip = {
     id: string;
     start_sec: number;
@@ -268,6 +271,8 @@ export type ShortVideoHtmlClip = {
     timeline_track_id?: string;
     timeline_hidden?: boolean;
     z_index?: number;
+    /** Layout khi đè visual B-roll — auto-detect nếu không set */
+    overlay_mode?: ShortVideoHtmlOverlayMode;
     /** Transient — inject lúc render, không lưu DB */
     prerender_playback_url?: string;
 };
@@ -282,6 +287,12 @@ export type ShortVideoTimelineTrack = {
 
 /** Khoảng im lặng mặc định giữa các scene narration trên timeline (giây). */
 export const SHORT_VIDEO_DEFAULT_SCENE_GAP_SEC = 0.3;
+
+/** Cấu hình voice TTS mặc định từ app_mobile.short_video_voice_config */
+export type ShortVideoVoiceConfig = {
+    voice_saydi?: string;
+    voice_vbee?: string;
+};
 
 export type ShortVideoRenderManifest = {
     schema_version: string;
@@ -317,4 +328,6 @@ export type ShortVideoRenderManifest = {
     preview_suppress_text_clip_ids?: string[];
     /** Chỉ dùng lúc preview editor — ẩn html clip khỏi Remotion khi render overlay iframe */
     preview_suppress_html_clip_ids?: string[];
+    /** Voice mặc định từ app mobile (short_video_voice_config) */
+    voice_config?: ShortVideoVoiceConfig;
 };

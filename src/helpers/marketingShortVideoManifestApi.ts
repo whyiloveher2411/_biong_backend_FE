@@ -86,10 +86,10 @@ export type SaydiVoiceSampleOption = SaydiTtsSelectOption;
 /** @deprecated Dùng SaydiTtsCatalogResult */
 export type SaydiVoiceSamplesResult = SaydiTtsCatalogResult;
 
-export async function fetchSaydiTtsCatalog(): Promise<SaydiTtsCatalogResult> {
+export async function fetchSaydiTtsCatalog(shortVideoId?: number): Promise<SaydiTtsCatalogResult> {
     const result = (await ajax({
         url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/get-saydi-tts-catalog',
-        data: {},
+        data: shortVideoId && shortVideoId > 0 ? { short_video_id: shortVideoId, id: shortVideoId } : {},
         loading: false,
     })) as SaydiTtsCatalogResult;
 
@@ -154,10 +154,10 @@ export async function fetchVbeeTtsAccountCredits(): Promise<VbeeTtsAccountResult
     return result;
 }
 
-export async function fetchVbeeTtsCatalog(): Promise<VbeeTtsCatalogResult> {
+export async function fetchVbeeTtsCatalog(shortVideoId?: number): Promise<VbeeTtsCatalogResult> {
     const result = (await ajax({
         url: 'plugin/vn4-e-learning/app-mobile/marketing/short-video/tts/get-vbee-tts-catalog',
-        data: {},
+        data: shortVideoId && shortVideoId > 0 ? { short_video_id: shortVideoId, id: shortVideoId } : {},
         loading: false,
     })) as VbeeTtsCatalogResult;
 
