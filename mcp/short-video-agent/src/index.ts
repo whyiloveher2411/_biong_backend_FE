@@ -89,7 +89,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.3.0',
+  version: '1.4.0',
 });
 
 server.tool(
@@ -103,6 +103,35 @@ server.tool(
       query: { short_video_id },
     });
 
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_generate_narration_tts',
+  'Sinh voiceover tiếng Việt (và ngôn ngữ khác) qua TTS CMS Saydi → Vbee cho video agent sáng tạo. Truyền text tự do + clip_id (beat_1, hook, ...). KHÔNG dùng Kokoro. Không ghi scene_audio_json CMS.',
+  {
+    short_video_id: z.number().int().positive(),
+    text: z.string().min(1).describe('Lời thoại narration cần TTS'),
+    clip_id: z.string().optional().describe('ID clip agent (mặc định narration, vd beat_1, hook)'),
+    lang_code: z.string().optional(),
+    voice_sample: z.string().optional().describe('Saydi voice sample key'),
+    voice_code: z.string().optional().describe('Vbee voice code key'),
+    speed: z.number().optional(),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      short_video_id: args.short_video_id,
+      text: args.text,
+    };
+    if (args.clip_id) query.clip_id = args.clip_id;
+    if (args.lang_code) query.lang_code = args.lang_code;
+    if (args.voice_sample) query.voice_sample = args.voice_sample;
+    if (args.voice_code) query.voice_code = args.voice_code;
+    if (args.speed !== undefined) query.speed = args.speed;
+    const result = await apiRequest('generate-narration-tts', { query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };
@@ -237,7 +266,10 @@ server.tool(
       form.append('metadata', JSON.stringify(args.metadata));
     }
 
-    const result = await apiRequest('upload-video', { form });
+    const result = await apiRequest('upload-video', {
+      query: { short_video_id: args.short_video_id },
+      form,
+    });
 
     return {
       content: [{ type: 'text', text: formatJson(result) }],

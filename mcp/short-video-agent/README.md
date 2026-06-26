@@ -26,7 +26,8 @@ Tools `generate_script`, `generate_scene_audio`, `get_audio_status` chỉ cho pi
 
 | Tool | Mô tả |
 |------|--------|
-| `short_video_get_context` | Creative brief từ marketing post (nguồn chính) |
+| `short_video_get_context` | Creative brief từ marketing post |
+| `short_video_generate_narration_tts` | **Voiceover agent** — Saydi → Vbee, text tự do |
 | `short_video_get_audio_status` | [CMS Remotion only] |
 | `short_video_generate_script` | [CMS Remotion only] |
 | `short_video_generate_scene_audio` | [CMS Remotion only] |
@@ -35,10 +36,10 @@ Tools `generate_script`, `generate_scene_audio`, `get_audio_status` chỉ cho pi
 
 ## Flow agent (creative)
 
-1. `get_context` → đọc `creative_brief`
-2. HyperFrames render tự do → `storage/agent-renders/{id}/`
-3. `upload_agent_video` → S3
-4. Không commit render vào git
+1. `get_context` → `creative_brief`
+2. `generate_narration_tts` → MP3 tiếng Việt (Saydi/Vbee)
+3. HyperFrames render → `storage/agent-renders/{id}/`
+4. `upload_agent_video` → S3
 
 ## API backend
 
