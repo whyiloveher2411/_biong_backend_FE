@@ -111,11 +111,11 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Phase 1: Lưu lời thoại voiceover vào audio_script (CMS). Agent dừng sau bước này — admin upload MP3 thủ công. KHÔNG TTS, KHÔNG render.',
+  'Phase 1: Lưu kịch bản audio viral (sau /extract-core-signals + /viral-audio-script). Truyền metadata: core_signals, markers, estimated_duration_sec. Admin upload MP3 thủ công sau đó.',
   {
     short_video_id: z.number().int().positive(),
-    text: z.string().min(1).describe('Toàn bộ lời thoại narration tiếng Việt'),
-    metadata: z.record(z.unknown()).optional().describe('Optional beat_map, estimated_duration vào agent_video_json'),
+    text: z.string().min(1).describe('Script có [SFX]/[BGM]/[Dừng Ns] — viết cho tai nghe'),
+    metadata: z.record(z.unknown()).optional().describe('core_signals, markers[{time,text}], estimated_duration_sec, structure'),
   },
   async (args) => {
     const query: Record<string, string | number> = {

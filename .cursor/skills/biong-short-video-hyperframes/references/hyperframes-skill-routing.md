@@ -19,13 +19,16 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 
 ---
 
-## Phase 1 — audio_script
+## Phase 1 — audio_script viral
 
-1. `short_video_get_context` → `creative_brief`
-2. Borrow cấu trúc `/faceless-explainer` scriptwriting: hook → problem → insight → proof → CTA (30–90s)
-3. `short_video_save_audio_script` → **DỪNG**
+1. `short_video_get_context` → `creative_brief.content_plain_text`
+2. `/extract-core-signals` → hook, tension, takeaway
+3. `/viral-audio-script` → HASCAS + `[SFX]` + markers (~45s)
+4. `save_audio_script({ text, metadata })` → **DỪNG**
 
-**Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames
+Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md)
+
+**Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật
 
 ---
 

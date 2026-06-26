@@ -40,7 +40,15 @@ npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --ski
 
 `get_context.production_playbook` trả: `motion_complexity_activation`, `registry_blocks`, `timeline_sync`, `render_settings`, `skill_routing`, ...
 
-## Ép video cinematic (không đơn sơ)
+## Phase 1 — Script viral
+
+`get_context` → `/extract-core-signals` → `/viral-audio-script` → `save_audio_script` (kèm `metadata.markers`)
+
+Docs: `references/extract-core-signals.md`, `references/viral-audio-script.md`
+
+Skills: `.cursor/skills/extract-core-signals/`, `.cursor/skills/viral-audio-script/`
+
+## Ép video cinematic (phase 2)
 
 Agent mặc định output an toàn (text + nền). Copy prompt bước 2 đã ép:
 
@@ -63,7 +71,7 @@ Doc: `.cursor/skills/biong-short-video-hyperframes/references/motion-complexity-
 | Tool | Mô tả |
 |------|--------|
 | `short_video_get_context` | Creative brief + production_playbook (skill routing) |
-| `short_video_save_audio_script` | Phase 1 — lưu lời thoại |
+| `short_video_save_audio_script` | Phase 1 — script viral + metadata markers |
 | `short_video_upload_agent_video` | Upload MP4 → S3 |
 
 ## Cài đặt MCP

@@ -13,7 +13,36 @@ description: Agent short video marketing 2 bước — phase 1 save audio_script
 | **Giữa** | Admin | Upload MP3 (drawer Agent audio) | `audio_file` |
 | **2** | Agent | render cinematic + `upload_agent_video` | `agent_video_url` |
 
-**Ép cinematic:** [motion-complexity-activation.md](references/motion-complexity-activation.md) — không để agent output "an toàn" tối giản.
+**Ép cinematic phase 2:** [motion-complexity-activation.md](references/motion-complexity-activation.md)
+
+---
+
+## Phase 1 — Audio script viral (extract + viral script)
+
+### Skills
+
+| # | Skill | Output |
+|---|-------|--------|
+| 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway |
+| 2 | `/viral-audio-script` | `text` + `[SFX]` + `markers` |
+
+Docs: [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md)
+
+### Công thức HASCAS
+
+Hook (3s) → Agitate → Solve → CTA — câu 10–15 từ, viết cho tai nghe.
+
+### Lưu MCP
+
+```text
+short_video_save_audio_script({
+  short_video_id,
+  text: "[SFX: ...] ...",
+  metadata: { core_signals, markers, estimated_duration_sec: 45 }
+})
+```
+
+**DỪNG** — admin upload MP3.
 
 ---
 
