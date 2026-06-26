@@ -249,7 +249,7 @@ export default function ShortVideoResourcePanel() {
                     >
                         HTML scene
                     </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2.5 }}>
                         <DraggableHtmlItem
                             preset="intro"
                             label="Intro HTML"
@@ -259,6 +259,30 @@ export default function ShortVideoResourcePanel() {
                             preset="blank"
                             label="HTML trống"
                             icon={<CodeIcon sx={{ fontSize: 18 }} />}
+                        />
+                    </Box>
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 1.5, fontWeight: 600 }}
+                    >
+                        Frame (Biennale Yellow)
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <DraggableHtmlItem
+                            preset="frame_cover"
+                            label="Frame cover"
+                            icon={<WebAssetIcon sx={{ fontSize: 18 }} />}
+                        />
+                        <DraggableHtmlItem
+                            preset="frame_chapter"
+                            label="Frame chapter"
+                            icon={<WebAssetIcon sx={{ fontSize: 18 }} />}
+                        />
+                        <DraggableHtmlItem
+                            preset="frame_poster"
+                            label="Frame poster"
+                            icon={<WebAssetIcon sx={{ fontSize: 18 }} />}
                         />
                     </Box>
                 </Box>

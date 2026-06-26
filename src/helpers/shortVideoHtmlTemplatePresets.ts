@@ -1,6 +1,16 @@
 import type { ShortVideoHtmlClip } from './shortVideoRenderManifestTypes';
+import {
+    buildFrameBaseCss,
+    buildFrameShellHtml,
+} from './shortVideoFrameDesignTokens';
 
 export type ShortVideoHtmlTemplateId =
+    | 'frame_cover'
+    | 'frame_chapter_divider'
+    | 'frame_ledger'
+    | 'frame_manifesto'
+    | 'frame_poster_panel'
+    | 'frame_strand_list'
     | 'hook_text'
     | 'brand_card'
     | 'big_number'
@@ -12,25 +22,53 @@ export type ShortVideoHtmlTemplateId =
     | 'cta'
     | 'custom';
 
+export type ShortVideoHtmlLedgerRow = {
+    date?: string;
+    title?: string;
+    venue?: string;
+    duration?: string;
+};
+
+export type ShortVideoHtmlStrandItem = {
+    numeral?: string;
+    title?: string;
+    body?: string;
+};
+
 export type ShortVideoHtmlTemplateData = {
     number?: string;
     label?: string;
     title?: string;
     text?: string;
     accent?: string;
+    accentWord?: string;
     kicker?: string;
     subtitle?: string;
     badge?: string;
     emoji?: string;
     percent?: number;
-    items?: string[];
+    items?: string[] | ShortVideoHtmlStrandItem[];
+    ordinal?: string;
+    railLabel?: string;
+    quote?: string;
+    attribution?: string;
+    headline?: string;
+    panelSide?: 'top' | 'bottom';
+    dateRail?: string;
+    footerCells?: string[];
+    pagenum?: string;
+    rows?: ShortVideoHtmlLedgerRow[];
 };
 
-const CARD_SHELL_CSS = `#app{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:72px 56px;background:transparent;pointer-events:none;}
-.card{width:100%;max-width:920px;padding:56px 48px;border-radius:28px;background:linear-gradient(145deg,#f8f4ec 0%,#efe8dc 55%,#e8dfd0 100%);box-shadow:0 24px 80px rgba(0,0,0,0.45);animation:cardIn 0.55s cubic-bezier(.2,.8,.2,1) both;}
-@keyframes cardIn{from{opacity:0;transform:translateY(28px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}`;
+const FRAME_CSS = buildFrameBaseCss();
 
 export const SHORT_VIDEO_HTML_TEMPLATE_IDS: ShortVideoHtmlTemplateId[] = [
+    'frame_cover',
+    'frame_chapter_divider',
+    'frame_ledger',
+    'frame_manifesto',
+    'frame_poster_panel',
+    'frame_strand_list',
     'hook_text',
     'brand_card',
     'big_number',
@@ -43,12 +81,157 @@ export const SHORT_VIDEO_HTML_TEMPLATE_IDS: ShortVideoHtmlTemplateId[] = [
     'custom',
 ];
 
+export const SHORT_VIDEO_FRAME_TEMPLATE_IDS: ShortVideoHtmlTemplateId[] = [
+    'frame_cover',
+    'frame_chapter_divider',
+    'frame_ledger',
+    'frame_manifesto',
+    'frame_poster_panel',
+    'frame_strand_list',
+];
+
 function escapeHtml(value: string): string {
     return value
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function framePreset(
+    label: string,
+    innerHtml: string,
+    extraCss = '',
+    js = '',
+    shellOptions?: { pagenum?: string }
+): Partial<ShortVideoHtmlClip> {
+    return {
+        label,
+        html: buildFrameShellHtml(innerHtml, shellOptions),
+        css: `${FRAME_CSS}\n${extraCss}`.trim(),
+        js,
+    };
+}
+
+function buildFooterBand(cells: string[]): string {
+    const slice = cells.slice(0, 4);
+    while (slice.length < 2) {
+        slice.push('—');
+    }
+    return `<div class="footer-band">${slice
+        .map((cell) => `<div class="footer-band__cell"><p class="type-body">${escapeHtml(cell)}</p></div>`)
+        .join('')}</div>`;
+}
+
+function buildStrandRows(items: ShortVideoHtmlStrandItem[] | string[]): string {
+    const normalized: ShortVideoHtmlStrandItem[] = items.map((item, index) => {
+        if (typeof item === 'string') {
+            return { numeral: String(index + 1).padStart(2, '0'), title: item };
+        }
+        return {
+            numeral: item.numeral ?? String(index + 1).padStart(2, '0'),
+            title: item.title ?? '',
+            body: item.body,
+        };
+    });
+    return normalized
+        .filter((row) => row.title)
+        .slice(0, 4)
+        .map(
+            (row) =>
+                `<div class="strand-row"><p class="strand-row__title">${escapeHtml(row.numeral ?? '')} · ${escapeHtml(row.title)}</p>${row.body ? `<p class="strand-row__body">${escapeHtml(row.body)}</p>` : ''}</div>`
+        )
+        .join('');
+}
+
+function buildLedgerRows(rows: ShortVideoHtmlLedgerRow[]): string {
+    const slice = rows.length > 0 ? rows : [{ date: '—', title: '— figure —', duration: '—' }];
+    return slice
+        .slice(0, 5)
+        .map(
+            (row) =>
+                `<div class="ledger-row"><span class="ledger-row__date">${escapeHtml(row.date ?? '—')}</span><span class="ledger-row__title">${escapeHtml(row.title ?? '')}</span><span class="ledger-row__duration">${escapeHtml(row.duration ?? '—')}</span></div>`
+        )
+        .join('');
+}
+
+function resolveFrameCover(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const kicker = escapeHtml(String(data.kicker ?? ''));
+    const title = escapeHtml(String(data.title ?? data.text ?? 'Tiêu đề'));
+    const accentWord = escapeHtml(String(data.accentWord ?? data.accent ?? ''));
+    const dateRail = escapeHtml(String(data.dateRail ?? ''));
+    const footerCells = Array.isArray(data.footerCells) ? data.footerCells : [];
+    const titleHtml = accentWord
+        ? `${title} <em>${accentWord}</em>`
+        : title;
+
+    const inner = `${kicker ? `<p class="micro-label">${kicker}</p>` : ''}<h1 class="type-display">${titleHtml}</h1>${data.subtitle ? `<p class="type-body" style="margin-top:2.5cqw;max-width:78cqw">${escapeHtml(String(data.subtitle))}</p>` : ''}${footerCells.length > 0 ? buildFooterBand(footerCells) : ''}`;
+
+    return framePreset(
+        'Frame cover',
+        inner,
+        dateRail ? `.date-rail{display:block}` : '',
+        '',
+        { pagenum: data.pagenum }
+    );
+}
+
+function resolveFrameChapterDivider(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const ordinal = escapeHtml(String(data.ordinal ?? data.number ?? '01'));
+    const title = escapeHtml(String(data.title ?? data.label ?? ''));
+    const railLabel = escapeHtml(String(data.railLabel ?? data.kicker ?? ''));
+
+    const inner = `${railLabel ? `<p class="rail-label rail-label--top">${railLabel}</p>` : ''}<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"><p class="type-numeral-jumbo">${ordinal}</p>${title ? `<p class="type-display--sm" style="margin-top:2cqw">${title}</p>` : ''}</div>`;
+
+    return framePreset('Frame chapter', inner, '.sun-bloom--left{display:none}.sun-bloom--center{display:block}', '', {
+        pagenum: data.pagenum,
+    });
+}
+
+function resolveFrameLedger(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const headline = escapeHtml(String(data.headline ?? data.title ?? ''));
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+
+    const inner = `${headline ? `<p class="micro-label">${headline}</p>` : ''}<div class="hairline-rule"></div>${buildLedgerRows(rows)}`;
+
+    return framePreset('Frame ledger', inner, '.sun-bloom{opacity:0.45;width:40cqw;height:40cqw}', '', {
+        pagenum: data.pagenum,
+    });
+}
+
+function resolveFrameManifesto(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const quote = escapeHtml(String(data.quote ?? data.text ?? data.title ?? '—'));
+    const attribution = escapeHtml(String(data.attribution ?? data.label ?? ''));
+
+    const inner = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6cqw 0"><p class="quote-mark">"</p><p class="type-display-it">${quote}</p>${attribution ? `<p class="micro-label" style="margin-top:3cqw;text-align:center">${attribution}</p>` : ''}</div>`;
+
+    return framePreset(
+        'Frame manifesto',
+        inner,
+        '.sun-bloom--left{display:none}.sun-bloom--center{display:block}',
+        '',
+        { pagenum: data.pagenum }
+    );
+}
+
+function resolveFramePosterPanel(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const kicker = escapeHtml(String(data.kicker ?? ''));
+    const headline = escapeHtml(String(data.headline ?? data.title ?? data.text ?? 'Statement'));
+    const panelSide = data.panelSide === 'bottom' ? 'bottom' : 'top';
+    const panelClass = panelSide === 'bottom' ? 'yellow-panel--bottom' : 'yellow-panel--top';
+
+    const inner = `<div class="yellow-panel ${panelClass}">${kicker ? `<p class="micro-label">${kicker}</p>` : ''}<h1 class="type-display--sm">${headline}</h1></div><div style="flex:1"></div>`;
+
+    return framePreset('Frame poster', inner, '', '', { pagenum: data.pagenum });
+}
+
+function resolveFrameStrandList(data: ShortVideoHtmlTemplateData): Partial<ShortVideoHtmlClip> {
+    const kicker = escapeHtml(String(data.kicker ?? data.label ?? ''));
+    const items = Array.isArray(data.items) ? data.items : ['Tip 1', 'Tip 2', 'Tip 3'];
+
+    const inner = `${kicker ? `<p class="micro-label">${kicker}</p>` : ''}<div class="hairline-rule hairline-rule--soft"></div>${buildStrandRows(items)}`;
+
+    return framePreset('Frame strand list', inner, '', '', { pagenum: data.pagenum });
 }
 
 export function resolveShortVideoHtmlTemplatePreset(
@@ -62,110 +245,90 @@ export function resolveShortVideoHtmlTemplatePreset(
     const percent = Math.max(0, Math.min(100, Number(data.percent ?? 0)));
 
     switch (templateId) {
+        case 'frame_cover':
+            return resolveFrameCover(data);
+        case 'frame_chapter_divider':
+            return resolveFrameChapterDivider(data);
+        case 'frame_ledger':
+            return resolveFrameLedger(data);
+        case 'frame_manifesto':
+            return resolveFrameManifesto(data);
+        case 'frame_poster_panel':
+            return resolveFramePosterPanel(data);
+        case 'frame_strand_list':
+            return resolveFrameStrandList(data);
         case 'brand_card': {
             const accentPart = escapeHtml(String(data.accent ?? ''));
             const kicker = escapeHtml(String(data.kicker ?? ''));
             const subtitle = escapeHtml(String(data.subtitle ?? ''));
             const badge = escapeHtml(String(data.badge ?? ''));
             const titleDark = title || 'Tiêu đề';
-            return {
-                label: 'Brand card',
-                html: `<div id="app"><div class="card">${kicker ? `<p class="kicker">${kicker}</p>` : ''}<h1 class="title"><span class="dark">${titleDark}</span>${accentPart ? `<span class="accent">${accentPart}</span>` : ''}</h1><div class="rule"></div>${subtitle ? `<p class="sub">${subtitle}</p>` : ''}${badge ? `<div class="badge">${badge}</div>` : ''}</div></div>`,
-                css: `${CARD_SHELL_CSS}
-.kicker{margin:0 0 16px;font:600 22px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#e85d2c}
-.title{margin:0;font:800 88px/1.02 Georgia,"Times New Roman",serif;color:#111}
-.dark{color:#111}.accent{color:#e85d2c}
-.rule{width:120px;height:4px;background:#e85d2c;margin:28px 0;border-radius:2px}
-.sub{margin:0;font:400 34px/1.35 Georgia,"Times New Roman",serif;color:#4a4a4a;max-width:90%}
-.badge{display:inline-flex;margin-top:32px;padding:14px 22px;border-radius:999px;background:rgba(232,93,44,.12);border:1px solid rgba(232,93,44,.35);font:600 24px/1 system-ui,sans-serif;color:#333}`,
-                js: '',
-            };
+            const inner = `${kicker ? `<p class="micro-label">${kicker}</p>` : ''}<h1 class="type-display">${titleDark}${accentPart ? ` <em>${accentPart}</em>` : ''}</h1><div class="hairline-rule"></div>${subtitle ? `<p class="type-body" style="max-width:78cqw">${subtitle}</p>` : ''}${badge ? `<p class="micro-label" style="margin-top:3cqw">${badge}</p>` : ''}`;
+            return framePreset('Brand card', inner, '', '', { pagenum: data.pagenum });
         }
         case 'hook_text':
-            return {
-                label: 'Hook text',
-                html: `<div id="app"><div class="card"><h1 class="hook">${title || 'Hook'}</h1></div></div>`,
-                css: `${CARD_SHELL_CSS}
-.hook{margin:0;font:800 64px/1.08 Georgia,"Times New Roman",serif;color:#111;text-align:left}`,
-                js: '',
-            };
+            return framePreset(
+                'Hook text',
+                `<h1 class="type-display">${title || 'Hook'}</h1>`,
+                '',
+                '',
+                { pagenum: data.pagenum }
+            );
         case 'big_number':
-            return {
-                label: 'Big number',
-                html: `<div id="app"><div class="card stats"><p class="num">${number || '0%'}</p>${label ? `<p class="lbl">${label}</p>` : ''}</div></div>`,
-                css: `${CARD_SHELL_CSS}
-.stats{align-items:flex-start}
-.num{margin:0;font:800 108px/1 system-ui,sans-serif;color:#e85d2c;letter-spacing:-0.02em}
-.lbl{margin:16px 0 0;font:500 32px/1.3 system-ui,sans-serif;color:#333}`,
-                js: '',
-            };
+            return framePreset(
+                'Big number',
+                `<div style="flex:1;display:flex;flex-direction:column;justify-content:center"><p class="type-numeral-jumbo">${number || '— figure —'}</p>${label ? `<p class="type-body" style="margin-top:2cqw">${label}</p>` : ''}</div>`,
+                '.sun-bloom--left{display:none}.sun-bloom--center{display:block}',
+                '',
+                { pagenum: data.pagenum }
+            );
         case 'listicle': {
-            const items = Array.isArray(data.items) ? data.items.slice(0, 3) : [];
-            const lis = (items.length > 0 ? items : ['Tip 1', 'Tip 2', 'Tip 3'])
-                .map((item, index) => {
-                    const text = escapeHtml(String(item));
-                    return `<li style="animation-delay:${index * 0.15}s">${text}</li>`;
-                })
-                .join('');
-            return {
-                label: 'Listicle',
-                html: `<div id="app"><ul>${lis}</ul></div>`,
-                css: `@keyframes slideIn { from{opacity:0;transform:translateX(-24px)} to{opacity:1;transform:translateX(0)} }
-#app { display:flex; align-items:center; min-height:100vh; padding:64px; }
-ul { margin:0; padding:0; list-style:none; }
-li { margin:0 0 20px; font-size:40px; color:#fff; font-family:system-ui,sans-serif; animation:slideIn 0.5s ease-out both; }`,
-                js: '',
-            };
+            const items = Array.isArray(data.items) ? data.items : ['Tip 1', 'Tip 2', 'Tip 3'];
+            return framePreset(
+                'Listicle',
+                buildStrandRows(items),
+                '',
+                '',
+                { pagenum: data.pagenum }
+            );
         }
         case 'lower_third':
-            return {
-                label: 'Lower third',
-                html: `<div id="app"><div class="bar"><span>${title || 'Caption'}</span></div></div>`,
-                css: `@keyframes slideUp { from{opacity:0;transform:translateY(40px)} to{opacity:1;transform:translateY(0)} }
-#app { display:flex; align-items:flex-end; min-height:100vh; padding:0 0 120px 48px; }
-.bar { background:rgba(0,0,0,0.75); padding:16px 28px; border-left:4px solid #ff3331; animation:slideUp 0.45s ease-out both; }
-span { color:#fff; font-size:32px; font-family:system-ui,sans-serif; }`,
-                js: '',
-            };
+            return framePreset(
+                'Lower third',
+                `<div class="lower-third">${label ? `<p class="micro-label">${label}</p>` : ''}<p class="type-body">${title || 'Caption'}</p></div>`,
+                '',
+                '',
+                { pagenum: data.pagenum }
+            );
         case 'emoji_reaction':
-            return {
-                label: 'Emoji',
-                html: `<div id="app"><span class="emo">${emoji}</span></div>`,
-                css: `@keyframes shake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-8deg)} 75%{transform:rotate(8deg)} }
-#app { display:flex; align-items:center; justify-content:center; min-height:100vh; }
-.emo { font-size:120px; animation:shake 0.6s ease-in-out both; }`,
-                js: '',
-            };
+            return framePreset(
+                'Emoji',
+                `<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="emoji-glyph">${emoji}</span></div>`,
+                '.sun-bloom--center{display:block}.sun-bloom--left{display:none}',
+                '',
+                { pagenum: data.pagenum }
+            );
         case 'progress_bar':
-            return {
-                label: 'Progress',
-                html: `<div id="app"><div class="track"><div class="fill" id="fill"></div></div><p class="pct">${percent}%</p></div>`,
-                css: `#app { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:100vh; padding:64px; gap:16px; }
-.track { width:80%; height:16px; background:rgba(255,255,255,0.2); border-radius:8px; overflow:hidden; }
-.fill { height:100%; width:0%; background:#ff3331; border-radius:8px; transition:width 0.3s ease; }
-.pct { margin:0; color:#fff; font-size:48px; font-family:system-ui,sans-serif; }`,
-                js: `(function(){var p=${percent};var el=document.getElementById("fill");function seek(t){if(el)el.style.width=Math.min(100,p*(t/2))+"%";}window.addEventListener("shortvideo:seek",function(e){seek(e.detail&&e.detail.timeSec||0);});})();`,
-            };
+            return framePreset(
+                'Progress',
+                `<div style="flex:1;display:flex;flex-direction:column;justify-content:center"><div class="progress-track"><div class="progress-fill" id="fill"></div></div><p class="progress-pct">${percent}%</p></div>`,
+                '',
+                `(function(){var p=${percent};var el=document.getElementById("fill");function seek(t){if(el)el.style.width=Math.min(100,p*(t/2))+"%";}window.addEventListener("shortvideo:seek",function(e){seek(e.detail&&e.detail.timeSec||0);});})();`,
+                { pagenum: data.pagenum }
+            );
         case 'intro':
-            return {
-                label: 'Intro HTML',
-                html: `<div id="app"><p class="eyebrow">Spacedev</p><h1>${title || 'Tiêu đề intro'}</h1></div>`,
-                css: `@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-#app { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:100vh; padding:64px; color:#fff; font-family:system-ui,sans-serif; }
-.eyebrow { margin:0 0 12px; font-size:28px; color:#ff3331; animation:rise 0.6s ease-out both; }
-h1 { margin:0; font-size:72px; line-height:1.1; animation:rise 0.8s ease-out 0.15s both; }`,
-                js: '',
-            };
+            return resolveFrameCover({
+                ...data,
+                kicker: data.kicker ?? 'Spacedev',
+                title: data.title ?? 'Tiêu đề intro',
+            });
         case 'cta':
-            return {
-                label: 'CTA HTML',
-                html: '<div id="app"><p class="cta-label">Tải ngay</p><h1>Spacedev</h1></div>',
-                css: `@keyframes pulse { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-#app { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:100vh; padding:64px; color:#fff; font-family:system-ui,sans-serif; }
-.cta-label { margin:0 0 8px; font-size:24px; color:#ff3331; animation:pulse 0.5s ease-out both; }
-h1 { margin:0; font-size:56px; line-height:1.15; animation:pulse 0.7s ease-out 0.1s both; }`,
-                js: '',
-            };
+            return resolveFramePosterPanel({
+                ...data,
+                kicker: data.kicker ?? 'Tải ngay',
+                headline: data.headline ?? data.title ?? 'Spacedev',
+                panelSide: data.panelSide ?? 'bottom',
+            });
         default:
             return null;
     }

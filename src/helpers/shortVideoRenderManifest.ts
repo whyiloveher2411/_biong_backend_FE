@@ -108,7 +108,9 @@ export function sceneBackgroundColor(
     if (custom) {
         return custom;
     }
-    return manifest.style?.bg || '#000000';
+    return manifest.style?.bg && manifest.style.bg !== '#000000' && manifest.style.bg !== '#000'
+        ? manifest.style.bg
+        : '#E9E5DB';
 }
 
 export function resolveSceneHeadlineText(scene: ShortVideoManifestScene): string {

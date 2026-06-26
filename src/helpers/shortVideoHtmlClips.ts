@@ -6,6 +6,8 @@ import { mergePreviewSuppressIds } from './shortVideoPreviewManifestClone';
 import { normalizeItemZIndex } from './shortVideoTimelineItemZIndex';
 import { isHtmlClipEffectivelyHidden } from './shortVideoTimelineVisibility';
 import { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
+import { buildFrameBaseCss, buildFrameShellHtml } from './shortVideoFrameDesignTokens';
+import { resolveShortVideoHtmlTemplatePreset } from './shortVideoHtmlTemplatePresets';
 
 export { buildHtmlClipDocument } from './shortVideoHtmlClipDocument';
 export { resolveShortVideoHtmlTemplatePreset, SHORT_VIDEO_HTML_TEMPLATE_IDS } from './shortVideoHtmlTemplatePresets';
@@ -20,70 +22,58 @@ const MAX_HTML_FIELD_BYTES = 512 * 1024;
 export const HTML_CLIP_DEFAULT_TIMELINE_LABEL = 'HTML';
 export const SHORT_VIDEO_HTML_DRAG_MIME = 'application/x-short-video-html';
 
-export type ShortVideoHtmlDragPreset = 'blank' | 'intro';
+export type ShortVideoHtmlDragPreset = 'blank' | 'intro' | 'frame_cover' | 'frame_chapter' | 'frame_poster';
+
+const FRAME_BLANK_CSS = buildFrameBaseCss();
 
 export const HTML_CLIP_BLANK_PRESET: Partial<ShortVideoHtmlClip> = {
     label: 'HTML scene',
-    html: '<div id="app"><h1>HTML scene</h1></div>',
-    css: `@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-#app {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  color: #fff;
-  font-family: system-ui, sans-serif;
-}
-#app h1 {
-  animation: fadeIn 0.8s ease-out both;
-}`,
+    html: buildFrameShellHtml('<p class="micro-label">Frame</p><h1 class="type-display--sm">Tiêu đề</h1>'),
+    css: FRAME_BLANK_CSS,
     js: '',
 };
 
-export const HTML_CLIP_INTRO_PRESET: Partial<ShortVideoHtmlClip> = {
-    label: 'Intro HTML',
-    html: '<div id="app"><p class="eyebrow">Spacedev</p><h1>Tiêu đề intro</h1></div>',
-    css: `@keyframes rise {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-#app {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 64px;
-  color: #fff;
-  font-family: system-ui, sans-serif;
-}
-.eyebrow {
-  margin: 0 0 12px;
-  font-size: 28px;
-  color: #ff3331;
-  animation: rise 0.6s ease-out both;
-}
-h1 {
-  margin: 0;
-  font-size: 72px;
-  line-height: 1.1;
-  animation: rise 0.8s ease-out 0.15s both;
-}`,
-    js: '',
-};
+export const HTML_CLIP_INTRO_PRESET: Partial<ShortVideoHtmlClip> = resolveShortVideoHtmlTemplatePreset('intro', {
+    kicker: 'Spacedev',
+    title: 'Tiêu đề intro',
+}) ?? HTML_CLIP_BLANK_PRESET;
+
+export const HTML_CLIP_FRAME_COVER_PRESET: Partial<ShortVideoHtmlClip> =
+    resolveShortVideoHtmlTemplatePreset('frame_cover', {
+        kicker: 'Programme',
+        title: 'Tiêu đề cover',
+    }) ?? HTML_CLIP_BLANK_PRESET;
+
+export const HTML_CLIP_FRAME_CHAPTER_PRESET: Partial<ShortVideoHtmlClip> =
+    resolveShortVideoHtmlTemplatePreset('frame_chapter_divider', {
+        ordinal: '01',
+        title: 'Chương mới',
+    }) ?? HTML_CLIP_BLANK_PRESET;
+
+export const HTML_CLIP_FRAME_POSTER_PRESET: Partial<ShortVideoHtmlClip> =
+    resolveShortVideoHtmlTemplatePreset('frame_poster_panel', {
+        kicker: 'Tải ngay',
+        headline: 'Spacedev',
+        panelSide: 'bottom',
+    }) ?? HTML_CLIP_BLANK_PRESET;
 
 export function serializeHtmlClipDragPayload(preset: ShortVideoHtmlDragPreset): string {
     return JSON.stringify({ preset });
 }
 
+const HTML_DRAG_PRESETS: ShortVideoHtmlDragPreset[] = [
+    'blank',
+    'intro',
+    'frame_cover',
+    'frame_chapter',
+    'frame_poster',
+];
+
 export function parseHtmlClipDragPayload(raw: string): ShortVideoHtmlDragPreset | null {
     try {
         const parsed = JSON.parse(raw) as { preset?: string };
-        if (parsed.preset === 'blank' || parsed.preset === 'intro') {
-            return parsed.preset;
+        if (HTML_DRAG_PRESETS.includes(parsed.preset as ShortVideoHtmlDragPreset)) {
+            return parsed.preset as ShortVideoHtmlDragPreset;
         }
     } catch {
         return null;
@@ -94,7 +84,18 @@ export function parseHtmlClipDragPayload(raw: string): ShortVideoHtmlDragPreset 
 export function resolveHtmlClipDragPreset(
     preset: ShortVideoHtmlDragPreset
 ): Partial<ShortVideoHtmlClip> {
-    return preset === 'intro' ? HTML_CLIP_INTRO_PRESET : HTML_CLIP_BLANK_PRESET;
+    switch (preset) {
+        case 'intro':
+            return HTML_CLIP_INTRO_PRESET;
+        case 'frame_cover':
+            return HTML_CLIP_FRAME_COVER_PRESET;
+        case 'frame_chapter':
+            return HTML_CLIP_FRAME_CHAPTER_PRESET;
+        case 'frame_poster':
+            return HTML_CLIP_FRAME_POSTER_PRESET;
+        default:
+            return HTML_CLIP_BLANK_PRESET;
+    }
 }
 
 function clampFieldSize(value: string, maxBytes: number): string {

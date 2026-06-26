@@ -241,7 +241,7 @@ export const ShortVideoRemotionPreview = React.memo(function ShortVideoRemotionP
                         borderRadius: 1,
                         overflow: 'hidden',
                         boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 6px 18px rgba(10,15,30,0.28)',
-                        bgcolor: '#000',
+                        bgcolor: '#E9E5DB',
                     }}
                 >
                     <Player

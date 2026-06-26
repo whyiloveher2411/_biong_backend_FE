@@ -1,3 +1,5 @@
+import { clipUsesFrameDesign, FRAME_FONTS_GOOGLE_URL } from './shortVideoFrameDesignTokens';
+
 /**
  * Document HTML clip + runtime seek — dùng chung preview iframe và Puppeteer prerender.
  * Mọi animation (CSS/JS) nên lắng nghe `shortvideo:seek` hoặc đọc `window.__shortVideoClipTimeSec`.
@@ -57,6 +59,13 @@ export const HTML_CLIP_RUNTIME_BOOTSTRAP = `(function () {
   }
 })();`;
 
+function buildHtmlClipHeadExtras(css: string, html: string): string {
+    if (!clipUsesFrameDesign(css, html)) {
+        return '';
+    }
+    return `<link rel="stylesheet" href="${FRAME_FONTS_GOOGLE_URL}" />\n`;
+}
+
 export function buildHtmlClipDocument(
     clip: { html?: string; css?: string; js?: string },
     options?: { width?: number; height?: number }
@@ -72,19 +81,22 @@ export function buildHtmlClipDocument(
         if (htmlBody.includes('__shortVideoSeekTo')) {
             return htmlBody;
         }
-        const injectScript = `<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}<\/script>`;
-        if (/<\/body>/i.test(htmlBody)) {
-            return htmlBody.replace(/<\/body>/i, `${injectScript}</body>`);
+        const injectScript = `<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}</script>`;
+        const bodyClosePattern = new RegExp('</body>', 'i');
+        if (bodyClosePattern.test(htmlBody)) {
+            return htmlBody.replace(bodyClosePattern, `${injectScript}</body>`);
         }
         return `${htmlBody}\n${injectScript}`;
     }
+
+    const headExtras = buildHtmlClipHeadExtras(css, htmlBody);
 
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=${width}, height=${height}, initial-scale=1" />
-<style>
+${headExtras}<style>
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: ${width}px; height: ${height}px; overflow: hidden; background: transparent; }
 ${css}
@@ -92,8 +104,8 @@ ${css}
 </head>
 <body>
 ${htmlBody}
-<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}<\/script>
-${js ? `<script>${js}<\/script>` : ''}
+<script>${HTML_CLIP_RUNTIME_BOOTSTRAP}</script>
+${js ? `<script>${js}</script>` : ''}
 </body>
 </html>`;
 }
