@@ -8,6 +8,7 @@ import MarketingManualAudioDrawer from 'components/atoms/PostType/MarketingManua
 import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/MarketingOmniVoiceSegmentsPreviewDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
+import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
@@ -94,12 +95,20 @@ function PostTypeClientActionDrawers({
 
     if (postType === 'spacedev_app_short_video') {
         return (
-            <ShortVideoEditDrawer
-                open={activeDrawer === 'drawer:ShortVideoEdit'}
-                onClose={onClose}
-                data={data}
-                onRefreshPost={onRefreshPost}
-            />
+            <>
+                <ShortVideoEditDrawer
+                    open={activeDrawer === 'drawer:ShortVideoEdit'}
+                    onClose={onClose}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
+                />
+                <ShortVideoAgentAudioDrawer
+                    open={activeDrawer === 'drawer:ShortVideoAgentAudio'}
+                    onClose={onClose}
+                    shortVideoId={Number(data?.post?.id || 0)}
+                    onUploaded={onRefreshPost}
+                />
+            </>
         );
     }
 

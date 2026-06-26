@@ -22,6 +22,7 @@ import PostTypeClientActionDrawers, {
 import { openMarketingXaiTtsWorkflow } from "helpers/marketingXaiTtsWorkflow";
 import { openExternalTabViaExtension } from "helpers/openExternalTabViaExtension";
 import { openMarketingPostAudioUrls } from "helpers/marketingPostAudioUrls";
+import { copyShortVideoAgentPromptToClipboard } from "helpers/marketingShortVideoAgentPrompt";
 import {
     getPostTypeActionButtonColorProps,
     resolvePostTypeColor,
@@ -188,6 +189,34 @@ function ActionOnPost({
                 const next = setShortVideoEditIdInSearchParams(searchParams, Number(id));
                 setSearchParams(next, { replace: true });
             }
+            return;
+        }
+
+        if (item.client_action?.startsWith('copy_agent_prompt:')) {
+            if (!id) {
+                return;
+            }
+            const phaseKey = item.client_action.replace('copy_agent_prompt:', '');
+            const phase = phaseKey === 'render_video' ? '2' : '1';
+            const runCopy = async () => {
+                setLoadingStateButton((prev) => ({
+                    ...prev,
+                    [index]: true,
+                }));
+                try {
+                    const result = await copyShortVideoAgentPromptToClipboard(Number(id), phase);
+                    window.alert(result.message);
+                    if (result.ok) {
+                        maybeRefreshAfterAction(item);
+                    }
+                } finally {
+                    setLoadingStateButton((prev) => ({
+                        ...prev,
+                        [index]: false,
+                    }));
+                }
+            };
+            void runCopy();
             return;
         }
 

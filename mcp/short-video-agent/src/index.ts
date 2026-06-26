@@ -89,12 +89,12 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.5.0',
+  version: '1.6.0',
 });
 
 server.tool(
   'short_video_get_context',
-  'Lấy creative brief + production_playbook (beat map, animation, caption sync, palette social). Nguồn: marketing post. KHÔNG dùng script_json/scene_audio_json CMS. Mặc định video đa dạng/high-energy — không ép Biennale Yellow.',
+  'Lấy creative brief + audio_script/audio_file + agent_workflow (phase 1 script / phase 2 video). Nguồn: marketing post. Phase 2 cần audio_file (admin upload). KHÔNG dùng script_json/scene_audio_json CMS.',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
@@ -110,8 +110,31 @@ server.tool(
 );
 
 server.tool(
+  'short_video_save_audio_script',
+  'Phase 1: Lưu lời thoại voiceover vào audio_script (CMS). Agent dừng sau bước này — admin upload MP3 thủ công. KHÔNG TTS, KHÔNG render.',
+  {
+    short_video_id: z.number().int().positive(),
+    text: z.string().min(1).describe('Toàn bộ lời thoại narration tiếng Việt'),
+    metadata: z.record(z.unknown()).optional().describe('Optional beat_map, estimated_duration vào agent_video_json'),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      short_video_id: args.short_video_id,
+      text: args.text,
+    };
+    if (args.metadata) {
+      query.metadata = JSON.stringify(args.metadata);
+    }
+    const result = await apiRequest('save-audio-script', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover tiếng Việt (và ngôn ngữ khác) qua TTS CMS Saydi → Vbee cho video agent sáng tạo. Truyền text tự do + clip_id (beat_1, hook, ...). KHÔNG dùng Kokoro. Không ghi scene_audio_json CMS.',
+  '[Legacy — không dùng workflow 2 bước] Sinh voiceover qua TTS CMS Saydi → Vbee. Luồng chính: admin upload MP3 vào audio_file.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

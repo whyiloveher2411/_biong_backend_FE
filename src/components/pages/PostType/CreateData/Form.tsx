@@ -29,8 +29,10 @@ import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/M
 import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/LocalNotification/NotificationAiDrawer';
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
+import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
+import { copyShortVideoAgentPromptToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import {
     parseShortVideoEditIdFromSearch,
     setShortVideoEditIdInSearchParams,
@@ -134,6 +136,7 @@ function Form({
     const [notificationAiDrawerOpen, setNotificationAiDrawerOpen] = React.useState(false);
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
     const [shortVideoEditDrawerOpen, setShortVideoEditDrawerOpen] = React.useState(false);
+    const [shortVideoAgentAudioDrawerOpen, setShortVideoAgentAudioDrawerOpen] = React.useState(false);
 
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -439,6 +442,9 @@ function Form({
                                     setSearchParams(next, { replace: true });
                                 }
                             }
+                            if (action === 'drawer:ShortVideoAgentAudio') {
+                                setShortVideoAgentAudioDrawerOpen(true);
+                            }
                         }}
                     />
                 )
@@ -497,12 +503,20 @@ function Form({
                 />
             )}
             {postType === 'spacedev_app_short_video' && (
-                <ShortVideoEditDrawer
-                    open={shortVideoEditDrawerOpen}
-                    onClose={closeShortVideoEditDrawer}
-                    data={data}
-                    onRefreshPost={onRefreshPost}
-                />
+                <>
+                    <ShortVideoEditDrawer
+                        open={shortVideoEditDrawerOpen}
+                        onClose={closeShortVideoEditDrawer}
+                        data={data}
+                        onRefreshPost={onRefreshPost}
+                    />
+                    <ShortVideoAgentAudioDrawer
+                        open={shortVideoAgentAudioDrawerOpen}
+                        onClose={() => setShortVideoAgentAudioDrawerOpen(false)}
+                        shortVideoId={Number(data?.post?.id || 0)}
+                        onUploaded={onRefreshPost}
+                    />
+                </>
             )}
             {postType === 'app_local_notification' && (
                 <NotificationAiDrawer
@@ -986,6 +1000,27 @@ function ButtonAction({
                 return;
             }
             onClientDrawer(clientAction);
+            return;
+        }
+
+        if (clientAction?.startsWith('copy_agent_prompt:')) {
+            if (!id) {
+                return;
+            }
+            const phaseKey = clientAction.replace('copy_agent_prompt:', '');
+            const phase = phaseKey === 'render_video' ? '2' : '1';
+            const runCopy = async () => {
+                try {
+                    const result = await copyShortVideoAgentPromptToClipboard(Number(id), phase);
+                    window.alert(result.message);
+                    if (result.ok) {
+                        onActionSuccess?.();
+                    }
+                } catch (e) {
+                    window.alert(e instanceof Error ? e.message : String(e));
+                }
+            };
+            void runCopy();
             return;
         }
 
