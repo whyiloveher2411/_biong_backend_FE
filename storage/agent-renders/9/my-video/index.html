@@ -4,14 +4,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1080, height=1920" />
     <title>Short Video #9 — AI Skepticism</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400&display=swap"
-      rel="stylesheet"
-    />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
+      @font-face {
+        font-family: "Archivo";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("assets/fonts/Archivo-400.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Archivo";
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+        src: url("assets/fonts/Archivo-600.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Instrument Serif";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("assets/fonts/InstrumentSerif-400.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Instrument Serif";
+        font-style: italic;
+        font-weight: 400;
+        font-display: swap;
+        src: url("assets/fonts/InstrumentSerif-400-italic.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "JetBrains Mono";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("assets/fonts/JetBrainsMono-400.ttf") format("truetype");
+      }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
         margin: 0;
@@ -27,7 +56,7 @@
         overflow: hidden;
         background: #E9E5DB;
         color: #1B2566;
-        font-family: Archivo, system-ui, sans-serif;
+        font-family: "Archivo", system-ui, sans-serif;
       }
       .scene {
         position: absolute;
@@ -45,10 +74,11 @@
         opacity: 0.95;
         pointer-events: none;
       }
-      .sun-bloom--left { left: -8cqw; top: 18cqh; }
+      .sun-bloom--tl { left: -10cqw; top: 8cqh; }
+      .sun-bloom--br { right: -12cqw; bottom: 18cqh; }
       .sun-bloom--center {
         left: 50%;
-        top: 38%;
+        top: 42%;
         transform: translate(-50%, -50%);
       }
       .ember-bloom {
@@ -57,7 +87,7 @@
         width: 36cqw;
         height: 36cqw;
         right: 0;
-        bottom: 12cqh;
+        bottom: 10cqh;
         background: radial-gradient(circle at 60% 60%, #E26B4A 0%, transparent 72%);
         opacity: 0.18;
         pointer-events: none;
@@ -91,18 +121,11 @@
         text-transform: uppercase;
         color: #1B2566;
       }
-      .rail-label {
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.32em;
-        text-transform: uppercase;
-        margin-bottom: 3cqw;
-      }
       .type-display {
         margin: 0;
         font-family: "Instrument Serif", Georgia, serif;
         font-weight: 400;
-        font-size: clamp(4.6cqw, 12cqw, 12cqw);
+        font-size: clamp(4.6cqw, 11cqw, 11cqw);
         line-height: 1.06;
         letter-spacing: -0.005em;
         color: #1B2566;
@@ -117,7 +140,7 @@
         font-family: "Instrument Serif", Georgia, serif;
         font-style: italic;
         font-weight: 400;
-        font-size: clamp(4cqw, 7cqw, 7cqw);
+        font-size: clamp(4cqw, 7.2cqw, 7.2cqw);
         line-height: 1.04;
         letter-spacing: -0.005em;
         text-align: center;
@@ -148,16 +171,31 @@
         line-height: 0.96;
         letter-spacing: -0.005em;
         z-index: 3;
+        text-align: right;
       }
-      .footer-band {
-        margin-top: auto;
+      .center-stack {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .split-duo {
+        flex: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2cqw;
-        padding-top: 2.5cqw;
-        border-top: 1px solid #1B2566;
+        grid-template-rows: 1fr 1fr;
+        gap: 0;
       }
-      .footer-band__cell .type-body { font-size: clamp(1.2cqw, 2cqw, 2cqw); }
+      .split-duo__cell {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 4cqw;
+      }
+      .split-duo__cell--top {
+        border-bottom: 1px solid #1B2566;
+      }
       .yellow-panel {
         background: #F1EE2E;
         color: #1B2566;
@@ -169,15 +207,8 @@
         left: 0;
         right: 0;
         bottom: 0;
-        min-height: 38cqh;
+        min-height: 36cqh;
         z-index: 1;
-      }
-      .quote-mark {
-        margin: 0 0 2cqw;
-        font-family: "Instrument Serif", Georgia, serif;
-        font-size: clamp(6cqw, 10cqw, 10cqw);
-        line-height: 0.9;
-        text-align: center;
       }
       .scene-bg {
         position: absolute;
@@ -192,28 +223,63 @@
         position: absolute;
         inset: 0;
         z-index: 2;
-        background: linear-gradient(180deg, rgba(233,229,219,0.55) 0%, rgba(233,229,219,0.88) 55%, rgba(233,229,219,0.96) 100%);
+        background: linear-gradient(180deg, rgba(233,229,219,0.5) 0%, rgba(233,229,219,0.9) 60%, rgba(233,229,219,0.97) 100%);
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
         padding: 4cqw;
-        padding-bottom: 10cqw;
+        padding-bottom: 12cqw;
         box-sizing: border-box;
       }
-      .center-stack {
-        flex: 1;
+      .compare-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3cqw;
+        width: 100%;
+        margin-top: 4cqw;
+      }
+      .compare-col {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        gap: 1.5cqw;
+      }
+      .compare-col__num {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: clamp(10cqw, 16cqw, 16cqw);
+        line-height: 0.9;
+        letter-spacing: -0.03em;
+      }
+      .compare-col__label {
+        font-size: clamp(1.2cqw, 2.2cqw, 2.2cqw);
+        text-align: center;
+        max-width: 36cqw;
+      }
+      .hairline-v {
+        width: 0;
+        height: 12cqw;
+        border-left: 1px solid #1B2566;
+        margin: 2cqw auto;
+      }
+      .quote-mark {
+        margin: 0 0 2cqw;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: clamp(6cqw, 10cqw, 10cqw);
+        line-height: 0.9;
         text-align: center;
       }
-      .hairline-rule {
-        width: 100%;
-        height: 0;
-        border: none;
-        border-top: 1px solid #1B2566;
-        margin: 2.5cqw 0;
+      .ledger-row {
+        display: grid;
+        grid-template-columns: 18cqw 1fr;
+        gap: 2cqw;
+        padding: 2cqw 0;
+        border-bottom: 1px solid rgba(27,37,102,0.25);
+        align-items: baseline;
+      }
+      .ledger-row__date {
+        font-family: "JetBrains Mono", monospace;
+        font-size: clamp(1.2cqw, 2cqw, 2cqw);
+        letter-spacing: 0.06em;
       }
     </style>
   </head>
@@ -221,163 +287,177 @@
     <div
       id="root"
       data-composition-id="main"
+      data-start="0"
       data-width="1080"
       data-height="1920"
-      data-duration="31.68"
+      data-duration="28"
       data-fps="30"
     >
-      <!-- Scene 1: Hook cover -->
-      <section id="scene-s1" class="clip scene" data-start="0" data-duration="5.54" data-track-index="1">
-        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
+      <!-- Beat A: Split hook -->
+      <section id="beat-a" class="clip scene" data-start="0" data-duration="4.2" data-track-index="1">
+        <div class="sun-bloom sun-bloom--tl" aria-hidden="true"></div>
         <div class="ember-bloom" aria-hidden="true"></div>
-        <p class="date-rail s1-date">49%</p>
+        <p class="date-rail ba-rail">Pew · 5.119</p>
         <div class="frame-content">
-          <p class="micro-label s1-kicker">Pew Research · 2026</p>
-          <h1 class="type-display s1-title">Người Mỹ dùng AI nhiều hơn bao giờ hết — <em>49%</em> đã chat với bot</h1>
-          <div class="footer-band s1-footer">
-            <div class="footer-band__cell"><p class="type-body">Nhưng đoán xem?</p></div>
-            <div class="footer-band__cell"><p class="type-body">49% dùng AI? Ồ!</p></div>
+          <p class="micro-label ba-kicker">Khảo sát 2026</p>
+          <div class="split-duo">
+            <div class="split-duo__cell split-duo__cell--top">
+              <p class="type-display ba-top" style="font-size:clamp(5cqw,9cqw,9cqw)">Dùng AI nhiều hơn</p>
+            </div>
+            <div class="split-duo__cell">
+              <p class="type-display-it ba-bottom">Tin tưởng ít hơn</p>
+            </div>
           </div>
         </div>
         <span class="pagenum">01</span>
       </section>
 
-      <!-- Scene 2: Young skeptical -->
-      <section id="scene-s2" class="clip scene" data-start="5.54" data-duration="5.45" data-track-index="1">
+      <!-- Beat B: Adoption stat -->
+      <section id="beat-b" class="clip scene" data-start="4.2" data-duration="4.5" data-track-index="1">
         <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
-        <div class="ember-bloom" aria-hidden="true"></div>
         <div class="frame-content">
-          <p class="rail-label s2-rail">Người trẻ</p>
+          <p class="micro-label bb-kicker">Người Mỹ trưởng thành</p>
           <div class="center-stack">
-            <p class="type-numeral-jumbo s2-num">66%</p>
-            <p class="type-display--sm s2-title" style="margin-top:2cqw">dùng AI</p>
-            <div class="hairline-rule" style="width:40cqw;margin:3cqw auto"></div>
-            <p class="type-body s2-sub" style="text-align:center">48% nghi ngờ tác động xấu</p>
+            <p class="type-numeral-jumbo bb-num">49%</p>
+            <p class="type-display--sm bb-title" style="margin-top:2.5cqw">đã chat với bot AI</p>
+            <p class="type-body bb-sub" style="margin-top:3cqw;text-align:center">Tăng từ một phần ba năm 2024</p>
           </div>
         </div>
         <span class="pagenum">02</span>
       </section>
 
-      <!-- Scene 3: Article image + stat -->
-      <section id="scene-s3" class="clip scene" data-start="11" data-duration="4.93" data-track-index="1">
-        <img
-          class="scene-bg s3-img"
-          src="https://s.yimg.com/lo/mysterio/api/cc6ba14af9d0c7f63a3363e6c9638363da3c32815fce1ccd07d010b168dfa077/lightyear_networkapi/resizefill_w976;quality_80;format_webp/https:%2F%2Fmedia.zenfs.com%2Fen%2Fforbes_contributor_845%2F3d85c55930c85cfad080bb4c252924d6"
-          alt=""
-          crossorigin="anonymous"
-        />
-        <div class="scene-overlay">
-          <p class="micro-label s3-kicker">Dự đoán xã hội</p>
-          <p class="type-numeral-jumbo s3-num" style="font-size:clamp(12cqw,18cqw,18cqw)">48%</p>
-          <p class="type-display--sm s3-title" style="margin-top:1.5cqw">nghĩ AI sẽ gây hại</p>
+      <!-- Beat C: Young paradox ledger -->
+      <section id="beat-c" class="clip scene" data-start="8.7" data-duration="5.3" data-track-index="1">
+        <div class="sun-bloom sun-bloom--br" aria-hidden="true"></div>
+        <div class="ember-bloom" aria-hidden="true"></div>
+        <div class="frame-content">
+          <p class="micro-label bc-kicker">Nghịch lý người trẻ</p>
+          <h2 class="type-display--sm bc-head" style="margin-bottom:4cqw">Dưới 30 tuổi</h2>
+          <div class="ledger-row bc-r1">
+            <span class="ledger-row__date">66%</span>
+            <p class="type-body">dùng chatbot — tỷ lệ cao nhất</p>
+          </div>
+          <div class="ledger-row bc-r2">
+            <span class="ledger-row__date">48%</span>
+            <p class="type-body">lo AI gây hại cho xã hội</p>
+          </div>
+          <div class="ledger-row bc-r3">
+            <span class="ledger-row__date">30%</span>
+            <p class="type-body">nhóm trên 50 tuổi cùng quan điểm</p>
+          </div>
         </div>
         <span class="pagenum">03</span>
       </section>
 
-      <!-- Scene 4: Privacy concern -->
-      <section id="scene-s4" class="clip scene" data-start="15.93" data-duration="3.64" data-track-index="1">
-        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
-        <div class="ember-bloom" aria-hidden="true"></div>
-        <div class="frame-content">
-          <p class="micro-label s4-kicker">An toàn dữ liệu</p>
-          <div class="center-stack">
-            <p class="type-numeral-jumbo s4-num">71%</p>
-            <p class="type-display--sm s4-title" style="margin-top:2cqw">lo AI làm lộ thông tin cá nhân</p>
-          </div>
+      <!-- Beat D: Chart image + privacy -->
+      <section id="beat-d" class="clip scene" data-start="14" data-duration="4.8" data-track-index="1">
+        <img
+          class="scene-bg bd-img"
+          src="assets/images/chart.webp"
+          alt=""
+          crossorigin="anonymous"
+        />
+        <div class="scene-overlay">
+          <p class="micro-label bd-kicker">An toàn dữ liệu</p>
+          <p class="type-numeral-jumbo bd-num" style="font-size:clamp(12cqw,18cqw,18cqw)">71%</p>
+          <p class="type-display--sm bd-title" style="margin-top:1.5cqw">sợ AI làm lộ thông tin cá nhân</p>
+          <p class="type-body bd-sub" style="margin-top:2cqw">63% cho rằng AI phát triển quá nhanh</p>
         </div>
         <span class="pagenum">04</span>
       </section>
 
-      <!-- Scene 5: Older optimistic -->
-      <section id="scene-s5" class="clip scene" data-start="19.57" data-duration="5.11" data-track-index="1">
+      <!-- Beat E: Sentiment compare -->
+      <section id="beat-e" class="clip scene" data-start="18.8" data-duration="4.5" data-track-index="1">
         <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
-        <div class="ember-bloom" aria-hidden="true"></div>
         <div class="frame-content">
-          <p class="rail-label s5-rail">Trên 50 tuổi</p>
-          <div class="center-stack">
-            <p class="type-numeral-jumbo s5-num">30%</p>
-            <p class="type-display--sm s5-title" style="margin-top:2cqw">nghĩ xấu về AI</p>
-            <p class="type-body s5-sub" style="margin-top:3cqw;text-align:center;max-width:70cqw">Dùng ít hơn, nhưng lạc quan hơn nhiều</p>
+          <p class="micro-label be-kicker">Dự đoán tác động</p>
+          <h2 class="type-display--sm be-head">Người Mỹ nhìn về tương lai AI</h2>
+          <div class="compare-row">
+            <div class="compare-col be-col-neg">
+              <p class="compare-col__num">40%</p>
+              <p class="compare-col__label">hậu quả tiêu cực</p>
+            </div>
+            <div class="compare-col be-col-pos">
+              <p class="compare-col__num">16%</p>
+              <p class="compare-col__label">ảnh hưởng tích cực</p>
+            </div>
           </div>
+          <div class="hairline-v be-rule"></div>
+          <p class="type-body be-foot" style="text-align:center;margin:0 auto">ChatGPT dẫn đầu — 44% người dùng</p>
         </div>
         <span class="pagenum">05</span>
       </section>
 
-      <!-- Scene 6: Manifesto -->
-      <section id="scene-s6" class="clip scene" data-start="24.68" data-duration="3.87" data-track-index="1">
-        <div class="sun-bloom sun-bloom--center" aria-hidden="true"></div>
+      <!-- Beat F: Manifesto -->
+      <section id="beat-f" class="clip scene" data-start="23.3" data-duration="2.7" data-track-index="1">
+        <div class="sun-bloom sun-bloom--tl" aria-hidden="true"></div>
         <div class="frame-content">
           <div class="center-stack">
-            <p class="quote-mark s6-quote">"</p>
-            <p class="type-display-it s6-text">Dùng AI nhiều không có nghĩa là tin tưởng</p>
-            <p class="micro-label s6-attr" style="margin-top:3cqw;text-align:center">Bạn thuộc nhóm nào?</p>
+            <p class="quote-mark bf-quote">"</p>
+            <p class="type-display-it bf-text">Dùng nhiều không có nghĩa là tin tưởng</p>
+            <p class="micro-label bf-attr" style="margin-top:3cqw;text-align:center">Pew Research · Forbes</p>
           </div>
         </div>
         <span class="pagenum">06</span>
       </section>
 
-      <!-- Scene 7: CTA -->
-      <section id="scene-s7" class="clip scene" data-start="28.55" data-duration="3.13" data-track-index="1">
-        <div class="sun-bloom sun-bloom--left" aria-hidden="true"></div>
-        <div class="yellow-panel yellow-panel--bottom s7-panel">
-          <p class="micro-label s7-kicker">Học AI cùng Spacedev</p>
-          <h1 class="type-display--sm s7-headline">Tải Spacedev ngay</h1>
-          <p class="type-body s7-sub" style="margin-top:2cqw">Link trong bio</p>
+      <!-- Beat G: CTA -->
+      <section id="beat-g" class="clip scene" data-start="26" data-duration="2" data-track-index="1">
+        <div class="sun-bloom sun-bloom--br" aria-hidden="true"></div>
+        <div class="yellow-panel yellow-panel--bottom bg-panel">
+          <p class="micro-label bg-kicker">Học AI cùng Spacedev</p>
+          <h1 class="type-display--sm bg-headline">Tải Spacedev ngay</h1>
+          <p class="type-body bg-sub" style="margin-top:2cqw">Link trong bio</p>
         </div>
         <span class="pagenum">07</span>
       </section>
-
-      <!-- Narration audio (Saydi via MCP backend) -->
-      <audio id="audio-s1" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s1.mp3?v=1782469495" data-start="0" data-duration="5.54" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s2" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s2.mp3?v=1782469497" data-start="5.54" data-duration="5.45" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s3" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s3.mp3?v=1782469498" data-start="11" data-duration="4.93" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s4" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s4.mp3?v=1782469500" data-start="15.93" data-duration="3.64" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s5" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s5.mp3?v=1782469501" data-start="19.57" data-duration="5.11" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s6" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s6.mp3?v=1782469503" data-start="24.68" data-duration="3.87" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
-      <audio id="audio-s7" src="https://file-spacedev-app.spacedev.vn/uploads/short-video/audio/9_vi_s7.mp3?v=1782469505" data-start="28.55" data-duration="3.13" data-track-index="10" data-volume="1" crossorigin="anonymous"></audio>
     </div>
 
     <script>
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });
 
-      // Scene 1
-      tl.from(".s1-kicker", { y: 24, opacity: 0, duration: 0.5, ease: "power3.out" }, 0.15);
-      tl.from(".s1-title", { y: 40, opacity: 0, duration: 0.65, ease: "power3.out" }, 0.35);
-      tl.from(".s1-date", { x: 30, opacity: 0, duration: 0.55, ease: "power2.out" }, 0.25);
-      tl.from(".s1-footer", { y: 20, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.7);
+      // Beat A
+      tl.from(".ba-kicker", { y: 20, opacity: 0, duration: 0.45, ease: "power2.out" }, 0.1);
+      tl.from(".ba-rail", { x: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.15);
+      tl.from(".ba-top", { y: 36, opacity: 0, duration: 0.6, ease: "power3.out" }, 0.35);
+      tl.from(".ba-bottom", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.75);
 
-      // Scene 2
-      tl.from(".s2-rail", { y: -16, opacity: 0, duration: 0.4, ease: "power2.out" }, 5.7);
-      tl.from(".s2-num", { scale: 0.85, opacity: 0, duration: 0.7, ease: "power3.out" }, 5.85);
-      tl.from(".s2-title", { y: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 6.2);
-      tl.from(".s2-sub", { y: 20, opacity: 0, duration: 0.45, ease: "power2.out" }, 6.55);
+      // Beat B
+      tl.from(".bb-kicker", { y: 18, opacity: 0, duration: 0.4, ease: "power2.out" }, 4.35);
+      tl.from(".bb-num", { scale: 0.82, opacity: 0, duration: 0.7, ease: "power3.out" }, 4.5);
+      tl.from(".bb-title", { y: 22, opacity: 0, duration: 0.5, ease: "power2.out" }, 4.85);
+      tl.from(".bb-sub", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 5.2);
 
-      // Scene 3 — ken burns
-      tl.fromTo(".s3-img", { scale: 1.08 }, { scale: 1, duration: 4.93, ease: "none" }, 11);
-      tl.from(".scene-overlay > *", { y: 30, opacity: 0, duration: 0.55, stagger: 0.12, ease: "power3.out" }, 11.2);
+      // Beat C
+      tl.from(".bc-kicker", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 8.85);
+      tl.from(".bc-head", { y: 24, opacity: 0, duration: 0.5, ease: "power3.out" }, 9.05);
+      tl.from(".bc-r1", { x: -30, opacity: 0, duration: 0.45, ease: "power2.out" }, 9.4);
+      tl.from(".bc-r2", { x: -30, opacity: 0, duration: 0.45, ease: "power2.out" }, 9.75);
+      tl.from(".bc-r3", { x: -30, opacity: 0, duration: 0.45, ease: "power2.out" }, 10.1);
 
-      // Scene 4
-      tl.from(".s4-kicker", { y: 20, opacity: 0, duration: 0.4, ease: "power2.out" }, 16.1);
-      tl.from(".s4-num", { scale: 0.9, opacity: 0, duration: 0.6, ease: "back.out(1.4)" }, 16.25);
-      tl.from(".s4-title", { y: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 16.55);
+      // Beat D — ken burns
+      tl.fromTo(".bd-img", { scale: 1.1 }, { scale: 1, duration: 4.8, ease: "none" }, 14);
+      tl.from(".scene-overlay > *", { y: 28, opacity: 0, duration: 0.5, stagger: 0.1, ease: "power3.out" }, 14.25);
 
-      // Scene 5
-      tl.from(".s5-rail", { y: -16, opacity: 0, duration: 0.4, ease: "power2.out" }, 19.75);
-      tl.from(".s5-num", { scale: 0.88, opacity: 0, duration: 0.65, ease: "power3.out" }, 19.9);
-      tl.from(".s5-title", { y: 20, opacity: 0, duration: 0.45, ease: "power2.out" }, 20.25);
-      tl.from(".s5-sub", { y: 18, opacity: 0, duration: 0.45, ease: "power2.out" }, 20.55);
+      // Beat E
+      tl.from(".be-kicker", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 18.95);
+      tl.from(".be-head", { y: 22, opacity: 0, duration: 0.5, ease: "power3.out" }, 19.15);
+      tl.from(".be-col-neg", { y: 30, opacity: 0, duration: 0.55, ease: "power3.out" }, 19.5);
+      tl.from(".be-col-pos", { y: 30, opacity: 0, duration: 0.55, ease: "power3.out" }, 19.7);
+      tl.from(".be-rule", { scaleY: 0, opacity: 0, duration: 0.35, ease: "power2.out" }, 20.1);
+      tl.from(".be-foot", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, 20.35);
 
-      // Scene 6
-      tl.from(".s6-quote", { scale: 0.6, opacity: 0, duration: 0.45, ease: "power2.out" }, 24.85);
-      tl.from(".s6-text", { y: 28, opacity: 0, duration: 0.6, ease: "power3.out" }, 25.05);
-      tl.from(".s6-attr", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 25.45);
+      // Beat F
+      tl.from(".bf-quote", { scale: 0.55, opacity: 0, duration: 0.4, ease: "power2.out" }, 23.45);
+      tl.from(".bf-text", { y: 26, opacity: 0, duration: 0.55, ease: "power3.out" }, 23.65);
+      tl.from(".bf-attr", { y: 14, opacity: 0, duration: 0.35, ease: "power2.out" }, 24.05);
 
-      // Scene 7
-      tl.from(".s7-panel", { y: 80, opacity: 0, duration: 0.55, ease: "power3.out" }, 28.7);
-      tl.from(".s7-kicker", { y: 16, opacity: 0, duration: 0.4, ease: "power2.out" }, 28.95);
-      tl.from(".s7-headline", { y: 24, opacity: 0, duration: 0.5, ease: "power3.out" }, 29.15);
-      tl.from(".s7-sub", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, 29.4);
+      // Beat G
+      tl.from(".bg-panel", { y: 70, opacity: 0, duration: 0.5, ease: "power3.out" }, 26.1);
+      tl.from(".bg-kicker", { y: 14, opacity: 0, duration: 0.35, ease: "power2.out" }, 26.35);
+      tl.from(".bg-headline", { y: 20, opacity: 0, duration: 0.45, ease: "power3.out" }, 26.5);
+      tl.from(".bg-sub", { y: 12, opacity: 0, duration: 0.35, ease: "power2.out" }, 26.75);
 
       window.__timelines["main"] = tl;
     </script>

@@ -1,145 +1,101 @@
 ---
 name: biong-short-video-hyperframes
-description: Workflow tạo short video marketing bằng HyperFrames local CLI từ Cursor agent, upload qua MCP Biong vào field agent_video_* — không đụng pipeline Remotion.
+description: Agent tạo video marketing sáng tạo tự do (HyperFrames) từ nội dung marketing post — không copy scene/script CMS. Upload S3 qua MCP, không commit git.
 ---
 
-# Biong Short Video — HyperFrames Agent Workflow
+# Biong Short Video — HyperFrames Agent (Creative Freeform)
 
-Skill này điều phối agent tạo video TikTok 9:16 cho `spacedev_app_short_video` bằng **HyperFrames local CLI**, upload qua **MCP `biong-short-video`**.
+Agent tạo video **9:16** gắn `short_video_id`, nhưng **nội dung và cấu trúc video hoàn toàn do agent sáng tạo** từ **marketing post** — không bị ràng buộc `script_json`, `scene_audio_json`, hay layout Remotion hiện có.
 
-Audio narration **bắt buộc** qua MCP backend (Saydi → Vbee), **không** dùng Kokoro hay `/hyperframes-media` TTS local.
+## Nguồn context duy nhất
 
-## Khi nào dùng
+Sau `short_video_get_context(id)`, chỉ dùng:
 
-User yêu cầu dạng:
+- `creative_brief.content_plain_text` / `creative_brief.content_text`
+- `creative_brief.marketing_post_title`
+- `lang`, `render_spec` (1080×1920, 30fps)
 
-- "Tạo video HyperFrames cho short video ID 123"
-- "Làm video agent cho short video #45"
+`brand_design_hint` — gợi ý thương hiệu, **không bắt buộc** cấu trúc scene.
 
-## Điều kiện tiên quyết
+**Bỏ qua hoàn toàn** (chỉ nằm trong `cms_pipeline_reference`):
 
-1. MCP server `biong-short-video` đã cấu hình trong `.cursor/mcp.json`
-2. HyperFrames skills đã cài: `npx skills add heygen-com/hyperframes`
-3. HyperFrames CLI hoạt động: `npx hyperframes doctor` (FFmpeg + Chrome; Kokoro **không bắt buộc**)
-4. CMS đã cấu hình TTS Saydi và/hoặc Vbee
+- `script_json`, `scene_audio_json`
+- `generate_script`, `generate_scene_audio`, `get_audio_status`
 
-## Skills HyperFrames cần load
+## Tự do sáng tạo
 
-1. `/hyperframes` — entry point
-2. `/hyperframes-core` — HTML composition contract
-3. `/hyperframes-animation` — GSAP timelines
-4. `/hyperframes-creative` — palette, typography (áp dụng Biennale Yellow từ context)
-5. `/hyperframes-cli` — lint, preview, render
-6. `/general-video` hoặc `/faceless-explainer` — workflow TikTok hook / explainer
+Agent được phép:
 
-**Không dùng** `/hyperframes-media` cho TTS — audio lấy từ MCP backend.
+- Tự chia beat/scene, không theo `s1`, `s2`… của CMS
+- Bất kỳ loại track/element HyperFrames hỗ trợ (text, image, video, GSAP, caption, nhạc…)
+- Không mirror timeline Remotion manifest
 
-## Quy trình bắt buộc (theo thứ tự)
+Narration/audio: tự viết lời từ marketing post, nhúng trong composition (HyperFrames media/CLI) hoặc video không voiceover — **không** gọi TTS scene CMS.
 
-### 1. Lấy context
+## Quy trình
+
+### 1. Context
 
 ```text
 short_video_get_context({ short_video_id })
 ```
 
-Chú ý: `audio_status`, `script_json`, `scene_audio_json`, `design_tokens_excerpt`, `render_spec`.
+Đọc `creative_brief.instructions`.
 
-### 2. Chuẩn bị script (nếu thiếu)
-
-Nếu `audio_status.has_script === false`:
-
-```text
-short_video_generate_script({ short_video_id })
-```
-
-Sau đó gọi lại `short_video_get_context`.
-
-### 3. Sinh audio scene qua MCP backend
-
-Kiểm tra trạng thái:
-
-```text
-short_video_get_audio_status({ short_video_id })
-```
-
-Nếu `has_scene_audio === false` hoặc còn `pending_scene_ids`:
-
-```text
-short_video_generate_scene_audio({ short_video_id })
-```
-
-- Flow TTS: **Saydi trước, fail → Vbee** (giống CMS `generate-audio-batch`)
-- Sinh một scene: thêm `scene_id: "s1"`
-- Sinh lại: `force: true`
-
-Lặp `generate_scene_audio` / `get_audio_status` cho đến khi `has_scene_audio === true`.
-
-Gọi lại `short_video_get_context` để lấy `scene_audio_json.scenes.*.url` mới nhất.
-
-### 4. Đánh dấu processing video agent
+### 2. Processing
 
 ```text
 short_video_update_agent_status({ short_video_id, status: "processing" })
 ```
 
-### 5. Khởi tạo composition HyperFrames
+### 3. Render local (gitignored)
 
 ```bash
 mkdir -p storage/agent-renders/{short_video_id}
 cd storage/agent-renders/{short_video_id}
 npx hyperframes init
-```
-
-### 6. Author video 9:16
-
-- Mỗi scene trong `script_json` → clip timed
-- **Narration**: dùng URL MP3 từ `scene_audio_json.scenes[sceneId].url` (backend S3)
-- Áp dụng `design_tokens_excerpt` (Biennale Yellow)
-- Caption từ `on_screen_text` hoặc voiceover
-
-### 7. Lint và render
-
-```bash
+# Author tự do từ creative_brief — KHÔNG đọc script_json CMS
 npx hyperframes lint
 npx hyperframes render --output ./output.mp4
 ```
 
-### 8. Upload qua MCP
+Thư mục `storage/agent-renders/` **đã gitignore** — không add/commit.
+
+### 4. Upload lên store (bắt buộc)
 
 ```text
 short_video_upload_agent_video({
   short_video_id,
-  file_path: "/absolute/path/to/output.mp4",
-  hyperframes_cli_version: "...",
-  composition_path: "storage/agent-renders/{id}/"
+  file_path: "/absolute/path/to/output.mp4"
 })
 ```
 
-### 9. Xử lý lỗi
+MP4 lên S3 → `agent_video_url`. **Đây là bản lưu chính thức.**
 
-```text
-short_video_update_agent_status({
-  short_video_id,
-  status: "failed",
-  last_error: "..."
-})
+### 5. Dọn local (khuyến nghị)
+
+Sau upload thành công, xóa `storage/agent-renders/{id}/` hoặc chỉ giữ tạm debug.
+
+### 6. Hoàn tất / lỗi
+
+- Thành công: `short_video_update_agent_status({ status: "completed" })` (upload tool đã set completed)
+- Lỗi: `status: "failed"`, `last_error: "..."`
+
+## CẤM
+
+- Dùng `script_json` / `scene_audio_json` / scene CMS để dựng video
+- Gọi `generate_script`, `generate_scene_audio` cho agent video
+- Ghi `video_url`, `render_manifest_json`, Remotion APIs
+- `git add` file trong `storage/agent-renders/` hoặc `output.mp4`
+
+## Skills HyperFrames
+
+`/hyperframes`, `/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-creative`, `/hyperframes-cli`, `/general-video` hoặc `/faceless-explainer`
+
+## Lệnh mẫu cho user
+
 ```
-
-## CẤM TUYỆT ĐỐI
-
-- Kokoro, HyperFrames local TTS (`hyperframes tts`, `/hyperframes-media`)
-- Ghi `video_url`, `render_manifest_json`, `render_json`
-- API Remotion: `render-video`, `run-workflow-step`, `build-render-manifest`
-- Upload prefix `uploads/short-video/video/`
-
-## MCP tools audio (tóm tắt)
-
-| Tool | Khi nào |
-|------|---------|
-| `short_video_get_audio_status` | Kiểm tra pending / URL audio |
-| `short_video_generate_script` | Chưa có script |
-| `short_video_generate_scene_audio` | Sinh MP3 scene (Saydi/Vbee) |
-
-## Kiểm tra sau upload
-
-`short_video_get_context` → `agent_video_status === "completed"`, `agent_video_url` có giá trị, `video_url` Remotion **không đổi**.
+Tạo video agent sáng tạo cho short video ID 9.
+Chỉ dùng nội dung marketing post từ MCP get_context — không copy scene/script CMS.
+Render HyperFrames 9:16, upload MCP, không commit git.
+```

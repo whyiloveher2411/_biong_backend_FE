@@ -89,12 +89,12 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.2.0',
+  version: '1.3.0',
 });
 
 server.tool(
   'short_video_get_context',
-  'Lấy context short video (script, audio, marketing post, design tokens) cho HyperFrames agent. Không đụng pipeline Remotion.',
+  'Lấy creative brief từ marketing post (nguồn chính). KHÔNG dùng script_json/scene_audio_json CMS để dựng video — chỉ sáng tạo tự do từ nội dung bài marketing.',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
@@ -111,7 +111,7 @@ server.tool(
 
 server.tool(
   'short_video_get_audio_status',
-  'Kiểm tra trạng thái audio scene (pending, URL đã có, TTS providers Saydi/Vbee).',
+  '[Pipeline CMS Remotion only] Kiểm tra audio scene Saydi/Vbee — KHÔNG dùng cho video agent sáng tạo tự do.',
   {
     short_video_id: z.number().int().positive(),
   },
@@ -127,7 +127,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_script',
-  'Sinh script TikTokScript v1 qua DeepSeek (flow CMS hiện tại). Dùng khi chưa có script_json.',
+  '[Pipeline CMS Remotion only] Sinh TikTokScript vào CMS — KHÔNG dùng cho video agent sáng tạo tự do.',
   {
     short_video_id: z.number().int().positive(),
     lang: z.string().optional(),
@@ -148,7 +148,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_scene_audio',
-  'Sinh audio scene qua TTS CMS (Saydi → Vbee fallback), giống generate-audio-batch. Không dùng Kokoro/HyperFrames TTS.',
+  '[Pipeline CMS Remotion only] TTS scene theo script_json CMS — KHÔNG dùng cho video agent sáng tạo tự do.',
   {
     short_video_id: z.number().int().positive(),
     scene_id: z.string().optional().describe('Chỉ sinh một scene; bỏ trống để sinh tất cả pending'),

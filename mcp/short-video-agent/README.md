@@ -10,23 +10,35 @@ MCP server cho Cursor agent — lấy context short video, **sinh script/audio q
 - HyperFrames CLI: FFmpeg + Chrome (`npx hyperframes doctor` — **Kokoro không bắt buộc**)
 - CMS đã cấu hình TTS Saydi và/hoặc Vbee
 
+## Creative freeform mode
+
+`get_context` trả `creative_brief` từ **marketing post only** — agent **không** dùng `script_json` / `scene_audio_json` CMS.
+
+Tools `generate_script`, `generate_scene_audio`, `get_audio_status` chỉ cho pipeline Remotion CMS.
+
+## Local render (không commit git)
+
+- Làm việc trong `storage/agent-renders/{id}/` (đã `.gitignore`)
+- Upload bắt buộc qua `short_video_upload_agent_video` → S3 `agent_video_url`
+- Xóa file local sau upload
+
 ## Tools
 
 | Tool | Mô tả |
 |------|--------|
-| `short_video_get_context` | Script, audio, marketing post, design tokens, `audio_status` |
-| `short_video_get_audio_status` | Pending scenes, URL audio, TTS providers |
-| `short_video_generate_script` | DeepSeek script (flow CMS) |
-| `short_video_generate_scene_audio` | TTS Saydi → Vbee per scene (flow `generate-audio-batch`) |
+| `short_video_get_context` | Creative brief từ marketing post (nguồn chính) |
+| `short_video_get_audio_status` | [CMS Remotion only] |
+| `short_video_generate_script` | [CMS Remotion only] |
+| `short_video_generate_scene_audio` | [CMS Remotion only] |
 | `short_video_update_agent_status` | Cập nhật `agent_video_status` |
 | `short_video_upload_agent_video` | Upload MP4 HyperFrames → S3 |
 
-## Flow audio (không dùng Kokoro)
+## Flow agent (creative)
 
-1. `short_video_get_audio_status` — kiểm tra `pending_scene_ids`
-2. Nếu thiếu script → `short_video_generate_script`
-3. `short_video_generate_scene_audio` — lặp đến khi `has_scene_audio === true`
-4. `short_video_get_context` — lấy `scene_audio_json.scenes.*.url` cho HyperFrames
+1. `get_context` → đọc `creative_brief`
+2. HyperFrames render tự do → `storage/agent-renders/{id}/`
+3. `upload_agent_video` → S3
+4. Không commit render vào git
 
 ## API backend
 
