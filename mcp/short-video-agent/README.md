@@ -4,31 +4,57 @@ MCP server cho Cursor agent — workflow **2 bước**: (1) sinh `audio_script`;
 
 **Phiên bản:** 1.6.0
 
-## Workflow 2 bước
+## Cài HyperFrames skills (một lần)
 
-1. **Bước 1 (agent):** `get_context` → `save_audio_script` → dừng
-2. **Admin:** Upload MP3 qua CMS (drawer Agent audio) → `audio_file`
-3. **Bước 2 (agent):** `get_context` (gate `audio_file`) → HyperFrames render → `upload_agent_video`
+```bash
+cd _biong_backend_FE
+npx skills add heygen-com/hyperframes --all
+npx skills add https://github.com/greensock/gsap-skills   # GSAP best practices
+```
 
-**Không** dùng `generate_narration_tts` trong luồng chính.
+Skills cài vào `.agents/skills/` (repo-level). Init project render:
+
+```bash
+npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --skip-skills --example=blank
+```
+
+## Skill groups (phase 2)
+
+| Nhóm | Skills |
+|------|--------|
+| Orchestrator | `/general-video` |
+| Visual marketing | `/product-launch-video` |
+| Caption | `/embedded-captions` |
+| Core + animation | `/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-creative` |
+| Media | `/hyperframes-media` (transcribe) |
+| Accent | `/motion-graphics` |
+| Optional URL | `/website-to-video` |
+| GSAP | `/gsap-core`, `/gsap-timeline`, `/gsap-performance` |
+
+## Docs Biong (routing)
+
+- `.cursor/skills/biong-short-video-hyperframes/references/hyperframes-skill-routing.md`
+- `.cursor/skills/biong-short-video-hyperframes/references/motion-vocabulary-map.md`
+- `.cursor/skills/biong-short-video-hyperframes/references/layout-9x16-zones.md`
+- `.cursor/skills/biong-short-video-hyperframes/references/gsap-beat-checklist.md`
+
+`get_context.production_playbook` trả: `skill_routing`, `composition_contract`, `motion_vocabulary`, `post_render_audit`.
+
+## Workflow
+
+1. **Bước 1:** `get_context` → `save_audio_script` → dừng
+2. **Admin:** Upload MP3 → `audio_file`
+3. **Bước 2:** `get_context` → HyperFrames render (skill routing) → `upload_agent_video`
 
 ## Tools
 
 | Tool | Mô tả |
 |------|--------|
-| `short_video_get_context` | Creative brief + audio_script/audio_file + agent_workflow |
-| `short_video_save_audio_script` | **Phase 1** — lưu lời thoại vào CMS |
-| `short_video_generate_narration_tts` | [Legacy] TTS Saydi/Vbee |
-| `short_video_update_agent_status` | Cập nhật agent_video_status |
+| `short_video_get_context` | Creative brief + production_playbook (skill routing) |
+| `short_video_save_audio_script` | Phase 1 — lưu lời thoại |
 | `short_video_upload_agent_video` | Upload MP4 → S3 |
 
-## CMS
-
-- Tab Agent video: `audio_script`, `audio_file`, ...
-- Actions: Copy prompt bước 1/2, drawer Agent audio
-- API: `short-video/upload-agent-audio`, `short-video/get-agent-prompt`
-
-## Cài đặt
+## Cài đặt MCP
 
 ```bash
 cd mcp/short-video-agent && npm install && npm run build
