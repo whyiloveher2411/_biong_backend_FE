@@ -6,3 +6,10 @@ rules
   - **ALWAYS RESPOND IN VIETNAMESE (TIẾNG VIỆT).**
   - Bất kể ngôn ngữ của câu hỏi là gì, câu trả lời của bạn phải LUÔN LUÔN là Tiếng Việt.
   - Commit message LUÔN LUÔN là tiếng việt
+
+## HyperFrames agent — media MCP (bắt buộc phase render)
+
+- Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md`
+- Phase render: gọi `short_video_search_bgm` (1 lần/video) + `short_video_search_stock_media` (mỗi beat); cấm bịa `assets/`
+- Tạo `media-plan.md` với dòng `bgm_global` + stock mỗi beat; BGM phát suốt `totalVideoSec`
+- GSAP: `paused: true` + `window.__timelines[id]`; cấm `tl.play()` cho motion render

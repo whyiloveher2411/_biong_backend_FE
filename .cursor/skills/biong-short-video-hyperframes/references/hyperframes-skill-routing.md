@@ -41,15 +41,18 @@ Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.
 | 1 | `/hyperframes` | Router + layout-before-animation |
 | 2 | `/general-video` | Orchestrator — pre-recorded VO |
 | 3 | `/product-launch-video` | `references/motion-language.md`, `composition.md`, `visual-design.md` |
-| 4 | `/hyperframes-core` | `references/tracks-and-clips.md` — clip contract |
-| 5 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
-| 6 | `/hyperframes-creative` | Palette, `beat-direction.md`, `audio-reactive.md` |
-| 7 | `/embedded-captions` | Karaoke word-sync |
-| 8 | `/hyperframes-media` | `transcribe` MP3 |
-| 9 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
-| 10 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
-| 11 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
-| 12 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
+| 4 | `/hyperframes-core` | `references/tracks-and-clips.md` — clip contract — **trước beat HTML** |
+| 5 | `/hyperframes-creative` | `video-composition.md`, palette, `audio-reactive.md` — **trước beat HTML** |
+| 6 | Kinetic typography | [kinetic-typography-brief.md](kinetic-typography-brief.md) — mindset motion graphics |
+| 7 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
+| 8 | Caption contract | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — script text + Whisper timing |
+| 9 | `/embedded-captions` + `/hyperframes-registry` | Registry caption blocks |
+| 10 | `/hyperframes-media` | `transcribe` MP3 |
+| 11 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
+| 12 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
+| 13 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
+| 14 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
+| 15 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 

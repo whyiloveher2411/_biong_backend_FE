@@ -36,6 +36,19 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 
 ---
 
+## Typography gates (1080×1920)
+
+Đọc [kinetic-typography-brief.md](kinetic-typography-brief.md) trước khi animate.
+
+| Gate | Quy tắc |
+|------|---------|
+| Headline | 64–120px — hero zone 8–52% |
+| Body | ≥28px — cấm <24px không justify |
+| Phrases | 3–5 từ/cụm — stagger `0.08–0.12` |
+| Lists | UI Card + icon — **không** bullet text thuần |
+
+---
+
 ## Minimum mỗi beat
 
 | # | Yêu cầu | Ví dụ |
@@ -73,7 +86,26 @@ window.__timelines["beat_1"] = tl;
 ## Audio-reactive (nhẹ)
 
 - Scale/glow theo amplitude narration — **không** equalizer bars generic
-- Sync caption qua word timestamps — không subtitle tĩnh
+- Caption karaoke **bắt buộc** — text từ `audio_script`, timing Whisper — xem [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md)
+- **Cấm** subtitle tĩnh hoặc text Whisper làm hiển thị
+
+---
+
+## MCP media — BGM + stock
+
+Đọc [media-mcp-activation.md](media-mcp-activation.md).
+
+### BGM global (track 11)
+
+- `search_bgm` sau transcribe — `min_duration_sec = totalVideoSec`
+- `index.html`: `data-start="0"`, `data-duration="{totalVideoSec}"`, `data-volume="0.18"`
+- Narration track 10: `data-volume="1.0"`
+- Nếu track ngắn hơn video → ffmpeg loop trước embed
+
+### Stock per beat
+
+- ≥1 `search_stock_media` mỗi beat — hero / full-bleed
+- GSAP paused timeline — **không** `tl.play()`
 
 ---
 
@@ -86,13 +118,18 @@ window.__timelines["beat_1"] = tl;
 - Mọi element cùng `from({ y: 30, opacity: 0 })`
 - Decorative không motion
 - `tl.play()` trong HyperFrames render
+- Bịa path `assets/` không qua MCP search
 - Animate `width`/`height`/`top`/`left` thay vì `x`/`y`/`scale`
 
 ---
 
 ## Preflight trước render
 
+- [ ] Caption karaoke wired — script text + transcript timing
+- [ ] Watermark Spacedev — [spacedev-brand-watermark.md](spacedev-brand-watermark.md)
+- [ ] Font body ≥28px; hero phrases 3–5 từ stagger
 - [ ] `window.__timelines["beat_N"]` tồn tại
 - [ ] `hyperframes lint` pass
 - [ ] Layout: `layout-9x16-zones.md` — không overlap caption
+- [ ] `media-plan.md` khớp assets đã embed
 - [ ] Preview frame tại 0.4 / 0.7 / 0.92 duration

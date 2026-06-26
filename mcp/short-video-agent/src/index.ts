@@ -89,12 +89,12 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.7.0',
+  version: '1.9.0',
 });
 
 server.tool(
   'short_video_get_context',
-  'Lấy creative brief + audio_script/audio_file + agent_workflow. Trả agent_tts_auto, workflow_mode (manual_2_step | auto_tts_full), tts_chain. Phase 2 / full pipeline cần audio_file.',
+  'Lấy creative brief + audio_script/audio_file + agent_workflow + production_playbook.media_assets (Pexels stock + Pixabay BGM MCP). Trả workflow_mode, tts_chain.',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
@@ -114,7 +114,7 @@ server.tool(
   'Lưu kịch bản audio viral (sau /extract-core-signals + /viral-audio-script). Truyền metadata: core_signals, markers, estimated_duration_sec. Manual mode: admin upload MP3 sau. Auto TTS: tiếp tục generate_narration_tts.',
   {
     short_video_id: z.number().int().positive(),
-    text: z.string().min(1).describe('Script có [SFX]/[BGM]/[Dừng Ns] — viết cho tai nghe'),
+    text: z.string().min(1).describe('Script có [BGM]/[Dừng Ns] — viết cho tai nghe'),
     metadata: z.record(z.unknown()).optional().describe('core_signals, markers[{time,text}], estimated_duration_sec, structure'),
   },
   async (args) => {
@@ -245,6 +245,52 @@ server.tool(
 
     const result = await apiRequest('update-status', { query });
 
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_search_stock_media',
+  'Tìm stock ảnh/video Pexels — BẮT BUỘC phase render mỗi beat (≥1 visual). Xem production_playbook.media_assets. Trả download_url — agent tải local.',
+  {
+    query: z.string().min(1).describe('Từ khóa EN hoặc VI — server có alias map'),
+    media_type: z.enum(['image', 'video']).optional().describe('Mặc định image'),
+    page: z.number().int().positive().optional(),
+    per_page: z.number().int().positive().max(25).optional(),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      query: args.query,
+      media_type: args.media_type ?? 'image',
+    };
+    if (args.page !== undefined) query.page = args.page;
+    if (args.per_page !== undefined) query.per_page = args.per_page;
+    const result = await apiRequest('search-stock-media', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_search_bgm',
+  'Tìm nhạc nền Pixabay — BẮT BUỘC 1 track/video (global BGM). Nhẹ nhàng, giọng đọc vẫn chính. Truyền min_duration_sec sau transcribe. Trả download_url — agent tải assets/audio/bgm.mp3.',
+  {
+    query: z.string().min(1).describe('Mood/genre: lofi ambient, soft corporate, cinematic...'),
+    min_duration_sec: z.number().positive().optional().describe('Lọc track ngắn hơn tổng video (giây)'),
+    limit: z.number().int().positive().max(15).optional(),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      query: args.query,
+    };
+    if (args.min_duration_sec !== undefined) {
+      query.min_duration_sec = args.min_duration_sec;
+    }
+    if (args.limit !== undefined) query.limit = args.limit;
+    const result = await apiRequest('search-bgm', { query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };

@@ -10,6 +10,18 @@ AI agent mặc định sinh HTML/CSS tối giản (text + đổi nền). **Bắt
 
 ---
 
+## Mindset shift — từ văn bản sang motion graphics
+
+**Đọc bắt buộc:** [kinetic-typography-brief.md](kinetic-typography-brief.md)
+
+- Invoke `/hyperframes-creative` + `/hyperframes-core` **trước** viết beat HTML
+- Cấm đoạn văn dài / font web-size — headline 64–120px, body ≥28px
+- Thoại hero: **3–5 từ/cụm**, GSAP stagger; list → UI Card + icon
+- Caption karaoke: [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — text script, timing Whisper
+- Watermark: [spacedev-brand-watermark.md](spacedev-brand-watermark.md) — logo + © Spacedev góc phải dưới
+
+---
+
 ## 1. Registry blocks (ưu tiên — không tự viết từ đầu)
 
 Trong thư mục project render, cài block từ HyperFrames registry:
@@ -103,6 +115,9 @@ Portrait 9:16: đảm bảo `hyperframes.json` / composition root = 1080×1920.
 
 ## Checklist trước render
 
+- [ ] Caption karaoke wired — text từ `audio_script`, timing transcript
+- [ ] Watermark Spacedev góc phải dưới — suốt `totalVideoSec`
+- [ ] Kinetic typography — không văn bản dài / font <28px body
 - [ ] ≥1 registry block wired (caption hoặc transition)
 - [ ] Không entrance dùng `ease: "none"` / linear
 - [ ] Stagger trên ≥1 nhóm mỗi beat
