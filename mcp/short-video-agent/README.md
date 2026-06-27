@@ -11,17 +11,21 @@ MCP server cho Cursor agent — workflow video + **media search** (Pexels stock 
 | `false` (mặc định) | Script → admin MP3 → render | Bước 1 + bước 2 |
 | `true` | Script → TTS MCP → render → upload | Một prompt toàn pipeline |
 
-**TTS chain (auto):** OmniVoice (clone `audio_demo`) → VieNeu → Saydi → Vbee.
+**TTS chain (auto):** OmniVoice Kaggle (GPU) → OmniVoice local (CPU) → VieNeu → Saydi → Vbee. Clone `audio_demo`, `num_step=64`, speed `1.15`.
 
-**Prereq OmniVoice trên server** (`_biong_backend`):
+**Prereq OmniVoice** (`_biong_backend`):
 
 ```bash
+# Tuỳ chọn — GPU nhanh (sau Run Cell 1 Kaggle):
+cd kaggle/omnivoice-tts && ./save-endpoint.sh HOST PORT && ./resume-kaggle.sh
+
+# Fallback — local CPU:
 ./omnivoice-tts.sh install   # một lần
 ./omnivoice-tts.sh prepare-clone
 ./omnivoice-tts.sh start
 ```
 
-Env: `OMNIVOICE_TTS_PORT` (mặc định 8766), `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`. Short video MCP gọi sync qua HTTP — không cần `./run_worker_omnivoice.sh`.
+Env backend: `OMNIVOICE_TTS_KAGGLE_BASE_URL`, `OMNIVOICE_TTS_LOCAL_BASE_URL`, `OMNIVOICE_USE_AUDIO_DEMO_CLONE=1`, `OMNIVOICE_NUM_STEP=64`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`. Response `tts_provider_used`: `omnivoice_kaggle` | `omnivoice_local` | …
 
 ## Media search
 
@@ -53,7 +57,7 @@ npx skills add https://github.com/greensock/gsap-skills
 |------|--------|
 | `short_video_get_context` | Creative brief + production_playbook (media_assets) |
 | `short_video_save_audio_script` | Script viral + metadata markers |
-| `short_video_generate_narration_tts` | TTS auto — OmniVoice→VieNeu→Saydi→Vbee |
+| `short_video_generate_narration_tts` | TTS auto — OmniVoice Kaggle→local→VieNeu→Saydi→Vbee |
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |
 | `short_video_search_bgm` | Nhạc nền Pixabay |
