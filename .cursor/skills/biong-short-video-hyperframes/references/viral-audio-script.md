@@ -2,68 +2,70 @@
 
 Skill phase 1. Invoke: `/viral-audio-script` sau `/extract-core-signals`.
 
+**Đọc trước:** [viral-retention-structure.md](viral-retention-structure.md)
+
+## Timeline viral (30–45s, mặc định 40s)
+
+```
+0s ── Hook ── 3s ── Agitate ── 15s ── Solve ── 35s ── CTA/Loop ── 40s
+```
+
 ## Công thức HASCAS
 
-```
-Hook (3s) → Agitate → Solve → CTA
-```
-
-| Phần | Nội dung |
-|------|----------|
-| Hook | Nỗi sợ / tò mò — câu đầu ≤15 từ |
-| Agitate | Khoét villain từ tension |
-| Solve | Takeaway formula + proof ngắn |
-| CTA | Một hành động — xem, thử, bấm link |
+| Phần | Giây | Mục tiêu |
+|------|------|----------|
+| Hook | 0–3 | Ngừng lướt — số shock, câu hỏi |
+| Agitate | 3–15 | Đồng cảm — villain, sai lầm phổ biến |
+| Solve | 15–35 | Công thức 3 bước + proof ngắn |
+| CTA/Loop | 35–40 | CTA 1 hành động **hoặc** câu nối hook |
 
 ## Viết cho tai nghe
 
-- Mỗi câu **10–15 từ**
-- Ngắt nhịp bằng `.` và `,` — tránh câu 40+ từ
-- Tiếng Việt nói tự nhiên — như podcast ngắn, không báo chí
+| Quy tắc | Chi tiết |
+|---------|----------|
+| Độ dài câu | **≤12 từ** — không 10–15 như cũ |
+| Dấu phẩy | Ngắt nghỉ ngắn — không lạm dụng |
+| Dấu chấm | Kết thúc ý — giữa Hook/Agitate/Solve |
+| Ngôn ngữ | Nói tự nhiên — không văn phong báo |
+| Nhịp | Dồn dập — phù hợp TTS VieNeu/Saydi/Vbee |
 
-## Thẻ âm thanh (trong text)
+## Thẻ âm thanh
 
-| Thẻ | Khi dùng |
-|-----|----------|
-| `[SFX: Tiếng sấm sét]` | Hook shock |
-| `[SFX: Chuông báo]` | Cảnh báo / myth bust |
-| `[BGM: Đẩy cao trào]` | Trước Solve |
-| `[Dừng 1s]` | Beat dramatic sau hook |
-
-Admin ghi âm MP3 thủ công — thẻ hướng dẫn người đọc và phase 2 beat map.
+| Thẻ | Phase 2 MCP |
+|-----|-------------|
+| `[BGM: mood]` | `short_video_search_bgm` |
+| `[SFX: vine boom]` | `short_video_search_meme_sound` — hook giây 0 |
+| `[Dừng 0.5s]` | Beat dramatic sau hook |
+| `[Dừng 1s]` | Trước Solve |
 
 ## Lưu qua MCP
 
 ```text
 short_video_save_audio_script({
   short_video_id: N,
-  text: "[SFX: ...] Câu hook. [Dừng 1s]. ...",
+  text: "[BGM: lofi ambient] [SFX: vine boom] Câu hook. [Dừng 0.5s]. ...",
   metadata: {
     core_signals: { hook, tension, takeaway },
-    markers: [{ time: 0, text: "..." }, { time: 3, text: "..." }],
-    estimated_duration_sec: 45,
-    structure: "hook-agitate-solve-cta"
+    structure: "hook-agitate-solve-cta",
+    timeline: { hook_end: 3, agitate_end: 15, solve_end: 35, total: 40 },
+    cta_mode: "loop",
+    markers: [{ time: 0, text: "...", section: "hook" }],
+    estimated_duration_sec: 40,
+    bgm_mood: "lofi ambient"
   }
 })
 ```
 
-## Ví dụ output
+## Ví dụ loop CTA
 
-```json
-{
-  "audio_script": "[SFX: Tiếng kính vỡ] 99% mọi người đang dùng HyperFrames sai cách! [Dừng 1s]. Bạn nghĩ cứ add skill là video tự đẹp? Sai lầm. [SFX: Tiếng chuông báo động]. Bí mật nằm ở Stagger và Easing. Xem ngay 3 bước sau...",
-  "markers": [
-    { "time": 0, "text": "99% mọi người sai cách" },
-    { "time": 3, "text": "Sai lầm lớn nhất" }
-  ]
-}
-```
-
-Phase 2: `markers` + transcribe MP3 → caption kinetic + beat cuts.
+- Hook: "99% người làm video sai bước này."
+- Đóng: "…và đó là lý do 99% người vẫn sai."
 
 ## Anti-patterns
 
+- Câu >12 từ
+- Không dấu chấm giữa các ý
+- Hook mơ hồ sau 3s
+- Thiếu `[SFX]` khi hook cần punch
+- CTA dài + chào tạm biệt — phá infinite loop
 - Văn viết dài, không đọc được
-- Không có hook 3 giây đầu
-- Thiếu SFX tại cao trào
-- CTA mơ hồ hoặc nhiều CTA

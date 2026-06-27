@@ -2,16 +2,18 @@
 
 Skill phase 1. Invoke: `/extract-core-signals`
 
+**Đọc:** [viral-retention-structure.md](viral-retention-structure.md)
+
 ## Mục tiêu
 
-Từ `creative_brief.content_plain_text` (marketing post), trích **3 tín hiệu** — không tóm tắt dài dòng.
+Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu cho timeline **0→3→15→35→40s** — không tóm tắt dài dòng.
 
 ## Ba trục
 
 ### 1. The Hook (điểm móc)
 
 - Câu gây sốc, số liệu tranh cãi, myth cần phá
-- Đặt lên đầu script — phải giữ người xem trong 3 giây đầu
+- `draft_line` **≤12 từ** — đặt lên đầu script, giữ người xem trong 3 giây đầu
 
 ### 2. The Tension (kịch tính)
 
@@ -40,6 +42,13 @@ Từ `creative_brief.content_plain_text` (marketing post), trích **3 tín hiệ
   "takeaway": {
     "formula": "3 bước: signals → viral script → cinematic render",
     "proof": "Từ nội dung marketing post / case thực tế"
+  },
+  "loop_hook_line": "…và đó là lý do 99% team vẫn nhàm chán",
+  "beat_suggestions": {
+    "hook": "meme SFX + kinetic slam + stock",
+    "agitate": "palette shift mỗi phrase",
+    "solve": "UI cards 3 bước",
+    "cta": "loop line + BGM fade"
   }
 }
 ```

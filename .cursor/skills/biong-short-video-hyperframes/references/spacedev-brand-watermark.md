@@ -94,7 +94,7 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
       display: block;
     }
     .brand-wrap span {
-      font-family: "Outfit", "Inter", system-ui, sans-serif;
+      font-family: "Be Vietnam Pro", system-ui, sans-serif;
       font-size: 20px;
       font-weight: 600;
       color: rgba(255, 255, 255, 0.92);

@@ -12,6 +12,7 @@ Trước khi viết bất kỳ beat HTML nào:
 
 1. Invoke `/hyperframes-creative` — đọc `references/video-composition.md`
 2. Invoke `/hyperframes-core` — đọc `references/tracks-and-clips.md`
+3. Đọc [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — Be Vietnam Pro local
 
 ---
 

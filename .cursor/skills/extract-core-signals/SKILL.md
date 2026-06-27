@@ -1,46 +1,55 @@
 ---
 name: extract-core-signals
-description: Trích xuất tín hiệu viral từ tài liệu thô (marketing post, bài báo, ghi chú) — Hook, Tension, Takeaway. Dùng phase 1 short video agent trước khi viết audio_script.
+description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Tension, Takeaway, loop line. Dùng phase 1 short video agent trước khi viết audio_script.
 ---
 
 # extract-core-signals
 
-**Không** tóm tắt học thuật. Quét văn bản để tìm 3 yếu tố giữ chân người xem.
+**Không** tóm tắt học thuật. Quét văn bản để tìm yếu tố giữ chân người xem.
+
+**Đọc:** `biong-short-video-hyperframes/references/viral-retention-structure.md`
 
 ## Input
 
 - `creative_brief.content_plain_text` từ `short_video_get_context`
-- Hoặc tài liệu thô user đính kèm
 
 ## Output (JSON)
 
 ```json
 {
   "hook": {
-    "angle": "Câu gây sốc / số liệu tranh cãi / hiểu lầm phổ biến",
-    "draft_line": "Một câu mở đầu ≤15 từ"
+    "angle": "Số shock / myth-bust / câu hỏi nỗi sợ",
+    "draft_line": "Một câu mở ≤12 từ"
   },
   "tension": {
-    "villain": "Thói quen xấu / sai lầm / nỗi đau",
-    "stakes": "Hậu quả cụ thể nếu không đổi",
-    "rescue": "Giải pháp / insight cứu cánh"
+    "villain": "Thói quen xấu / sai lầm",
+    "stakes": "Hậu quả cụ thể",
+    "rescue": "Insight cứu cánh"
   },
   "takeaway": {
-    "formula": "Quy tắc 3 bước / mẹo 5 giây / công thức dễ nhớ",
-    "proof": "Số liệu hoặc ví dụ từ nguồn — không bịa"
+    "formula": "3 bước / mẹo 5 giây",
+    "proof": "Số liệu từ nguồn — không bịa"
+  },
+  "loop_hook_line": "Câu cuối nối mạch draft_line — cho infinite loop",
+  "beat_suggestions": {
+    "hook": "meme SFX + kinetic slam + stock hook",
+    "agitate": "đổi palette mỗi phrase, pain cards",
+    "solve": "UI cards 3 bước, số đếm",
+    "cta": "loop line hoặc CTA ngắn + BGM fade"
   }
 }
 ```
 
 ## Quy tắc
 
-1. **Hook** — số liệu giật gân, insight gây tranh cãi, hoặc myth-bust từ nguồn
-2. **Tension** — đặt tên "kẻ phản diện" rõ (thói quen, tool sai, quy trình lỗi thời)
-3. **Takeaway** — đóng gói thành công thức nhớ được, bám nội dung marketing post
-4. **Không** invent claims ngoài `content_plain_text`
+1. **Hook** — `draft_line` **≤12 từ**; số liệu / myth-bust / câu hỏi
+2. **Tension** — villain rõ, stakes cụ thể
+3. **Takeaway** — công thức nhớ được
+4. **loop_hook_line** — semantic bridge về hook (cho `cta_mode: loop`)
+5. **Không** invent claims ngoài nguồn
 
 ## Bước tiếp
 
-Chuyển output sang `/viral-audio-script` → `save_audio_script`.
+`/viral-audio-script` → `save_audio_script` với `timeline` + `markers`.
 
 Tham khảo: `biong-short-video-hyperframes/references/extract-core-signals.md`

@@ -22,9 +22,10 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 ## Phase 1 — audio_script viral
 
 1. `short_video_get_context` → `creative_brief.content_plain_text`
-2. `/extract-core-signals` → hook, tension, takeaway
-3. `/viral-audio-script` → HASCAS + `[SFX]` + markers (~45s)
-4. `save_audio_script({ text, metadata })` → **DỪNG**
+2. Đọc [viral-retention-structure.md](viral-retention-structure.md)
+3. `/extract-core-signals` → hook, tension, takeaway, loop_hook_line
+4. `/viral-audio-script` → timeline 40s, câu ≤12 từ, `[SFX]` + markers
+5. `save_audio_script({ text, metadata })` → **DỪNG**
 
 Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md)
 
@@ -44,18 +45,20 @@ Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.
 | 4 | `/hyperframes-core` | `references/tracks-and-clips.md` — clip contract — **trước beat HTML** |
 | 5 | `/hyperframes-creative` | `video-composition.md`, palette, `audio-reactive.md` — **trước beat HTML** |
 | 6 | Kinetic typography | [kinetic-typography-brief.md](kinetic-typography-brief.md) — mindset motion graphics |
-| 7 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
-| 8 | Caption contract | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — script text + Whisper timing |
-| 9 | `/embedded-captions` + `/hyperframes-registry` | Registry caption blocks |
-| 10 | `/hyperframes-media` | `transcribe` MP3 |
-| 11 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
-| 12 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — caption 9000, watermark 9500 |
-| 13 | **Preflight** | `/biong-short-video-preflight` — check-overlay-stack.mjs |
-| 14 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
-| 15 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
-| 16 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
-| 17 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
-| 16 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) — lint + inspect trước render |
+| 7 | Typography font | [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — **trước beat HTML** |
+| 8 | Viral pacing | [viral-retention-structure.md](viral-retention-structure.md) — beat map timeline |
+| 9 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
+| 10 | Caption contract | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — script text + Whisper timing |
+| 11 | `/embedded-captions` + `/hyperframes-registry` | Registry caption blocks |
+| 12 | `/hyperframes-media` | `transcribe` MP3 |
+| 13 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
+| 14 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — caption 9000, watermark 9500 |
+| 15 | **Preflight** | `/biong-short-video-preflight` — check-overlay-stack.mjs |
+| 16 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
+| 17 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
+| 18 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
+| 19 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
+| 20 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) — lint + inspect trước render |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 

@@ -230,6 +230,22 @@ if (
   );
 }
 
+// --- Be Vietnam Pro font ---
+const htmlBundle = indexHtml + captionsHtml + watermarkHtml;
+if (/fonts\.googleapis\.com/i.test(htmlBundle)) {
+  errors.push("Cấm fonts.googleapis.com — dùng Be Vietnam Pro local @font-face");
+}
+if (!/Be Vietnam Pro/i.test(htmlBundle)) {
+  warnings.push(
+    "Chưa thấy font-family Be Vietnam Pro — đọc typography-be-vietnam-pro.md",
+  );
+}
+if (!exists("assets/fonts/BeVietnamPro-Regular.ttf")) {
+  warnings.push(
+    "Thiếu assets/fonts/BeVietnamPro-Regular.ttf — copy từ skill assets/fonts/",
+  );
+}
+
 // --- Report ---
 warnings.forEach((w) => console.warn(`⚠ ${w}`));
 

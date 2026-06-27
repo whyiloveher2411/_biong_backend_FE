@@ -47,22 +47,23 @@ Chain TTS: **VieNeu → Saydi → Vbee** — response `tts_provider_used`.
 
 **Đọc trước:** [media-mcp-activation.md](references/media-mcp-activation.md)
 
-Phase 1 chỉ ghi `[BGM: mood]` + `markers` — **không** gọi MCP. Phase render:
+Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` — **không** gọi MCP. Phase render:
 
 1. Transcribe → `totalVideoSec`
-2. `search_bgm` 1 lần (global) + `search_stock_media` mỗi beat
-3. Embed BGM track 11 + stock trong beat HTML; GSAP paused
+2. `search_meme_sound` (hook) + `search_bgm` + `search_stock_media` mỗi beat
+3. Embed SFX track 12 + BGM track 11 + stock; GSAP paused
 
 | Tool | Dùng khi |
 |------|----------|
+| `short_video_search_meme_sound` | Hook SFX — vine boom, sấm sét (giây 0) |
 | `short_video_search_stock_media` | B-roll cinematic (Pexels) — ≥1 mỗi beat |
-| `short_video_search_bgm` | Nhạc nền Pixabay — 1 track/video, nhẹ, phát suốt chiều dài |
+| `short_video_search_bgm` | Nhạc nền Pixabay — 1 track/video |
 
-Thư mục: `storage/agent-renders/{id}/assets/{images,audio}/`
+Thư mục: `storage/agent-renders/{id}/assets/{images,audio,fonts}/`
 
-Deliverable: `my-video/media-plan.md` — dòng `bgm_global` + mỗi beat stock.
+Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat stock.
 
-**Tần suất:** mỗi video ≥1 BGM; mỗi beat ≥1 stock visual; hook beat ưu tiên stock video.
+**Tần suất:** hook SFX (nếu script có `[SFX]`); ≥1 BGM; mỗi beat ≥1 stock; hook beat ưu tiên stock video.
 
 `get_context.production_playbook.media_assets` có `priority_matrix`, `frequency_rules`, `alias_hints`.
 
@@ -79,19 +80,29 @@ Deliverable: `my-video/media-plan.md` — dòng `bgm_global` + mỗi beat stock.
 | 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway |
 | 2 | `/viral-audio-script` | `text` + `[BGM]` + `markers` |
 
-Docs: [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md)
+Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md)
 
-### Công thức HASCAS
+### Timeline viral (30–45s)
 
-Hook (3s) → Agitate → Solve → CTA — câu 10–15 từ, viết cho tai nghe.
+```
+0s Hook (3s) → Agitate (15s) → Solve (35s) → CTA/Loop (40s)
+```
+
+- Câu **≤12 từ**; dấu phẩy/chấm rõ; `[Dừng 0.5s/1s]`
+- `[SFX: vine boom]` ở hook; `cta_mode: "loop"` khuyến nghị
 
 ### Lưu MCP
 
 ```text
 short_video_save_audio_script({
   short_video_id,
-  text: "[BGM: lofi ambient] ...",
-  metadata: { core_signals, markers, estimated_duration_sec: 45 }
+  text: "[BGM: lofi ambient] [SFX: vine boom] ...",
+  metadata: {
+    timeline: { hook_end: 3, agitate_end: 15, solve_end: 35, total: 40 },
+    cta_mode: "loop",
+    markers: [{ time: 0, text: "...", section: "hook" }],
+    estimated_duration_sec: 40
+  }
 })
 ```
 
@@ -105,7 +116,7 @@ short_video_save_audio_script({
 
 **Senior Motion Graphics** — dynamic, cinematic. Cấm slide text + đổi nền.
 
-**Mindset:** Motion designer TikTok/Reels — đọc [kinetic-typography-brief.md](references/kinetic-typography-brief.md). Invoke `/hyperframes-creative` + `/hyperframes-core` trước beat HTML.
+**Mindset:** Motion designer — [kinetic-typography-brief.md](references/kinetic-typography-brief.md). Font: [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md). Pacing: [viral-retention-structure.md](references/viral-retention-structure.md).
 
 ### Caption karaoke (bắt buộc mọi video)
 
@@ -168,18 +179,20 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 
 ## Tài liệu (đọc theo thứ tự)
 
-1. [media-mcp-activation.md](references/media-mcp-activation.md) — **phase render: MCP assets bắt buộc**
-2. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc: script text + Whisper timing**
-3. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
-4. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
-5. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
-6. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
-7. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
-8. [layout-9x16-zones.md](references/layout-9x16-zones.md)
-9. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
-10. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect: tránh blank frames / mất chữ**
-11. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
-12. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
+1. [viral-retention-structure.md](references/viral-retention-structure.md) — **timeline viral + retention pacing**
+2. [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md) — **font Be Vietnam Pro local**
+3. [media-mcp-activation.md](references/media-mcp-activation.md) — **phase render: MCP assets bắt buộc**
+4. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc**
+5. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
+6. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
+7. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
+8. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
+9. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+10. [layout-9x16-zones.md](references/layout-9x16-zones.md)
+11. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
+12. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
+13. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
+14. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
 ---
 

@@ -2,7 +2,7 @@
 
 AI agent mặc định bịa đường dẫn `assets/foo.mp3` hoặc bỏ qua nhạc nền. **Bắt buộc** đọc file này phase render (sau transcribe) trước khi viết beat HTML.
 
-**Phạm vi:** chỉ phase render — phase 1 script chỉ ghi `[BGM: mood]` + `metadata.markers`, không gọi MCP.
+Phase 1 script: ghi `[BGM: mood]`, `[SFX: ...]` + `metadata.markers` / `timeline` — không gọi MCP.
 
 ---
 
@@ -22,6 +22,14 @@ Chuyên gia Motion Graphics viral TikTok/Reels — video **cinematic, có B-roll
 - Map mỗi beat → stock visual trigger
 
 ### 2. Gọi MCP (cấm bịa tên file)
+
+**Hook SFX (1 lần / video, giây 0):**
+
+```text
+short_video_search_meme_sound({ query: "vine boom" })
+```
+
+Tải → `storage/agent-renders/{id}/assets/audio/sfx_hook.mp3`
 
 **BGM (1 lần / video):**
 
@@ -54,11 +62,13 @@ Tải → `storage/agent-renders/{id}/assets/images/`
 
 | Trigger | MCP tool | Ghi chú |
 |---------|----------|---------|
+| `[SFX: ...]` / hook punch | `short_video_search_meme_sound` | 1 clip, `data-start=0`, track 12, volume 0.35–0.5 |
 | `[BGM: ...]` / mood video | `short_video_search_bgm` | 1 track, `data-start=0`, `data-duration=totalVideoSec` |
 | Hook / b-roll / tech / edu | `short_video_search_stock_media` | `video` ưu tiên, fallback `image` |
 
 **Ví dụ routing:**
 
+- `vine boom`, `sấm sét`, `airhorn` → `search_meme_sound`
 - `lofi ambient`, `soft corporate` → `search_bgm`
 - `city night`, `office technology` → `search_stock_media` video
 
@@ -69,6 +79,7 @@ Tải → `storage/agent-renders/{id}/assets/images/`
 | Quy tắc | Chi tiết |
 |---------|----------|
 | Mỗi video | ≥ **1** BGM track global (track 11) |
+| Hook | ≥ **1** meme SFX nếu script có `[SFX: ...]` (track 12) |
 | Mỗi beat (4–8) | ≥ **1** stock visual (Pexels) |
 | Beat Hook (beat 1) | Bắt buộc **stock video** (ưu tiên) hoặc stock image |
 | BGM volume | **0.15–0.20** — narration track 10 giữ **1.0** |
@@ -113,11 +124,12 @@ Tạo **trước** khi viết HTML beat:
 ```markdown
 | scope | time_sec | trigger | mcp_tool | query | local_path |
 |-------|----------|---------|----------|-------|------------|
+| sfx_hook | 0.0 | [SFX: vine boom] | short_video_search_meme_sound | vine boom | ../assets/audio/sfx_hook.mp3 |
 | bgm_global | 0.0 | [BGM: lofi ambient] | short_video_search_bgm | lofi ambient | ../assets/audio/bgm.mp3 |
 | hook | 0.0 | hook_visual | short_video_search_stock_media | city night | ../assets/images/hook_stock.mp4 |
 ```
 
-**Quality gate:** không `hyperframes render` nếu thiếu dòng `bgm_global` hoặc beat thiếu stock visual.
+**Quality gate:** không `hyperframes render` nếu thiếu `bgm_global`, thiếu `sfx_hook` (khi script có `[SFX]`), hoặc beat thiếu stock visual.
 
 ---
 

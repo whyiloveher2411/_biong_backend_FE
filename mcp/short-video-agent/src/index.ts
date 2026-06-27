@@ -275,6 +275,25 @@ server.tool(
 );
 
 server.tool(
+  'short_video_search_meme_sound',
+  'Tìm meme SFX Myinstants — hook punch (vine boom, sấm sét…). 1 lần/video tại giây 0. Trả download_url — agent tải assets/audio/sfx_hook.mp3.',
+  {
+    query: z.string().min(1).describe('Từ khóa: vine boom, airhorn, sấm sét, crying meme…'),
+    limit: z.number().int().positive().max(15).optional(),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      query: args.query,
+    };
+    if (args.limit !== undefined) query.limit = args.limit;
+    const result = await apiRequest('search-meme-sound', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
   'short_video_search_bgm',
   'Tìm nhạc nền Pixabay — BẮT BUỘC 1 track/video (global BGM). Nhẹ nhàng, giọng đọc vẫn chính. Truyền min_duration_sec sau transcribe. Trả download_url — agent tải assets/audio/bgm.mp3.',
   {

@@ -19,6 +19,8 @@ AI agent mặc định sinh HTML/CSS tối giản (text + đổi nền). **Bắt
 - Thoại hero: **3–5 từ/cụm**, GSAP stagger; list → UI Card + icon
 - Caption karaoke: [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — text script, timing Whisper, host z-index **9000**
 - Watermark: [spacedev-brand-watermark.md](spacedev-brand-watermark.md) — host z-index **9500**, suốt video
+- Font: [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — Be Vietnam Pro local
+- Viral pacing: [viral-retention-structure.md](viral-retention-structure.md) — visual change 1.5–2s
 - Overlay stack: [overlay-layer-stack.md](overlay-layer-stack.md) — **data-track-index ≠ z-order**
 - Preflight: `/biong-short-video-preflight` trước render final
 

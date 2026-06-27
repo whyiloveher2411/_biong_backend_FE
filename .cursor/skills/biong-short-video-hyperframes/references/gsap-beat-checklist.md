@@ -51,6 +51,17 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 
 ---
 
+## Retention pacing (viral)
+
+Đọc [viral-retention-structure.md](viral-retention-structure.md).
+
+- **Visual change mỗi 1.5–2s** — không frame tĩnh >2s
+- Beat map theo `metadata.timeline` (Hook 0–3, Agitate 3–15, Solve 15–35, CTA 35–40)
+- `animation-map.mjs` dead zone ≤1.5s
+- Agitate: đổi palette / layout mỗi phrase
+
+---
+
 ## Typography gates (1080×1920)
 
 Đọc [kinetic-typography-brief.md](kinetic-typography-brief.md) trước khi animate.
