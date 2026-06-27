@@ -49,10 +49,12 @@ Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.
 | 9 | `/embedded-captions` + `/hyperframes-registry` | Registry caption blocks |
 | 10 | `/hyperframes-media` | `transcribe` MP3 |
 | 11 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
-| 12 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
-| 13 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
-| 14 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
-| 15 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
+| 12 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — caption 9000, watermark 9500 |
+| 13 | **Preflight** | `/biong-short-video-preflight` — check-overlay-stack.mjs |
+| 14 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
+| 15 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
+| 16 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
+| 17 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
 | 16 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) — lint + inspect trước render |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
@@ -106,12 +108,13 @@ Sau khi viết beat HTML — đọc [blank-frame-audit.md](blank-frame-audit.md)
 
 ```bash
 cd storage/agent-renders/{id}/my-video
+node ../../../../.cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs .
 npx hyperframes lint
 npx hyperframes inspect --json
 node .agents/skills/hyperframes-animation/scripts/animation-map.mjs .
 ```
 
-Preflight overlap caption vs content (layout zones). **0 lint errors** trước `--quality high`.
+Preflight overlay pass + overlap caption vs content (layout zones). **0 lint errors** trước `--quality high`.
 
 ---
 

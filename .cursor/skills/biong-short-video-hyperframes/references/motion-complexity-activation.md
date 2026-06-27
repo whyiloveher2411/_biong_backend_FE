@@ -17,8 +17,10 @@ AI agent mặc định sinh HTML/CSS tối giản (text + đổi nền). **Bắt
 - Invoke `/hyperframes-creative` + `/hyperframes-core` **trước** viết beat HTML
 - Cấm đoạn văn dài / font web-size — headline 64–120px, body ≥28px
 - Thoại hero: **3–5 từ/cụm**, GSAP stagger; list → UI Card + icon
-- Caption karaoke: [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — text script, timing Whisper
-- Watermark: [spacedev-brand-watermark.md](spacedev-brand-watermark.md) — logo + © Spacedev góc phải dưới
+- Caption karaoke: [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — text script, timing Whisper, host z-index **9000**
+- Watermark: [spacedev-brand-watermark.md](spacedev-brand-watermark.md) — host z-index **9500**, suốt video
+- Overlay stack: [overlay-layer-stack.md](overlay-layer-stack.md) — **data-track-index ≠ z-order**
+- Preflight: `/biong-short-video-preflight` trước render final
 
 ---
 

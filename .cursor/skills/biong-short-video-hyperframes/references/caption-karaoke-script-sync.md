@@ -66,15 +66,28 @@ Customize in-place sau khi `add` — không reinvent HTML/CSS caption.
 - Caption **tách file** — `compositions/captions.html` hoặc registry sub-composition.
 - Band **78–100%** canvas (1498–1920px) — xem [layout-9x16-zones.md](layout-9x16-zones.md).
 - **Cấm** karaoke inline trong beat HTML cùng layer diagram.
+- **Z-index bắt buộc:** host clip trong `index.html` phải `z-index:9000` — xem [overlay-layer-stack.md](overlay-layer-stack.md). **`data-track-index` KHÔNG thay z-index.**
 
 ```html
-<div class="clip" data-composition-src="compositions/captions.html"
-     data-start="0" data-duration="{totalVideoSec}" data-track-index="5">
+<!-- CUỐI #root, SAU mọi beat section -->
+<div class="clip hf-overlay-caption"
+     data-composition-src="compositions/captions.html"
+     data-start="0"
+     data-duration="{totalVideoSec}"
+     data-track-index="20"
+     style="position:absolute;inset:0;z-index:9000;pointer-events:none;">
 </div>
+```
+
+Trong `compositions/captions.html`:
+
+```css
+html, body { background: transparent !important; }
 ```
 
 - GSAP caption timeline: `window.__timelines["caption-pill-karaoke"]` — `paused: true`.
 - Karaoke active word: stagger `0.08–0.12` sync `word.start` / `word.end`.
+- Preflight: `/biong-short-video-preflight` hoặc `check-overlay-stack.mjs` — **pass trước render final**.
 
 ---
 
@@ -120,4 +133,7 @@ Customize in-place sau khi `add` — không reinvent HTML/CSS caption.
 - [ ] Mọi word hiển thị khớp script (không phải Whisper text)
 - [ ] Chunk 3–5 từ / group
 - [ ] Registry block installed + wired
+- [ ] Caption host `z-index:9000` trong index.html
+- [ ] `compositions/captions.html` body `background: transparent`
+- [ ] Preflight `check-overlay-stack.mjs` pass
 - [ ] Caption band không overlap diagram/CTA

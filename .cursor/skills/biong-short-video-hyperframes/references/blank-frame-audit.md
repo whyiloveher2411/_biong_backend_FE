@@ -13,6 +13,9 @@ Chạy trong thư mục project render:
 ```bash
 cd storage/agent-renders/{id}/my-video
 
+# 0. Overlay stack — caption + watermark z-index (BẮT BUỘC trước render final)
+node ../../../../.cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs .
+
 # 1. Cấu trúc: track overlap, timeline chưa đăng ký, media thiếu id
 npx hyperframes lint
 
@@ -35,6 +38,8 @@ node .agents/skills/hyperframes-animation/scripts/animation-map.mjs .
 | Beat 2+ trống, hero không hiện | Chọn **một** timeline pattern (A hoặc B) — **cấm pattern C** | Bảng dưới; `determinism-rules.md` |
 | Chữ nhấp nháy / mất 1–2 frame đầu beat | `tl.fromTo()` thay `tl.from()` trong `.clip` scene | `hyperframes-animation/adapters/gsap-timeline-and-labels.md` |
 | Caption biến mất giữa video | Text từ `audio_script` + `fill-timings.cjs` — cấm map tỷ lệ thô | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) |
+| Karaoke/logo chìm dưới nền beat | Host clip z-index 9000/9500; body transparent trong sub-composition | [overlay-layer-stack.md](overlay-layer-stack.md) |
+| Logo lúc có lúc không | Watermark host global `data-duration=totalVideoSec` — cấm beat cuối | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
 | Stock video đứng hình / freeze | Re-encode keyframe dày trước embed | [media-mcp-activation.md](media-mcp-activation.md) |
 | Khung trống do font | Cấm `fonts.googleapis.com`; dùng `sans-serif` hoặc `@font-face` local | `hyperframes lint` rule `google_fonts_import` |
 
@@ -108,6 +113,7 @@ API `hyperframes.start({ delay })` **không tồn tại** trong HyperFrames CLI.
 
 ## Checklist nhanh
 
+- [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `lint` 0 errors
 - [ ] `inspect` không có text clipped / missing ở caption band
 - [ ] Timeline pattern A **hoặc** B — **không** pattern C

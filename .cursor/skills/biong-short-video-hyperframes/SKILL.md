@@ -118,10 +118,22 @@ short_video_save_audio_script({
 
 ### Watermark Spacedev (bắt buộc)
 
-Đọc [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md):
+Đọc [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) + [overlay-layer-stack.md](references/overlay-layer-stack.md):
 
 - Logo: `assets/spacedev-logo.png` (bundled trong skill)
-- Góc phải dưới + `"© Spacedev"` — suốt `totalVideoSec`
+- Host clip `z-index:9500`, **cuối** `#root`, `data-duration=totalVideoSec`
+- **Cấm** gắn logo vào beat cuối — sẽ lúc có lúc không
+
+### Preflight (bắt buộc trước render final)
+
+Invoke `/biong-short-video-preflight`:
+
+```bash
+node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs \
+  storage/agent-renders/{id}/my-video
+```
+
+Pass → mới `render --quality high --strict`.
 
 ### Registry blocks (ưu tiên)
 
@@ -160,12 +172,14 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 2. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc: script text + Whisper timing**
 3. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
 4. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
-5. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
-6. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
-7. [layout-9x16-zones.md](references/layout-9x16-zones.md)
-8. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
-9. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect: tránh blank frames / mất chữ**
-10. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
+5. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
+6. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
+7. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+8. [layout-9x16-zones.md](references/layout-9x16-zones.md)
+9. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
+10. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect: tránh blank frames / mất chữ**
+11. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
+12. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
 ---
 
@@ -178,11 +192,14 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 | Registry | `/hyperframes-registry` |
 | Caption | `/embedded-captions` |
 | GSAP | `/hyperframes-animation` + gsap-skills |
+| Preflight | `/biong-short-video-preflight` — trước render final |
 
 ---
 
 ## Quality gates
 
+- [ ] Caption host `z-index:9000` + watermark host `z-index:9500` — [overlay-layer-stack.md](references/overlay-layer-stack.md)
+- [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
 - [ ] Caption karaoke wired — text `audio_script`, timing transcript, registry block
 - [ ] Watermark Spacedev — logo + © Spacedev góc phải dưới, suốt video
 - [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; list → UI Card
@@ -206,7 +223,6 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 ## Lệnh mẫu
 
 ```
-Render video agent ID 9 (phase 2). Đọc motion-complexity-activation.md + blank-frame-audit.md.
-lint + inspect trước render. Timeline pattern A (single main). stagger + no linear.
-Render --quality high --strict. upload_agent_video.
+Render video agent ID 9 (phase 2). overlay-layer-stack: caption z9000, watermark z9500.
+/biong-short-video-preflight → check-overlay-stack.mjs pass → lint → render --quality high --strict.
 ```
