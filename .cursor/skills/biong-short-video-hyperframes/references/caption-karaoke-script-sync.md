@@ -34,16 +34,28 @@ node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs .
 
 **Cấm** copy text từ `transcript.json` vào caption — Whisper hay sai chính tả tiếng Việt.
 
-Thuật toán: map tuần tự script word *N* ← Whisper timing word *N* (lookahead 40) — port từ `embedded-captions/scripts/fill-timings.cjs`.
+Thuật toán: [`caption-script-align.mjs`](../../biong-short-video-preflight/scripts/lib/caption-script-align.mjs) — 4 tầng map (lookahead 40):
+
+| Tầng | Khi nào | Kết quả |
+|------|---------|---------|
+| **exact** | `norm(script) === norm(whisper)` | Text script + timing Whisper |
+| **fuzzy** | Levenshtein ratio ≥ 0.72 | Text script + timing Whisper (log correction) |
+| **positional** | Lệch từ ≤25%, còn slot Whisper | Text script + consume timing slot (vd. Whisper "ca" → hiển thị "cá") |
+| **interpolate** | Hết transcript | Text script + nội suy timing |
+
+Ví dụ: script `"Con cá lớn"`, Whisper `"Con ca lớn"` → karaoke hiển thị **"cá"** (không phải "ca").
 
 **Cấm map timing tỷ lệ thô** (vd. `scriptWords[i] → transcript[Math.floor(i * m / n)]`) khi số từ script ≠ số từ transcript — gây caption biến mất / lệch giữa video. Luôn dùng `sync-caption-from-script.mjs`; giữ text script, chỉ lấy `start`/`end` từ transcript.
+
+**Cấm** `npx hyperframes add caption-pill-karaoke` rồi embed `transcript.json` text — phải chạy sync pipeline trước.
 
 ---
 
 ## Fallback khi map lệch
 
 - Giữ **text script** — không thay bằng Whisper.
-- Log word không match; interpolate `start`/`end` từ word kề.
+- Log corrections trong `assets/caption-sync-report.json` (`corrections[]`: whisper→script).
+- Interpolate `start`/`end` chỉ khi hết transcript (`interpolatedCount`).
 - Nếu transcript ngắn hơn script → kéo dài group cuối đến `totalVideoSec`.
 
 ---

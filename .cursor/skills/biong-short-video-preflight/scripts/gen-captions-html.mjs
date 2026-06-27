@@ -6,6 +6,30 @@
  */
 import fs from "fs";
 import path from "path";
+import { tokenizeScript } from "./lib/caption-script-align.mjs";
+
+function assertCaptionMatchesScript(projectDir, captionWords) {
+  const scriptPath = path.join(projectDir, "assets/audio-script.txt");
+  if (!fs.existsSync(scriptPath)) {
+    console.error(`Thiếu ${scriptPath} — không thể xác nhận text script`);
+    process.exit(1);
+  }
+  const scriptWords = tokenizeScript(fs.readFileSync(scriptPath, "utf8"));
+  if (captionWords.length !== scriptWords.length) {
+    console.error(
+      `caption-words.json (${captionWords.length}) !== script (${scriptWords.length}) — chạy sync-caption-from-script.mjs`,
+    );
+    process.exit(1);
+  }
+  for (let i = 0; i < scriptWords.length; i++) {
+    if (String(captionWords[i].text ?? "") !== scriptWords[i]) {
+      console.error(
+        `Word #${i}: caption "${captionWords[i].text}" !== script "${scriptWords[i]}" — cấm Whisper text`,
+      );
+      process.exit(1);
+    }
+  }
+}
 
 function main() {
   const projectDir = path.resolve(process.argv[2] || "");
@@ -33,6 +57,8 @@ function main() {
     console.error("caption-words.json rỗng");
     process.exit(1);
   }
+
+  assertCaptionMatchesScript(projectDir, words);
 
   let duration = durationArg;
   if (!duration || !Number.isFinite(duration)) {

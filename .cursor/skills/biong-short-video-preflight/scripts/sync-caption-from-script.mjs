@@ -7,57 +7,15 @@
  */
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+import {
+  alignScriptToWhisper,
+  tokenizeScript,
+  toCaptionWords,
+  totalVideoSec,
+} from "./lib/caption-script-align.mjs";
 
-const LOOKAHEAD = 40;
-
-const norm = (s) =>
-  String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "");
-
-const OMNIVOICE_EMOTION_TAG_RE =
-  /\[(?:laughter|sigh|gasp|chuckle|whisper)\]/gi;
-
-function stripScriptMarkers(text) {
-  return String(text)
-    .replace(/\[BGM:[^\]]*\]/gi, " ")
-    .replace(/\[SFX:[^\]]*\]/gi, " ")
-    .replace(/\[Dừng[^\]]*\]/gi, " ")
-    .replace(OMNIVOICE_EMOTION_TAG_RE, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenizeScript(text) {
-  const cleaned = stripScriptMarkers(text);
-  if (!cleaned) return [];
-
-  const raw = cleaned.match(/[\p{L}\p{N}]+(?:[.,!?;:…]+)?|[.,!?;:…]+/gu) ?? [];
-  const words = [];
-
-  for (const piece of raw) {
-    const trimmed = piece.trim();
-    if (!trimmed) continue;
-
-    if (/^[.,!?;:…]+$/.test(trimmed)) {
-      if (words.length) {
-        words[words.length - 1] = words[words.length - 1] + trimmed;
-      }
-      continue;
-    }
-
-    const m = trimmed.match(/^([\p{L}\p{N}]+)([.,!?;:…]+)?$/u);
-    if (m) {
-      words.push(m[2] ? m[1] + m[2] : m[1]);
-    } else {
-      words.push(trimmed);
-    }
-  }
-
-  return words;
-}
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function resolveTranscriptPath(projectDir) {
   const candidates = [
@@ -87,85 +45,6 @@ function loadTranscriptWords(projectDir) {
     .filter((w) => w.text.length > 0);
 }
 
-function interpolateTiming(prev, next, index, total) {
-  if (prev && next) {
-    const t = (index + 1) / (total + 1);
-    const start = prev.end + (next.start - prev.end) * t;
-    const end = start + Math.max(0.08, (next.end - next.start) * 0.5);
-    return { start: +start.toFixed(3), end: +end.toFixed(3) };
-  }
-  if (prev) {
-    const dur = Math.max(0.12, prev.end - prev.start);
-    return {
-      start: +(prev.end + 0.02).toFixed(3),
-      end: +(prev.end + 0.02 + dur).toFixed(3),
-    };
-  }
-  if (next) {
-    const dur = Math.max(0.12, next.end - next.start);
-    return {
-      start: +Math.max(0, next.start - dur).toFixed(3),
-      end: +next.start.toFixed(3),
-    };
-  }
-  return { start: 0, end: 0.2 };
-}
-
-function mapScriptToTranscript(scriptWords, transcriptWords) {
-  const state = { p: 0 };
-  const mapped = [];
-  const unmatched = [];
-
-  for (let i = 0; i < scriptWords.length; i++) {
-    const text = scriptWords[i];
-    const target = norm(text.replace(/[.,!?;:…]+$/u, ""));
-
-    let found = -1;
-    for (let j = state.p; j < Math.min(transcriptWords.length, state.p + LOOKAHEAD); j++) {
-      const tw = norm(transcriptWords[j].text.replace(/[.,!?;:…]+$/u, ""));
-      if (tw && tw === target) {
-        found = j;
-        break;
-      }
-    }
-
-    if (found >= 0) {
-      mapped.push({
-        text,
-        start: transcriptWords[found].start,
-        end: transcriptWords[found].end,
-        matched: true,
-        transcriptIndex: found,
-      });
-      state.p = found + 1;
-    } else {
-      const prev = mapped.length ? mapped[mapped.length - 1] : null;
-      const nextTw = transcriptWords[state.p] ?? null;
-      const timing = interpolateTiming(prev, nextTw, unmatched.length, scriptWords.length);
-      mapped.push({
-        text,
-        start: timing.start,
-        end: timing.end,
-        matched: false,
-        transcriptIndex: null,
-      });
-      unmatched.push(text);
-    }
-  }
-
-  return { mapped, unmatched, transcriptPointerEnd: state.p };
-}
-
-function totalVideoSec(transcriptWords, mapped) {
-  if (transcriptWords.length) {
-    return +Math.max(...transcriptWords.map((w) => w.end)).toFixed(2);
-  }
-  if (mapped.length) {
-    return +Math.max(...mapped.map((w) => w.end)).toFixed(2);
-  }
-  return 0;
-}
-
 function main() {
   const projectDir = path.resolve(process.argv[2] || "");
   if (!process.argv[2]) {
@@ -182,8 +61,7 @@ function main() {
     process.exit(1);
   }
 
-  const trPath = resolveTranscriptPath(projectDir);
-  if (!trPath) {
+  if (!resolveTranscriptPath(projectDir)) {
     console.error(`Thiếu transcript.json — chạy hyperframes transcribe trước`);
     process.exit(1);
   }
@@ -201,32 +79,42 @@ function main() {
     process.exit(1);
   }
 
-  const { mapped, unmatched, transcriptPointerEnd } = mapScriptToTranscript(
-    scriptWords,
-    transcriptWords,
-  );
+  const {
+    mapped,
+    exactCount,
+    fuzzyCount,
+    positionalCount,
+    interpolatedCount,
+    corrections,
+    unmatchedWords,
+    transcriptPointerEnd,
+    densityDrift,
+  } = alignScriptToWhisper(scriptWords, transcriptWords);
 
   const duration = totalVideoSec(transcriptWords, mapped);
-  const captionWords = mapped.map(({ text, start, end }) => ({
-    text,
-    start: Math.max(0, Math.min(start, duration || start)),
-    end: Math.min(duration || end, Math.max(end, start + 0.05)),
-  }));
+  const captionWords = toCaptionWords(mapped, duration);
 
   fs.mkdirSync(path.dirname(outWordsPath), { recursive: true });
   fs.writeFileSync(outWordsPath, JSON.stringify(captionWords, null, 2));
 
-  const matchedCount = mapped.filter((w) => w.matched).length;
+  const timedCount = exactCount + fuzzyCount + positionalCount;
   const report = {
     generatedAt: new Date().toISOString(),
+    alignModule: path.join(__dirname, "lib/caption-script-align.mjs"),
     scriptWordCount: scriptWords.length,
     transcriptWordCount: transcriptWords.length,
-    matchedCount,
-    unmatchedCount: unmatched.length,
+    exactCount,
+    fuzzyCount,
+    positionalCount,
+    interpolatedCount,
+    timedCount,
+    unmatchedCount: unmatchedWords.length,
     unmatchedRatio: scriptWords.length
-      ? +(unmatched.length / scriptWords.length).toFixed(4)
+      ? +(unmatchedWords.length / scriptWords.length).toFixed(4)
       : 0,
-    unmatchedWords: unmatched,
+    unmatchedWords,
+    corrections,
+    densityDrift,
     totalVideoSec: duration,
     transcriptPointerEnd,
     scriptSample: scriptWords.slice(0, 8),
@@ -236,11 +124,19 @@ function main() {
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
   console.log(
-    `[sync-caption] ${matchedCount}/${scriptWords.length} words matched` +
-      (unmatched.length ? `; ${unmatched.length} interpolated` : " ✓"),
+    `[sync-caption] ${timedCount}/${scriptWords.length} timed` +
+      ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount})` +
+      (interpolatedCount ? `; ${interpolatedCount} interpolated` : " ✓"),
   );
-  if (unmatched.length) {
-    console.warn(`[sync-caption] unmatched: ${unmatched.slice(0, 12).join(" ")}`);
+  if (corrections.length) {
+    const sample = corrections
+      .slice(0, 5)
+      .map((c) => `"${c.whisper}"→"${c.script}"`)
+      .join(", ");
+    console.log(`[sync-caption] corrected: ${sample}`);
+  }
+  if (unmatchedWords.length) {
+    console.warn(`[sync-caption] interpolated: ${unmatchedWords.slice(0, 12).join(" ")}`);
   }
   console.log(`[sync-caption] wrote ${outWordsPath}`);
 }

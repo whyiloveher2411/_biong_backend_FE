@@ -6,48 +6,11 @@
  */
 import fs from "fs";
 import path from "path";
+import { norm, stripPunct, tokenizeScript } from "./lib/caption-script-align.mjs";
 
 const DRIFT_TOL = 0.08;
 const DEFAULT_MAX_UNMATCHED = 0.1;
 const MAX_COUNT_DRIFT_RATIO = 0.15;
-
-const norm = (s) =>
-  String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "");
-
-const OMNIVOICE_EMOTION_TAG_RE =
-  /\[(?:laughter|sigh|gasp|chuckle|whisper)\]/gi;
-
-function stripScriptMarkers(text) {
-  return String(text)
-    .replace(/\[BGM:[^\]]*\]/gi, " ")
-    .replace(/\[SFX:[^\]]*\]/gi, " ")
-    .replace(/\[Dừng[^\]]*\]/gi, " ")
-    .replace(OMNIVOICE_EMOTION_TAG_RE, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenizeScript(text) {
-  const cleaned = stripScriptMarkers(text);
-  const raw = cleaned.match(/[\p{L}\p{N}]+(?:[.,!?;:…]+)?|[.,!?;:…]+/gu) ?? [];
-  const words = [];
-  for (const piece of raw) {
-    const trimmed = piece.trim();
-    if (!trimmed) continue;
-    if (/^[.,!?;:…]+$/.test(trimmed)) {
-      if (words.length) words[words.length - 1] += trimmed;
-      continue;
-    }
-    const m = trimmed.match(/^([\p{L}\p{N}]+)([.,!?;:…]+)?$/u);
-    if (m) words.push(m[2] ? m[1] + m[2] : m[1]);
-    else words.push(trimmed);
-  }
-  return words;
-}
 
 function resolveTranscriptPath(projectDir) {
   const candidates = [
@@ -65,7 +28,9 @@ function loadTranscriptWords(projectDir) {
   if (!trPath) return [];
   const raw = JSON.parse(fs.readFileSync(trPath, "utf8"));
   const list = Array.isArray(raw) ? raw : raw.words ?? [];
-  return list.filter((w) => w && "start" in w).map((w) => String(w.text ?? "").trim());
+  return list
+    .filter((w) => w && "start" in w)
+    .map((w) => String(w.text ?? "").trim());
 }
 
 function parseArgs(argv) {
@@ -102,6 +67,10 @@ function main() {
     errors.push("Thiếu assets/caption-words.json — chạy sync-caption-from-script.mjs trước");
   }
 
+  if (opts.strict && !fs.existsSync(reportPath)) {
+    errors.push("Thiếu assets/caption-sync-report.json — chạy sync-caption-from-script.mjs trước (--strict)");
+  }
+
   if (errors.length) {
     errors.forEach((e) => console.error(`✗ ${e}`));
     process.exit(1);
@@ -135,7 +104,7 @@ function main() {
     } catch {
       warnings.push("caption-sync-report.json không parse được");
     }
-  } else {
+  } else if (!opts.strict) {
     warnings.push("Thiếu caption-sync-report.json — nên chạy sync-caption-from-script.mjs");
   }
 
@@ -145,35 +114,51 @@ function main() {
     );
   }
 
-  const scriptNorm = scriptWords.map((w) => norm(w.replace(/[.,!?;:…]+$/u, "")));
-  const captionNorm = captionWords.map((w) =>
-    norm(String(w.text ?? "").replace(/[.,!?;:…]+$/u, "")),
-  );
-  const transcriptNorm = transcriptTexts.map((w) =>
-    norm(w.replace(/[.,!?;:…]+$/u, "")),
-  );
-
-  let matchesScript = 0;
-  let matchesWhisperOnly = 0;
-  const len = Math.min(scriptNorm.length, captionNorm.length);
-
-  for (let i = 0; i < len; i++) {
-    if (captionNorm[i] === scriptNorm[i]) matchesScript++;
-    else if (transcriptNorm.includes(captionNorm[i]) && !scriptNorm.includes(captionNorm[i])) {
-      matchesWhisperOnly++;
-    }
-  }
-
-  const scriptMatchRatio = len ? matchesScript / len : 0;
-  if (scriptMatchRatio < 0.85) {
+  if (opts.strict && captionWords.length !== scriptWords.length) {
     errors.push(
-      `Caption text không khớp script (${(scriptMatchRatio * 100).toFixed(0)}% match) — có thể đang dùng Whisper text`,
+      `Strict: caption word count (${captionWords.length}) !== script (${scriptWords.length})`,
     );
   }
 
-  if (matchesWhisperOnly >= 3) {
+  let whisperLeakCount = 0;
+  for (let i = 0; i < Math.min(scriptWords.length, captionWords.length); i++) {
+    const scriptText = scriptWords[i];
+    const captionText = String(captionWords[i].text ?? "");
+
+    if (captionText !== scriptText) {
+      errors.push(
+        `Word #${i}: caption "${captionText}" !== script "${scriptText}" — cấm dùng Whisper text`,
+      );
+    }
+
+    const captionNorm = norm(stripPunct(captionText));
+    const scriptNorm = norm(stripPunct(scriptText));
+    const whisperNorm = norm(stripPunct(transcriptTexts[i] ?? ""));
+
+    if (
+      captionNorm === whisperNorm &&
+      captionNorm !== scriptNorm &&
+      whisperNorm.length > 0
+    ) {
+      whisperLeakCount++;
+    }
+  }
+
+  if (whisperLeakCount > 0) {
     errors.push(
-      `Phát hiện ${matchesWhisperOnly} từ giống Whisper nhưng khác script — cấm dùng Whisper làm hiển thị`,
+      `Phát hiện ${whisperLeakCount} từ hiển thị text Whisper thay vì script`,
+    );
+  }
+
+  const scriptMatchRatio =
+    scriptWords.length > 0
+      ? captionWords.filter((w, i) => String(w.text ?? "") === scriptWords[i]).length /
+        scriptWords.length
+      : 0;
+
+  if (!opts.strict && scriptMatchRatio < 0.85) {
+    errors.push(
+      `Caption text không khớp script (${(scriptMatchRatio * 100).toFixed(0)}% match) — có thể đang dùng Whisper text`,
     );
   }
 
@@ -229,8 +214,10 @@ function main() {
     `✓ Caption sync OK — ${captionWords.length} words, script match ${(scriptMatchRatio * 100).toFixed(0)}%, duration ~${totalVideoSec}s`,
   );
 
-  if (opts.strict && report?.unmatchedCount > 0) {
-    console.warn(`⚠ strict: ${report.unmatchedCount} word(s) interpolated — kiểm tra lại`);
+  if (opts.strict && report?.interpolatedCount > 0) {
+    console.warn(
+      `⚠ strict: ${report.interpolatedCount} word(s) interpolated — kiểm tra caption-sync-report.json`,
+    );
   }
 
   process.exit(0);
