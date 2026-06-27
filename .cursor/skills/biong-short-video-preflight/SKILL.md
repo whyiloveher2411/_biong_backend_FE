@@ -32,6 +32,9 @@ PROJ=storage/agent-renders/{id}/my-video
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
+mkdir -p $PROJ/assets/images
+cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
+node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 ```
 
 - **verify exit 1** → đọc `assets/caption-sync-report.json`, sửa script/map, chạy lại sync (tối đa 2 vòng)
@@ -42,8 +45,11 @@ node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $P
 ## Bước 1 — Script overlay stack (bắt buộc)
 
 ```bash
+node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 ```
+
+`check-media-stack`: sfx_hook.mp3 + track 12, bgm.mp3 + track 11, BGM duration ≥ totalVideoSec.
 
 Exit 0 = pass. Exit 1 = **dừng**, sửa lỗi in ra stderr.
 
@@ -68,11 +74,12 @@ npx hyperframes inspect --samples 15
 | 1 | `assets/audio-script.txt` + `assets/caption-words.json` tồn tại | ✓ |
 | 2 | `verify-caption-sync.mjs --strict` exit 0 | ✓ |
 | 3 | `compositions/captions.html` tồn tại (từ gen-captions-html.mjs) | ✓ |
-| 4 | `compositions/brand-watermark.html` tồn tại | ✓ |
-| 5 | Caption text từ `audio_script` — không Whisper | ✓ |
-| 6 | Caption host `data-duration` = `totalVideoSec` | ✓ |
-| 7 | Caption host `z-index:9000` | ✓ |
-| 8 | Watermark host `z-index:9500`, suốt video | ✓ |
+| 4 | `compositions/brand-watermark.html` từ `gen-brand-watermark.mjs` | ✓ |
+| 5 | `.brand-wrap { right:28px; bottom:28px }` — không right/bottom trên `#root` | ✓ |
+| 6 | Caption text từ `audio_script` — không Whisper | ✓ |
+| 7 | Caption host `data-duration` = `totalVideoSec` | ✓ |
+| 8 | Caption host `z-index:9000` | ✓ |
+| 9 | Watermark host `z-index:9500`, suốt video | ✓ |
 
 ---
 
@@ -86,6 +93,7 @@ npx hyperframes inspect --samples 15
 ## Quality gate
 
 - [ ] `sync-caption-from-script.mjs` + `verify-caption-sync.mjs --strict` exit 0
+- [ ] `check-media-stack.mjs --strict` exit 0
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `hyperframes lint` 0 errors
 - [ ] Chỉ sau đó: `render --quality high --strict`

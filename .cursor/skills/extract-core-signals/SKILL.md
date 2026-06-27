@@ -50,6 +50,6 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 
 ## Bước tiếp
 
-`/viral-audio-script` → `save_audio_script` với `timeline` + `markers`.
+`/humanize-audio-script` → `save_audio_script` với `timeline` + `markers`.
 
 Tham khảo: `biong-short-video-hyperframes/references/extract-core-signals.md`

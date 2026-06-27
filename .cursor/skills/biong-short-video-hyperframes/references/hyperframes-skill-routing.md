@@ -19,15 +19,17 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 
 ---
 
-## Phase 1 — audio_script viral
+## Phase 1 — audio_script viral (OmniVoice văn nói)
 
 1. `short_video_get_context` → `creative_brief.content_plain_text`
-2. Đọc [viral-retention-structure.md](viral-retention-structure.md)
+2. Đọc [viral-retention-structure.md](viral-retention-structure.md) + [omnivoice-speech-script.md](omnivoice-speech-script.md)
 3. `/extract-core-signals` → hook, tension, takeaway, loop_hook_line
-4. `/viral-audio-script` → timeline 40s, câu ≤12 từ, `[SFX]` + markers
-5. `save_audio_script({ text, metadata })` → **DỪNG**
+4. `/hyperframes-creative` → phá câu học thuật → văn hội thoại, cảm thán
+5. `/viral-audio-script` → bản nháp HASCAS 60–180s, timeline, markers
+6. `/humanize-audio-script` → văn người thật, thành ngữ, ví von + checklist OmniVoice
+7. `save_audio_script({ text, metadata })` → **DỪNG**
 
-Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md)
+Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
 **Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật
 

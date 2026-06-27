@@ -2,7 +2,7 @@
 
 MCP server cho Cursor agent — workflow video + **media search** (Pexels stock + Pixabay BGM).
 
-**Phiên bản:** 2.1.0
+**Phiên bản:** 2.2.0
 
 ## Chế độ workflow
 
@@ -10,6 +10,18 @@ MCP server cho Cursor agent — workflow video + **media search** (Pexels stock 
 |------------------|----------|-----------------|
 | `false` (mặc định) | Script → admin MP3 → render | Bước 1 + bước 2 |
 | `true` | Script → TTS MCP → render → upload | Một prompt toàn pipeline |
+
+**TTS chain (auto):** OmniVoice (clone `audio_demo`) → VieNeu → Saydi → Vbee.
+
+**Prereq OmniVoice trên server** (`_biong_backend`):
+
+```bash
+./omnivoice-tts.sh install   # một lần
+./omnivoice-tts.sh prepare-clone
+./omnivoice-tts.sh start
+```
+
+Env: `OMNIVOICE_TTS_PORT` (mặc định 8766), `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`. Short video MCP gọi sync qua HTTP — không cần `./run_worker_omnivoice.sh`.
 
 ## Media search
 
@@ -41,13 +53,20 @@ npx skills add https://github.com/greensock/gsap-skills
 |------|--------|
 | `short_video_get_context` | Creative brief + production_playbook (media_assets) |
 | `short_video_save_audio_script` | Script viral + metadata markers |
-| `short_video_generate_narration_tts` | TTS auto — VieNeu→Saydi→Vbee |
+| `short_video_generate_narration_tts` | TTS auto — OmniVoice→VieNeu→Saydi→Vbee |
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |
 | `short_video_search_bgm` | Nhạc nền Pixabay |
-| `short_video_upload_agent_video` | Upload MP4 → S3 (Buffer multipart — ưu tiên) |
+| `short_video_upload_agent_video` | Upload MP4 → S3 (native FormData ≤20MB; curl -F >20MB) |
 
-## Upload fallback (khi MCP tool lỗi multipart)
+## Upload MP4
+
+| Kích thước | Cơ chế |
+|------------|--------|
+| ≤ 20MB | Native `fetch` + `FormData` + `Blob` |
+| > 20MB | `curl -F` subprocess (streaming — khớp PHP local) |
+
+## Upload fallback (khi MCP tool lỗi)
 
 Nếu `short_video_upload_agent_video` fail, chạy CLI (cùng env `BIONG_API_BASE_URL`, `BIONG_MCP_TOKEN`):
 

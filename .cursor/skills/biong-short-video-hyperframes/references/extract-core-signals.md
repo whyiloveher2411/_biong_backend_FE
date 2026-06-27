@@ -6,7 +6,7 @@ Skill phase 1. Invoke: `/extract-core-signals`
 
 ## Mục tiêu
 
-Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu cho timeline **0→3→15→35→40s** — không tóm tắt dài dòng.
+Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu cho timeline **HASCAS 60–180s** — không tóm tắt dài dòng.
 
 ## Ba trục
 
@@ -59,4 +59,4 @@ Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu ch
 - Hook chung chung không số liệu/insight
 - Takeaway không nhớ được sau 1 lần nghe
 
-Bước tiếp: [/viral-audio-script](viral-audio-script.md)
+Bước tiếp: [/viral-audio-script](viral-audio-script.md) → [/humanize-audio-script](humanize-audio-script.md) → `save_audio_script`

@@ -1,71 +1,67 @@
-# viral-audio-script — kịch bản giữ chân cao
+# viral-audio-script — kịch bản giữ chân cao (bản nháp)
 
-Skill phase 1. Invoke: `/viral-audio-script` sau `/extract-core-signals`.
+Skill phase 1. Invoke: `/viral-audio-script` sau `/hyperframes-creative`. Output là **bản nháp** — bắt buộc `/humanize-audio-script` trước `save_audio_script`.
 
-**Đọc trước:** [viral-retention-structure.md](viral-retention-structure.md)
+**Đọc trước:**
+- [viral-retention-structure.md](viral-retention-structure.md)
+- [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
-## Timeline viral (30–45s, mặc định 40s)
+## Timeline viral (60–180s)
 
-```
-0s ── Hook ── 3s ── Agitate ── 15s ── Solve ── 35s ── CTA/Loop ── 40s
-```
+Agent chọn `estimated_duration_sec` trong **60–180** theo nội dung — không viết quá ngắn.
 
-## Công thức HASCAS
+Word budget: **~2.5 từ/giây** (60s ≈ 150 từ, 180s ≈ 450 từ).
 
-| Phần | Giây | Mục tiêu |
-|------|------|----------|
-| Hook | 0–3 | Ngừng lướt — số shock, câu hỏi |
-| Agitate | 3–15 | Đồng cảm — villain, sai lầm phổ biến |
-| Solve | 15–35 | Công thức 3 bước + proof ngắn |
-| CTA/Loop | 35–40 | CTA 1 hành động **hoặc** câu nối hook |
+## Công thức HASCAS (scale theo total)
 
-## Viết cho tai nghe
+| Phần | % | Mục tiêu |
+|------|---|----------|
+| Hook | ~5% | Ngừng lướt — số shock, câu hỏi + **[SFX] bắt buộc** |
+| Agitate | ~25% | Đồng cảm — villain, sai lầm phổ biến |
+| Solve | ~60% | Công thức nhiều bước + proof |
+| CTA/Loop | ~10% | CTA ngắn **hoặc** câu nối hook |
+
+## Viết cho tai nghe (OmniVoice)
 
 | Quy tắc | Chi tiết |
 |---------|----------|
-| Độ dài câu | **≤12 từ** — không 10–15 như cũ |
-| Dấu phẩy | Ngắt nghỉ ngắn — không lạm dụng |
-| Dấu chấm | Kết thúc ý — giữa Hook/Agitate/Solve |
-| Ngôn ngữ | Nói tự nhiên — không văn phong báo |
-| Nhịp | Dồn dập — phù hợp TTS VieNeu/Saydi/Vbee |
+| Độ dài video | **60–180s** — chọn theo nội dung |
+| Độ dài câu | **≤12 từ** |
+| Văn hội thoại | `/hyperframes-creative` trước |
+| Cấm SSML | Không `<break>`, `<emphasis>` |
+| Emotion tags | `[laughter]`, `[sigh]`, `[gasp]` ở Hook/twist |
+| Prosody | `. . .` = ngắt dài; `,` = ngắt ngắn |
 
 ## Thẻ âm thanh
 
 | Thẻ | Phase 2 MCP |
 |-----|-------------|
 | `[BGM: mood]` | `short_video_search_bgm` |
-| `[SFX: vine boom]` | `short_video_search_meme_sound` — hook giây 0 |
-| `[Dừng 0.5s]` | Beat dramatic sau hook |
-| `[Dừng 1s]` | Trước Solve |
+| `[SFX: vine boom]` | **`short_video_search_meme_sound` — BẮT BUỘC mọi video** |
+| `[Dừng 0.5s]` | Server convert `. . .` khi TTS |
 
 ## Lưu qua MCP
 
+**Không save trực tiếp draft.** Chuyển sang `/humanize-audio-script` trước:
+
 ```text
-short_video_save_audio_script({
+/humanize-audio-script → short_video_save_audio_script({
   short_video_id: N,
-  text: "[BGM: lofi ambient] [SFX: vine boom] Câu hook. [Dừng 0.5s]. ...",
+  text: "[BGM: lofi ambient] [SFX: vine boom] [laughter] Câu hook . . . ...",
   metadata: {
-    core_signals: { hook, tension, takeaway },
+    estimated_duration_sec: 90,
     structure: "hook-agitate-solve-cta",
-    timeline: { hook_end: 3, agitate_end: 15, solve_end: 35, total: 40 },
+    timeline: { hook_end: 5, agitate_end: 27, solve_end: 81, total: 90 },
     cta_mode: "loop",
-    markers: [{ time: 0, text: "...", section: "hook" }],
-    estimated_duration_sec: 40,
-    bgm_mood: "lofi ambient"
+    markers: [...],
+    tts_engine_hint: "omnivoice"
   }
 })
 ```
 
-## Ví dụ loop CTA
-
-- Hook: "99% người làm video sai bước này."
-- Đóng: "…và đó là lý do 99% người vẫn sai."
-
 ## Anti-patterns
 
+- Script < 60s / > 180s
+- Thiếu `[SFX: ...]`
 - Câu >12 từ
-- Không dấu chấm giữa các ý
-- Hook mơ hồ sau 3s
-- Thiếu `[SFX]` khi hook cần punch
-- CTA dài + chào tạm biệt — phá infinite loop
-- Văn viết dài, không đọc được
+- SSML hoặc văn viết học thuật

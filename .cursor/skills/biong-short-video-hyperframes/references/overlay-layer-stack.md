@@ -92,7 +92,14 @@ Sau `npx hyperframes add caption-pill-karaoke` — **patch** file caption: `back
 
 ### Watermark (`compositions/brand-watermark.html`)
 
+**Cấu trúc bắt buộc:** `#root` full canvas `1080×1920` (`position:relative`) → child `.brand-wrap` có `right`/`bottom`. **Cấm** đặt `right`/`bottom` trên `#root` — HyperFrames lệch logo (giữa/trái). Sinh bằng `gen-brand-watermark.mjs`.
+
 ```css
+#root {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+}
 .brand-wrap {
   position: absolute;
   right: 28px;

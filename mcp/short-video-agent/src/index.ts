@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import FormData from 'form-data';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -31,7 +30,6 @@ async function apiRequest(
   options: {
     method?: 'GET' | 'POST';
     query?: Record<string, string | number>;
-    form?: FormData;
   } = {}
 ): Promise<unknown> {
   const method = options.method ?? 'POST';
@@ -43,21 +41,12 @@ async function apiRequest(
     }
   }
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${mcpToken()}`,
-    Accept: 'application/json',
-  };
-
-  let body: FormData | undefined;
-  if (options.form) {
-    body = options.form;
-    Object.assign(headers, options.form.getHeaders());
-  }
-
   const response = await fetch(url.toString(), {
     method,
-    headers,
-    body: body as BodyInit | undefined,
+    headers: {
+      Authorization: `Bearer ${mcpToken()}`,
+      Accept: 'application/json',
+    },
   });
 
   const text = await response.text();
@@ -85,7 +74,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.1.0',
+  version: '2.2.0',
 });
 
 server.tool(
@@ -107,11 +96,11 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Lưu kịch bản audio viral (sau /extract-core-signals + /viral-audio-script). Truyền metadata: core_signals, markers, estimated_duration_sec. Manual mode: admin upload MP3 sau. Auto TTS: tiếp tục generate_narration_tts.',
+  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec trong khoảng). Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script + /humanize-audio-script.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Script có [BGM]/[Dừng Ns] — viết cho tai nghe'),
-    metadata: z.record(z.unknown()).optional().describe('core_signals, markers[{time,text}], estimated_duration_sec, structure'),
+    metadata: z.record(z.unknown()).optional().describe('estimated_duration_sec: 60–180, core_signals, markers, timeline HASCAS'),
   },
   async (args) => {
     const query: Record<string, string | number> = {
@@ -130,7 +119,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover TTS và ghi audio_file. Chain VieNeu → Saydi → Vbee; strip [SFX]/[Dừng] tags. Dùng khi agent_tts_auto=true (workflow auto_tts_full). KHÔNG dùng trong manual_2_step.',
+  'Sinh voiceover TTS và ghi audio_file. OmniVoice: giữ emotion tags [laughter]/[sigh]; strip [BGM]/[SFX]/[Dừng]; speed 1.15. Fallback VieNeu → Saydi → Vbee. Dùng khi agent_tts_auto=true. KHÔNG dùng trong manual_2_step.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

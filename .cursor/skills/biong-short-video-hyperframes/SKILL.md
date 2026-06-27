@@ -1,6 +1,6 @@
 ---
 name: biong-short-video-hyperframes
-description: Agent short video marketing — manual 2 bước hoặc auto TTS full pipeline (VieNeu→Saydi→Vbee) + render cinematic HyperFrames.
+description: Agent short video marketing — manual 2 bước hoặc auto TTS full pipeline (OmniVoice→VieNeu→Saydi→Vbee) + render cinematic HyperFrames.
 ---
 
 # Biong Short Video — HyperFrames Agent
@@ -14,7 +14,7 @@ description: Agent short video marketing — manual 2 bước hoặc auto TTS fu
 
 Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu TTS lỗi → upload MP3 fallback.
 
-`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: VieNeu → Saydi → Vbee.
+`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: OmniVoice → VieNeu → Saydi → Vbee.
 
 ---
 
@@ -34,12 +34,20 @@ Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu
 
 | Bước | MCP | Kết quả |
 |------|-----|---------|
-| Script | `save_audio_script` | `audio_script` + markers |
-| TTS | `generate_narration_tts` (strip `[BGM]`/`[Dừng]`) | `audio_file` |
+| Script | `save_audio_script` | `audio_script` + markers + OmniVoice emotion tags |
+| TTS | `generate_narration_tts` (giữ `[laughter]`/`[sigh]` cho OmniVoice; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
 
-Chain TTS: **VieNeu → Saydi → Vbee** — response `tts_provider_used`.
+Chain TTS: **OmniVoice → VieNeu → Saydi → Vbee** — response `tts_provider_used`.
+
+**Phase 1 script (OmniVoice văn nói):**
+1. `/extract-core-signals` → `/hyperframes-creative` (văn hội thoại) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật)
+2. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) — cấm SSML; dùng `[laughter]`, `[sigh]`, `. . .` (áp sau humanize)
+
+**Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
+
+**Prereq OmniVoice (server):** `./omnivoice-tts.sh install` (một lần) → `prepare-clone` → `start`. Env `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`. Không cần queue worker cho MCP short video.
 
 ---
 
@@ -63,7 +71,7 @@ Thư mục: `storage/agent-renders/{id}/assets/{images,audio,fonts}/`
 
 Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat stock.
 
-**Tần suất:** hook SFX (nếu script có `[SFX]`); ≥1 BGM; mỗi beat ≥1 stock; hook beat ưu tiên stock video.
+**Tần suất:** hook SFX **bắt buộc** `[SFX: ...]` phase 1; ≥1 BGM; mỗi beat ≥1 stock; preflight `check-media-stack.mjs`
 
 `get_context.production_playbook.media_assets` có `priority_matrix`, `frequency_rules`, `alias_hints`.
 
@@ -78,30 +86,32 @@ Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat
 | # | Skill | Output |
 |---|-------|--------|
 | 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway |
-| 2 | `/viral-audio-script` | `text` + `[BGM]` + `markers` |
+| 2 | `/hyperframes-creative` | Hướng văn hội thoại, cảm thán |
+| 3 | `/viral-audio-script` | Bản **nháp** HASCAS + timeline + markers |
+| 4 | `/humanize-audio-script` | Script **cuối** — văn người thật + OmniVoice tags |
 
-Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md)
+Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md) · [humanize-audio-script.md](references/humanize-audio-script.md)
 
-### Timeline viral (30–45s)
+### Timeline viral (60–180s)
 
-```
-0s Hook (3s) → Agitate (15s) → Solve (35s) → CTA/Loop (40s)
-```
+Agent chọn `estimated_duration_sec` trong **60–180** theo nội dung. HASCAS scale: Hook ~5%, Agitate ~25%, Solve ~60%, CTA ~10%.
 
-- Câu **≤12 từ**; dấu phẩy/chấm rõ; `[Dừng 0.5s/1s]`
-- `[SFX: vine boom]` ở hook; `cta_mode: "loop"` khuyến nghị
+Word budget: ~2.5 từ/giây — 60s ≈ 150 từ, 180s ≈ 450 từ.
+
+- Câu **≤12 từ**; **bắt buộc** `[SFX: vine boom]` ở hook
+- `cta_mode: "loop"` khuyến nghị
 
 ### Lưu MCP
 
 ```text
 short_video_save_audio_script({
   short_video_id,
-  text: "[BGM: lofi ambient] [SFX: vine boom] ...",
+  text: "[BGM: lofi ambient] [SFX: vine boom] ... (đủ dài 60–180s)",
   metadata: {
-    timeline: { hook_end: 3, agitate_end: 15, solve_end: 35, total: 40 },
+    timeline: { hook_end: 5, agitate_end: 27, solve_end: 81, total: 90 },
     cta_mode: "loop",
     markers: [{ time: 0, text: "...", section: "hook" }],
-    estimated_duration_sec: 40
+    estimated_duration_sec: 90
   }
 })
 ```
@@ -136,6 +146,8 @@ PROJ=storage/agent-renders/{id}/my-video
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
+cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
+node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 ```
 
@@ -143,15 +155,15 @@ Pass → mới `render --quality high --strict`.
 
 ### Watermark Spacedev (bắt buộc)
 
-Đọc [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) + [overlay-layer-stack.md](references/overlay-layer-stack.md):
+Đọc [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md):
 
-- Logo: `assets/spacedev-logo.png` (bundled trong skill)
+- **Sinh:** `gen-brand-watermark.mjs` — `#root` full canvas + `.brand-wrap` góc phải dưới
+- **Cấm** `right`/`bottom` trên `#root` — logo lệch giữa/trái (lỗi video #25)
 - Host clip `z-index:9500`, **cuối** `#root`, `data-duration=totalVideoSec`
-- **Cấm** gắn logo vào beat cuối — sẽ lúc có lúc không
 
 ### Upload (sau render)
 
-1. `short_video_upload_agent_video` — ưu tiên MCP (Buffer multipart v2.1.0)
+1. `short_video_upload_agent_video` — native FormData ≤20MB; curl -F >20MB (v2.2.0)
 2. Fail → `node mcp/short-video-agent/scripts/upload-agent-video.mjs --short-video-id {id} --file {abs}`
 
 ### Registry blocks (ưu tiên)

@@ -79,7 +79,7 @@ Tải → `storage/agent-renders/{id}/assets/images/`
 | Quy tắc | Chi tiết |
 |---------|----------|
 | Mỗi video | ≥ **1** BGM track global (track 11) |
-| Hook | ≥ **1** meme SFX nếu script có `[SFX: ...]` (track 12) |
+| Hook | ≥ **1** meme SFX **bắt buộc** nếu script có `[SFX: ...]` (track 12) — server reject script thiếu SFX |
 | Mỗi beat (4–8) | ≥ **1** stock visual (Pexels) |
 | Beat Hook (beat 1) | Bắt buộc **stock video** (ưu tiên) hoặc stock image |
 | BGM volume | **0.15–0.20** — narration track 10 giữ **1.0** |

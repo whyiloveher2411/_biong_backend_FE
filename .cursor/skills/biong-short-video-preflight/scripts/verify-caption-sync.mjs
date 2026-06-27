@@ -18,11 +18,15 @@ const norm = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "");
 
+const OMNIVOICE_EMOTION_TAG_RE =
+  /\[(?:laughter|sigh|gasp|chuckle|whisper)\]/gi;
+
 function stripScriptMarkers(text) {
   return String(text)
     .replace(/\[BGM:[^\]]*\]/gi, " ")
     .replace(/\[SFX:[^\]]*\]/gi, " ")
     .replace(/\[Dừng[^\]]*\]/gi, " ")
+    .replace(OMNIVOICE_EMOTION_TAG_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

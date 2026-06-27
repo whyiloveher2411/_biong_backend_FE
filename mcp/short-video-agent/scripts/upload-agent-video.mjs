@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CLI fallback upload MP4 — cùng logic MCP uploadVideoToApi (Buffer multipart).
+ * CLI upload MP4 — dùng uploadVideoToApi (native FormData ≤20MB / curl >20MB).
  *
  * Usage:
  *   node mcp/short-video-agent/scripts/upload-agent-video.mjs \

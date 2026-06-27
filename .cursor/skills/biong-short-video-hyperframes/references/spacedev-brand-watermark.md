@@ -24,7 +24,8 @@ cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png \
 
 ## Vị trí
 
-- **Góc phải dưới** — `right: 28px`, `bottom: 28px` (trong safe zone, không che caption chính giữa band)
+- **Góc phải dưới** — `right: 28px`, `bottom: 28px` trên **`.brand-wrap`** (child của `#root`)
+- **`#root` = full canvas** `1080×1920` — `position: relative` — **CẤM** `right`/`bottom` trên `#root` (HyperFrames coi `#root` là composition root → logo lệch giữa/trái)
 - Opacity ~0.85–0.95 — đủ đọc, không lấn nội dung
 - Logo height **48–64px**; text **18–22px** video-scale
 - Text: `"© Spacedev"` hoặc `"Spacedev"` — sentence case, không ALL CAPS
@@ -68,6 +69,25 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
 
 ## Composition scaffold — `compositions/brand-watermark.html`
 
+**Ưu tiên sinh bằng script** (tránh agent đặt sai `#root`):
+
+```bash
+node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs . --duration {totalVideoSec}
+```
+
+Cấu trúc bắt buộc:
+
+```html
+<body>
+  <div id="root" data-composition-id="brand-watermark" data-width="1080" data-height="1920" ...>
+    <div class="brand-wrap">
+      <img src="../assets/images/spacedev-logo.png" alt="" />
+      <span>© Spacedev</span>
+    </div>
+  </div>
+</body>
+```
+
 ```html
 <!DOCTYPE html>
 <html>
@@ -76,6 +96,11 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent !important; }
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+    }
     .brand-wrap {
       position: absolute;
       right: 28px;
@@ -104,9 +129,11 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
   </style>
 </head>
 <body>
-  <div class="brand-wrap" data-composition-id="brand-watermark">
-    <img src="../assets/images/spacedev-logo.png" alt="" />
-    <span>© Spacedev</span>
+  <div id="root" data-composition-id="brand-watermark" data-start="0" data-duration="{totalVideoSec}" data-width="1080" data-height="1920">
+    <div class="brand-wrap">
+      <img src="../assets/images/spacedev-logo.png" alt="" />
+      <span>© Spacedev</span>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <script>
@@ -135,6 +162,7 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
 | Sai | Đúng |
 |-----|------|
 | Không watermark | Luôn có logo + text |
+| `right`/`bottom` trên `#root` | `#root` full canvas; `.brand-wrap` góc phải dưới |
 | Tin track 99 = trên cùng | z-index 9500 trên host clip |
 | Watermark chỉ beat cuối | Host global data-duration=totalVideoSec |
 | Logo to che caption giữa | Góc phải dưới, compact |
@@ -146,6 +174,7 @@ Clip global — visible **suốt** video (không gắn vào beat cuối):
 ## Checklist
 
 - [ ] Logo copied vào `assets/images/spacedev-logo.png`
+- [ ] `gen-brand-watermark.mjs` hoặc scaffold đúng: `#root` full canvas + `.brand-wrap` right/bottom
 - [ ] Clip watermark `data-start=0`, `data-duration=totalVideoSec`
 - [ ] Host clip `z-index:9500` — **cuối** `#root`
 - [ ] `body { background: transparent !important; }`
