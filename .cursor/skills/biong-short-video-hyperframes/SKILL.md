@@ -122,10 +122,24 @@ short_video_save_audio_script({
 
 Đọc [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md):
 
-- **Text:** `audio_script` từ MCP — cấm text Whisper
-- **Timing:** transcribe → `transcript.json` (start/end only)
-- **Chunk:** 3–5 từ/group; map tuần tự như `fill-timings.cjs`
-- **Style:** registry blocks — mặc định `caption-pill-karaoke`
+- **Text:** `assets/audio-script.txt` từ MCP — cấm text Whisper
+- **Timing:** `transcript.json` (start/end only)
+- **Sync:** `sync-caption-from-script.mjs` → `verify-caption-sync.mjs --strict` → `gen-captions-html.mjs`
+- **Chunk:** 3–5 từ/group trong HTML generator
+
+### Preflight (bắt buộc trước render final)
+
+Invoke `/biong-short-video-preflight` — **Bước 0 caption sync** rồi overlay check:
+
+```bash
+PROJ=storage/agent-renders/{id}/my-video
+node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
+```
+
+Pass → mới `render --quality high --strict`.
 
 ### Watermark Spacedev (bắt buộc)
 
@@ -135,16 +149,10 @@ short_video_save_audio_script({
 - Host clip `z-index:9500`, **cuối** `#root`, `data-duration=totalVideoSec`
 - **Cấm** gắn logo vào beat cuối — sẽ lúc có lúc không
 
-### Preflight (bắt buộc trước render final)
+### Upload (sau render)
 
-Invoke `/biong-short-video-preflight`:
-
-```bash
-node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs \
-  storage/agent-renders/{id}/my-video
-```
-
-Pass → mới `render --quality high --strict`.
+1. `short_video_upload_agent_video` — ưu tiên MCP (Buffer multipart v2.1.0)
+2. Fail → `node mcp/short-video-agent/scripts/upload-agent-video.mjs --short-video-id {id} --file {abs}`
 
 ### Registry blocks (ưu tiên)
 
@@ -213,7 +221,8 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 
 - [ ] Caption host `z-index:9000` + watermark host `z-index:9500` — [overlay-layer-stack.md](references/overlay-layer-stack.md)
 - [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
-- [ ] Caption karaoke wired — text `audio_script`, timing transcript, registry block
+- [ ] Caption sync: verify-caption-sync.mjs --strict pass
+- [ ] Caption karaoke wired — text audio_script, timing Whisper
 - [ ] Watermark Spacedev — logo + © Spacedev góc phải dưới, suốt video
 - [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; list → UI Card
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML

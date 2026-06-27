@@ -15,17 +15,26 @@
 
 ---
 
-## Pipeline 5 bước
+## Pipeline 5 bước (bắt buộc — dùng script, không hand-author)
 
-1. **Đọc script** — `get_context.audio_script`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`.
-2. **Transcribe** — `hyperframes transcribe` trên `audio_file` → `transcript.json` (`words[].start`, `words[].end`).
-3. **Tokenize script** — tách từ theo thứ tự nói (giữ dấu câu gắn từ nếu cần).
-4. **Chunk** — nhóm **3–5 từ** mỗi caption group; break tại pause >150ms hoặc ranh giới câu.
-5. **Map timing tuần tự** — word thứ *N* trong script ← timestamp word thứ *N* trong transcript (theo vị trí, không text-match mù).
+1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`.
+2. **Transcribe** — `hyperframes transcribe` trên `audio_file` → `transcript.json` hoặc `assets/transcript.json` (`words[].start`, `words[].end`).
+3. **Sync tự động** — chạy từ thư mục project:
 
-Thuật toán tham chiếu: `agent/skills/embedded-captions/scripts/fill-timings.cjs` — map theo sequence, lookahead 40 words.
+```bash
+node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs .
+node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs . --strict
+node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs .
+```
 
-**Cấm map timing tỷ lệ thô** (vd. `scriptWords[i] → transcript[Math.floor(i * m / n)]`) khi số từ script ≠ số từ transcript — gây caption biến mất / lệch giữa video. Luôn dùng sequential map + `fill-timings.cjs`; giữ text script, chỉ lấy `start`/`end` từ transcript.
+4. **Self-check** — `verify-caption-sync.mjs` exit 0 bắt buộc trước render. FAIL → đọc `assets/caption-sync-report.json`, sửa, sync lại (tối đa 2 vòng).
+5. **Wire** — host clip `compositions/captions.html` trong `index.html` — z-index 9000.
+
+**Cấm** copy text từ `transcript.json` vào caption — Whisper hay sai chính tả tiếng Việt.
+
+Thuật toán: map tuần tự script word *N* ← Whisper timing word *N* (lookahead 40) — port từ `embedded-captions/scripts/fill-timings.cjs`.
+
+**Cấm map timing tỷ lệ thô** (vd. `scriptWords[i] → transcript[Math.floor(i * m / n)]`) khi số từ script ≠ số từ transcript — gây caption biến mất / lệch giữa video. Luôn dùng `sync-caption-from-script.mjs`; giữ text script, chỉ lấy `start`/`end` từ transcript.
 
 ---
 
@@ -128,11 +137,12 @@ html, body { background: transparent !important; }
 
 ## Checklist
 
-- [ ] `audio_script` đã đọc từ MCP
+- [ ] `audio_script` đã đọc từ MCP → `assets/audio-script.txt`
 - [ ] `transcript.json` có word timings
+- [ ] `sync-caption-from-script.mjs` + `verify-caption-sync.mjs --strict` pass
+- [ ] `gen-captions-html.mjs` đã chạy — không hand-author từ Whisper
 - [ ] Mọi word hiển thị khớp script (không phải Whisper text)
-- [ ] Chunk 3–5 từ / group
-- [ ] Registry block installed + wired
+- [ ] Chunk 3–5 từ / group (trong HTML generator)
 - [ ] Caption host `z-index:9000` trong index.html
 - [ ] `compositions/captions.html` body `background: transparent`
 - [ ] Preflight `check-overlay-stack.mjs` pass

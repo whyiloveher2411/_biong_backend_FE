@@ -1,14 +1,10 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import FormData from 'form-data';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { uploadVideoToApi } from './upload-video.js';
 
 function requireEnv(name: string): string {
   const value = (process.env[name] ?? '').trim();
@@ -89,7 +85,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '1.9.0',
+  version: '2.1.0',
 });
 
 server.tool(
@@ -327,36 +323,14 @@ server.tool(
     metadata: z.record(z.unknown()).optional(),
   },
   async (args) => {
-    const resolved = path.resolve(args.file_path);
-    if (!fs.existsSync(resolved)) {
-      throw new Error(`File không tồn tại: ${resolved}`);
-    }
-
-    const stat = fs.statSync(resolved);
-    if (!stat.isFile()) {
-      throw new Error(`Không phải file: ${resolved}`);
-    }
-
-    const form = new FormData();
-    form.append('short_video_id', String(args.short_video_id));
-    form.append('video', fs.createReadStream(resolved), {
-      filename: path.basename(resolved),
-      contentType: 'video/mp4',
-    });
-
-    if (args.hyperframes_cli_version) {
-      form.append('hyperframes_cli_version', args.hyperframes_cli_version);
-    }
-    if (args.composition_path) {
-      form.append('composition_path', args.composition_path);
-    }
-    if (args.metadata) {
-      form.append('metadata', JSON.stringify(args.metadata));
-    }
-
-    const result = await apiRequest('upload-video', {
-      query: { short_video_id: args.short_video_id },
-      form,
+    const result = await uploadVideoToApi({
+      shortVideoId: args.short_video_id,
+      filePath: args.file_path,
+      apiBaseUrl: apiBaseUrl(),
+      mcpToken: mcpToken(),
+      hyperframesCliVersion: args.hyperframes_cli_version,
+      compositionPath: args.composition_path,
+      metadata: args.metadata,
     });
 
     return {

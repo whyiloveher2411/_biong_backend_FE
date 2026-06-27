@@ -1,37 +1,48 @@
 ---
 name: biong-short-video-preflight
-description: Kiểm tra bắt buộc trước render final short video — caption karaoke wired, watermark Spacedev, z-index overlay stack, file tồn tại. Invoke phase 2 sau khi viết HTML, trước hyperframes render --quality high.
+description: Kiểm tra bắt buộc trước render final short video — caption sync script+Whisper, karaoke wired, watermark Spacedev, z-index overlay stack. Invoke phase 2 sau transcribe, trước hyperframes render --quality high.
 ---
 
 # Biong Short Video — Preflight
 
 **Chạy bắt buộc** trước mọi `hyperframes render --quality high`. Fail → **sửa code**, không render final.
 
-Đọc: [overlay-layer-stack.md](../biong-short-video-hyperframes/references/overlay-layer-stack.md)
+Đọc: [overlay-layer-stack.md](../biong-short-video-hyperframes/references/overlay-layer-stack.md), [caption-karaoke-script-sync.md](../biong-short-video-hyperframes/references/caption-karaoke-script-sync.md)
 
 ---
 
 ## Khi nào invoke
 
-- Phase 2 render — sau khi wire `index.html` + compositions
+- Phase 2 render — sau transcribe + trước render final
 - Trước `upload_agent_video`
 - Sau mỗi lần sửa caption/watermark/layer
 
 ---
 
-## Bước 1 — Script tự động (bắt buộc)
+## Bước 0 — Caption sync (bắt buộc TRƯỚC overlay check)
+
+Từ repo root `_biong_backend_FE`, thay `{id}`:
 
 ```bash
-cd storage/agent-renders/{id}/my-video
+PROJ=storage/agent-renders/{id}/my-video
 
-node ../../../../.cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs .
+# 1. Lưu audio_script từ get_context → $PROJ/assets/audio-script.txt
+# 2. transcribe → $PROJ/transcript.json
+
+node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 ```
 
-Từ repo root `_biong_backend_FE`:
+- **verify exit 1** → đọc `assets/caption-sync-report.json`, sửa script/map, chạy lại sync (tối đa 2 vòng)
+- **Cấm** ghi `caption-words.json` / `captions.html` trực tiếp từ Whisper text
+
+---
+
+## Bước 1 — Script overlay stack (bắt buộc)
 
 ```bash
-node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs \
-  storage/agent-renders/{id}/my-video
+node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 ```
 
 Exit 0 = pass. Exit 1 = **dừng**, sửa lỗi in ra stderr.
@@ -41,6 +52,7 @@ Exit 0 = pass. Exit 1 = **dừng**, sửa lỗi in ra stderr.
 ## Bước 2 — HyperFrames lint + inspect
 
 ```bash
+cd $PROJ
 npx hyperframes lint
 npx hyperframes inspect --samples 15
 ```
@@ -53,39 +65,27 @@ npx hyperframes inspect --samples 15
 
 | # | Kiểm tra | Pass |
 |---|----------|------|
-| 1 | `compositions/captions.html` tồn tại | ✓ |
-| 2 | `compositions/brand-watermark.html` tồn tại | ✓ |
-| 3 | `assets/images/spacedev-logo.png` tồn tại | ✓ |
-| 4 | Caption text từ `audio_script` — không Whisper | ✓ |
-| 5 | Caption host `data-duration` = `totalVideoSec` | ✓ |
-| 6 | Watermark host `data-duration` = `totalVideoSec` | ✓ |
-| 7 | Caption host `z-index:9000` (hoặc ≥9000) | ✓ |
-| 8 | Watermark host `z-index:9500` (hoặc ≥9500) | ✓ |
-| 9 | Sub-composition `background: transparent` | ✓ |
-| 10 | Beat section không có `z-index` > 100 | ✓ |
+| 1 | `assets/audio-script.txt` + `assets/caption-words.json` tồn tại | ✓ |
+| 2 | `verify-caption-sync.mjs --strict` exit 0 | ✓ |
+| 3 | `compositions/captions.html` tồn tại (từ gen-captions-html.mjs) | ✓ |
+| 4 | `compositions/brand-watermark.html` tồn tại | ✓ |
+| 5 | Caption text từ `audio_script` — không Whisper | ✓ |
+| 6 | Caption host `data-duration` = `totalVideoSec` | ✓ |
+| 7 | Caption host `z-index:9000` | ✓ |
+| 8 | Watermark host `z-index:9500`, suốt video | ✓ |
 
 ---
 
-## Sửa lỗi thường gặp
+## Upload (sau render final)
 
-### Karaoke chìm dưới nền
-
-1. Thêm host clip caption **sau** beats với `z-index:9000`
-2. `compositions/captions.html` → `body { background: transparent !important; }`
-3. Không tin `data-track-index` — chỉ dùng z-index
-
-### Logo lúc có lúc không / bị chìm
-
-1. Watermark host **cuối** `#root`, `z-index:9500`
-2. `data-start=0`, `data-duration={totalVideoSec}` — không gắn vào beat cuối
-3. Copy logo vào `assets/images/spacedev-logo.png`
-4. `filter: drop-shadow` trên `.brand-wrap`
+1. `short_video_upload_agent_video({ short_video_id, file_path })`
+2. Nếu lỗi → `node mcp/short-video-agent/scripts/upload-agent-video.mjs --short-video-id {id} --file {abs_path}`
 
 ---
 
 ## Quality gate
 
+- [ ] `sync-caption-from-script.mjs` + `verify-caption-sync.mjs --strict` exit 0
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `hyperframes lint` 0 errors
-- [ ] `inspect` không báo caption/watermark clipped
 - [ ] Chỉ sau đó: `render --quality high --strict`

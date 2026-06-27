@@ -2,7 +2,7 @@
 
 MCP server cho Cursor agent — workflow video + **media search** (Pexels stock + Pixabay BGM).
 
-**Phiên bản:** 2.0.0
+**Phiên bản:** 2.1.0
 
 ## Chế độ workflow
 
@@ -45,7 +45,20 @@ npx skills add https://github.com/greensock/gsap-skills
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |
 | `short_video_search_bgm` | Nhạc nền Pixabay |
-| `short_video_upload_agent_video` | Upload MP4 → S3 |
+| `short_video_upload_agent_video` | Upload MP4 → S3 (Buffer multipart — ưu tiên) |
+
+## Upload fallback (khi MCP tool lỗi multipart)
+
+Nếu `short_video_upload_agent_video` fail, chạy CLI (cùng env `BIONG_API_BASE_URL`, `BIONG_MCP_TOKEN`):
+
+```bash
+cd _biong_backend_FE
+node mcp/short-video-agent/scripts/upload-agent-video.mjs \
+  --short-video-id {id} \
+  --file /abs/path/output.mp4
+```
+
+Cần `npm run build` trong `mcp/short-video-agent` trước lần đầu dùng CLI.
 
 ## Cài đặt MCP
 

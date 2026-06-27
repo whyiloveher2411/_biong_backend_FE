@@ -72,6 +72,8 @@ function hasOpaqueBodyBackground(html) {
 // --- Required files ---
 const requiredFiles = [
   "index.html",
+  "assets/audio-script.txt",
+  "assets/caption-words.json",
   "compositions/captions.html",
   "compositions/brand-watermark.html",
   "assets/images/spacedev-logo.png",
