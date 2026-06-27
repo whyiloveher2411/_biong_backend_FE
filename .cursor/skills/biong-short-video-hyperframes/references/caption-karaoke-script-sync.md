@@ -25,6 +25,8 @@
 
 Thuật toán tham chiếu: `agent/skills/embedded-captions/scripts/fill-timings.cjs` — map theo sequence, lookahead 40 words.
 
+**Cấm map timing tỷ lệ thô** (vd. `scriptWords[i] → transcript[Math.floor(i * m / n)]`) khi số từ script ≠ số từ transcript — gây caption biến mất / lệch giữa video. Luôn dùng sequential map + `fill-timings.cjs`; giữ text script, chỉ lấy `start`/`end` từ transcript.
+
 ---
 
 ## Fallback khi map lệch

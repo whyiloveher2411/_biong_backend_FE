@@ -143,10 +143,14 @@ Dùng block cho caption + transition — customize, không viết từ đầu. S
 ### Render final
 
 ```bash
-npx hyperframes render --output output.mp4 --quality high --fps 30
+# Debug local — cấm upload CMS
+npx hyperframes render --quality draft --output debug.mp4
+
+# Final — sau lint + inspect pass
+npx hyperframes render --output output.mp4 --quality high --fps 30 --strict
 ```
 
-Không upload bản `--quality draft`.
+Không upload bản `--quality draft`. Trước render final: đọc [blank-frame-audit.md](references/blank-frame-audit.md).
 
 ---
 
@@ -160,7 +164,8 @@ Không upload bản `--quality draft`.
 6. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
 7. [layout-9x16-zones.md](references/layout-9x16-zones.md)
 8. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
-9. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
+9. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect: tránh blank frames / mất chữ**
+10. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
 ---
 
@@ -188,9 +193,11 @@ Không upload bản `--quality draft`.
 - [ ] Không path `assets/` bịa — mọi file qua MCP (trừ logo Spacedev bundled)
 - [ ] Registry blocks installed + wired
 - [ ] Không linear entrance; stagger mỗi beat
+- [ ] Timeline pattern A hoặc B — **không** pattern C — [blank-frame-audit.md](references/blank-frame-audit.md)
 - [ ] `window.__timelines` + `data-duration` khớp audio
+- [ ] `hyperframes lint` — 0 errors; `inspect` pass caption band
 - [ ] `animation-map.mjs` — không dead zone >1.5s
-- [ ] Render `--quality high`
+- [ ] Render `--quality high --strict` (draft chỉ debug local)
 - [ ] Caption band tách — không overlap
 - [ ] Upload MP4 qua MCP
 
@@ -199,7 +206,7 @@ Không upload bản `--quality draft`.
 ## Lệnh mẫu
 
 ```
-Render video agent ID 9 (phase 2). Đọc motion-complexity-activation.md.
-Senior Motion Graphics. hyperframes add registry blocks. stagger + no linear.
-Render --quality high. upload_agent_video.
+Render video agent ID 9 (phase 2). Đọc motion-complexity-activation.md + blank-frame-audit.md.
+lint + inspect trước render. Timeline pattern A (single main). stagger + no linear.
+Render --quality high --strict. upload_agent_video.
 ```

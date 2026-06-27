@@ -21,18 +21,33 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
   window.__timelines = window.__timelines || {};
   const tl = gsap.timeline({ paused: true });
 
-  // entrances + ambient — xem checklist dưới
+  // Pattern A (inline beats): tween times = global seconds từ 0
+  tl.fromTo(".b1-p1", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.2);
+  tl.fromTo(".b2-p1", { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 6.3);
 
-  window.__timelines["beat_1"] = tl; // key = data-composition-id
+  window.__timelines["main"] = tl; // key = data-composition-id trên #root
 </script>
 ```
 
 - `paused: true` — **không** `tl.play()`
-- Registry key = `data-composition-id` trên root
+- Registry key = `data-composition-id` trên composition root
 - Duration từ `data-duration` trên root — **không** pad timeline rỗng
 - Repeat **hữu hạn** (không `-1`)
 - **Cấm** `ease: "none"` / linear cho entrance — dùng `power3.out`, `back.out(1.7)`, `elastic.out`
 - **data-duration** root = độ dài beat theo audio — timeline không kết thúc sớm hơn clip
+- Entrance trong `.clip` scene: ưu tiên **`fromTo`** thay `from` — tránh opacity 0 khi seek non-linear
+
+---
+
+## Timeline pattern — tránh blank frames
+
+Đọc chi tiết: [blank-frame-audit.md](blank-frame-audit.md)
+
+| Pattern | Khi nào | GSAP |
+|---------|---------|------|
+| **A — Single main** (khuyến nghị) | Beat inline trong `index.html`; **không** `data-composition-id` từng section | `window.__timelines["main"]`; times **global** |
+| **B — Sub-composition per beat** | Beat trong `compositions/beat_N.html` + `data-composition-src` | `window.__timelines["beat_N"]`; times **local 0-based** |
+| **C — CẤM** | Inline section + `data-composition-id="beat_N"` + global times | Gây blank frames beat 2+ |
 
 ---
 
@@ -61,24 +76,22 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 
 ---
 
-## Timeline pattern
+## Timeline pattern (Pattern A — single main)
 
 ```javascript
 const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
 
-// Hero — top zone
-tl.from(".hero-title", { y: 80, opacity: 0, duration: 0.55, ease: "back.out(1.4)" }, 0);
-tl.from(".hero-sub", { y: 40, opacity: 0, duration: 0.4 }, 0.15);
+// Hero — top zone (global time)
+tl.fromTo(".hero-title", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: "back.out(1.4)" }, 0);
+tl.fromTo(".hero-sub", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.15);
 
 // Support — diagram zone
-tl.from(".flow-step", {
-  x: -40, opacity: 0, duration: 0.35, stagger: 0.12, ease: "power2.out"
-}, 0.35);
+tl.fromTo(".flow-step", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, stagger: 0.12, ease: "power2.out" }, 0.35);
 
 // Ambient — decorative only
 tl.to(".glow-orb", { scale: 1.08, duration: 2, yoyo: true, repeat: 3, ease: "sine.inOut" }, 0.5);
 
-window.__timelines["beat_1"] = tl;
+window.__timelines["main"] = tl;
 ```
 
 ---
@@ -120,6 +133,9 @@ window.__timelines["beat_1"] = tl;
 - `tl.play()` trong HyperFrames render
 - Bịa path `assets/` không qua MCP search
 - Animate `width`/`height`/`top`/`left` thay vì `x`/`y`/`scale`
+- **Pattern C timeline** — inline beat + `data-composition-id="beat_N"` + global tween times
+- **`tl.from()` trong `.clip`** khi seek non-linear gây mất chữ — dùng `fromTo`
+- Google Fonts CDN — font chưa nạp kịp → blank frame
 
 ---
 
@@ -128,8 +144,11 @@ window.__timelines["beat_1"] = tl;
 - [ ] Caption karaoke wired — script text + transcript timing
 - [ ] Watermark Spacedev — [spacedev-brand-watermark.md](spacedev-brand-watermark.md)
 - [ ] Font body ≥28px; hero phrases 3–5 từ stagger
-- [ ] `window.__timelines["beat_N"]` tồn tại
-- [ ] `hyperframes lint` pass
+- [ ] Timeline pattern A hoặc B — **không** pattern C — [blank-frame-audit.md](blank-frame-audit.md)
+- [ ] `window.__timelines["main"]` (A) hoặc `["beat_N"]` per sub-comp (B) đã đăng ký
+- [ ] `hyperframes lint` — **0 errors**
+- [ ] `hyperframes inspect` — không text clipped/missing ở caption band
+- [ ] `animation-map.mjs` — dead zone ≤ 1.5s
 - [ ] Layout: `layout-9x16-zones.md` — không overlap caption
 - [ ] `media-plan.md` khớp assets đã embed
 - [ ] Preview frame tại 0.4 / 0.7 / 0.92 duration

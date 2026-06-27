@@ -73,17 +73,29 @@ Skill: `/hyperframes-registry` — `references/wiring-blocks.md`
 
 ## 5. Timeline sync — tránh video "đứng hình"
 
-### GSAP registry (bắt buộc mỗi sub-composition)
+### GSAP registry (bắt buộc)
+
+**Pattern A (inline beats — khuyến nghị):**
 
 ```javascript
 window.__timelines = window.__timelines || {};
 const tl = gsap.timeline({ paused: true });
-// ... tweens ...
-window.__timelines["beat_1"] = tl; // key === data-composition-id trên root
+// ... tweens với global times ...
+window.__timelines["main"] = tl; // key === data-composition-id trên #root
 ```
+
+**Pattern B (sub-composition per beat):**
+
+```javascript
+window.__timelines["beat_1"] = tl; // key === data-composition-id trong compositions/beat_1.html
+// tween times = local 0-based trong file đó
+```
+
+**Cấm Pattern C** — xem [blank-frame-audit.md](blank-frame-audit.md).
 
 - **Không** `tl.play()`
 - **Không** pad timeline rỗng — duration từ `data-duration` trên root
+- Entrance trong `.clip`: dùng **`fromTo`** thay `from`
 
 ### Khớp audio
 
@@ -97,17 +109,38 @@ Preflight: `animation-map.mjs` — kiểm tra dead zones (khoảng trống khôn
 
 ---
 
+## Pre-render audit (bắt buộc)
+
+Invoke `/hyperframes-cli` — chi tiết: [blank-frame-audit.md](blank-frame-audit.md)
+
+```bash
+cd storage/agent-renders/{id}/my-video
+npx hyperframes lint                    # 0 errors
+npx hyperframes inspect --json          # caption/text không biến mất
+node .agents/skills/hyperframes-animation/scripts/animation-map.mjs .
+```
+
+Anti-pattern audit:
+
+- Timeline Pattern C (inline beat + global times) → blank frames
+- Google Fonts CDN → font blank frame lúc render
+- Stock Pexels chưa re-encode → sparse keyframe freeze — xem [media-mcp-activation.md](media-mcp-activation.md)
+
+---
+
 ## 6. Render chất lượng cao (final)
 
 ```bash
-# Preview / iterate
-npx hyperframes render --quality draft
+# Preview / iterate — chỉ debug local, KHÔNG upload CMS
+npx hyperframes render --quality draft --output debug.mp4
 
 # Final delivery — BẮT BUỘC trước upload_agent_video
-npx hyperframes render --output output.mp4 --quality high --fps 30
+npx hyperframes render --output output.mp4 --quality high --fps 30 --strict
 ```
 
-Portrait 9:16: đảm bảo `hyperframes.json` / composition root = 1080×1920.
+Composition nặng: thêm `--player-ready-timeout=60000` (không dùng `hyperframes.start({ delay })` — không phải CLI API).
+
+Portrait 9:16: đảm bảo composition root = 1080×1920.
 
 **Cấm** upload MP4 render ở `--quality draft` làm bản final.
 
@@ -121,7 +154,9 @@ Portrait 9:16: đảm bảo `hyperframes.json` / composition root = 1080×1920.
 - [ ] ≥1 registry block wired (caption hoặc transition)
 - [ ] Không entrance dùng `ease: "none"` / linear
 - [ ] Stagger trên ≥1 nhóm mỗi beat
-- [ ] `window.__timelines` đăng ký đúng id mỗi beat
+- [ ] Timeline pattern A hoặc B — **không** pattern C
+- [ ] `window.__timelines` đăng ký đúng id (main hoặc beat_N)
 - [ ] `data-duration` khớp audio beat
+- [ ] `lint` 0 errors + `inspect` pass caption band
 - [ ] `animation-map.mjs` — không dead zone > 1.5s
-- [ ] Render `--quality high`
+- [ ] Render `--quality high --strict`

@@ -53,6 +53,7 @@ Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.
 | 13 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
 | 14 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
 | 15 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
+| 16 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) — lint + inspect trước render |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 
@@ -80,7 +81,8 @@ Mọi visual element trong beat:
 ```
 
 - Sub-composition caption: `data-composition-src="compositions/captions.html"` — **tách file**
-- GSAP: `gsap.timeline({ paused: true })` → `window.__timelines["beat_N"]` — key = `data-composition-id`
+- GSAP: `gsap.timeline({ paused: true })` → đăng ký `window.__timelines[id]` — key = `data-composition-id`
+- **Timeline pattern:** Pattern A (inline beats → `window.__timelines["main"]`, times global) **hoặc** Pattern B (sub-comp per beat → `["beat_N"]`, times local). **Cấm Pattern C** — xem [blank-frame-audit.md](blank-frame-audit.md)
 - Chi tiết: `.agents/skills/hyperframes-core/references/tracks-and-clips.md`
 
 ---
@@ -100,14 +102,16 @@ Chi tiết: [motion-complexity-activation.md](motion-complexity-activation.md)
 
 ## Post-author audit
 
-Sau khi viết beat HTML:
+Sau khi viết beat HTML — đọc [blank-frame-audit.md](blank-frame-audit.md):
 
 ```bash
-node .agents/skills/hyperframes-animation/scripts/animation-map.mjs storage/agent-renders/{id}/my-video/compositions/beat_1
-hyperframes lint storage/agent-renders/{id}/my-video
+cd storage/agent-renders/{id}/my-video
+npx hyperframes lint
+npx hyperframes inspect --json
+node .agents/skills/hyperframes-animation/scripts/animation-map.mjs .
 ```
 
-Preflight overlap caption vs content (layout zones).
+Preflight overlap caption vs content (layout zones). **0 lint errors** trước `--quality high`.
 
 ---
 
@@ -117,4 +121,5 @@ Preflight overlap caption vs content (layout zones).
 - Bỏ qua skill routing — chỉ dùng `/general-video` mà không đọc product-launch visual
 - Caption inline trong beat HTML cùng layer diagram
 - Thiếu `data-track-index` / `class="clip"` trên visual clips
-- Bỏ qua `animation-map.mjs` audit trước render
+- Bỏ qua `lint` / `inspect` / `animation-map.mjs` audit trước render
+- Pattern C timeline (inline beat + global times) — blank frames beat 2+

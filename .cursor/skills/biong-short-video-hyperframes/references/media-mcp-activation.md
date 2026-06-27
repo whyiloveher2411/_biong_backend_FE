@@ -121,6 +121,22 @@ Tạo **trước** khi viết HTML beat:
 
 ---
 
+## Re-encode stock video (tránh frame freeze)
+
+Sau khi tải stock Pexels, chạy `npx hyperframes lint`. Nếu báo **`sparse keyframes`** trên `<video>`, re-encode trước khi embed — nếu không video B-roll có thể đứng hình / blank frame khi seek:
+
+```bash
+# Thay hook_stock.mp4 bằng tên file tương ứng
+ffmpeg -y -i assets/images/hook_stock.mp4 \
+  -c:v libx264 -r 30 -g 30 -keyint_min 30 -movflags +faststart -an \
+  assets/images/hook_stock_enc.mp4
+mv assets/images/hook_stock_enc.mp4 assets/images/hook_stock.mp4
+```
+
+Lặp cho mỗi stock video trong `media-plan.md`. Xem thêm [blank-frame-audit.md](blank-frame-audit.md).
+
+---
+
 ## Anti-patterns
 
 | Cấm | Làm đúng |
@@ -139,3 +155,4 @@ Tạo **trước** khi viết HTML beat:
 - [layout-9x16-zones.md](layout-9x16-zones.md) — vị trí visual
 - [gsap-beat-checklist.md](gsap-beat-checklist.md) — timeline contract
 - [motion-complexity-activation.md](motion-complexity-activation.md) — cinematic bar
+- [blank-frame-audit.md](blank-frame-audit.md) — lint/inspect trước render
