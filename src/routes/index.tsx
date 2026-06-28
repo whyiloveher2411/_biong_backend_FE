@@ -4,6 +4,7 @@ import LinearProgress from 'components/atoms/LinearProgress';
 import FormRelogin from 'components/organisms/FormRelogin';
 import Header from 'components/organisms/Header';
 import SidebarFull from 'components/organisms/SidebarFull';
+import { useFloatingMessages } from 'hook/useFloatingMessages';
 import React, { Suspense } from 'react';
 import { useSelector } from 'react-redux';
 import {
@@ -15,6 +16,7 @@ import { UserState } from 'store/user/user.reducers';
 interface Props {
     [key: string]: ANY
 }
+
 
 const Loadable = (Component: React.ElementType) => (props: Props) => {
     return (
@@ -127,6 +129,12 @@ function Router() {
     const user = useSelector((state: RootState) => state.user);
 
     const theme: Theme = useTheme();
+
+    const { showMessage } = useFloatingMessages();
+
+    React.useEffect(() => { 
+        window.showMessage = showMessage;
+    }, []);
 
     return (
         <div className="App" style={{ background: theme.palette.body.background }}>

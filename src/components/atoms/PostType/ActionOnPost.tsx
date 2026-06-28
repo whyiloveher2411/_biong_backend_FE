@@ -205,8 +205,8 @@ function ActionOnPost({
                 }));
                 try {
                     const result = await copyShortVideoAgentPromptToClipboard(Number(id), phase);
-                    window.alert(result.message);
                     if (result.ok) {
+                        window.showMessage(result.message, 'info');
                         maybeRefreshAfterAction(item);
                     }
                 } finally {

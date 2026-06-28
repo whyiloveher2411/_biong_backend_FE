@@ -2,7 +2,7 @@
 
 **Bắt buộc** phase 1 khi TTS chain ưu tiên OmniVoice. Invoke sau `/extract-core-signals`, cùng `/hyperframes-creative` + `/viral-audio-script` + `/humanize-audio-script`.
 
-Engine: OmniVoice FastAPI — **Kaggle GPU** (`./kaggle/omnivoice-tts/resume-kaggle.sh`) hoặc **local** (`./omnivoice-tts.sh start`). Không hiểu SSML XML. Cấu hình: clone `audio_demo`, `OMNIVOICE_NUM_STEP=64`, speed `1.15`.
+Engine: OmniVoice FastAPI — **local** (`./omnivoice-tts.sh start`). Không hiểu SSML XML. Cấu hình: clone `audio_demo`, `OMNIVOICE_NUM_STEP=64`, speed `1.15`.
 
 > **Thẻ emotion/prosody** (`[laughter]`, `. . .`, `[SFX]`, `[BGM]`) áp **sau** `/humanize-audio-script` — bước cuối trước `save_audio_script`.
 
@@ -66,7 +66,7 @@ Viết lại draft theo văn phong tự nhiên, thành ngữ, ví von — đọc
 
    `[BGM: lofi ambient]` · `[SFX: vine boom]` · `[Dừng 0.5s]` (server convert → `. . .` khi TTS)
 
-4. **Tốc độ & chất lượng** — `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64` (Kaggle + local đồng bộ).
+4. **Tốc độ & chất lượng** — `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64`.
 
 5. **Script dài 60–180s** — vẫn single-pass clone; nếu >120s theo dõi timeout OmniVoice (`OMNIVOICE_TTS_TIMEOUT_SECONDS`). Viết đủ word budget (~2.5 từ/giây).
 

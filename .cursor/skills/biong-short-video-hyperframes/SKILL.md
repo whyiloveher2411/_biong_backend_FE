@@ -1,6 +1,6 @@
 ---
 name: biong-short-video-hyperframes
-description: Agent short video marketing — manual 2 bước hoặc auto TTS full pipeline (OmniVoice Kaggle→local→VieNeu→Saydi→Vbee) + render cinematic HyperFrames.
+description: Agent short video marketing — manual 2 bước hoặc auto TTS full pipeline (OmniVoice local→VieNeu→Saydi→Vbee) + render cinematic HyperFrames.
 ---
 
 # Biong Short Video — HyperFrames Agent
@@ -14,7 +14,7 @@ description: Agent short video marketing — manual 2 bước hoặc auto TTS fu
 
 Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu TTS lỗi → upload MP3 fallback.
 
-`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: OmniVoice Kaggle → OmniVoice local → VieNeu → Saydi → Vbee.
+`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: OmniVoice local → VieNeu → Saydi → Vbee.
 
 ---
 
@@ -39,7 +39,7 @@ Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
 
-Chain TTS: **OmniVoice Kaggle → OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_provider_used` (`omnivoice_kaggle` | `omnivoice_local` | …).
+Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_provider_used` (`omnivoice_local` | `vieneu_clone` | …).
 
 **Phase 1 script (OmniVoice văn nói):**
 1. `/extract-core-signals` → `/hyperframes-creative` (văn hội thoại) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật)
@@ -47,14 +47,13 @@ Chain TTS: **OmniVoice Kaggle → OmniVoice local → VieNeu → Saydi → Vbee*
 
 **Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
 
-**Prereq OmniVoice (tuỳ chọn Kaggle GPU, fallback local CPU):**
+**Prereq OmniVoice (local):**
 
 | Tier | Lệnh | Env backend |
 |------|------|-------------|
-| Kaggle GPU (ưu tiên) | `./kaggle/omnivoice-tts/resume-kaggle.sh` sau Run Cell 1 | `OMNIVOICE_TTS_KAGGLE_BASE_URL=http://127.0.0.1:8766` |
-| Local CPU (fallback) | `./omnivoice-tts.sh prepare-clone && start` | `OMNIVOICE_TTS_LOCAL_BASE_URL=http://127.0.0.1:8766` |
+| Local | `./omnivoice-tts.sh prepare-clone && start` | `OMNIVOICE_TTS_LOCAL_BASE_URL=http://127.0.0.1:8766` |
 
-Chung: `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64`. Không cần queue worker cho MCP short video. Tunnel Kaggle chưa mở → PHP tự fallback local.
+Chung: `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64`. Không cần queue worker cho MCP short video.
 
 ---
 
