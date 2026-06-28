@@ -96,7 +96,7 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec trong khoảng). Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script + /humanize-audio-script.',
+  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec trong khoảng). Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script (expressive tags) + /humanize-audio-script (giữ tag).',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Script có [BGM]/[Dừng Ns] — viết cho tai nghe'),
@@ -119,7 +119,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover TTS và ghi audio_file. OmniVoice: giữ emotion tags [laughter]/[sigh]; strip [BGM]/[SFX]/[Dừng]; speed 1.15. Fallback VieNeu → Saydi → Vbee. Dùng khi agent_tts_auto=true. KHÔNG dùng trong manual_2_step.',
+  'Sinh voiceover TTS và ghi audio_file. OmniVoice: giữ full expressive tag set [happy]/[excited]/[whisper]/[calm]/[laughter]/[sigh]/[gasp]/[chuckle]/[singing]; strip [BGM]/[SFX]/[Dừng]; speed 1.15. Fallback VieNeu → Saydi → Vbee. Dùng khi agent_tts_auto=true. KHÔNG dùng trong manual_2_step.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

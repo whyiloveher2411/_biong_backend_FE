@@ -26,7 +26,7 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 3. `/extract-core-signals` → hook, tension, takeaway, loop_hook_line
 4. `/hyperframes-creative` → phá câu học thuật → văn hội thoại, cảm thán
 5. `/viral-audio-script` → bản nháp HASCAS 60–180s, timeline, markers
-6. `/humanize-audio-script` → văn người thật, thành ngữ, ví von + checklist OmniVoice
+6. `/humanize-audio-script` → polish văn người thật — giữ expressive tag slots
 7. `save_audio_script({ text, metadata })` → **DỪNG**
 
 Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)

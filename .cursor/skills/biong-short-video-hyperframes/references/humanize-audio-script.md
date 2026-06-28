@@ -1,47 +1,36 @@
-# humanize-audio-script — văn người thật
+# humanize-audio-script — văn người thật (giữ tag)
 
-Skill phase 1. Invoke: `/humanize-audio-script` **sau** `/viral-audio-script` (bản nháp), **trước** `save_audio_script`.
+Skill phase 1. Invoke: **sau** `/viral-audio-script`, **trước** `save_audio_script`.
 
-**Đọc trước:** [omnivoice-speech-script.md](omnivoice-speech-script.md)
+**Đọc trước:** [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
 ---
 
-## Vai trò trong pipeline
+## Vai trò
 
-| Bước | Output |
+| Bước | Làm gì |
 |------|--------|
-| `/viral-audio-script` | Bản **nháp** HASCAS — cấu trúc đúng, có thể còn giọng AI |
-| **`/humanize-audio-script`** | Script **cuối** — văn nói tự nhiên, thành ngữ, ví von |
-| Checklist OmniVoice | `[SFX]`, emotion tags, prosody, ≤12 từ/câu |
-| `save_audio_script` | Lưu + validation server |
+| `/viral-audio-script` | Draft HASCAS **+ gắn expressive tags** |
+| **`/humanize-audio-script`** | Polish văn — **giữ tag slots** |
+| `save_audio_script` | Lưu — không chèn tag mới |
+
+**Cấm:** sinh script xong rồi chèn tag vô tội vạ ở humanize hoặc save.
 
 ---
 
 ## Prompt template
 
-```text
-Hãy viết lại đoạn văn sau theo văn phong tự nhiên, dùng từ ngữ giao tiếp hàng ngày của người thật.
-Hãy thêm các thành ngữ hoặc cách nói ví von, thay đổi cấu trúc câu linh hoạt để bài viết không bị khô khan và máy móc.
-Dưới đây là đoạn văn cần sửa: [DRAFT_SCRIPT]
-```
-
-Humanize **toàn bộ** draft hoặc từng section (Hook, Agitate, Solve, CTA) rồi ghép lại — giữ timeline và markers.
+Thêm dòng bảo toàn tag vào prompt humanize (xem SKILL.md).
 
 ---
 
-## Ví dụ before / after
+## Ví dụ — giữ tag slots
 
-**Before (giọng AI):**
-> Do đó, việc sử dụng HyperFrames không đúng cách sẽ dẫn đến kết quả không mong muốn trong quá trình tạo video marketing.
+**Draft viral:**
+> [excited] 99% dev dùng HyperFrames sai! [whisper] Bạn nghĩ add skill là xong? [sigh] Sai rồi!
 
-**After (văn người thật):**
-> Dùng HyperFrames kiểu này . . . [sigh] Video ra toàn lỗi thôi!
-
-**Before:**
-> Ngoài ra, bạn cần lưu ý rằng việc thêm skill vào project là chưa đủ.
-
-**After:**
-> Tưởng add skill là xong? . . . [laughter] Còn lâu mới đủ!
+**Sau humanize (tag giữ nguyên, văn tự nhiên hơn):**
+> [excited] 99% dev xài HyperFrames sai bét! [whisper] Tưởng add skill là xong hả? [sigh] Lệch bét rồi!
 
 ---
 
@@ -49,22 +38,17 @@ Humanize **toàn bộ** draft hoặc từng section (Hook, Agitate, Solve, CTA) 
 
 | Lỗi | Hậu quả |
 |-----|----------|
-| Bỏ qua humanize, save draft viral trực tiếp | Script khô, máy móc — TTS nghe robot |
-| Humanize xong mất `[SFX: ...]` | Server reject `save_audio_script` |
-| Câu >12 từ sau humanize | OmniVoice đọc đều, mất nhịp viral |
-| Thêm claims/facts không có trong nguồn | Sai nội dung marketing |
-| Giọng quá slang / thô tục | Không phù hợp brand Spacedev |
-| SSML `<break>` sau humanize | OmniVoice đọc thành ký tự |
+| Humanize thêm `[laughter]` mới | Vượt quota — giọng kịch quá |
+| Humanize xóa `[whisper]` | Mất contrast Agitate |
+| Di chuyển tag sang section khác | Lệch HASCAS / timeline cảm xúc |
+| Save draft viral không humanize | Văn AI khô |
 
 ---
 
-## Checklist trước save
+## Self-check trước save
 
-- [ ] Đã humanize toàn bộ draft
-- [ ] Giữ HASCAS + `estimated_duration_sec` 60–180
-- [ ] Có `[SFX: vine boom]` (hoặc tương đương) ở Hook
-- [ ] Có `[BGM: mood]` ở đầu
-- [ ] Emotion tags + prosody `. . .` ở Hook/twist
+- [ ] Số tag và loại tag khớp `expressive_plan`
+- [ ] Không tag mới so với viral draft
+- [ ] `[SFX]` + `[BGM]` còn nguyên
+- [ ] ≤2 phi-ngôn-ngữ / video
 - [ ] Mọi câu ≤12 từ
-- [ ] Không SSML
-- [ ] `markers` text khớp script cuối
