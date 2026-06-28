@@ -34,8 +34,8 @@ Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từn
 
 | Bước | MCP | Kết quả |
 |------|-----|---------|
-| Script | `save_audio_script` | `audio_script` + markers + OmniVoice emotion tags |
-| TTS | `generate_narration_tts` (giữ `[laughter]`/`[sigh]` cho OmniVoice; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
+| Script | `save_audio_script` | `audio_script` + markers + OmniVoice tags `[laughter]`/`[sigh]`/`[gasp]` |
+| TTS | `generate_narration_tts` (giữ 3 tag non-verbal; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
 
@@ -44,7 +44,7 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 **Phase 1 script (OmniVoice văn nói):**
 1. `/extract-core-signals` → `/hyperframes-creative` (văn hội thoại) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật)
 2. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) — văn nói VI, từ đệm, punctuation, pacing
-3. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) — cấm SSML; dùng `[laughter]`, `[sigh]`, `. . .` (áp sau humanize)
+3. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — CHỈ `[laughter]`/`[sigh]`/`[gasp]`; cấm SSML; `. . .` prosody sau humanize
 
 **Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
 
@@ -54,7 +54,7 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 |------|------|-------------|
 | Local | `./omnivoice-tts.sh prepare-clone && start` | `OMNIVOICE_TTS_LOCAL_BASE_URL=http://127.0.0.1:8766` |
 
-Chung: `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64`. Không cần queue worker cho MCP short video.
+Chung: `OMNIVOICE_MODEL_ID=k2-fsa/OmniVoice`, `OMNIVOICE_GUIDANCE_SCALE=2`, `OMNIVOICE_USE_AUDIO_DEMO_CLONE=true`, `OMNIVOICE_SHORT_VIDEO_SPEED=1.15`, `OMNIVOICE_NUM_STEP=64`. Không cần queue worker cho MCP short video.
 
 ---
 

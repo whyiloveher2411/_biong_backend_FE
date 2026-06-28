@@ -1,57 +1,44 @@
-# viral-audio-script — kịch bản giữ chân cao (bản nháp + expressive tags)
+# viral-audio-script — kịch bản giữ chân cao (bản nháp + non-verbal tags)
 
-Skill phase 1. Invoke: `/viral-audio-script` sau `/hyperframes-creative`. Output là **bản nháp có tag** — bắt buộc `/humanize-audio-script` trước `save_audio_script`.
+**Model TTS:** `k2-fsa/OmniVoice` — chỉ tag trong [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) allowlist.
 
-**Đọc trước:**
-- [viral-retention-structure.md](viral-retention-structure.md)
-- [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §1 §3 §4
+**Đọc cùng:**
 - [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md)
 - [omnivoice-speech-script.md](omnivoice-speech-script.md)
+- [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md)
 
-## Expressive tags — gắn trong draft (80/20)
+---
 
-| Section HASCAS | Tag | Quota |
-|----------------|-----|-------|
-| Hook | `[excited]` / `[happy]` | 0–1 câu ≤10 từ |
-| Agitate | `[whisper]` / `[calm]`, `[sigh]` | 0–1 mood; phi-ngôn-ngữ trong budget 2/video |
-| Solve | *(neutral)* | Không mood tag |
-| CTA | `[laughter]`, `[singing]` (tùy ngữ cảnh) | `[singing]` slogan ngắn nếu tự nhiên |
+## Non-verbal tags (allowlist)
 
-Metadata: `expressive_plan: { hook, agitate, solve, cta }` — liệt kê tag đã gắn.
+| Section | Tag | Quota |
+|---------|-----|-------|
+| Agitate | `[sigh]` hoặc `[gasp]` | 0–1 |
+| Twist / CTA | `[laughter]` | 0–1 |
+| **Tổng** | `[laughter]` `[sigh]` `[gasp]` | **≤2 / video** |
 
-## Timeline viral (60–180s)
+**Cấm:** `[happy]`, `[singing]`, `[whisper]` và mọi tag ngoài allowlist — server reject khi save.
 
-Word budget: **~2.5 từ/giây**.
+Metadata: `expressive_plan: { hook, agitate, solve, cta }`.
 
-| Phần | % | Mục tiêu |
-|------|---|----------|
-| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `[excited]` + `?!` |
-| Agitate | ~25% | Nỗi đau — cảm thán ngắn brand-safe (§3) |
-| Solve | ~60% | Neutral — giải thích kỹ thuật |
-| CTA/Loop | ~10% | Loop hook hoặc slogan |
+Mood Hook/CTA: **neutral + `?!` + `. . .`** — không mood tag.
 
-## Punctuation trong draft (§4)
+---
 
-- `...` hoặc `. . .` trước từ khóa
-- `?!` ở câu hỏi tu từ
-- Chấm rời: `Sai. Lầm. Lớn.` ở hook mạnh
+## HASCAS pacing
 
-## Thẻ production
+| Section | % thời lượng | Ghi chú |
+|---------|--------------|---------|
+| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `?!` |
+| Agitate | ~15% | `[sigh]` hoặc `[gasp]` optional |
+| Solve | ~70% | Neutral — `. . .` prosody |
+| CTA/Loop | ~10% | Optional `[laughter]` |
 
-| Thẻ | Phase 2 MCP |
-|-----|-------------|
-| `[BGM: mood]` | `short_video_search_bgm` |
-| `[SFX: vine boom]` | **Bắt buộc** — `short_video_search_meme_sound` |
-| `[Dừng 0.5s]` | Convert `. . .` khi TTS |
-
-## Lưu qua MCP
-
-**Không save draft trực tiếp.** `/humanize-audio-script` → `save_audio_script`.
+---
 
 ## Anti-patterns
 
-- Chèn tag sau humanize thay vì trong draft
-- Bọc cả đoạn Solve trong `[excited]`
-- >2 tag phi-ngôn-ngữ / video
-- Script < 60s / > 180s; thiếu `[SFX]`; SSML
-- Văn học thuật: "do đó", "tiến hành", câu ghép dài — phá ở `/hyperframes-creative` hoặc humanize
+- Tag mood (`[happy]`, `[singing]`, …)
+- Tag không có trong allowlist
+- >2 non-verbal / video
+- SSML XML

@@ -17,7 +17,7 @@
 
 ## Pipeline 5 bước (bắt buộc — dùng script, không hand-author)
 
-1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`, **và thẻ OmniVoice expressive** `[happy]`, `[excited]`, `[whisper]`, `[calm]`, `[laughter]`, `[sigh]`, `[gasp]`, `[chuckle]`, `[singing]` (caption không hiển thị emotion tags).
+1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`, **và thẻ OmniVoice non-verbal** `[laughter]`, `[sigh]`, `[gasp]` (caption không hiển thị — chỉ 3 tag allowlist).
 2. **Transcribe** — `hyperframes transcribe` trên `audio_file` → `transcript.json` hoặc `assets/transcript.json` (`words[].start`, `words[].end`).
 
 **Sau MCP TTS OmniVoice:** bắt buộc transcribe **lại** MP3 mới — prosody `. . .` và emotion tags làm đổi duration so với ước lượng script.

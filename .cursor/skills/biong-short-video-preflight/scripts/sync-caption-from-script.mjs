@@ -18,8 +18,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const WHISPER_EMOTION_WORD_RE =
-  /^(?:laugh|laughter|sigh|gasp|chuckle|whisper|happy|excited|calm|singing)$/i;
+const WHISPER_EMOTION_WORD_RE = /^(?:laugh|laughter|sigh|gasp)$/i;
 
 function resolveTranscriptPath(projectDir) {
   const candidates = [

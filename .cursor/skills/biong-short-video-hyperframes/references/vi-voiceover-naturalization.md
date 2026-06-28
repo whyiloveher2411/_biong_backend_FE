@@ -45,7 +45,7 @@ Align với timeline [viral-retention-structure.md](viral-retention-structure.md
 
 | Giai đoạn | Thời gian (trong Hook/Agitate) | Giọng & nội dung |
 |-----------|-------------------------------|------------------|
-| **Hook** | ~0–3s đầu video | Câu hỏi gai, khẳng định mạnh, số shock. Dùng `[excited]`/`[happy]` + `?!` — **không** ALL CAPS |
+| **Hook** | ~0–3s đầu video | Câu hỏi gai, khẳng định mạnh — dùng `?!` và `. . .` (không mood tag) |
 | **Agitate** | ~3–15s (trong block Agitate) | Cảm thán ngắn, khoét nỗi đau. `[whisper]`/`[sigh]`. Brand-safe: "Ức chế quá đi!", "Chịu không nổi luôn á!" — tránh từ thô |
 | **Solve** | ~60% script | Neutral, rõ ràng, từng bước. Không mood tag dài |
 | **CTA/Loop** | ~10% cuối | Nhẹ, tự tin, dứt khoát. `[laughter]` hoặc slogan ngắn |

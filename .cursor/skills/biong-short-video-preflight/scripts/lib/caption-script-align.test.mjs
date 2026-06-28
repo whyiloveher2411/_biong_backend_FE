@@ -23,6 +23,11 @@ describe("caption-script-align", () => {
     assert.equal(stripScriptMarkers(raw), "Con cá lớn nhé!");
   });
 
+  it("strip non-verbal tags only (laughter, sigh, gasp)", () => {
+    const raw = "[laughter] Hook [sigh] thở [gasp] hốt hả";
+    assert.equal(stripScriptMarkers(raw), "Hook thở hốt hả");
+  });
+
   it("exact diacritic: Con cá lớn vs Con ca lớn — text script", () => {
     const script = ["Con", "cá", "lớn"];
     const transcript = tw(["Con", "ca", "lớn"]);
