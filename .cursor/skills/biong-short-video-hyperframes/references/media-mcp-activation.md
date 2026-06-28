@@ -82,7 +82,7 @@ Tải → `storage/agent-renders/{id}/assets/images/`
 | Hook | ≥ **1** meme SFX **bắt buộc** nếu script có `[SFX: ...]` (track 12) — server reject script thiếu SFX |
 | Mỗi beat (4–8) | ≥ **1** stock visual (Pexels) |
 | Beat Hook (beat 1) | Bắt buộc **stock video** (ưu tiên) hoặc stock image |
-| BGM volume | **0.15–0.20** — narration track 10 giữ **1.0** |
+| BGM volume | **0.30** (khoảng **0.25–0.35**) — narration track 10 giữ **1.0** |
 | CTA beat | Typography + stock nhẹ |
 
 ---
@@ -105,7 +105,7 @@ Embed trong `index.html`:
   data-start="0"
   data-duration="{totalVideoSec}"
   data-track-index="11"
-  data-volume="0.18"
+  data-volume="0.3"
 ></audio>
 ```
 
@@ -157,7 +157,7 @@ Lặp cho mỗi stock video trong `media-plan.md`. Xem thêm [blank-frame-audit.
 | Beat chỉ text + nền, không stock | ≥1 MCP stock mỗi beat |
 | Không có BGM track | `search_bgm` + embed track 11 |
 | BGM `data-duration` < video | Chọn track dài hơn hoặc ffmpeg loop |
-| BGM volume > 0.25 | Giữ 0.15–0.20, narration = 1.0 |
+| BGM volume > 0.45 | Giữ ~0.30 (0.25–0.35), narration = 1.0 |
 | `tl.play()` | `paused: true` + `window.__timelines[id]` |
 
 ---

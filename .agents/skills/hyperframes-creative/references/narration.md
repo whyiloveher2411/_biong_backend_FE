@@ -2,6 +2,8 @@
 
 How to write narration scripts for video compositions. Read when the composition includes voiceover or TTS.
 
+> **Vietnamese marketing voiceover** (Biong short video, spoken VI): read [narration-vi.md](narration-vi.md) for writing-for-the-ear rules, conversational anchors, and HASCAS pacing.
+
 ## Pacing
 
 - **2.5 words per second** is natural speaking pace

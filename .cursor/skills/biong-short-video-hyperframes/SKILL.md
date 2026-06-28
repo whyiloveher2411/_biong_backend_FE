@@ -43,7 +43,8 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 
 **Phase 1 script (OmniVoice văn nói):**
 1. `/extract-core-signals` → `/hyperframes-creative` (văn hội thoại) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật)
-2. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) — cấm SSML; dùng `[laughter]`, `[sigh]`, `. . .` (áp sau humanize)
+2. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) — văn nói VI, từ đệm, punctuation, pacing
+3. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) — cấm SSML; dùng `[laughter]`, `[sigh]`, `. . .` (áp sau humanize)
 
 **Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
 
@@ -96,7 +97,7 @@ Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat
 | 3 | `/viral-audio-script` | Bản **nháp** HASCAS + timeline + markers |
 | 4 | `/humanize-audio-script` | Script **cuối** — văn người thật + OmniVoice tags |
 
-Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md) · [humanize-audio-script.md](references/humanize-audio-script.md)
+Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md) · [humanize-audio-script.md](references/humanize-audio-script.md) · [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md)
 
 ### Timeline viral (60–180s)
 
@@ -105,6 +106,7 @@ Agent chọn `estimated_duration_sec` trong **60–180** theo nội dung. HASCAS
 Word budget: ~2.5 từ/giây — 60s ≈ 150 từ, 180s ≈ 450 từ.
 
 - Câu **≤12 từ**; **bắt buộc** `[SFX: vine boom]` ở hook
+- Văn nói VI: từ đệm, bảng thay thế học thuật, punctuation — [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md)
 - `cta_mode: "loop"` khuyến nghị
 
 ### Lưu MCP
@@ -246,7 +248,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML
 - [ ] `media-plan.md` có dòng `bgm_global` + stock mỗi beat
 - [ ] Mỗi beat ≥ 1 MCP stock visual
-- [ ] BGM track 11: `data-start=0`, `data-duration=totalVideoSec`, volume 0.15–0.20
+- [ ] BGM track 11: `data-start=0`, `data-duration=totalVideoSec`, volume 0.3 (khoảng 0.25–0.35)
 - [ ] Không path `assets/` bịa — mọi file qua MCP (trừ logo Spacedev bundled)
 - [ ] Registry blocks installed + wired
 - [ ] Không linear entrance; stagger mỗi beat

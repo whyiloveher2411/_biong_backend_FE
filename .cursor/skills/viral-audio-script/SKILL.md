@@ -11,6 +11,7 @@ Tạo **bản nháp** HASCAS 60–180 giây — **đã gắn expressive tags** t
 
 **Đọc trước:**
 - `biong-short-video-hyperframes/references/viral-retention-structure.md`
+- `biong-short-video-hyperframes/references/vi-voiceover-naturalization.md` (§1 §3 §4)
 - `biong-short-video-hyperframes/references/omnivoice-expressive-tags.md`
 - `biong-short-video-hyperframes/references/omnivoice-speech-script.md`
 
@@ -46,9 +47,11 @@ Word budget: ~2.5 từ/giây.
 
 ## Quy tắc khác
 
-- Câu **≤12 từ**; **cấm SSML**
+- Câu **≤12 từ**; **cấm SSML**; cấm từ nối học thuật (§1 vi-voiceover)
 - **Bắt buộc** `[SFX: vine boom]` ở Hook
 - `[BGM: mood]` đầu script
+- Hook 0–3s: `?!`, chấm rời, `[excited]` — không ALL CAPS
+- Agitate: cảm thán ngắn brand-safe (§3)
 
 ## Output (draft + expressive_plan)
 

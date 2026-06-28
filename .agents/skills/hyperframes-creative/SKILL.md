@@ -44,6 +44,7 @@ For motion patterns, scene blueprints, transitions, and CSS marker effects, use 
 | High-level motion guardrails and GSAP-quality rules                      | `references/motion-principles.md`              |
 | Font selection, pairings, rendered-video type guardrails                 | `references/typography.md`                     |
 | Script pacing, tone, openings, number pronunciation                      | `references/narration.md`                      |
+| Vietnamese marketing voiceover — writing for the ear                     | `references/narration-vi.md`                   |
 | Precomputed audio bands mapped to motion                                 | `references/audio-reactive.md`                 |
 
 ## Scripts

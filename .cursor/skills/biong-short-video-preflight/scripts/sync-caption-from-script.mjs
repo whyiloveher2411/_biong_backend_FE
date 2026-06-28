@@ -13,14 +13,19 @@ import {
   tokenizeScript,
   toCaptionWords,
   totalVideoSec,
+  stripPunct,
 } from "./lib/caption-script-align.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const WHISPER_EMOTION_WORD_RE =
+  /^(?:laugh|laughter|sigh|gasp|chuckle|whisper|happy|excited|calm|singing)$/i;
 
 function resolveTranscriptPath(projectDir) {
   const candidates = [
     path.join(projectDir, "transcript.json"),
     path.join(projectDir, "assets/transcript.json"),
+    path.join(projectDir, "assets/audio/transcript.json"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
@@ -42,8 +47,11 @@ function loadTranscriptWords(projectDir) {
       start: Number(w.start),
       end: Number(w.end),
     }))
-    .filter((w) => w.text.length > 0);
+    .filter((w) => w.text.length > 0)
+    .filter((w) => !WHISPER_EMOTION_WORD_RE.test(stripPunct(w.text)));
 }
+
+const CAPTION_ALIGN_LOOKAHEAD = Number(process.env.CAPTION_LOOKAHEAD || 5);
 
 function main() {
   const projectDir = path.resolve(process.argv[2] || "");
@@ -89,7 +97,9 @@ function main() {
     unmatchedWords,
     transcriptPointerEnd,
     densityDrift,
-  } = alignScriptToWhisper(scriptWords, transcriptWords);
+  } = alignScriptToWhisper(scriptWords, transcriptWords, {
+    lookahead: CAPTION_ALIGN_LOOKAHEAD,
+  });
 
   const duration = totalVideoSec(transcriptWords, mapped);
   const captionWords = toCaptionWords(mapped, duration);

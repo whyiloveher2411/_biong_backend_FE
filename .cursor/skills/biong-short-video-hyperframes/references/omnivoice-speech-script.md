@@ -39,19 +39,27 @@ Server: production tags strip; expressive tags giữ cho OmniVoice; fallback Vie
 
 ### Bước 1 — `/hyperframes-creative`: văn hội thoại
 
+Đọc [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §1.
+
 - Câu **≤12 từ**; dùng `?` và `!`
-- Tránh từ nối học thuật
-- Nói như podcast TikTok
+- Thay từ nối học thuật bằng văn nói (bảng §1)
+- Nói như podcast TikTok — không câu ghép dài
 
 ### Bước 2 — `/viral-audio-script`: draft HASCAS + expressive tags
 
+Đọc §3 pacing + §4 punctuation.
+
 - Timeline 60–180s, markers, HASCAS
 - **Gắn tag theo bảng expressive** — 80% neutral, 20% expressive
+- Hook 0–3s giật gân; Agitate cảm thán ngắn brand-safe
+- Dùng `...`, `?!`, chấm rời ở chỗ nhấn
 - Metadata `expressive_plan: { hook, agitate, solve, cta }`
 
 ### Bước 3 — `/humanize-audio-script`: polish văn, giữ tag
 
-- Rewrite văn tự nhiên, thành ngữ, ví von
+Đọc §2 từ đệm + §1 bảng thay thế.
+
+- Rewrite văn tự nhiên, thành ngữ, từ đệm hội thoại
 - **Cấm** thêm/xóa/di chuyển expressive tags
 - Self-check quota (docs) trước save
 

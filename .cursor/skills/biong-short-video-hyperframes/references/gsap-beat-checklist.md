@@ -122,7 +122,7 @@ window.__timelines["main"] = tl;
 ### BGM global (track 11)
 
 - `search_bgm` sau transcribe — `min_duration_sec = totalVideoSec`
-- `index.html`: `data-start="0"`, `data-duration="{totalVideoSec}"`, `data-volume="0.18"`
+- `index.html`: `data-start="0"`, `data-duration="{totalVideoSec}"`, `data-volume="0.3"`
 - Narration track 10: `data-volume="1.0"`
 - Nếu track ngắn hơn video → ffmpeg loop trước embed
 

@@ -59,6 +59,7 @@ See `references/bgm.md` and `references/sfx.md`.
 | ------------------------------------------------------------------- | -------------------------------------------- |
 | The audio engine — request/meta schema, `--only`, the switch        | `scripts/audio.mjs` (header comment)         |
 | `npx hyperframes tts` / `heygen-tts.mjs` — providers, voices, words | `references/tts.md`                          |
+| Vietnamese TTS script — punctuation, phonetics (TTS layer)            | `references/tts-vi.md`                     |
 | BGM — HeyGen retrieval + local Lyria / MusicGen generation          | `references/bgm.md`                          |
 | SFX — HeyGen retrieval (min_score 0.4) + bundled local library      | `references/sfx.md`                          |
 | `npx hyperframes transcribe` — Whisper, model rules, output shape   | `references/transcribe.md`                   |

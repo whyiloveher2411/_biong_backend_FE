@@ -2,7 +2,7 @@
 
 Skill phase 1. Invoke: **sau** `/viral-audio-script`, **trước** `save_audio_script`.
 
-**Đọc trước:** [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
+**Đọc trước:** [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §2 · [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
 ---
 
@@ -11,26 +11,36 @@ Skill phase 1. Invoke: **sau** `/viral-audio-script`, **trước** `save_audio_s
 | Bước | Làm gì |
 |------|--------|
 | `/viral-audio-script` | Draft HASCAS **+ gắn expressive tags** |
-| **`/humanize-audio-script`** | Polish văn — **giữ tag slots** |
+| **`/humanize-audio-script`** | Polish văn — **từ đệm §2** + bảng thay thế §1 — **giữ tag slots** |
 | `save_audio_script` | Lưu — không chèn tag mới |
 
 **Cấm:** sinh script xong rồi chèn tag vô tội vạ ở humanize hoặc save.
 
 ---
 
+## Trọng tâm humanize (§2 từ đệm)
+
+Chủ động thêm conversational anchors — không nhồi mỗi câu:
+
+- Đầu: "Biết sao không?…", "Nghe nè…", "Bật mí nhé…"
+- Cuối: "…nè", "…đúng không?", "…luôn á!"
+- Thay từ học thuật theo bảng [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §1
+
+---
+
 ## Prompt template
 
-Thêm dòng bảo toàn tag vào prompt humanize (xem SKILL.md).
+Thêm dòng bảo toàn tag vào prompt humanize (xem SKILL.md slash skill).
 
 ---
 
 ## Ví dụ — giữ tag slots
 
 **Draft viral:**
-> [excited] 99% dev dùng HyperFrames sai! [whisper] Bạn nghĩ add skill là xong? [sigh] Sai rồi!
+> [excited] 99% dev dùng HyperFrames sai! Do đó họ bỏ qua bước quan trọng. [sigh] Sai rồi!
 
 **Sau humanize (tag giữ nguyên, văn tự nhiên hơn):**
-> [excited] 99% dev xài HyperFrames sai bét! [whisper] Tưởng add skill là xong hả? [sigh] Lệch bét rồi!
+> [excited] Nghe nè — 99% dev xài HyperFrames sai bét! [whisper] Tưởng add skill là xong hả? [sigh] Lệch bét rồi!
 
 ---
 
@@ -42,6 +52,7 @@ Thêm dòng bảo toàn tag vào prompt humanize (xem SKILL.md).
 | Humanize xóa `[whisper]` | Mất contrast Agitate |
 | Di chuyển tag sang section khác | Lệch HASCAS / timeline cảm xúc |
 | Save draft viral không humanize | Văn AI khô |
+| Giữ "do đó", "tiến hành" | Robot, không văn nói |
 
 ---
 
@@ -52,3 +63,4 @@ Thêm dòng bảo toàn tag vào prompt humanize (xem SKILL.md).
 - [ ] `[SFX]` + `[BGM]` còn nguyên
 - [ ] ≤2 phi-ngôn-ngữ / video
 - [ ] Mọi câu ≤12 từ
+- [ ] Có 2–4 từ đệm tự nhiên (§2)

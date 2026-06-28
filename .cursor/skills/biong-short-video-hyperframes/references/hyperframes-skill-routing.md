@@ -22,14 +22,14 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 ## Phase 1 — audio_script viral (OmniVoice văn nói)
 
 1. `short_video_get_context` → `creative_brief.content_plain_text`
-2. Đọc [viral-retention-structure.md](viral-retention-structure.md) + [omnivoice-speech-script.md](omnivoice-speech-script.md)
+2. Đọc [viral-retention-structure.md](viral-retention-structure.md) + [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) + [omnivoice-speech-script.md](omnivoice-speech-script.md)
 3. `/extract-core-signals` → hook, tension, takeaway, loop_hook_line
-4. `/hyperframes-creative` → phá câu học thuật → văn hội thoại, cảm thán
-5. `/viral-audio-script` → bản nháp HASCAS 60–180s, timeline, markers
-6. `/humanize-audio-script` → polish văn người thật — giữ expressive tag slots
+4. `/hyperframes-creative` → §1 phá cấu trúc văn viết → văn hội thoại
+5. `/viral-audio-script` → bản nháp HASCAS 60–180s + §3 pacing + §4 punctuation
+6. `/humanize-audio-script` → §2 từ đệm — giữ expressive tag slots
 7. `save_audio_script({ text, metadata })` → **DỪNG**
 
-Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
+Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
 **Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật
 

@@ -4,6 +4,7 @@ Skill phase 1. Invoke: `/viral-audio-script` sau `/hyperframes-creative`. Output
 
 **Đọc trước:**
 - [viral-retention-structure.md](viral-retention-structure.md)
+- [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §1 §3 §4
 - [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md)
 - [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
@@ -24,10 +25,16 @@ Word budget: **~2.5 từ/giây**.
 
 | Phần | % | Mục tiêu |
 |------|---|----------|
-| Hook | ~5% | Shock + **[SFX] bắt buộc** + optional `[excited]` |
-| Agitate | ~25% | Nỗi đau + optional `[whisper]` |
+| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `[excited]` + `?!` |
+| Agitate | ~25% | Nỗi đau — cảm thán ngắn brand-safe (§3) |
 | Solve | ~60% | Neutral — giải thích kỹ thuật |
 | CTA/Loop | ~10% | Loop hook hoặc slogan |
+
+## Punctuation trong draft (§4)
+
+- `...` hoặc `. . .` trước từ khóa
+- `?!` ở câu hỏi tu từ
+- Chấm rời: `Sai. Lầm. Lớn.` ở hook mạnh
 
 ## Thẻ production
 
@@ -47,3 +54,4 @@ Word budget: **~2.5 từ/giây**.
 - Bọc cả đoạn Solve trong `[excited]`
 - >2 tag phi-ngôn-ngữ / video
 - Script < 60s / > 180s; thiếu `[SFX]`; SSML
+- Văn học thuật: "do đó", "tiến hành", câu ghép dài — phá ở `/hyperframes-creative` hoặc humanize
