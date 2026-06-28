@@ -1,6 +1,6 @@
 # Spacedev brand watermark — bắt buộc mọi video
 
-Mọi video final phải có **logo Spacedev + text** góc **phải dưới** để đánh dấu bản quyền.
+Mọi video final phải có **logo Spacedev + text** góc **trên trái** để đánh dấu bản quyền.
 
 ---
 
@@ -24,13 +24,13 @@ cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png \
 
 ## Vị trí
 
-- **Góc phải dưới** — `right: 28px`, `bottom: 28px` trên **`.brand-wrap`** (child của `#root`)
-- **`#root` = full canvas** `1080×1920` — `position: relative` — **CẤM** `right`/`bottom` trên `#root` (HyperFrames coi `#root` là composition root → logo lệch giữa/trái)
+- **Góc trên trái** — `left: 28px`, `top: 28px` trên **`.brand-wrap`** (child của `#root`)
+- **`#root` = full canvas** `1080×1920` — `position: relative` — **CẤM** `left`/`top`/`right`/`bottom` trên `#root` (HyperFrames coi `#root` là composition root → logo lệch)
 - Opacity ~0.85–0.95 — đủ đọc, không lấn nội dung
 - Logo height **48–64px**; text **18–22px** video-scale
 - Text: `"© Spacedev"` hoặc `"Spacedev"` — sentence case, không ALL CAPS
 
-Caption karaoke nằm band 78–100% **giữa** — watermark **góc phải** trong band, không overlap hero/support.
+Caption karaoke nằm band 78–100% **giữa** — watermark **góc trên trái**, không overlap hero/support.
 
 ---
 
@@ -103,8 +103,8 @@ Cấu trúc bắt buộc:
     }
     .brand-wrap {
       position: absolute;
-      right: 28px;
-      bottom: 28px;
+      left: 28px;
+      top: 28px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -139,7 +139,7 @@ Cấu trúc bắt buộc:
   <script>
     window.__timelines = window.__timelines || {};
     const tl = gsap.timeline({ paused: true });
-    tl.from(".brand-wrap", { opacity: 0, x: 12, duration: 0.5, ease: "power2.out" }, 0.2);
+    tl.from(".brand-wrap", { opacity: 0, x: -12, duration: 0.5, ease: "power2.out" }, 0.2);
     window.__timelines["brand-watermark"] = tl;
   </script>
 </body>
@@ -162,10 +162,10 @@ Cấu trúc bắt buộc:
 | Sai | Đúng |
 |-----|------|
 | Không watermark | Luôn có logo + text |
-| `right`/`bottom` trên `#root` | `#root` full canvas; `.brand-wrap` góc phải dưới |
+| `left`/`top`/`right`/`bottom` trên `#root` | `#root` full canvas; `.brand-wrap` góc trên trái |
 | Tin track 99 = trên cùng | z-index 9500 trên host clip |
 | Watermark chỉ beat cuối | Host global data-duration=totalVideoSec |
-| Logo to che caption giữa | Góc phải dưới, compact |
+| Logo to che caption giữa | Góc trên trái, compact |
 | ALL CAPS "SPACEDEV" | "© Spacedev" |
 | Watermark chỉ beat đầu | `data-duration=totalVideoSec` |
 
@@ -174,7 +174,7 @@ Cấu trúc bắt buộc:
 ## Checklist
 
 - [ ] Logo copied vào `assets/images/spacedev-logo.png`
-- [ ] `gen-brand-watermark.mjs` hoặc scaffold đúng: `#root` full canvas + `.brand-wrap` right/bottom
+- [ ] `gen-brand-watermark.mjs` hoặc scaffold đúng: `#root` full canvas + `.brand-wrap` left/top
 - [ ] Clip watermark `data-start=0`, `data-duration=totalVideoSec`
 - [ ] Host clip `z-index:9500` — **cuối** `#root`
 - [ ] `body { background: transparent !important; }`

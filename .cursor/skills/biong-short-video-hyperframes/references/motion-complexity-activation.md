@@ -153,7 +153,7 @@ Portrait 9:16: đảm bảo composition root = 1080×1920.
 ## Checklist trước render
 
 - [ ] Caption karaoke wired — text từ `audio_script`, timing transcript
-- [ ] Watermark Spacedev góc phải dưới — suốt `totalVideoSec`
+- [ ] Watermark Spacedev góc trên trái — suốt `totalVideoSec`
 - [ ] Kinetic typography — không văn bản dài / font <28px body
 - [ ] ≥1 registry block wired (caption hoặc transition)
 - [ ] Không entrance dùng `ease: "none"` / linear

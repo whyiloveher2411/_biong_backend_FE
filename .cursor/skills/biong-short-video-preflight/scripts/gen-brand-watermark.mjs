@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate compositions/brand-watermark.html — logo góc phải dưới (brand-wrap).
+ * Generate compositions/brand-watermark.html — logo góc trên trái (brand-wrap).
  *
  * Usage: node gen-brand-watermark.mjs <project-dir> [--duration SEC]
  */
@@ -79,8 +79,8 @@ function main() {
     }
     .brand-wrap {
       position: absolute;
-      right: 28px;
-      bottom: 28px;
+      left: 28px;
+      top: 28px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -110,7 +110,7 @@ function main() {
   <script>
     window.__timelines = window.__timelines || {};
     const tl = gsap.timeline({ paused: true });
-    tl.from(".brand-wrap", { opacity: 0, x: 12, duration: 0.5, ease: "power2.out" }, 0.2);
+    tl.from(".brand-wrap", { opacity: 0, x: -12, duration: 0.5, ease: "power2.out" }, 0.2);
     window.__timelines["brand-watermark"] = tl;
   </script>
 </body>

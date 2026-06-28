@@ -222,7 +222,7 @@ if (!/spacedev-logo\.png/i.test(watermarkHtml)) {
   );
 }
 
-// --- Watermark position: brand-wrap bottom-right, NOT #root ---
+// --- Watermark position: brand-wrap top-left, NOT #root ---
 if (!/class\s*=\s*["'][^"']*brand-wrap/i.test(watermarkHtml)) {
   errors.push(
     "brand-watermark.html: thiếu .brand-wrap — logo phải nằm trong child .brand-wrap, không style #root",
@@ -230,22 +230,22 @@ if (!/class\s*=\s*["'][^"']*brand-wrap/i.test(watermarkHtml)) {
 }
 
 const rootBlock = watermarkHtml.match(/#root\s*\{[^}]+\}/i)?.[0] ?? "";
-if (/right\s*:|bottom\s*:/i.test(rootBlock)) {
+if (/right\s*:|bottom\s*:|left\s*:|top\s*:/i.test(rootBlock)) {
   errors.push(
-    "brand-watermark.html: CẤM đặt right/bottom trên #root — HyperFrames coi #root là full canvas; dùng .brand-wrap { right:28px; bottom:28px }",
+    "brand-watermark.html: CẤM đặt left/top/right/bottom trên #root — HyperFrames coi #root là full canvas; dùng .brand-wrap { left:28px; top:28px }",
   );
 }
 
 const brandWrapBlock =
   watermarkHtml.match(/\.brand-wrap\s*\{[^}]+\}/i)?.[0] ?? "";
-if (!/right\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
+if (!/left\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
   errors.push(
-    "brand-watermark.html: .brand-wrap thiếu right:28px (góc phải dưới)",
+    "brand-watermark.html: .brand-wrap thiếu left:28px (góc trên trái)",
   );
 }
-if (!/bottom\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
+if (!/top\s*:\s*2[0-9]px/i.test(brandWrapBlock)) {
   errors.push(
-    "brand-watermark.html: .brand-wrap thiếu bottom:28px (góc phải dưới)",
+    "brand-watermark.html: .brand-wrap thiếu top:28px (góc trên trái)",
   );
 }
 

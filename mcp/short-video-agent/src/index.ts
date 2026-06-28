@@ -79,7 +79,7 @@ const server = new McpServer({
 
 server.tool(
   'short_video_get_context',
-  'Lấy creative brief + audio_script/audio_file + agent_workflow + production_playbook.media_assets (Pexels stock + Pixabay BGM MCP). Trả workflow_mode, tts_chain.',
+  'Lấy creative brief + audio_script/audio_file + agent_workflow + production_playbook.media_assets (Pexels stock + Pixabay BGM MCP). Trả workflow_mode, agent_tts_platforms, tts_chain (đã lọc theo user chọn).',
   {
     short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
   },
@@ -119,7 +119,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover TTS và ghi audio_file. OmniVoice: giữ full expressive tag set [happy]/[excited]/[whisper]/[calm]/[laughter]/[sigh]/[gasp]/[chuckle]/[singing]; strip [BGM]/[SFX]/[Dừng]; speed 1.15. Fallback VieNeu → Saydi → Vbee. Dùng khi agent_tts_auto=true. KHÔNG dùng trong manual_2_step.',
+  'Sinh voiceover TTS và ghi audio_file — CHỈ thử các nền tảng trong tts_chain từ get_context (OmniVoice→VieNeu→Saydi→Vbee). OmniVoice giữ full expressive tags; strip [BGM]/[SFX]/[Dừng]. Nếu fail hết chain: status failed + last_error — DỪNG. Dùng khi agent_tts_auto=true. KHÔNG dùng trong manual_2_step.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

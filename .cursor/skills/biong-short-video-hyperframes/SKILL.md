@@ -12,9 +12,9 @@ description: Agent short video marketing — manual 2 bước hoặc auto TTS fu
 | **Manual 2 bước** | `false` (mặc định) | Bước 1 + bước 2 | script → admin upload MP3 → render |
 | **Auto TTS full** | `true` | Một prompt toàn pipeline | script → `generate_narration_tts` → render → upload |
 
-Toggle **TTS tự động** trên từng short video (drawer Agent audio). Nếu TTS lỗi → upload MP3 fallback.
+Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từng short video (drawer Agent audio). Mặc định cả 4 nền tảng. Nếu TTS lỗi → `agent_video_status=failed` + upload MP3 fallback.
 
-`get_context` trả `workflow_mode`: `manual_2_step` | `auto_tts_full`, `tts_chain`: OmniVoice local → VieNeu → Saydi → Vbee.
+`get_context` trả `workflow_mode`, `agent_tts_platforms`, `tts_chain` (đã lọc theo user — thứ tự ưu tiên: OmniVoice local → VieNeu → Saydi → Vbee).
 
 ---
 
@@ -163,7 +163,7 @@ Pass → mới `render --quality high --strict`.
 
 Đọc [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md):
 
-- **Sinh:** `gen-brand-watermark.mjs` — `#root` full canvas + `.brand-wrap` góc phải dưới
+- **Sinh:** `gen-brand-watermark.mjs` — `#root` full canvas + `.brand-wrap` góc trên trái
 - **Cấm** `right`/`bottom` trên `#root` — logo lệch giữa/trái (lỗi video #25)
 - Host clip `z-index:9500`, **cuối** `#root`, `data-duration=totalVideoSec`
 
@@ -241,7 +241,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
 - [ ] Caption karaoke wired — text audio_script, timing Whisper
-- [ ] Watermark Spacedev — logo + © Spacedev góc phải dưới, suốt video
+- [ ] Watermark Spacedev — logo + © Spacedev góc trên trái, suốt video
 - [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; list → UI Card
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML
 - [ ] `media-plan.md` có dòng `bgm_global` + stock mỗi beat

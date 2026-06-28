@@ -2,8 +2,10 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Checkbox,
     Chip,
     FormControlLabel,
+    FormGroup,
     Stack,
     Switch,
     Typography,
@@ -35,6 +37,15 @@ type UploadResponse = {
     duration_sec?: number;
 };
 
+const TTS_PLATFORM_OPTIONS = [
+    { key: 'omnivoice_local', label: 'OmniVoice (local)' },
+    { key: 'vieneu', label: 'VieNeu (local)' },
+    { key: 'saydi', label: 'Saydi (API)' },
+    { key: 'vbee', label: 'Vbee (API)' },
+] as const;
+
+const DEFAULT_TTS_PLATFORMS = TTS_PLATFORM_OPTIONS.map((item) => item.key);
+
 type AgentAudioContentResponse = {
     success?: boolean;
     title?: string;
@@ -42,6 +53,8 @@ type AgentAudioContentResponse = {
     audio_file?: string;
     audio_file_duration_sec?: number;
     agent_tts_auto?: boolean;
+    agent_tts_platforms?: string[];
+    tts_chain?: string[];
     workflow_mode?: string;
     agent_workflow?: {
         ready_for_video?: boolean;
@@ -57,6 +70,17 @@ function parseMessage(message: UploadResponse['message']): string {
         return message;
     }
     return '';
+}
+
+function platformLabel(key: string): string {
+    return TTS_PLATFORM_OPTIONS.find((item) => item.key === key)?.label ?? key;
+}
+
+function formatTtsChain(chain: string[]): string {
+    if (chain.length === 0) {
+        return 'Chưa chọn nền tảng';
+    }
+    return chain.map(platformLabel).join(' → ');
 }
 
 function workflowChip(
@@ -117,8 +141,30 @@ async function uploadAgentAudioMp3(shortVideoId: number, file: File): Promise<Up
     return result;
 }
 
-async function saveAgentTtsAuto(shortVideoId: number, enabled: boolean): Promise<JsonFormat> {
+type SaveTtsSettingsArgs = {
+    shortVideoId: number;
+    enabled?: boolean;
+    platforms?: string[];
+};
+
+async function saveAgentTtsSettings({
+    shortVideoId,
+    enabled,
+    platforms,
+}: SaveTtsSettingsArgs): Promise<JsonFormat> {
     const token = getAccessToken() ?? '';
+    const body: Record<string, unknown> = {
+        short_video_id: shortVideoId,
+        id: shortVideoId,
+        access_token: token,
+    };
+    if (enabled !== undefined) {
+        body.agent_tts_auto = enabled ? '1' : '0';
+    }
+    if (platforms !== undefined) {
+        body.agent_tts_platforms = platforms;
+    }
+
     const response = await fetch(
         convertToURL(
             getAdminApiPrefix(),
@@ -132,12 +178,7 @@ async function saveAgentTtsAuto(shortVideoId: number, enabled: boolean): Promise
                 Accept: 'application/json',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({
-                short_video_id: shortVideoId,
-                id: shortVideoId,
-                agent_tts_auto: enabled ? '1' : '0',
-                access_token: token,
-            }),
+            body: JSON.stringify(body),
         },
     );
 
@@ -157,6 +198,7 @@ export default function ShortVideoAgentAudioDrawer({
     const [uploading, setUploading] = React.useState(false);
     const [savingTtsMode, setSavingTtsMode] = React.useState(false);
     const [agentTtsAuto, setAgentTtsAuto] = React.useState(false);
+    const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
     const [audioScript, setAudioScript] = React.useState('');
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
     const [audioDurationSec, setAudioDurationSec] = React.useState<number | null>(null);
@@ -182,6 +224,10 @@ export default function ShortVideoAgentAudioDrawer({
                 setAudioScript(String(res?.audio_script || '').trim());
                 setAudioFileUrl(String(res?.audio_file || '').trim());
                 setAgentTtsAuto(Boolean(res?.agent_tts_auto));
+                const platforms = Array.isArray(res?.agent_tts_platforms) && res.agent_tts_platforms.length > 0
+                    ? res.agent_tts_platforms
+                    : DEFAULT_TTS_PLATFORMS;
+                setSelectedPlatforms(platforms);
                 const dur = Number(res?.audio_file_duration_sec || 0);
                 setAudioDurationSec(dur > 0 ? dur : null);
             },
@@ -195,6 +241,34 @@ export default function ShortVideoAgentAudioDrawer({
     const hasScript = audioScript.length > 0;
     const hasAudio = audioFileUrl.length > 0;
     const statusChip = workflowChip(agentTtsAuto, hasScript, hasAudio);
+    const chainLabel = formatTtsChain(selectedPlatforms);
+
+    const persistTtsSettings = async (
+        nextAuto: boolean,
+        nextPlatforms: string[],
+        successMessage: string,
+    ) => {
+        setSavingTtsMode(true);
+        try {
+            const res = await saveAgentTtsSettings({
+                shortVideoId,
+                enabled: nextAuto,
+                platforms: nextPlatforms,
+            });
+            if (!res?.success) {
+                showMessage(parseMessage(res?.message as UploadResponse['message']) || 'Không lưu được cấu hình TTS', 'error');
+                return;
+            }
+            setAgentTtsAuto(nextAuto);
+            setSelectedPlatforms(nextPlatforms);
+            showMessage(successMessage, 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingTtsMode(false);
+        }
+    };
 
     const handleCopyScript = async () => {
         if (!audioScript) {
@@ -216,24 +290,32 @@ export default function ShortVideoAgentAudioDrawer({
 
     const handleTtsAutoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const next = event.target.checked;
-        setSavingTtsMode(true);
-        try {
-            const res = await saveAgentTtsAuto(shortVideoId, next);
-            if (!res?.success) {
-                showMessage(parseMessage(res?.message as UploadResponse['message']) || 'Không lưu được chế độ TTS', 'error');
-                return;
-            }
-            setAgentTtsAuto(next);
-            showMessage(
-                next ? 'Đã bật TTS tự động (VieNeu → Saydi → Vbee)' : 'Đã tắt TTS tự động — workflow 2 bước',
-                'success',
-            );
-            loadRow();
-        } catch (e) {
-            showMessage(e instanceof Error ? e.message : String(e), 'error');
-        } finally {
-            setSavingTtsMode(false);
+        const platforms = next && selectedPlatforms.length === 0
+            ? DEFAULT_TTS_PLATFORMS
+            : selectedPlatforms;
+        await persistTtsSettings(
+            next,
+            platforms,
+            next ? 'Đã bật TTS tự động agent' : 'Đã tắt TTS tự động — workflow 2 bước',
+        );
+    };
+
+    const handlePlatformToggle = async (platformKey: string) => {
+        if (!agentTtsAuto || savingTtsMode) {
+            return;
         }
+        const isSelected = selectedPlatforms.includes(platformKey);
+        const nextPlatforms = isSelected
+            ? selectedPlatforms.filter((key) => key !== platformKey)
+            : [...selectedPlatforms, platformKey];
+
+        if (nextPlatforms.length === 0) {
+            showMessage('Phải chọn ít nhất một nền tảng TTS', 'warning');
+            return;
+        }
+
+        const ordered = DEFAULT_TTS_PLATFORMS.filter((key) => nextPlatforms.includes(key));
+        await persistTtsSettings(agentTtsAuto, ordered, 'Đã cập nhật nền tảng TTS');
     };
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -284,8 +366,43 @@ export default function ShortVideoAgentAudioDrawer({
                             onChange={(e) => { void handleTtsAutoChange(e); }}
                         />
                     )}
-                    label="TTS tự động (VieNeu → Saydi → Vbee)"
+                    label="TTS tự động agent"
                 />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                    Bật: agent sinh audio qua MCP. Tắt: upload MP3 thủ công (2 bước).
+                </Typography>
+
+                <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                        Nền tảng TTS
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        Thứ tự ưu tiên: OmniVoice → VieNeu → Saydi → Vbee
+                    </Typography>
+                    <FormGroup>
+                        {TTS_PLATFORM_OPTIONS.map((option) => (
+                            <FormControlLabel
+                                key={option.key}
+                                control={(
+                                    <Checkbox
+                                        checked={selectedPlatforms.includes(option.key)}
+                                        disabled={!agentTtsAuto || savingTtsMode}
+                                        onChange={() => { void handlePlatformToggle(option.key); }}
+                                    />
+                                )}
+                                label={option.label}
+                            />
+                        ))}
+                    </FormGroup>
+                    {agentTtsAuto && (
+                        <Chip
+                            label={`Chain: ${chainLabel}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ mt: 1 }}
+                        />
+                    )}
+                </Box>
 
                 <Chip label={statusChip.label} color={statusChip.color} size="small" sx={{ alignSelf: 'flex-start' }} />
 
@@ -375,7 +492,7 @@ export default function ShortVideoAgentAudioDrawer({
                     ) : (
                         <Alert severity="warning" sx={{ mb: 1 }}>
                             {agentTtsAuto
-                                ? 'Chưa có MP3. Agent sẽ sinh qua MCP; nếu TTS lỗi, upload MP3 fallback ở đây.'
+                                ? 'Chưa có MP3. Agent sẽ sinh qua MCP theo chain đã chọn; nếu TTS lỗi, upload MP3 fallback ở đây.'
                                 : 'Chưa có MP3. Dùng script ở trên để tạo audio (Saydi/Vbee/studio), nghe thử rồi upload.'}
                         </Alert>
                     )}

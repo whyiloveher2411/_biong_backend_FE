@@ -75,7 +75,7 @@ npx hyperframes inspect --samples 15
 | 2 | `verify-caption-sync.mjs --strict` exit 0 | ✓ |
 | 3 | `compositions/captions.html` tồn tại (từ gen-captions-html.mjs) | ✓ |
 | 4 | `compositions/brand-watermark.html` từ `gen-brand-watermark.mjs` | ✓ |
-| 5 | `.brand-wrap { right:28px; bottom:28px }` — không right/bottom trên `#root` | ✓ |
+| 5 | `.brand-wrap { left:28px; top:28px }` — không left/top trên `#root` | ✓ |
 | 6 | Caption text từ `audio_script` — không Whisper | ✓ |
 | 7 | Caption host `data-duration` = `totalVideoSec` | ✓ |
 | 8 | Caption host `z-index:9000` | ✓ |
