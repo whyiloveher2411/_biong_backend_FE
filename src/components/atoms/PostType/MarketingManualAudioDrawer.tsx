@@ -112,6 +112,18 @@ function whisperQaChipProps(status: string): { color: 'success' | 'warning' | 'd
     return null;
 }
 
+function formatTtsEngineLabel(engine: string): string {
+    const normalized = engine.trim().toLowerCase();
+    if (normalized === 'saydi_pipeline') {
+        return 'Saydi pipeline';
+    }
+    if (normalized === 'saydi_manual') {
+        return 'Saydi thủ công';
+    }
+
+    return engine;
+}
+
 type SaydiUploadResponse = UploadResponse & {
     whisper_stage?: 'segment' | 'merged' | 'complete' | string;
     failed_segment_index?: number | null;
@@ -288,9 +300,12 @@ export default function MarketingManualAudioDrawer({
         });
     }, [postId]);
 
+    const hasSaydiWhisperPassed = (engine: string) =>
+        engine === 'saydi_manual' || engine === 'saydi_pipeline';
+
     const hasPendingWhisperQa = langs.some((row) => {
         const engine = String(row.tts_engine || '').toLowerCase();
-        if (engine === 'saydi_manual') {
+        if (hasSaydiWhisperPassed(engine)) {
             return false;
         }
 
@@ -701,7 +716,11 @@ export default function MarketingManualAudioDrawer({
                                         />
                                     ) : null}
                                     {item.tts_engine ? (
-                                        <Chip size="small" variant="outlined" label={item.tts_engine} />
+                                        <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            label={formatTtsEngineLabel(String(item.tts_engine))}
+                                        />
                                     ) : null}
                                     {whisperChip ? (
                                         <Chip
