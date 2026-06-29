@@ -23,15 +23,16 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 
 1. `short_video_get_context` → `creative_brief.content_plain_text`
 2. Đọc [viral-retention-structure.md](viral-retention-structure.md) + [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) + [omnivoice-speech-script.md](omnivoice-speech-script.md)
-3. `/extract-core-signals` → hook, tension, takeaway, loop_hook_line
-4. `/hyperframes-creative` → §1 phá cấu trúc văn viết → văn hội thoại
-5. `/viral-audio-script` → bản nháp HASCAS 60–180s + §3 pacing + §4 punctuation
-6. `/humanize-audio-script` → §2 từ đệm — giữ expressive tag slots
-7. `save_audio_script({ text, metadata })` → **DỪNG**
+3. `/extract-core-signals` → hook, tension, takeaway, **narrative_chain**, loop_hook_line
+4. `/hyperframes-creative` → **Narrative Flow But/Therefore** + góc nhìn — đọc [narrative-flow-vi.md](narrative-flow-vi.md)
+5. `/viral-audio-script` → bản nháp HASCAS 60–180s + expand narrative_chain — **cấm structural summarization**
+6. `/humanize-audio-script` → §2 từ đệm — giữ expressive tag slots + But/Therefore
+7. `/audit-audio-script` → QA + sửa lỗi — **pass bắt buộc** trước save
+8. `save_audio_script({ text, metadata })` → **DỪNG**
 
-Docs: [extract-core-signals.md](extract-core-signals.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
+Docs: [extract-core-signals.md](extract-core-signals.md) · [narrative-flow-vi.md](narrative-flow-vi.md) · [audit-audio-script.md](audit-audio-script.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
-**Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật
+**Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật, **structural summarization**, **save khi audit chưa pass**
 
 ---
 

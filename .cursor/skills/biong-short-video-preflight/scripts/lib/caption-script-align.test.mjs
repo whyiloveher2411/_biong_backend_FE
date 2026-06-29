@@ -23,9 +23,14 @@ describe("caption-script-align", () => {
     assert.equal(stripScriptMarkers(raw), "Con cá lớn nhé!");
   });
 
-  it("strip non-verbal tags only (laughter, sigh, gasp)", () => {
-    const raw = "[laughter] Hook [sigh] thở [gasp] hốt hả";
+  it("strip non-verbal tags (allowlist OmniVoice)", () => {
+    const raw = "[laughter] Hook [sigh] thở [surprise-oh] hốt hả";
     assert.equal(stripScriptMarkers(raw), "Hook thở hốt hả");
+  });
+
+  it("strip hyphenated non-verbal tags", () => {
+    const raw = "[dissatisfaction-hnn] Thật là [confirmation-en] đúng rồi";
+    assert.equal(stripScriptMarkers(raw), "Thật là đúng rồi");
   });
 
   it("exact diacritic: Con cá lớn vs Con ca lớn — text script", () => {

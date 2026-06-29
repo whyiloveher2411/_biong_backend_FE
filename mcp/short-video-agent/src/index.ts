@@ -96,7 +96,7 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec). Non-verbal tag CHỈ [laughter][sigh][gasp] — tối đa 2/video. Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script + /humanize-audio-script (giữ tag).',
+  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec). Non-verbal tag CHỈ allowlist OmniVoice 13 tag (xem omnivoice-expressive-tags.md) — cấm [gasp]; tối đa 2/video. Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script + /humanize-audio-script (giữ tag).',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Script có [BGM]/[Dừng Ns] — viết cho tai nghe'),
@@ -119,7 +119,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover TTS (k2-fsa/OmniVoice) — CHỈ thử các nền tảng trong tts_chain. OmniVoice giữ [laughter]/[sigh]/[gasp]; strip [BGM]/[SFX]/[Dừng]. Nếu fail hết chain: status failed — DỪNG.',
+  'Sinh voiceover TTS (k2-fsa/OmniVoice) — CHỈ thử các nền tảng trong tts_chain. OmniVoice giữ non-verbal allowlist (13 tag); strip [BGM]/[SFX]/[Dừng]. Nếu fail hết chain: status failed — DỪNG.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),

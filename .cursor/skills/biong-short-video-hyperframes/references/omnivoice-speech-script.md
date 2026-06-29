@@ -1,6 +1,6 @@
 # OmniVoice — ngôn ngữ thiết kế kịch bản thoại
 
-**Bắt buộc** phase 1 khi TTS chain ưu tiên OmniVoice. Invoke sau `/extract-core-signals`, cùng `/hyperframes-creative` + `/viral-audio-script` + `/humanize-audio-script`.
+**Bắt buộc** phase 1 khi TTS chain ưu tiên OmniVoice. Invoke sau `/extract-core-signals`, cùng `/hyperframes-creative` + `/viral-audio-script` + `/humanize-audio-script` + `/audit-audio-script`.
 
 Engine: **k2-fsa/OmniVoice** — OmniVoice FastAPI local (`./omnivoice-tts.sh start`). `OMNIVOICE_GUIDANCE_SCALE=2`. Không hiểu SSML XML.
 
@@ -24,7 +24,7 @@ Engine: **k2-fsa/OmniVoice** — OmniVoice FastAPI local (`./omnivoice-tts.sh st
 | Lớp | Thẻ | Gửi OmniVoice TTS | Caption |
 |-----|-----|-------------------|---------|
 | **Production** | `[BGM: mood]`, `[SFX: vine boom]`, `[Dừng 0.5s]` | Strip / convert → `. . .` | Strip |
-| **Non-verbal** | `[laughter]`, `[sigh]`, `[gasp]` | **Giữ** | Strip |
+| **Non-verbal** | allowlist 13 tag OmniVoice (xem omnivoice-expressive-tags.md) | **Giữ** | Strip |
 | **Prosody dấu câu** | `. . .` (chấm cách nhau), `?!` | **Giữ** | Giữ |
 
 Chi tiết allowlist: [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md).
@@ -48,18 +48,27 @@ Server: production tags strip; 3 tag non-verbal giữ cho OmniVoice; fallback Vi
 Đọc §3 pacing + §4 punctuation.
 
 - Timeline 60–180s, markers, HASCAS
-- **Gắn tag** `[laughter]` / `[sigh]` / `[gasp]` — tối đa 2 / video
+- **Gắn tag** theo allowlist OmniVoice (13 tag) — tối đa 2 / video; xem omnivoice-expressive-tags.md
 - Mood qua `. . .`, `?!`, câu ngắn — **không** mood tag
 - Metadata `expressive_plan: { hook, agitate, solve, cta }`
 
 ### Bước 3 — `/humanize-audio-script`: polish văn, giữ tag
 
 - **Cấm** thêm/xóa/di chuyển non-verbal tags
-- Self-check quota trước save
+- Chuyển sang `/audit-audio-script` — không save trực tiếp
 
-### Bước 4 — `save_audio_script`
+### Bước 4 — `/audit-audio-script`: QA + sửa lỗi
+
+Đọc [audit-audio-script.md](audit-audio-script.md).
+
+- Chẩn đoán Bullet Syndrome, Missing Narrative Flow, Hook loop collision
+- `script_diagnosis.pass === true` bắt buộc trước save
+- Retry tối đa 2 vòng
+
+### Bước 5 — `save_audio_script`
 
 - Verify: `[SFX]` bắt buộc, câu ≤12 từ, SSML cấm, tag trong allowlist
+- Lưu `script_diagnosis` trong metadata (audit trail)
 
 ---
 
@@ -87,7 +96,7 @@ Prosody + non-verbal tags đổi duration MP3. Phase 2:
 ## Anti-patterns
 
 - SSML hoặc XML
-- `[happy]` / `[singing]` / mood tag
+- `[happy]` / `[singing]` / `[gasp]` / mood tag
 - Chèn tag sau humanize
-- >2 tag `[laughter]`/`[sigh]`/`[gasp]` / video
+- >2 tag non-verbal / video
 - Câu >12 từ liên tiếp

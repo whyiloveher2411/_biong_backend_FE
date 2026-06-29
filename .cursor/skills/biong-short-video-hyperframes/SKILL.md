@@ -34,7 +34,7 @@ Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từn
 
 | Bước | MCP | Kết quả |
 |------|-----|---------|
-| Script | `save_audio_script` | `audio_script` + markers + OmniVoice tags `[laughter]`/`[sigh]`/`[gasp]` |
+| Script | `save_audio_script` | `audio_script` + markers + OmniVoice non-verbal tags (allowlist 13 tag) |
 | TTS | `generate_narration_tts` (giữ 3 tag non-verbal; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
@@ -42,9 +42,10 @@ Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từn
 Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_provider_used` (`omnivoice_local` | `vieneu_clone` | …).
 
 **Phase 1 script (OmniVoice văn nói):**
-1. `/extract-core-signals` → `/hyperframes-creative` (văn hội thoại) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật)
-2. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) — văn nói VI, từ đệm, punctuation, pacing
-3. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — CHỈ `[laughter]`/`[sigh]`/`[gasp]`; cấm SSML; `. . .` prosody sau humanize
+1. `/extract-core-signals` → `/hyperframes-creative` (Narrative Flow But/Therefore) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật) → `/audit-audio-script` (QA + sửa)
+2. Đọc [narrative-flow-vi.md](references/narrative-flow-vi.md) — cấm structural summarization, But/Therefore, góc nhìn storytelling
+3. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) — văn nói VI, từ đệm, punctuation, pacing
+4. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — CHỈ allowlist 13 tag OmniVoice; cấm `[gasp]`; cấm SSML; `. . .` prosody sau humanize
 
 **Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
 
@@ -92,12 +93,13 @@ Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat
 
 | # | Skill | Output |
 |---|-------|--------|
-| 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway |
-| 2 | `/hyperframes-creative` | Hướng văn hội thoại, cảm thán |
-| 3 | `/viral-audio-script` | Bản **nháp** HASCAS + timeline + markers |
-| 4 | `/humanize-audio-script` | Script **cuối** — văn người thật + OmniVoice tags |
+| 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway, **narrative_chain**, perspective |
+| 2 | `/hyperframes-creative` | Narrative Flow But/Therefore + góc nhìn storytelling |
+| 3 | `/viral-audio-script` | Bản **nháp** HASCAS + expand narrative_chain + timeline + markers |
+| 4 | `/humanize-audio-script` | Script polish — văn người thật + OmniVoice tags + giữ But/Therefore |
+| 5 | `/audit-audio-script` | **QA + sửa lỗi** — pass bắt buộc trước save |
 
-Docs: [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md) · [humanize-audio-script.md](references/humanize-audio-script.md) · [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md)
+Docs: [audit-audio-script.md](references/audit-audio-script.md) · [narrative-flow-vi.md](references/narrative-flow-vi.md) · [viral-retention-structure.md](references/viral-retention-structure.md) · [extract-core-signals.md](references/extract-core-signals.md) · [viral-audio-script.md](references/viral-audio-script.md) · [humanize-audio-script.md](references/humanize-audio-script.md) · [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md)
 
 ### Timeline viral (60–180s)
 
@@ -207,20 +209,22 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 
 ## Tài liệu (đọc theo thứ tự)
 
-1. [viral-retention-structure.md](references/viral-retention-structure.md) — **timeline viral + retention pacing**
-2. [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md) — **font Be Vietnam Pro local**
-3. [media-mcp-activation.md](references/media-mcp-activation.md) — **phase render: MCP assets bắt buộc**
-4. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc**
-5. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
-6. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
-7. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
-8. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
-9. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
-10. [layout-9x16-zones.md](references/layout-9x16-zones.md)
-11. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
-12. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
-13. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
-14. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
+1. [audit-audio-script.md](references/audit-audio-script.md) — **QA cổng cuối phase 1 — bắt buộc trước save**
+2. [narrative-flow-vi.md](references/narrative-flow-vi.md) — **But/Therefore + anti-listing — bắt buộc phase 1**
+3. [viral-retention-structure.md](references/viral-retention-structure.md) — **timeline viral + retention pacing**
+4. [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md) — **font Be Vietnam Pro local**
+5. [media-mcp-activation.md](references/media-mcp-activation.md) — **phase render: MCP assets bắt buộc**
+6. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc**
+7. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
+8. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
+9. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
+10. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
+11. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+12. [layout-9x16-zones.md](references/layout-9x16-zones.md)
+13. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
+14. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
+15. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
+16. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
 ---
 

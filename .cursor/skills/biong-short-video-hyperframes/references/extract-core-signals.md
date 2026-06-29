@@ -2,13 +2,15 @@
 
 Skill phase 1. Invoke: `/extract-core-signals`
 
-**Đọc:** [viral-retention-structure.md](viral-retention-structure.md)
+**Đọc:** [viral-retention-structure.md](viral-retention-structure.md) · [narrative-flow-vi.md](narrative-flow-vi.md)
 
 ## Mục tiêu
 
-Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu cho timeline **HASCAS 60–180s** — không tóm tắt dài dòng.
+Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu cho timeline **HASCAS 60–180s** — **không** tóm tắt dài dòng, **không** structural summarization.
 
-## Ba trục
+Xây `narrative_chain` (But/Therefore) **trước** khi viết script.
+
+## Ba trục + Narrative Flow
 
 ### 1. The Hook (điểm móc)
 
@@ -23,8 +25,22 @@ Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu ch
 
 ### 3. The Takeaway (giá trị cốt lõi)
 
-- Công thức dễ nhớ: 3 bước, 5 giây, quy tắc vàng
+- Insight dễ nhớ — **cấm** liệt kê "bước 1, bước 2, bước 3"
 - Bám proof từ nguồn — không bịa số liệu
+
+### 4. narrative_chain (But/Therefore)
+
+Mỗi fact quan trọng từ bài nguồn → 1 link:
+
+```json
+{
+  "cause": "Sự kiện / fact",
+  "but": "Twist / đối lập",
+  "therefore": "Hậu quả / insight kéo tiếp"
+}
+```
+
+`perspective`: góc nhìn kể chuyện (reviewer TikTok, người dùng, người trong cuộc).
 
 ## Output mẫu
 
@@ -40,14 +56,27 @@ Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu ch
     "rescue": "Ép registry blocks + motion vocabulary"
   },
   "takeaway": {
-    "formula": "3 bước: signals → viral script → cinematic render",
+    "formula": "Signals → narrative script → cinematic render",
     "proof": "Từ nội dung marketing post / case thực tế"
   },
+  "narrative_chain": [
+    {
+      "cause": "Team add skill HyperFrames",
+      "but": "Video vẫn chỉ text + đổi nền",
+      "therefore": "Thiếu narrative flow + motion vocabulary"
+    },
+    {
+      "cause": "Ép registry blocks + GSAP stagger",
+      "but": "Tưởng phức tạp",
+      "therefore": "Render cinematic giữ chân gấp đôi"
+    }
+  ],
+  "perspective": "Reviewer TikTok — giật gân, hội thoại",
   "loop_hook_line": "…và đó là lý do 99% team vẫn nhàm chán",
   "beat_suggestions": {
     "hook": "meme SFX + kinetic slam + stock",
     "agitate": "palette shift mỗi phrase",
-    "solve": "UI cards 3 bước",
+    "solve": "UI cards theo narrative_chain",
     "cta": "loop line + BGM fade"
   }
 }
@@ -56,7 +85,8 @@ Từ `creative_brief.content_plain_text` (marketing post), trích tín hiệu ch
 ## Anti-patterns
 
 - Tóm tắt bullet học thuật
+- Structural summarization — fact rời không But/Therefore
 - Hook chung chung không số liệu/insight
-- Takeaway không nhớ được sau 1 lần nghe
+- Takeaway dạng checklist "3 bước / 5 mẹo" — kích thích liệt kê
 
-Bước tiếp: [/viral-audio-script](viral-audio-script.md) → [/humanize-audio-script](humanize-audio-script.md) → `save_audio_script`
+Bước tiếp: [/hyperframes-creative](hyperframes-skill-routing.md) → [/viral-audio-script](viral-audio-script.md) → [/humanize-audio-script](humanize-audio-script.md) → [/audit-audio-script](audit-audio-script.md) → `save_audio_script`

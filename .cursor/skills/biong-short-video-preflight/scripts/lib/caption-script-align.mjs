@@ -7,7 +7,7 @@ export const DEFAULT_LOOKAHEAD = 40;
 export const DEFAULT_FUZZY_MIN = 0.72;
 export const DEFAULT_DENSITY_MAX = 0.25;
 
-const OMNIVOICE_EMOTION_TAG_RE = /\[(?:laughter|laugh|sigh|gasp)\]/gi;
+const OMNIVOICE_EMOTION_TAG_RE = /\[(?:laughter|laugh|sigh|confirmation-en|question-en|question-ah|question-oh|question-ei|question-yi|surprise-ah|surprise-oh|surprise-wa|surprise-yo|dissatisfaction-hnn)\]/gi;
 
 export const norm = (s) =>
   String(s ?? "")

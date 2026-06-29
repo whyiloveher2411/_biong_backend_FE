@@ -4,6 +4,8 @@ Read when writing **Vietnamese** narration for marketing short video (Biong Hype
 
 Canonical full spec: `biong-short-video-hyperframes/references/vi-voiceover-naturalization.md` (in Biong FE repo).
 
+**Narrative Flow (But/Therefore, anti-listing):** `biong-short-video-hyperframes/references/narrative-flow-vi.md` — **bắt buộc phase 1 Biong**.
+
 ---
 
 ## 1. Break written structure (eye → ear)
@@ -20,7 +22,18 @@ Canonical full spec: `biong-short-video-hyperframes/references/vi-voiceover-natu
 | Phương pháp tối ưu | Cách tốt nhất / Mẹo cực hay… |
 | Chúng ta sở hữu | Mình có… |
 
-- No bullet lists read in one breath — split into short lines.
+- No bullet lists read in one breath — convert bullets into **But/Therefore chains**, not independent sentences.
+- **Ban listing connectors:** Một là, Tiếp theo, Ngoài ra, Đầu tiên, Bên cạnh đó — see narrative-flow-vi.md §3.
+
+---
+
+## 1b. Narrative Flow (But/Therefore)
+
+- Each fact must link via cause/effect or contrast: *Nhưng mà…*, *Thành ra…*, *Chính vì vậy…*
+- Use a perspective (reviewer TikTok, end user) — not brochure product copy.
+- Compress specs into one exclamation/comparison — do not read line by line.
+
+Full rules: `biong-short-video-hyperframes/references/narrative-flow-vi.md`.
 
 ---
 

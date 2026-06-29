@@ -1,13 +1,15 @@
 ---
 name: extract-core-signals
-description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Tension, Takeaway, loop line. Dùng phase 1 short video agent trước khi viết audio_script.
+description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Tension, Takeaway, narrative_chain, loop line. Dùng phase 1 short video agent trước khi viết audio_script.
 ---
 
 # extract-core-signals
 
-**Không** tóm tắt học thuật. Quét văn bản để tìm yếu tố giữ chân người xem.
+**Không** tóm tắt học thuật. **Không** structural summarization. Quét văn bản để tìm yếu tố giữ chân người xem và xây **chuỗi But/Therefore**.
 
-**Đọc:** `biong-short-video-hyperframes/references/viral-retention-structure.md`
+**Đọc:**
+- `biong-short-video-hyperframes/references/viral-retention-structure.md`
+- `biong-short-video-hyperframes/references/narrative-flow-vi.md`
 
 ## Input
 
@@ -27,14 +29,22 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
     "rescue": "Insight cứu cánh"
   },
   "takeaway": {
-    "formula": "3 bước / mẹo 5 giây",
+    "formula": "Insight nhớ được — không liệt kê số thứ tự",
     "proof": "Số liệu từ nguồn — không bịa"
   },
+  "narrative_chain": [
+    {
+      "cause": "Sự kiện / fact từ nguồn",
+      "but": "Twist / đối lập / giả định sai",
+      "therefore": "Hậu quả / insight kéo câu tiếp"
+    }
+  ],
+  "perspective": "Góc nhìn kể chuyện — vd. reviewer TikTok, người dùng thực tế",
   "loop_hook_line": "Câu cuối nối mạch draft_line — cho infinite loop",
   "beat_suggestions": {
     "hook": "meme SFX + kinetic slam + stock hook",
     "agitate": "đổi palette mỗi phrase, pain cards",
-    "solve": "UI cards 3 bước, số đếm",
+    "solve": "UI cards theo narrative_chain — không checklist",
     "cta": "loop line hoặc CTA ngắn + BGM fade"
   }
 }
@@ -44,12 +54,20 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 
 1. **Hook** — `draft_line` **≤12 từ**; số liệu / myth-bust / câu hỏi
 2. **Tension** — villain rõ, stakes cụ thể
-3. **Takeaway** — công thức nhớ được
-4. **loop_hook_line** — semantic bridge về hook (cho `cta_mode: loop`)
-5. **Không** invent claims ngoài nguồn
+3. **Takeaway** — insight nhớ được; **cấm** "bước 1, bước 2" hoặc liệt kê số thứ tự
+4. **narrative_chain** — ≥1 link `{ cause, but, therefore }`; mỗi fact nguồn phải nằm trong chuỗi nhân quả
+5. **perspective** — góc nhìn cụ thể, không mô tả brochure
+6. **loop_hook_line** — semantic bridge về hook (cho `cta_mode: loop`)
+7. **Không** invent claims ngoài nguồn
+
+## Anti-patterns
+
+- Tóm tắt bullet học thuật
+- Structural summarization — fact rời không nối But/Therefore
+- `takeaway.formula: "3 bước"` — kích thích liệt kê trong script
 
 ## Bước tiếp
 
-`/humanize-audio-script` → `save_audio_script` với `timeline` + `markers`.
+`/hyperframes-creative` → `/viral-audio-script` → `/humanize-audio-script` → `/audit-audio-script` → `save_audio_script`
 
 Tham khảo: `biong-short-video-hyperframes/references/extract-core-signals.md`

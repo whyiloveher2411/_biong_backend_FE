@@ -25,7 +25,8 @@ For motion patterns, scene blueprints, transitions, and CSS marker effects, use 
    - Fast defaults → `references/house-style.md`
    - Interactive selection → `references/design-picker.md`
 3. For multi-scene work, plan beats and rhythm before writing HTML → `references/beat-direction.md`. For scene transitions, jump to `hyperframes-animation/transitions/`.
-4. For motion-heavy work, read `references/motion-principles.md` (high-level guardrails), then go to `hyperframes-animation` for atomic rules.
+4. **Biong phase 1 (Vietnamese voiceover):** read `biong-short-video-hyperframes/references/narrative-flow-vi.md` — design **Narrative Flow** (But/Therefore + perspective) from `narrative_chain` before drafting script. Do not structural summarization.
+5. For motion-heavy work, read `references/motion-principles.md` (high-level guardrails), then go to `hyperframes-animation` for atomic rules.
 
 ## Routing
 
@@ -45,6 +46,7 @@ For motion patterns, scene blueprints, transitions, and CSS marker effects, use 
 | Font selection, pairings, rendered-video type guardrails                 | `references/typography.md`                     |
 | Script pacing, tone, openings, number pronunciation                      | `references/narration.md`                      |
 | Vietnamese marketing voiceover — writing for the ear                     | `references/narration-vi.md`                   |
+| Narrative Flow — But/Therefore, anti-listing (Biong phase 1)           | `biong-short-video-hyperframes/references/narrative-flow-vi.md` |
 | Precomputed audio bands mapped to motion                                 | `references/audio-reactive.md`                 |
 
 ## Scripts
