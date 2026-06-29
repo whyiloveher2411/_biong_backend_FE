@@ -4,7 +4,7 @@
 
 **Less is More:** ~90% giọng neutral + ~10% non-verbal. Tag gắn **khi viết draft** (`/viral-audio-script`), không paste sau humanize.
 
-**Cấm tuyệt đối:** mọi tag **không** có trong bảng allowlist (vd. `[happy]`, `[singing]`, `[gasp]`, `[whisper]`). Server **reject** `save_audio_script` nếu có tag lạ.
+**Cấm tuyệt đối:** mọi tag **không** có trong bảng allowlist (vd. `[happy]`, `[singing]`, `[gasp]`, `[whisper]`, `[question-oh]`, `[surprise-ah]`). Server **reject** `save_audio_script` nếu có tag lạ.
 
 **Đọc cùng:** [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
@@ -12,22 +12,12 @@
 
 ## Allowlist (single source of truth)
 
-Theo tài liệu chính thức OmniVoice — **13 tag non-verbal**:
+Theo tài liệu chính thức OmniVoice — **3 tag non-verbal**:
 
 | Tag | Nhóm | Ghi chú |
 |-----|------|---------|
 | `[laughter]` | Cười | CTA / twist vui |
 | `[sigh]` | Thở | Agitate — hối hận, mệt mỏi |
-| `[confirmation-en]` | Xác nhận | CTA — khẳng định ngắn |
-| `[question-en]` | Câu hỏi | Hook — câu hỏi retoric |
-| `[question-ah]` | Câu hỏi | Hook — ngữ điệu "ah" |
-| `[question-oh]` | Câu hỏi | Hook — ngữ điệu "oh" |
-| `[question-ei]` | Câu hỏi | Hook — ngữ điệu "ei" |
-| `[question-yi]` | Câu hỏi | Hook — ngữ điệu "yi" |
-| `[surprise-ah]` | Bất ngờ | Agitate — shock, twist |
-| `[surprise-oh]` | Bất ngờ | Agitate — shock, twist |
-| `[surprise-wa]` | Bất ngờ | Agitate — shock, twist |
-| `[surprise-yo]` | Bất ngờ | Agitate — shock, twist |
 | `[dissatisfaction-hnn]` | Bất mãn | Agitate — ức chế, thất vọng |
 
 | Nhóm khác | Tag | Ghi chú |
@@ -36,9 +26,9 @@ Theo tài liệu chính thức OmniVoice — **13 tag non-verbal**:
 
 **Mood / prosody:** dùng `. . .`, `?!`, dấu phẩy, câu ngắn — **không** dùng mood tag.
 
-OmniVoice TTS **giữ** 13 tag non-verbal; caption karaoke **strip** hết.
+OmniVoice TTS **giữ** 3 tag non-verbal; caption karaoke **strip** hết.
 
-**Cấm:** `[gasp]` — không được OmniVoice hỗ trợ; dùng `[surprise-oh]` / `[surprise-ah]` thay cho shock Agitate.
+**Cấm:** `[gasp]`, `[question-*]`, `[surprise-*]`, `[confirmation-en]` — không được OmniVoice hỗ trợ; dùng `?!`, `. . .` hoặc `[sigh]` / `[dissatisfaction-hnn]` cho Agitate.
 
 ---
 
@@ -55,10 +45,8 @@ OmniVoice TTS **giữ** 13 tag non-verbal; caption karaoke **strip** hết.
 
 | Nhóm tag | Tag gợi ý | Gợi ý / section | Ghi chú |
 |----------|-----------|-----------------|---------|
-| Câu hỏi | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` | **Hook** | Câu hỏi gai, retoric |
 | Thở / bất mãn | `[sigh]`, `[dissatisfaction-hnn]` | **Agitate** | Trước sai lầm, ức chế |
-| Bất ngờ | `[surprise-ah]`, `[surprise-oh]`, `[surprise-wa]`, `[surprise-yo]` | **Agitate** | Shock, twist (thay `[gasp]`) |
-| Cười / xác nhận | `[laughter]`, `[confirmation-en]` | **CTA / twist** | Punchline vui, khẳng định |
+| Cười | `[laughter]` | **CTA / twist** | Punchline vui |
 | *(neutral + ?!)* | — | **Hook / Solve / CTA** | Shock, pacing qua punctuation |
 
 ---
@@ -66,16 +54,14 @@ OmniVoice TTS **giữ** 13 tag non-verbal; caption karaoke **strip** hết.
 ## Prompt mẫu (phase 1 agent)
 
 ```text
-Model: k2-fsa/OmniVoice. CHỈ dùng tag allowlist (13 tag):
-[laughter] [sigh] [confirmation-en]
-[question-en] [question-ah] [question-oh] [question-ei] [question-yi]
-[surprise-ah] [surprise-oh] [surprise-wa] [surprise-yo] [dissatisfaction-hnn]
-CẤM [happy] [singing] [whisper] [gasp] và tag khác.
+Model: k2-fsa/OmniVoice. CHỈ dùng tag allowlist (3 tag):
+[laughter] [sigh] [dissatisfaction-hnn]
+CẤM [happy] [singing] [whisper] [gasp] [question-*] [surprise-*] [confirmation-en] và tag khác.
 
-1. Hook: neutral + ?! + [SFX] — optional [question-*].
-2. Agitate: [sigh] / [dissatisfaction-hnn] / [surprise-*] theo narrative.
+1. Hook: neutral + ?! + [SFX] — không tag.
+2. Agitate: [sigh] / [dissatisfaction-hnn] theo narrative.
 3. Solve: neutral — . . . prosody.
-4. CTA: optional [laughter] hoặc [confirmation-en] — slogan ngắn.
+4. CTA: optional [laughter] — slogan ngắn.
 5. Ghi đủ tag trong expressive_plan — không giới hạn số lượng cứng.
 ```
 
@@ -102,10 +88,10 @@ Follow để không bỏ lỡ nè!
 }
 ```
 
-Ví dụ Agitate shock (thay `[gasp]`):
+Ví dụ Agitate ức chế:
 
 ```text
-Apple vừa làm cả thế giới chao đảo! [surprise-oh] Tưởng chỉ nâng cấp nhẹ, nhưng mà…
+Apple vừa làm cả thế giới chao đảo! [dissatisfaction-hnn] Tưởng chỉ nâng cấp nhẹ, nhưng mà…
 ```
 
 ---
@@ -114,6 +100,6 @@ Apple vừa làm cả thế giới chao đảo! [surprise-oh] Tưởng chỉ nâ
 
 | Lỗi | Sửa |
 |-----|-----|
-| `[happy]` / `[singing]` / `[whisper]` / `[gasp]` | Chỉ 13 tag allowlist |
+| `[happy]` / `[singing]` / `[whisper]` / `[gasp]` / `[question-*]` / `[surprise-*]` | Chỉ 3 tag allowlist |
 | Tag sau humanize | Gắn lúc viral draft |
 | Bọc Solve trong tag | Solve neutral + `. . .` |

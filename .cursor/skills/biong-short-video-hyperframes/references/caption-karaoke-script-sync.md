@@ -17,7 +17,7 @@
 
 ## Pipeline 5 bước (bắt buộc — dùng script, không hand-author)
 
-1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`, **và thẻ OmniVoice non-verbal** (allowlist 13 tag — xem omnivoice-expressive-tags.md; caption không hiển thị).
+1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`, **và thẻ OmniVoice non-verbal** (allowlist 3 tag — xem omnivoice-expressive-tags.md; caption không hiển thị).
 2. **Transcribe (bắt buộc)** — `node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs .` → `transcript.json` + `assets/transcribe-manifest.json`. Đọc `language` từ `assets/agent-metadata.json` (mặc định `vi`). **Cấm** `npx hyperframes transcribe` không flag — CLI default `small.en` dịch non-English sang tiếng Anh. Chi tiết: [transcribe-locale.md](transcribe-locale.md).
 
 **Sau MCP TTS OmniVoice:** bắt buộc transcribe **lại** MP3 mới — prosody `. . .` và emotion tags làm đổi duration so với ước lượng script.

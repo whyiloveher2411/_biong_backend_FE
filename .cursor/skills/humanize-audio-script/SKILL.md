@@ -20,7 +20,7 @@ Polish **bản nháp** từ `/viral-audio-script` — văn người thật, thà
 ## Prompt cốt lõi
 
 ```text
-QUAN TRỌNG: Giữ nguyên mọi thẻ allowlist OmniVoice (13 tag — xem omnivoice-expressive-tags.md) — cấm thêm/xóa tag. Cấm [happy] [singing] [whisper] [gasp].
+QUAN TRỌNG: Giữ nguyên mọi thẻ allowlist OmniVoice (3 tag — xem omnivoice-expressive-tags.md) — cấm thêm/xóa tag. Cấm [happy] [singing] [whisper] [gasp].
 Giữ [BGM], [SFX], [Dừng] nguyên vị trí.
 
 NARRATIVE FLOW — áp dụng nghiêm:

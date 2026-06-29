@@ -41,7 +41,7 @@ Agents must **not** write phonetic forms into `save_audio_script` text.
 
 ## Chain note
 
-- OmniVoice: keeps expressive non-verbal tags per allowlist (13 tags — see omnivoice-expressive-tags.md); strips `[BGM]`/`[SFX]`
+- OmniVoice: keeps expressive non-verbal tags per allowlist (3 tags — see omnivoice-expressive-tags.md); strips `[BGM]`/`[SFX]`
 - Fallback providers strip all bracket tags — write prosody into punctuation instead
 
 See [tts.md](tts.md) for provider chain and word timestamps.

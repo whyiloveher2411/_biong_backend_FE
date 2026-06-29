@@ -135,7 +135,8 @@ function main() {
     const trustedRatio =
       report.trustedRatio ??
       (report.scriptWordCount
-        ? (report.exactCount + report.fuzzyCount) / report.scriptWordCount
+        ? (report.exactCount + report.fuzzyCount + (report.clusterCount ?? 0)) /
+          report.scriptWordCount
         : 0);
     if (trustedRatio < STRICT_MIN_TRUSTED_RATIO) {
       errors.push(
@@ -251,7 +252,7 @@ function main() {
   if (opts.strict && report) {
     const trusted = ((report.trustedRatio ?? 0) * 100).toFixed(0);
     const positional = ((report.positionalRatio ?? 0) * 100).toFixed(0);
-    console.log(`  trusted(exact+fuzzy)=${trusted}%, positional=${positional}%`);
+    console.log(`  trusted(exact+fuzzy+cluster)=${trusted}%, positional=${positional}%`);
   }
 
   process.exit(0);

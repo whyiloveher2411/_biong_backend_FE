@@ -76,6 +76,7 @@ function main() {
     unmatchedWords,
     transcriptPointerEnd,
     densityDrift,
+    clusterCount,
   } = alignScriptToWhisper(scriptWords, transcriptWords, {
     lookahead: CAPTION_ALIGN_LOOKAHEAD,
   });
@@ -87,12 +88,12 @@ function main() {
   fs.mkdirSync(path.dirname(outWordsPath), { recursive: true });
   fs.writeFileSync(outWordsPath, JSON.stringify(captionWords, null, 2));
 
-  const timedCount = exactCount + fuzzyCount + positionalCount;
+  const timedCount = exactCount + fuzzyCount + positionalCount + clusterCount;
   const positionalRatio = scriptWords.length
     ? +(positionalCount / scriptWords.length).toFixed(4)
     : 0;
   const trustedRatio = scriptWords.length
-    ? +((exactCount + fuzzyCount) / scriptWords.length).toFixed(4)
+    ? +((exactCount + fuzzyCount + clusterCount) / scriptWords.length).toFixed(4)
     : 0;
 
   const report = {
@@ -106,6 +107,7 @@ function main() {
     exactCount,
     fuzzyCount,
     positionalCount,
+    clusterCount,
     positionalRatio,
     trustedRatio,
     interpolatedCount,
@@ -127,7 +129,7 @@ function main() {
 
   console.log(
     `[sync-caption] ${timedCount}/${scriptWords.length} timed` +
-      ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount})` +
+      ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount} cluster=${clusterCount})` +
       ` transcript=${report.transcriptPath}` +
       (interpolatedCount ? `; ${interpolatedCount} interpolated` : " ✓"),
   );

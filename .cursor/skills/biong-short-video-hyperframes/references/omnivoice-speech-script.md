@@ -24,7 +24,7 @@ Engine: **k2-fsa/OmniVoice** — OmniVoice FastAPI local (`./omnivoice-tts.sh st
 | Lớp | Thẻ | Gửi OmniVoice TTS | Caption |
 |-----|-----|-------------------|---------|
 | **Production** | `[BGM: mood]`, `[SFX: vine boom]`, `[Dừng 0.5s]` | Strip / convert → `. . .` | Strip |
-| **Non-verbal** | allowlist 13 tag OmniVoice (xem omnivoice-expressive-tags.md) | **Giữ** | Strip |
+| **Non-verbal** | allowlist 3 tag OmniVoice (xem omnivoice-expressive-tags.md) | **Giữ** | Strip |
 | **Prosody dấu câu** | `. . .` (chấm cách nhau), `?!` | **Giữ** | Giữ |
 
 Chi tiết allowlist: [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md).
@@ -48,7 +48,7 @@ Server: production tags strip; 3 tag non-verbal giữ cho OmniVoice; fallback Vi
 Đọc §3 pacing + §4 punctuation.
 
 - Timeline 60–180s, markers, HASCAS
-- **Gắn tag** theo allowlist OmniVoice (13 tag); ghi đủ trong `expressive_plan` — xem omnivoice-expressive-tags.md
+- **Gắn tag** theo allowlist OmniVoice (3 tag); ghi đủ trong `expressive_plan` — xem omnivoice-expressive-tags.md
 - Mood qua `. . .`, `?!`, câu ngắn — **không** mood tag
 - Metadata `expressive_plan: { hook, agitate, solve, cta }`
 

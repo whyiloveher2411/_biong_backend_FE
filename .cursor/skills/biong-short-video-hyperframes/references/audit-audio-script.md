@@ -26,7 +26,7 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/humanize-audio-script
 | `hook_loop_collision` | warning→critical nếu CTA = hook | CTA lặp hook không bridge | Viết CTA mới nối `loop_hook_line` |
 | `weak_prosody` | warning | Solve thiếu `...` hoặc `. . .` | Thêm punctuation tuning §4 vi-voiceover |
 | `sentence_too_long` | critical | Câu >12 từ (trừ dòng `[BGM]`/`[SFX]`) | Tách + nối narrative |
-| `disallowed_tag` | critical | Tag ngoài allowlist 13 tag (vd. `[gasp]`) | Thay bằng tag allowlist hoặc bỏ |
+| `disallowed_tag` | critical | Tag ngoài allowlist 3 tag (vd. `[gasp]`, `[question-oh]`) | Thay bằng tag allowlist hoặc bỏ |
 | `missing_sfx` | critical | Thiếu `[SFX: ...]` hook | Thêm `[SFX: vine boom]` |
 | `duration_short` | warning | <60s word budget (~2.5 từ/giây) | Mở rộng Solve từ `narrative_chain` |
 | `missing_but_therefore` | warning | <3 mốc But/Therefore trong 60–90s | Thêm liên từ nhân quả/đối lập |
@@ -65,7 +65,7 @@ Theo dõi để không bỏ lỡ nhé!
 ```text
 [BGM: dark tech ambient] [SFX: vine boom] Google tìm kiếm đạt đỉnh lịch sử ... nhưng công ty lại đang hoảng loạn?!
 
-[surprise-ah] Sự thật là CEO Sundar Pichai vừa xác nhận ... lượng truy cập đang cao nhất mọi thời đại!
+[dissatisfaction-hnn] Sự thật là CEO Sundar Pichai vừa xác nhận ... lượng truy cập đang cao nhất mọi thời đại!
 
 Thế nhưng ... ChatGPT đã chạm mốc một tỷ người dùng . . . còn DuckDuckGo thì chơi lớn ... tung luôn tính năng xóa sạch AI!
 
@@ -84,7 +84,7 @@ Chưa dừng lại ở đó đâu nhé ... cuộc chiến nhân tài đang cực
 Bạn nghĩ sao về tương lai của Google? . . . Bình luận bên dưới ... và theo dõi kênh để không bỏ lỡ nhé!
 ```
 
-**Lưu ý tag:** Ví dụ trên có 3 tag (`[surprise-ah]`, `[sigh]`, `[laughter]`) — hợp lệ khi khớp `expressive_plan`. Audit chỉ kiểm tra tag nằm trong allowlist và không thêm/xóa ngoài plan.
+**Lưu ý tag:** Ví dụ trên có 3 tag (`[dissatisfaction-hnn]`, `[sigh]`, `[laughter]`) — hợp lệ khi khớp `expressive_plan`. Audit chỉ kiểm tra tag nằm trong allowlist và không thêm/xóa ngoài plan.
 
 ---
 
@@ -110,7 +110,7 @@ Bạn nghĩ sao về tương lai của Google? . . . Bình luận bên dưới .
   "fixed_script": "[BGM: dark tech ambient] [SFX: vine boom] ...",
   "expressive_plan": {
     "hook": [],
-    "agitate": ["[sigh]"],
+    "agitate": ["[dissatisfaction-hnn]", "[sigh]"],
     "solve": [],
     "cta": ["[laughter]"]
   },
@@ -137,7 +137,7 @@ Bạn nghĩ sao về tương lai của Google? . . . Bình luận bên dưới .
 - [ ] ≥3 mốc But/Therefore (script 60–90s)
 - [ ] Không từ blocklist liệt kê
 - [ ] CTA không lặp hook verbatim
-- [ ] Non-verbal tags khớp `expressive_plan`; chỉ allowlist 13 tag
+- [ ] Non-verbal tags khớp `expressive_plan`; chỉ allowlist 3 tag
 - [ ] Câu ≤12 từ; có `[SFX: ...]` hook
 - [ ] Metadata lưu `script_diagnosis` (audit trail)
 

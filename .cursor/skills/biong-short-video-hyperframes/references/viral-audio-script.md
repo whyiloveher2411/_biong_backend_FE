@@ -1,6 +1,6 @@
 # viral-audio-script — kịch bản giữ chân cao (bản nháp + non-verbal tags)
 
-**Model TTS:** `k2-fsa/OmniVoice` — chỉ tag trong [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) allowlist (13 tag).
+**Model TTS:** `k2-fsa/OmniVoice` — chỉ tag trong [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) allowlist (3 tag).
 
 **Đọc cùng:**
 - [narrative-flow-vi.md](narrative-flow-vi.md) — **bắt buộc**
@@ -24,9 +24,8 @@
 
 | Section | Tag gợi ý |
 |---------|-----------|
-| Hook | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` |
-| Agitate | `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-ah/oh/wa/yo]` |
-| Twist / CTA | `[laughter]`, `[confirmation-en]` |
+| Agitate | `[sigh]`, `[dissatisfaction-hnn]` |
+| Twist / CTA | `[laughter]` |
 
 **Cấm:** `[gasp]`, `[happy]`, `[singing]`, `[whisper]` và mọi tag ngoài allowlist — server reject khi save.
 
@@ -40,10 +39,10 @@ Mood Hook/CTA: **neutral + `?!` + `. . .`** — không mood tag.
 
 | Section | % thời lượng | Ghi chú |
 |---------|--------------|---------|
-| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `?!`; optional `[question-*]` |
-| Agitate | ~15% | `[sigh]` / `[dissatisfaction-hnn]` / `[surprise-*]` optional |
+| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `?!` — không tag |
+| Agitate | ~15% | `[sigh]` / `[dissatisfaction-hnn]` optional |
 | Solve | ~70% | Narrative chain But/Therefore — **không checklist** |
-| CTA/Loop | ~10% | Optional `[laughter]` hoặc `[confirmation-en]` |
+| CTA/Loop | ~10% | Optional `[laughter]` |
 
 ---
 

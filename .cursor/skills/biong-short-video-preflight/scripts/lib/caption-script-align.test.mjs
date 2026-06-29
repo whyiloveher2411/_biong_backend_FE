@@ -24,12 +24,12 @@ describe("caption-script-align", () => {
   });
 
   it("strip non-verbal tags (allowlist OmniVoice)", () => {
-    const raw = "[laughter] Hook [sigh] thở [surprise-oh] hốt hả";
-    assert.equal(stripScriptMarkers(raw), "Hook thở hốt hả");
+    const raw = "[laughter] Hook [sigh] thở [dissatisfaction-hnn] ức chế";
+    assert.equal(stripScriptMarkers(raw), "Hook thở ức chế");
   });
 
   it("strip hyphenated non-verbal tags", () => {
-    const raw = "[dissatisfaction-hnn] Thật là [confirmation-en] đúng rồi";
+    const raw = "[dissatisfaction-hnn] Thật là [laughter] đúng rồi";
     assert.equal(stripScriptMarkers(raw), "Thật là đúng rồi");
   });
 
@@ -60,15 +60,15 @@ describe("caption-script-align", () => {
     assert.equal(mapped[1].whisperText, "ca");
   });
 
-  it("positional when whisper word unrelated but density ok", () => {
+  it("interpolate when whisper word unrelated (positional threshold)", () => {
     const script = ["Con", "cá", "lớn"];
     const transcript = tw(["Con", "xyz", "lớn"]);
-    const { mapped } = alignScriptToWhisper(script, transcript);
+    const { mapped, interpolatedCount } = alignScriptToWhisper(script, transcript);
 
     assert.equal(mapped[1].text, "cá");
-    assert.equal(mapped[1].matchType, "positional");
-    assert.equal(mapped[1].whisperText, "xyz");
+    assert.equal(mapped[1].matchType, "interpolate");
     assert.equal(mapped[2].matchType, "exact");
+    assert.ok(interpolatedCount >= 1);
   });
 
   it("interpolate when transcript exhausted", () => {
@@ -93,7 +93,7 @@ describe("caption-script-align", () => {
     assert.ok(wordSimilarity("cá", "ca") >= 0.99);
   });
 
-  it("EN transcript + VI script yields mostly positional (bad alignment)", () => {
+  it("EN transcript + VI script yields low trusted alignment", () => {
     const script = [
       "Google",
       "tìm",
@@ -112,11 +112,12 @@ describe("caption-script-align", () => {
       "team",
       "working",
     ]);
-    const { positionalCount, exactCount, fuzzyCount } = alignScriptToWhisper(
-      script,
-      transcript,
+    const { positionalCount, exactCount, fuzzyCount, interpolatedCount, clusterCount } =
+      alignScriptToWhisper(script, transcript);
+    const trusted = exactCount + fuzzyCount + clusterCount;
+    assert.ok(
+      interpolatedCount + positionalCount > trusted,
+      "interpolate/positional should dominate with EN transcript",
     );
-    const trusted = exactCount + fuzzyCount;
-    assert.ok(positionalCount > trusted, "positional should dominate with EN transcript");
   });
 });

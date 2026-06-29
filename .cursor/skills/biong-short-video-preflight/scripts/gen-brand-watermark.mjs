@@ -63,7 +63,7 @@ function main() {
       font-style: normal;
       font-weight: 600;
       font-display: swap;
-      src: url("../assets/fonts/BeVietnamPro-SemiBold.ttf") format("truetype");
+      src: url("assets/fonts/BeVietnamPro-SemiBold.ttf") format("truetype");
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -103,7 +103,7 @@ function main() {
 <body>
   <div id="root" data-composition-id="brand-watermark" data-start="0" data-duration="${duration}" data-width="1080" data-height="1920">
     <div class="brand-wrap">
-      <img src="../assets/images/spacedev-logo.png" alt="" />
+      <img src="assets/images/spacedev-logo.png" alt="" />
       <span>© Spacedev</span>
     </div>
   </div>

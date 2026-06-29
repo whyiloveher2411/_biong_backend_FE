@@ -34,7 +34,7 @@ Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từn
 
 | Bước | MCP | Kết quả |
 |------|-----|---------|
-| Script | `save_audio_script` | `audio_script` + markers + OmniVoice non-verbal tags (allowlist 13 tag) |
+| Script | `save_audio_script` | `audio_script` + markers + OmniVoice non-verbal tags (allowlist 3 tag) |
 | TTS | `generate_narration_tts` (giữ non-verbal tags allowlist; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
@@ -45,9 +45,9 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 1. `/extract-core-signals` → `/hyperframes-creative` (Narrative Flow But/Therefore) → `/viral-audio-script` (bản nháp HASCAS) → `/humanize-audio-script` (văn người thật) → `/audit-audio-script` (QA + sửa)
 2. Đọc [narrative-flow-vi.md](references/narrative-flow-vi.md) — cấm structural summarization, But/Therefore, góc nhìn storytelling
 3. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) — văn nói VI, từ đệm, punctuation, pacing
-4. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — CHỈ allowlist 13 tag OmniVoice; cấm `[gasp]`; cấm SSML; `. . .` prosody sau humanize
+4. Đọc [omnivoice-speech-script.md](references/omnivoice-speech-script.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — CHỈ allowlist 3 tag OmniVoice; cấm `[gasp]`; cấm SSML; `. . .` prosody sau humanize
 
-**Sau TTS:** transcribe lại MP3 → caption sync pipeline (prosody tags đổi duration).
+**Sau TTS:** `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `map-markers-to-timing.mjs` (prosody tags đổi duration).
 
 **Prereq OmniVoice (local):**
 
@@ -65,7 +65,7 @@ Chung: `OMNIVOICE_MODEL_ID=k2-fsa/OmniVoice`, `OMNIVOICE_GUIDANCE_SCALE=2`, `OMN
 
 Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` — **không** gọi MCP. Phase render:
 
-1. Transcribe → `totalVideoSec`
+1. `get_context` → `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → `totalVideoSec`
 2. `search_meme_sound` (hook) + `search_bgm` + `search_stock_media` mỗi beat
 3. Embed SFX track 12 + BGM track 11 + stock; GSAP paused
 
@@ -142,22 +142,28 @@ short_video_save_audio_script({
 
 Đọc [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md):
 
-- **Text:** `assets/audio-script.txt` từ MCP — cấm text Whisper
-- **Timing:** `transcript.json` (start/end only)
-- **Sync:** `sync-caption-from-script.mjs` → `verify-caption-sync.mjs --strict` → `gen-captions-html.mjs`
+- **Text:** `assets/audio-script.txt` từ `bootstrap-phase2-assets.mjs`
+- **Timing:** `transcript.json` từ `transcribe-audio.mjs` (start/end only)
+- **Sync:** `transcribe-audio.mjs` → `sync-caption-from-script.mjs` → `verify-caption-sync.mjs --strict` → `gen-captions-html.mjs`
 - **Chunk:** 3–5 từ/group trong HTML generator
 
 ### Preflight (bắt buộc trước render final)
 
-Invoke `/biong-short-video-preflight` — **Bước 0 caption sync** rồi overlay check:
+Invoke `/biong-short-video-preflight` — đọc skill đầy đủ; tóm tắt:
 
 ```bash
 PROJ=storage/agent-renders/{id}/my-video
+# Sau short_video_get_context — lưu response → assets/get-context-snapshot.json
+node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/map-markers-to-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
+node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 ```
 
@@ -215,6 +221,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 4. [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md) — **font Be Vietnam Pro local**
 5. [media-mcp-activation.md](references/media-mcp-activation.md) — **phase render: MCP assets bắt buộc**
 6. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc**
+7. [transcribe-locale.md](references/transcribe-locale.md) — **locale transcribe đa ngôn ngữ**
 7. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
 8. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
 9. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
@@ -245,6 +252,8 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 
 - [ ] Caption host `z-index:9000` + watermark host `z-index:9500` — [overlay-layer-stack.md](references/overlay-layer-stack.md)
 - [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
+- [ ] `transcribe-audio.mjs` + `verify-caption-sync.mjs --strict` pass
+- [ ] `map-markers-to-timing.mjs` + `check-beat-timing.mjs` pass
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
 - [ ] Caption karaoke wired — text audio_script, timing Whisper
 - [ ] Watermark Spacedev — logo + © Spacedev góc trên trái, suốt video

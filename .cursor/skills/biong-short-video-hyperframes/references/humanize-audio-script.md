@@ -1,6 +1,6 @@
 # humanize-audio-script — polish văn, giữ non-verbal tags
 
-**Vai trò:** Lớp polish sau `/viral-audio-script` — văn người thật, **giữ nguyên** non-verbal tags allowlist OmniVoice (13 tag), **giữ Narrative Flow**.
+**Vai trò:** Lớp polish sau `/viral-audio-script` — văn người thật, **giữ nguyên** non-verbal tags allowlist OmniVoice (3 tag), **giữ Narrative Flow**.
 
 **Đọc trước:** [narrative-flow-vi.md](narrative-flow-vi.md) · [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) §2 · [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
 
@@ -33,7 +33,7 @@
 > Apple tung chip 8 nhân mới. Chip tiết kiệm pin 30%. Giá 900 USD.
 
 **Sau humanize (tag + But/Therefore):**
-> Apple vừa làm cả thế giới chao đảo! [surprise-oh] Tưởng chỉ nâng cấp nhẹ, nhưng mà… pin tiết kiệm tới 30% luôn á! Chính vì vậy… giá 900 USD lần này là cú hích lớn!
+> Apple vừa làm cả thế giới chao đảo! Tưởng chỉ nâng cấp nhẹ, nhưng mà… [dissatisfaction-hnn] pin tiết kiệm tới 30% luôn á! Chính vì vậy… giá 900 USD lần này là cú hích lớn!
 
 **Ví dụ khác — giữ tag slots:**
 > 99% dev dùng HyperFrames sai! Do đó họ bỏ qua bước quan trọng. [sigh] Sai rồi!
@@ -58,7 +58,7 @@
 ## Checklist
 
 - [ ] Số tag và loại tag khớp `expressive_plan`
-- [ ] Chỉ allowlist 13 tag (xem omnivoice-expressive-tags.md)
+- [ ] Chỉ allowlist 3 tag (xem omnivoice-expressive-tags.md)
 - [ ] Không SSML; câu ≤12 từ
 - [ ] Không từ blocklist liệt kê
 - [ ] But/Therefore còn nguyên sau polish

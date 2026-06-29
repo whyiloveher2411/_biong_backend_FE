@@ -26,9 +26,8 @@ Từ repo root `_biong_backend_FE`, thay `{id}`:
 ```bash
 PROJ=storage/agent-renders/{id}/my-video
 
-# 1. Lưu audio_script + metadata từ get_context:
-#    $PROJ/assets/audio-script.txt
-#    $PROJ/assets/agent-metadata.json  → { language: "vi"|"en"|..., markers, timeline }
+# 1. short_video_get_context → lưu response vào $PROJ/assets/get-context-snapshot.json
+node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.mjs $PROJ
 
 # 2. Transcribe đúng ngôn ngữ (CẤM small.en cho non-English — xem transcribe-locale.md)
 node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ

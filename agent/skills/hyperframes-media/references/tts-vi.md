@@ -41,7 +41,7 @@ Agents must **not** write phonetic forms into `save_audio_script` text.
 
 ## Chain note
 
-- OmniVoice: keeps expressive tags `[laughter]`, `[sigh]`, etc.; strips `[BGM]`/`[SFX]`
+- OmniVoice: keeps expressive tags `[laughter]`, `[sigh]`, `[dissatisfaction-hnn]`; strips `[BGM]`/`[SFX]`
 - Fallback providers strip all bracket tags — write prosody into punctuation instead
 
 See [tts.md](tts.md) for provider chain and word timestamps.

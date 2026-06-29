@@ -93,7 +93,7 @@ function main() {
       font-style: normal;
       font-weight: 700;
       font-display: swap;
-      src: url("../assets/fonts/BeVietnamPro-Bold.ttf") format("truetype");
+      src: url("assets/fonts/BeVietnamPro-Bold.ttf") format("truetype");
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
@@ -171,7 +171,7 @@ function main() {
   </style>
 </head>
 <body>
-  <div id="pill-karaoke" data-composition-id="caption-pill-karaoke" data-timeline-locked data-start="0" data-duration="${duration}" data-fps="30" data-width="1080" data-height="1920">
+  <div id="pill-karaoke" data-composition-id="captions" data-timeline-locked data-start="0" data-duration="${duration}" data-fps="30" data-width="1080" data-height="1920">
     <div class="caption-root" aria-hidden="true">
       <div id="caption-stage" class="caption-group-wrap"></div>
     </div>
@@ -261,7 +261,6 @@ function main() {
         tl.to(wordEl, { color: COLOR_ACTIVE, duration: COLOR_FADE_DURATION, ease: "power2.out" }, wordStart);
       });
     });
-    window.__timelines["caption-pill-karaoke"] = tl;
     window.__timelines["captions"] = tl;
   </script>
 </body>

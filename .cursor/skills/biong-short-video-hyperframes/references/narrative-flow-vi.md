@@ -81,7 +81,7 @@ Thay bằng But/Therefore hoặc câu hỏi tu từ tạo suspense.
 > Hôm nay Apple ra mắt chip mới. Chip này có 8 nhân CPU. Tiếp theo, nó tiết kiệm pin hơn ba mươi phần trăm. Ngoài ra, giá bán của nó là chín trăm USD.
 
 **After (Narrative Flow):**
-> Apple vừa làm cả thế giới công nghệ chao đảo khi tung ra con chip 8 nhân thế hệ mới! [surprise-oh] Tưởng chỉ là nâng cấp nhẹ, nhưng mà… nó lại tiết kiệm pin tới ba mươi phần trăm luôn á! Chính vì vậy… mức giá chín trăm USD lần này thực sự là một cú hích lớn!
+> Apple vừa làm cả thế giới công nghệ chao đảo khi tung ra con chip 8 nhân thế hệ mới! Tưởng chỉ là nâng cấp nhẹ, nhưng mà… [dissatisfaction-hnn] nó lại tiết kiệm pin tới ba mươi phần trăm luôn á! Chính vì vậy… mức giá chín trăm USD lần này thực sự là một cú hích lớn!
 
 ---
 

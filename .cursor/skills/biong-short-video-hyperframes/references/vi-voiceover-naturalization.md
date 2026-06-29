@@ -47,7 +47,7 @@ Align với timeline [viral-retention-structure.md](viral-retention-structure.md
 | Giai đoạn | Thời gian (trong Hook/Agitate) | Giọng & nội dung |
 |-----------|-------------------------------|------------------|
 | **Hook** | ~0–3s đầu video | Câu hỏi gai, khẳng định mạnh — dùng `?!` và `. . .` (không mood tag) |
-| **Agitate** | ~3–15s (trong block Agitate) | Cảm thán ngắn, khoét nỗi đau. `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-*]`. Brand-safe: "Ức chế quá đi!", "Chịu không nổi luôn á!" — tránh từ thô |
+| **Agitate** | ~3–15s (trong block Agitate) | Cảm thán ngắn, khoét nỗi đau. `[sigh]`, `[dissatisfaction-hnn]`. Brand-safe: "Ức chế quá đi!", "Chịu không nổi luôn á!" — tránh từ thô |
 | **Solve** | ~60% script | Neutral, rõ ràng, từng bước. Không mood tag dài |
 | **CTA/Loop** | ~10% cuối | Nhẹ, tự tin, dứt khoát. `[laughter]` hoặc slogan ngắn |
 
@@ -123,6 +123,6 @@ Self-check: ≥3 mốc But/Therefore trong script 60–90s; không từ blocklis
 - [ ] Hook giật gân 0–3s; Agitate có cảm thán ngắn (§3)
 - [ ] Có `...` / `?!` / chấm rời ở chỗ nhấn (§4)
 - [ ] Brand EN giữ nguyên trong script; không SSML (§5)
-- [ ] Expressive tag theo [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) — allowlist 13 tag, khớp `expressive_plan`
+- [ ] Expressive tag theo [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) — allowlist 3 tag, khớp `expressive_plan`
 - [ ] Narrative Flow: không từ liệt kê; ≥3 But/Therefore (§6 / narrative-flow-vi.md)
 - [ ] `/audit-audio-script` pass — không issue critical (audit-audio-script.md)
