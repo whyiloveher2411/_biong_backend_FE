@@ -47,19 +47,19 @@ OmniVoice TTS **giữ** 13 tag non-verbal; caption karaoke **strip** hết.
 1. **Gắn khi viết** — tag nằm trong draft HASCAS; `/humanize-audio-script` **cấm** thêm/xóa/di chuyển tag
 2. **1 tag = 1 vị trí** — không xếp chồng nhiều tag liên tiếp
 3. **Solve neutral** — giải thích kỹ thuật không tag; dùng `. . .` và `,` đủ
-4. **Quota** — tối đa **2** tag non-verbal mỗi video (bất kỳ tag nào trong allowlist)
+4. **Less is more** — ưu tiên ít tag, đặt đúng HASCAS; **không** giới hạn số lượng cứng — khớp `expressive_plan`
 
 ---
 
 ## Bảng phân bổ theo HASCAS
 
-| Nhóm tag | Tag gợi ý | Quota | Section | Ghi chú |
-|----------|-----------|-------|---------|---------|
-| Câu hỏi | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` | 0–1 | **Hook** | Câu hỏi gai, retoric |
-| Thở / bất mãn | `[sigh]`, `[dissatisfaction-hnn]` | 0–1 | **Agitate** | Trước sai lầm, ức chế |
-| Bất ngờ | `[surprise-ah]`, `[surprise-oh]`, `[surprise-wa]`, `[surprise-yo]` | 0–1 | **Agitate** | Shock, twist (thay `[gasp]`) |
-| Cười / xác nhận | `[laughter]`, `[confirmation-en]` | 0–1 | **CTA / twist** | Punchline vui, khẳng định |
-| *(neutral + ?!)* | — | ~90% | **Hook / Solve / CTA** | Shock, pacing qua punctuation |
+| Nhóm tag | Tag gợi ý | Gợi ý / section | Ghi chú |
+|----------|-----------|-----------------|---------|
+| Câu hỏi | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` | **Hook** | Câu hỏi gai, retoric |
+| Thở / bất mãn | `[sigh]`, `[dissatisfaction-hnn]` | **Agitate** | Trước sai lầm, ức chế |
+| Bất ngờ | `[surprise-ah]`, `[surprise-oh]`, `[surprise-wa]`, `[surprise-yo]` | **Agitate** | Shock, twist (thay `[gasp]`) |
+| Cười / xác nhận | `[laughter]`, `[confirmation-en]` | **CTA / twist** | Punchline vui, khẳng định |
+| *(neutral + ?!)* | — | **Hook / Solve / CTA** | Shock, pacing qua punctuation |
 
 ---
 
@@ -72,11 +72,11 @@ Model: k2-fsa/OmniVoice. CHỈ dùng tag allowlist (13 tag):
 [surprise-ah] [surprise-oh] [surprise-wa] [surprise-yo] [dissatisfaction-hnn]
 CẤM [happy] [singing] [whisper] [gasp] và tag khác.
 
-1. Hook: neutral + ?! + [SFX] — optional [question-*] tối đa 1.
-2. Agitate: [sigh] / [dissatisfaction-hnn] / [surprise-*] — tối đa 1.
+1. Hook: neutral + ?! + [SFX] — optional [question-*].
+2. Agitate: [sigh] / [dissatisfaction-hnn] / [surprise-*] theo narrative.
 3. Solve: neutral — . . . prosody.
 4. CTA: optional [laughter] hoặc [confirmation-en] — slogan ngắn.
-5. Tổng non-verbal ≤ 2 / video.
+5. Ghi đủ tag trong expressive_plan — không giới hạn số lượng cứng.
 ```
 
 ---
@@ -115,6 +115,5 @@ Apple vừa làm cả thế giới chao đảo! [surprise-oh] Tưởng chỉ nâ
 | Lỗi | Sửa |
 |-----|-----|
 | `[happy]` / `[singing]` / `[whisper]` / `[gasp]` | Chỉ 13 tag allowlist |
-| >2 tag non-verbal | Quota tối đa 2 |
 | Tag sau humanize | Gắn lúc viral draft |
 | Bọc Solve trong tag | Solve neutral + `. . .` |

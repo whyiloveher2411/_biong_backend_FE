@@ -41,7 +41,7 @@ Chi tiết rubric: [audit-audio-script.md](biong-short-video-hyperframes/referen
 | `listing_connector` | Thay blocklist |
 | `hook_loop_collision` | CTA mới + bridge |
 | `sentence_too_long` | Tách ≤12 từ |
-| `tag_quota_exceeded` | Giữ `expressive_plan` |
+| `disallowed_tag` | Thay/bỏ tag ngoài allowlist |
 | `missing_sfx` | Thêm `[SFX: vine boom]` |
 
 ## Prompt cốt lõi

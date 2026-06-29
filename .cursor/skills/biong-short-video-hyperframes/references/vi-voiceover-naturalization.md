@@ -123,6 +123,6 @@ Self-check: ≥3 mốc But/Therefore trong script 60–90s; không từ blocklis
 - [ ] Hook giật gân 0–3s; Agitate có cảm thán ngắn (§3)
 - [ ] Có `...` / `?!` / chấm rời ở chỗ nhấn (§4)
 - [ ] Brand EN giữ nguyên trong script; không SSML (§5)
-- [ ] Expressive tag quota the [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md)
+- [ ] Expressive tag theo [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) — allowlist 13 tag, khớp `expressive_plan`
 - [ ] Narrative Flow: không từ liệt kê; ≥3 But/Therefore (§6 / narrative-flow-vi.md)
 - [ ] `/audit-audio-script` pass — không issue critical (audit-audio-script.md)

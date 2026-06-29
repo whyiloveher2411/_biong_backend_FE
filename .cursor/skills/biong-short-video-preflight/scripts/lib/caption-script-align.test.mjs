@@ -92,4 +92,31 @@ describe("caption-script-align", () => {
     assert.ok(wordSimilarity("HyperFrames", "Hyperframes") >= 0.72);
     assert.ok(wordSimilarity("cá", "ca") >= 0.99);
   });
+
+  it("EN transcript + VI script yields mostly positional (bad alignment)", () => {
+    const script = [
+      "Google",
+      "tìm",
+      "kiếm",
+      "đạt",
+      "đỉnh",
+      "lịch",
+      "sử",
+    ];
+    const transcript = tw([
+      "Google",
+      "is",
+      "a",
+      "very",
+      "good",
+      "team",
+      "working",
+    ]);
+    const { positionalCount, exactCount, fuzzyCount } = alignScriptToWhisper(
+      script,
+      transcript,
+    );
+    const trusted = exactCount + fuzzyCount;
+    assert.ok(positionalCount > trusted, "positional should dominate with EN transcript");
+  });
 });

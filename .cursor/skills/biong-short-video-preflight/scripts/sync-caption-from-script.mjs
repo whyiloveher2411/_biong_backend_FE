@@ -13,44 +13,20 @@ import {
   tokenizeScript,
   toCaptionWords,
   totalVideoSec,
+  DEFAULT_LOOKAHEAD,
   stripPunct,
 } from "./lib/caption-script-align.mjs";
+import {
+  resolveTranscriptPath,
+  readTranscribeManifest,
+  loadTranscriptWords,
+} from "./lib/transcript-path.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const WHISPER_EMOTION_WORD_RE = /^(?:laugh|laughter|sigh|confirmation|dissatisfaction|surprise|question)$/i;
-
-function resolveTranscriptPath(projectDir) {
-  const candidates = [
-    path.join(projectDir, "transcript.json"),
-    path.join(projectDir, "assets/transcript.json"),
-    path.join(projectDir, "assets/audio/transcript.json"),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-function loadTranscriptWords(projectDir) {
-  const trPath = resolveTranscriptPath(projectDir);
-  if (!trPath) {
-    throw new Error("Thiếu transcript.json — chạy hyperframes transcribe trước");
-  }
-  const raw = JSON.parse(fs.readFileSync(trPath, "utf8"));
-  const list = Array.isArray(raw) ? raw : raw.words ?? [];
-  return list
-    .filter((w) => w && "start" in w && "end" in w)
-    .map((w) => ({
-      text: String(w.text ?? "").trim(),
-      start: Number(w.start),
-      end: Number(w.end),
-    }))
-    .filter((w) => w.text.length > 0)
-    .filter((w) => !WHISPER_EMOTION_WORD_RE.test(stripPunct(w.text)));
-}
-
-const CAPTION_ALIGN_LOOKAHEAD = Number(process.env.CAPTION_LOOKAHEAD || 5);
+const CAPTION_ALIGN_LOOKAHEAD = Number(
+  process.env.CAPTION_LOOKAHEAD || String(DEFAULT_LOOKAHEAD),
+);
 
 function main() {
   const projectDir = path.resolve(process.argv[2] || "");
@@ -68,14 +44,18 @@ function main() {
     process.exit(1);
   }
 
-  if (!resolveTranscriptPath(projectDir)) {
-    console.error(`Thiếu transcript.json — chạy hyperframes transcribe trước`);
+  const transcriptPath = resolveTranscriptPath(projectDir);
+  if (!transcriptPath) {
+    console.error(`Thiếu transcript.json — chạy transcribe-audio.mjs trước`);
     process.exit(1);
   }
 
   const scriptText = fs.readFileSync(scriptPath, "utf8");
   const scriptWords = tokenizeScript(scriptText);
-  const transcriptWords = loadTranscriptWords(projectDir);
+  const { words: transcriptWords } = loadTranscriptWords(projectDir, {
+    stripEmotion: true,
+    stripPunctFn: stripPunct,
+  });
 
   if (!scriptWords.length) {
     console.error("audio-script.txt rỗng sau khi strip markers");
@@ -102,19 +82,32 @@ function main() {
 
   const duration = totalVideoSec(transcriptWords, mapped);
   const captionWords = toCaptionWords(mapped, duration);
+  const manifest = readTranscribeManifest(projectDir);
 
   fs.mkdirSync(path.dirname(outWordsPath), { recursive: true });
   fs.writeFileSync(outWordsPath, JSON.stringify(captionWords, null, 2));
 
   const timedCount = exactCount + fuzzyCount + positionalCount;
+  const positionalRatio = scriptWords.length
+    ? +(positionalCount / scriptWords.length).toFixed(4)
+    : 0;
+  const trustedRatio = scriptWords.length
+    ? +((exactCount + fuzzyCount) / scriptWords.length).toFixed(4)
+    : 0;
+
   const report = {
     generatedAt: new Date().toISOString(),
     alignModule: path.join(__dirname, "lib/caption-script-align.mjs"),
+    transcriptPath: path.relative(projectDir, transcriptPath),
+    transcribeModel: manifest?.model ?? null,
+    transcribeLang: manifest?.language ?? null,
     scriptWordCount: scriptWords.length,
     transcriptWordCount: transcriptWords.length,
     exactCount,
     fuzzyCount,
     positionalCount,
+    positionalRatio,
+    trustedRatio,
     interpolatedCount,
     timedCount,
     unmatchedCount: unmatchedWords.length,
@@ -135,6 +128,7 @@ function main() {
   console.log(
     `[sync-caption] ${timedCount}/${scriptWords.length} timed` +
       ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount})` +
+      ` transcript=${report.transcriptPath}` +
       (interpolatedCount ? `; ${interpolatedCount} interpolated` : " ✓"),
   );
   if (corrections.length) {

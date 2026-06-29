@@ -22,12 +22,11 @@
 
 ## Non-verbal tags (allowlist)
 
-| Section | Tag | Quota |
-|---------|-----|-------|
-| Hook | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` | 0–1 |
-| Agitate | `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-ah/oh/wa/yo]` | 0–1 |
-| Twist / CTA | `[laughter]`, `[confirmation-en]` | 0–1 |
-| **Tổng** | allowlist 13 tag | **≤2 / video** |
+| Section | Tag gợi ý |
+|---------|-----------|
+| Hook | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` |
+| Agitate | `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-ah/oh/wa/yo]` |
+| Twist / CTA | `[laughter]`, `[confirmation-en]` |
 
 **Cấm:** `[gasp]`, `[happy]`, `[singing]`, `[whisper]` và mọi tag ngoài allowlist — server reject khi save.
 

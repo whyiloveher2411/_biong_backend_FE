@@ -7,31 +7,15 @@
 import fs from "fs";
 import path from "path";
 import { norm, stripPunct, tokenizeScript } from "./lib/caption-script-align.mjs";
+import { resolveTranscriptPath, loadTranscriptWords, readTranscribeManifest } from "./lib/transcript-path.mjs";
+import { detectWrongLanguageTranscript } from "./lib/transcribe-sanity.mjs";
+import { resolveTranscribeConfig } from "./lib/transcribe-locale.mjs";
 
 const DRIFT_TOL = 0.08;
 const DEFAULT_MAX_UNMATCHED = 0.1;
 const MAX_COUNT_DRIFT_RATIO = 0.15;
-
-function resolveTranscriptPath(projectDir) {
-  const candidates = [
-    path.join(projectDir, "transcript.json"),
-    path.join(projectDir, "assets/transcript.json"),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-function loadTranscriptWords(projectDir) {
-  const trPath = resolveTranscriptPath(projectDir);
-  if (!trPath) return [];
-  const raw = JSON.parse(fs.readFileSync(trPath, "utf8"));
-  const list = Array.isArray(raw) ? raw : raw.words ?? [];
-  return list
-    .filter((w) => w && "start" in w)
-    .map((w) => String(w.text ?? "").trim());
-}
+const STRICT_MAX_POSITIONAL_RATIO = 0.15;
+const STRICT_MIN_TRUSTED_RATIO = 0.7;
 
 function parseArgs(argv) {
   const out = { strict: false, maxUnmatched: DEFAULT_MAX_UNMATCHED };
@@ -68,7 +52,9 @@ function main() {
   }
 
   if (opts.strict && !fs.existsSync(reportPath)) {
-    errors.push("Thiếu assets/caption-sync-report.json — chạy sync-caption-from-script.mjs trước (--strict)");
+    errors.push(
+      "Thiếu assets/caption-sync-report.json — chạy sync-caption-from-script.mjs trước (--strict)",
+    );
   }
 
   if (errors.length) {
@@ -78,12 +64,26 @@ function main() {
 
   const scriptWords = tokenizeScript(fs.readFileSync(scriptPath, "utf8"));
   const captionWords = JSON.parse(fs.readFileSync(wordsPath, "utf8"));
-  const transcriptTexts = resolveTranscriptPath(projectDir)
-    ? loadTranscriptWords(projectDir)
-    : [];
+  const { words: transcriptTimed } = loadTranscriptWords(projectDir);
+  const transcriptTexts = transcriptTimed.map((w) => w.text);
 
   if (!Array.isArray(captionWords) || !captionWords.length) {
     errors.push("caption-words.json rỗng hoặc không phải array");
+  }
+
+  const manifest = readTranscribeManifest(projectDir);
+  const localeConfig = resolveTranscribeConfig(projectDir, {
+    lang: manifest?.language,
+  });
+
+  const langCheck = detectWrongLanguageTranscript(scriptWords, transcriptTexts, {
+    lang: localeConfig.lang,
+    profile: localeConfig.profile,
+  });
+  if (langCheck.fail) {
+    errors.push(
+      `Transcript sai ngôn ngữ (${localeConfig.lang}): ${langCheck.reason} — chạy transcribe-audio.mjs`,
+    );
   }
 
   const countDrift =
@@ -118,6 +118,36 @@ function main() {
     errors.push(
       `Strict: caption word count (${captionWords.length}) !== script (${scriptWords.length})`,
     );
+  }
+
+  if (opts.strict && report) {
+    const positionalRatio =
+      report.positionalRatio ??
+      (report.scriptWordCount
+        ? report.positionalCount / report.scriptWordCount
+        : 0);
+    if (positionalRatio > STRICT_MAX_POSITIONAL_RATIO) {
+      errors.push(
+        `Strict: positional ratio ${(positionalRatio * 100).toFixed(1)}% > ${(STRICT_MAX_POSITIONAL_RATIO * 100).toFixed(0)}% — transcript có thể sai ngôn ngữ hoặc lệch alignment`,
+      );
+    }
+
+    const trustedRatio =
+      report.trustedRatio ??
+      (report.scriptWordCount
+        ? (report.exactCount + report.fuzzyCount) / report.scriptWordCount
+        : 0);
+    if (trustedRatio < STRICT_MIN_TRUSTED_RATIO) {
+      errors.push(
+        `Strict: exact+fuzzy ${(trustedRatio * 100).toFixed(1)}% < ${(STRICT_MIN_TRUSTED_RATIO * 100).toFixed(0)}% — timing không đáng tin`,
+      );
+    }
+
+    if (report.interpolatedCount > 0) {
+      errors.push(
+        `Strict: ${report.interpolatedCount} word(s) interpolated — không cho render`,
+      );
+    }
   }
 
   let whisperLeakCount = 0;
@@ -205,19 +235,23 @@ function main() {
     console.error("\n=== CAPTION SYNC FAIL ===\n");
     errors.forEach((e) => console.error(`✗ ${e}`));
     console.error(
-      "\nSửa: chạy lại sync-caption-from-script.mjs; đọc caption-sync-report.json",
+      "\nSửa: chạy transcribe-audio.mjs → sync-caption-from-script.mjs; đọc caption-sync-report.json",
     );
     process.exit(1);
   }
 
+  const transcriptRel = resolveTranscriptPath(projectDir)
+    ? path.relative(projectDir, resolveTranscriptPath(projectDir))
+    : "?";
+
   console.log(
-    `✓ Caption sync OK — ${captionWords.length} words, script match ${(scriptMatchRatio * 100).toFixed(0)}%, duration ~${totalVideoSec}s`,
+    `✓ Caption sync OK — ${captionWords.length} words, script match ${(scriptMatchRatio * 100).toFixed(0)}%, duration ~${totalVideoSec}s, transcript=${transcriptRel}`,
   );
 
-  if (opts.strict && report?.interpolatedCount > 0) {
-    console.warn(
-      `⚠ strict: ${report.interpolatedCount} word(s) interpolated — kiểm tra caption-sync-report.json`,
-    );
+  if (opts.strict && report) {
+    const trusted = ((report.trustedRatio ?? 0) * 100).toFixed(0);
+    const positional = ((report.positionalRatio ?? 0) * 100).toFixed(0);
+    console.log(`  trusted(exact+fuzzy)=${trusted}%, positional=${positional}%`);
   }
 
   process.exit(0);

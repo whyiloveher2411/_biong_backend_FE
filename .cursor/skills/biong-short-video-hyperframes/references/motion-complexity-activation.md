@@ -105,11 +105,11 @@ window.__timelines["beat_1"] = tl; // key === data-composition-id trong composit
 
 | Vấn đề | Fix |
 |--------|-----|
-| Animation xong sớm, frame đứng chờ VO | `data-duration` beat = word timestamps đến beat tiếp theo |
-| Timeline ngắn hơn clip | `data-duration` host ≥ GSAP active range; ambient loop finite trong window |
-| Caption lệch | `embedded-captions` + transcribe word-level |
+| Animation xong sớm, frame đứng chờ VO | `data-start`/`data-duration` beat theo `assets/beat-map.json` (từ `map-markers-to-timing.mjs`) |
+| Timeline ngắn hơn clip | `data-duration` host ≥ GSAP active range; tổng beat ≈ `totalVideoSec` |
+| Caption lệch | `transcribe-audio.mjs` → sync pipeline; verify `--strict` (positional ≤15%) |
 
-Preflight: `animation-map.mjs` — kiểm tra dead zones (khoảng trống không motion).
+Preflight: `check-beat-timing.mjs` + `animation-map.mjs` — kiểm tra dead zones và lệch beat-map.
 
 ---
 

@@ -48,7 +48,7 @@ Server: production tags strip; 3 tag non-verbal giữ cho OmniVoice; fallback Vi
 Đọc §3 pacing + §4 punctuation.
 
 - Timeline 60–180s, markers, HASCAS
-- **Gắn tag** theo allowlist OmniVoice (13 tag) — tối đa 2 / video; xem omnivoice-expressive-tags.md
+- **Gắn tag** theo allowlist OmniVoice (13 tag); ghi đủ trong `expressive_plan` — xem omnivoice-expressive-tags.md
 - Mood qua `. . .`, `?!`, câu ngắn — **không** mood tag
 - Metadata `expressive_plan: { hook, agitate, solve, cta }`
 
@@ -97,6 +97,5 @@ Prosody + non-verbal tags đổi duration MP3. Phase 2:
 
 - SSML hoặc XML
 - `[happy]` / `[singing]` / `[gasp]` / mood tag
-- Chèn tag sau humanize
-- >2 tag non-verbal / video
+- Chèn tag sau humanize hoặc thêm tag ngoài `expressive_plan`
 - Câu >12 từ liên tiếp

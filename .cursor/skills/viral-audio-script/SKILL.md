@@ -7,7 +7,7 @@ description: Bản nháp HASCAS 60–180s kèm non-verbal tags OmniVoice (k2-fsa
 
 Tạo **bản nháp** HASCAS 60–180 giây — **đã gắn non-verbal tags** theo [omnivoice-expressive-tags.md](biong-short-video-hyperframes/references/omnivoice-expressive-tags.md).
 
-**CHỈ allowlist OmniVoice (13 tag)** — tối đa **2 / video**. **Cấm** `[gasp]`, mood tag (`[happy]`, `[singing]`, …).
+**CHỈ allowlist OmniVoice (13 tag)**. **Cấm** `[gasp]`, mood tag (`[happy]`, `[singing]`, …). **Không** giới hạn số lượng tag cứng — ghi đủ trong `expressive_plan`.
 
 **Output là draft** — bắt buộc `/humanize-audio-script` → `/audit-audio-script` trước `save_audio_script`.
 
@@ -29,12 +29,11 @@ Tạo **bản nháp** HASCAS 60–180 giây — **đã gắn non-verbal tags** t
 
 ## Non-verbal tags — gắn khi viết
 
-| Section | Tag gợi ý | Quota |
-|---------|-----------|-------|
-| Hook | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` | 0–1 |
-| Agitate | `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-ah/oh/wa/yo]` | 0–1 |
-| Twist / CTA | `[laughter]`, `[confirmation-en]` | 0–1 |
-| **Tổng** | allowlist 13 tag | **≤2 / video** |
+| Section | Tag gợi ý |
+|---------|-----------|
+| Hook | `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]` |
+| Agitate | `[sigh]`, `[dissatisfaction-hnn]`, `[surprise-ah/oh/wa/yo]` |
+| Twist / CTA | `[laughter]`, `[confirmation-en]` |
 
 Mood Hook/Agitate/CTA: **neutral + `?!` + `. . .`** — không mood tag. **Cấm** `[gasp]`.
 

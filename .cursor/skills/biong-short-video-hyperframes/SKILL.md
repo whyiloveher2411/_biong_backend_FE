@@ -35,7 +35,7 @@ Toggle **TTS tự động** + chọn **nền tảng TTS** (checkbox) trên từn
 | Bước | MCP | Kết quả |
 |------|-----|---------|
 | Script | `save_audio_script` | `audio_script` + markers + OmniVoice non-verbal tags (allowlist 13 tag) |
-| TTS | `generate_narration_tts` (giữ 3 tag non-verbal; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
+| TTS | `generate_narration_tts` (giữ non-verbal tags allowlist; strip `[BGM]`/`[SFX]`/`[Dừng]`) | `audio_file` |
 | Render | HyperFrames cinematic | `output.mp4` |
 | Upload | `upload_agent_video` | `agent_video_url` |
 

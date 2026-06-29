@@ -18,18 +18,19 @@
 ## Pipeline 5 bước (bắt buộc — dùng script, không hand-author)
 
 1. **Đọc script** — `get_context.audio_script` → lưu `assets/audio-script.txt`; strip markers `[BGM: ...]`, `[Dừng Ns]`, `[SFX: ...]`, **và thẻ OmniVoice non-verbal** (allowlist 13 tag — xem omnivoice-expressive-tags.md; caption không hiển thị).
-2. **Transcribe** — `hyperframes transcribe` trên `audio_file` → `transcript.json` hoặc `assets/transcript.json` (`words[].start`, `words[].end`).
+2. **Transcribe (bắt buộc)** — `node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs .` → `transcript.json` + `assets/transcribe-manifest.json`. Đọc `language` từ `assets/agent-metadata.json` (mặc định `vi`). **Cấm** `npx hyperframes transcribe` không flag — CLI default `small.en` dịch non-English sang tiếng Anh. Chi tiết: [transcribe-locale.md](transcribe-locale.md).
 
 **Sau MCP TTS OmniVoice:** bắt buộc transcribe **lại** MP3 mới — prosody `. . .` và emotion tags làm đổi duration so với ước lượng script.
 3. **Sync tự động** — chạy từ thư mục project:
 
 ```bash
+node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs .
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs .
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs . --strict
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs .
 ```
 
-4. **Self-check** — `verify-caption-sync.mjs` exit 0 bắt buộc trước render. FAIL → đọc `assets/caption-sync-report.json`, sửa, sync lại (tối đa 2 vòng).
+4. **Self-check** — `verify-caption-sync.mjs --strict` exit 0 bắt buộc trước render. FAIL → đọc `assets/caption-sync-report.json` (`positionalRatio`, `trustedRatio`, `transcriptPath`); chạy lại `transcribe-audio.mjs` → sync (tối đa 2 vòng).
 5. **Wire** — host clip `compositions/captions.html` trong `index.html` — z-index 9000.
 
 **Cấm** copy text từ `transcript.json` vào caption — Whisper hay sai chính tả tiếng Việt.

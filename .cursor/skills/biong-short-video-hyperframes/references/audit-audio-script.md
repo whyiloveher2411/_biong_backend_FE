@@ -26,7 +26,7 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/humanize-audio-script
 | `hook_loop_collision` | warning→critical nếu CTA = hook | CTA lặp hook không bridge | Viết CTA mới nối `loop_hook_line` |
 | `weak_prosody` | warning | Solve thiếu `...` hoặc `. . .` | Thêm punctuation tuning §4 vi-voiceover |
 | `sentence_too_long` | critical | Câu >12 từ (trừ dòng `[BGM]`/`[SFX]`) | Tách + nối narrative |
-| `tag_quota_exceeded` | critical | >2 non-verbal tags | Giữ theo `expressive_plan`, cấm thêm |
+| `disallowed_tag` | critical | Tag ngoài allowlist 13 tag (vd. `[gasp]`) | Thay bằng tag allowlist hoặc bỏ |
 | `missing_sfx` | critical | Thiếu `[SFX: ...]` hook | Thêm `[SFX: vine boom]` |
 | `duration_short` | warning | <60s word budget (~2.5 từ/giây) | Mở rộng Solve từ `narrative_chain` |
 | `missing_but_therefore` | warning | <3 mốc But/Therefore trong 60–90s | Thêm liên từ nhân quả/đối lập |
@@ -84,7 +84,7 @@ Chưa dừng lại ở đó đâu nhé ... cuộc chiến nhân tài đang cực
 Bạn nghĩ sao về tương lai của Google? . . . Bình luận bên dưới ... và theo dõi kênh để không bỏ lỡ nhé!
 ```
 
-**Lưu ý tag:** Ví dụ trên có 3 tag (`[surprise-ah]`, `[sigh]`, `[laughter]`) — **vượt quota ≤2**. Khi audit thực tế: giữ tag theo `expressive_plan` (vd. chỉ `[sigh]` + `[laughter]`), không thêm tag thừa nếu quota đã đủ.
+**Lưu ý tag:** Ví dụ trên có 3 tag (`[surprise-ah]`, `[sigh]`, `[laughter]`) — hợp lệ khi khớp `expressive_plan`. Audit chỉ kiểm tra tag nằm trong allowlist và không thêm/xóa ngoài plan.
 
 ---
 
@@ -137,7 +137,7 @@ Bạn nghĩ sao về tương lai của Google? . . . Bình luận bên dưới .
 - [ ] ≥3 mốc But/Therefore (script 60–90s)
 - [ ] Không từ blocklist liệt kê
 - [ ] CTA không lặp hook verbatim
-- [ ] ≤2 non-verbal tags; khớp `expressive_plan`
+- [ ] Non-verbal tags khớp `expressive_plan`; chỉ allowlist 13 tag
 - [ ] Câu ≤12 từ; có `[SFX: ...]` hook
 - [ ] Metadata lưu `script_diagnosis` (audit trail)
 

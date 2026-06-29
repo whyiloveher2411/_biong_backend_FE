@@ -47,7 +47,7 @@
 
 | Lỗi | Hậu quả |
 |-----|---------|
-| Humanize thêm `[laughter]` mới | Vượt quota — giọng kịch quá |
+| Humanize thêm tag mới ngoài `expressive_plan` | expressive_plan lệch; giọng kịch quá |
 | Dùng `[happy]`, `[gasp]` hoặc tag ngoài allowlist | Server reject save_audio_script |
 | Di chuyển `[sigh]` sang câu khác | expressive_plan lệch |
 | Thêm "Tiếp theo / Ngoài ra" khi polish | Structural summarization quay lại |
@@ -58,7 +58,7 @@
 ## Checklist
 
 - [ ] Số tag và loại tag khớp `expressive_plan`
-- [ ] ≤2 non-verbal / video — chỉ allowlist 13 tag (xem omnivoice-expressive-tags.md)
+- [ ] Chỉ allowlist 13 tag (xem omnivoice-expressive-tags.md)
 - [ ] Không SSML; câu ≤12 từ
 - [ ] Không từ blocklist liệt kê
 - [ ] But/Therefore còn nguyên sau polish

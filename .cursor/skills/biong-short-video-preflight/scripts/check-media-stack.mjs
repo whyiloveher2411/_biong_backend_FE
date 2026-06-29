@@ -7,6 +7,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { resolveTranscriptPath, loadTranscriptWords } from "./lib/transcript-path.mjs";
 
 const args = process.argv.slice(2);
 const strict = args.includes("--strict");
@@ -39,28 +40,40 @@ function scriptHasSfxTag() {
 }
 
 function parseTotalVideoSec() {
-  const candidates = [
-    "transcript.json",
-    "assets/transcript.json",
-    "assets/caption-words.json",
-  ];
-  for (const rel of candidates) {
-    if (!exists(rel)) continue;
+  const reportPath = path.join(root, "assets/caption-sync-report.json");
+  if (exists("assets/caption-sync-report.json")) {
     try {
-      const data = JSON.parse(read(rel));
-      if (typeof data.duration === "number" && data.duration > 0) {
-        return data.duration;
+      const report = JSON.parse(read("assets/caption-sync-report.json"));
+      if (report.totalVideoSec > 0) return report.totalVideoSec;
+    } catch {
+      /* skip */
+    }
+  }
+
+  const transcriptPath = resolveTranscriptPath(root);
+  if (transcriptPath) {
+    try {
+      const { words } = loadTranscriptWords(root);
+      if (words.length > 0) {
+        return Math.max(...words.map((w) => w.end));
       }
-      const words = data.words;
-      if (Array.isArray(words) && words.length > 0) {
-        const last = words[words.length - 1];
-        const end = Number(last?.end ?? 0);
+    } catch {
+      /* skip */
+    }
+  }
+
+  if (exists("assets/caption-words.json")) {
+    try {
+      const data = JSON.parse(read("assets/caption-words.json"));
+      if (Array.isArray(data) && data.length > 0) {
+        const end = Number(data[data.length - 1]?.end ?? 0);
         if (end > 0) return end;
       }
     } catch {
       /* skip */
     }
   }
+
   return 0;
 }
 
