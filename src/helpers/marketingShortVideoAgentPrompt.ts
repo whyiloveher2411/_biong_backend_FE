@@ -7,9 +7,9 @@ export type ShortVideoAgentPromptPhase =
     | '2'
     | 'audio_script'
     | 'render_video'
-    | 'full'
-    | 'full_pipeline'
-    | 'pipeline';
+    | 'continue'
+    | 'post_approval'
+    | '3';
 
 export type ShortVideoAgentPromptResponse = {
     success?: boolean;
@@ -21,7 +21,10 @@ export type ShortVideoAgentPromptResponse = {
     agent_workflow?: {
         phase?: string;
         has_script?: boolean;
+        script_approved?: boolean;
+        ready_for_continue?: boolean;
         ready_for_video?: boolean;
+        ready_for_phase_2?: boolean;
         has_agent_video?: boolean;
         agent_tts_auto?: boolean;
         workflow_mode?: string;
@@ -40,15 +43,18 @@ function normalizePromptPhase(phase: ShortVideoAgentPromptPhase): string {
     if (phase === 'render_video' || phase === '2') {
         return '2';
     }
-    if (phase === 'full' || phase === 'full_pipeline' || phase === 'pipeline') {
-        return 'full';
+    if (phase === 'continue' || phase === 'post_approval' || phase === '3') {
+        return 'continue';
     }
     return phase;
 }
 
 export function resolveAgentPromptPhaseFromAction(phaseKey: string): ShortVideoAgentPromptPhase {
+    if (phaseKey === 'continue' || phaseKey === 'post_approval') {
+        return 'continue';
+    }
     if (phaseKey === 'full_pipeline' || phaseKey === 'full' || phaseKey === 'pipeline') {
-        return 'full';
+        return 'continue';
     }
     if (phaseKey === 'render_video') {
         return '2';
@@ -131,8 +137,8 @@ export async function copyShortVideoAgentPromptToClipboard(
 }
 
 function normalizedPhaseLabel(phase: ShortVideoAgentPromptPhase): string {
-    if (phase === 'full' || phase === 'full_pipeline' || phase === 'pipeline') {
-        return 'Đã copy prompt agent toàn pipeline vào clipboard';
+    if (phase === 'continue' || phase === 'post_approval' || phase === '3') {
+        return 'Đã copy prompt agent tiếp tục (TTS + render) vào clipboard';
     }
     if (phase === '1' || phase === 'audio_script') {
         return 'Đã copy prompt agent bước 1 (script) vào clipboard';

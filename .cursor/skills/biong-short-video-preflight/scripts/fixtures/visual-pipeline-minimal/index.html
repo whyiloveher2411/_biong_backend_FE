@@ -1,0 +1,26 @@
+<!DOCTYPE html><html><head><style>html,body{margin:0;width:1080px;height:1920px}</style></head>
+<body>
+<div id="root" data-composition-id="main">
+  <div class="clip hf-ambient-layer" data-composition-src="compositions/ambient-layer.html"
+       data-composition-id="ambient" data-start="0" data-duration="60" data-track-index="2"
+       style="position:absolute;inset:0;z-index:8;pointer-events:none"></div>
+  <section class="clip scene" style="position:absolute;inset:0;z-index:320" data-start="0" data-duration="30" data-track-index="1">
+    <div data-composition-src="compositions/data-chart.html" style="z-index:350">hero</div>
+  </section>
+  <div class="clip hf-overlay-caption" data-composition-src="compositions/captions.html"
+       data-start="0" data-duration="60" data-track-index="20"
+       style="position:absolute;inset:0;z-index:9000;pointer-events:none"></div>
+  <div class="clip hf-overlay-brand" data-composition-src="compositions/brand-watermark.html"
+       data-start="0" data-duration="60" data-track-index="21"
+       style="position:absolute;inset:0;z-index:9500;pointer-events:none"></div>
+  <audio class="clip" src="../assets/audio/bgm.mp3" data-start="0" data-duration="60" data-track-index="11" data-volume="0.3"></audio>
+  <audio class="clip" src="../assets/audio/sfx_hook.mp3" data-start="0" data-duration="2" data-track-index="12" data-volume="0.45"></audio>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+window.__timelines=window.__timelines||{};
+const tl=gsap.timeline({paused:true});
+tl.fromTo(".scene",{opacity:0},{opacity:1,duration:0.5},0);
+window.__timelines["main"]=tl;
+</script>
+</body></html>

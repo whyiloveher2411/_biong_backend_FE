@@ -15,7 +15,7 @@ Xây `narrative_chain` (But/Therefore) **trước** khi viết script.
 ### 1. The Hook (điểm móc)
 
 - Câu gây sốc, số liệu tranh cãi, myth cần phá
-- `draft_line` **≤12 từ** — đặt lên đầu script, giữ người xem trong 3 giây đầu
+- `draft_line` **ngắn gọn, gây tò mò** — đặt lên đầu script, giữ người xem trong 3 giây đầu (plain language, xem [plain-language-storytelling-vi.md](plain-language-storytelling-vi.md))
 
 ### 2. The Tension (kịch tính)
 

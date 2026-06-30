@@ -21,7 +21,7 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 {
   "hook": {
     "angle": "Số shock / myth-bust / câu hỏi nỗi sợ",
-    "draft_line": "Một câu mở ≤12 từ"
+    "draft_line": "Một câu mở ngắn gọn, gây tò mò"
   },
   "tension": {
     "villain": "Thói quen xấu / sai lầm",
@@ -39,7 +39,7 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
       "therefore": "Hậu quả / insight kéo câu tiếp"
     }
   ],
-  "perspective": "Góc nhìn kể chuyện — vd. reviewer TikTok, người dùng thực tế",
+  "perspective": "Kể chuyện cho bạn 12 tuổi — từ đơn giản, ví dụ đời",
   "loop_hook_line": "Câu cuối nối mạch draft_line — cho infinite loop",
   "beat_suggestions": {
     "hook": "meme SFX + kinetic slam + stock hook",
@@ -52,7 +52,7 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 
 ## Quy tắc
 
-1. **Hook** — `draft_line` **≤12 từ**; số liệu / myth-bust / câu hỏi
+1. **Hook** — `draft_line` ngắn gọn, gây tò mò; plain language
 2. **Tension** — villain rõ, stakes cụ thể
 3. **Takeaway** — insight nhớ được; **cấm** "bước 1, bước 2" hoặc liệt kê số thứ tự
 4. **narrative_chain** — ≥1 link `{ cause, but, therefore }`; mỗi fact nguồn phải nằm trong chuỗi nhân quả
@@ -68,6 +68,6 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 
 ## Bước tiếp
 
-`/hyperframes-creative` → `/viral-audio-script` → `/humanize-audio-script` → `/audit-audio-script` → `save_audio_script`
+`/hyperframes-creative` → `/viral-audio-script` → `/audit-audio-script` → `save_audio_script`
 
 Tham khảo: `biong-short-video-hyperframes/references/extract-core-signals.md`

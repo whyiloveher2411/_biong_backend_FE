@@ -69,6 +69,30 @@ function hasOpaqueBodyBackground(html) {
   return true;
 }
 
+function collectZIndexValues(html) {
+  const values = new Set();
+  const re = /z-index\s*:\s*(\d+)/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    values.add(parseInt(m[1], 10));
+  }
+  return [...values];
+}
+
+function countDepthBands(zValues) {
+  const bands = [
+    [0, 10],
+    [80, 150],
+    [200, 450],
+    [450, 800],
+  ];
+  let hit = 0;
+  for (const [lo, hi] of bands) {
+    if (zValues.some((z) => z >= lo && z <= hi)) hit++;
+  }
+  return hit;
+}
+
 // --- Required files ---
 const requiredFiles = [
   "index.html",
@@ -182,15 +206,38 @@ if (captionIdx >= 0 && watermarkIdx >= 0 && watermarkIdx < captionIdx) {
   );
 }
 
-// --- Beat z-index too high ---
+// --- Beat z-index vs caption ---
+const allZ = collectZIndexValues(indexHtml);
+const contentZ = allZ.filter((z) => z < 9000);
+const tooHigh = contentZ.filter((z) => z > 850);
+if (tooHigh.length) {
+  errors.push(
+    `Content z-index > 850 (${tooHigh.join(", ")}) — max ~800 trước caption 9000`,
+  );
+}
+
+const depthBands = countDepthBands(contentZ);
+if (depthBands < 2) {
+  errors.push(
+    `Z-depth phẳng: chỉ ${depthBands} band trong stack 0–10 / 80–150 / 200–450 / 450–800 — cần ≥2 (đọc overlay-layer-stack.md)`,
+  );
+}
+
+const hasAmbientHost =
+  /ambient-layer\.html/i.test(indexHtml) || /hf-ambient-layer/i.test(indexHtml);
+if (!hasAmbientHost) {
+  errors.push(
+    "index.html: thiếu ambient layer host (compositions/ambient-layer.html hoặc class hf-ambient-layer)",
+  );
+}
+
 const beatHighZ = indexHtml.matchAll(
   /class="[^"]*scene[^"]*"[^>]*style="[^"]*z-index\s*:\s*(\d+)/gi,
 );
 for (const m of beatHighZ) {
-  if (parseInt(m[1], 10) > 100) {
-    errors.push(
-      `Beat scene z-index=${m[1]} > 100 — sẽ che caption (9000). Hạ beat ≤50`,
-    );
+  const z = parseInt(m[1], 10);
+  if (z > 850) {
+    errors.push(`Beat scene z-index=${z} > 850 — sẽ conflict caption stack`);
   }
 }
 

@@ -4,14 +4,24 @@ MCP server cho Cursor agent — workflow video + **media search** (Pexels stock 
 
 **Phiên bản:** 2.2.0
 
-## Chế độ workflow
+## Luồng workflow (3 bước)
 
-| `agent_tts_auto` | Workflow | Copy prompt CMS |
-|------------------|----------|-----------------|
-| `false` (mặc định) | Script → admin MP3 → render | Bước 1 + bước 2 |
-| `true` | Script → TTS MCP → render → upload | Một prompt toàn pipeline |
+| Bước | Ai | Kết quả |
+|------|-----|---------|
+| 1 | Agent Phase 1 | `save_audio_script` → **DỪNG** |
+| Giữa | Admin CMS | **Duyệt script** → enqueue `agent_narration_tts` |
+| Giữa | Queue worker | `audio_file` (OmniVoice chain) |
+| 2 | Agent Phase 2 | `visual_shot_plan` → render → upload — **CẤM TTS MCP** |
 
-**TTS chain (auto):** OmniVoice local → VieNeu → Saydi → Vbee. Clone `audio_demo`, `num_step=64`, speed `1.15`.
+Copy prompt CMS: **bước 1** (script) → chờ audio → **bước 2** (render-only).
+
+Toggle `agent_tts_auto` + nền tảng TTS trên drawer chỉ cấu hình chain CMS queue.
+
+**Phase 1 (4 bước):** extract → creative → viral (one-pass) → audit → save → **DỪNG**
+
+**Phase 2:** gate `audio_file` bắt buộc → shot-plan → transcribe → render
+
+**TTS chain (CMS queue):** OmniVoice local → VieNeu → Saydi → Vbee.
 
 **Prereq OmniVoice** (`_biong_backend`):
 
@@ -29,15 +39,12 @@ Agent tìm media — **chỉ trả URL**, tự tải về `storage/agent-renders
 
 | Tool | Provider | Mô tả |
 |------|----------|--------|
-| `short_video_search_stock_media` | Pexels | `media_type`: image \| video — ≥1 mỗi beat |
-| `short_video_search_meme_sound` | Myinstants | SFX hook — vine boom, sấm sét — giây 0 |
-| `short_video_search_bgm` | Pixabay | Nhạc nền nhẹ — 1 track/video, `min_duration_sec` sau transcribe |
+| `short_video_search_stock_media` | Pexels | `bg_media` only — không full-bleed hero |
+| `short_video_search_meme_sound` | Myinstants | SFX hook — giây 0 |
+| `short_video_search_bgm` | Pixabay | Nhạc nền — 1 track/video |
+| `short_video_search_giphy` | Giphy | Sticker/gif accent — theo visual_shot_plan |
 
-**Backend `.env`:** `PEXELS_API_KEY`, `PIXABAY_API_KEY` (Audio API)
-
-Pixabay BGM: ưu tiên Audio API (`/api/audio/`). Nếu key chưa có quyền audio (403) → fallback scrape/catalog.
-
-Giphy vẫn có backend PHP nhưng **không còn MCP**. Myinstants meme sound **đã khôi phục** MCP.
+**Backend `.env`:** `PEXELS_API_KEY`, `PIXABAY_API_KEY`, `GIPHY_API_KEY`
 
 ## Cài HyperFrames skills (một lần)
 
@@ -52,12 +59,14 @@ npx skills add https://github.com/greensock/gsap-skills
 | Tool | Mô tả |
 |------|--------|
 | `short_video_get_context` | Creative brief + production_playbook (media_assets) |
-| `short_video_save_audio_script` | Script viral + metadata markers |
-| `short_video_generate_narration_tts` | TTS auto — OmniVoice local→VieNeu→Saydi→Vbee |
+| `short_video_save_audio_script` | Script viral — chờ admin duyệt CMS |
+| `short_video_update_agent_status` | Lưu `visual_shot_plan` (Phase 2) |
+| `short_video_generate_narration_tts` | CMS queue TTS nội bộ — **CẤM agent Phase 2**; reject nếu `audio_file` đã có |
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |
 | `short_video_search_bgm` | Nhạc nền Pixabay |
-| `short_video_upload_agent_video` | Upload MP4 → S3 (native FormData ≤20MB; curl -F >20MB) |
+| `short_video_search_giphy` | GIF/sticker Giphy accent |
+| `short_video_upload_agent_video` | Upload MP4 → S3 |
 
 ## Upload MP4
 

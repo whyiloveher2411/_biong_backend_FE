@@ -1,6 +1,6 @@
 # HyperFrames skill routing — Short Video Agent (Biong)
 
-Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 render từ `audio_file`.
+Workflow **3 bước**: phase 1 `audio_script` → admin **duyệt** → phase 2 render (manual: upload MP3 trước; auto: prompt `continue` TTS+render).
 
 **Luật vàng:** MP3 đã có sẵn → **không** chạy TTS pipeline của `/faceless-explainer`. Orchestrator chính là `/general-video`.
 
@@ -14,29 +14,28 @@ Workflow **2 bước**: phase 1 `audio_script` → admin upload MP3 → phase 2 
 | `content_plain_text` có URL site/sản phẩm | + `/website-to-video` (tùy chọn) | Chỉ capture brand/screenshot nếu URL rõ ràng; không thay orchestrator |
 | Topic explainer thuần (không promo) | Borrow `/faceless-explainer` visual-design | Chỉ section_plan, diagram, typography — **không** TTS |
 | Caption karaoke | `/embedded-captions` | **Bắt buộc** — sub-composition `compositions/captions.html` |
-| Transition stinger / kinetic accent | `/motion-graphics` | Beat ngắn, không thay narration |
+| Transition / registry UI | `/motion-graphics` | Catalog-map → data-chart, flowchart, social cards |
+| Ambient secondary motion | `/continuous-motion` | `ambient-layer.html` + dual timeline |
 | GitHub PR | `/pr-to-video` | **Không** dùng trong pipeline marketing Biong |
 
 ---
 
-## Phase 1 — audio_script viral (OmniVoice văn nói)
+## Phase 1 — audio_script (4 bước)
 
 1. `short_video_get_context` → `creative_brief.content_plain_text`
-2. Đọc [viral-retention-structure.md](viral-retention-structure.md) + [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) + [omnivoice-speech-script.md](omnivoice-speech-script.md)
-3. `/extract-core-signals` → hook, tension, takeaway, **narrative_chain**, loop_hook_line
-4. `/hyperframes-creative` → **Narrative Flow But/Therefore** + góc nhìn — đọc [narrative-flow-vi.md](narrative-flow-vi.md)
-5. `/viral-audio-script` → bản nháp HASCAS 60–180s + expand narrative_chain — **cấm structural summarization**
-6. `/humanize-audio-script` → §2 từ đệm — giữ expressive tag slots + But/Therefore
-7. `/audit-audio-script` → QA + sửa lỗi — **pass bắt buộc** trước save
-8. `save_audio_script({ text, metadata })` → **DỪNG**
+2. `/extract-core-signals` → hook, tension, takeaway, **narrative_chain**
+3. `/hyperframes-creative` → Narrative Flow + plain language
+4. `/viral-audio-script` → script hoàn chỉnh one-pass (đọc [plain-language-storytelling-vi.md](plain-language-storytelling-vi.md))
+5. `/audit-audio-script` → QA script — **pass bắt buộc**
+6. `save_audio_script` → **DỪNG** — chờ admin duyệt
 
-Docs: [extract-core-signals.md](extract-core-signals.md) · [narrative-flow-vi.md](narrative-flow-vi.md) · [audit-audio-script.md](audit-audio-script.md) · [viral-audio-script.md](viral-audio-script.md) · [humanize-audio-script.md](humanize-audio-script.md) · [vi-voiceover-naturalization.md](vi-voiceover-naturalization.md) · [omnivoice-speech-script.md](omnivoice-speech-script.md)
-
-**Cấm:** `generate_narration_tts`, Kokoro, render HyperFrames, tóm tắt học thuật, **structural summarization**, **save khi audit chưa pass**
+**Cấm:** `visual_shot_plan`, `generate_narration_tts`, render, structural summarization
 
 ---
 
 ## Phase 2 — render (thứ tự đọc skill)
+
+**Bước 0 (bắt buộc):** Sinh `visual_shot_plan` từ `audio_script` **đã duyệt** + markers → `short_video_update_agent_status({ metadata: { visual_shot_plan } })` — [visual-shot-plan.md](visual-shot-plan.md)
 
 Đọc **theo thứ tự** trước khi viết HTML:
 
@@ -49,19 +48,23 @@ Docs: [extract-core-signals.md](extract-core-signals.md) · [narrative-flow-vi.m
 | 5 | `/hyperframes-creative` | `video-composition.md`, palette, `audio-reactive.md` — **trước beat HTML** |
 | 6 | Kinetic typography | [kinetic-typography-brief.md](kinetic-typography-brief.md) — mindset motion graphics |
 | 7 | Typography font | [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — **trước beat HTML** |
-| 8 | Viral pacing | [viral-retention-structure.md](viral-retention-structure.md) — beat map timeline |
-| 9 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
-| 10 | Caption contract | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — script text + Whisper timing |
-| 11 | `/embedded-captions` + `/hyperframes-registry` | Registry caption blocks |
-| 12 | `/hyperframes-media` | `transcribe` MP3 |
-| 13 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
-| 14 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — caption 9000, watermark 9500 |
-| 15 | **Preflight** | `/biong-short-video-preflight` — check-overlay-stack.mjs |
-| 16 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
-| 17 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
-| 18 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
-| 19 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
-| 20 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) — lint + inspect trước render |
+| 8 | Viral pacing | [viral-retention-structure.md](viral-retention-structure.md) |
+| 8b | Visual shot-plan | [visual-shot-plan.md](visual-shot-plan.md) — từ metadata |
+| 9 | `/motion-graphics` | `agent/skills/motion-graphics/catalog-map.md` — registry pick |
+| 10 | `/continuous-motion` | [continuous-motion-patterns.md](continuous-motion-patterns.md) — **trước beat HTML** |
+| 11 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
+| 10 | Caption contract | [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) |
+| 12 | `/embedded-captions` + `/hyperframes-registry` | Caption + hero registry blocks |
+| 13 | `/hyperframes-media` | transcribe MP3 |
+| 14 | Media MCP | [media-mcp-activation.md](media-mcp-activation.md) + giphy + lottie |
+| 15 | Brand watermark | [spacedev-brand-watermark.md](spacedev-brand-watermark.md) |
+| 16 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — z 0–800 + 9000/9500 |
+| 17 | **Preflight** | `/biong-short-video-preflight` — continuous + visual-density + overlay |
+| 18 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
+| 19 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
+| 20 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
+| 21 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
+| 22 | **`/hyperframes-cli`** | [blank-frame-audit.md](blank-frame-audit.md) |
 
 GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 
@@ -101,8 +104,14 @@ Mọi visual element trong beat:
 cd storage/agent-renders/{id}/my-video
 npx hyperframes add caption-pill-karaoke
 npx hyperframes add caption-kinetic-slam
-# + transition/VFX block theo beat map
+# Theo visual_shot_plan:
+npx hyperframes add data-chart
+npx hyperframes add flowchart
+npx hyperframes add grain-overlay
+npx hyperframes add domain-warp-dissolve
 ```
+
+Đọc `visual_shot_plan` từ get_context — không install blind.
 
 Chi tiết: [motion-complexity-activation.md](motion-complexity-activation.md)
 
@@ -114,7 +123,9 @@ Sau khi viết beat HTML — đọc [blank-frame-audit.md](blank-frame-audit.md)
 
 ```bash
 cd storage/agent-renders/{id}/my-video
-node ../../../../.cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs .
+node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs .
+node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs .
+node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs .
 npx hyperframes lint
 npx hyperframes inspect --json
 node .agents/skills/hyperframes-animation/scripts/animation-map.mjs .

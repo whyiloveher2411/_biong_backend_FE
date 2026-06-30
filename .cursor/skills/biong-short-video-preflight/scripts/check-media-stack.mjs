@@ -157,7 +157,12 @@ if (strict && exists("media-plan.md")) {
   if (!/bgm_global/i.test(plan)) {
     warnings.push("media-plan.md: missing bgm_global row (recommended)");
   }
-} else if (strict && needsSfx) {
+  if (!/hero_type|registry_block/i.test(plan)) {
+    warnings.push(
+      "media-plan.md: thiếu cột hero_type/registry_block — đọc media-mcp-activation.md",
+    );
+  }
+} else if (strict) {
   warnings.push("missing media-plan.md (recommended deliverable)");
 }
 

@@ -37,6 +37,19 @@ export type ShortVideoWorkflowStatus = {
     message?: string | { content?: string };
 };
 
+export function resolveMarketingPostIdFromShortVideo(
+    post: JsonFormat | Record<string, unknown> | null | undefined,
+): number {
+    if (!post) {
+        return 0;
+    }
+
+    const raw = (post as Record<string, unknown>).marketing_post;
+    const id = Number(raw);
+
+    return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
 export type ShortVideoWorkflowStepResult = ShortVideoWorkflowStatus & {
     step?: string;
     action?: string;

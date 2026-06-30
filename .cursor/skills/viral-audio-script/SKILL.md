@@ -1,65 +1,53 @@
 ---
 name: viral-audio-script
-description: Bản nháp HASCAS 60–180s kèm non-verbal tags OmniVoice (k2-fsa/OmniVoice). Dùng sau /hyperframes-creative; bắt buộc /humanize-audio-script rồi /audit-audio-script trước save.
+description: Script HASCAS 60–180s hoàn chỉnh — plain language, từ đệm, OmniVoice tags. One-pass; sau đó /audit-audio-script trước save.
 ---
 
 # viral-audio-script
 
-Tạo **bản nháp** HASCAS 60–180 giây — **đã gắn non-verbal tags** theo [omnivoice-expressive-tags.md](biong-short-video-hyperframes/references/omnivoice-expressive-tags.md).
+Viết **script hoàn chỉnh** HASCAS 60–180 giây **một lần** — gồm non-verbal tags, từ đệm, văn nói tự nhiên. **Không** cần bước `/humanize-audio-script` riêng.
 
-**CHỈ allowlist OmniVoice (3 tag)**. **Cấm** `[gasp]`, mood tag (`[happy]`, `[singing]`, …). **Không** giới hạn số lượng tag cứng — ghi đủ trong `expressive_plan`.
+**CHỈ allowlist OmniVoice (3 tag)**. **Cấm** `[gasp]`, mood tag. Ghi đủ trong `expressive_plan`.
 
-**Output là draft** — bắt buộc `/humanize-audio-script` → `/audit-audio-script` trước `save_audio_script`.
-
-**Cấm Structural Summarization** — expand `narrative_chain` bằng But/Therefore, không liệt kê fact.
+**Cấm Structural Summarization** — expand `narrative_chain` bằng But/Therefore.
 
 **Đọc trước:**
-- `biong-short-video-hyperframes/references/narrative-flow-vi.md` — **bắt buộc**
+- `biong-short-video-hyperframes/references/plain-language-storytelling-vi.md` — **bắt buộc**
+- `biong-short-video-hyperframes/references/narrative-flow-vi.md`
 - `biong-short-video-hyperframes/references/viral-retention-structure.md`
-- `biong-short-video-hyperframes/references/vi-voiceover-naturalization.md` (§1 §3 §4 §6)
+- `biong-short-video-hyperframes/references/vi-voiceover-naturalization.md`
 - `biong-short-video-hyperframes/references/omnivoice-expressive-tags.md`
 - `biong-short-video-hyperframes/references/omnivoice-speech-script.md`
 
+## One-pass writing
+
+1. Input: `core_signals` + góc creative từ `/hyperframes-creative`
+2. Viết **câu tự nhiên** — kể như giải thích cho bạn 12 tuổi
+3. Gắn **2–4 từ đệm** (ừm, thật ra, nói thật…)
+4. **Cấm em dash** `—` — dùng phẩy, câu mới, `. . .`
+5. Gắn tag OmniVoice + `[BGM]` + `[SFX: vine boom]` hook
+
 ## Narrative Flow (bắt buộc)
 
-1. Input: `core_signals.narrative_chain` + `perspective` từ extract
-2. Solve section: **expand chain** — cấm đọc feature/spec theo thứ tự
-3. **Cấm** blocklist từ liệt kê (xem narrative-flow-vi.md §3)
-4. Gom thông số → 1 câu cảm thán/so sánh
+1. Solve: **expand chain** — cấm đọc feature/spec theo thứ tự
+2. **Cấm** blocklist từ liệt kê (narrative-flow-vi.md §3)
+3. Gom thông số → 1 câu cảm thán/so sánh
 
-## Non-verbal tags — gắn khi viết
+## Non-verbal tags
 
 | Section | Tag gợi ý |
 |---------|-----------|
 | Agitate | `[sigh]`, `[dissatisfaction-hnn]` |
 | Twist / CTA | `[laughter]` |
 
-Mood Hook/Agitate/CTA: **neutral + `?!` + `. . .`** — không mood tag. **Cấm** `[gasp]`.
+Mood: **neutral + `?!` + `. . .`** — không mood tag.
 
 ## Quy tắc khác
 
-- Câu **≤12 từ**; **cấm SSML**; cấm tag ngoài allowlist
+- **Cấm SSML**; cấm tag ngoài allowlist
 - **Bắt buộc** `[SFX: vine boom]` ở Hook
-
-## Output (draft + expressive_plan)
-
-```
-[BGM: lofi ambient] [SFX: vine boom] 99% dev dùng HyperFrames sai! . . .
-Tưởng add skill là xong? [sigh] Sai rồi! ... (60–180s)
-```
-
-```json
-{
-  "estimated_duration_sec": 90,
-  "expressive_plan": {
-    "hook": [],
-    "agitate": ["[sigh]"],
-    "solve": [],
-    "cta": ["[laughter]"]
-  }
-}
-```
+- Câu **tự nhiên** — không giới hạn 12 từ
 
 ## Bước tiếp
 
-`/humanize-audio-script` — polish văn, **giữ tag slots**, **giữ But/Therefore**.
+`/audit-audio-script` — QA; chỉ `save_audio_script` khi `pass === true`

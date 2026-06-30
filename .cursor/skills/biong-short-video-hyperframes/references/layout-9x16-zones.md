@@ -33,6 +33,22 @@ Hero anchor portrait: **y ≈ 0.42 × height** (~806px) — không dùng midpoin
 
 ---
 
+## Z-depth theo `z_role` (visual_shot_plan)
+
+| z_role | z-index | Vùng layout |
+|--------|---------|-------------|
+| `bg_mesh` | 0–2 | Full-bleed behind all |
+| `bg_stock` | 3–5 | Stock video/image mờ |
+| `ambient` | 6–10 | ambient-layer.html |
+| `floater` | 80–150 | Stickers, orbs |
+| `hero_chart` / `hero_type` | 200–450 | Hero zone 8–52% |
+| `support` | 450–650 | Support zone 52–78% |
+| `accent_lottie` | 650–800 | Accent trên support |
+
+Registry block host: `style="z-index:320"` (ví dụ) + `data-composition-src` trong hero/support zone.
+
+---
+
 ## Quy tắc cứng
 
 1. **Cấm** `justify-content: center` hoặc `flex-end` trên **root scene** khi có caption — dùng `flex-start` + padding-top.

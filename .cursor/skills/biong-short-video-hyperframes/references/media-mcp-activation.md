@@ -2,13 +2,17 @@
 
 AI agent mặc định bịa đường dẫn `assets/foo.mp3` hoặc bỏ qua nhạc nền. **Bắt buộc** đọc file này phase render (sau transcribe) trước khi viết beat HTML.
 
-Phase 1 script: ghi `[BGM: mood]`, `[SFX: ...]` + `metadata.markers` / `timeline` — không gọi MCP.
+Phase 1: ghi `[BGM: mood]`, `[SFX: ...]` + `metadata.markers` — **không** gọi MCP, **không** shot-plan.
+
+Phase 2: sinh `visual_shot_plan` → lưu `update_agent_status` → MCP theo shot-plan.
+
+**Đọc:** [visual-shot-plan.md](visual-shot-plan.md) — mọi media call theo shot-plan, không search stock blind mỗi beat.
 
 ---
 
 ## Vai trò
 
-Chuyên gia Motion Graphics viral TikTok/Reels — video **cinematic, có B-roll stock + nhạc nền nhẹ**. Giọng đọc vẫn là chính; BGM không lấn narration.
+Chuyên gia Motion Graphics viral — **registry UI hero** + ambient motion + nhạc nền nhẹ. Pexels chỉ **nền** (z 3–5, opacity 0.3–0.6).
 
 ---
 
@@ -16,61 +20,78 @@ Chuyên gia Motion Graphics viral TikTok/Reels — video **cinematic, có B-roll
 
 ### 1. Phân tích ngữ cảnh
 
-- Đọc `audio_script`, word timestamps (transcribe), `metadata.markers`
-- Tính `totalVideoSec` từ transcribe
-- Map mood BGM từ `[BGM: ...]` trong script (fallback: `lofi ambient`)
-- Map mỗi beat → stock visual trigger
+- Đọc `visual_shot_plan`, `audio_script`, transcribe → `totalVideoSec`
+- Map BGM từ `[BGM: ...]` (fallback: `lofi ambient`)
+- Mỗi beat: `hero_mode`, `registry_block`, `accent_media`, `bg_media`
 
-### 2. Gọi MCP (cấm bịa tên file)
+### 2. Gọi MCP + registry (cấm bịa tên file)
 
-**Hook SFX (1 lần / video, giây 0):**
+**Hook SFX (1 lần / video):**
 
 ```text
 short_video_search_meme_sound({ query: "vine boom" })
 ```
 
-Tải → `storage/agent-renders/{id}/assets/audio/sfx_hook.mp3`
+→ `assets/audio/sfx_hook.mp3`
 
 **BGM (1 lần / video):**
 
 ```text
-short_video_search_bgm({
-  query: "lofi ambient",
-  min_duration_sec: totalVideoSec
-})
+short_video_search_bgm({ query: "lofi ambient", min_duration_sec: totalVideoSec })
 ```
 
-Tải → `storage/agent-renders/{id}/assets/audio/bgm.mp3`
+→ `assets/audio/bgm.mp3`
 
-**Stock (mỗi beat):**
+**Stock — chỉ `bg_media`:**
 
 ```text
-short_video_search_stock_media({ query: "...", media_type: "video" })
+short_video_search_stock_media({ query: "abstract dark gradient", media_type: "video" })
 ```
 
-Tải → `storage/agent-renders/{id}/assets/images/`
+→ `assets/images/` — embed z 3–5, **full-bleed** `.stock-bg` 1080×1920 + `object-fit:cover` (chạy `patch-stock-full-bleed.mjs`)
+
+**Giphy accent:**
+
+```text
+short_video_search_giphy({ query: "celebration", media_type: "sticker" })
+```
+
+→ `assets/images/` — floater z 80–150
+
+**Lottie (bundle local):**
+
+```bash
+cp .cursor/skills/biong-short-video-hyperframes/assets/lotties/{id}.json \
+   storage/agent-renders/{id}/my-video/assets/lotties/
+```
+
+→ `window.__hfLottie` — xem [lottie-activation.md](lottie-activation.md)
+
+**Registry hero:**
+
+```bash
+npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
+```
 
 ### 3. Embed HyperFrames
 
-- **BGM global** trong `index.html` root (track 11)
-- Stock relative path trong beat HTML
-- GSAP **paused** timeline — **cấm** `tl.play()`
+- BGM track 11, SFX track 12, narration track 10
+- Registry blocks via `data-composition-src` — z 200–450
+- `compositions/ambient-layer.html` — z 6–10
+- GSAP `paused: true` — `main` + `ambient` timelines
 
 ---
 
 ## Bảng chọn tool
 
-| Trigger | MCP tool | Ghi chú |
-|---------|----------|---------|
-| `[SFX: ...]` / hook punch | `short_video_search_meme_sound` | 1 clip, `data-start=0`, track 12, volume 0.35–0.5 |
-| `[BGM: ...]` / mood video | `short_video_search_bgm` | 1 track, `data-start=0`, `data-duration=totalVideoSec` |
-| Hook / b-roll / tech / edu | `short_video_search_stock_media` | `video` ưu tiên, fallback `image` |
-
-**Ví dụ routing:**
-
-- `vine boom`, `sấm sét`, `airhorn` → `search_meme_sound`
-- `lofi ambient`, `soft corporate` → `search_bgm`
-- `city night`, `office technology` → `search_stock_media` video
+| Trigger | MCP / action | Ghi chú |
+|---------|--------------|---------|
+| `[SFX: ...]` | `short_video_search_meme_sound` | track 12, giây 0 |
+| `[BGM: ...]` | `short_video_search_bgm` | track 11, full duration |
+| `bg_media.stock_*` | `short_video_search_stock_media` | bg only, opacity thấp |
+| `accent_media.giphy_*` | `short_video_search_giphy` | sticker/gif |
+| `accent_media.lottie` | Lottie bundle | `lottie_id` từ manifest |
+| `hero_mode=registry_block` | `npx hyperframes add` | customize in-place |
 
 ---
 
@@ -78,74 +99,29 @@ Tải → `storage/agent-renders/{id}/assets/images/`
 
 | Quy tắc | Chi tiết |
 |---------|----------|
-| Mỗi video | ≥ **1** BGM track global (track 11) |
-| Hook | ≥ **1** meme SFX **bắt buộc** nếu script có `[SFX: ...]` (track 12) — server reject script thiếu SFX |
-| Mỗi beat (4–8) | ≥ **1** stock visual (Pexels) |
-| Beat Hook (beat 1) | Bắt buộc **stock video** (ưu tiên) hoặc stock image |
-| BGM volume | **0.30** (khoảng **0.25–0.35**) — narration track 10 giữ **1.0** |
-| CTA beat | Typography + stock nhẹ |
-
----
-
-## BGM — phát suốt video (chống dừng giữa chừng)
-
-Chọn track `duration_sec >= totalVideoSec`. Nếu không có, chọn track dài nhất và loop khi tải:
-
-```bash
-ffmpeg -stream_loop -1 -i bgm_raw.mp3 -t ${totalVideoSec} -c copy assets/audio/bgm.mp3
-```
-
-Embed trong `index.html`:
-
-```html
-<audio
-  id="el-bgm"
-  class="clip"
-  src="../assets/audio/bgm.mp3"
-  data-start="0"
-  data-duration="{totalVideoSec}"
-  data-track-index="11"
-  data-volume="0.3"
-></audio>
-```
-
-Narration MP3 (track 10): `data-volume="1.0"`.
-
-**Quality gate:** `data-duration` BGM phải bằng `totalVideoSec` — không render nếu nhạc ngắn hơn video.
+| Mỗi video | ≥1 BGM (track 11) |
+| Hook SFX | Bắt buộc nếu script có `[SFX: ...]` (track 12) |
+| Registry | ≥1 **non-caption** block (data-chart, flowchart, stat-motion…) |
+| Stock hero | ≤40% beat — còn lại registry/kinetic/diagram |
+| Ambient | `ambient-layer.html` bắt buộc |
+| BGM volume | 0.25–0.35; narration 1.0 |
 
 ---
 
 ## Deliverable: `media-plan.md`
 
-Tạo **trước** khi viết HTML beat:
-
-`storage/agent-renders/{id}/my-video/media-plan.md`
-
 ```markdown
-| scope | time_sec | trigger | mcp_tool | query | local_path |
-|-------|----------|---------|----------|-------|------------|
-| sfx_hook | 0.0 | [SFX: vine boom] | short_video_search_meme_sound | vine boom | ../assets/audio/sfx_hook.mp3 |
-| bgm_global | 0.0 | [BGM: lofi ambient] | short_video_search_bgm | lofi ambient | ../assets/audio/bgm.mp3 |
-| hook | 0.0 | hook_visual | short_video_search_stock_media | city night | ../assets/images/hook_stock.mp4 |
+| scope | time_sec | hero_type | registry_block | z_role | mcp_tool | query | local_path |
+|-------|----------|-----------|----------------|--------|----------|-------|------------|
+| sfx_hook | 0.0 | audio | — | — | short_video_search_meme_sound | vine boom | ../assets/audio/sfx_hook.mp3 |
+| bgm_global | 0.0 | audio | — | — | short_video_search_bgm | lofi ambient | ../assets/audio/bgm.mp3 |
+| hook | 0.0 | kinetic_type | caption-kinetic-slam | hero_type | hyperframes add | — | compositions/… |
+| agitate | 5.0 | registry_block | stat-motion | hero_chart | hyperframes add | — | compositions/stat-motion.html |
+| agitate_bg | 5.0 | stock_bg | — | bg_stock | short_video_search_stock_media | dark city | ../assets/images/agitate_bg.mp4 |
+| agitate_accent | 5.0 | giphy_sticker | — | floater | short_video_search_giphy | shocked | ../assets/images/agitate_sticker.gif |
 ```
 
-**Quality gate:** không `hyperframes render` nếu thiếu `bgm_global`, thiếu `sfx_hook` (khi script có `[SFX]`), hoặc beat thiếu stock visual.
-
----
-
-## Re-encode stock video (tránh frame freeze)
-
-Sau khi tải stock Pexels, chạy `npx hyperframes lint`. Nếu báo **`sparse keyframes`** trên `<video>`, re-encode trước khi embed — nếu không video B-roll có thể đứng hình / blank frame khi seek:
-
-```bash
-# Thay hook_stock.mp4 bằng tên file tương ứng
-ffmpeg -y -i assets/images/hook_stock.mp4 \
-  -c:v libx264 -r 30 -g 30 -keyint_min 30 -movflags +faststart -an \
-  assets/images/hook_stock_enc.mp4
-mv assets/images/hook_stock_enc.mp4 assets/images/hook_stock.mp4
-```
-
-Lặp cho mỗi stock video trong `media-plan.md`. Xem thêm [blank-frame-audit.md](blank-frame-audit.md).
+**Quality gate:** `check-media-stack.mjs --strict` + `check-visual-density.mjs`
 
 ---
 
@@ -153,18 +129,17 @@ Lặp cho mỗi stock video trong `media-plan.md`. Xem thêm [blank-frame-audit.
 
 | Cấm | Làm đúng |
 |-----|----------|
-| `assets/fake.mp3` không qua MCP | `search_bgm` → download → `bgm.mp3` |
-| Beat chỉ text + nền, không stock | ≥1 MCP stock mỗi beat |
-| Không có BGM track | `search_bgm` + embed track 11 |
-| BGM `data-duration` < video | Chọn track dài hơn hoặc ffmpeg loop |
-| BGM volume > 0.45 | Giữ ~0.30 (0.25–0.35), narration = 1.0 |
-| `tl.play()` | `paused: true` + `window.__timelines[id]` |
+| Pexels full-bleed hero mỗi beat | Registry block + stock bg mờ |
+| Bỏ qua visual_shot_plan | MCP theo shot-plan |
+| Chỉ caption registry blocks | ≥1 data-chart / flowchart / stat-motion |
+| `tl.play()` | paused + `window.__timelines` |
 
 ---
 
 ## Đọc kèm
 
-- [layout-9x16-zones.md](layout-9x16-zones.md) — vị trí visual
-- [gsap-beat-checklist.md](gsap-beat-checklist.md) — timeline contract
-- [motion-complexity-activation.md](motion-complexity-activation.md) — cinematic bar
-- [blank-frame-audit.md](blank-frame-audit.md) — lint/inspect trước render
+- [visual-shot-plan.md](visual-shot-plan.md)
+- [lottie-activation.md](lottie-activation.md)
+- [continuous-motion-patterns.md](continuous-motion-patterns.md)
+- [overlay-layer-stack.md](overlay-layer-stack.md)
+- [blank-frame-audit.md](blank-frame-audit.md)

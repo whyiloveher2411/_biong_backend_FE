@@ -30,6 +30,7 @@ import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
+import { resolveMarketingPostIdFromShortVideo } from 'helpers/marketingShortVideoWorkflowApi';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { copyShortVideoAgentPromptToClipboard, resolveAgentPromptPhaseFromAction } from 'helpers/marketingShortVideoAgentPrompt';
@@ -516,6 +517,15 @@ function Form({
                         shortVideoId={Number(data?.post?.id || 0)}
                         onUploaded={onRefreshPost}
                     />
+                    {resolveMarketingPostIdFromShortVideo(data?.post) > 0 && (
+                        <MarketingFacebookPreviewDrawer
+                            open={facebookPreviewDrawerOpen}
+                            onClose={() => setFacebookPreviewDrawerOpen(false)}
+                            postId={resolveMarketingPostIdFromShortVideo(data?.post)}
+                            fallbackThumbnail={data?.post?.thumbnail}
+                            onSaved={onRefreshPost}
+                        />
+                    )}
                 </>
             )}
             {postType === 'app_local_notification' && (

@@ -9,7 +9,8 @@ rules
 
 ## HyperFrames agent — media MCP (bắt buộc phase render)
 
-- Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md`
-- Phase render: gọi `short_video_search_bgm` (1 lần/video) + `short_video_search_stock_media` (mỗi beat); cấm bịa `assets/`
-- Tạo `media-plan.md` với dòng `bgm_global` + stock mỗi beat; BGM phát suốt `totalVideoSec`
+- Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md` + `visual-shot-plan.md`
+- Phase render: `search_bgm` + `search_giphy` + stock **bg only** theo shot-plan; registry blocks hero
+- `media-plan.md`: sfx_hook + bgm_global + hero_type/registry_block/z_role mỗi beat
+- `/continuous-motion` → ambient-layer + `window.__timelines["ambient"]`
 - GSAP: `paused: true` + `window.__timelines[id]`; cấm `tl.play()` cho motion render

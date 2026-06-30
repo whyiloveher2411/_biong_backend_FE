@@ -9,6 +9,7 @@ import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/M
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
+import { resolveMarketingPostIdFromShortVideo } from 'helpers/marketingShortVideoWorkflowApi';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
@@ -94,6 +95,8 @@ function PostTypeClientActionDrawers({
     }
 
     if (postType === 'spacedev_app_short_video') {
+        const marketingPostId = resolveMarketingPostIdFromShortVideo(data?.post);
+
         return (
             <>
                 <ShortVideoEditDrawer
@@ -108,6 +111,15 @@ function PostTypeClientActionDrawers({
                     shortVideoId={Number(data?.post?.id || 0)}
                     onUploaded={onRefreshPost}
                 />
+                {marketingPostId > 0 && (
+                    <MarketingFacebookPreviewDrawer
+                        open={activeDrawer === 'drawer:MarketingFacebookPreview'}
+                        onClose={onClose}
+                        postId={marketingPostId}
+                        fallbackThumbnail={data?.post?.thumbnail}
+                        onSaved={onRefreshPost}
+                    />
+                )}
             </>
         );
     }

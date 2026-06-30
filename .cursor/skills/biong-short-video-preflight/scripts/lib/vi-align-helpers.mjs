@@ -41,8 +41,17 @@ const MATCH_ALIASES = {
   muon: "muon",
   cau: "cau",
   coview: "cauview",
-  lot: "not",
+  lot: "nuot",
+  nuot: "nuot",
+  nerd: "not",
   not: "not",
+  gio: "do",
+  do: "do",
+  minh: "mem",
+  mem: "mem",
+  mo: "ngo",
+  ngo: "ngo",
+  chi: "tri",
 };
 
 export function matchKey(word) {
@@ -125,7 +134,7 @@ export function parseViPercentPhrase(words, start) {
 
     if (w === "nghin") {
       sawNumber = true;
-      total += (current || 1) * 1000;
+      total = (total + (current || 1)) * 1000;
       current = 0;
       i++;
       continue;
@@ -160,7 +169,8 @@ export function transcriptPercentToken(tw) {
 
 export function transcriptDigitToken(tw) {
   const n = norm(stripPunct(tw.text));
-  if (/^\d+$/.test(n)) return parseInt(n, 10);
+  const digitsOnly = n.replace(/\./g, "");
+  if (/^\d+$/.test(digitsOnly)) return parseInt(digitsOnly, 10);
   return null;
 }
 
@@ -177,6 +187,17 @@ export function parseViPlainNumber(words, start) {
     if (!w) {
       i++;
       continue;
+    }
+
+    if (w === "nam" && i > start) {
+      const prev = norm(stripPunct(words[i - 1] ?? ""));
+      const next = norm(stripPunct(words[i + 1] ?? ""));
+      if (
+        prev === "mot" &&
+        (next === "truoc" || next === "nay" || next === "sau" || next === "qua")
+      ) {
+        break;
+      }
     }
 
     const one = viWordNum(raw);
@@ -206,11 +227,45 @@ export function parseViPlainNumber(words, start) {
       continue;
     }
 
+    if (w === "nghin") {
+      sawNumber = true;
+      total = (total + (current || 1)) * 1000;
+      current = 0;
+      i++;
+      continue;
+    }
+
     break;
   }
 
   if (!sawNumber) return null;
   return { value: total + current, consumed: i - start };
+}
+
+/** "năm hai nghìn hai mươi sáu" ↔ Whisper "2026" (năm = year, not số 5) */
+export function tryYearCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
+  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
+  if (w0 !== "nam") return null;
+
+  const parsed = parseViPlainNumber(scriptWords, i + 1);
+  if (!parsed || parsed.value < 1900 || parsed.value > 2100) return null;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+    const d = transcriptDigitToken(transcriptWords[j]);
+    if (d !== null && d === parsed.value) {
+      const words = scriptWords.slice(i, i + 1 + parsed.consumed);
+      const timings = splitClusterTiming(transcriptWords[j], words.length);
+      return {
+        words,
+        consumed: 1 + parsed.consumed,
+        transcriptEnd: j + 1,
+        timings,
+        whisperText: transcriptWords[j].text,
+        matchType: "cluster-year",
+      };
+    }
+  }
+  return null;
 }
 
 export function tryPlainNumberCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
@@ -243,6 +298,58 @@ export function splitClusterTiming(tw, count) {
     start: +(tw.start + slice * k).toFixed(3),
     end: +(tw.start + slice * (k + 1)).toFixed(3),
   }));
+}
+
+/** Whisper gộp 2+ từ ↔ nhiều token script liên tiếp: "hìnhảnh" ↔ "hình" + "ảnh" */
+export function tryMergedTranscriptCluster(scriptWords, i, transcriptWords, p, lookahead = 12) {
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const tn = norm(stripPunct(tw.text));
+  if (tn.length < 4) return null;
+
+  for (let len = 2; len <= 4 && i + len <= scriptWords.length; len++) {
+    const words = scriptWords.slice(i, i + len);
+    const combined = words.map((w) => norm(stripPunct(w))).join("");
+    if (
+      combined === tn ||
+      collapseDoubleChars(combined) === collapseDoubleChars(tn)
+    ) {
+      const timings = splitClusterTiming(tw, words.length);
+      return {
+        words,
+        consumed: len,
+        transcriptEnd: p + 1,
+        timings,
+        whisperText: tw.text,
+        matchType: "cluster-merged-transcript",
+      };
+    }
+  }
+
+  for (let start = p; start < Math.min(transcriptWords.length, p + lookahead); start++) {
+    const twn = norm(stripPunct(transcriptWords[start]?.text ?? ""));
+    if (twn.length < 4) continue;
+    for (let len = 2; len <= 4 && i + len <= scriptWords.length; len++) {
+      const words = scriptWords.slice(i, i + len);
+      const combined = words.map((w) => norm(stripPunct(w))).join("");
+      if (
+        combined === twn ||
+        collapseDoubleChars(combined) === collapseDoubleChars(twn)
+      ) {
+        const timings = splitClusterTiming(transcriptWords[start], words.length);
+        return {
+          words,
+          consumed: len,
+          transcriptEnd: start + 1,
+          timings,
+          whisperText: transcriptWords[start].text,
+          matchType: "cluster-merged-transcript",
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 /** Whisper "tích" + "tóc" ↔ script "TikTok." */

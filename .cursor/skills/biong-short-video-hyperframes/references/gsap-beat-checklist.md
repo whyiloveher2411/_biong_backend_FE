@@ -32,7 +32,8 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 - `paused: true` — **không** `tl.play()`
 - Registry key = `data-composition-id` trên composition root
 - Duration từ `data-duration` trên root — **không** pad timeline rỗng
-- Repeat **hữu hạn** (không `-1`)
+- Repeat **hữu hạn** trên `main` — **không** `-1` trên main
+- **`ambient` timeline:** `repeat: -1` — xem `/continuous-motion`
 - **Cấm** `ease: "none"` / linear cho entrance — dùng `power3.out`, `back.out(1.7)`, `elastic.out`
 - **data-duration** root = độ dài beat theo audio — timeline không kết thúc sớm hơn clip
 - Entrance trong `.clip` scene: ưu tiên **`fromTo`** thay `from` — tránh opacity 0 khi seek non-linear
@@ -82,8 +83,16 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 | 1 | ≥3 entrance tweens | headline SLAM, subtitle fade, diagram stagger |
 | 2 | Khác ease/hướng | `power3.out`, `back.out(1.4)`, `elastic.out` — không lặp `y:30 opacity:0` |
 | 3 | ≥1 stagger group | cards, arrows, words |
-| 4 | ≥1 ambient motion | decorative breathe `scale: 1.02`, glow pulse, finite repeat |
+| 4 | Ambient layer | `window.__timelines["ambient"]` — parallax, breathe (không trên main) |
 | 5 | Motion verbs đặt tên | SLAM, CASCADE, PUNCH, morph — mỗi element có verb |
+
+---
+
+## Dual-timeline (bắt buộc)
+
+Invoke `/continuous-motion` trước beat HTML. `window.__timelines["ambient"]` với `repeat: -1`.
+
+Preflight: `check-continuous-motion.mjs`. Dead zone trên `main` >1.5s pass nếu ambient active.
 
 ---
 
@@ -115,21 +124,22 @@ window.__timelines["main"] = tl;
 
 ---
 
-## MCP media — BGM + stock
+## MCP media — BGM + shot-plan assets
 
-Đọc [media-mcp-activation.md](media-mcp-activation.md).
+Đọc [media-mcp-activation.md](media-mcp-activation.md) + [visual-shot-plan.md](visual-shot-plan.md).
 
 ### BGM global (track 11)
 
-- `search_bgm` sau transcribe — `min_duration_sec = totalVideoSec`
-- `index.html`: `data-start="0"`, `data-duration="{totalVideoSec}"`, `data-volume="0.3"`
-- Narration track 10: `data-volume="1.0"`
-- Nếu track ngắn hơn video → ffmpeg loop trước embed
+- `search_bgm` — `min_duration_sec = totalVideoSec`
+- `data-volume="0.3"`; narration track 10 = `1.0`
 
-### Stock per beat
+### Visual per beat (theo shot-plan)
 
-- ≥1 `search_stock_media` mỗi beat — hero / full-bleed
-- GSAP paused timeline — **không** `tl.play()`
+- Registry: `npx hyperframes add` — hero z 200–450
+- Stock: **bg only** — `bg_media` trong shot-plan
+- Giphy: `short_video_search_giphy` — accent z 80–150
+- Lottie: bundle `assets/lotties/`
+- **Cấm** ≥1 stock hero mỗi beat khi shot-plan chỉ định registry
 
 ---
 
@@ -159,7 +169,9 @@ window.__timelines["main"] = tl;
 - [ ] `window.__timelines["main"]` (A) hoặc `["beat_N"]` per sub-comp (B) đã đăng ký
 - [ ] `hyperframes lint` — **0 errors**
 - [ ] `hyperframes inspect` — không text clipped/missing ở caption band
-- [ ] `animation-map.mjs` — dead zone ≤ 1.5s
+- [ ] `window.__timelines["ambient"]` + ambient-layer host
+- [ ] `check-continuous-motion.mjs` + `check-visual-density.mjs` pass
+- [ ] `animation-map.mjs` — dead zone ≤1.5s (hoặc ambient cover)
 - [ ] Layout: `layout-9x16-zones.md` — không overlap caption
 - [ ] `media-plan.md` khớp assets đã embed
 - [ ] Preview frame tại 0.4 / 0.7 / 0.92 duration

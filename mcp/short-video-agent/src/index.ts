@@ -30,23 +30,37 @@ async function apiRequest(
   options: {
     method?: 'GET' | 'POST';
     query?: Record<string, string | number>;
+    body?: Record<string, string | number>;
   } = {}
 ): Promise<unknown> {
   const method = options.method ?? 'POST';
   const url = new URL(mcpEndpoint(action));
 
-  if (options.query) {
+  const useBody = method === 'POST' && options.body && Object.keys(options.body).length > 0;
+  if (!useBody && options.query) {
     for (const [key, value] of Object.entries(options.query)) {
       url.searchParams.set(key, String(value));
     }
   }
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${mcpToken()}`,
+    Accept: 'application/json',
+  };
+  let body: string | undefined;
+  if (useBody && options.body) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(options.body).map(([key, value]) => [key, String(value)])
+      )
+    ).toString();
+  }
+
   const response = await fetch(url.toString(), {
     method,
-    headers: {
-      Authorization: `Bearer ${mcpToken()}`,
-      Accept: 'application/json',
-    },
+    headers,
+    body,
   });
 
   const text = await response.text();
@@ -96,7 +110,7 @@ server.tool(
 
 server.tool(
   'short_video_save_audio_script',
-  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...] + estimated_duration_sec). Non-verbal tag CHỈ allowlist OmniVoice 3 tag (xem omnivoice-expressive-tags.md) — cấm [gasp]. Sau /extract-core-signals + /hyperframes-creative + /viral-audio-script + /humanize-audio-script (giữ tag).',
+  'Lưu kịch bản audio viral 60–180s (bắt buộc [SFX: ...]). Phase 1: extract → creative → viral (one-pass) → audit → save → DỪNG chờ admin duyệt. Không visual_shot_plan.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Script có [BGM]/[Dừng Ns] — viết cho tai nghe'),
@@ -110,7 +124,7 @@ server.tool(
     if (args.metadata) {
       query.metadata = JSON.stringify(args.metadata);
     }
-    const result = await apiRequest('save-audio-script', { query });
+    const result = await apiRequest('save-audio-script', { body: query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };
@@ -119,7 +133,7 @@ server.tool(
 
 server.tool(
   'short_video_generate_narration_tts',
-  'Sinh voiceover TTS (k2-fsa/OmniVoice) — CHỈ thử các nền tảng trong tts_chain. OmniVoice giữ non-verbal allowlist (3 tag); strip [BGM]/[SFX]/[Dừng]. Nếu fail hết chain: status failed — DỪNG.',
+  'Sinh voiceover TTS qua CMS queue sau admin duyệt — CẤM agent Phase 2 gọi tool này. Chỉ dùng nội bộ queue worker hoặc retry CMS. Nếu audio_file đã có → reject.',
   {
     short_video_id: z.number().int().positive(),
     text: z.string().min(1).describe('Lời thoại narration cần TTS'),
@@ -295,6 +309,29 @@ server.tool(
     }
     if (args.limit !== undefined) query.limit = args.limit;
     const result = await apiRequest('search-bgm', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_search_giphy',
+  'Tìm GIF/sticker Giphy — accent visual (hook reaction, celebrate). Trả download_url — agent tải assets/images/.',
+  {
+    query: z.string().min(1).describe('Từ khóa: celebration, mind blown, shocked, fire…'),
+    media_type: z.enum(['gif', 'sticker']).optional().describe('Mặc định sticker'),
+    limit: z.number().int().positive().max(15).optional(),
+    offset: z.number().int().min(0).optional(),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      query: args.query,
+      media_type: args.media_type ?? 'sticker',
+    };
+    if (args.limit !== undefined) query.limit = args.limit;
+    if (args.offset !== undefined) query.offset = args.offset;
+    const result = await apiRequest('search-giphy', { query });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };

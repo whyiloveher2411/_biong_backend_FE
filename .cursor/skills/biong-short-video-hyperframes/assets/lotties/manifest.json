@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "bundle_root": ".cursor/skills/biong-short-video-hyperframes/assets/lotties",
+  "items": [
+    {
+      "id": "celebration",
+      "tags": ["celebration", "cta", "edu"],
+      "path": "celebration.json",
+      "suggested_z": 720,
+      "description": "Confetti pulse — CTA beat"
+    },
+    {
+      "id": "spark-burst",
+      "tags": ["hook", "impact"],
+      "path": "spark-burst.json",
+      "suggested_z": 700,
+      "description": "Radial burst — hook accent"
+    },
+    {
+      "id": "arrow-up",
+      "tags": ["growth", "chart", "stat"],
+      "path": "arrow-up.json",
+      "suggested_z": 680,
+      "description": "Arrow trending up"
+    },
+    {
+      "id": "arrow-down",
+      "tags": ["warning", "agitate"],
+      "path": "arrow-down.json",
+      "suggested_z": 680,
+      "description": "Arrow trending down"
+    },
+    {
+      "id": "loading-dots",
+      "tags": ["loading", "process"],
+      "path": "loading-dots.json",
+      "suggested_z": 650,
+      "description": "Three dots pulse"
+    },
+    {
+      "id": "check-mark",
+      "tags": ["edu", "success"],
+      "path": "check-mark.json",
+      "suggested_z": 710,
+      "description": "Check mark draw"
+    },
+    {
+      "id": "fire-loop",
+      "tags": ["viral", "hot"],
+      "path": "fire-loop.json",
+      "suggested_z": 730,
+      "description": "Flame flicker loop"
+    },
+    {
+      "id": "star-pop",
+      "tags": ["rating", "social"],
+      "path": "star-pop.json",
+      "suggested_z": 700,
+      "description": "Star scale pop"
+    }
+  ]
+}

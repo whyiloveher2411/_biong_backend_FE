@@ -12,6 +12,8 @@ import {
   tryHyphenTranscriptCluster,
   tryPlainNumberCluster,
   tryTikTokCluster,
+  tryMergedTranscriptCluster,
+  tryYearCluster,
 } from "./vi-align-helpers.mjs";
 
 export const DEFAULT_LOOKAHEAD = 40;
@@ -177,6 +179,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const yearCluster = tryYearCluster(scriptWords, i, transcriptWords, state.p, lookahead);
+    if (yearCluster) {
+      yearCluster.words.forEach((w, k) => {
+        const t = yearCluster.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: yearCluster.matchType,
+          whisperText: yearCluster.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += yearCluster.words.length;
+      state.p = yearCluster.transcriptEnd;
+      i += yearCluster.consumed - 1;
+      continue;
+    }
+
     const pctCluster = tryPercentCluster(scriptWords, i, transcriptWords, state.p, lookahead);
     if (pctCluster) {
       pctCluster.words.forEach((w, k) => {
@@ -300,6 +322,32 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       clusterCount += plainNum.words.length;
       state.p = plainNum.transcriptEnd;
       i += plainNum.consumed - 1;
+      continue;
+    }
+
+    const mergedTw = tryMergedTranscriptCluster(
+      scriptWords,
+      i,
+      transcriptWords,
+      state.p,
+      lookahead,
+    );
+    if (mergedTw) {
+      mergedTw.words.forEach((w, k) => {
+        const t = mergedTw.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: mergedTw.matchType,
+          whisperText: mergedTw.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += mergedTw.words.length;
+      state.p = mergedTw.transcriptEnd;
+      i += mergedTw.consumed - 1;
       continue;
     }
 

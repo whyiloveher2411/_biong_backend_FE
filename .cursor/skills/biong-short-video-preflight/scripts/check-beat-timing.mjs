@@ -136,6 +136,30 @@ function main() {
         `Beat #${i + 1} (${htmlBeat.id}): data-start=${htmlBeat.start}s lệch beat-map ${mapSec.startSec}s (${drift.toFixed(2)}s > ${tolerance}s)`,
       );
     }
+    const durDrift = Math.abs(htmlBeat.duration - mapSec.durationSec);
+    if (durDrift > DURATION_TOLERANCE_SEC) {
+      errors.push(
+        `Beat #${i + 1} (${htmlBeat.id}): data-duration=${htmlBeat.duration}s lệch beat-map ${mapSec.durationSec}s`,
+      );
+    }
+  }
+
+  for (let i = 0; i < htmlBeats.length - 1; i++) {
+    const endA = htmlBeats[i].start + htmlBeats[i].duration;
+    const startB = htmlBeats[i + 1].start;
+    if (startB < endA - 0.05) {
+      errors.push(
+        `Beat overlap: #${i + 1} (${htmlBeats[i].id}) kết thúc ~${endA.toFixed(2)}s nhưng #${i + 2} (${htmlBeats[i + 1].id}) bắt đầu ${startB}s — chồng nội dung ghost. Chạy map-markers-to-timing + sync-index-beats-from-map`,
+      );
+    }
+  }
+
+  for (let i = 0; i < mapSections.length - 1; i++) {
+    if (mapSections[i + 1].startSec < mapSections[i].endSec - 0.05) {
+      errors.push(
+        `beat-map overlap: section #${i + 2} start ${mapSections[i + 1].startSec}s < section #${i + 1} end ${mapSections[i].endSec}s`,
+      );
+    }
   }
 
   if (htmlBeats.length !== mapSections.length) {

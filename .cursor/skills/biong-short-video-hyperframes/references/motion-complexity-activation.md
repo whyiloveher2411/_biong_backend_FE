@@ -28,22 +28,30 @@ AI agent mặc định sinh HTML/CSS tối giản (text + đổi nền). **Bắt
 
 ## 1. Registry blocks (ưu tiên — không tự viết từ đầu)
 
+**Đọc:** [visual-shot-plan.md](visual-shot-plan.md) — hero block theo shot-plan, không chỉ caption.
+
 Trong thư mục project render, cài block từ HyperFrames registry:
 
 ```bash
 cd storage/agent-renders/{id}/my-video
 npx hyperframes add caption-pill-karaoke
 npx hyperframes add caption-kinetic-slam
-npx hyperframes add caption-highlight
-# Transitions / VFX — chọn theo beat map:
-npx hyperframes add <block-name>   # xem registry: hyperframes-registry skill
+# Hero UI theo visual_shot_plan:
+npx hyperframes add data-chart      # số liệu
+npx hyperframes add flowchart       # quy trình
+npx hyperframes add stat-motion     # stat counter
+# Transitions giữa beat:
+npx hyperframes add domain-warp-dissolve
+# Ambient components:
+npx hyperframes add grain-overlay
+npx hyperframes add shimmer-sweep
 ```
 
-Browse catalog: `curl -s https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry/registry.json`
+Browse catalog: `agent/skills/motion-graphics/catalog-map.md` + registry.json
 
-**Luật:** Dùng block đã install cho caption, transition shader, social overlay — customize in-place, không reinvent.
+**Luật:** ≥1 **non-caption** registry block mỗi video. Customize in-place theo `visual_shot_plan.customize`.
 
-Skill: `/hyperframes-registry` — `references/wiring-blocks.md`
+Skill: `/hyperframes-registry` + `/motion-graphics` · `/continuous-motion` cho ambient layer
 
 ---
 
@@ -77,6 +85,22 @@ Skill: `/hyperframes-registry` — `references/wiring-blocks.md`
 
 ## 5. Timeline sync — tránh video "đứng hình"
 
+### Dual-timeline (bắt buộc Phase 2)
+
+Invoke `/continuous-motion` — chi tiết: [continuous-motion-patterns.md](continuous-motion-patterns.md)
+
+| Timeline | Key | repeat | Vai trò |
+|----------|-----|--------|---------|
+| Beat-synced | `main` (hoặc `beat_N`) | **không** | Entrance/exit theo beat-map |
+| Ambient | `ambient` | **-1** | Parallax, breathe, grain — suốt video |
+
+```javascript
+window.__timelines["main"] = gsap.timeline({ paused: true });
+window.__timelines["ambient"] = gsap.timeline({ paused: true, repeat: -1 });
+```
+
+Host: `compositions/ambient-layer.html` — z-index 6–10. Preflight: `check-continuous-motion.mjs`.
+
 ### GSAP registry (bắt buộc)
 
 **Pattern A (inline beats — khuyến nghị):**
@@ -109,7 +133,7 @@ window.__timelines["beat_1"] = tl; // key === data-composition-id trong composit
 | Timeline ngắn hơn clip | `data-duration` host ≥ GSAP active range; tổng beat ≈ `totalVideoSec` |
 | Caption lệch | `transcribe-audio.mjs` → sync pipeline; verify `--strict` (positional ≤15%) |
 
-Preflight: `check-beat-timing.mjs` + `animation-map.mjs` — kiểm tra dead zones và lệch beat-map.
+Preflight: `check-beat-timing.mjs` + `check-continuous-motion.mjs` + `animation-map.mjs` — dead zone >1.5s chỉ pass nếu có ambient layer.
 
 ---
 
@@ -155,7 +179,9 @@ Portrait 9:16: đảm bảo composition root = 1080×1920.
 - [ ] Caption karaoke wired — text từ `audio_script`, timing transcript
 - [ ] Watermark Spacedev góc trên trái — suốt `totalVideoSec`
 - [ ] Kinetic typography — không văn bản dài / font <28px body
-- [ ] ≥1 registry block wired (caption hoặc transition)
+- [ ] ≥1 registry block wired (caption **và** ≥1 non-caption hero)
+- [ ] `window.__timelines["ambient"]` + ambient-layer host z 6–10
+- [ ] `check-continuous-motion.mjs` exit 0
 - [ ] Không entrance dùng `ease: "none"` / linear
 - [ ] Stagger trên ≥1 nhóm mỗi beat
 - [ ] Timeline pattern A hoặc B — **không** pattern C

@@ -92,6 +92,39 @@ function rescaleMarkerTime(markerTime, timelineTotal, totalVideoSec) {
   return +(markerTime * (totalVideoSec / timelineTotal)).toFixed(3);
 }
 
+/** Cấm beat overlap — mỗi clip chỉ 1 beat visible (tránh ghost 19M + Gen Z). */
+function normalizeSequentialSections(sections, totalVideoSec) {
+  if (!sections.length) return;
+  const MIN_DUR = 0.6;
+
+  for (let i = 1; i < sections.length; i++) {
+    const prevEnd = sections[i - 1].endSec;
+    if (sections[i].startSec < prevEnd - 0.001) {
+      sections[i].startSec = +prevEnd.toFixed(3);
+      if (!sections[i].source.includes("no-overlap")) {
+        sections[i].source = `${sections[i].source}+no-overlap`;
+      }
+    }
+  }
+
+  for (let i = 0; i < sections.length - 1; i++) {
+    sections[i].endSec = +sections[i + 1].startSec.toFixed(3);
+    sections[i].durationSec = +(sections[i].endSec - sections[i].startSec).toFixed(3);
+    if (sections[i].durationSec < MIN_DUR) {
+      sections[i].endSec = +(sections[i].startSec + MIN_DUR).toFixed(3);
+      sections[i].durationSec = MIN_DUR;
+      sections[i + 1].startSec = sections[i].endSec;
+      if (!sections[i + 1].source.includes("no-overlap")) {
+        sections[i + 1].source = `${sections[i + 1].source}+no-overlap`;
+      }
+    }
+  }
+
+  const last = sections[sections.length - 1];
+  last.endSec = +totalVideoSec.toFixed(3);
+  last.durationSec = +(last.endSec - last.startSec).toFixed(3);
+}
+
 function main() {
   const { projectDir: rawDir, metadataRel } = parseArgs(process.argv);
   if (!rawDir) {
@@ -187,6 +220,8 @@ function main() {
       source,
     });
   }
+
+  normalizeSequentialSections(sections, totalVideoSec);
 
   const beatMap = {
     generatedAt: new Date().toISOString(),

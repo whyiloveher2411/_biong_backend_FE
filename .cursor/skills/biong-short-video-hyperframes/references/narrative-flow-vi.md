@@ -46,7 +46,7 @@ Biến bài tin khô thành câu chuyện có **góc nhìn**:
 | "Công ty B tăng doanh thu 20%" | "CEO B tưởng quý này ổn — ai ngờ con số cuối cùng lại gấp đôi dự báo" |
 | "App C hỗ trợ A, B, C" | "Mình thử App C vì đồng nghiệp khen — và lần đầu mở ra thì…" |
 
-Góc nhìn gợi ý: reviewer TikTok công nghệ/tin tức, người dùng thực tế, người trong cuộc.
+Góc nhìn gợi ý: kể như giải thích cho **bạn 12 tuổi** — từ đơn giản, ví dụ đời (xem plain-language-storytelling-vi.md).
 
 ---
 
@@ -98,7 +98,7 @@ Trước khi viết script, agent xây chuỗi logic:
       "therefore": "Pin tiết kiệm 30% — giá 900 USD hợp lý hơn"
     }
   ],
-  "perspective": "Reviewer công nghệ TikTok — giật gân, hội thoại"
+  "perspective": "Kể chuyện cho bạn 12 tuổi — từ đơn giản, ví dụ đời"
 }
 ```
 
