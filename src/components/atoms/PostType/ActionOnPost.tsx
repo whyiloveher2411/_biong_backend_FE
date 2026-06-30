@@ -31,6 +31,10 @@ import {
     parseShortVideoEditIdFromSearch,
     setShortVideoEditIdInSearchParams,
 } from "helpers/shortVideoEditDrawerUrl";
+import {
+    parseShortVideoAgentIdFromSearch,
+    setShortVideoAgentIdInSearchParams,
+} from "helpers/shortVideoAgentVideoDrawerUrl";
 
 const useStyles = makeCSS((theme: Theme) => ({
     actionPost: {
@@ -121,19 +125,33 @@ function ActionOnPost({
 
     const closeClientDrawer = React.useCallback(() => {
         setActiveClientDrawer(null);
+        const postId = Number(post.id);
         const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
-        if (editId && Number(post.id) === editId) {
-            const next = setShortVideoEditIdInSearchParams(searchParams, null);
+        if (editId && postId === editId) {
+            let next = setShortVideoEditIdInSearchParams(searchParams, null);
+            next = setShortVideoAgentIdInSearchParams(next, null);
+            setSearchParams(next, { replace: true });
+            return;
+        }
+        const agentId = parseShortVideoAgentIdFromSearch(searchParams.toString());
+        if (agentId && postId === agentId) {
+            let next = setShortVideoAgentIdInSearchParams(searchParams, null);
+            next = setShortVideoEditIdInSearchParams(next, null);
             setSearchParams(next, { replace: true });
         }
     }, [post.id, searchParams, setSearchParams]);
 
     React.useEffect(() => {
-        const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
-        if (!editId || Number(post.id) !== editId) {
+        const postId = Number(post.id);
+        const agentId = parseShortVideoAgentIdFromSearch(searchParams.toString());
+        if (agentId && postId === agentId) {
+            setActiveClientDrawer('drawer:ShortVideoAgentAudio');
             return;
         }
-        setActiveClientDrawer('drawer:ShortVideoEdit');
+        const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
+        if (editId && postId === editId) {
+            setActiveClientDrawer('drawer:ShortVideoEdit');
+        }
     }, [post.id, searchParams]);
 
     const useAjaxAction = useAjax();
@@ -186,7 +204,13 @@ function ActionOnPost({
             }
             setActiveClientDrawer(item.client_action);
             if (item.client_action === 'drawer:ShortVideoEdit') {
-                const next = setShortVideoEditIdInSearchParams(searchParams, Number(id));
+                let next = setShortVideoEditIdInSearchParams(searchParams, Number(id));
+                next = setShortVideoAgentIdInSearchParams(next, null);
+                setSearchParams(next, { replace: true });
+            }
+            if (item.client_action === 'drawer:ShortVideoAgentAudio') {
+                let next = setShortVideoAgentIdInSearchParams(searchParams, Number(id));
+                next = setShortVideoEditIdInSearchParams(next, null);
                 setSearchParams(next, { replace: true });
             }
             return;

@@ -31,7 +31,10 @@ const VI_ONES = {
 /** ASR / TTS thường nghe khác chữ script */
 const MATCH_ALIASES = {
   jack: "rac",
+  zakk: "rac",
   rac: "rac",
+  cho: "tro",
+  tro: "tro",
   tich: "tik",
   toc: "tok",
   review: "ribio",
@@ -52,6 +55,9 @@ const MATCH_ALIASES = {
   mo: "ngo",
   ngo: "ngo",
   chi: "tri",
+  glm: "glm",
+  grm: "glm",
+  luc: "luc",
 };
 
 export function matchKey(word) {
@@ -161,10 +167,35 @@ export function parseViHundredPhrase(words, start) {
 }
 
 export function transcriptPercentToken(tw) {
+  const raw = String(tw.text ?? "")
+    .trim()
+    .replace(/%\.?$/, "")
+    .replace(/\s/g, "");
+  const decimal = raw.match(/^(\d+)[,.](\d+)$/);
+  if (decimal) {
+    return {
+      value: parseFloat(`${decimal[1]}.${decimal[2]}`),
+      hasPercent: String(tw.text).includes("%"),
+    };
+  }
   const n = norm(stripPunct(tw.text));
-  const m = n.match(/^(\d+)%?$/);
+  const m = n.match(/^(\d+)%?\.?$/);
   if (!m) return null;
-  return { value: parseInt(m[1], 10), hasPercent: n.includes("%") };
+  return { value: parseInt(m[1], 10), hasPercent: String(tw.text).includes("%") };
+}
+
+/** Script "10," + "2." ↔ Whisper "10,2%." */
+export function parseDecimalPercentTokens(words, start) {
+  const raw0 = String(words[start] ?? "");
+  const raw1 = String(words[start + 1] ?? "");
+  const m0 = raw0.match(/^(\d+),$/);
+  const m1 = raw1.match(/^(\d+)\.?$/);
+  if (!m0 || !m1) return null;
+  return {
+    value: parseFloat(`${m0[1]}.${m1[1]}`),
+    consumed: 2,
+    isPercent: true,
+  };
 }
 
 export function transcriptDigitToken(tw) {
@@ -174,8 +205,15 @@ export function transcriptDigitToken(tw) {
   return null;
 }
 
-/** Số đơn / cụm không có "phần trăm": năm mươi → 50, bảy → 7 */
+/** Số đơn / cụm không có "phần trăm": năm mươi → 50, bảy → 7, 25 → 25 */
 export function parseViPlainNumber(words, start) {
+  const arabic = String(words[start] ?? "")
+    .trim()
+    .match(/^(\d+)\.?$/);
+  if (arabic) {
+    return { value: parseInt(arabic[1], 10), consumed: 1 };
+  }
+
   let i = start;
   let total = 0;
   let current = 0;
@@ -272,9 +310,15 @@ export function tryPlainNumberCluster(scriptWords, i, transcriptWords, p, lookah
   const parsed = parseViPlainNumber(scriptWords, i);
   if (!parsed || parsed.consumed < 1) return null;
 
-  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+  const maxJump = parsed.consumed === 1 && parsed.value <= 10 ? 3 : lookahead;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + maxJump); j++) {
     const d = transcriptDigitToken(transcriptWords[j]);
-    if (d !== null && d === parsed.value) {
+    const pt = transcriptPercentToken(transcriptWords[j]);
+    const matches =
+      (d !== null && d === parsed.value) ||
+      (pt && Math.abs(pt.value - parsed.value) < 0.001);
+    if (matches) {
       const words = scriptWords.slice(i, i + parsed.consumed);
       const timings = splitClusterTiming(transcriptWords[j], words.length);
       return {
@@ -283,7 +327,7 @@ export function tryPlainNumberCluster(scriptWords, i, transcriptWords, p, lookah
         transcriptEnd: j + 1,
         timings,
         whisperText: transcriptWords[j].text,
-        matchType: "cluster-number",
+        matchType: pt ? "cluster-plain-percent" : "cluster-number",
       };
     }
   }
@@ -312,7 +356,8 @@ export function tryMergedTranscriptCluster(scriptWords, i, transcriptWords, p, l
     const combined = words.map((w) => norm(stripPunct(w))).join("");
     if (
       combined === tn ||
-      collapseDoubleChars(combined) === collapseDoubleChars(tn)
+      collapseDoubleChars(combined) === collapseDoubleChars(tn) ||
+      portmanteauMatch(combined, tn)
     ) {
       const timings = splitClusterTiming(tw, words.length);
       return {
@@ -334,7 +379,8 @@ export function tryMergedTranscriptCluster(scriptWords, i, transcriptWords, p, l
       const combined = words.map((w) => norm(stripPunct(w))).join("");
       if (
         combined === twn ||
-        collapseDoubleChars(combined) === collapseDoubleChars(twn)
+        collapseDoubleChars(combined) === collapseDoubleChars(twn) ||
+        portmanteauMatch(combined, twn)
       ) {
         const timings = splitClusterTiming(transcriptWords[start], words.length);
         return {
@@ -350,6 +396,29 @@ export function tryMergedTranscriptCluster(scriptWords, i, transcriptWords, p, l
   }
 
   return null;
+}
+
+/** Whisper "Jack"/"Zakk" + "AI" ↔ script "rác" + "AI" */
+export function tryRacAiCluster(scriptWords, i, transcriptWords, p) {
+  const sw = norm(stripPunct(scriptWords[i] ?? ""));
+  const sw1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (sw !== "rac" || sw1 !== "ai") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (!["jack", "zakk", "rac"].includes(t0) || t1 !== "ai") return null;
+  const tw = {
+    start: transcriptWords[p].start,
+    end: transcriptWords[p + 1].end,
+  };
+  const timings = splitClusterTiming(tw, 2);
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings,
+    whisperText: `${transcriptWords[p].text} ${transcriptWords[p + 1].text}`,
+    matchType: "cluster-rac-ai",
+  };
 }
 
 /** Whisper "tích" + "tóc" ↔ script "TikTok." */
@@ -436,13 +505,16 @@ function portmanteauMatch(a, b) {
   const minLen = Math.min(a.length, b.length);
   for (let i = 0; i < minLen; i++) if (a[i] !== b[i]) dist++;
   dist += Math.abs(a.length - b.length);
-  return 1 - dist / maxLen >= 0.88;
+  return 1 - dist / maxLen >= 0.82;
 }
 
 /** Script "cartoonkids" ↔ Whisper "cartoon" + "kids" */
 export function tryCompoundSplit(scriptWord, transcriptWords, p, lookahead = 12) {
   const sw = norm(stripPunct(scriptWord));
   if (sw.length < 4) return null;
+
+  const atP = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  if (atP === sw) return null;
 
   const matchesCombined = (combined) =>
     combined === sw ||
@@ -467,7 +539,7 @@ export function tryCompoundSplit(scriptWord, transcriptWords, p, lookahead = 12)
   }
 
   // Tìm trong lookahead nếu pointer đã lệch (hashtag ghép: nurseryrhyme)
-  for (let start = p; start < Math.min(transcriptWords.length, p + lookahead); start++) {
+  for (let start = p + 1; start < Math.min(transcriptWords.length, p + lookahead); start++) {
     for (let len = 2; len <= 4; len++) {
       if (start + len > transcriptWords.length) continue;
       const slice = transcriptWords.slice(start, start + len);
@@ -510,14 +582,67 @@ export function tryForYouCluster(scriptWords, i, transcriptWords, p) {
   return null;
 }
 
+/**
+ * "năm chấm sáu" ↔ Whisper "5.6" (TTS đọc số thập phân).
+ */
+export function tryDecimalChamCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
+  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
+  const w1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (w0 !== "nam" || w1 !== "cham") return null;
+
+  const digit = viWordNum(scriptWords[i + 2] ?? "");
+  if (digit === undefined) return null;
+
+  const expected = `5.${digit}`;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+    const raw = stripPunct(transcriptWords[j]?.text ?? "").replace(/\s/g, "");
+    if (raw === expected) {
+      const words = scriptWords.slice(i, i + 3);
+      const timings = splitClusterTiming(transcriptWords[j], words.length);
+      return {
+        words,
+        consumed: 3,
+        transcriptEnd: j + 1,
+        timings,
+        whisperText: transcriptWords[j].text,
+        matchType: "cluster-decimal-cham",
+      };
+    }
+  }
+  return null;
+}
+
+/** "lúc ra" ↔ Whisper "rút ra" (TTS đồng âm) */
+export function tryLucRaHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "luc" || b !== "ra") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if ((t0 === "rut" || t0 === "luc") && t1 === "ra") {
+    const tw = transcriptWords[p];
+    return {
+      words: [scriptWords[i]],
+      consumed: 1,
+      transcriptEnd: p + 1,
+      timings: [{ start: tw.start, end: tw.end }],
+      whisperText: tw.text,
+      matchType: "cluster-luc-ra",
+    };
+  }
+  return null;
+}
+
 /** Cụm phần trăm viết chữ ↔ token "57%" */
 export function tryPercentCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
-  const parsed = parseViPercentPhrase(scriptWords, i);
+  const decimalParsed = parseDecimalPercentTokens(scriptWords, i);
+  const parsed = decimalParsed ?? parseViPercentPhrase(scriptWords, i);
   if (!parsed) return null;
 
   for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
     const pt = transcriptPercentToken(transcriptWords[j]);
-    if (pt && pt.value === parsed.value) {
+    if (pt && Math.abs(pt.value - parsed.value) < 0.001) {
       const words = scriptWords.slice(i, i + parsed.consumed);
       const timings = splitClusterTiming(transcriptWords[j], words.length);
       return {
@@ -566,4 +691,146 @@ export function tryFractionCluster(scriptWords, i, transcriptWords, p, lookahead
     }
   }
   return null;
+}
+
+/** "rủng rỉnh" ↔ Whisper "dùng dừng" (TTS đồng âm) */
+export function tryRungRinhHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "rung" || b !== "rinh") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (t0 !== "dung" || t1 !== "dung") return null;
+  const timings = [
+    { start: transcriptWords[p].start, end: transcriptWords[p].end },
+    { start: transcriptWords[p + 1].start, end: transcriptWords[p + 1].end },
+  ];
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings,
+    whisperText: `${transcriptWords[p].text} ${transcriptWords[p + 1].text}`,
+    matchType: "cluster-homophone",
+  };
+}
+
+/** "rối ren" ↔ "rồi gian" */
+export function tryRoiRenHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "roi" || b !== "ren") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (t0 !== "roi" || t1 !== "gian") return null;
+  const timings = [
+    { start: transcriptWords[p].start, end: transcriptWords[p].end },
+    { start: transcriptWords[p + 1].start, end: transcriptWords[p + 1].end },
+  ];
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings,
+    whisperText: `${transcriptWords[p].text} ${transcriptWords[p + 1].text}`,
+    matchType: "cluster-homophone",
+  };
+}
+
+/** "Tháng Năm" (script) ↔ Whisper "Tháng" "5" — TTS đọc tháng 5 */
+export function tryThangNamPairCluster(scriptWords, i, transcriptWords, p) {
+  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
+  const w1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (w0 !== "thang" || w1 !== "nam") return null;
+  const tw0 = transcriptWords[p];
+  const tw1 = transcriptWords[p + 1];
+  if (!tw0 || !tw1) return null;
+  const t0 = norm(stripPunct(tw0.text));
+  const t1 = norm(stripPunct(tw1.text));
+  if (t0 !== "thang" || t1 !== "5") return null;
+  const words = [scriptWords[i], scriptWords[i + 1]];
+  const timings = [
+    { start: tw0.start, end: tw0.end },
+    { start: tw1.start, end: tw1.end },
+  ];
+  return {
+    words,
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings,
+    whisperText: `${tw0.text} ${tw1.text}`,
+    matchType: "cluster-homophone",
+  };
+}
+
+/** "Tháng Năm" (script) ↔ Whisper "Tháng" "5" — single token fallback */
+export function tryThangMonthHomophone(scriptWords, i, transcriptWords, p) {
+  const prev = i > 0 ? norm(stripPunct(scriptWords[i - 1])) : "";
+  const w = norm(stripPunct(scriptWords[i] ?? ""));
+  if (prev !== "thang" || w !== "nam") return null;
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const t = norm(stripPunct(tw.text));
+  if (t !== "5") return null;
+  return {
+    words: [scriptWords[i]],
+    consumed: 1,
+    transcriptEnd: p + 1,
+    timings: [{ start: tw.start, end: tw.end }],
+    whisperText: tw.text,
+    matchType: "cluster-homophone",
+  };
+}
+
+const WHISPER_SINGLE_HOMOPHONES = {
+  sa: ["xa"],
+  code: ["cot"],
+  chop: ["chap"],
+  chi: ["tri"],
+  san: ["xan"],
+  mac: ["ngoc"],
+  nganh: ["hanh"],
+  he: ["the"],
+};
+
+/** Whisper đồng âm 1 từ phổ biến (sa/xa, code/cốt, Mặc/Ngọc, …) */
+export function tryWhisperSingleHomophone(scriptWord, transcriptWords, p) {
+  const sw = norm(stripPunct(scriptWord));
+  const alts = WHISPER_SINGLE_HOMOPHONES[sw];
+  if (!alts) return null;
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const t = norm(stripPunct(tw.text));
+  if (!alts.includes(t)) return null;
+  return {
+    timing: { start: tw.start, end: tw.end },
+    whisperText: tw.text,
+    transcriptEnd: p + 1,
+    matchType: "homophone",
+  };
+}
+
+/** Bỏ qua filler Whisper thừa (Hmm, ừm, …) */
+export function trySkipTranscriptFiller(transcriptWords, p) {
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const t = norm(stripPunct(tw.text));
+  if (!["hmm", "um", "uh"].includes(t)) return null;
+  return { transcriptEnd: p + 1 };
+}
+
+/** "Sale," ↔ "cell" (TTS loanword) */
+export function trySaleCellHomophone(scriptWord, transcriptWords, p) {
+  const sw = norm(stripPunct(scriptWord));
+  if (sw !== "sale") return null;
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const t0 = norm(stripPunct(tw.text));
+  if (t0 !== "cell") return null;
+  return {
+    timing: { start: tw.start, end: tw.end },
+    whisperText: tw.text,
+    transcriptEnd: p + 1,
+    matchType: "homophone",
+  };
 }

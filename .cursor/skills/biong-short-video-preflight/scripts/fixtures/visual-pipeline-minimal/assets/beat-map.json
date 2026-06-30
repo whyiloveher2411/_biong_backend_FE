@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-06-30T15:21:06.725Z",
+  "source": "visual-shot-plan",
+  "totalVideoSec": 60,
+  "sections": [
+    {
+      "id": "beat_1",
+      "beat_id": "beat_1",
+      "layout_archetype": "kinetic_hook_slam",
+      "narrative_role": null,
+      "phrase_anchor": "Hook shock opener",
+      "startSec": 0,
+      "endSec": 10,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    },
+    {
+      "id": "beat_2",
+      "beat_id": "beat_2",
+      "layout_archetype": "stat_punch_card",
+      "narrative_role": null,
+      "phrase_anchor": "Ninety thousand jobs cut",
+      "startSec": 10,
+      "endSec": 20,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    },
+    {
+      "id": "beat_3",
+      "beat_id": "beat_3",
+      "layout_archetype": "process_flow",
+      "narrative_role": null,
+      "phrase_anchor": "AI investment flow steps",
+      "startSec": 20,
+      "endSec": 30,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    },
+    {
+      "id": "beat_4",
+      "beat_id": "beat_4",
+      "layout_archetype": "comparison_split",
+      "narrative_role": null,
+      "phrase_anchor": "Before after comparison chart",
+      "startSec": 30,
+      "endSec": 40,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    },
+    {
+      "id": "beat_5",
+      "beat_id": "beat_5",
+      "layout_archetype": "bento_insight_grid",
+      "narrative_role": null,
+      "phrase_anchor": "Three insight bento grid",
+      "startSec": 40,
+      "endSec": 50,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    },
+    {
+      "id": "beat_6",
+      "beat_id": "beat_6",
+      "layout_archetype": "cta_orbit",
+      "narrative_role": null,
+      "phrase_anchor": "Follow now call to action",
+      "startSec": 50,
+      "endSec": 60,
+      "durationSec": 10,
+      "source": "caption-word-match"
+    }
+  ]
+}

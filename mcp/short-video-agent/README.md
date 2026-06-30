@@ -19,7 +19,9 @@ Toggle `agent_tts_auto` + nền tảng TTS trên drawer chỉ cấu hình chain 
 
 **Phase 1 (4 bước):** extract → creative → viral (one-pass) → audit → save → **DỪNG**
 
-**Phase 2:** gate `audio_file` bắt buộc → shot-plan → transcribe → render
+**Phase 2:** gate `audio_file` bắt buộc → transcribe → `visual_shot_plan` (N beats content-driven) → `map-shot-plan-to-beat-map.mjs` → hand-craft beat HTML → render
+
+**Cấm Phase 2:** `gen-beats-from-shot-plan.mjs` (đã gỡ), map 1:1 HASCAS → visual beat
 
 **TTS chain (CMS queue):** OmniVoice local → VieNeu → Saydi → Vbee.
 

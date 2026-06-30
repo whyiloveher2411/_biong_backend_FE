@@ -35,7 +35,7 @@ Workflow **3 bước**: phase 1 `audio_script` → admin **duyệt** → phase 2
 
 ## Phase 2 — render (thứ tự đọc skill)
 
-**Bước 0 (bắt buộc):** Sinh `visual_shot_plan` từ `audio_script` **đã duyệt** + markers → `short_video_update_agent_status({ metadata: { visual_shot_plan } })` — [visual-shot-plan.md](visual-shot-plan.md)
+**Bước 0 (bắt buộc):** Sau transcribe + `caption-words.json` → sinh `visual_shot_plan` (**N beats** bám audio, không theo HASCAS) → `short_video_update_agent_status({ metadata: { visual_shot_plan } })` — [visual-shot-plan.md](visual-shot-plan.md) · [visual-layout-archetypes.md](visual-layout-archetypes.md)
 
 Đọc **theo thứ tự** trước khi viết HTML:
 
@@ -48,8 +48,9 @@ Workflow **3 bước**: phase 1 `audio_script` → admin **duyệt** → phase 2
 | 5 | `/hyperframes-creative` | `video-composition.md`, palette, `audio-reactive.md` — **trước beat HTML** |
 | 6 | Kinetic typography | [kinetic-typography-brief.md](kinetic-typography-brief.md) — mindset motion graphics |
 | 7 | Typography font | [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — **trước beat HTML** |
+| 7b | Theme init | [hyperframes-theme-init.md](hyperframes-theme-init.md) + [canvas-contract-3-layer.md](canvas-contract-3-layer.md) |
 | 8 | Viral pacing | [viral-retention-structure.md](viral-retention-structure.md) |
-| 8b | Visual shot-plan | [visual-shot-plan.md](visual-shot-plan.md) — từ metadata |
+| 8b | Visual shot-plan | [visual-shot-plan.md](visual-shot-plan.md) + [visual-layout-archetypes.md](visual-layout-archetypes.md) |
 | 9 | `/motion-graphics` | `agent/skills/motion-graphics/catalog-map.md` — registry pick |
 | 10 | `/continuous-motion` | [continuous-motion-patterns.md](continuous-motion-patterns.md) — **trước beat HTML** |
 | 11 | `/hyperframes-animation` | `adapters/gsap.md`, blueprints |
@@ -61,6 +62,8 @@ Workflow **3 bước**: phase 1 `audio_script` → admin **duyệt** → phase 2
 | 16 | Overlay z-index | [overlay-layer-stack.md](overlay-layer-stack.md) — z 0–800 + 9000/9500 |
 | 17 | **Preflight** | `/biong-short-video-preflight` — continuous + visual-density + overlay |
 | 18 | Layout Biong | [layout-9x16-zones.md](layout-9x16-zones.md) |
+| 18b | Floater keep-out | [floater-text-keepout.md](floater-text-keepout.md) |
+| 18c | Dynamic BG | [dynamic-bg-mandatory.md](dynamic-bg-mandatory.md) |
 | 19 | GSAP checklist | [gsap-beat-checklist.md](gsap-beat-checklist.md) |
 | 20 | Motion map | [motion-vocabulary-map.md](motion-vocabulary-map.md) |
 | 21 | **Cinematic ép** | [motion-complexity-activation.md](motion-complexity-activation.md) |
@@ -72,9 +75,17 @@ GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 
 ## Init project render
 
+Resolve theme: CMS `hf_theme` → `visual_shot_plan.hf_theme` → `vignelli`. Xem [hyperframes-theme-init.md](hyperframes-theme-init.md).
+
 ```bash
-npx hyperframes init storage/agent-renders/{id}/my-video --non-interactive --skip-skills --example=blank
+# THEME từ short_video_get_context.hf_theme (không dùng blank production)
+npx hyperframes init storage/agent-renders/{id}/my-video \
+  --non-interactive --skip-skills \
+  --example={hf_theme} \
+  --resolution portrait
 ```
+
+Sau init: đọc CSS token theme → override Be Vietnam Pro → tuân [canvas-contract-3-layer.md](canvas-contract-3-layer.md).
 
 Dùng skill **repo-level** (`.agents/skills/`) — không duplicate skill vào từng project.
 

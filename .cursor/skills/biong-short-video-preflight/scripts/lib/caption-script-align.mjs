@@ -11,12 +11,23 @@ import {
   tryCoViewCluster,
   tryHyphenTranscriptCluster,
   tryPlainNumberCluster,
+  tryRacAiCluster,
   tryTikTokCluster,
   tryMergedTranscriptCluster,
   tryYearCluster,
+  tryDecimalChamCluster,
+  tryLucRaHomophone,
+  tryRungRinhHomophone,
+  tryRoiRenHomophone,
+  trySaleCellHomophone,
+  tryThangMonthHomophone,
+  tryThangNamPairCluster,
+  tryWhisperSingleHomophone,
+  trySkipTranscriptFiller,
 } from "./vi-align-helpers.mjs";
 
 export const DEFAULT_LOOKAHEAD = 40;
+const MAX_FUZZY_JUMP = 8;
 export const DEFAULT_FUZZY_MIN = 0.72;
 export const DEFAULT_DENSITY_MAX = 0.25;
 
@@ -159,6 +170,51 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
   for (let i = 0; i < scriptWords.length; i++) {
     const text = scriptWords[i];
 
+    let fillerSkip;
+    while ((fillerSkip = trySkipTranscriptFiller(transcriptWords, state.p))) {
+      state.p = fillerSkip.transcriptEnd;
+    }
+
+    const thangNamPair = tryThangNamPairCluster(scriptWords, i, transcriptWords, state.p);
+    if (thangNamPair) {
+      thangNamPair.words.forEach((w, k) => {
+        const t = thangNamPair.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: thangNamPair.matchType,
+          whisperText: thangNamPair.whisperText,
+          corrected: k === 1,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += thangNamPair.words.length;
+      state.p = thangNamPair.transcriptEnd;
+      i += thangNamPair.consumed - 1;
+      continue;
+    }
+
+    const thangMonth = tryThangMonthHomophone(scriptWords, i, transcriptWords, state.p);
+    if (thangMonth) {
+      thangMonth.words.forEach((w, k) => {
+        const t = thangMonth.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: thangMonth.matchType,
+          whisperText: thangMonth.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += thangMonth.words.length;
+      state.p = thangMonth.transcriptEnd;
+      i += thangMonth.consumed - 1;
+      continue;
+    }
+
     const forYou = tryForYouCluster(scriptWords, i, transcriptWords, state.p);
     if (forYou) {
       forYou.words.forEach((w, k) => {
@@ -196,6 +252,86 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       clusterCount += yearCluster.words.length;
       state.p = yearCluster.transcriptEnd;
       i += yearCluster.consumed - 1;
+      continue;
+    }
+
+    const decimalCham = tryDecimalChamCluster(scriptWords, i, transcriptWords, state.p, lookahead);
+    if (decimalCham) {
+      decimalCham.words.forEach((w, k) => {
+        const t = decimalCham.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: decimalCham.matchType,
+          whisperText: decimalCham.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += decimalCham.words.length;
+      state.p = decimalCham.transcriptEnd;
+      i += decimalCham.consumed - 1;
+      continue;
+    }
+
+    const lucRa = tryLucRaHomophone(scriptWords, i, transcriptWords, state.p);
+    if (lucRa) {
+      lucRa.words.forEach((w, k) => {
+        const t = lucRa.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: lucRa.matchType,
+          whisperText: lucRa.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += lucRa.words.length;
+      state.p = lucRa.transcriptEnd;
+      i += lucRa.consumed - 1;
+      continue;
+    }
+
+    const rungRinh = tryRungRinhHomophone(scriptWords, i, transcriptWords, state.p);
+    if (rungRinh) {
+      rungRinh.words.forEach((w, k) => {
+        const t = rungRinh.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: rungRinh.matchType,
+          whisperText: rungRinh.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += rungRinh.words.length;
+      state.p = rungRinh.transcriptEnd;
+      i += rungRinh.consumed - 1;
+      continue;
+    }
+
+    const roiRen = tryRoiRenHomophone(scriptWords, i, transcriptWords, state.p);
+    if (roiRen) {
+      roiRen.words.forEach((w, k) => {
+        const t = roiRen.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: roiRen.matchType,
+          whisperText: roiRen.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += roiRen.words.length;
+      state.p = roiRen.transcriptEnd;
+      i += roiRen.consumed - 1;
       continue;
     }
 
@@ -242,6 +378,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       clusterCount += fracCluster.words.length;
       state.p = fracCluster.transcriptEnd;
       i += fracCluster.consumed - 1;
+      continue;
+    }
+
+    const racAiCluster = tryRacAiCluster(scriptWords, i, transcriptWords, state.p);
+    if (racAiCluster) {
+      racAiCluster.words.forEach((w, k) => {
+        const t = racAiCluster.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: racAiCluster.matchType,
+          whisperText: racAiCluster.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += racAiCluster.words.length;
+      state.p = racAiCluster.transcriptEnd;
+      i += racAiCluster.consumed - 1;
       continue;
     }
 
@@ -375,6 +531,50 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const saleCell = trySaleCellHomophone(text, transcriptWords, state.p);
+    if (saleCell) {
+      mapped.push({
+        text,
+        start: saleCell.timing.start,
+        end: saleCell.timing.end,
+        matchType: saleCell.matchType,
+        whisperText: saleCell.whisperText,
+        corrected: true,
+        transcriptIndex: state.p,
+      });
+      fuzzyCount++;
+      corrections.push({
+        index: i,
+        script: text,
+        whisper: saleCell.whisperText,
+        matchType: saleCell.matchType,
+      });
+      state.p = saleCell.transcriptEnd;
+      continue;
+    }
+
+    const whisperHom = tryWhisperSingleHomophone(text, transcriptWords, state.p);
+    if (whisperHom) {
+      mapped.push({
+        text,
+        start: whisperHom.timing.start,
+        end: whisperHom.timing.end,
+        matchType: whisperHom.matchType,
+        whisperText: whisperHom.whisperText,
+        corrected: true,
+        transcriptIndex: state.p,
+      });
+      fuzzyCount++;
+      corrections.push({
+        index: i,
+        script: text,
+        whisper: whisperHom.whisperText,
+        matchType: whisperHom.matchType,
+      });
+      state.p = whisperHom.transcriptEnd;
+      continue;
+    }
+
     const target = norm(stripPunct(text));
 
     let found = -1;
@@ -396,7 +596,7 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
     }
 
     if (found < 0) {
-      for (let j = state.p; j < Math.min(transcriptWords.length, state.p + lookahead); j++) {
+      for (let j = state.p; j < Math.min(transcriptWords.length, state.p + MAX_FUZZY_JUMP); j++) {
         const sim = wordSimilarity(text, transcriptWords[j].text);
         if (sim >= fuzzyMin && sim > bestSim) {
           bestSim = sim;

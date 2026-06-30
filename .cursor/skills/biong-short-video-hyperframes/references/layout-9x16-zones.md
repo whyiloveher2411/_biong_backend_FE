@@ -1,61 +1,80 @@
 # Layout 9:16 — Agent short video (1080×1920)
 
-Quy tắc bắt buộc phase 2. Mục tiêu: **nội dung chính top-center**, **caption chỉ ở band dưới**, không đè diagram/CTA.
+Quy tắc bắt buộc phase 2. Mục tiêu: **nội dung chính gom cụm ở giữa dọc**, caption chỉ ở band dưới.
 
 Canvas mặc định: **1080×1920** (portrait TikTok/Reels).
 
 ---
 
-## Vùng canvas
+## Nguyên tắc cốt lõi — CONTENT CLUSTER (căn giữa dọc)
+
+**Hero + support phải nằm trong MỘT cụm**, căn giữa theo chiều dọc của vùng an toàn (trên caption band). **Cấm** tách hero lên zone trên và support xuống zone dưới khiến hai box cách xa nhau với khoảng trống lớn ở giữa.
 
 ```
 +----------------------------------+
-|  Top chrome (optional)     y 0   |
-|  +----------------------------+  |
-|  | HERO 8%–52% (~154–998px)   |  |  ← headline, hook, số chính
-|  | anchor top-center          |  |
-|  +----------------------------+  |
-|  | SUPPORT 52%–78%            |  |  ← diagram, flow, chips phụ
-|  | (~998–1498px)              |  |
-|  +----------------------------+  |
-|  | CAPTION BAND 78%–100%      |  |  ← CHỈ karaoke/caption rail
-|  | (~1498–1920) HARD          |  |
+|  (padding top ~80px)             |
+|                                  |
+|     ┌─────────────────────┐      |
+|     │  HERO (stat/headline)│      |  ← content-cluster
+|     │  gap 16–24px         │      |     justify-content: center
+|     │  SUPPORT (chart/flow)│      |     trên scene-root
+|     └─────────────────────┘      |
+|         ↑ tâm cụm ≈ y 42–48%     |
+|                                  |
+|  CAPTION 78%–100% (karaoke only) |
 +----------------------------------+
 ```
 
 | Vùng | % cao | px (1920h) | Nội dung |
 |------|-------|------------|----------|
-| Hero | 8–52% | 154–998 | Headline, hook, stat chính, CTA text lớn |
-| Support | 52–78% | 998–1498 | Sơ đồ, mũi tên flow, badge, metadata |
-| Caption | 78–100% | 1498–1920 | **Chỉ** `compositions/captions.html` hoặc registry caption |
+| Safe content | 4–78% | 80–1498 | **Toàn bộ** `.content-cluster` (hero + support gom lại) |
+| Caption | 78–100% | 1498–1920 | Chỉ `compositions/captions.html` |
 
-Hero anchor portrait: **y ≈ 0.42 × height** (~806px) — không dùng midpoint canvas (960px) khi có caption.
-
----
-
-## Z-depth theo `z_role` (visual_shot_plan)
-
-| z_role | z-index | Vùng layout |
-|--------|---------|-------------|
-| `bg_mesh` | 0–2 | Full-bleed behind all |
-| `bg_stock` | 3–5 | Stock video/image mờ |
-| `ambient` | 6–10 | ambient-layer.html |
-| `floater` | 80–150 | Stickers, orbs |
-| `hero_chart` / `hero_type` | 200–450 | Hero zone 8–52% |
-| `support` | 450–650 | Support zone 52–78% |
-| `accent_lottie` | 650–800 | Accent trên support |
-
-Registry block host: `style="z-index:320"` (ví dụ) + `data-composition-src` trong hero/support zone.
+**Tâm cụm mục tiêu:** `y ≈ 0.44 × 1920` (~845px) — giữa vùng an toàn, không dồn sát top.
 
 ---
 
-## Quy tắc cứng
+## Cấu trúc HTML bắt buộc
 
-1. **Cấm** `justify-content: center` hoặc `flex-end` trên **root scene** khi có caption — dùng `flex-start` + padding-top.
-2. **Cấm** đặt diagram/flow/CTA trong caption band (bottom 320px).
-3. **Cấm** headline chính trong support zone hoặc caption band.
-4. Caption sub-composition **tách file** — không nhúng karaoke inline trong beat HTML cùng layer diagram.
-5. Preflight: mọi `.clip` nội dung (trừ caption) có `bottom` edge **≥ 320px** từ đáy canvas (hoặc nằm trong hero+support qua padding).
+```html
+<div class="scene-root">
+  <div class="content-cluster">
+    <div class="hero-block">…nội dung chính…</div>
+    <div class="support-block">…visual phụ…</div>
+  </div>
+</div>
+```
+
+- `.content-cluster` — **bắt buộc** mọi beat (gom nội dung, căn giữa dọc)
+- `.hero-block` + `.support-block` — **tùy chọn**; có thể gộp một block hoặc chỉ hero khi đủ visual
+- **Không** ép một khuôn HTML cố định — chọn `layout_variant` phù hợp nội dung (xem bên dưới)
+- **Cấm** đặt hero/support trực tiếp dưới `.scene-root` không có cluster
+
+---
+
+## Layout variants (linh hoạt — không gò ép 1 khuôn)
+
+`content-cluster` chỉ quy định **cụm căn giữa dọc** — **không** bắt buộc hero trái / support phải / bento cố định.
+
+Ghi `layout_variant` trong shot-plan (tùy chọn):
+
+| Variant | Khi dùng | Cấu trúc |
+|---------|----------|----------|
+| `stack_center` | Mặc định — headline + visual dưới | Cột: hero full-width → gap → support |
+| `hero_only` | Một stat/quote đủ mạnh | Chỉ hero-block, không support |
+| `vs_row` | A vs B (2 card) | Headline trên; support = `flex row` 2 card + `vs` badge, `gap ≥24px` |
+| `bento_2x2` | 3–4 insight | Grid 2×2 trong support-block |
+| `single_column` | Flow dọc | Support = cột, reveal tuần tự |
+
+**Cấm trên 9:16:**
+
+| Anti-pattern | Vì sao |
+|--------------|--------|
+| `content-cluster { flex-direction: row }` với headline \| cards | Screen split — hình 2, đọc kém |
+| Headline cột trái ~40% + cards cột phải ~60% | Chip bị bó, chữ nhỏ |
+| Zone 52% trên / 38% dưới cách xa | Khoảng trống giữa màn hình |
+
+**So sánh A vs B:** dùng `stack_center` + `vs_row` — headline **căn giữa phía trên**, hai card **cùng hàng bên dưới** (không chia màn hình trái/phải).
 
 ---
 
@@ -63,62 +82,97 @@ Registry block host: `style="z-index:320"` (ví dụ) + `data-composition-src` t
 
 ```css
 .scene-root {
+  width: 1080px;
+  height: 1920px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  height: 100%;
-  padding: 140px 80px 340px; /* bottom = caption keep-out ~17% */
+  justify-content: center;   /* căn GIỮA cụm theo chiều dọc */
+  padding: 80px 48px 360px;  /* bottom = caption keep-out */
   box-sizing: border-box;
 }
 
-.hero-block {
-  flex: 0 0 auto;
-  width: 100%;
-  max-height: 44%; /* ~844px — stays in hero zone */
-  text-align: center;
+.content-cluster {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 20px;                 /* hero + support sát nhau */
+  width: 100%;
+  max-width: 940px;
 }
 
+.hero-block,
 .support-block {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   width: 100%;
-  max-height: 26%; /* support zone only */
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 24px;
 }
-
-/* Background/ambient layers may be position:absolute full-bleed */
 ```
 
----
-
-## Caption keep-out
-
-- Band cao **~320px** (17% của 1920).
-- Dùng `npx hyperframes add caption-highlight` / `caption-pill-karaoke` → sub-composition riêng.
-- Beat HTML: `padding-bottom: 340px` minimum để content không tràn xuống band.
+**Cấm:**
+- `flex: 0 0 52%` / `min-height: 480px` trên hero/support — gây tách box trên/dưới
+- `justify-content: flex-start` + padding-top lớn trên `.scene-root` — đẩy cụm lên top
+- `gap: 28px`+ giữa hero/support khi cluster đã có gap riêng mà vẫn spread zones
 
 ---
 
-## Anti-patterns (gây overlap như frame lỗi)
+## Z-depth theo `z_role`
+
+| z_role | z-index | Ghi chú |
+|--------|---------|---------|
+| `bg_mesh` | 0–2 | Full-bleed |
+| `bg_stock` | 3–5 | Stock mờ |
+| `ambient` | 6–10 | ambient-layer |
+| `floater` | 80–150 | Sticker — **lane phải**, cấm đè text — [floater-text-keepout.md](floater-text-keepout.md) |
+| `hero_chart` / `hero_type` | 200–450 | Trong cluster |
+| `support` | 200–450 | Trong cluster (cùng band, không tách xa) |
+
+---
+
+## Quy tắc cứng
+
+1. **Bắt buộc** `.content-cluster` + `justify-content: center` trên `.scene-root`.
+2. Hero và support **cùng cụm**, khoảng cách **20–32px**.
+3. **Cấm** diagram/CTA trong caption band (bottom 360px).
+4. Caption sub-composition **tách file** — không inline trong beat.
+5. Preflight: nội dung (trừ caption) bottom edge ≥ 360px từ đáy canvas.
+
+---
+
+## Typography & spacing (1080×1920)
+
+| Token | Quy tắc |
+|-------|---------|
+| Hero stat/headline | ≥64px; chiếm ≥40% chiều rộng cluster |
+| Support card title | ≥36px |
+| Support card subtitle / body | ≥28px |
+| Gap hero ↔ support | 20–32px trong `.content-cluster` |
+| Gap giữa cards | ≥24px (`gap` flex/grid) |
+| Max items / hàng ngang | ≤3; 4+ insight → bento 2×2 hoặc vertical cascade |
+| Card min-width | ≥280px hoặc full-width stack |
+| Cell min-height (bento) | ≥160px |
+
+Preflight: `check-typography-spacing.mjs` — xem [canvas-contract-3-layer.md](canvas-contract-3-layer.md).
+
+---
+
+## Anti-patterns
 
 | Sai | Đúng |
 |-----|------|
-| Diagram + caption cùng bottom 30% | Diagram ở support zone; caption ở band riêng |
-| Toàn scene `justify-content: center` | `flex-start` + hero top-center |
-| Headline ở giữa dọc canvas | Headline top 15–25% |
-| Karaoke inline trong beat HTML | `compositions/captions.html` overlay |
+| Hero 52% trên + support 38% dưới, giữa trống | Một `.content-cluster` căn giữa dọc |
+| Hai box cách nhau cả màn hình | `gap: 20px` trong cluster |
+| Headline sát top 15% | Cụm căn giữa ~y 44% |
+| Headline trái + cards phải (screen split) | Stack dọc: headline giữa trên → vs row dưới |
+| Sticker trái rộng đè chữ card | `floater-lane-right` — floater-text-keepout.md |
+| Nền gradient/mesh tĩnh | `stock_video` phủ timeline — dynamic-bg-mandatory.md |
+| Karaoke inline trong beat | `compositions/captions.html` overlay |
 
 ---
 
 ## Tham khảo
 
-- `product-launch-video/references/composition.md` — portrait zones
-- `hyperframes-creative/references/video-composition.md` — density, scale
-- Skill: `gsap-beat-checklist.md` — animation mỗi slide
+- `gsap-beat-checklist.md` — animation mỗi beat
+- `visual-layout-archetypes.md` — archetype theo shot plan

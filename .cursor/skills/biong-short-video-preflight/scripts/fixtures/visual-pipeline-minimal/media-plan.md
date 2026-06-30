@@ -1,4 +1,9 @@
-| scope | hero_type | registry_block | z_role | mcp_tool |
+| beat | layout_archetype | hero_type | registry_block | z_role |
+| beat_1 | kinetic_hook_slam | kinetic_type | caption-kinetic-slam | hero_type |
+| beat_2 | stat_punch_card | registry_block | stat-motion | hero_chart |
+| beat_3 | process_flow | diagram | flowchart | hero_chart |
+| beat_4 | comparison_split | registry_block | data-chart | hero_chart |
+| beat_5 | bento_insight_grid | registry_block | stat-motion | support |
+| beat_6 | cta_orbit | kinetic_type | caption-kinetic-slam | hero_type |
 | sfx_hook | audio | — | — | short_video_search_meme_sound |
 | bgm_global | audio | — | — | short_video_search_bgm |
-| solve | registry_block | data-chart | hero_chart | hyperframes add |

@@ -96,9 +96,15 @@ function main() {
   const metadata = pickMetadata(ctx);
   if (!metadata.markers.length) {
     console.warn(
-      "[bootstrap] Cảnh báo: markers rỗng — map-markers-to-timing sẽ fallback HASCAS rescale",
+      "[bootstrap] Cảnh báo: markers rỗng — HASCAS narrative anchors thiếu (chỉ ảnh hưởng Phase 1 metadata)",
     );
   }
+
+  const visualShotPlan =
+    ctx.visual_shot_plan ??
+    ctx.audio_script_metadata?.visual_shot_plan ??
+    metadata.visual_shot_plan ??
+    null;
 
   fs.mkdirSync(path.join(projectDir, "assets"), { recursive: true });
   fs.writeFileSync(path.join(projectDir, AUDIO_SCRIPT_REL), audioScript);
@@ -106,6 +112,14 @@ function main() {
     path.join(projectDir, AGENT_METADATA_REL),
     JSON.stringify(metadata, null, 2),
   );
+
+  if (Array.isArray(visualShotPlan) && visualShotPlan.length) {
+    const shotPath = path.join(projectDir, "assets/visual-shot-plan.json");
+    fs.writeFileSync(shotPath, JSON.stringify(visualShotPlan, null, 2));
+    console.log(
+      `[bootstrap] wrote assets/visual-shot-plan.json (${visualShotPlan.length} beats)`,
+    );
+  }
 
   console.log(
     `[bootstrap] wrote ${AUDIO_SCRIPT_REL} (${audioScript.length} chars), ${AGENT_METADATA_REL} (lang=${metadata.language}, markers=${metadata.markers.length})`,

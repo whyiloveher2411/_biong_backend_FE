@@ -20,7 +20,11 @@ AI agent mặc định sinh HTML/CSS tối giản (text + đổi nền). **Bắt
 - Caption karaoke: [caption-karaoke-script-sync.md](caption-karaoke-script-sync.md) — text script, timing Whisper, host z-index **9000**
 - Watermark: [spacedev-brand-watermark.md](spacedev-brand-watermark.md) — host z-index **9500**, suốt video
 - Font: [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md) — Be Vietnam Pro local
-- Viral pacing: [viral-retention-structure.md](viral-retention-structure.md) — visual change 1.5–2s
+- Viral pacing: [viral-retention-structure.md](viral-retention-structure.md) — beat visual content-driven, không theo HASCAS
+- Đọc kèm: [visual-layout-archetypes.md](visual-layout-archetypes.md) — **bắt buộc mỗi beat**
+- Giphy accent: [giphy-accent-format.md](giphy-accent-format.md) — **cấm MP4 sticker (ô trắng)**
+- Fixture test ≠ template: [fixtures-not-production-templates.md](fixtures-not-production-templates.md)
+- Layout căn giữa: [layout-9x16-zones.md](layout-9x16-zones.md) — `.content-cluster` gom hero + support **căn giữa dọc**
 - Overlay stack: [overlay-layer-stack.md](overlay-layer-stack.md) — **data-track-index ≠ z-order**
 - Preflight: `/biong-short-video-preflight` trước render final
 
@@ -49,7 +53,23 @@ npx hyperframes add shimmer-sweep
 
 Browse catalog: `agent/skills/motion-graphics/catalog-map.md` + registry.json
 
-**Luật:** ≥1 **non-caption** registry block mỗi video. Customize in-place theo `visual_shot_plan.customize`.
+**Luật:** ≥2 **non-caption** registry block mỗi video. Customize in-place theo `visual_shot_plan.customize`. **Cấm** ship "1 headline + 1 nền gradient".
+
+---
+
+## Render stack bắt buộc mỗi beat
+
+Chọn **≥2** trong: registry block · GSAP choreography · Lottie · Giphy accent · Three.js/WebGL · shader transition.
+
+Ghi trong `render_stack[]` của shot-plan. Đọc [visual-layout-archetypes.md](visual-layout-archetypes.md).
+
+| Cấm | Bắt buộc |
+|-----|----------|
+| Echo `phrase_anchor` lên nền | `visual_story` mô tả layout riêng |
+| Một archetype cả video | ≥3 archetype unique (video ≥60s) |
+| Chỉ caption-* registry | data-chart, flowchart, stat-motion, code-3d-extrude… |
+
+Three.js: scene nhẹ 9:16, `paused: true`, Pattern B `window.__timelines["beat_N"]`. Tham chiếu `.agents/skills/hyperframes/references/narration.md`.
 
 Skill: `/hyperframes-registry` + `/motion-graphics` · `/continuous-motion` cho ambient layer
 
@@ -129,11 +149,21 @@ window.__timelines["beat_1"] = tl; // key === data-composition-id trong composit
 
 | Vấn đề | Fix |
 |--------|-----|
-| Animation xong sớm, frame đứng chờ VO | `data-start`/`data-duration` beat theo `assets/beat-map.json` (từ `map-markers-to-timing.mjs`) |
+| Animation xong sớm, frame đứng chờ VO | `data-start`/`data-duration` beat theo `assets/beat-map.json` (từ `map-shot-plan-to-beat-map.mjs`) |
 | Timeline ngắn hơn clip | `data-duration` host ≥ GSAP active range; tổng beat ≈ `totalVideoSec` |
 | Caption lệch | `transcribe-audio.mjs` → sync pipeline; verify `--strict` (positional ≤15%) |
 
 Preflight: `check-beat-timing.mjs` + `check-continuous-motion.mjs` + `animation-map.mjs` — dead zone >1.5s chỉ pass nếu có ambient layer.
+
+### Pacing đồn dập (internal acts)
+
+- Beat duration ≥6s: **bắt buộc** ≥2 `internal_acts` trong shot-plan **hoặc** ≥2 `tl.addLabel()` trong beat HTML — [visual-shot-plan.md](visual-shot-plan.md)
+- Mỗi beat ≥1 **layout shift**: hero swap, stagger wave, camera push (`scale 0.92→1`), shader transition
+- Stat beat: **bắt buộc** `stat-motion` / `apple-money-count` — **cấm** plain `<div>` số liệu
+- Meme/logo: `rotation: 3`, `ease: "back.out(1.7)"`
+- `visual_enrichment[]`: facts ngắn từ brief **không** cần nằm trong VO — badge ≥32px
+- Max ~8–12s một layout world — sau đó beat mới hoặc thêm internal acts
+- Micro-motion: không frame tĩnh >2s giữa tween (trừ ambient cover)
 
 ---
 
@@ -178,8 +208,10 @@ Portrait 9:16: đảm bảo composition root = 1080×1920.
 
 - [ ] Caption karaoke wired — text từ `audio_script`, timing transcript
 - [ ] Watermark Spacedev góc trên trái — suốt `totalVideoSec`
-- [ ] Kinetic typography — không văn bản dài / font <28px body
-- [ ] ≥1 registry block wired (caption **và** ≥1 non-caption hero)
+- [ ] Theme init + canvas 3 lớp — [hyperframes-theme-init.md](hyperframes-theme-init.md) · [canvas-contract-3-layer.md](canvas-contract-3-layer.md)
+- [ ] `check-typography-spacing.mjs` exit 0
+- [ ] Beat ≥6s có ≥2 internal acts hoặc GSAP labels
+- [ ] ≥2 registry block khác tên wired (caption **và** ≥2 non-caption hero)
 - [ ] `window.__timelines["ambient"]` + ambient-layer host z 6–10
 - [ ] `check-continuous-motion.mjs` exit 0
 - [ ] Không entrance dùng `ease: "none"` / linear

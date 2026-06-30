@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Map HASCAS markers → real audio timings via caption word matches.
+ * Map HASCAS narrative markers → timings (optional/debug — không dùng làm nguồn beat visual mặc định).
  *
  * Usage: node map-markers-to-timing.mjs <project-dir> [--metadata assets/agent-metadata.json]
  */

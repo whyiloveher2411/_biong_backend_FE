@@ -60,6 +60,10 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 6. **loop_hook_line** — semantic bridge về hook (cho `cta_mode: loop`)
 7. **Không** invent claims ngoài nguồn
 
+## Phase 2 — visual enrichment
+
+Facts trong `narrative_chain`, `takeaway.proof`, hoặc marketing post **chưa** đưa vào VO → ghi vào `visual_enrichment[]` trong `visual_shot_plan` (Phase 2). On-screen ngắn; không lặp caption narration.
+
 ## Anti-patterns
 
 - Tóm tắt bullet học thuật

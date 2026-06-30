@@ -43,7 +43,7 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 3. Đọc [narrative-flow-vi.md](references/narrative-flow-vi.md) — But/Therefore
 4. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md)
 
-**Sau TTS:** `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `map-markers-to-timing.mjs` (prosody tags đổi duration).
+**Sau TTS:** `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `visual_shot_plan` (N beats) → `map-shot-plan-to-beat-map.mjs` (prosody tags đổi duration).
 
 **Prereq OmniVoice (local):**
 
@@ -59,13 +59,15 @@ Chung: `OMNIVOICE_MODEL_ID=k2-fsa/OmniVoice`, `OMNIVOICE_GUIDANCE_SCALE=2`, `OMN
 
 **Đọc trước:** [media-mcp-activation.md](references/media-mcp-activation.md)
 
-Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` — **không** gọi MCP, **không** shot-plan. Phase render:
+Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) — **không** gọi MCP, **không** shot-plan. Phase render:
 
-1. `get_context` — script **đã duyệt**; sinh `visual_shot_plan` → `update_agent_status`
-2. `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → `totalVideoSec`
-3. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / Lottie bundle / stock **bg only**
-4. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
-5. Embed SFX track 12 + BGM track 11; GSAP paused
+1. `get_context` — script **đã duyệt**
+2. `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `totalVideoSec`
+3. Sinh `visual_shot_plan` (**N beats** bám audio, không theo HASCAS) → `update_agent_status` + `assets/visual-shot-plan.json`
+4. `map-shot-plan-to-beat-map.mjs` → agent viết `compositions/beat_N.html` thủ công (registry/GSAP/Lottie/Three.js)
+5. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / Lottie bundle / stock **bg only**
+6. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
+7. Embed SFX track 12 + BGM track 11; GSAP paused
 
 | Tool | Dùng khi |
 |------|----------|
@@ -128,12 +130,13 @@ short_video_save_audio_script({
 
 ## Phase 2 — Motion complexity (bắt buộc)
 
-**Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`… hoặc `#root` opaque che stock. Phase 2 **bắt buộc**:
+**Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`…, text-only kinetic, hoặc `#root` opaque che stock. **Cấm** `gen-beats-from-shot-plan.mjs` — đã gỡ. Phase 2 **bắt buộc**:
 
-1. Sinh `visual_shot_plan` từ `audio_script` đã duyệt → lưu `update_agent_status` — [visual-shot-plan.md](references/visual-shot-plan.md)
-2. `assets/visual-shot-plan.json` + `gen-beats-from-shot-plan.mjs`
-3. `npx hyperframes add` registry blocks theo shot-plan — customize in-place
-4. `check-visual-density.mjs` pass (FAIL nếu placeholder / thiếu shot-plan / opaque beat)
+1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md) · [visual-layout-archetypes.md](references/visual-layout-archetypes.md)
+2. `assets/visual-shot-plan.json` + `map-shot-plan-to-beat-map.mjs`
+3. Agent **viết thủ công** `compositions/beat_N.html` + `npx hyperframes add` registry — customize in-place
+4. Đọc [giphy-accent-format.md](references/giphy-accent-format.md) · [floater-text-keepout.md](references/floater-text-keepout.md) · [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) · [fixtures-not-production-templates.md](references/fixtures-not-production-templates.md) · [layout-9x16-zones.md](references/layout-9x16-zones.md)
+5. `check-visual-density.mjs` pass (FAIL nếu text-only / thiếu shot-plan / opaque beat)
 
 ### Vai trò
 
@@ -161,9 +164,9 @@ node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.
 node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
-node .cursor/skills/biong-short-video-preflight/scripts/map-markers-to-timing.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
-node .cursor/skills/biong-short-video-preflight/scripts/gen-beats-from-shot-plan.mjs $PROJ
+# Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
@@ -232,11 +235,15 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 6. [caption-karaoke-script-sync.md](references/caption-karaoke-script-sync.md) — **caption bắt buộc**
 7. [transcribe-locale.md](references/transcribe-locale.md) — **locale transcribe đa ngôn ngữ**
 7. [kinetic-typography-brief.md](references/kinetic-typography-brief.md) — **mindset motion graphics, min font**
+7b. [hyperframes-theme-init.md](references/hyperframes-theme-init.md) + [canvas-contract-3-layer.md](references/canvas-contract-3-layer.md) — **theme scaffolding + 3 lớp**
 8. [spacedev-brand-watermark.md](references/spacedev-brand-watermark.md) — **watermark bắt buộc**
 9. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
 10. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
-11. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
+11. [visual-layout-archetypes.md](references/visual-layout-archetypes.md) — **layout catalog Phase 2**
+12. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
 12. [layout-9x16-zones.md](references/layout-9x16-zones.md)
+12b. [floater-text-keepout.md](references/floater-text-keepout.md) — **sticker không đè text**
+12c. [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) — **cấm nền tĩnh**
 13. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
 14. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
 15. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
@@ -263,13 +270,16 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] Caption host `z-index:9000` + watermark host `z-index:9500` — [overlay-layer-stack.md](references/overlay-layer-stack.md)
 - [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
 - [ ] `transcribe-audio.mjs` + `verify-caption-sync.mjs --strict` pass
-- [ ] `map-markers-to-timing.mjs` + `check-beat-timing.mjs` pass
+- [ ] `map-shot-plan-to-beat-map.mjs` + `check-beat-timing.mjs` pass
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
 - [ ] Caption karaoke wired — text audio_script, timing Whisper
 - [ ] Watermark Spacedev — logo + © Spacedev góc trên trái, suốt video
-- [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; list → UI Card
+- [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; card title ≥36px; list → UI Card
+- [ ] Theme init `--example={hf_theme}` portrait — **cấm** blank production — [hyperframes-theme-init.md](references/hyperframes-theme-init.md)
+- [ ] Canvas contract 3 lớp mỗi beat — [canvas-contract-3-layer.md](references/canvas-contract-3-layer.md)
+- [ ] `check-typography-spacing.mjs` exit 0
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML
-- [ ] `visual_shot_plan` trong metadata Phase 2 — ≥60% non-stock hero
+- [ ] `visual_shot_plan` trong metadata Phase 2 — N beats content-driven, mỗi beat có `layout_archetype` + `visual_story`
 - [ ] `check-continuous-motion.mjs` + `check-visual-density.mjs` exit 0
 - [ ] `media-plan.md` có `bgm_global` + `hero_type`/`registry_block`/`z_role`
 - [ ] ≥1 non-caption registry block (data-chart, flowchart, stat-motion…)

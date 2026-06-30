@@ -12,7 +12,7 @@ Phase 2: sinh `visual_shot_plan` → lưu `update_agent_status` → MCP theo sho
 
 ## Vai trò
 
-Chuyên gia Motion Graphics viral — **registry UI hero** + ambient motion + nhạc nền nhẹ. Pexels chỉ **nền** (z 3–5, opacity 0.3–0.6).
+Chuyên gia Motion Graphics viral — **registry UI hero** + ambient motion + nhạc nền nhẹ. **Mọi beat** phải có `stock_video` nền — đọc [dynamic-bg-mandatory.md](dynamic-bg-mandatory.md). Pexels z 3–5, opacity 0.35–0.55.
 
 ---
 
@@ -56,7 +56,7 @@ short_video_search_stock_media({ query: "abstract dark gradient", media_type: "v
 short_video_search_giphy({ query: "celebration", media_type: "sticker" })
 ```
 
-→ `assets/images/` — floater z 80–150
+→ `assets/images/` — floater z 80–150 — **`<img>` WebP/GIF only** — [giphy-accent-format.md](giphy-accent-format.md) + **lane phải** [floater-text-keepout.md](floater-text-keepout.md)
 
 **Lottie (bundle local):**
 
@@ -103,7 +103,9 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 | Hook SFX | Bắt buộc nếu script có `[SFX: ...]` (track 12) |
 | Registry | ≥1 **non-caption** block (data-chart, flowchart, stat-motion…) |
 | Stock hero | ≤40% beat — còn lại registry/kinetic/diagram |
-| Ambient | `ambient-layer.html` bắt buộc |
+| Ambient | `ambient-layer.html` bắt buộc (lớp phụ — **không** thay stock video) |
+| Dynamic BG | Mọi beat `stock_video`; timeline phủ kín — `check-dynamic-background.mjs` |
+| Floater lane | `floater-lane-right`; cấm đè text — `check-floater-keepout.mjs` |
 | BGM volume | 0.25–0.35; narration 1.0 |
 
 ---

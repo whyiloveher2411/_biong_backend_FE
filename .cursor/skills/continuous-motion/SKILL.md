@@ -11,7 +11,7 @@ Tách **beat-synced motion** (theo `beat-map.json`) khỏi **ambient motion** (c
 
 ## Khi invoke
 
-- Phase 2 render — sau `map-markers-to-timing.mjs`, **trước** viết beat HTML
+- Phase 2 render — sau `map-shot-plan-to-beat-map.mjs`, **trước** viết beat HTML
 - Sau `npx hyperframes add grain-overlay` (component)
 
 ## Dual-timeline contract

@@ -83,9 +83,10 @@ html, body, #root {
 |---------|--------|------------------|
 | Hero headline | 700–800 | 64–120px |
 | Body / support | 500–600 | 28–42px |
+| Support card title (on-screen UI) | 600–700 | **≥36px** |
 | Caption karaoke | 600–700 | min 42px portrait |
 | Watermark "© Spacedev" | 600 | 18–22px |
-| Metadata chip | 500 | 18–24px |
+| On-screen chip / badge | 500–600 | **≥32px** (không dùng 18–24px cho UI card) |
 
 ---
 

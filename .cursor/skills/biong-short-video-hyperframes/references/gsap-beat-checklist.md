@@ -54,12 +54,16 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 
 ## Retention pacing (viral)
 
-Đọc [viral-retention-structure.md](viral-retention-structure.md).
+Đọc [viral-retention-structure.md](viral-retention-structure.md) · [visual-layout-archetypes.md](visual-layout-archetypes.md).
 
-- **Visual change mỗi 1.5–2s** — không frame tĩnh >2s
-- Beat map theo `metadata.timeline` (Hook 0–3, Agitate 3–15, Solve 15–35, CTA 35–40)
+- **Visual beat** bám `phrase_anchor` — timing từ `map-shot-plan-to-beat-map.mjs`
+- **Không** map 1:1 HASCAS → visual beat; Solve có thể nhiều beat
+- Beat ≥6s: ≥2 `internal_acts` (shot-plan) hoặc ≥2 `tl.addLabel()` — xem [visual-shot-plan.md](visual-shot-plan.md)
+- Mỗi beat ≥1 layout shift — hero swap, camera push, shader in
+- Stat: `npx hyperframes add stat-motion` — cấm plain number div
+- Max ~8–12s một layout world — sau đó beat mới hoặc `internal_acts`
+- Micro-motion trong beat: stagger, ambient — không frame tĩnh >2s
 - `animation-map.mjs` dead zone ≤1.5s
-- Agitate: đổi palette / layout mỗi phrase
 
 ---
 
@@ -71,8 +75,10 @@ Bắt buộc phase 2. Đọc **trước** khi viết animation.
 |------|---------|
 | Headline | 64–120px — hero zone 8–52% |
 | Body | ≥28px — cấm <24px không justify |
+| Support card title | ≥36px |
+| On-screen chip | ≥32px |
 | Phrases | 3–5 từ/cụm — stagger `0.08–0.12` |
-| Lists | UI Card + icon — **không** bullet text thuần |
+| Lists | UI Card + icon — **không** bullet text thuần; max 3/row ngang |
 
 ---
 

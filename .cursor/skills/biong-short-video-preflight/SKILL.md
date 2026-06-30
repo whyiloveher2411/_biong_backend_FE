@@ -30,9 +30,9 @@ node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.
 node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
-node .cursor/skills/biong-short-video-preflight/scripts/map-markers-to-timing.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
-node .cursor/skills/biong-short-video-preflight/scripts/gen-beats-from-shot-plan.mjs $PROJ
+# Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 mkdir -p $PROJ/assets/images
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
@@ -48,7 +48,10 @@ Sau `/continuous-motion` + registry blocks theo `visual_shot_plan`:
 ```bash
 node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-stock-full-bleed.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-dynamic-background.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-floater-keepout.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-typography-spacing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
@@ -82,7 +85,10 @@ node ../../../../.agents/skills/hyperframes-animation/scripts/animation-map.mjs 
 ## Quality gate
 
 - [ ] `check-continuous-motion.mjs` exit 0
+- [ ] `check-dynamic-background.mjs` exit 0
+- [ ] `check-floater-keepout.mjs` exit 0
 - [ ] `check-visual-density.mjs` exit 0
+- [ ] `check-typography-spacing.mjs` exit 0
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `check-media-stack.mjs --strict` exit 0
 - [ ] `hyperframes lint` 0 errors

@@ -46,6 +46,7 @@ import {
 } from 'helpers/postTypeRowClick';
 import { useScrollPostTypeTableOnQueryChange } from 'hook/useScrollPostTypeTableOnQueryChange';
 import ShortVideoEditDrawerUrlFallback from 'components/atoms/PostType/ShortVideoEditDrawerUrlFallback';
+import ShortVideoAgentVideoDrawerUrlFallback from 'components/atoms/PostType/ShortVideoAgentVideoDrawerUrlFallback';
 
 const useStyles = makeCSS((theme: Theme) => ({
     results: {
@@ -661,6 +662,13 @@ const Results = ({
                 postType={postType}
                 rows={data?.rows?.data}
                 config={data.config}
+                isLoadedData={isLoadedData}
+                onRefreshList={() => acctionPost({})}
+            />
+
+            <ShortVideoAgentVideoDrawerUrlFallback
+                postType={postType}
+                rows={data?.rows?.data}
                 isLoadedData={isLoadedData}
                 onRefreshList={() => acctionPost({})}
             />

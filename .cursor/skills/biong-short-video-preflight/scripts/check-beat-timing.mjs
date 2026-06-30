@@ -92,7 +92,7 @@ function main() {
   }
 
   if (!fs.existsSync(beatMapPath)) {
-    console.error(`Thiếu ${BEAT_MAP_REL} — chạy map-markers-to-timing.mjs trước`);
+    console.error(`Thiếu ${BEAT_MAP_REL} — chạy map-shot-plan-to-beat-map.mjs trước`);
     process.exit(1);
   }
 
@@ -149,7 +149,7 @@ function main() {
     const startB = htmlBeats[i + 1].start;
     if (startB < endA - 0.05) {
       errors.push(
-        `Beat overlap: #${i + 1} (${htmlBeats[i].id}) kết thúc ~${endA.toFixed(2)}s nhưng #${i + 2} (${htmlBeats[i + 1].id}) bắt đầu ${startB}s — chồng nội dung ghost. Chạy map-markers-to-timing + sync-index-beats-from-map`,
+        `Beat overlap: #${i + 1} (${htmlBeats[i].id}) kết thúc ~${endA.toFixed(2)}s nhưng #${i + 2} (${htmlBeats[i + 1].id}) bắt đầu ${startB}s — chồng nội dung ghost. Chạy map-shot-plan-to-beat-map + sync-index-beats-from-map`,
       );
     }
   }
