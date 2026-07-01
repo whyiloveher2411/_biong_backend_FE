@@ -1,3 +1,5 @@
+import type { HfThemeCatalogItem } from './agentVideoApi';
+
 export const TTS_PLATFORM_OPTIONS = [
     { key: 'omnivoice_local', label: 'OmniVoice (local)' },
     { key: 'vieneu', label: 'VieNeu (local)' },

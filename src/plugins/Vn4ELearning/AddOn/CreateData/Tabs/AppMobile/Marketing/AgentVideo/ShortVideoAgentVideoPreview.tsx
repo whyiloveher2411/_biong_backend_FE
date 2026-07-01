@@ -12,9 +12,10 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
 type Props = {
     state: AgentVideoState;
+    videoRef: React.Ref<HTMLVideoElement>;
 };
 
-export default function ShortVideoAgentVideoPreview({ state }: Props) {
+export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) {
     const placeholder = resolvePreviewPlaceholder({
         agentVideoUrl: state.agentVideoUrl,
         agentVideoStatus: state.agentVideoStatus,
@@ -66,6 +67,7 @@ export default function ShortVideoAgentVideoPreview({ state }: Props) {
                         }}
                     >
                         <video
+                            ref={videoRef}
                             controls
                             src={state.agentVideoUrl}
                             style={{

@@ -4,9 +4,11 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import Button from 'components/atoms/Button';
+import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentVideoPreview from './ShortVideoAgentVideoPreview';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
+import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import { useAgentVideoContent } from './useAgentVideoContent';
 
 type Props = {
@@ -34,6 +36,38 @@ export default function ShortVideoAgentVideoWorkspace({
     onUploaded,
 }: Props) {
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+
+    React.useEffect(() => {
+        if (!open || !state.agentVideoUrl) {
+            return undefined;
+        }
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space' && event.key !== ' ') {
+                return;
+            }
+            if (event.repeat || isKeyboardEditableTarget(event.target)) {
+                return;
+            }
+            const video = videoRef.current;
+            if (!video) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (video.paused) {
+                void video.play();
+            } else {
+                video.pause();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [open, state.agentVideoUrl]);
 
     const drawerTitle = state.title
         ? `Short video #${shortVideoId} — ${state.title}`
@@ -128,7 +162,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         <ShortVideoAgentScriptPanel state={state} />
                     </Box>
 
-                    <ShortVideoAgentVideoPreview state={state} />
+                    <ShortVideoAgentVideoPreview state={state} videoRef={videoRef} />
 
                     <Box
                         sx={{
@@ -145,6 +179,15 @@ export default function ShortVideoAgentVideoWorkspace({
                         <ShortVideoAgentWorkflowPanel state={state} />
                     </Box>
                 </Box>
+                <ShortVideoAgentVideoTimeline
+                    shortVideoId={shortVideoId}
+                    videoUrl={state.agentVideoUrl}
+                    agentVideoRenderedAt={state.agentVideoRenderedAt}
+                    videoRef={videoRef}
+                    clipLabel={state.title || `Short video #${shortVideoId}`}
+                    audioDurationSec={state.audioDurationSec}
+                    estimatedDurationSec={state.agentVideoSummary?.estimated_duration_sec}
+                />
             </Box>
         </DrawerCustom>
     );
