@@ -1,0 +1,12 @@
+{
+  "short_video_id": 0,
+  "captured_at": "",
+  "frame_count": 0,
+  "fix_loops_used": 0,
+  "layout_pass": false,
+  "aesthetic_score": 0,
+  "issues": [],
+  "beat_verdicts": [],
+  "premium_patterns_extracted": [],
+  "memory_appended": false
+}

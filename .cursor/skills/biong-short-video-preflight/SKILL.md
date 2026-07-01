@@ -82,6 +82,22 @@ node ../../../../.agents/skills/hyperframes-animation/scripts/animation-map.mjs 
 
 ---
 
+## Bước 4 — Visual audit (pre-final)
+
+Sau Bước 1–3 pass → invoke `/biong-short-video-evolution` (không thay thế lint/inspect):
+
+```bash
+node .cursor/skills/biong-short-video-preflight/scripts/capture-visual-audit.mjs $PROJ
+```
+
+Agent đọc `snapshots/` + `contact-sheet.jpg` — layout 0 fail + aesthetic ≥7/10.
+
+**Sau mỗi vòng fix trong vision loop:** chạy lại Bước 1–3 (preflight đầy đủ) rồi `capture-visual-audit.mjs` lại.
+
+Pass vision → append [evolution-memory.md](../biong-short-video-hyperframes/references/evolution-memory.md) → mới `render --quality high --strict`.
+
+---
+
 ## Quality gate
 
 - [ ] `check-continuous-motion.mjs` exit 0
@@ -92,4 +108,5 @@ node ../../../../.agents/skills/hyperframes-animation/scripts/animation-map.mjs 
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `check-media-stack.mjs --strict` exit 0
 - [ ] `hyperframes lint` 0 errors
+- [ ] `/biong-short-video-evolution` vision pass + `assets/visual-audit-report.json`
 - [ ] Chỉ sau đó: `render --quality high --strict`

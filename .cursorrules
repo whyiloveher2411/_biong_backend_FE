@@ -14,3 +14,10 @@ rules
 - `media-plan.md`: sfx_hook + bgm_global + hero_type/registry_block/z_role mỗi beat
 - `/continuous-motion` → ambient-layer + `window.__timelines["ambient"]`
 - GSAP: `paused: true` + `window.__timelines[id]`; cấm `tl.play()` cho motion render
+
+## HyperFrames agent — auto-evolution (bắt buộc phase render)
+
+- Đọc TRƯỚC beat HTML: `.cursor/skills/biong-short-video-hyperframes/references/evolution-memory.md`
+- Sau preflight pass: `/biong-short-video-evolution` — snapshot + vision audit + tự vá (max 2 vòng, không hỏi user)
+- Sau vision pass: append `evolution-memory.md` + `assets/visual-audit-report.json`
+- Cấm sửa `SKILL.md` trong session render; cấm `render --quality high` trước vision pass

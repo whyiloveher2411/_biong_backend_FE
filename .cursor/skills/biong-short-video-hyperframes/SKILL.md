@@ -130,6 +130,8 @@ short_video_save_audio_script({
 
 ## Phase 2 — Motion complexity (bắt buộc)
 
+**Đọc TRƯỚC khi viết beat HTML:** [evolution-memory.md](references/evolution-memory.md) — reuse premium blocks, tuân constraints. **Cấm** sửa `SKILL.md` trong session render.
+
 **Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`…, text-only kinetic, hoặc `#root` opaque che stock. **Cấm** `gen-beats-from-shot-plan.mjs` — đã gỡ. Phase 2 **bắt buộc**:
 
 1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md) · [visual-layout-archetypes.md](references/visual-layout-archetypes.md)
@@ -179,7 +181,17 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $P
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 ```
 
-Pass → mới `render --quality high --strict`.
+Pass → invoke `/biong-short-video-evolution` (vision loop) → mới `render --quality high --strict`.
+
+### Phase 2.5 — Auto-Evolution (bắt buộc)
+
+Invoke `/biong-short-video-evolution` sau preflight pass, **trước** render final:
+
+1. `capture-visual-audit.mjs` → `hyperframes snapshot`
+2. Agent đọc snapshots + contact-sheet — rubric layout + aesthetic ≥7/10
+3. Fail → sửa beat HTML/CSS/GSAP → re-preflight (max **2 vòng**, không hỏi user)
+4. Pass → append [evolution-memory.md](references/evolution-memory.md) + `assets/visual-audit-report.json`
+5. `render --quality high --strict` + upload kèm `metadata.visual_audit_report`
 
 ### Watermark Spacedev (bắt buộc)
 
@@ -247,7 +259,9 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 13. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
 14. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
 15. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
-16. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
+16. [evolution-memory.md](references/evolution-memory.md) — **đọc trước beat HTML; append sau vision audit**
+17. `/biong-short-video-evolution` — **vision loop trước render final**
+18. [motion-vocabulary-map.md](references/motion-vocabulary-map.md)
 
 ---
 
@@ -262,6 +276,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 | Caption | `/embedded-captions` |
 | GSAP | `/hyperframes-animation` + gsap-skills |
 | Preflight | `/biong-short-video-preflight` — trước render final |
+| Auto-evolution | `/biong-short-video-evolution` — vision audit + memory sau preflight |
 
 ---
 
@@ -294,6 +309,9 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `window.__timelines` + `data-duration` khớp audio
 - [ ] `hyperframes lint` — 0 errors; `inspect` pass caption band
 - [ ] `animation-map.mjs` — dead zone ≤1.5s (hoặc ambient cover)
+- [ ] Đã đọc `evolution-memory.md` trước beat HTML; reuse ≥1 premium block khi phù hợp
+- [ ] `/biong-short-video-evolution` pass — vision audit + `visual-audit-report.json`
+- [ ] `evolution-memory.md` appended (lesson và/hoặc premium block + evolution log)
 - [ ] Render `--quality high --strict` (draft chỉ debug local)
 - [ ] Caption band tách — không overlap
 - [ ] Upload MP4 qua MCP
