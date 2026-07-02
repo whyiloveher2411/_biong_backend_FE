@@ -23,5 +23,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Agent HyperFrames renders — upload S3 qua MCP, không đưa vào git
-/storage/agent-renders/
+# Runtime storage — agent renders, assets tạm; upload S3 qua MCP, không đưa vào git
+/storage/**
+!storage/
+!storage/**/
+!storage/**/.gitkeep

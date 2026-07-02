@@ -279,6 +279,20 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
     }
   }
 
+  const anchors = shotPlan.map((s) =>
+    String(s.phrase_anchor ?? s.phrase_text ?? "").trim().toLowerCase(),
+  );
+  const seenAnchors = new Set();
+  for (let i = 0; i < anchors.length; i++) {
+    const anchor = anchors[i];
+    if (!anchor) continue;
+    if (seenAnchors.has(anchor)) {
+      const id = shotPlan[i].beat_id ?? `beat_${i + 1}`;
+      errors.push(`${id}: phrase_anchor trùng beat khác — cấm lặp nội dung`);
+    }
+    seenAnchors.add(anchor);
+  }
+
   const stockHeavy = shotPlan.filter((s) => s.hero_mode === "stock_accent").length;
   const ratio = stockHeavy / shotPlan.length;
   if (ratio > 0.5) {
@@ -294,9 +308,9 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
       for (let i = 0; i < Math.min(sections.length, shotPlan.length); i++) {
         const dur = sections[i].durationSec ?? 0;
         const shot = shotPlan[i];
-        if (dur > 12 && !shot.internal_acts && !shot.multi_clip) {
-          warnings.push(
-            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >12s — thêm internal_acts hoặc tách beat`,
+        if (dur > 5 && !shot.internal_acts && !shot.multi_clip) {
+          errors.push(
+            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >5s — tách thành nhiều beat (visual-shot-plan.md)`,
           );
         }
       }

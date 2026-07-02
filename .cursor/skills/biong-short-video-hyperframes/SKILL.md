@@ -204,6 +204,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-stock-full-bleed.m
 node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-foreground-motion-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-screen-fill.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-transition-sfx.mjs $PROJ
@@ -320,6 +321,9 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `check-default-styles.mjs` exit 0 — plate-rust beat_1 + global border-3d/text-shadow
 - [ ] `transcribe-audio.mjs` + `verify-caption-sync.mjs --strict` pass
 - [ ] `map-shot-plan-to-beat-map.mjs` + `check-beat-timing.mjs` pass
+- [ ] Mỗi beat ≤5s — `check-beat-timing.mjs` exit 0
+- [ ] Content fill >50% màn hình — `check-screen-fill.mjs` exit 0
+- [ ] Không lặp `phrase_anchor` giữa các beat — `check-visual-density.mjs`
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
 - [ ] Caption karaoke wired — text audio_script, timing Whisper
 - [ ] Watermark Spacedev — logo + © Spacedev góc trên trái, suốt video

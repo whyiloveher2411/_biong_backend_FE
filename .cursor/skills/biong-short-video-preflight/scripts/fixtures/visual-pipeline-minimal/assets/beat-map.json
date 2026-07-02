@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-01T08:33:58.041Z",
+  "generatedAt": "2026-07-02T07:55:20.018Z",
   "source": "visual-shot-plan",
-  "totalVideoSec": 60,
+  "totalVideoSec": 30,
   "sections": [
     {
       "id": "beat_1",
@@ -10,8 +10,8 @@
       "narrative_role": null,
       "phrase_anchor": "Hook shock opener",
       "startSec": 0,
-      "endSec": 10,
-      "durationSec": 10,
+      "endSec": 5,
+      "durationSec": 5,
       "source": "caption-word-match"
     },
     {
@@ -20,9 +20,9 @@
       "layout_archetype": "stat_punch_card",
       "narrative_role": null,
       "phrase_anchor": "Ninety thousand jobs cut",
-      "startSec": 10,
-      "endSec": 20,
-      "durationSec": 10,
+      "startSec": 5,
+      "endSec": 10,
+      "durationSec": 5,
       "source": "caption-word-match"
     },
     {
@@ -31,9 +31,9 @@
       "layout_archetype": "process_flow",
       "narrative_role": null,
       "phrase_anchor": "AI investment flow steps",
-      "startSec": 20,
-      "endSec": 30,
-      "durationSec": 10,
+      "startSec": 10,
+      "endSec": 15,
+      "durationSec": 5,
       "source": "caption-word-match"
     },
     {
@@ -42,9 +42,9 @@
       "layout_archetype": "comparison_split",
       "narrative_role": null,
       "phrase_anchor": "Before after comparison chart",
-      "startSec": 30,
-      "endSec": 40,
-      "durationSec": 10,
+      "startSec": 15,
+      "endSec": 20,
+      "durationSec": 5,
       "source": "caption-word-match"
     },
     {
@@ -53,9 +53,9 @@
       "layout_archetype": "bento_insight_grid",
       "narrative_role": null,
       "phrase_anchor": "Three insight bento grid",
-      "startSec": 40,
-      "endSec": 50,
-      "durationSec": 10,
+      "startSec": 20,
+      "endSec": 25,
+      "durationSec": 5,
       "source": "caption-word-match"
     },
     {
@@ -64,9 +64,9 @@
       "layout_archetype": "cta_orbit",
       "narrative_role": null,
       "phrase_anchor": "Follow now call to action",
-      "startSec": 50,
-      "endSec": 60,
-      "durationSec": 10,
+      "startSec": 25,
+      "endSec": 30,
+      "durationSec": 5,
       "source": "caption-word-match"
     }
   ]

@@ -168,6 +168,23 @@ function main() {
     );
   }
 
+  const MAX_BEAT_DURATION_SEC = 5.0;
+  for (const beat of htmlBeats) {
+    if (beat.duration > MAX_BEAT_DURATION_SEC) {
+      errors.push(
+        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s > 5s — tách thành ${Math.ceil(beat.duration / MAX_BEAT_DURATION_SEC)} beat (visual-shot-plan.md)`,
+      );
+    }
+  }
+  for (const mapSec of mapSections) {
+    const dur = mapSec.durationSec ?? 0;
+    if (dur > MAX_BEAT_DURATION_SEC) {
+      errors.push(
+        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s > 5s — tách shot-plan`,
+      );
+    }
+  }
+
   const rootDuration = html.match(
     /<div[^>]*id\s*=\s*["']root["'][^>]*data-duration\s*=\s*["']([^"']+)["']/i,
   )?.[1];

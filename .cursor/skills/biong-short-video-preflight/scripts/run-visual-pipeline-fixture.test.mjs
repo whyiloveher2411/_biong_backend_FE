@@ -29,14 +29,14 @@ function beatHtml(id, registryBlock, inner, compId = id) {
   return `<!DOCTYPE html><html><head><style>
 html,body{margin:0;background:transparent!important;width:1080px;height:1920px;font-family:'Be Vietnam Pro',sans-serif}
 .scene-root{width:1080px;height:1920px;display:flex;align-items:center;justify-content:center;padding:80px 48px 360px;box-sizing:border-box}
-.content-cluster{display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:940px}
+.content-cluster{display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:940px;min-height:960px;justify-content:center}
 .hero{font-size:72px;font-weight:800}.card-title{font-size:36px;font-weight:600}.card-body{font-size:28px}
 .ui-card{border-radius:24px;border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(12px);
 box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);background:rgba(255,255,255,0.06);padding:20px 24px}
 .bento-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script></head>
-<body><div id="root" data-composition-id="${compId}" data-registry-block="${registryBlock}" data-duration="10">
+<body><div id="root" data-composition-id="${compId}" data-registry-block="${registryBlock}" data-duration="5">
 <div class="scene-root"><div class="content-cluster">
 ${inner}
 </div></div>
@@ -133,27 +133,27 @@ const captionWords = [
   { text: "Hook", start: 0, end: 0.3 },
   { text: "shock", start: 0.3, end: 0.6 },
   { text: "opener", start: 0.6, end: 1 },
-  { text: "Ninety", start: 10, end: 10.3 },
-  { text: "thousand", start: 10.3, end: 10.7 },
-  { text: "jobs", start: 10.7, end: 11 },
-  { text: "cut", start: 11, end: 11.3 },
-  { text: "AI", start: 20, end: 20.2 },
-  { text: "investment", start: 20.2, end: 20.6 },
-  { text: "flow", start: 20.6, end: 20.9 },
-  { text: "steps", start: 20.9, end: 21.2 },
-  { text: "Before", start: 30, end: 30.3 },
-  { text: "after", start: 30.3, end: 30.6 },
-  { text: "comparison", start: 30.6, end: 31 },
-  { text: "chart", start: 31, end: 31.3 },
-  { text: "Three", start: 40, end: 40.3 },
-  { text: "insight", start: 40.3, end: 40.7 },
-  { text: "bento", start: 40.7, end: 41 },
-  { text: "grid", start: 41, end: 41.3 },
-  { text: "Follow", start: 50, end: 50.3 },
-  { text: "now", start: 50.3, end: 50.5 },
-  { text: "call", start: 50.5, end: 50.7 },
-  { text: "to", start: 50.7, end: 50.8 },
-  { text: "action", start: 50.8, end: 51.2 },
+  { text: "Ninety", start: 5, end: 5.3 },
+  { text: "thousand", start: 5.3, end: 5.7 },
+  { text: "jobs", start: 5.7, end: 6 },
+  { text: "cut", start: 6, end: 6.3 },
+  { text: "AI", start: 10, end: 10.2 },
+  { text: "investment", start: 10.2, end: 10.6 },
+  { text: "flow", start: 10.6, end: 10.9 },
+  { text: "steps", start: 10.9, end: 11.2 },
+  { text: "Before", start: 15, end: 15.3 },
+  { text: "after", start: 15.3, end: 15.6 },
+  { text: "comparison", start: 15.6, end: 16 },
+  { text: "chart", start: 16, end: 16.3 },
+  { text: "Three", start: 20, end: 20.3 },
+  { text: "insight", start: 20.3, end: 20.7 },
+  { text: "bento", start: 20.7, end: 21 },
+  { text: "grid", start: 21, end: 21.3 },
+  { text: "Follow", start: 25, end: 25.3 },
+  { text: "now", start: 25.3, end: 25.5 },
+  { text: "call", start: 25.5, end: 25.7 },
+  { text: "to", start: 25.7, end: 25.8 },
+  { text: "action", start: 25.8, end: 26.2 },
 ];
 
 fs.rmSync(FIXTURE, { recursive: true, force: true });
@@ -165,7 +165,7 @@ write(
 );
 write("assets/audio-script.txt", captionWords.map((w) => w.text).join(" "));
 write("assets/caption-words.json", JSON.stringify(captionWords));
-write("assets/caption-sync-report.json", JSON.stringify({ totalVideoSec: 60 }));
+write("assets/caption-sync-report.json", JSON.stringify({ totalVideoSec: 30 }));
 
 write(
   "compositions/ambient-layer.html",
@@ -259,12 +259,12 @@ write(
 );
 
 const beatSections = [
-  { id: "beat-1", start: 0, dur: 10 },
-  { id: "beat-2", start: 10, dur: 10 },
-  { id: "beat-3", start: 20, dur: 10 },
-  { id: "beat-4", start: 30, dur: 10 },
-  { id: "beat-5", start: 40, dur: 10 },
-  { id: "beat-6", start: 50, dur: 10 },
+  { id: "beat-1", start: 0, dur: 5 },
+  { id: "beat-2", start: 5, dur: 5 },
+  { id: "beat-3", start: 10, dur: 5 },
+  { id: "beat-4", start: 15, dur: 5 },
+  { id: "beat-5", start: 20, dur: 5 },
+  { id: "beat-6", start: 25, dur: 5 },
 ];
 
 const beatHosts = beatSections
@@ -280,18 +280,18 @@ write(
   "index.html",
   `<!DOCTYPE html><html><head><style>html,body{margin:0;width:1080px;height:1920px}</style></head>
 <body>
-<div id="root" data-composition-id="main" data-duration="60">
+<div id="root" data-composition-id="main" data-duration="30">
   <div class="clip hf-ambient-layer" data-composition-src="compositions/ambient-layer.html"
-       data-composition-id="ambient" data-start="0" data-duration="60" data-track-index="2"
+       data-composition-id="ambient" data-start="0" data-duration="30" data-track-index="2"
        style="position:absolute;inset:0;z-index:8;pointer-events:none"></div>
   ${beatHosts}
   <div class="clip hf-overlay-caption" data-composition-src="compositions/captions.html"
-       data-start="0" data-duration="60" data-track-index="20"
+       data-start="0" data-duration="30" data-track-index="20"
        style="position:absolute;inset:0;z-index:9000;pointer-events:none"></div>
   <div class="clip hf-overlay-brand" data-composition-src="compositions/brand-watermark.html"
-       data-start="0" data-duration="60" data-track-index="21"
+       data-start="0" data-duration="30" data-track-index="21"
        style="position:absolute;inset:0;z-index:9500;pointer-events:none"></div>
-  <audio class="clip" src="assets/audio/bgm.mp3" data-start="0" data-duration="60" data-track-index="11" data-volume="0.3"></audio>
+  <audio class="clip" src="assets/audio/bgm.mp3" data-start="0" data-duration="30" data-track-index="11" data-volume="0.3"></audio>
   <audio class="clip" src="assets/audio/sfx_hook.mp3" data-start="0" data-duration="2" data-track-index="12" data-volume="0.45"></audio>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
@@ -338,6 +338,8 @@ const checks = [
   ["check-continuous-motion.mjs", []],
   ["check-visual-density.mjs", []],
   ["check-typography-spacing.mjs", []],
+  ["check-beat-timing.mjs", []],
+  ["check-screen-fill.mjs", []],
   ["check-overlay-stack.mjs", []],
 ];
 

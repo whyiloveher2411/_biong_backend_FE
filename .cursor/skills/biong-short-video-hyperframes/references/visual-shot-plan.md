@@ -36,6 +36,21 @@ Chia beat khi: đổi chủ đề · số liệu mới · quy trình mới · so
 
 ---
 
+## Beat duration — tối đa 5s (bắt buộc)
+
+| Rule | Giá trị |
+|------|---------|
+| Max duration/beat | **5s** — không ngoại lệ (kể cả beat 1 hook) |
+| Video 60s | Tối thiểu ~12 beat |
+| Video 90s | Tối thiểu ~18 beat |
+| Video 120–180s | Tối thiểu ~24–36 beat |
+| Beat quá dài | **Tách thành nhiều beat** — mỗi beat = 1 ý / số liệu / câu |
+
+**Cấm:** 1 beat ôm nhiều ý → màn hình trống chờ.  
+**Cấm:** 2 beat liền kề dùng cùng `phrase_anchor` hoặc cùng `layout_archetype`.
+
+---
+
 ## Schema — file `visual-shot-plan.json`
 
 Top-level (ngoài array beat):
@@ -95,6 +110,8 @@ Một entry = **một visual beat** (content unit):
 | `render_stack` | ≥2 trong: `registry:*`, `gsap`, `lottie`, `giphy`, `threejs`, `shader` |
 | `visual_story` | Mô tả visual **không** chỉ echo text — preflight kiểm tra |
 | `minimum_elements` | **≥5** distinct elements trên màn hình — bắt buộc |
+| `max_duration_sec` | ≤ 5.0 — preflight FAIL nếu beat-map > 5s |
+| `content_unique` | `phrase_anchor` phải khác tất cả beat khác trong video |
 
 ### Trường bắt buộc (density)
 

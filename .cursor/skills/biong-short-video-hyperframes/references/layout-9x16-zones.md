@@ -99,6 +99,8 @@ Ghi `layout_variant` trong shot-plan (tùy chọn):
   gap: 20px;                 /* hero + support sát nhau */
   width: 100%;
   max-width: 940px;
+  min-height: 960px;         /* bắt buộc fill >50% canvas */
+  justify-content: center;
 }
 
 .hero-block,
@@ -138,8 +140,9 @@ Ghi `layout_variant` trong shot-plan (tùy chọn):
 3. **Cấm** diagram/CTA trong caption band (bottom 360px).
 4. Caption sub-composition **tách file** — không inline trong beat.
 5. Preflight: nội dung (trừ caption) bottom edge ≥ 360px từ đáy canvas.
+6. **Screen fill >50%:** `.content-cluster` phải phủ ≥50% canvas (≥960px chiều cao, không tính caption band). Enforce qua `min-height: 960px` trên `.content-cluster`.
 
----
+Preflight: `check-screen-fill.mjs` — xem [visual-shot-plan.md](visual-shot-plan.md).
 
 ## Typography & spacing (1080×1920)
 
