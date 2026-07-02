@@ -27,10 +27,41 @@ if (stockVideos.length === 0) {
   errors.push("index.html: không có <video class=\"stock-bg\"> — stock nền chưa wire");
 }
 
-const hasCssRule =
+  const hasCssRule =
   /\.stock-bg\s*\{[^}]*object-fit\s*:\s*cover/i.test(html) &&
   (/\.stock-bg[^}]*width\s*:\s*(100%|1080px)/i.test(html) ||
     /\.stock-bg[^}]*height\s*:\s*(100%|1920px)/i.test(html));
+
+const stockOpacityMatch = html.match(/\.stock-bg\s*\{[^}]*opacity\s*:\s*([\d.]+)/i);
+if (stockOpacityMatch) {
+  const op = parseFloat(stockOpacityMatch[1]);
+  if (op > 0.15) {
+    errors.push(
+      `index.html: .stock-bg opacity ${op} quá cao — dùng 0.1–0.15 (khuyến nghị 0.1)`,
+    );
+  }
+}
+
+const ambientZ = html.match(
+  /hf-ambient-layer[^>]*style="[^"]*z-index:\s*(\d+)/i,
+)?.[1];
+const stockWrapZ = html.match(/\.stock-bg-wrap\s*\{[^}]*z-index:\s*(\d+)/i)?.[1];
+
+if (/hf-ambient-layer/i.test(html)) {
+  if (ambientZ && stockWrapZ && Number(ambientZ) >= Number(stockWrapZ)) {
+    errors.push(
+      `index.html: ambient z-index ${ambientZ} phải < stock z-index ${stockWrapZ} — animation dưới, video trên`,
+    );
+  }
+  const rootInner = html.match(/<div id="root"[^>]*>([\s\S]*?)<\/div>\s*<script/i)?.[1] ?? "";
+  const ambientPos = rootInner.search(/hf-ambient-layer/i);
+  const stockPos = rootInner.search(/stock-bg-wrap/i);
+  if (ambientPos >= 0 && stockPos >= 0 && ambientPos > stockPos) {
+    errors.push(
+      "index.html: DOM sai thứ tự — ambient-layer phải đứng TRƯỚC stock-bg-wrap",
+    );
+  }
+}
 
 if (stockVideos.length && !hasCssRule) {
   errors.push(

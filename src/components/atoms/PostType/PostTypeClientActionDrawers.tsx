@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import ContentAiWizard from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ContentAiWizard';
 import ArticleRewriteDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ArticleRewriteDrawer';
@@ -9,7 +10,7 @@ import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/M
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
-import { resolveMarketingPostIdFromShortVideo } from 'helpers/marketingShortVideoWorkflowApi';
+import { parseShortVideoAgentTabFromSearch } from 'helpers/shortVideoAgentVideoDrawerUrl';
 
 export type PostTypeClientDrawerAction =
     | 'drawer:MarketingContentAi'
@@ -37,6 +38,8 @@ function PostTypeClientActionDrawers({
     onClose,
     onRefreshPost,
 }: Props) {
+    const [searchParams] = useSearchParams();
+
     if (!activeDrawer?.startsWith('drawer:')) {
         return null;
     }
@@ -95,7 +98,9 @@ function PostTypeClientActionDrawers({
     }
 
     if (postType === 'spacedev_app_short_video') {
-        const marketingPostId = resolveMarketingPostIdFromShortVideo(data?.post);
+        const agentDrawerOpen =
+            activeDrawer === 'drawer:ShortVideoAgentAudio'
+            || activeDrawer === 'drawer:MarketingFacebookPreview';
 
         return (
             <>
@@ -106,20 +111,12 @@ function PostTypeClientActionDrawers({
                     onRefreshPost={onRefreshPost}
                 />
                 <ShortVideoAgentAudioDrawer
-                    open={activeDrawer === 'drawer:ShortVideoAgentAudio'}
+                    open={agentDrawerOpen}
                     onClose={onClose}
                     shortVideoId={Number(data?.post?.id || 0)}
                     onUploaded={onRefreshPost}
+                    initialTab={parseShortVideoAgentTabFromSearch(searchParams.toString())}
                 />
-                {marketingPostId > 0 && (
-                    <MarketingFacebookPreviewDrawer
-                        open={activeDrawer === 'drawer:MarketingFacebookPreview'}
-                        onClose={onClose}
-                        postId={marketingPostId}
-                        fallbackThumbnail={data?.post?.thumbnail}
-                        onSaved={onRefreshPost}
-                    />
-                )}
             </>
         );
     }

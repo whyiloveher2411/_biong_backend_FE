@@ -53,6 +53,8 @@ export type AgentVideoContentResponse = {
         tts_failed?: boolean;
         phase?: string;
     };
+    marketing_post_id?: number;
+    thumbnail?: unknown;
 };
 
 export type JsonResponse = {

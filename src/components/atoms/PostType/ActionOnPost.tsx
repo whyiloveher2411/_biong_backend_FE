@@ -33,7 +33,8 @@ import {
 } from "helpers/shortVideoEditDrawerUrl";
 import {
     parseShortVideoAgentIdFromSearch,
-    setShortVideoAgentIdInSearchParams,
+    clearShortVideoAgentSearchParams,
+    openShortVideoAgentInSearchParams,
 } from "helpers/shortVideoAgentVideoDrawerUrl";
 
 const useStyles = makeCSS((theme: Theme) => ({
@@ -129,13 +130,13 @@ function ActionOnPost({
         const editId = parseShortVideoEditIdFromSearch(searchParams.toString());
         if (editId && postId === editId) {
             let next = setShortVideoEditIdInSearchParams(searchParams, null);
-            next = setShortVideoAgentIdInSearchParams(next, null);
+            next = clearShortVideoAgentSearchParams(next);
             setSearchParams(next, { replace: true });
             return;
         }
         const agentId = parseShortVideoAgentIdFromSearch(searchParams.toString());
         if (agentId && postId === agentId) {
-            let next = setShortVideoAgentIdInSearchParams(searchParams, null);
+            let next = clearShortVideoAgentSearchParams(searchParams);
             next = setShortVideoEditIdInSearchParams(next, null);
             setSearchParams(next, { replace: true });
         }
@@ -202,14 +203,24 @@ function ActionOnPost({
             if (!id) {
                 return;
             }
+            if (
+                item.client_action === 'drawer:MarketingFacebookPreview'
+                && postType === 'spacedev_app_short_video'
+            ) {
+                setActiveClientDrawer('drawer:ShortVideoAgentAudio');
+                let next = openShortVideoAgentInSearchParams(searchParams, Number(id), 'facebook');
+                next = setShortVideoEditIdInSearchParams(next, null);
+                setSearchParams(next, { replace: true });
+                return;
+            }
             setActiveClientDrawer(item.client_action);
             if (item.client_action === 'drawer:ShortVideoEdit') {
                 let next = setShortVideoEditIdInSearchParams(searchParams, Number(id));
-                next = setShortVideoAgentIdInSearchParams(next, null);
+                next = clearShortVideoAgentSearchParams(next);
                 setSearchParams(next, { replace: true });
             }
             if (item.client_action === 'drawer:ShortVideoAgentAudio') {
-                let next = setShortVideoAgentIdInSearchParams(searchParams, Number(id));
+                let next = openShortVideoAgentInSearchParams(searchParams, Number(id), 'script');
                 next = setShortVideoEditIdInSearchParams(next, null);
                 setSearchParams(next, { replace: true });
             }

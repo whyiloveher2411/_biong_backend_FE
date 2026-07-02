@@ -30,7 +30,6 @@ import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
-import { resolveMarketingPostIdFromShortVideo } from 'helpers/marketingShortVideoWorkflowApi';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { copyShortVideoAgentPromptToClipboard, resolveAgentPromptPhaseFromAction } from 'helpers/marketingShortVideoAgentPrompt';
@@ -40,7 +39,9 @@ import {
 } from 'helpers/shortVideoEditDrawerUrl';
 import {
     parseShortVideoAgentIdFromSearch,
-    setShortVideoAgentIdInSearchParams,
+    parseShortVideoAgentTabFromSearch,
+    clearShortVideoAgentSearchParams,
+    openShortVideoAgentInSearchParams,
 } from 'helpers/shortVideoAgentVideoDrawerUrl';
 
 
@@ -148,13 +149,13 @@ function Form({
     const closeShortVideoEditDrawer = React.useCallback(() => {
         setShortVideoEditDrawerOpen(false);
         let next = setShortVideoEditIdInSearchParams(searchParams, null);
-        next = setShortVideoAgentIdInSearchParams(next, null);
+        next = clearShortVideoAgentSearchParams(next);
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams]);
 
     const closeShortVideoAgentVideoDrawer = React.useCallback(() => {
         setShortVideoAgentAudioDrawerOpen(false);
-        let next = setShortVideoAgentIdInSearchParams(searchParams, null);
+        let next = clearShortVideoAgentSearchParams(searchParams);
         next = setShortVideoEditIdInSearchParams(next, null);
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams]);
@@ -441,7 +442,17 @@ function Form({
                                 setContentTranslateDrawerOpen(true);
                             }
                             if (action === 'drawer:MarketingFacebookPreview') {
-                                setFacebookPreviewDrawerOpen(true);
+                                if (postType === 'spacedev_app_short_video') {
+                                    setShortVideoAgentAudioDrawerOpen(true);
+                                    const postId = Number(data?.post?.id || 0);
+                                    if (postId > 0) {
+                                        let next = openShortVideoAgentInSearchParams(searchParams, postId, 'facebook');
+                                        next = setShortVideoEditIdInSearchParams(next, null);
+                                        setSearchParams(next, { replace: true });
+                                    }
+                                } else {
+                                    setFacebookPreviewDrawerOpen(true);
+                                }
                             }
                             if (action === 'drawer:MarketingManualAudio') {
                                 setManualAudioDrawerOpen(true);
@@ -460,7 +471,7 @@ function Form({
                                 const postId = Number(data?.post?.id || 0);
                                 if (postId > 0) {
                                     let next = setShortVideoEditIdInSearchParams(searchParams, postId);
-                                    next = setShortVideoAgentIdInSearchParams(next, null);
+                                    next = clearShortVideoAgentSearchParams(next);
                                     setSearchParams(next, { replace: true });
                                 }
                             }
@@ -468,7 +479,7 @@ function Form({
                                 setShortVideoAgentAudioDrawerOpen(true);
                                 const postId = Number(data?.post?.id || 0);
                                 if (postId > 0) {
-                                    let next = setShortVideoAgentIdInSearchParams(searchParams, postId);
+                                    let next = openShortVideoAgentInSearchParams(searchParams, postId, 'script');
                                     next = setShortVideoEditIdInSearchParams(next, null);
                                     setSearchParams(next, { replace: true });
                                 }
@@ -543,16 +554,8 @@ function Form({
                         onClose={closeShortVideoAgentVideoDrawer}
                         shortVideoId={Number(data?.post?.id || 0)}
                         onUploaded={onRefreshPost}
+                        initialTab={parseShortVideoAgentTabFromSearch(searchParams.toString())}
                     />
-                    {resolveMarketingPostIdFromShortVideo(data?.post) > 0 && (
-                        <MarketingFacebookPreviewDrawer
-                            open={facebookPreviewDrawerOpen}
-                            onClose={() => setFacebookPreviewDrawerOpen(false)}
-                            postId={resolveMarketingPostIdFromShortVideo(data?.post)}
-                            fallbackThumbnail={data?.post?.thumbnail}
-                            onSaved={onRefreshPost}
-                        />
-                    )}
                 </>
             )}
             {postType === 'app_local_notification' && (

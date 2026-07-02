@@ -1,0 +1,122 @@
+/**
+ * Global default styles — inject mọi short video phase 2.
+ * Copy: bootstrap-phase2-assets.mjs → assets/global-default-styles.css
+ * Link trong index.html hoặc inline <style> trong beat HTML.
+ */
+
+/* Border 3D — bắt buộc cho tất cả boxes */
+.ui-card,
+.premium-card,
+.quote-box,
+.flow-node,
+.company-chip,
+.context-chip,
+.badge,
+.vs-card,
+.bento-card,
+.stat-card {
+  box-shadow:
+    inset 0 4px 0 0 rgba(255, 255, 255, 0.3),
+    inset 0 -4px 0 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Border 3D với màu variant */
+.box-info.border-3d,
+.ui-card.box-info {
+  box-shadow:
+    inset 0 4px 0 0 rgba(99, 102, 241, 0.65),
+    inset 0 -4px 0 0 rgba(0, 0, 0, 0.5);
+}
+.box-warning.border-3d,
+.ui-card.box-warning {
+  box-shadow:
+    inset 0 4px 0 0 rgba(251, 146, 60, 0.65),
+    inset 0 -4px 0 0 rgba(0, 0, 0, 0.5);
+}
+.box-success.border-3d,
+.ui-card.box-success {
+  box-shadow:
+    inset 0 4px 0 0 rgba(74, 222, 128, 0.65),
+    inset 0 -4px 0 0 rgba(0, 0, 0, 0.5);
+}
+.box-accent.border-3d,
+.ui-card.box-accent {
+  box-shadow:
+    inset 0 4px 0 0 rgba(236, 72, 153, 0.65),
+    inset 0 -4px 0 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Text shadow hierarchy */
+.hero,
+.hero-sm,
+.hook-title-text {
+  text-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.75),
+    0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.focal,
+.focal-large,
+.focal-medium,
+.focal-small {
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.card-title {
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+.card-body,
+.card-detail,
+.quote-box,
+.flow-node-label {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.badge,
+.company-chip,
+.context-chip,
+.source-badge {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Shared fx — shine + breathe (reuse hook/box) */
+@keyframes shine-sweep {
+  0%,
+  100% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(280%);
+  }
+}
+.fx-shine {
+  position: relative;
+  overflow: hidden;
+}
+.fx-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.18),
+    transparent
+  );
+  animation: shine-sweep 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+.fx-breathe {
+  animation: breathe 4.5s ease-in-out infinite;
+}

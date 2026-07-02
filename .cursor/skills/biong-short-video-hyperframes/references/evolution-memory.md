@@ -74,6 +74,235 @@ tl.fromTo(".premium-card", { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, d
 
 ## 3. Visual evolution log
 
-*(Agent tự điền sau mỗi vision audit — format: `Video #{id}: score X/10 — nhận xét — action`)*
+- Video #11: score 8/10 — Hook kinetic + stat counter + CTA orbit; caption karaoke script-sync 432 từ; vá align cụm 65-75% Vi↔Whisper
+- Video #11 v2 (dense): score 9/10 — news_editorial_stack 5 beats; ≥7 elements/beat (header badge, section label, accent line, quote, chips, deco icons, particles); foreground continuous motion loops; mix stock video + animated bg-layer; user feedback "quá đơn điệu" → AIDEVNEWS-style density
+- Video #11 v3 (UI polish): score 9/10 — keyword highlighting vibrant (cyan/orange/purple/yellow/lime); box-info/warning/success/accent + fx-shine/glossy/wobble/pulse/shake; flow nodes colored icons; ambient particle+mesh+geometric; gap 32px; hero 48-68px
+- Video #11 v4 (contrast + bg stack): score 8/10 — breathe 1→1.05; border-3d 4px opacity cao; bg-layer/animated opacity .25; ambient gradient .3; text-shadow tiered hero/body; stock video lộ qua overlay
+- Video #11 v5 (bg stack fix): score 8/10 — ambient animation opacity 1 (z4) dưới cùng; stock video opacity .2 (z7) giữa; beat cấm bg-animated opaque; content trên cùng
+- Video #11 v6 (hook UI): score 8/10 — beat-progress bar z8990 continuous; hook_title_impact_box beat_1; keyword sáng cấm đen; bỏ #N/9 + section-label
+- Video #11 v7 (plate + sfx): score 8/10 — plate-rust hook corners + shine; progress 4px transparent; sfx_beat_move ×8; hero ≥ support typography
 
-- *(Chưa có entry runtime — agent sẽ append sau render đầu tiên)*
+### [2026-07-01] short_video_11 v7 — hook plate + beat SFX + headline hierarchy
+
+- **Lỗi phát hiện:** Hook box flat; progress bar dày có nền xám; thiếu SFX chuyển beat; keyword/focal tối trong card; headline nhỏ hơn stat (512 > Công cụ Caveman)
+- **Cách vá:** `plate-rust` + hook-corner + fx-shine; progress track transparent 4px; `sfx_beat_move` index.html; `.kw-*` solid; `.hero` clamp 56–80px; cap stat/focal trong card
+- **Rule cứng:** Beat 1 plate-rust; SFX mỗi beat transition; hero lớn nhất scene; cấm focal-gradient trong mockup/card
+
+### [2026-07-01] short_video_11 v6 — beat counter + hook frame
+
+- **Lỗi phát hiện:** `#N/9` badge + section-label chiếm header; keyword/focal có vùng tối; beat 1 hero trần không impact
+- **Cách vá:** Global `beat-progress-fill` index.html; beat_1 `hook-title-impact-box`; palette `.kw-*` solid sáng; cấm header-badge trong beat HTML
+- **Rule cứng:** Beat 1 = `hook_title_impact_box`; progress bar global only; cấm `#N/9` trong beat
+
+
+- **Lỗi phát hiện:** `index.html` ambient z8 trên stock z1; beat `.bg-animated` opaque trong composition che hết stack
+- **Cách vá:** DOM: ambient trước z4 opacity 1 → stock z7 opacity .2 → beats; xóa bg-animated/grain-layer trong beat HTML
+- **Rule cứng:** Stack nền = animation(1.0) → video(0.15–0.25) → content; cấm bg-animated trong beat khi có ambient global
+
+
+- **Lỗi phát hiện:** `.bg-animated` opacity .75 + ambient .85 che stock video; breathe scale 1.1 gây jitter text pill; border-3d 2px quá nhẹ trên nền tối
+- **Cách vá:** Giảm beat bg-layer/animated → opacity .25; ambient `.gradient-flow` → .3; `@keyframes breathe` scale 1.05; border-3d inset 4px + opacity cao; thêm text-shadow tiered
+- **Rule cứng:** Beat overlay opacity ≤0.3 khi có stock-bg index.html; breathe max 1.05; đọc `text-shadow-guidelines.md`
+
+### [2026-07-02] short_video_12 — ChatGPT corporate hook + 8-beat vignelli
+
+- **Lỗi phát hiện:** Caption sync Vi↔Whisper fail với small model (89% interpolated); "một ngàn ba trăm" vs "1.300"; "ngủ quáng" vs "mù quáng"; "1%" vs "một phần ba"
+- **Cách vá:** medium Whisper + vi-align clusters (ngan/nghin, mot-phan-ba, homophone quo/cua mu/ngu gia/ra chay/trai)
+- **Rule cứng:** Phase 2 caption sync: transcribe medium trước; vá vi-align-helpers trước khi render
+- **Aesthetic:** 8/10 — hook plate-rust + dual stat 65/94 + bento Futurism horror + contrast exit cards + CTA orbit
+- **Reuse:** content-cluster wrapper; index stock-bg z7; beat HTML không embed video (media_in_subcomposition lint)
+
+
+- **Khi dùng:** Mọi headline, quote, card body trong gen-beats
+- **Patterns:** number, company, tech, action, success — đọc `keyword-highlighting.md`
+
+```javascript
+function highlightKeywords(text) {
+  // wrap <span class="kw kw-{type}"> — skip nested
+}
+```
+
+### [box_fx] box-animation-catalog — Màu đặc + loop fx
+
+- **Khi dùng:** `.ui-card`, `.quote-box`, `.flow-node`, chips — **cấm** rgba(255,255,255,.04) only
+- **Fx mix:** fx-shine, fx-glossy, fx-wobble, fx-pulse, fx-shake, fx-border-rotate, fx-corner-highlight
+- **List:** mỗi item màu khác (box-info / warning / success / accent)
+
+### [dynamic_bg] ambient-layer — Particle + mesh + geometric
+
+- **Cấm:** chỉ orb blur scale
+- **Stack:** gradient-flow + particle-complex + mesh-warp SVG + geo-hex/tri rotation
+
+### [news_editorial_stack] news_editorial_stack — Editorial header + dense layers
+
+- **Khi dùng:** Beat cần nhiều thông tin như AIDEVNEWS — header, headline, quote, mockup
+- **Minimum:** header-badge + section-label + hero + accent-line + quote-box + ≥1 support chip
+
+```html
+<div class="editorial-header">
+  <span class="header-badge">#2/9</span>
+  <span class="section-label">AGITATE</span>
+  <span class="source-badge">404 Media</span>
+</div>
+<div class="hero-sm">Headline</div>
+<div class="accent-line"></div>
+<div class="quote-box">Supporting quote</div>
+```
+
+```javascript
+// Finite-repeat loops (lint-safe) — pass beat duration D
+const r = (cycle) => Math.max(1, Math.floor(D / cycle) - 1);
+tl.to(".particle", { y: "+=14", duration: 2.2, repeat: r(2.2), yoyo: true, stagger: { each: 0.18, from: "random" } }, 0);
+tl.to(".accent-line", { scaleX: 1.08, duration: 2.5, repeat: r(2.5), yoyo: true, overwrite: "auto" }, 0.3);
+```
+
+### [lesson] video_11_v2 — Foreground phải loop, không chỉ entrance
+
+- **Lỗi phát hiện:** User feedback video quá đơn điệu — 1 card tĩnh giữa màn, bg gradient không động
+- **Cách vá:** `foreground-continuous-motion.md` + `check-foreground-motion-density.mjs`; mỗi beat ≥5 elements + finite GSAP loops
+- **Rule cứng:** Background = stock video HOẶC animated graphics; foreground luôn có micro-motion suốt beat
+
+---
+
+## Video #11 v4 — Text & Card Effects Overhaul (2026-07-01)
+
+### User feedback
+- Opacity fade trong loop → user không đọc được nội dung (quote box beat 6)
+- Shine 3s quá nhanh → muốn 4s
+- Border chạy chưa có → muốn gradient xoay + segment chase
+- Request 5 text effects: marquee, carousel, sine wave, neon flicker, glitch
+- Request 4 card effects: floating, glow breathe, heartbeat, auto flip
+- Tần suất: effect nổi 1–2s, effect mượt 4–6s
+
+### Fixes implemented
+1. Xóa ALL opacity tweens trong loopMotion → content never fades
+2. Shine animation 3s → 4s
+3. Border: `.fx-border-gradient` (conic xoay) + `.fx-border-chase` (segment chạy viền)
+4. Text: marquee, sine wave chars, neon textShadow flicker, glitch pseudo, carousel keywords
+5. Card: float idle, glow breathe shadow, heartbeat double-beat, auto-flip VS cards
+
+### Lessons learned
+- **Opacity trong loop = nguy hiểm:** Chỉ opacity cho intro/outro; KHÔNG trong loopMotion
+- **Shine frequency:** 4s optimal cho mirror effect
+- **Border animations:** conic-gradient + `@property`; chase dùng `::before` mask composite
+- **Text hierarchy:** Hero = wave, keywords = neon/glitch/kw-bg, quotes = marquee
+- **Card distribution:** Quote float+shine, stat heartbeat+glow, flow gradient, VS auto-flip
+- **Frequency tiering:** glitch/flicker/chase 1–2s; float/breathe/gradient 4–6s
+
+---
+
+## Video #11 v5 — Bug Fixes + Focal + Advanced Effects (2026-07-01)
+
+### User feedback
+- Marquee trong box → nội dung bị cắt/mất
+- Border gradient lấp background → nội dung chìm
+- Hero title xuống dòng vô cớ (3 dòng cho câu ngắn)
+- Flip card lộ nền đen, thiếu border-radius
+- Card padding quá sát viền
+- Thêm breathing + advanced text/card effects
+- Mỗi màn hình 1 focal point (số/keyword) 50–100px gradient
+
+### Fixes implemented
+1. Bỏ `marqueeQuote()` khỏi tất cả quote-box → `hk()` static
+2. `.fx-border-gradient` border 3px + dual background `padding-box`/`border-box`
+3. Beat 1 hero gộp 1 dòng; beat 9 gộp 1 dòng CTA
+4. `.flip-card` border-radius + overflow hidden; padding 24px 28px
+5. Padding tăng: premium-card 26/30, quote 22/26, chips 12/20
+6. Focal system: `autoFocal()`, `.focal-large/medium/small`, 3 gradients
+7. Breathing: `.fx-breathe` scale 1.03, 4–6s
+8. Advanced: liquid text, svg-path, particle-text, warp, liquid-card, glass-refract
+9. Animation budget: max 1–3 loop fx/beat
+
+### Lessons learned
+- **Quote-box = static text only** — marquee chỉ cho banner ngoài box (nếu cần)
+- **Border gradient:** luôn set `--bg-color` match `.box-*` — test trên mockup-card
+- **Focal hierarchy:** focal 80–100px > hero 48–68px > card-title 36px > body 28px
+- **Flip 3D:** container transparent, faces có border-radius riêng
+- **Effect budget:** giảm pulse/carousel/heartbeat khi thêm advanced fx
+
+---
+
+## Video #11 v6 — UI Bug Fixes (2026-07-01)
+
+### User feedback
+- 404 Media label hiển thị khi media lỗi
+- Headline beat 2 bị đè (svg-path double layer)
+- Border gradient bay trong box
+- Card content đè border, shine vượt box
+- Cards cùng hàng height không bằng nhau
+
+### Fixes implemented
+1. `editorialHeader()` ẩn source chứa "404"; xóa badge 404 ở beat 1
+2. Beat 2 hero: `svgPathText` → `hk()` static
+3. Xóa toàn bộ `.fx-border-gradient` CSS
+4. Padding flip cards 28/32px; `overflow:hidden` trên vs-card/flip-card
+5. `flip-sizer` grid stack (max height) + `align-items:stretch` vs-row/bento-grid
+
+### Lessons learned
+- **404 source:** không render `.source-badge` nếu source match `/404/i`
+- **svg-path trên hero:** gây double-layer overlap — dùng `hk()` hoặc focal
+- **Border gradient:** bỏ hẳn nếu không stable — dùng `fx-border-chase` hoặc accent border
+- **Flip card height:** `flip-sizer` invisible grid stack 2 faces → height = max content
+- **Shine clip:** parent phải `overflow:hidden` (vs-card, flip-card, ui-card)
+
+### Evolution log
+- Video #11 v6: score 8/10 — fix 404/headline/border/shine/card-height — render v6
+
+---
+
+## Video #11 v7 — No Flip + Border 3D + Per-Beat Video (2026-07-01)
+
+### User feedback
+- Label vẫn có vệt sáng (border chase đã bỏ nhưng cần xác nhận)
+- Flip card text bị ngược/mirror
+- Card shadow làm góc mất border-radius
+- Background cần thêm lớp stock video dưới animation
+
+### Fixes implemented
+1. Bỏ hoàn toàn flip animation — beat 3/6 dùng `.vs-grid` 4 static cards
+2. Bỏ `box-shadow` drop-shadow trên `.premium-card` — thay `.border-3d` inset
+3. Breathing scale 1.03→1.1 trên cards/boxes
+4. Per-beat `<video class="bg-stock">` + gradient overlay + grain
+5. Tải 9 stock videos Pexels → `assets/images/bg_beat_N.mp4`
+
+### Lessons learned
+- **Cấm flip 3D** trong HyperFrames beat HTML — dùng static dual cards
+- **Cấm drop-shadow** trên card bo tròn — dùng inset border-3d
+- **Background stack:** video (z0) → gradient animation (z1) → grain (z3) → content (z100)
+- **Cấm fx-border-chase** trên mọi element kể cả chip
+
+### Evolution log
+- Video #11 v7: score 8/10 — no flip, border-3d, per-beat video — render v7
+
+---
+
+## Video #12 — ChatGPT sếp Mỹ / copy-paste rác công nghệ (2026-07-01)
+
+### Premium patterns
+- **hook_title_impact_box + sticker:** khung đỏ `hook-title-frame` + Giphy sticker góc phải + `sfx_hook` beat 1
+- **stat_punch_card:** `stat-val` gradient 96px + `box-accent` glass card + quote box dưới stat
+- **process_flow_stack:** `.flow-node` vertical stack + hero keyword cyan
+
+### Lessons learned
+- **Track-index beats:** dùng track 30–40 cho beat-host; tránh trùng ambient(2), vo(10), bgm(11), caption(20), brand(21)
+- **GSAP repeat:** lint cấm `repeat:-1` — embed literal `repeat:N` tính từ `Math.floor(D/cycle)-1` lúc build
+- **Beat SFX:** `sfx_beat_move` chỉ trong `index.html` track 14–19, 22–25
+
+### Evolution log
+- Video #12: score 8/10 — 11 beats vignelli, stat/flow/hook pass vision — render high
+
+---
+
+### [2026-07-01] Global style enforcement — v8 onwards
+
+- **Lỗi phát hiện:** Video khác thiếu plate-rust beat_1, border-3d, text-shadow không đồng nhất
+- **Cách vá:** Tạo `global-default-styles.css` + `check-default-styles.mjs` preflight + bootstrap auto-copy
+- **Rule cứng:** Beat 1 plate-rust MANDATORY không biến thể; inject global CSS mọi video; preflight FAIL nếu thiếu
+
+Từ video 12 trở đi:
+
+- Beat 1 = plate-rust chính xác như template (4 hook-corner + fx-shine + fx-breathe)
+- Tất cả boxes/cards có border-3d inset shadow (qua global CSS)
+- Tất cả text có tiered text-shadow theo font-size
+- Preflight `check-default-styles.mjs` bắt buộc pass
+

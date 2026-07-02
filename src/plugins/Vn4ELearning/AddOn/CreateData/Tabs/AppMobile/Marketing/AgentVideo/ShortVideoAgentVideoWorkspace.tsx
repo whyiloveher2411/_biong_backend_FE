@@ -5,17 +5,19 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import Button from 'components/atoms/Button';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
-import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
+import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentVideoPreview from './ShortVideoAgentVideoPreview';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import { useAgentVideoContent } from './useAgentVideoContent';
+import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
 
 type Props = {
     open: boolean;
     shortVideoId: number;
     onClose: () => void;
     onUploaded?: () => void;
+    initialTab?: ShortVideoAgentLeftTab;
 };
 
 const HEADER_BTN_SX = {
@@ -34,6 +36,7 @@ export default function ShortVideoAgentVideoWorkspace({
     shortVideoId,
     onClose,
     onUploaded,
+    initialTab = 'script',
 }: Props) {
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
     const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -159,7 +162,11 @@ export default function ShortVideoAgentVideoWorkspace({
                             bgcolor: 'background.paper',
                         }}
                     >
-                        <ShortVideoAgentScriptPanel state={state} />
+                        <ShortVideoAgentLeftPanel
+                            state={state}
+                            initialTab={initialTab}
+                            onSaved={onUploaded}
+                        />
                     </Box>
 
                     <ShortVideoAgentVideoPreview state={state} videoRef={videoRef} />

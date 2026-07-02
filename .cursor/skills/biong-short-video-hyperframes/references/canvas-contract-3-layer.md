@@ -6,13 +6,13 @@ Mọi phân cảnh trong beat HTML **bắt buộc** dựng theo 3 lớp. **Cấm
 
 ---
 
-## Lớp 1 — Canvas nền (background)
+## Lớp 1 — Canvas nền (global `index.html`, không trong beat)
 
 | Bắt buộc | Cấm |
 |----------|-----|
-| Dark gradient (`#0B0F19` → `#1a1035` hoặc token theme) | Nền flat một màu `#0B0F1A` opaque che stock |
-| Warm grain (`grain-overlay` registry) hoặc ambient blur | Chỉ `background: #000` |
-| Stock bg opacity 0.3–0.6 qua `bg_media` | Full-bleed hero stock khi có registry |
+| `ambient-layer.html` opacity **1.0** — gradient + particles + mesh | Beat `.bg-animated` opaque che stock |
+| `stock-bg` video opacity **0.1–0.15** (khuyến nghị 0.11) trên ambient | Stock opacity > 0.2 làm lộ B-roll quá đậm |
+| Beat `#root` / `.scene-root` **transparent** | Nền flat `#0B0F1A` opaque trong beat |
 
 ```css
 .scene-root {

@@ -8,6 +8,7 @@ const norm = (s) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u0111/g, "d")
     .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "");
 
 function stripPunct(word) {
@@ -20,7 +21,9 @@ const VI_ONES = {
   hai: 2,
   ba: 3,
   bon: 4,
+  tu: 4,
   nam: 5,
+  lam: 5,
   sau: 6,
   bay: 7,
   tam: 8,
@@ -138,7 +141,7 @@ export function parseViPercentPhrase(words, start) {
       continue;
     }
 
-    if (w === "nghin") {
+    if (w === "nghin" || w === "ngan") {
       sawNumber = true;
       total = (total + (current || 1)) * 1000;
       current = 0;
@@ -182,6 +185,62 @@ export function transcriptPercentToken(tw) {
   const m = n.match(/^(\d+)%?\.?$/);
   if (!m) return null;
   return { value: parseInt(m[1], 10), hasPercent: String(tw.text).includes("%") };
+}
+
+/** Whisper "65-75%." ↔ script sáu mươi lăm đến bảy mươi lăm phần trăm */
+export function transcriptPercentRangeToken(tw) {
+  const raw = String(tw.text ?? "")
+    .trim()
+    .replace(/%\.?$/u, "")
+    .replace(/\s/g, "");
+  const m = raw.match(/^(\d+)[-–](\d+)$/u);
+  if (!m) return null;
+  return { low: parseInt(m[1], 10), high: parseInt(m[2], 10) };
+}
+
+/** Cụm "X đến Y phần trăm" viết chữ (X,Y là số tiếng Việt hoặc chữ số) */
+export function parseViPercentRangePhrase(words, start) {
+  const first = parseViPlainNumber(words, start);
+  if (!first) return null;
+  let i = start + first.consumed;
+  if (norm(stripPunct(words[i] ?? "")) !== "den") return null;
+  i++;
+  const second = parseViPlainNumber(words, i);
+  if (!second) return null;
+  i += second.consumed;
+  if (
+    norm(stripPunct(words[i] ?? "")) === "phan" &&
+    norm(stripPunct(words[i + 1] ?? "")) === "tram"
+  ) {
+    return {
+      low: first.value,
+      high: second.value,
+      consumed: i + 2 - start,
+    };
+  }
+  return null;
+}
+
+export function tryViPercentRangeCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
+  const parsed = parseViPercentRangePhrase(scriptWords, i);
+  if (!parsed) return null;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+    const rt = transcriptPercentRangeToken(transcriptWords[j]);
+    if (rt && rt.low === parsed.low && rt.high === parsed.high) {
+      const words = scriptWords.slice(i, i + parsed.consumed);
+      const timings = splitClusterTiming(transcriptWords[j], words.length);
+      return {
+        words,
+        consumed: parsed.consumed,
+        transcriptEnd: j + 1,
+        timings,
+        whisperText: transcriptWords[j].text,
+        matchType: "cluster-percent-range",
+      };
+    }
+  }
+  return null;
 }
 
 /** Script "10," + "2." ↔ Whisper "10,2%." */
@@ -265,7 +324,7 @@ export function parseViPlainNumber(words, start) {
       continue;
     }
 
-    if (w === "nghin") {
+    if (w === "nghin" || w === "ngan") {
       sawNumber = true;
       total = (total + (current || 1)) * 1000;
       current = 0;
@@ -613,6 +672,52 @@ export function tryDecimalChamCluster(scriptWords, i, transcriptWords, p, lookah
   return null;
 }
 
+/** "từ thừa" ↔ Whisper "tư thừa" */
+export function tryTuThuaHomophone(scriptWords, i, transcriptWords, p) {
+  const sw = norm(stripPunct(scriptWords[i] ?? ""));
+  const sw1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (sw !== "tu" || !sw1.startsWith("thua")) return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (t0 !== "tu" || !t1.startsWith("thua")) return null;
+  const tw0 = transcriptWords[p];
+  const tw1 = transcriptWords[p + 1];
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings: [
+      { start: tw0.start, end: tw0.end },
+      { start: tw1.start, end: tw1.end },
+    ],
+    whisperText: `${tw0.text} ${tw1.text}`,
+    matchType: "cluster-tu-thua",
+  };
+}
+
+/** "rườm rà" ↔ Whisper "rượm già" */
+export function tryRuomRaHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "ruom" || b !== "ra") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (!["ruom", "ruoum"].includes(t0) || !["ra", "gia"].includes(t1)) return null;
+  const tw0 = transcriptWords[p];
+  const tw1 = transcriptWords[p + 1];
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings: [
+      { start: tw0.start, end: tw0.end },
+      { start: tw1.start, end: tw1.end },
+    ],
+    whisperText: `${tw0.text} ${tw1.text}`,
+    matchType: "cluster-ruom-ra",
+  };
+}
+
 /** "lúc ra" ↔ Whisper "rút ra" (TTS đồng âm) */
 export function tryLucRaHomophone(scriptWords, i, transcriptWords, p) {
   const a = norm(stripPunct(scriptWords[i] ?? ""));
@@ -652,6 +757,40 @@ export function tryPercentCluster(scriptWords, i, transcriptWords, p, lookahead 
         timings,
         whisperText: transcriptWords[j].text,
         matchType: "cluster-percent",
+      };
+    }
+  }
+  return null;
+}
+
+/** "một phần ba" ↔ Whisper "1%" / "1/3" / "33%" (TTS đọc phân số) */
+export function tryMotPhanBaCluster(scriptWords, i, transcriptWords, p, lookahead = 15) {
+  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
+  const w1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  const w2 = norm(stripPunct(scriptWords[i + 2] ?? ""));
+  if (w0 !== "mot" || w1 !== "phan" || w2 !== "ba") return null;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+    const tw = transcriptWords[j];
+    const raw = String(tw?.text ?? "").trim();
+    const n = norm(stripPunct(raw));
+    const pt = transcriptPercentToken(tw);
+    const isThird =
+      raw === "1%" ||
+      raw === "1/3" ||
+      n === "13" ||
+      n === "33" ||
+      (pt && (pt.value === 1 || pt.value === 33));
+    if (isThird) {
+      const words = scriptWords.slice(i, i + 3);
+      const timings = splitClusterTiming(transcriptWords[j], words.length);
+      return {
+        words,
+        consumed: 3,
+        transcriptEnd: j + 1,
+        timings,
+        whisperText: transcriptWords[j].text,
+        matchType: "cluster-mot-phan-ba",
       };
     }
   }
@@ -791,6 +930,11 @@ const WHISPER_SINGLE_HOMOPHONES = {
   mac: ["ngoc"],
   nganh: ["hanh"],
   he: ["the"],
+  quo: ["cua"],
+  mu: ["ngu"],
+  gia: ["ra"],
+  chay: ["trai"],
+  dan: ["ran"],
 };
 
 /** Whisper đồng âm 1 từ phổ biến (sa/xa, code/cốt, Mặc/Ngọc, …) */

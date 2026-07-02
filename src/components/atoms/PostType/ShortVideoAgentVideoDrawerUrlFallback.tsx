@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
 import {
     parseShortVideoAgentIdFromSearch,
-    setShortVideoAgentIdInSearchParams,
+    parseShortVideoAgentTabFromSearch,
+    clearShortVideoAgentSearchParams,
 } from 'helpers/shortVideoAgentVideoDrawerUrl';
 
 type Props = {
@@ -23,6 +24,7 @@ function ShortVideoAgentVideoDrawerUrlFallback({
     const [open, setOpen] = React.useState(false);
 
     const agentId = parseShortVideoAgentIdFromSearch(searchParams.toString());
+    const initialTab = parseShortVideoAgentTabFromSearch(searchParams.toString());
 
     const rowHasPost = React.useMemo(() => {
         if (!agentId || !Array.isArray(rows)) {
@@ -41,7 +43,7 @@ function ShortVideoAgentVideoDrawerUrlFallback({
 
     const handleClose = React.useCallback(() => {
         setOpen(false);
-        const next = setShortVideoAgentIdInSearchParams(searchParams, null);
+        const next = clearShortVideoAgentSearchParams(searchParams);
         setSearchParams(next, { replace: true });
     }, [searchParams, setSearchParams]);
 
@@ -55,6 +57,7 @@ function ShortVideoAgentVideoDrawerUrlFallback({
             onClose={handleClose}
             shortVideoId={agentId}
             onUploaded={onRefreshList}
+            initialTab={initialTab}
         />
     );
 }

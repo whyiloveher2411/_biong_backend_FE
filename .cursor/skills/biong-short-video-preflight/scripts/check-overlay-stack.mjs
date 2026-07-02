@@ -197,9 +197,53 @@ if (hasWatermarkHost) {
   }
 }
 
+// --- Beat progress bar (global overlay z8990, between content and caption) ---
+const hasBeatProgress =
+  /beat-progress-host/i.test(indexHtml) || /beat-progress-fill/i.test(indexHtml);
+const progressZ = extractZIndex(indexHtml, "beat-progress-host");
+if (!hasBeatProgress) {
+  errors.push(
+    "index.html: thiếu beat-progress-host — thanh progress global z8990 (đọc beat-progress-bar.md)",
+  );
+} else if (progressZ !== null && progressZ !== 8990) {
+  errors.push(
+    `beat-progress-host z-index=${progressZ} — bắt buộc 8990`,
+  );
+}
+
+if (hasBeatProgress) {
+  const trackOpaque = indexHtml.match(
+    /beat-progress-track[^>]*style="[^"]*background\s*:\s*(?!transparent)[^";]+/i,
+  );
+  if (trackOpaque && !/background\s*:\s*transparent/i.test(trackOpaque[0])) {
+    errors.push(
+      "beat-progress-track phải background:transparent — chỉ hiện fill đã chạy (beat-progress-bar.md)",
+    );
+  }
+  const hostHeight = indexHtml.match(/beat-progress-host[^>]*height\s*:\s*(\d+)px/i);
+  if (hostHeight && parseInt(hostHeight[1], 10) > 6) {
+    warnings.push(
+      `beat-progress-host height=${hostHeight[1]}px — khuyến nghị 4px`,
+    );
+  }
+}
+
+const beatMoveCount = (indexHtml.match(/class="[^"]*sfx-beat-move/gi) ?? []).length;
+if (beatMoveCount < 1) {
+  errors.push(
+    "index.html: thiếu sfx_beat_move clips — chạy wire-beat-transition-sfx.mjs (beat-transition-sfx.md)",
+  );
+}
+
 // --- DOM order: watermark after caption ---
 const captionIdx = indexHtml.search(/captions\.html|hf-overlay-caption/i);
 const watermarkIdx = indexHtml.search(/brand-watermark\.html|hf-overlay-brand/i);
+const progressIdx = indexHtml.search(/beat-progress-host/i);
+if (hasBeatProgress && captionIdx >= 0 && progressIdx >= 0 && progressIdx > captionIdx) {
+  errors.push(
+    "DOM order: beat-progress-host phải đứng TRƯỚC caption host trong index.html",
+  );
+}
 if (captionIdx >= 0 && watermarkIdx >= 0 && watermarkIdx < captionIdx) {
   errors.push(
     "DOM order: watermark host phải đứng SAU caption host trong index.html",
@@ -208,7 +252,8 @@ if (captionIdx >= 0 && watermarkIdx >= 0 && watermarkIdx < captionIdx) {
 
 // --- Beat z-index vs caption ---
 const allZ = collectZIndexValues(indexHtml);
-const contentZ = allZ.filter((z) => z < 9000);
+const overlayZ = new Set([8990]); // beat-progress global overlay
+const contentZ = allZ.filter((z) => z < 9000 && !overlayZ.has(z));
 const tooHigh = contentZ.filter((z) => z > 850);
 if (tooHigh.length) {
   errors.push(

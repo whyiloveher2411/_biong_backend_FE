@@ -7,12 +7,16 @@ import {
   tryCompoundSplit,
   tryForYouCluster,
   tryFractionCluster,
+  tryMotPhanBaCluster,
   tryPercentCluster,
   tryCoViewCluster,
   tryHyphenTranscriptCluster,
   tryPlainNumberCluster,
   tryRacAiCluster,
+  tryRuomRaHomophone,
   tryTikTokCluster,
+  tryTuThuaHomophone,
+  tryViPercentRangeCluster,
   tryMergedTranscriptCluster,
   tryYearCluster,
   tryDecimalChamCluster,
@@ -38,6 +42,7 @@ export const norm = (s) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u0111/g, "d")
     .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, "");
 
 export function stripPunct(word) {
@@ -335,6 +340,72 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const pctRangeCluster = tryViPercentRangeCluster(
+      scriptWords,
+      i,
+      transcriptWords,
+      state.p,
+      lookahead,
+    );
+    if (pctRangeCluster) {
+      pctRangeCluster.words.forEach((w, k) => {
+        const t = pctRangeCluster.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: pctRangeCluster.matchType,
+          whisperText: pctRangeCluster.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += pctRangeCluster.words.length;
+      state.p = pctRangeCluster.transcriptEnd;
+      i += pctRangeCluster.consumed - 1;
+      continue;
+    }
+
+    const tuThua = tryTuThuaHomophone(scriptWords, i, transcriptWords, state.p);
+    if (tuThua) {
+      tuThua.words.forEach((w, k) => {
+        const t = tuThua.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: tuThua.matchType,
+          whisperText: tuThua.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += tuThua.words.length;
+      state.p = tuThua.transcriptEnd;
+      i += tuThua.consumed - 1;
+      continue;
+    }
+
+    const ruomRa = tryRuomRaHomophone(scriptWords, i, transcriptWords, state.p);
+    if (ruomRa) {
+      ruomRa.words.forEach((w, k) => {
+        const t = ruomRa.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: ruomRa.matchType,
+          whisperText: ruomRa.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += ruomRa.words.length;
+      state.p = ruomRa.transcriptEnd;
+      i += ruomRa.consumed - 1;
+      continue;
+    }
+
     const pctCluster = tryPercentCluster(scriptWords, i, transcriptWords, state.p, lookahead);
     if (pctCluster) {
       pctCluster.words.forEach((w, k) => {
@@ -378,6 +449,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       clusterCount += fracCluster.words.length;
       state.p = fracCluster.transcriptEnd;
       i += fracCluster.consumed - 1;
+      continue;
+    }
+
+    const motPhanBa = tryMotPhanBaCluster(scriptWords, i, transcriptWords, state.p, lookahead);
+    if (motPhanBa) {
+      motPhanBa.words.forEach((w, k) => {
+        const t = motPhanBa.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: motPhanBa.matchType,
+          whisperText: motPhanBa.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += motPhanBa.words.length;
+      state.p = motPhanBa.transcriptEnd;
+      i += motPhanBa.consumed - 1;
       continue;
     }
 

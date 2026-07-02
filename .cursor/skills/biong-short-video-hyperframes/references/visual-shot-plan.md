@@ -94,6 +94,16 @@ Một entry = **một visual beat** (content unit):
 | `layout_archetype` | Xem [visual-layout-archetypes.md](visual-layout-archetypes.md) — **bắt buộc**, không lặp >2 beat liên tiếp |
 | `render_stack` | ≥2 trong: `registry:*`, `gsap`, `lottie`, `giphy`, `threejs`, `shader` |
 | `visual_story` | Mô tả visual **không** chỉ echo text — preflight kiểm tra |
+| `minimum_elements` | **≥5** distinct elements trên màn hình — bắt buộc |
+
+### Trường bắt buộc (density)
+
+| Trường | Mô tả |
+|--------|--------|
+| `minimum_elements` | Số element visual tối thiểu (≥5) |
+| `decorative_elements[]` | Badges, icons, particles, glow rings |
+| `supporting_graphics[]` | Source badges, mockups, company chips, quote boxes |
+| `continuous_motion_layers[]` | Elements có loop animation suốt beat |
 
 ### Trường tùy chọn
 
@@ -113,6 +123,42 @@ Một entry = **một visual beat** (content unit):
 | `comparison_stat` | Số so sánh chưa nói trong VO | `core_signals`, brief (có proof) |
 | `context_chip` | Insight ngắn bổ sung | `narrative_chain` |
 | `quote_snippet` | Trích dẫn ≤8 từ | Post gốc |
+| `header_badge` | Beat index `#N/total` | Shot-plan |
+| `decorative_icon` | Icon trang trí (atom, dollar, etc.) | Creative |
+| `screenshot_mockup` | Browser/app mockup card | Brief / enrichment |
+
+**Enforcement:** Mỗi beat phải có **≥2** `visual_enrichment` entries **hoặc** `supporting_graphics[]` + `decorative_elements[]`.
+
+### `decorative_elements[]` — types
+
+| type | Khi dùng |
+|------|----------|
+| `header_badge` | `#2/9` beat index góc trên |
+| `section_label` | `HOOK` / `AGITATE` / `SOLVE` / `CTA` |
+| `decorative_icon` | Icon lớn mờ phía sau hero |
+| `particle_field` | Floating dots/orbs |
+| `glow_ring` | Vòng sáng pulse quanh hero |
+| `accent_underline` | Line gradient dưới headline |
+
+### `supporting_graphics[]` — types
+
+| type | Khi dùng |
+|------|----------|
+| `source_badge` | Nguồn báo cáo, năm |
+| `company_logos` | Logo chips horizontal stack |
+| `quote_box` | Blockquote mô tả ngắn |
+| `screenshot_mockup` | Browser window mockup |
+| `comparison_stat` | Số so sánh chưa nói trong VO |
+
+### `continuous_motion_layers[]`
+
+List elements có animation loop suốt beat:
+
+```json
+{ "element": "deco-icon", "animation": "rotate_loop", "duration": 10 },
+{ "element": "particles", "animation": "float_yoyo", "duration": 2 },
+{ "element": "hero-card", "animation": "breathe", "duration": 2.5 }
+```
 
 On-screen copy **ngắn** (headline/chip ≥32px); narration đầy đủ vẫn ở caption track.
 

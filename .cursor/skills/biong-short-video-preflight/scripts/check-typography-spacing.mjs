@@ -132,6 +132,70 @@ function checkScreenSplit(name, content) {
   }
 }
 
+function parseClampMax(cssBlock, selector) {
+  const re = new RegExp(
+    `${selector.replace(/\./g, "\\.")}\\{[^}]*font-size\\s*:\\s*clamp\\([^,]+,[^,]+,\\s*(\\d+(?:\\.\\d+)?)px`,
+    "i",
+  );
+  const m = cssBlock.match(re);
+  if (m) return parseFloat(m[1]);
+  const pxRe = new RegExp(
+    `${selector.replace(/\./g, "\\.")}\\{[^}]*font-size\\s*:\\s*(\\d+(?:\\.\\d+)?)px`,
+    "i",
+  );
+  const m2 = cssBlock.match(pxRe);
+  if (m2) return parseFloat(m2[1]);
+  return null;
+}
+
+function checkHeadlineHierarchy(name, content) {
+  if (/hook-title-text/i.test(content)) return;
+
+  const heroMax =
+    parseClampMax(content, ".hero") ??
+    parseClampMax(content, ".hero-sm") ??
+    56;
+  let focalLarge = parseClampMax(content, ".focal-large") ?? 0;
+  if (content.includes("content-cluster:has(.hero) .focal-large")) {
+    focalLarge = Math.min(focalLarge, 56);
+  }
+  let statVal = parseClampMax(content, ".stat-val") ?? 0;
+  if (content.includes("content-cluster:has(.hero) .stat-val")) {
+    statVal = Math.min(statVal, 56);
+  }
+  const supportMax = Math.max(statVal, focalLarge);
+
+  if (supportMax > 0 && supportMax > heroMax) {
+    errors.push(
+      `${name}: support text (${supportMax}px) > headline (${heroMax}px) — hero phải lớn nhất (kinetic-typography-brief.md)`,
+    );
+  }
+
+  const heroSmInBody = content.match(
+    /<div class="hero-sm"[^>]*>([^<]{0,120})<\/div>/i,
+  );
+  if (heroSmInBody) {
+    const words = heroSmInBody[1].replace(/<[^>]+>/g, " ").trim().split(/\s+/).length;
+    if (words <= 6) {
+      warnings.push(
+        `${name}: .hero-sm với ≤6 từ — nên dùng .hero clamp(56px,5.5vw,80px)`,
+      );
+    }
+  }
+}
+
+function checkFocalGradientInSupport(name, content) {
+  if (
+    /mockup-body[\s\S]{0,800}focal-gradient/i.test(content) ||
+    /card-body[\s\S]{0,800}focal-gradient/i.test(content) ||
+    /ui-card[\s\S]{0,1200}focal-gradient/i.test(content)
+  ) {
+    errors.push(
+      `${name}: focal-gradient trong card/mockup — dùng solid .kw-* (keyword-highlighting.md)`,
+    );
+  }
+}
+
 function checkContentCluster(name, content) {
   if (!/content-cluster/i.test(content)) {
     errors.push(`${name}: thiếu .content-cluster — layout-9x16-zones.md`);
@@ -150,6 +214,8 @@ for (const { name, content } of beatFiles) {
   checkGlassOrUiCard(name, content);
   checkScreenSplit(name, content);
   checkContentCluster(name, content);
+  checkHeadlineHierarchy(name, content);
+  checkFocalGradientInSupport(name, content);
 }
 
 if (warnings.length) {

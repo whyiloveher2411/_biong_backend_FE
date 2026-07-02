@@ -11,13 +11,13 @@
 
 | Layer | z-index | Nội dung |
 |-------|---------|----------|
-| Bg gradient / mesh | 0–2 | CSS mesh, dark premium |
-| Stock / video bg | 3–5 | Pexels low-opacity, blur |
-| Ambient layer | 6–10 | `compositions/ambient-layer.html` — grain, parallax |
-| Decorative floaters | 80–150 | Orbs, giphy sticker, lines |
+| Ambient animation (base) | **2–6** | `ambient-layer.html` — gradient, particles, mesh — **opacity 1.0** |
+| Stock / video bg | **7–10** | Pexels B-roll — **opacity 0.1–0.15** (khuyến nghị 0.11), trên ambient |
+| Decorative floaters | 80–150 | Orbs, giphy sticker, lines (trong beat) |
 | Hero (registry block, headline) | 200–450 | data-chart, flowchart, kinetic hero |
 | Support (chips, badges) | 450–650 | Metadata, secondary UI |
 | Accent Lottie / sticker | 650–800 | `window.__hfLottie` hosts |
+| Beat progress bar (`index.html`) | **8990** | Thanh tiến trình liên tục — [beat-progress-bar.md](beat-progress-bar.md) |
 | Caption host clip (`index.html`) | **9000** | Sub-composition karaoke |
 | Watermark host clip (`index.html`) | **9500** | Sub-composition brand |
 | (Cấm content > 850) | — | Không được gần caption band |
@@ -30,15 +30,25 @@ Map `z_role` từ `visual_shot_plan` → band: xem [visual-shot-plan.md](visual-
 
 ```html
 <div id="root" data-composition-id="main">
-  <!-- 1. Bg + ambient (z 0–10) -->
+  <!-- 1. Ambient animation — DƯỚI CÙNG, opacity 1 -->
   <div class="clip hf-ambient-layer" data-composition-src="compositions/ambient-layer.html"
        data-composition-id="ambient" data-start="0" data-duration="{totalVideoSec}"
-       style="position:absolute;inset:0;z-index:8;pointer-events:none;"></div>
+       style="position:absolute;inset:0;z-index:4;pointer-events:none;"></div>
 
-  <!-- 2. Beat sections (z 80–800 theo z_role) -->
+  <!-- 2. Stock video — TRÊN ambient, opacity thấp (0.1–0.15) -->
+  <div class="stock-bg-wrap" style="position:absolute;inset:0;z-index:7;pointer-events:none;">
+    <video class="stock-bg" ...></video>
+  </div>
+
+  <!-- 3. Beat sections (z 80–800 theo z_role) -->
   <section class="clip scene" style="z-index:320" ... data-track-index="1">...</section>
 
-  <!-- 3. Caption — SAU beats, TRƯỚC watermark -->
+  <!-- 3. Beat progress — trước caption -->
+  <div class="beat-progress-host" style="position:absolute;top:0;left:0;width:1080px;height:4px;z-index:8990;pointer-events:none">
+    <div class="beat-progress-track" style="background:transparent"><div class="beat-progress-fill"></div></div>
+  </div>
+
+  <!-- 4. Caption — SAU beats, TRƯỚC watermark -->
   <div class="clip hf-overlay-caption"
        data-composition-src="compositions/captions.html"
        data-start="0"
@@ -78,7 +88,7 @@ html, body {
 ### Ambient (`compositions/ambient-layer.html`)
 
 - `data-composition-id="ambient"` khớp `window.__timelines["ambient"]`
-- z-index host **6–10**
+- z-index host **2–6** (dưới stock video)
 - Invoke `/continuous-motion`
 
 ### Caption (`compositions/captions.html`)
@@ -141,7 +151,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.
 |-----|---------|------|
 | Mọi beat z≤50 (phẳng) | Slideshow feel | Hero z 200–450, floaters 80–150 |
 | Tin track 99 = trên cùng | Logo/caption chìm | z-index 9000 / 9500 |
-| Stock full-bleed z=300 che UI | Mất registry hero | Stock bg z 3–5, opacity thấp |
+| Stock full-bleed z=300 che UI | Mất registry hero | Stock bg z 7–10, opacity 0.1–0.15 **trên** ambient |
 | Beat z > 850 | Gần caption | Content max ~800 |
 | Caption trước beat trong DOM | Beat che caption | Caption sau beats |
 

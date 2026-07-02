@@ -8,6 +8,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const DEFAULT_CONTEXT_REL = "assets/get-context-snapshot.json";
 const AUDIO_SCRIPT_REL = "assets/audio-script.txt";
@@ -23,6 +24,26 @@ function parseArgs(argv) {
     }
   }
   return out;
+}
+
+function stripShortVideoSuffix(title) {
+  return String(title ?? "")
+    .trim()
+    .replace(/\s*[—–-]\s*Short video\s*#\d+\s*$/iu, "")
+    .trim();
+}
+
+function resolveArticleTitle(ctx) {
+  const fromCtx = String(ctx.article_title ?? "").trim();
+  if (fromCtx) return fromCtx;
+
+  const fromBrief = String(ctx.creative_brief?.article_title ?? "").trim();
+  if (fromBrief) return fromBrief;
+
+  const fromMarketing = String(ctx.creative_brief?.marketing_post_title ?? "").trim();
+  if (fromMarketing) return fromMarketing;
+
+  return stripShortVideoSuffix(ctx.title ?? "");
 }
 
 function pickMetadata(ctx) {
@@ -57,6 +78,7 @@ function pickMetadata(ctx) {
     markers,
     timeline,
     estimated_duration_sec: estimated,
+    article_title: resolveArticleTitle(ctx),
   };
 }
 
@@ -112,6 +134,40 @@ function main() {
     path.join(projectDir, AGENT_METADATA_REL),
     JSON.stringify(metadata, null, 2),
   );
+
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const skillAssetsDir = path.resolve(
+    scriptDir,
+    "../../biong-short-video-hyperframes/assets",
+  );
+  const globalStylesSrc = path.join(skillAssetsDir, "global-default-styles.css");
+  const globalStylesDest = path.join(projectDir, "assets/global-default-styles.css");
+  if (fs.existsSync(globalStylesSrc)) {
+    fs.copyFileSync(globalStylesSrc, globalStylesDest);
+    console.log("[bootstrap] copied assets/global-default-styles.css");
+  } else {
+    console.warn(
+      "[bootstrap] Cảnh báo: thiếu skill global-default-styles.css — copy thủ công",
+    );
+  }
+
+  const sfxSrc = path.join(skillAssetsDir, "audio/sfx_beat_move.mp3");
+  const repoSfx = path.resolve(scriptDir, "../../../short_video_beat_move.mp3");
+  const sfxDestDir = path.join(projectDir, "assets/audio");
+  fs.mkdirSync(sfxDestDir, { recursive: true });
+  const sfxSource = fs.existsSync(sfxSrc)
+    ? sfxSrc
+    : fs.existsSync(repoSfx)
+      ? repoSfx
+      : "";
+  if (sfxSource) {
+    fs.copyFileSync(sfxSource, path.join(sfxDestDir, "sfx_beat_move.mp3"));
+    console.log("[bootstrap] copied assets/audio/sfx_beat_move.mp3");
+  } else {
+    console.warn(
+      "[bootstrap] Cảnh báo: thiếu short_video_beat_move.mp3 — copy thủ công",
+    );
+  }
 
   if (Array.isArray(visualShotPlan) && visualShotPlan.length) {
     const shotPath = path.join(projectDir, "assets/visual-shot-plan.json");

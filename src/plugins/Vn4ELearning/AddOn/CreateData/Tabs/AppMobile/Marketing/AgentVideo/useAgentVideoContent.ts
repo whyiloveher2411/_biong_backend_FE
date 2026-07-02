@@ -69,6 +69,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [hfThemeResolved, setHfThemeResolved] = React.useState('');
     const [hfThemeSource, setHfThemeSource] = React.useState('');
     const [hfThemeCatalog, setHfThemeCatalog] = React.useState<HfThemeCatalogItem[]>([]);
+    const [marketingPostId, setMarketingPostId] = React.useState(0);
+    const [thumbnail, setThumbnail] = React.useState<unknown>(null);
 
     const [uploading, setUploading] = React.useState(false);
     const [savingTtsMode, setSavingTtsMode] = React.useState(false);
@@ -124,6 +126,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setHfThemeResolved(String(res?.hf_theme_resolved || '').trim());
         setHfThemeSource(String(res?.hf_theme_source || '').trim());
         setHfThemeCatalog(Array.isArray(res?.hf_theme_catalog) ? res.hf_theme_catalog : []);
+        const mpId = Number(res?.marketing_post_id || 0);
+        setMarketingPostId(Number.isFinite(mpId) && mpId > 0 ? mpId : 0);
+        setThumbnail(res?.thumbnail ?? null);
     }, [resolveScriptFromResponse]);
 
     const handleAudioScriptChange = React.useCallback((value: string) => {
@@ -427,6 +432,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         hfThemeResolved,
         hfThemeSource,
         hfThemeCatalog,
+        marketingPostId,
+        thumbnail,
         uploading,
         savingTtsMode,
         savingHfTheme,

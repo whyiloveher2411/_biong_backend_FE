@@ -32,10 +32,12 @@ node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
 # Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 mkdir -p $PROJ/assets/images
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
+cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 ```
 
@@ -55,6 +57,8 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-typography-spacing
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-beat-transition-sfx.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-default-styles.mjs $PROJ
 ```
 
 ---

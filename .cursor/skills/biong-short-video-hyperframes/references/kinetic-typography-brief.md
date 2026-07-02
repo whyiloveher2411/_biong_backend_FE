@@ -20,7 +20,8 @@ Trước khi viết bất kỳ beat HTML nào:
 
 | Element | Min size | Ghi chú |
 |---------|----------|---------|
-| Headline hero | 64–120px | 60–80% frame width |
+| Headline hero | `clamp(56px, 5.5vw, 80px)` — `.hero` mặc định beats 2–N |
+| Headline dài (>8 từ) | `.hero-sm` `clamp(48px, 4.5vw, 64px)` |
 | Body / support | 28–42px | Cấm <28px |
 | Label / chip | 18–24px | Chỉ metadata phụ |
 | Bất kỳ text | <24px | Phải justify — mặc định cấm |
@@ -45,6 +46,30 @@ Nguồn: `hyperframes-creative/references/video-composition.md`
 - **GSAP stagger** `0.08–0.12` trên `.word` hoặc `.phrase`
 - **Liệt kê / danh sách** → **UI Card** (icon SVG + label ngắn 1–3 từ), stagger cards
 - **Mật độ** 8–10 elements/scene — decor, metadata chips, edge accents
+
+---
+
+## Headline hierarchy (bắt buộc)
+
+Beat 1: `.hook-title-text` là text lớn nhất scene.
+
+Beats 2–N:
+
+| Element | Max size |
+|---------|----------|
+| `.hero` | `clamp(56px, 5.5vw, 80px)` |
+| `.hero-sm` | chỉ khi headline >8 từ |
+| `.stat-val`, `.focal-large` trong `.ui-card` / `.mockup-body` | `≤ 56px` — dùng `.focal-medium` hoặc `.kw-number` |
+| `.card-title` | `36px` |
+
+**Cấm:** stat/mockup số lớn hơn headline (ví dụ `512` 100px > `Công cụ Caveman` 56px).
+
+```css
+.content-cluster:has(.hero) .stat-val,
+.content-cluster:has(.hero) .focal-large {
+  font-size: clamp(44px, 4.5vw, 56px);
+}
+```
 
 ---
 

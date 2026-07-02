@@ -67,7 +67,7 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 4. `map-shot-plan-to-beat-map.mjs` → agent viết `compositions/beat_N.html` thủ công (registry/GSAP/Lottie/Three.js)
 5. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / Lottie bundle / stock **bg only**
 6. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
-7. Embed SFX track 12 + BGM track 11; GSAP paused
+7. Embed SFX track 12 (hook) + beat-move tracks 14–21 + BGM track 11; GSAP paused
 
 | Tool | Dùng khi |
 |------|----------|
@@ -137,8 +137,32 @@ short_video_save_audio_script({
 1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md) · [visual-layout-archetypes.md](references/visual-layout-archetypes.md)
 2. `assets/visual-shot-plan.json` + `map-shot-plan-to-beat-map.mjs`
 3. Agent **viết thủ công** `compositions/beat_N.html` + `npx hyperframes add` registry — customize in-place
-4. Đọc [giphy-accent-format.md](references/giphy-accent-format.md) · [floater-text-keepout.md](references/floater-text-keepout.md) · [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) · [fixtures-not-production-templates.md](references/fixtures-not-production-templates.md) · [layout-9x16-zones.md](references/layout-9x16-zones.md)
-5. `check-visual-density.mjs` pass (FAIL nếu text-only / thiếu shot-plan / opaque beat)
+
+**CSS global bắt buộc:**
+
+Mọi project PHẢI copy + inject `global-default-styles.css` vào `assets/` và link trong `index.html`:
+
+```html
+<link rel="stylesheet" href="assets/global-default-styles.css" />
+```
+
+Copy khi bootstrap:
+
+```bash
+cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
+```
+
+Hoặc inline vào `<style>` trong beat HTML. File này enforce:
+
+- Inset `box-shadow` (border-3d) cho tất cả boxes/cards
+- Tiered `text-shadow` cho hero/focal/card-title/body
+- `fx-shine` + `fx-breathe` shared keyframes
+- Cấm override các styles này trừ khi có lý do đặc biệt
+
+**Beat 1 hook title:** `.hook-title-text` = `article_title` từ `get_context` (tên bài viết) — cấm `title` có ` — Short video #N`; hook VO đặt ở `.quote-box`.
+
+4. Đọc [giphy-accent-format.md](references/giphy-accent-format.md) · [floater-text-keepout.md](references/floater-text-keepout.md) · [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) · [foreground-continuous-motion.md](references/foreground-continuous-motion.md) · [keyword-highlighting.md](references/keyword-highlighting.md) · [beat-progress-bar.md](references/beat-progress-bar.md) · [beat-transition-sfx.md](references/beat-transition-sfx.md) · [hook-title-impact-box.md](references/hook-title-impact-box.md) · [box-animation-catalog.md](references/box-animation-catalog.md) · [card-animation-catalog-v2.md](references/card-animation-catalog-v2.md) · [text-animation-catalog.md](references/text-animation-catalog.md) · [text-shadow-guidelines.md](references/text-shadow-guidelines.md) · [dynamic-bg-patterns.md](references/dynamic-bg-patterns.md) · [fixtures-not-production-templates.md](references/fixtures-not-production-templates.md) · [layout-9x16-zones.md](references/layout-9x16-zones.md)
+5. `check-visual-density.mjs` pass (FAIL nếu text-only / thiếu shot-plan / opaque beat) — **keyword highlight + box fx (`.box-*` + `.fx-*`) + text effects (≥2 types) + card effects (≥3 types) + NO opacity fade content trong loop**
 
 ### Vai trò
 
@@ -168,17 +192,22 @@ node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
 # Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
+cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 node .cursor/skills/biong-short-video-preflight/scripts/patch-stock-full-bleed.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-stock-full-bleed.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-foreground-motion-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-beat-transition-sfx.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-default-styles.mjs $PROJ
 ```
 
 Pass → invoke `/biong-short-video-evolution` (vision loop) → mới `render --quality high --strict`.
@@ -220,6 +249,8 @@ Dùng block cho caption + transition — customize, không viết từ đầu. S
 
 - **Cấm** linear entrance → `power3.out`, `back.out(1.7)`, `elastic.out(1, 0.3)`
 - **Stagger** `0.1` trên lists/words/cards
+- **Continuous loops:** mỗi beat ≥1 foreground tween `repeat: -1` hoặc `yoyo: true` — đọc [foreground-continuous-motion.md](references/foreground-continuous-motion.md)
+- **Visual density:** mỗi beat ≥5 distinct elements (badges, hero, cards, deco icons, quote boxes)
 - **3D depth:** scale 0.8→1, rotate ±5°, gradient border glow
 - **Sync:** `paused: true` → `window.__timelines[id]`; `data-duration` khớp audio beat
 
@@ -256,6 +287,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 12. [layout-9x16-zones.md](references/layout-9x16-zones.md)
 12b. [floater-text-keepout.md](references/floater-text-keepout.md) — **sticker không đè text**
 12c. [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) — **cấm nền tĩnh**
+12d. [foreground-continuous-motion.md](references/foreground-continuous-motion.md) — **foreground animation liên tục**
 13. [gsap-beat-checklist.md](references/gsap-beat-checklist.md)
 14. [blank-frame-audit.md](references/blank-frame-audit.md) — **lint + inspect**
 15. `/biong-short-video-preflight` — **check-overlay-stack.mjs trước render final**
@@ -284,6 +316,8 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 
 - [ ] Caption host `z-index:9000` + watermark host `z-index:9500` — [overlay-layer-stack.md](references/overlay-layer-stack.md)
 - [ ] `check-overlay-stack.mjs` exit 0 — `/biong-short-video-preflight`
+- [ ] `check-beat-transition-sfx.mjs` exit 0 — sfx_beat_move mỗi chuyển beat 2…N
+- [ ] `check-default-styles.mjs` exit 0 — plate-rust beat_1 + global border-3d/text-shadow
 - [ ] `transcribe-audio.mjs` + `verify-caption-sync.mjs --strict` pass
 - [ ] `map-shot-plan-to-beat-map.mjs` + `check-beat-timing.mjs` pass
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
@@ -295,7 +329,8 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `check-typography-spacing.mjs` exit 0
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML
 - [ ] `visual_shot_plan` trong metadata Phase 2 — N beats content-driven, mỗi beat có `layout_archetype` + `visual_story`
-- [ ] `check-continuous-motion.mjs` + `check-visual-density.mjs` exit 0
+- [ ] `check-continuous-motion.mjs` + `check-visual-density.mjs` + `check-foreground-motion-density.mjs` exit 0
+- [ ] Mỗi beat ≥5 distinct visual elements + ≥1 foreground loop animation + keyword highlighting + diverse box animations (`.box-*` + `.fx-*`)
 - [ ] `media-plan.md` có `bgm_global` + `hero_type`/`registry_block`/`z_role`
 - [ ] ≥1 non-caption registry block (data-chart, flowchart, stat-motion…)
 - [ ] `compositions/ambient-layer.html` + `window.__timelines["ambient"]`

@@ -8,6 +8,21 @@ Agent **bắt buộc** chọn `layout_archetype` cho mỗi beat trong `visual_sh
 
 ---
 
+## Density rules (bắt buộc mọi beat)
+
+| Rule | Giá trị |
+|------|---------|
+| `minimum_elements` | **≥5** distinct visual elements trên màn hình |
+| `decorative_layer` | **mandatory** — badges, icons, particles, glow rings |
+| `supporting_graphics` | **required** — source badges, quote boxes, mockups khi phù hợp |
+| `continuous_motion` | **≥1** foreground loop (`repeat: -1` hoặc `yoyo`) — đọc [foreground-continuous-motion.md](foreground-continuous-motion.md) |
+
+Mỗi beat phải có **visual hierarchy** rõ: progress (global) → headline/hero → supporting → decorative.
+
+**Cấm:** `#N/9` header-badge và `section-label` trong beat — dùng [beat-progress-bar.md](beat-progress-bar.md).
+
+---
+
 ## Render stack (mỗi beat)
 
 Chọn **≥2** trong:
@@ -27,6 +42,40 @@ Ghi trong `render_stack[]` của shot-plan entry.
 
 ## Archetype catalog
 
+### `hook_title_impact_box`
+
+| | |
+|--|--|
+| **Khi dùng** | **Bắt buộc beat_1 / hook** — title box có khung, keyword highlight |
+| **Stack** | `gsap` + `registry:*` + optional `giphy` |
+| **Visual story** | Plate rust + **article title** (tên bài viết) + quote hook VO + deco |
+| **Minimum elements** | 5: `hook-title-plate`, `hook-title-box`, `hook-title-text`, `hook-corner`×4, `quote-box`/`context-chip`, `deco-icon`, `particle` |
+| **Đọc** | [hook-title-impact-box.md](hook-title-impact-box.md) |
+
+### `news_editorial_stack`
+
+| | |
+|--|--|
+| **Khi dùng** | Beat information-dense kiểu AIDEVNEWS — nhiều layers, professional news |
+| **Stack** | `gsap` + `registry:*` + `lottie` + optional `giphy` |
+| **Visual story** | Headline lớn + quote box + screenshot/mockup + decorative icons |
+| **Minimum elements** | 5–8: `hero-headline`, `quote-box`, `source-badge`, `deco-icon`, `mockup-card` |
+| **Layout 9:16** | Stack dọc: header row → headline → underline accent → quote → hero card/mockup |
+| **Continuous motion** | Headline underline sweep, deco icons rotate, mockup float yoyo, badge pulse |
+
+**Mẫu stack:**
+
+```
+─────────────────────────────────────
+     HEADLINE LỚN BOLD
+     ───────────── (accent line)
+  "Quote box mô tả ngắn bổ sung"
+  ┌─────────────────────────┐
+  │  Mockup / stat hero     │
+  └─────────────────────────┘
+  [ Uber ] [ Walmart ] [ Copilot ]
+```
+
 ### `kinetic_hook_slam`
 
 | | |
@@ -36,6 +85,8 @@ Ghi trong `render_stack[]` của shot-plan entry.
 | **Visual story** | Từng từ slam stagger + sticker nổ + grain ambient |
 | **Registry** | `caption-kinetic-slam` |
 | **Cấm** | Chỉ 1 dòng text tĩnh |
+| **minimum_elements** | 5 — hook words + support card + deco + sticker |
+| **decorative_layer** | mandatory — particles, glow, accent underline |
 
 ### `stat_punch_card`
 
@@ -45,6 +96,9 @@ Ghi trong `render_stack[]` của shot-plan entry.
 | **Stack** | `registry:stat-motion` hoặc `apple-money-count` + `gsap` |
 | **Visual story** | Counter punch + ring fill + label card |
 | **Registry** | `stat-motion`, `apple-money-count` |
+| **minimum_elements** | 5 — header badge + section label + stat hero + source badge + company chips |
+| **supporting_graphics** | source badge, company logo chips |
+| **decorative_layer** | dollar icons, particle field, glow ring |
 
 ### `comparison_split`
 
