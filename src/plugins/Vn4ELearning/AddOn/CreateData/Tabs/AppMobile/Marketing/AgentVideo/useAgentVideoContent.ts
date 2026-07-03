@@ -5,6 +5,7 @@ import {
     copyShortVideoAgentPromptToClipboard,
     type ShortVideoAgentPromptPhase,
 } from 'helpers/marketingShortVideoAgentPrompt';
+import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
 import {
     approveAudioScript,
     normalizePlatforms,
@@ -79,6 +80,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [approvingScript, setApprovingScript] = React.useState(false);
     const [retryingTts, setRetryingTts] = React.useState(false);
     const [regeneratingTts, setRegeneratingTts] = React.useState(false);
+    const [launchingRender, setLaunchingRender] = React.useState(false);
+    const [launchingScript, setLaunchingScript] = React.useState(false);
+    const [launchingContinue, setLaunchingContinue] = React.useState(false);
 
     const savedScriptRef = React.useRef('');
 
@@ -276,6 +280,42 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         showMessage(result.message, result.ok ? 'success' : 'error');
     };
 
+    const handleLaunchAgentRender = async () => {
+        setLaunchingRender(true);
+        try {
+            const result = await launchShortVideoAgentRender(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingRender(false);
+        }
+    };
+
+    const handleLaunchAgentScript = async () => {
+        setLaunchingScript(true);
+        try {
+            const result = await launchShortVideoAgent(shortVideoId, '1');
+            showMessage(result.message, result.ok ? 'success' : 'error');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingScript(false);
+        }
+    };
+
+    const handleLaunchAgentContinue = async () => {
+        setLaunchingContinue(true);
+        try {
+            const result = await launchShortVideoAgentContinue(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingContinue(false);
+        }
+    };
+
     const handleSaveScript = async () => {
         if (!audioScript.trim()) {
             showMessage('Script trống', 'warning');
@@ -441,6 +481,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         approvingScript,
         retryingTts,
         regeneratingTts,
+        launchingRender,
+        launchingScript,
+        launchingContinue,
         hasScript,
         hasAudio,
         statusChip,
@@ -452,6 +495,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleCopyScript,
         handleCopyImproveScriptPrompt,
         handleCopyPrompt,
+        handleLaunchAgentRender,
+        handleLaunchAgentScript,
+        handleLaunchAgentContinue,
         handleSaveScript,
         handleApproveScript,
         handleRegenerateTts,

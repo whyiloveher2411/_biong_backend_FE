@@ -183,6 +183,93 @@ for (const { name, content } of beats2Plus) {
   }
 }
 
+/**
+ * Empty-box bug: element mang class border-3d (ui-card/quote-box/vs-card/...)
+ * nhưng KHÔNG class nào của chính nó có padding + (background|border) trong
+ * CSS cùng file — global-default-styles.css chỉ thêm box-shadow (viền sáng/tối),
+ * không có nền/khoảng đệm. Kết quả: element chỉ hiện 2 đường viền ngang mỏng,
+ * chữ dính sát viền, không có "box" thật (lỗi phát hiện video #13, 2026-07-02).
+ */
+const BOX_PATTERN_CLASSES = [
+  "ui-card",
+  "premium-card",
+  "quote-box",
+  "vs-card",
+  "bento-card",
+  "stat-card",
+  "company-chip",
+  "context-chip",
+  "flow-node",
+  "badge",
+];
+
+function extractStyleRules(html) {
+  const styleBlocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(
+    (m) => m[1],
+  );
+  const css = styleBlocks.join("\n");
+  const rules = [];
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = ruleRe.exec(css)) !== null) {
+    rules.push({ selectors: m[1], body: m[2] });
+  }
+  return rules;
+}
+
+/** class -> merged CSS declaration text từ mọi selector chứa class đó (kể cả compound). */
+function buildClassStyleMap(rules) {
+  const map = new Map();
+  for (const { selectors, body } of rules) {
+    const classNames = [
+      ...selectors.matchAll(/\.([a-zA-Z0-9_-]+)/g),
+    ].map((m) => m[1]);
+    for (const cls of new Set(classNames)) {
+      map.set(cls, (map.get(cls) ?? "") + ";" + body);
+    }
+  }
+  return map;
+}
+
+function hasBoxTreatment(cssText) {
+  const hasPadding = /padding\s*:/i.test(cssText);
+  const hasFill =
+    /background(?!-position|-size|-repeat|-attachment)\s*:/i.test(cssText) ||
+    /border(?!-radius)\s*:/i.test(cssText) ||
+    /border-left\s*:/i.test(cssText) ||
+    /backdrop-filter\s*:/i.test(cssText);
+  return hasPadding && hasFill;
+}
+
+const globalClassMap = buildClassStyleMap(
+  extractStyleRules(hasGlobalCssFile ? read("assets/global-default-styles.css") : ""),
+);
+
+for (const { name, content } of beatFiles) {
+  const classMap = buildClassStyleMap(extractStyleRules(content));
+  const elementRe = /<(?:div|span|section|p|h1|h2|h3)\b[^>]*\bclass="([^"]+)"[^>]*>/gi;
+  let em;
+  const seen = new Set();
+  while ((em = elementRe.exec(content)) !== null) {
+    const classes = em[1].trim().split(/\s+/);
+    const boxClass = classes.find((c) => BOX_PATTERN_CLASSES.includes(c));
+    if (!boxClass) continue;
+    const key = classes.join(" ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const styled = classes.some((c) => {
+      const local = classMap.get(c) ?? "";
+      const global = globalClassMap.get(c) ?? "";
+      return hasBoxTreatment(local) || hasBoxTreatment(local + global);
+    });
+    if (!styled) {
+      errors.push(
+        `${name}: class="${key}" mang box-pattern "${boxClass}" nhưng không class nào có padding+background/border cùng file — global-default-styles.css chỉ thêm box-shadow viền, element sẽ hiện 2 đường viền ngang trống không khoảng đệm (đọc canvas-contract-3-layer.md § Lớp 2)`,
+      );
+    }
+  }
+}
+
 warnings.forEach((w) => console.error("WARN:", w));
 
 if (errors.length) {

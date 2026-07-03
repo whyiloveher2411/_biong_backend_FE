@@ -340,6 +340,7 @@ const checks = [
   ["check-typography-spacing.mjs", []],
   ["check-beat-timing.mjs", []],
   ["check-screen-fill.mjs", []],
+  ["check-marketing-post-images.mjs", []],
   ["check-overlay-stack.mjs", []],
 ];
 

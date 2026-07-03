@@ -48,6 +48,8 @@ Mọi khối thông tin, chart, meme frame **phải** nằm trong card:
 
 **Cấm:** list bullet text thuần không card; chip 4-in-a-row font nhỏ.
 
+**Cấm (lỗi video #13):** gắn class `ui-card`/`quote-box`/`vs-card`/`bento-card`/`flow-node`/`badge`/`context-chip`/`company-chip` lên element **chỉ để** thỏa số lượng block-pattern của preflight, mà không viết CSS local `padding` + `background`/`border`. `global-default-styles.css` chỉ thêm `box-shadow: inset` (viền 3D) — KHÔNG có nền/khoảng đệm. Thiếu local CSS → element hiện 2 đường viền ngang mỏng dính sát chữ, không nền, trông như box lỗi. `check-default-styles.mjs` nay FAIL trường hợp này — xem [evolution-memory.md](evolution-memory.md) § 2026-07-02 v2.
+
 ---
 
 ## Lớp 3 — Dynamic typography (tiền cảnh)

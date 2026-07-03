@@ -174,10 +174,21 @@ Ghi trong `render_stack[]` của shot-plan entry.
 
 | | |
 |--|--|
-| **Khi dùng** | CTA, follow, loop hook |
+| **Khi dùng** | CTA, follow, loop hook — **chỉ** khi dùng blueprint collapse có anchor cố định |
 | **Stack** | `registry:caption-kinetic-slam` + `gsap` + `lottie` |
 | **Visual story** | Orbit collapse blueprint hoặc logo-outro + CTA words |
 | **Blueprint** | `hyperframes-animation/blueprints/cta-orbit-collapse.md` |
+
+**Cấm (video #21):** `.cta-orbit` + `.orbit-item` `position:absolute` + GSAP `scale`/`rotation` trên container orbit hoặc `.cta-main` — card CTA "Theo dõi" bị bay lệch khỏi stack. **Ưu tiên `exit_card_stack`:** CTA card cố định trong `.exit-stack`, chip row flex — entrance một lần, **không** loop scale/x trên CTA.
+
+### `exit_card_stack`
+
+| | |
+|--|--|
+| **Khi dùng** | Beat cuối CTA, recap + follow |
+| **Stack** | `gsap` + `.exit-stack` vertical |
+| **Visual story** | 2–3 exit cards stack + CTA main cố định + chip row |
+| **Rule** | `.cta-main` trong stack — cấm `fx-shine` GSAP `x` sweep; cấm `scale` yoyo loop trên CTA card |
 
 ### `code_reveal`
 
@@ -202,7 +213,7 @@ Ghi trong `render_stack[]` của shot-plan entry.
 | 3+ insight trong một đoạn | `bento_insight_grid` |
 | Wow / climax | `shader_hero_3d` |
 | Screenshot sản phẩm + số | `annotation_fusion` |
-| "Theo dõi", "link bio" | `cta_orbit` |
+| "Theo dõi", "link bio" | `exit_card_stack` (ưu tiên) hoặc `cta_orbit` blueprint có anchor |
 | Code / API | `code_reveal` |
 
 ---

@@ -11,6 +11,7 @@ import {
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { formatTtsChain, hfThemeLabel, phaseLabel, platformLabel } from './agentVideoUi';
@@ -21,6 +22,22 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 type Props = {
     state: AgentVideoState;
 };
+
+/** Sidebar 300px — theme Button có whiteSpace: nowrap nên cần cho phép wrap. */
+const workflowActionButtonSx = {
+    whiteSpace: 'normal',
+    lineHeight: 1.35,
+    py: 0.75,
+    minHeight: 'auto',
+    textAlign: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    '& .MuiButton-startIcon': {
+        marginRight: 0.75,
+        marginLeft: 0,
+    },
+} as const;
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
     return (
@@ -150,40 +167,89 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </Typography>
 
                     {!state.scriptApproved && (
-                        <Button
-                            size="small"
-                            variant="contained"
-                            fullWidth
-                            startIcon={<ContentCopyIcon />}
-                            onClick={() => { void state.handleCopyPrompt('1'); }}
-                        >
-                            Copy prompt bước 1
-                        </Button>
+                        <>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.launchingScript}
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => { void state.handleLaunchAgentScript(); }}
+                            >
+                                Chạy agent bước 1
+                            </LoadingButton>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                startIcon={<ContentCopyIcon />}
+                                onClick={() => { void state.handleCopyPrompt('1'); }}
+                            >
+                                Copy prompt bước 1
+                            </Button>
+                        </>
                     )}
 
-                    {state.readyForPhase2 && !state.hasAgentVideo && (
-                        <Button
-                            size="small"
-                            variant="contained"
-                            color="primary"
-                            fullWidth
-                            startIcon={<ContentCopyIcon />}
-                            onClick={() => { void state.handleCopyPrompt('2'); }}
-                        >
-                            Copy prompt render video (bước 2)
-                        </Button>
+                    {state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
+                        <>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.launchingRender}
+                                disabled={state.agentVideoStatus === 'processing'}
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => { void state.handleLaunchAgentRender(); }}
+                            >
+                                Chạy render agent
+                            </LoadingButton>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                startIcon={<ContentCopyIcon />}
+                                onClick={() => { void state.handleCopyPrompt('2'); }}
+                            >
+                                Copy prompt bước 2
+                            </Button>
+                        </>
                     )}
 
                     {state.hasAgentVideo && (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            fullWidth
-                            startIcon={<ContentCopyIcon />}
-                            onClick={() => { void state.handleCopyPrompt('continue'); }}
-                        >
-                            Copy prompt tiếp tục
-                        </Button>
+                        <>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.launchingContinue}
+                                disabled={state.agentVideoStatus === 'processing'}
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => { void state.handleLaunchAgentContinue(); }}
+                            >
+                                Chạy agent tiếp tục
+                            </LoadingButton>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                startIcon={<ContentCopyIcon />}
+                                onClick={() => { void state.handleCopyPrompt('continue'); }}
+                            >
+                                Copy prompt tiếp tục
+                            </Button>
+                        </>
                     )}
 
                     {state.ttsFailed && state.scriptApproved && !state.hasAudio && (
@@ -192,6 +258,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             variant="outlined"
                             color="warning"
                             fullWidth
+                            sx={workflowActionButtonSx}
                             loading={state.retryingTts}
                             onClick={() => { void state.handleRetryTts(); }}
                         >
@@ -205,6 +272,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             variant="outlined"
                             color="primary"
                             fullWidth
+                            sx={workflowActionButtonSx}
                             loading={state.retryingTts}
                             onClick={() => { void state.handleRetryTts('Đã queue TTS narration'); }}
                         >

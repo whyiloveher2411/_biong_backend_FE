@@ -297,6 +297,14 @@ export function parseViPlainNumber(words, start) {
       }
     }
 
+    if (w === "tam") {
+      const next = norm(stripPunct(words[i + 1] ?? ""));
+      const prev = norm(stripPunct(words[i - 1] ?? ""));
+      const measureNext = ["guong", "giay", "anh", "vai", "goi", "ban"].includes(next);
+      const isMeasureTam = /ấm/i.test(String(raw)) || (prev === "mot" && measureNext);
+      if (isMeasureTam) break;
+    }
+
     const one = viWordNum(raw);
     if (one !== undefined) {
       sawNumber = true;
@@ -363,6 +371,43 @@ export function tryYearCluster(scriptWords, i, transcriptWords, p, lookahead = 2
     }
   }
   return null;
+}
+
+/** "hề hay biết" ↔ Whisper "hề ai biết" */
+export function tryHayAiHomophone(scriptWords, i, transcriptWords, p) {
+  const prev = i > 0 ? norm(stripPunct(scriptWords[i - 1] ?? "")) : "";
+  const w = norm(stripPunct(scriptWords[i] ?? ""));
+  if (prev !== "he" || w !== "hay") return null;
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const t = norm(stripPunct(tw.text));
+  if (t !== "ai") return null;
+  return {
+    words: [scriptWords[i]],
+    consumed: 1,
+    transcriptEnd: p + 1,
+    timings: [{ start: tw.start, end: tw.end }],
+    whisperText: tw.text,
+    matchType: "homophone",
+  };
+}
+
+/** Whisper "9" ↔ script "chính" (lại chính câu hỏi) */
+export function tryChinhNineHomophone(scriptWords, i, transcriptWords, p) {
+  const w = norm(stripPunct(scriptWords[i] ?? ""));
+  if (w !== "chinh") return null;
+  const tw = transcriptWords[p];
+  if (!tw) return null;
+  const d = transcriptDigitToken(tw);
+  if (d !== 9) return null;
+  return {
+    words: [scriptWords[i]],
+    consumed: 1,
+    transcriptEnd: p + 1,
+    timings: [{ start: tw.start, end: tw.end }],
+    whisperText: tw.text,
+    matchType: "homophone-digit",
+  };
 }
 
 export function tryPlainNumberCluster(scriptWords, i, transcriptWords, p, lookahead = 20) {
@@ -830,6 +875,28 @@ export function tryFractionCluster(scriptWords, i, transcriptWords, p, lookahead
     }
   }
   return null;
+}
+
+/** "chong chóng" ↔ Whisper "trong tróng" (TTS đồng âm) */
+export function tryChongChongHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "chong" || b !== "chong") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (t0 !== "trong" || t1 !== "trong") return null;
+  const timings = [
+    { start: transcriptWords[p].start, end: transcriptWords[p].end },
+    { start: transcriptWords[p + 1].start, end: transcriptWords[p + 1].end },
+  ];
+  return {
+    words: [scriptWords[i], scriptWords[i + 1]],
+    consumed: 2,
+    transcriptEnd: p + 2,
+    timings,
+    whisperText: `${transcriptWords[p].text} ${transcriptWords[p + 1].text}`,
+    matchType: "cluster-homophone",
+  };
 }
 
 /** "rủng rỉnh" ↔ Whisper "dùng dừng" (TTS đồng âm) */

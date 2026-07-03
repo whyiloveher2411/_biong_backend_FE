@@ -32,7 +32,7 @@ Nguồn: `hyperframes-creative/references/video-composition.md`
 
 ## Beat pacing (bắt buộc)
 
-- **Max 5s/beat** — nếu nội dung >5s, tách thành 2+ beat, mỗi beat 1 ý
+- **5s–20s/beat** — mỗi beat trong khoảng này; nếu >20s tách beat, nếu <5s gộp beat
 - **Mỗi beat 1 focal point** — 1 số lớn / 1 headline / 1 so sánh
 - **Không lặp nội dung** — beat sau phải khác chủ đề/số liệu beat trước
 

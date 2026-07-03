@@ -60,15 +60,28 @@ describe("caption-script-align", () => {
     assert.equal(mapped[1].whisperText, "ca");
   });
 
-  it("interpolate when whisper word unrelated (positional threshold)", () => {
-    const script = ["Con", "cá", "lớn"];
-    const transcript = tw(["Con", "xyz", "lớn"]);
+  it("interpolate when whisper word unrelated and no next-word anchor confirms position", () => {
+    const script = ["Con", "cá", "lớn", "quá"];
+    // "lớn" cũng bị nghe sai (không neo được từ kế tiếp) → không đủ tin cậy để nhận vị trí
+    const transcript = tw(["Con", "xyz", "abc", "quá"]);
     const { mapped, interpolatedCount } = alignScriptToWhisper(script, transcript);
 
     assert.equal(mapped[1].text, "cá");
     assert.equal(mapped[1].matchType, "interpolate");
-    assert.equal(mapped[2].matchType, "exact");
     assert.ok(interpolatedCount >= 1);
+  });
+
+  it("positional-gap: từ hiếm nghe sai 1 từ nhưng 2 mốc liền kề khớp đúng vị trí", () => {
+    const script = ["Con", "cá", "lớn"];
+    const transcript = tw(["Con", "xyz", "lớn"]);
+    const { mapped } = alignScriptToWhisper(script, transcript);
+
+    // "cá" bị Whisper nghe nhầm thành "xyz", nhưng "lớn" ngay sau khớp đúng vị trí
+    // liên tiếp → nhận timing tại vị trí đó thay vì nội suy (timing chính xác hơn)
+    assert.equal(mapped[1].text, "cá");
+    assert.equal(mapped[1].matchType, "positional-gap");
+    assert.equal(mapped[1].whisperText, "xyz");
+    assert.equal(mapped[2].matchType, "exact");
   });
 
   it("interpolate when transcript exhausted", () => {

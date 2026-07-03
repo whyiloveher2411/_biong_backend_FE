@@ -64,6 +64,10 @@ description: Trích xuất tín hiệu viral từ tài liệu thô — Hook, Ten
 
 Facts trong `narrative_chain`, `takeaway.proof`, hoặc marketing post **chưa** đưa vào VO → ghi vào `visual_enrichment[]` trong `visual_shot_plan` (Phase 2). On-screen ngắn; không lặp caption narration.
 
+**Content freedom:** Khi có marketing post liên kết, agent được dùng nội dung bài gốc (`content_plain_text`, `marketing_post_images`) để làm giàu visual — **không** bó buộc bám sát từng câu `audio_script`.
+
+**Ảnh marketing post:** Nếu `creative_brief.marketing_post_images` không rỗng → mỗi ảnh 1 beat riêng, `.browser-mockup-card`, tối đa 1 ảnh/beat. Đọc [marketing-post-image-card.md](../biong-short-video-hyperframes/references/marketing-post-image-card.md).
+
 ## Anti-patterns
 
 - Tóm tắt bullet học thuật

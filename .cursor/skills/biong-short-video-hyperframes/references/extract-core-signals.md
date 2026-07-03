@@ -90,3 +90,13 @@ Mỗi fact quan trọng từ bài nguồn → 1 link:
 - Takeaway dạng checklist "3 bước / 5 mẹo" — kích thích liệt kê
 
 Bước tiếp: [/hyperframes-creative](hyperframes-skill-routing.md) → [/viral-audio-script](viral-audio-script.md) → [/humanize-audio-script](humanize-audio-script.md) → [/audit-audio-script](audit-audio-script.md) → `save_audio_script`
+
+## Phase 2 — visual enrichment (marketing post)
+
+Khi short video liên kết marketing post:
+
+- **Content freedom:** Dùng `creative_brief.content_plain_text` và `marketing_post_images` để làm giàu on-screen — **không** bó buộc bám từng câu `audio_script`.
+- Facts/insight chưa nói trong VO → `visual_enrichment[]` trong shot-plan.
+- Ảnh thật → `hero_mode: "marketing_post_image"`, 1 ảnh / 1 beat, `.browser-mockup-card`.
+
+Đọc: [marketing-post-image-card.md](marketing-post-image-card.md)

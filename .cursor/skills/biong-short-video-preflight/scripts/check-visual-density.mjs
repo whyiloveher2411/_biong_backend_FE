@@ -308,9 +308,15 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
       for (let i = 0; i < Math.min(sections.length, shotPlan.length); i++) {
         const dur = sections[i].durationSec ?? 0;
         const shot = shotPlan[i];
-        if (dur > 5 && !shot.internal_acts && !shot.multi_clip) {
+        const isLastBeat = i === sections.length - 1;
+        if (dur < 5 && !(isLastBeat && dur > 0)) {
           errors.push(
-            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >5s — tách thành nhiều beat (visual-shot-plan.md)`,
+            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s <5s — gộp với beat liền kề (visual-shot-plan.md)`,
+          );
+        }
+        if (dur > 20) {
+          errors.push(
+            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >20s — tách thành nhiều beat (visual-shot-plan.md)`,
           );
         }
       }

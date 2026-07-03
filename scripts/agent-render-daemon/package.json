@@ -1,0 +1,12 @@
+{
+  "name": "biong-agent-render-daemon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local daemon — CMS extension trigger render agent bước 2",
+  "type": "module",
+  "scripts": {
+    "daemon": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node launch-token.test.mjs"
+  }
+}

@@ -168,19 +168,48 @@ function main() {
     );
   }
 
-  const MAX_BEAT_DURATION_SEC = 5.0;
-  for (const beat of htmlBeats) {
+  const MIN_BEAT_DURATION_SEC = 5.0;
+  const MAX_BEAT_DURATION_SEC = 20.0;
+  const lastBeatIndex = htmlBeats.length - 1;
+  for (let i = 0; i < htmlBeats.length; i++) {
+    const beat = htmlBeats[i];
+    const isLastBeat = i === lastBeatIndex;
+    if (beat.duration < MIN_BEAT_DURATION_SEC && !(isLastBeat && beat.duration > 0)) {
+      errors.push(
+        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s < 5s — gộp với beat liền kề (visual-shot-plan.md)`,
+      );
+    } else if (
+      beat.duration < MIN_BEAT_DURATION_SEC &&
+      isLastBeat &&
+      beat.duration > 0
+    ) {
+      warnings.push(
+        `${beat.id}: beat cuối ${beat.duration.toFixed(2)}s < 5s — chấp nhận nếu dư audio sau khi chia`,
+      );
+    }
     if (beat.duration > MAX_BEAT_DURATION_SEC) {
       errors.push(
-        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s > 5s — tách thành ${Math.ceil(beat.duration / MAX_BEAT_DURATION_SEC)} beat (visual-shot-plan.md)`,
+        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s > 20s — tách thành ${Math.ceil(beat.duration / MAX_BEAT_DURATION_SEC)} beat (visual-shot-plan.md)`,
       );
     }
   }
-  for (const mapSec of mapSections) {
+  const mapLastIndex = mapSections.length - 1;
+  for (let i = 0; i < mapSections.length; i++) {
+    const mapSec = mapSections[i];
     const dur = mapSec.durationSec ?? 0;
+    const isLastBeat = i === mapLastIndex;
+    if (dur < MIN_BEAT_DURATION_SEC && !(isLastBeat && dur > 0)) {
+      errors.push(
+        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s < 5s — gộp shot-plan`,
+      );
+    } else if (dur < MIN_BEAT_DURATION_SEC && isLastBeat && dur > 0) {
+      warnings.push(
+        `${mapSec.id ?? "beat"}: beat cuối ${dur.toFixed(2)}s < 5s — chấp nhận nếu dư audio`,
+      );
+    }
     if (dur > MAX_BEAT_DURATION_SEC) {
       errors.push(
-        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s > 5s — tách shot-plan`,
+        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s > 20s — tách shot-plan`,
       );
     }
   }

@@ -1,0 +1,8 @@
+{
+  "short_video_id": 12,
+  "phase": "continue",
+  "launched_at": "2026-07-02T17:14:33.664Z",
+  "method": "local_daemon",
+  "api_base_url": "http://localhost:9999",
+  "prompt_file": "agent-continue-prompt.md"
+}

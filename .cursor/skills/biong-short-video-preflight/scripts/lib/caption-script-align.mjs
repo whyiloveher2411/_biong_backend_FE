@@ -12,6 +12,8 @@ import {
   tryCoViewCluster,
   tryHyphenTranscriptCluster,
   tryPlainNumberCluster,
+  tryChinhNineHomophone,
+  tryHayAiHomophone,
   tryRacAiCluster,
   tryRuomRaHomophone,
   tryTikTokCluster,
@@ -21,6 +23,7 @@ import {
   tryYearCluster,
   tryDecimalChamCluster,
   tryLucRaHomophone,
+  tryChongChongHomophone,
   tryRungRinhHomophone,
   tryRoiRenHomophone,
   trySaleCellHomophone,
@@ -122,6 +125,28 @@ export function wordSimilarity(a, b) {
   return 1 - dist / maxLen;
 }
 
+/**
+ * Similarity giữ nguyên dấu (không strip tone/vowel-shape) — dùng để phân biệt
+ * false-positive tone-collision khi `norm()` gộp nhầm các nguyên âm khác dấu
+ * (vd "mắt" vs "mật" cùng norm về "mat" nhưng là 2 từ khác nghĩa hoàn toàn).
+ */
+function rawSimilarity(a, b) {
+  const na = String(a ?? "")
+    .toLowerCase()
+    .replace(/[.,!?;:…]+$/u, "");
+  const nb = String(b ?? "")
+    .toLowerCase()
+    .replace(/[.,!?;:…]+$/u, "");
+  if (!na && !nb) return 1;
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const dist = levenshtein(na, nb);
+  const maxLen = Math.max(na.length, nb.length);
+  return 1 - dist / maxLen;
+}
+
+const FAR_MATCH_MIN_RAW_SIM = 0.8;
+
 export function interpolateTiming(prev, next, index, total) {
   if (prev && next) {
     const t = (index + 1) / (total + 1);
@@ -220,6 +245,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const hayAi = tryHayAiHomophone(scriptWords, i, transcriptWords, state.p);
+    if (hayAi) {
+      hayAi.words.forEach((w, k) => {
+        const t = hayAi.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: hayAi.matchType,
+          whisperText: hayAi.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += hayAi.words.length;
+      state.p = hayAi.transcriptEnd;
+      i += hayAi.consumed - 1;
+      continue;
+    }
+
     const forYou = tryForYouCluster(scriptWords, i, transcriptWords, state.p);
     if (forYou) {
       forYou.words.forEach((w, k) => {
@@ -297,6 +342,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       clusterCount += lucRa.words.length;
       state.p = lucRa.transcriptEnd;
       i += lucRa.consumed - 1;
+      continue;
+    }
+
+    const chongChong = tryChongChongHomophone(scriptWords, i, transcriptWords, state.p);
+    if (chongChong) {
+      chongChong.words.forEach((w, k) => {
+        const t = chongChong.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: chongChong.matchType,
+          whisperText: chongChong.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += chongChong.words.length;
+      state.p = chongChong.transcriptEnd;
+      i += chongChong.consumed - 1;
       continue;
     }
 
@@ -552,6 +617,26 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const chinhNine = tryChinhNineHomophone(scriptWords, i, transcriptWords, state.p);
+    if (chinhNine) {
+      chinhNine.words.forEach((w, k) => {
+        const t = chinhNine.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: chinhNine.matchType,
+          whisperText: chinhNine.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += chinhNine.words.length;
+      state.p = chinhNine.transcriptEnd;
+      i += chinhNine.consumed - 1;
+      continue;
+    }
+
     const plainNum = tryPlainNumberCluster(scriptWords, i, transcriptWords, state.p, lookahead);
     if (plainNum) {
       plainNum.words.forEach((w, k) => {
@@ -673,16 +758,18 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
     let bestSim = 0;
 
     for (let j = state.p; j < Math.min(transcriptWords.length, state.p + lookahead); j++) {
-      if (tokensMatchForAlign(text, transcriptWords[j].text)) {
-        found = j;
-        matchType = "exact";
-        break;
-      }
+      const isTokenMatch = tokensMatchForAlign(text, transcriptWords[j].text);
       const twNorm = norm(stripPunct(transcriptWords[j].text));
-      if (twNorm && twNorm === target) {
-        found = j;
-        matchType = "exact";
-        break;
+      const isNormMatch = twNorm && twNorm === target;
+      if (isTokenMatch || isNormMatch) {
+        const dist = j - state.p;
+        // Xa hơn MAX_FUZZY_JUMP: chỉ nhận nếu thật sự giống nhau (giữ dấu) —
+        // tránh nhảy pointer xa do trùng norm (tone-collision) như "mắt" vs "mật"
+        if (dist <= MAX_FUZZY_JUMP || rawSimilarity(text, transcriptWords[j].text) >= FAR_MATCH_MIN_RAW_SIM) {
+          found = j;
+          matchType = "exact";
+          break;
+        }
       }
     }
 
@@ -701,16 +788,16 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
     if (found < 0) {
       const target = norm(stripPunct(text));
       for (let j = state.p + 1; j < Math.min(transcriptWords.length, state.p + lookahead); j++) {
-        if (tokensMatchForAlign(text, transcriptWords[j].text)) {
-          found = j;
-          matchType = "exact";
-          break;
-        }
+        const isTokenMatch = tokensMatchForAlign(text, transcriptWords[j].text);
         const twNorm = norm(stripPunct(transcriptWords[j].text));
-        if (twNorm && twNorm === target) {
-          found = j;
-          matchType = "exact";
-          break;
+        const isNormMatch = twNorm && twNorm === target;
+        if (isTokenMatch || isNormMatch) {
+          const dist = j - state.p;
+          if (dist <= MAX_FUZZY_JUMP || rawSimilarity(text, transcriptWords[j].text) >= FAR_MATCH_MIN_RAW_SIM) {
+            found = j;
+            matchType = "exact";
+            break;
+          }
         }
       }
     }
@@ -762,6 +849,36 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
             matchType: "positional",
           });
         }
+        state.p += 1;
+        continue;
+      }
+    }
+
+    // Khe hẹp 1 từ: Whisper nghe sai hoàn toàn 1 từ hiếm/lạ nhưng 2 mốc liền kề
+    // (trước + sau) đều khớp đúng vị trí liên tiếp — nhận timing tại state.p dù
+    // độ giống thấp, vì vị trí thời gian gần như chắc chắn đúng và caption luôn
+    // hiển thị text script (không phải text Whisper).
+    if (state.p < transcriptWords.length) {
+      const nextText = scriptWords[i + 1];
+      const nextTw = transcriptWords[state.p + 1];
+      if (nextText && nextTw && tokensMatchForAlign(nextText, nextTw.text)) {
+        const tw = transcriptWords[state.p];
+        mapped.push({
+          text,
+          start: tw.start,
+          end: tw.end,
+          matchType: "positional-gap",
+          whisperText: tw.text,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+        positionalCount++;
+        corrections.push({
+          index: i,
+          script: text,
+          whisper: tw.text,
+          matchType: "positional-gap",
+        });
         state.p += 1;
         continue;
       }

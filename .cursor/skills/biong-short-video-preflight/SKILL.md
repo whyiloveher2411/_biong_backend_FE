@@ -56,6 +56,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/check-typography-spacing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-screen-fill.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-marketing-post-images.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-transition-sfx.mjs $PROJ
@@ -110,8 +111,9 @@ Pass vision → append [evolution-memory.md](../biong-short-video-hyperframes/re
 - [ ] `check-floater-keepout.mjs` exit 0
 - [ ] `check-visual-density.mjs` exit 0
 - [ ] `check-typography-spacing.mjs` exit 0
-- [ ] `check-beat-timing.mjs` exit 0 — mỗi beat ≤5s
+- [ ] `check-beat-timing.mjs` exit 0 — mỗi beat 5s–20s
 - [ ] `check-screen-fill.mjs` exit 0 — content-cluster min-height ≥960px + ≥2 block visual
+- [ ] `check-marketing-post-images.mjs` exit 0 — nếu có ảnh marketing post: 1 ảnh/beat, `.browser-mockup-card`
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `check-media-stack.mjs --strict` exit 0
 - [ ] `hyperframes lint` 0 errors

@@ -163,6 +163,7 @@ window.__timelines["main"] = tl;
 - **Pattern C timeline** — inline beat + `data-composition-id="beat_N"` + global tween times
 - **`tl.from()` trong `.clip`** khi seek non-linear gây mất chữ — dùng `fromTo`
 - Google Fonts CDN — font chưa nạp kịp → blank frame
+- **CTA card bay lệch:** `.cta-orbit` + `orbit-item` absolute + GSAP `scale`/`x` trên `.cta-main` hoặc `.fx-shine` — dùng `exit_card_stack`, CTA cố định trong `.exit-stack`, chip row flex; chỉ entrance stagger, **cấm** loop scale/translate trên card "Theo dõi"
 
 ---
 

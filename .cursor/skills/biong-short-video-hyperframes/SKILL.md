@@ -205,6 +205,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/check-foreground-motion-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-screen-fill.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-marketing-post-images.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-media-stack.mjs $PROJ --strict
 node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-transition-sfx.mjs $PROJ
@@ -254,6 +255,7 @@ Dùng block cho caption + transition — customize, không viết từ đầu. S
 - **Visual density:** mỗi beat ≥5 distinct elements (badges, hero, cards, deco icons, quote boxes)
 - **3D depth:** scale 0.8→1, rotate ±5°, gradient border glow
 - **Sync:** `paused: true` → `window.__timelines[id]`; `data-duration` khớp audio beat
+- **CTA beat cuối:** dùng `exit_card_stack` — card "Theo dõi" cố định trong `.exit-stack`; **cấm** `.cta-orbit` + scale/yoyo/`.fx-shine` GSAP sweep trên `.cta-main` (card bay lệch) — xem `visual-layout-archetypes.md` · `evolution-memory.md` video #21 v3
 
 ### Render final
 
@@ -284,6 +286,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 9. [overlay-layer-stack.md](references/overlay-layer-stack.md) — **z-index caption 9000 / watermark 9500**
 10. [motion-complexity-activation.md](references/motion-complexity-activation.md) — ép cinematic
 11. [visual-layout-archetypes.md](references/visual-layout-archetypes.md) — **layout catalog Phase 2**
+11b. [visual-shot-plan.md](references/visual-shot-plan.md) + [marketing-post-image-card.md](references/marketing-post-image-card.md) — **shot-plan + ảnh marketing post**
 12. [hyperframes-skill-routing.md](references/hyperframes-skill-routing.md)
 12. [layout-9x16-zones.md](references/layout-9x16-zones.md)
 12b. [floater-text-keepout.md](references/floater-text-keepout.md) — **sticker không đè text**
@@ -321,8 +324,9 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `check-default-styles.mjs` exit 0 — plate-rust beat_1 + global border-3d/text-shadow
 - [ ] `transcribe-audio.mjs` + `verify-caption-sync.mjs --strict` pass
 - [ ] `map-shot-plan-to-beat-map.mjs` + `check-beat-timing.mjs` pass
-- [ ] Mỗi beat ≤5s — `check-beat-timing.mjs` exit 0
+- [ ] Mỗi beat 5s–20s — `check-beat-timing.mjs` exit 0
 - [ ] Content fill >50% màn hình — `check-screen-fill.mjs` exit 0
+- [ ] Nếu `marketing_post_images` không rỗng: mỗi ảnh 1 beat `.browser-mockup-card`, ≤1 ảnh/beat — `check-marketing-post-images.mjs` exit 0
 - [ ] Không lặp `phrase_anchor` giữa các beat — `check-visual-density.mjs`
 - [ ] Caption sync: verify-caption-sync.mjs --strict pass
 - [ ] Caption karaoke wired — text audio_script, timing Whisper

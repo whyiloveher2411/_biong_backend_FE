@@ -177,6 +177,17 @@ function main() {
     );
   }
 
+  const marketingPostImages = Array.isArray(ctx.creative_brief?.marketing_post_images)
+    ? ctx.creative_brief.marketing_post_images
+    : [];
+  if (marketingPostImages.length) {
+    const imagesPath = path.join(projectDir, "assets/marketing-post-images.json");
+    fs.writeFileSync(imagesPath, JSON.stringify(marketingPostImages, null, 2));
+    console.log(
+      `[bootstrap] wrote assets/marketing-post-images.json (${marketingPostImages.length} images)`,
+    );
+  }
+
   console.log(
     `[bootstrap] wrote ${AUDIO_SCRIPT_REL} (${audioScript.length} chars), ${AGENT_METADATA_REL} (lang=${metadata.language}, markers=${metadata.markers.length})`,
   );

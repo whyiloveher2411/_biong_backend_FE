@@ -1,0 +1,6 @@
+{
+  "short_video_id": 20,
+  "launched_at": "2026-07-02T14:27:50.492Z",
+  "method": "local_daemon",
+  "api_base_url": "http://localhost:9999"
+}
