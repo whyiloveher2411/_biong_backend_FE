@@ -10,6 +10,7 @@ export type ShortVideoAgentPromptPhase =
     | 'continue'
     | 'post_approval'
     | 'import_assemble'
+    | 'import_html_full'
     | '3';
 
 export type ShortVideoAgentPromptResponse = {
@@ -46,6 +47,9 @@ function normalizePromptPhase(phase: ShortVideoAgentPromptPhase): string {
     }
     if (phase === 'import_assemble') {
         return 'import_assemble';
+    }
+    if (phase === 'import_html_full') {
+        return 'import_html_full';
     }
     if (phase === 'continue' || phase === 'post_approval' || phase === '3') {
         return 'continue';
@@ -141,6 +145,9 @@ export async function copyShortVideoAgentPromptToClipboard(
 }
 
 function normalizedPhaseLabel(phase: ShortVideoAgentPromptPhase): string {
+    if (phase === 'import_html_full') {
+        return 'Đã copy prompt auto HTML beat + ghép video vào clipboard';
+    }
     if (phase === 'import_assemble') {
         return 'Đã copy prompt agent ghép HTML chatbot vào clipboard';
     }

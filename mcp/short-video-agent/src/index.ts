@@ -88,7 +88,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.2.0',
+  version: '2.3.0',
 });
 
 server.tool(
@@ -332,6 +332,48 @@ server.tool(
     if (args.limit !== undefined) query.limit = args.limit;
     if (args.offset !== undefined) query.offset = args.offset;
     const result = await apiRequest('search-giphy', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_get_import_html_beat_prompt',
+  'Lấy prompt server để sinh HTML beat import_html (hf_prompt_type + duration + whisper pacing). Dùng trong phase import_html_full.',
+  {
+    short_video_id: z.number().int().positive(),
+    beat_id: z.string().min(1).describe('beat_N trong beat_map'),
+  },
+  async (args) => {
+    const result = await apiRequest('get-import-html-beat-prompt', {
+      body: {
+        short_video_id: args.short_video_id,
+        beat_id: args.beat_id,
+      },
+    });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_save_import_html_beat',
+  'Lưu HTML beat import_html lên CMS (validate document đơn, cấm karaoke). Trả beats_html_completed/total.',
+  {
+    short_video_id: z.number().int().positive(),
+    beat_id: z.string().min(1).describe('beat_N trong beat_map'),
+    html: z.string().min(1).describe('Document HTML self-contained <!doctype html>…</html>'),
+  },
+  async (args) => {
+    const result = await apiRequest('save-import-html-beat', {
+      body: {
+        short_video_id: args.short_video_id,
+        beat_id: args.beat_id,
+        html: args.html,
+      },
+    });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };

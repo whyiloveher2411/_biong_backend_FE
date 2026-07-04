@@ -5,7 +5,7 @@ import {
     copyShortVideoAgentPromptToClipboard,
     type ShortVideoAgentPromptPhase,
 } from 'helpers/marketingShortVideoAgentPrompt';
-import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
+import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
 import {
     approveAudioScript,
     fetchImportHtmlContext,
@@ -126,6 +126,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [launchingScript, setLaunchingScript] = React.useState(false);
     const [launchingContinue, setLaunchingContinue] = React.useState(false);
     const [launchingImportAssemble, setLaunchingImportAssemble] = React.useState(false);
+    const [launchingImportHtmlFull, setLaunchingImportHtmlFull] = React.useState(false);
     const [transcribingWhisper, setTranscribingWhisper] = React.useState(false);
     const [savingImportHtml, setSavingImportHtml] = React.useState(false);
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
@@ -497,6 +498,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setLaunchingImportAssemble(false);
+        }
+    };
+
+    const handleLaunchAgentImportHtmlFull = async () => {
+        setLaunchingImportHtmlFull(true);
+        try {
+            const result = await launchShortVideoAgentImportHtmlFull(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+            if (result.ok) {
+                loadRow();
+            }
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingImportHtmlFull(false);
         }
     };
 
@@ -934,6 +950,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         launchingScript,
         launchingContinue,
         launchingImportAssemble,
+        launchingImportHtmlFull,
         transcribingWhisper,
         savingImportHtml,
         copyingBeatDivisionPrompt,
@@ -956,6 +973,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleLaunchAgentScript,
         handleLaunchAgentContinue,
         handleLaunchAgentImportAssemble,
+        handleLaunchAgentImportHtmlFull,
         handleRenderModeChange,
         handleHfPromptTypeChange,
         handleBeatMapJsonChange,

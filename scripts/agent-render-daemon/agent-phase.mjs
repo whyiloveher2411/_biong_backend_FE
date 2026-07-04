@@ -9,6 +9,9 @@ export function normalizeAgentPhase(raw) {
   if (phase === 'import_assemble') {
     return 'import_assemble';
   }
+  if (phase === 'import_html_full') {
+    return 'import_html_full';
+  }
   return '2';
 }
 
@@ -22,6 +25,9 @@ export function promptFileName(phase) {
   }
   if (normalized === 'import_assemble') {
     return 'agent-import-assemble-prompt.md';
+  }
+  if (normalized === 'import_html_full') {
+    return 'agent-import-html-full-prompt.md';
   }
   return 'agent-render-prompt.md';
 }

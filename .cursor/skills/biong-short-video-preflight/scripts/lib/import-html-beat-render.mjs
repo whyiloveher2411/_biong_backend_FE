@@ -30,7 +30,7 @@ export function readRenderMode(projectDir) {
   if (fs.existsSync(launchMeta)) {
     try {
       const data = JSON.parse(fs.readFileSync(launchMeta, "utf8"));
-      if (data?.phase === "import_assemble") return "import_html";
+      if (data?.phase === "import_assemble" || data?.phase === "import_html_full") return "import_html";
     } catch {
       /* skip */
     }

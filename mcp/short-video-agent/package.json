@@ -1,6 +1,6 @@
 {
   "name": "@biong/short-video-agent-mcp",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "description": "MCP server cho Cursor agent — short video HyperFrames workflow",
   "type": "module",

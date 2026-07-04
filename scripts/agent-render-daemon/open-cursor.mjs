@@ -48,6 +48,15 @@ function buildBootstrapPrompt(shortVideoId, phase) {
     ].join('\n');
   }
 
+  if (normalized === 'import_html_full') {
+    return [
+      `Tự động sinh HTML beat thiếu + ghép video cho short video ID ${shortVideoId}.`,
+      `Đọc prompt đã lưu: ${promptRelativePath(shortVideoId, normalized)}`,
+      'Phần A: MCP get_import_html_beat_prompt + save_import_html_beat cho từng beat thiếu.',
+      'Phần B: ghép caption + ambient + watermark + render (giống import_assemble).',
+    ].join('\n');
+  }
+
   return [
     `Render video agent short video ID ${shortVideoId} (phase 2).`,
     `Đọc và thực thi đầy đủ trong @${promptRelative}`,

@@ -30,6 +30,7 @@ export type ImportHtmlSummary = {
     beats_html_completed?: number;
     beats_html_ready?: boolean;
     import_html_ready?: boolean;
+    missing_beat_ids?: string[];
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
     beat_html?: Record<string, { html?: string; updated_at?: string }>;

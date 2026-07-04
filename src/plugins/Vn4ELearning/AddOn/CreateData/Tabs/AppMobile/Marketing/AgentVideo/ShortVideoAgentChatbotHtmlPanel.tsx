@@ -347,36 +347,57 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                     </>
                 ) : null}
 
-                {state.renderMode === 'import_html' && state.importHtmlReady ? (
+                {state.renderMode === 'import_html' && state.beatMapReady && state.whisperStatus === 'completed' ? (
                     <>
                         <Divider />
                         <Box>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Bước 4 — Ghép video từ HTML beat
+                                Bước 4 — Tự động HTML beat + ghép video
                             </Typography>
                             <LoadingButton
                                 size="small"
                                 variant="contained"
-                                color="primary"
+                                color="secondary"
                                 fullWidth
-                                loading={state.launchingImportAssemble}
+                                loading={state.launchingImportHtmlFull}
                                 disabled={state.agentVideoStatus === 'processing'}
                                 startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentImportAssemble(); }}
+                                onClick={() => { void state.handleLaunchAgentImportHtmlFull(); }}
                                 sx={{ mb: 1 }}
                             >
-                                {state.hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép từ HTML'}
+                                Tự động HTML beat + ghép video
                             </LoadingButton>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
-                            >
-                                Copy prompt ghép
-                            </Button>
+                            {state.importHtmlReady ? (
+                                <>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        fullWidth
+                                        loading={state.launchingImportAssemble}
+                                        disabled={state.agentVideoStatus === 'processing'}
+                                        startIcon={<PlayArrowIcon />}
+                                        onClick={() => { void state.handleLaunchAgentImportAssemble(); }}
+                                        sx={{ mb: 1 }}
+                                    >
+                                        {state.hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép từ HTML'}
+                                    </LoadingButton>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        fullWidth
+                                        startIcon={<ContentCopyIcon />}
+                                        onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
+                                    >
+                                        Copy prompt ghép
+                                    </Button>
+                                </>
+                            ) : (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                    HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — agent sẽ sinh phần thiếu
+                                </Typography>
+                            )}
                         </Box>
                     </>
                 ) : null}
@@ -384,12 +405,16 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                 {state.importHtmlReady ? (
                     <Alert severity="success">
                         {state.hasAgentVideo
-                            ? 'Sẵn sàng ghép lại — bấm "Ghép lại từ HTML" để render MP4 mới từ beat HTML (khớp preview).'
-                            : 'Sẵn sàng ghép — bấm "Chạy agent ghép từ HTML" để render video final.'}
+                            ? 'Sẵn sàng ghép lại — dùng "Tự động HTML beat + ghép video" hoặc "Ghép lại từ HTML".'
+                            : 'Sẵn sàng ghép — dùng "Tự động HTML beat + ghép video" hoặc "Chạy agent ghép từ HTML".'}
+                    </Alert>
+                ) : state.beatMapReady && state.whisperStatus === 'completed' ? (
+                    <Alert severity="info">
+                        HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — bấm &quot;Tự động HTML beat + ghép video&quot; để agent sinh phần thiếu rồi render.
                     </Alert>
                 ) : (
                     <Alert severity="info">
-                        Cần whisper, beat-map hợp lệ và HTML đủ mọi beat trước khi chạy agent ghép.
+                        Cần whisper và beat-map hợp lệ trước khi chạy auto HTML + ghép video.
                     </Alert>
                 )}
 

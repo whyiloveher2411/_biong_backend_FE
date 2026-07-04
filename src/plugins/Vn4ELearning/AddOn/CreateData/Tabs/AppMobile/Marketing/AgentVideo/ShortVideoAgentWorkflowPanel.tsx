@@ -249,13 +249,47 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     {state.renderMode === 'import_html' && state.scriptApproved && state.hasAudio && (
                         <>
                             <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
-                                {state.hasAgentVideo
-                                    ? 'Ghép lại từ HTML chatbot (giống preview beat)'
-                                    : 'Ghép HTML chatbot lần đầu'}
+                                {state.beatsHtmlCompleted < state.beatsHtmlTotal
+                                    ? `Agent sẽ sinh ${state.beatsHtmlTotal - state.beatsHtmlCompleted} beat HTML thiếu, rồi ghép video`
+                                    : state.hasAgentVideo
+                                        ? 'Đủ HTML — agent ghép lại rồi render video'
+                                        : 'Đủ HTML — agent ghép và render video'}
                             </Typography>
                             <LoadingButton
                                 size="small"
                                 variant="contained"
+                                color="secondary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.launchingImportHtmlFull}
+                                disabled={
+                                    !state.beatMapReady
+                                    || state.whisperStatus !== 'completed'
+                                    || state.agentVideoStatus === 'processing'
+                                }
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => { void state.handleLaunchAgentImportHtmlFull(); }}
+                            >
+                                Tự động HTML beat + ghép video
+                            </LoadingButton>
+                            {!state.beatMapReady ? (
+                                <Typography variant="caption" color="warning.main" display="block">
+                                    Cần beat-map hợp lệ — chia beat trong panel HTML trước
+                                </Typography>
+                            ) : null}
+                            {state.beatMapReady && state.whisperStatus !== 'completed' ? (
+                                <Typography variant="caption" color="warning.main" display="block">
+                                    Cần Whisper hoàn tất — chạy transcribe trong panel HTML trước
+                                </Typography>
+                            ) : null}
+                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
+                                {state.hasAgentVideo
+                                    ? 'Chỉ ghép lại (HTML đã đủ trên CMS)'
+                                    : 'Ghép thủ công khi đã dán đủ HTML beat'}
+                            </Typography>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
                                 color="primary"
                                 fullWidth
                                 sx={workflowActionButtonSx}
