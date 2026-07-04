@@ -4,10 +4,12 @@ import {
     Box,
     Divider,
     FormControl,
+    FormControlLabel,
     InputLabel,
     MenuItem,
     Select,
     Stack,
+    Switch,
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -92,6 +94,27 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     />
                     <MetaRow label="TTS chain" value={chainDisplay} />
                     <MetaRow label="Video status" value={state.agentVideoStatus || 'none'} />
+                    <MetaRow
+                        label="Render mode"
+                        value={state.renderMode === 'import_html' ? 'HTML chatbot' : 'Agent sáng tạo'}
+                    />
+                    {state.renderMode === 'import_html' ? (
+                        <>
+                            <MetaRow label="Whisper" value={state.whisperStatus || 'none'} />
+                            <MetaRow
+                                label="Beat map"
+                                value={state.beatMapReady ? `${state.beatMap?.sections.length ?? 0} beat` : 'Chưa chia'}
+                            />
+                            <MetaRow
+                                label="HTML beats"
+                                value={`${state.beatsHtmlCompleted}/${state.beatsHtmlTotal || 0}`}
+                            />
+                            <MetaRow
+                                label="HTML chatbot"
+                                value={state.importHtmlReady ? 'Sẵn sàng ghép' : 'Chưa đủ'}
+                            />
+                        </>
+                    ) : null}
                     <MetaRow
                         label="Rendered at"
                         value={state.agentVideoRenderedAt || '—'}
@@ -194,7 +217,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         </>
                     )}
 
-                    {state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
+                    {state.renderMode === 'creative' && state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
                         <>
                             <LoadingButton
                                 size="small"
@@ -223,8 +246,48 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         </>
                     )}
 
+                    {state.renderMode === 'import_html' && state.scriptApproved && state.hasAudio && (
+                        <>
+                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
+                                {state.hasAgentVideo
+                                    ? 'Ghép lại từ HTML chatbot (giống preview beat)'
+                                    : 'Ghép HTML chatbot lần đầu'}
+                            </Typography>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.launchingImportAssemble}
+                                disabled={!state.importHtmlReady || state.agentVideoStatus === 'processing'}
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => { void state.handleLaunchAgentImportAssemble(); }}
+                            >
+                                {state.hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép'}
+                            </LoadingButton>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                disabled={!state.importHtmlReady}
+                                startIcon={<ContentCopyIcon />}
+                                onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
+                            >
+                                Copy prompt ghép
+                            </Button>
+                        </>
+                    )}
+
                     {state.hasAgentVideo && (
                         <>
+                            {state.renderMode === 'import_html' ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
+                                    Render creative mới (phase 2 — không dùng HTML chatbot)
+                                </Typography>
+                            ) : null}
                             <LoadingButton
                                 size="small"
                                 variant="contained"
@@ -280,6 +343,36 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         </LoadingButton>
                     )}
                 </Stack>
+
+                <Divider />
+
+                <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        Đăng social
+                    </Typography>
+                    <Stack spacing={0.5}>
+                        <FormControlLabel
+                            control={(
+                                <Switch
+                                    checked={state.postEligible}
+                                    disabled={state.savingPublishFlags}
+                                    onChange={(e) => { void state.handlePostEligibleChange(e.target.checked); }}
+                                />
+                            )}
+                            label="Đủ điều kiện post"
+                        />
+                        <FormControlLabel
+                            control={(
+                                <Switch
+                                    checked={state.socialPosted}
+                                    disabled={state.savingPublishFlags}
+                                    onChange={(e) => { void state.handleSocialPostedChange(e.target.checked); }}
+                                />
+                            )}
+                            label="Đã post lên social"
+                        />
+                    </Stack>
+                </Box>
 
                 {state.selectedPlatforms.length > 0 ? (
                     <Box>

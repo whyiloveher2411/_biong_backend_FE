@@ -63,11 +63,12 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 
 1. `get_context` — script **đã duyệt**
 2. `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `totalVideoSec`
-3. Sinh `visual_shot_plan` (**N beats** bám audio, không theo HASCAS) → `update_agent_status` + `assets/visual-shot-plan.json`
-4. `map-shot-plan-to-beat-map.mjs` → agent viết `compositions/beat_N.html` thủ công (registry/GSAP/Lottie/Three.js)
-5. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / Lottie bundle / stock **bg only**
-6. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
-7. Embed SFX track 12 (hook) + beat-move tracks 14–21 + BGM track 11; GSAP paused
+3. Sinh `visual_shot_plan` (**N beats** bám audio) → `update_agent_status` + `assets/visual-shot-plan.json`
+4. `assign-beat-prompt-types.mjs` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
+5. **Mỗi beat:** đọc `@hyperframes/prompts/{hf_prompt_type}.md` → viết `compositions/beat_N.html` (hf-seek)
+6. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / stock **bg only**
+7. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
+8. Embed SFX track 12 (hook) + beat-move tracks 14–21 + BGM track 11
 
 | Tool | Dùng khi |
 |------|----------|
@@ -75,11 +76,10 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 | `short_video_search_stock_media` | **bg_media** only — opacity 0.3–0.6, không hero full-bleed |
 | `short_video_search_bgm` | Nhạc nền Pixabay — 1 track/video |
 | `short_video_search_giphy` | accent_media sticker/gif từ shot-plan |
-| Lottie bundle | `accent_media.type=lottie` — cp từ `assets/lotties/` |
 
-Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat (`hero_type`, `registry_block`, `z_role`).
+Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat (`hf_prompt_type`, `accent_media`, `bg_media`).
 
-**Tần suất:** hook SFX bắt buộc; ≥1 BGM; ≥1 non-caption registry block/video; ambient layer bắt buộc; preflight `check-continuous-motion.mjs` + `check-visual-density.mjs`
+**Tần suất:** hook SFX bắt buộc; ≥1 BGM; ambient layer bắt buộc; preflight `check-continuous-motion.mjs` + `check-visual-density.mjs` + `check-hf-seek-beat.mjs`
 
 `get_context.production_playbook.media_assets` có `priority_matrix`, `frequency_rules`, `alias_hints`.
 
@@ -128,47 +128,39 @@ short_video_save_audio_script({
 
 ---
 
-## Phase 2 — Motion complexity (bắt buộc)
+## Import HTML assemble (`render_mode=import_html`)
 
-**Đọc TRƯỚC khi viết beat HTML:** [evolution-memory.md](references/evolution-memory.md) — reuse premium blocks, tuân constraints. **Cấm** sửa `SKILL.md` trong session render.
+Admin dán beat HTML từ chatbot ngoài — **không** creative shot-plan. Đọc [import-html-beat-render.md](references/import-html-beat-render.md).
 
-**Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`…, text-only kinetic, hoặc `#root` opaque che stock. **Cấm** `gen-beats-from-shot-plan.mjs` — đã gỡ. Phase 2 **bắt buộc**:
+1. Ghi `compositions/beat_N.html` từ CMS (giữ visual user)
+2. **Bắt buộc:** `normalize-import-html-beat-for-render.mjs --localize-images` (scaffolding `<template>` + `window.__timelines`)
+3. Preflight: `check-import-html-beat-render.mjs` (không dùng `check-hf-seek-beat.mjs`)
+4. Ghép caption / ambient / watermark → render
 
-1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md) · [visual-layout-archetypes.md](references/visual-layout-archetypes.md)
-2. `assets/visual-shot-plan.json` + `map-shot-plan-to-beat-map.mjs`
-3. Agent **viết thủ công** `compositions/beat_N.html` + `npx hyperframes add` registry — customize in-place
+Preview admin dùng `hf-seek` trong iframe — **không** sửa HTML trên CMS; normalize chỉ trên disk trước render.
 
-**CSS global bắt buộc:**
+---
 
-Mọi project PHẢI copy + inject `global-default-styles.css` vào `assets/` và link trong `index.html`:
+## Phase 2 — HF Prompt beats (bắt buộc)
 
-```html
-<link rel="stylesheet" href="assets/global-default-styles.css" />
-```
+**Đọc TRƯỚC khi viết beat HTML:** [evolution-memory.md](references/evolution-memory.md) · [hf-prompt-art-direction.md](references/hf-prompt-art-direction.md) · [hf-prompt-beat-contract.md](references/hf-prompt-beat-contract.md) · [hf-prompt-catalog.md](references/hf-prompt-catalog.md). **Cấm** sửa `SKILL.md` trong session render.
 
-Copy khi bootstrap:
+**Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`…, hoặc `#root` opaque che stock. **Cấm** `gen-beats-from-shot-plan.mjs`. Phase 2 **bắt buộc**:
 
-```bash
-cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
-```
+1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md)
+2. `assign-beat-prompt-types.mjs` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
+3. **Mỗi beat:** đọc `@hyperframes/prompts/{hf_prompt_type}.md` + `assets/beat-timing/beat_N.json` → viết `compositions/beat_N.html` (**hf-seek `t`-based**, không GSAP beat)
 
-Hoặc inline vào `<style>` trong beat HTML. File này enforce:
+**Beat contract:** [hf-prompt-beat-contract.md](references/hf-prompt-beat-contract.md) — transparent `#root`, Be Vietnam Pro, `render()` + `TIMINGS` từ Whisper.
 
-- Inset `box-shadow` (border-3d) cho tất cả boxes/cards
-- Tiered `text-shadow` cho hero/focal/card-title/body
-- `fx-shine` + `fx-breathe` shared keyframes
-- Cấm override các styles này trừ khi có lý do đặc biệt
-
-**Beat 1 hook title:** `.hook-title-text` = `article_title` từ `get_context` (tên bài viết) — cấm `title` có ` — Short video #N`; hook VO đặt ở `.quote-box`.
-
-4. Đọc [giphy-accent-format.md](references/giphy-accent-format.md) · [floater-text-keepout.md](references/floater-text-keepout.md) · [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) · [foreground-continuous-motion.md](references/foreground-continuous-motion.md) · [keyword-highlighting.md](references/keyword-highlighting.md) · [beat-progress-bar.md](references/beat-progress-bar.md) · [beat-transition-sfx.md](references/beat-transition-sfx.md) · [hook-title-impact-box.md](references/hook-title-impact-box.md) · [box-animation-catalog.md](references/box-animation-catalog.md) · [card-animation-catalog-v2.md](references/card-animation-catalog-v2.md) · [text-animation-catalog.md](references/text-animation-catalog.md) · [text-shadow-guidelines.md](references/text-shadow-guidelines.md) · [dynamic-bg-patterns.md](references/dynamic-bg-patterns.md) · [fixtures-not-production-templates.md](references/fixtures-not-production-templates.md) · [layout-9x16-zones.md](references/layout-9x16-zones.md)
-5. `check-visual-density.mjs` pass (FAIL nếu text-only / thiếu shot-plan / opaque beat) — **keyword highlight + box fx (`.box-*` + `.fx-*`) + text effects (≥2 types) + card effects (≥3 types) + NO opacity fade content trong loop**
+4. Đọc [giphy-accent-format.md](references/giphy-accent-format.md) · [dynamic-bg-mandatory.md](references/dynamic-bg-mandatory.md) · [beat-progress-bar.md](references/beat-progress-bar.md) · [beat-transition-sfx.md](references/beat-transition-sfx.md) · [layout-9x16-zones.md](references/layout-9x16-zones.md)
+5. Preflight pass — `check-visual-density.mjs` + `check-hf-seek-beat.mjs`
 
 ### Vai trò
 
-**Senior Motion Graphics** — dynamic, cinematic. Cấm slide text + đổi nền.
+**Senior Motion Designer** — aesthetic HyperFrames playground per beat. Cấm registry/GSAP beat catalog cũ.
 
-**Mindset:** Motion designer — [kinetic-typography-brief.md](references/kinetic-typography-brief.md). Font: [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md). Pacing: [viral-retention-structure.md](references/viral-retention-structure.md).
+**Font:** [typography-be-vietnam-pro.md](references/typography-be-vietnam-pro.md). **Pacing:** [viral-retention-structure.md](references/viral-retention-structure.md).
 
 ### Caption karaoke (bắt buộc mọi video)
 
@@ -190,17 +182,19 @@ node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.
 node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/assign-beat-prompt-types.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/build-beat-element-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
-# Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
+# Agent viết compositions/beat_N.html theo hf_prompt_type + beat-timing — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
-cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 node .cursor/skills/biong-short-video-preflight/scripts/patch-stock-full-bleed.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-stock-full-bleed.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-hf-seek-beat.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-foreground-motion-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ

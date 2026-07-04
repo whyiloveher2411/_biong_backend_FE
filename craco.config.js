@@ -1,10 +1,12 @@
 const path = require('path');
+const fs = require('fs');
 
 const remotionSrcPath = path.resolve(
   __dirname,
   '../_biong_backend/resources/views/plugins/vn4-e-learning/services/remotion-short-video/src'
 );
 const feNodeModules = path.resolve(__dirname, 'node_modules');
+const hyperframesPromptsPath = path.resolve(__dirname, 'hyperframes/prompts');
 
 /** Alias Remotion về FE — tránh kéo bản từ backend node_modules. */
 function applyRemotionWebpackAliases(webpackConfig) {
@@ -48,6 +50,33 @@ function enableRemotionWatch(webpackConfig) {
   };
 }
 
+function syncHyperframesPromptsToPublic() {
+  const publicPromptsDir = path.join(__dirname, 'public/hyperframes-prompts');
+  fs.mkdirSync(publicPromptsDir, { recursive: true });
+
+  fs.readdirSync(hyperframesPromptsPath)
+    .filter((fileName) => fileName.endsWith('.md'))
+    .forEach((fileName) => {
+      fs.copyFileSync(
+        path.join(hyperframesPromptsPath, fileName),
+        path.join(publicPromptsDir, fileName),
+      );
+    });
+}
+
+function includeHyperframesPromptsRule(webpackConfig) {
+  const oneOfRule = webpackConfig.module.rules.find((rule) => rule.oneOf);
+  if (!oneOfRule || !Array.isArray(oneOfRule.oneOf)) {
+    return;
+  }
+
+  oneOfRule.oneOf.unshift({
+    test: /\.md$/,
+    include: hyperframesPromptsPath,
+    type: 'asset/source',
+  });
+}
+
 module.exports = {
   devServer: (devServerConfig) => {
     devServerConfig.headers = {
@@ -85,6 +114,26 @@ module.exports = {
           usePolling: process.env.REMOTION_WATCH_POLLING === '1',
           interval: 300,
         },
+      },
+      {
+        paths: [path.join(hyperframesPromptsPath, '**/*')],
+        options: {
+          usePolling: process.env.REMOTION_WATCH_POLLING === '1',
+          interval: 300,
+        },
+      },
+    ];
+
+    devServerConfig.static = [
+      ...(Array.isArray(devServerConfig.static)
+        ? devServerConfig.static
+        : devServerConfig.static
+          ? [devServerConfig.static]
+          : []),
+      {
+        directory: hyperframesPromptsPath,
+        publicPath: '/hyperframes-prompts',
+        watch: true,
       },
     ];
 
@@ -126,6 +175,14 @@ module.exports = {
         '.ts',
         '.tsx',
       ];
+
+      webpackConfig.resolve.alias = {
+        ...(webpackConfig.resolve.alias || {}),
+        '@hyperframes-prompts': hyperframesPromptsPath,
+      };
+
+      includeHyperframesPromptsRule(webpackConfig);
+      syncHyperframesPromptsToPublic();
 
       return webpackConfig;
     },

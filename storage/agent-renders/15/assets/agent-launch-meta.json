@@ -1,0 +1,8 @@
+{
+  "short_video_id": 15,
+  "phase": "2",
+  "launched_at": "2026-07-03T08:16:58.328Z",
+  "method": "local_daemon",
+  "api_base_url": "http://localhost:9999",
+  "prompt_file": "agent-render-prompt.md"
+}

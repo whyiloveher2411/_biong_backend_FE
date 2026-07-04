@@ -1,0 +1,28 @@
+<div id="root" data-composition-id="beat_1" data-duration="8">
+  <div class="scene-root">
+    <div id="stage">
+      <h1 id="hero_line" class="hero-line">Hello world test</h1>
+    </div>
+  </div>
+</div>
+<style>
+#root, .scene-root { background: transparent !important; }
+#stage { width: 1080px; height: 1920px; position: relative; }
+.hero-line { font-size: 96px; font-weight: 800; opacity: 0; }
+</style>
+<script>
+let t = 0;
+const DURATION = 8;
+const TIMINGS = [{ id: "hero_line", show_at_local_sec: 0.1 }];
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function render() {
+  const time = clamp(t, 0, DURATION);
+  const el = document.getElementById("hero_line");
+  const show = TIMINGS[0].show_at_local_sec;
+  const p = clamp((time - show) / 0.4, 0, 1);
+  el.style.opacity = String(p);
+  el.style.transform = "translateY(" + ((1 - p) * 40) + "px)";
+}
+addEventListener("hf-seek", (e) => { t = e.detail.time; render(); });
+render();
+</script>

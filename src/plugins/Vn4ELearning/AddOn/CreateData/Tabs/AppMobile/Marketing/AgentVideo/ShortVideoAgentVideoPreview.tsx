@@ -3,9 +3,19 @@ import {
     Alert,
     Box,
     CircularProgress,
+    Tab,
+    Tabs,
     Typography,
 } from '@mui/material';
 import { resolvePreviewPlaceholder } from './agentVideoUi';
+import {
+    canShowHtmlBeatPreview,
+    canShowPreviewSourceTabs,
+    resolveActivePreviewSource,
+    resolvePreviewSourceTitle,
+    type AgentPreviewSource,
+} from './agentVideoPreviewSource';
+import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -13,11 +23,65 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 type Props = {
     state: AgentVideoState;
     videoRef: React.Ref<HTMLVideoElement>;
+    previewSource: AgentPreviewSource;
+    onPreviewSourceChange: (source: AgentPreviewSource) => void;
 };
 
-export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) {
-    const placeholder = resolvePreviewPlaceholder({
+function buildPreviewSourceInput(state: AgentVideoState) {
+    return {
+        renderMode: state.renderMode,
+        hasAudio: state.hasAudio,
         agentVideoUrl: state.agentVideoUrl,
+        beatMapReady: state.beatMapReady,
+        beatsHtmlCompleted: state.beatsHtmlCompleted,
+        beatHtml: state.beatHtml,
+        importHtml: state.importHtml,
+    };
+}
+
+function HtmlBeatMissingPlaceholder() {
+    return (
+        <Box
+            sx={{
+                width: '100%',
+                maxWidth: 360,
+                aspectRatio: '9 / 16',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 2,
+                border: 2,
+                borderStyle: 'dashed',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                p: 3,
+                textAlign: 'center',
+            }}
+        >
+            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                Chưa có HTML beat
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+                Dán HTML từng beat ở tab HTML chatbot bên trái.
+            </Typography>
+        </Box>
+    );
+}
+
+export default function ShortVideoAgentVideoPreview({
+    state,
+    videoRef,
+    previewSource,
+    onPreviewSourceChange,
+}: Props) {
+    const previewInput = React.useMemo(() => buildPreviewSourceInput(state), [state]);
+    const activeSource = resolveActivePreviewSource(previewSource, previewInput);
+    const showTabs = canShowPreviewSourceTabs(previewInput);
+    const showHtmlBeat = activeSource === 'html_beat' && canShowHtmlBeatPreview(previewInput);
+
+    const placeholder = resolvePreviewPlaceholder({
+        agentVideoUrl: showHtmlBeat ? '' : state.agentVideoUrl,
         agentVideoStatus: state.agentVideoStatus,
         phase: state.workflowPhase,
         hasScript: state.hasScript,
@@ -26,6 +90,13 @@ export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) 
         ttsPending: state.ttsPending,
         lastError: state.lastError,
     });
+
+    const handleTabChange = (_event: React.SyntheticEvent, value: AgentPreviewSource) => {
+        if (typeof videoRef === 'object' && videoRef !== null && 'current' in videoRef) {
+            videoRef.current?.pause();
+        }
+        onPreviewSourceChange(value);
+    };
 
     return (
         <Box
@@ -40,9 +111,21 @@ export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) 
                     theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
             }}
         >
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2, flexShrink: 0 }}>
-                Preview video HyperFrames
-            </Typography>
+            {showTabs ? (
+                <Tabs
+                    value={activeSource}
+                    onChange={handleTabChange}
+                    variant="fullWidth"
+                    sx={{ mb: 2, flexShrink: 0, minHeight: 40 }}
+                >
+                    <Tab label="Video final" value="final" />
+                    <Tab label="HTML beat" value="html_beat" />
+                </Tabs>
+            ) : (
+                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2, flexShrink: 0 }}>
+                    {resolvePreviewSourceTitle(activeSource)}
+                </Typography>
+            )}
 
             <Box
                 sx={{
@@ -54,7 +137,7 @@ export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) 
                     overflow: 'hidden',
                 }}
             >
-                {state.agentVideoUrl ? (
+                {activeSource === 'final' && state.agentVideoUrl ? (
                     <Box
                         sx={{
                             width: '100%',
@@ -80,6 +163,16 @@ export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) 
                             <track kind="captions" />
                         </video>
                     </Box>
+                ) : showHtmlBeat ? (
+                    <ShortVideoAgentCustomHtmlPreview
+                        beatMap={state.beatMap}
+                        beatHtml={state.beatHtml}
+                        audioUrl={state.audioFileUrl}
+                        audioDurationSec={state.audioDurationSec}
+                        videoRef={videoRef}
+                    />
+                ) : activeSource === 'html_beat' ? (
+                    <HtmlBeatMissingPlaceholder />
                 ) : placeholder ? (
                     <Box
                         sx={{
@@ -114,13 +207,13 @@ export default function ShortVideoAgentVideoPreview({ state, videoRef }: Props) 
                 ) : null}
             </Box>
 
-            {state.agentVideoUrl && state.agentVideoRenderedAt ? (
+            {activeSource === 'final' && state.agentVideoUrl && state.agentVideoRenderedAt ? (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
                     Render lúc: {state.agentVideoRenderedAt}
                 </Typography>
             ) : null}
 
-            {placeholder?.severity === 'error' && state.lastError ? (
+            {placeholder?.severity === 'error' && state.lastError && activeSource !== 'html_beat' ? (
                 <Alert severity="error" sx={{ mt: 2, maxWidth: 480, mx: 'auto', width: '100%' }}>
                     {state.lastError}
                 </Alert>

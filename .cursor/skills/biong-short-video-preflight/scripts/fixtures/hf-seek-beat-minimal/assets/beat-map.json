@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "source": "visual-shot-plan",
+  "totalVideoSec": 8,
+  "sections": [
+    {
+      "id": "beat_1",
+      "beat_id": "beat_1",
+      "hf_prompt_type": "kinetic-type",
+      "phrase_anchor": "Hello world test",
+      "startSec": 0,
+      "endSec": 8,
+      "durationSec": 8,
+      "source": "test"
+    }
+  ]
+}

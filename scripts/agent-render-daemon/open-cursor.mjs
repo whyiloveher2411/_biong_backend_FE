@@ -39,6 +39,15 @@ function buildBootstrapPrompt(shortVideoId, phase) {
     ].join('\n');
   }
 
+  if (normalized === 'import_assemble') {
+    return [
+      `Ghép HTML chatbot cho short video ID ${shortVideoId}.`,
+      `Đọc prompt đã lưu: ${promptRelativePath(shortVideoId, normalized)}`,
+      'Invoke MCP short_video_get_context — dùng import_html.html từ CMS.',
+      'CẤM sửa visual HTML user — chỉ ghép caption + ambient + watermark + render.',
+    ].join('\n');
+  }
+
   return [
     `Render video agent short video ID ${shortVideoId} (phase 2).`,
     `Đọc và thực thi đầy đủ trong @${promptRelative}`,

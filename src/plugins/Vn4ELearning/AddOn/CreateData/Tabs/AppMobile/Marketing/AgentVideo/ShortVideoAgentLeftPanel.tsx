@@ -3,12 +3,14 @@ import { Alert, Box } from '@mui/material';
 import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
 import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
+import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 const TAB = {
     script: 0,
-    facebook: 1,
+    chatbot: 1,
+    facebook: 2,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -20,7 +22,13 @@ type Props = {
 };
 
 function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
-    return initialTab === 'facebook' ? TAB.facebook : TAB.script;
+    if (initialTab === 'facebook') {
+        return TAB.facebook;
+    }
+    if (initialTab === 'chatbot') {
+        return TAB.chatbot;
+    }
+    return TAB.script;
 }
 
 export default function ShortVideoAgentLeftPanel({
@@ -33,6 +41,12 @@ export default function ShortVideoAgentLeftPanel({
     React.useEffect(() => {
         setActiveTab(resolveInitialTabIndex(initialTab));
     }, [initialTab, state.shortVideoId]);
+
+    React.useEffect(() => {
+        if (state.beatEditorFocusRequest?.nonce) {
+            setActiveTab(TAB.chatbot);
+        }
+    }, [state.beatEditorFocusRequest?.nonce]);
 
     const facebookEnabled = activeTab === TAB.facebook && state.marketingPostId > 0;
 
@@ -50,12 +64,16 @@ export default function ShortVideoAgentLeftPanel({
                 onChange={setActiveTab}
                 tabs={[
                     { label: 'Script & TTS' },
+                    { label: 'HTML chatbot' },
                     { label: 'Facebook' },
                 ]}
             />
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {activeTab === TAB.script ? (
                     <ShortVideoAgentScriptPanel state={state} />
+                ) : null}
+                {activeTab === TAB.chatbot ? (
+                    <ShortVideoAgentChatbotHtmlPanel state={state} active={activeTab === TAB.chatbot} />
                 ) : null}
                 {activeTab === TAB.facebook ? (
                     state.marketingPostId > 0 ? (

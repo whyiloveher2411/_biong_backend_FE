@@ -12,6 +12,29 @@ export type HfThemeCatalogItem = {
     description?: string;
 };
 
+export type AgentRenderMode = 'creative' | 'import_html';
+
+export type ImportHtmlSummary = {
+    hf_prompt_type?: string;
+    html_length?: number;
+    html_updated_at?: string;
+    has_html?: boolean;
+    whisper_status?: 'none' | 'processing' | 'completed' | 'failed' | string;
+    whisper_word_count?: number;
+    whisper_transcribed_at?: string;
+    whisper_error?: string;
+    beat_map_ready?: boolean;
+    beat_count?: number;
+    beat_map_updated_at?: string;
+    beats_html_total?: number;
+    beats_html_completed?: number;
+    beats_html_ready?: boolean;
+    import_html_ready?: boolean;
+    html?: string;
+    beat_map?: import('./agentVideoBeatMap').BeatMap | null;
+    beat_html?: Record<string, { html?: string; updated_at?: string }>;
+};
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -52,9 +75,17 @@ export type AgentVideoContentResponse = {
         tts_pending?: boolean;
         tts_failed?: boolean;
         phase?: string;
+        render_mode?: AgentRenderMode;
+        import_html_ready?: boolean;
+        whisper_status?: string;
     };
     marketing_post_id?: number;
     thumbnail?: unknown;
+    post_eligible?: boolean;
+    social_posted?: boolean;
+    render_mode?: AgentRenderMode;
+    import_html?: ImportHtmlSummary;
+    hf_prompt_types_catalog?: string[];
 };
 
 export type JsonResponse = {
@@ -142,6 +173,23 @@ export async function uploadAgentAudioMp3(shortVideoId: number, file: File): Pro
     return result;
 }
 
+export async function savePublishFlags(
+    shortVideoId: number,
+    flags: { postEligible?: boolean; socialPosted?: boolean },
+): Promise<JsonResponse & { post_eligible?: boolean; social_posted?: boolean }> {
+    const body: Record<string, unknown> = shortVideoBody(shortVideoId);
+    if (flags.postEligible !== undefined) {
+        body.post_eligible = flags.postEligible ? '1' : '0';
+    }
+    if (flags.socialPosted !== undefined) {
+        body.social_posted = flags.socialPosted ? '1' : '0';
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-publish-flags',
+        body,
+    );
+}
+
 export async function saveAgentHfTheme(
     shortVideoId: number,
     hfTheme: string,
@@ -203,6 +251,74 @@ export async function retryAgentNarrationTts(shortVideoId: number): Promise<Json
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/retry-agent-narration-tts',
         shortVideoBody(shortVideoId),
     );
+}
+
+export async function transcribeAgentAudio(
+    shortVideoId: number,
+    options?: { force?: boolean },
+): Promise<JsonResponse & {
+    status?: string;
+    word_count?: number;
+    import_html?: ImportHtmlSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/transcribe-agent-audio',
+        shortVideoBody(shortVideoId, options?.force ? { force: 1 } : {}),
+    );
+}
+
+export async function saveAgentImportHtml(
+    shortVideoId: number,
+    payload: {
+        renderMode?: AgentRenderMode;
+        hfPromptType?: string;
+        html?: string;
+        beatMap?: import('./agentVideoBeatMap').BeatMap;
+        beatId?: string;
+        beatHtml?: string;
+    },
+): Promise<JsonResponse & {
+    render_mode?: AgentRenderMode;
+    import_html?: ImportHtmlSummary;
+}> {
+    const body: Record<string, unknown> = shortVideoBody(shortVideoId);
+    if (payload.renderMode !== undefined) {
+        body.render_mode = payload.renderMode;
+    }
+    if (payload.hfPromptType !== undefined) {
+        body.hf_prompt_type = payload.hfPromptType;
+    }
+    if (payload.html !== undefined) {
+        body.html = payload.html;
+    }
+    if (payload.beatMap !== undefined) {
+        body.beat_map = payload.beatMap;
+    }
+    if (payload.beatId !== undefined && payload.beatHtml !== undefined) {
+        body.beat_id = payload.beatId;
+        body.beat_html = payload.beatHtml;
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',
+        body,
+    );
+}
+
+export async function fetchImportHtmlContext(shortVideoId: number) {
+    const token = getAccessToken() ?? '';
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-import-html-context',
+        ),
+        {
+            method: 'POST',
+            credentials: 'include',
+            headers: authHeaders(),
+            body: JSON.stringify(shortVideoBody(shortVideoId, { access_token: token })),
+        },
+    );
+    return response.json();
 }
 
 const AGENT_VIDEO_STREAM_API_PATH =

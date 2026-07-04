@@ -1,0 +1,26 @@
+<!doctype html>
+<html data-duration="8">
+<head>
+<style>
+#root, .scene-root { background: transparent !important; }
+#stage { width: 1080px; height: 1920px; }
+#hero { opacity: 0; font-size: 96px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="beat_1" data-duration="8">
+  <div class="scene-root"><div id="stage"><div id="hero">Test</div></div></div>
+</div>
+<script>
+const DURATION = 8;
+let t = 0;
+const hero = document.getElementById("hero");
+function render() {
+  const p = Math.min(1, t / 2);
+  hero.style.opacity = String(p);
+}
+addEventListener("hf-seek", (e) => { t = e.detail.time; render(); });
+render();
+</script>
+</body>
+</html>

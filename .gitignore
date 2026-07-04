@@ -31,4 +31,5 @@ yarn-error.log*
 !storage/agent-renders/**/assets/agent-render-prompt.md
 !storage/agent-renders/**/assets/agent-script-prompt.md
 !storage/agent-renders/**/assets/agent-continue-prompt.md
+!storage/agent-renders/**/assets/agent-import-assemble-prompt.md
 !storage/agent-renders/**/assets/agent-launch-meta.json

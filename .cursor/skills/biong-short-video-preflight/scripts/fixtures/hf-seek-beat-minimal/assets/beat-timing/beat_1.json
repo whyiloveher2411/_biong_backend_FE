@@ -1,0 +1,15 @@
+{
+  "beat_id": "beat_1",
+  "hf_prompt_type": "kinetic-type",
+  "startSec": 0,
+  "durationSec": 8,
+  "phrase_anchor": "Hello world test",
+  "elements": [
+    {
+      "id": "hero_line",
+      "text": "Hello world test",
+      "show_at_local_sec": 0.1,
+      "whisper_start": 0.1
+    }
+  ]
+}

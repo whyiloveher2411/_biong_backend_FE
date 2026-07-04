@@ -740,14 +740,14 @@ export function tryTuThuaHomophone(scriptWords, i, transcriptWords, p) {
   };
 }
 
-/** "rườm rà" ↔ Whisper "rượm già" */
+/** "rườm rà" ↔ Whisper "rượm già" / "giềm giả" (TTS đồng âm) */
 export function tryRuomRaHomophone(scriptWords, i, transcriptWords, p) {
   const a = norm(stripPunct(scriptWords[i] ?? ""));
   const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
   if (a !== "ruom" || b !== "ra") return null;
   const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
   const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
-  if (!["ruom", "ruoum"].includes(t0) || !["ra", "gia"].includes(t1)) return null;
+  if (!["ruom", "ruoum", "giem"].includes(t0) || !["ra", "gia"].includes(t1)) return null;
   const tw0 = transcriptWords[p];
   const tw1 = transcriptWords[p + 1];
   return {

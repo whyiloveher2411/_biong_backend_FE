@@ -11,6 +11,12 @@ import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import { useAgentVideoContent } from './useAgentVideoContent';
 import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
+import {
+    canPlaybackPreviewSource,
+    resolveActivePreviewSource,
+    resolveDefaultPreviewSource,
+    type AgentPreviewSource,
+} from './agentVideoPreviewSource';
 
 type Props = {
     open: boolean;
@@ -40,9 +46,43 @@ export default function ShortVideoAgentVideoWorkspace({
 }: Props) {
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
     const videoRef = React.useRef<HTMLVideoElement>(null);
+    const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('final');
+
+    const previewInput = React.useMemo(() => ({
+        renderMode: state.renderMode,
+        hasAudio: state.hasAudio,
+        agentVideoUrl: state.agentVideoUrl,
+        beatMapReady: state.beatMapReady,
+        beatsHtmlCompleted: state.beatsHtmlCompleted,
+        beatHtml: state.beatHtml,
+        importHtml: state.importHtml,
+    }), [
+        state.renderMode,
+        state.hasAudio,
+        state.agentVideoUrl,
+        state.beatMapReady,
+        state.beatsHtmlCompleted,
+        state.beatHtml,
+        state.importHtml,
+    ]);
+
+    const activePreviewSource = resolveActivePreviewSource(previewSource, previewInput);
 
     React.useEffect(() => {
-        if (!open || !state.agentVideoUrl) {
+        setPreviewSource(resolveDefaultPreviewSource(previewInput));
+    }, [shortVideoId]);
+
+    React.useEffect(() => {
+        setPreviewSource((current) => resolveActivePreviewSource(current, previewInput));
+    }, [previewInput]);
+
+    React.useEffect(() => {
+        if (!open) {
+            return undefined;
+        }
+
+        const canPlayback = canPlaybackPreviewSource(activePreviewSource, previewInput);
+        if (!canPlayback) {
             return undefined;
         }
 
@@ -70,7 +110,9 @@ export default function ShortVideoAgentVideoWorkspace({
         return () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
-    }, [open, state.agentVideoUrl]);
+    }, [open, activePreviewSource, previewInput]);
+
+    const useCustomHtmlPreview = activePreviewSource === 'html_beat';
 
     const drawerTitle = state.title
         ? `Short video #${shortVideoId} — ${state.title}`
@@ -169,7 +211,12 @@ export default function ShortVideoAgentVideoWorkspace({
                         />
                     </Box>
 
-                    <ShortVideoAgentVideoPreview state={state} videoRef={videoRef} />
+                    <ShortVideoAgentVideoPreview
+                        state={state}
+                        videoRef={videoRef}
+                        previewSource={activePreviewSource}
+                        onPreviewSourceChange={setPreviewSource}
+                    />
 
                     <Box
                         sx={{
@@ -194,6 +241,17 @@ export default function ShortVideoAgentVideoWorkspace({
                     clipLabel={state.title || `Short video #${shortVideoId}`}
                     audioDurationSec={state.audioDurationSec}
                     estimatedDurationSec={state.agentVideoSummary?.estimated_duration_sec}
+                    customHtmlPreview={useCustomHtmlPreview}
+                    previewSourceKey={activePreviewSource}
+                    beatMap={state.beatMapReady ? state.beatMap : null}
+                    beatHtml={state.beatHtml}
+                    activeBeatId={state.activeBeatId}
+                    onBeatClick={state.focusBeatEditor}
+                    onCopyBeatPrompt={(beatId) => { void state.handleCopyBeatHtmlPrompt(beatId); }}
+                    onPasteBeatHtml={(beatId) => { void state.handlePasteBeatHtml(beatId); }}
+                    copyingBeatHtmlPromptBeatId={state.copyingBeatHtmlPromptBeatId}
+                    pastingBeatHtmlBeatId={state.pastingBeatHtmlBeatId}
+                    savingImportHtml={state.savingImportHtml}
                 />
             </Box>
         </DrawerCustom>

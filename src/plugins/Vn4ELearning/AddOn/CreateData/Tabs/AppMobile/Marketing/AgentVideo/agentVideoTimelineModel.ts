@@ -9,6 +9,20 @@ export const AGENT_VIDEO_TIMELINE_EFFECTS = {
     video: { id: 'video', name: 'Video' },
 } as const;
 
+export type AgentVideoTimelineLayout = {
+    startLeft: number;
+    scaleWidth: number;
+    timelineScale: number;
+};
+
+export function timeSecToTimelineLeftPx(
+    timeSec: number,
+    layout: AgentVideoTimelineLayout,
+): number {
+    const time = Math.max(0, Number(timeSec) || 0);
+    return layout.startLeft + (time * layout.scaleWidth) / layout.timelineScale;
+}
+
 export function buildAgentVideoTimelineRows(
     durationSec: number,
     filmstripVersion = 0,

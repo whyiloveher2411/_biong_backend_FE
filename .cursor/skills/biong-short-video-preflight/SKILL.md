@@ -1,13 +1,13 @@
 ---
 name: biong-short-video-preflight
-description: Kiểm tra bắt buộc trước render final short video — transcribe, caption sync, ambient motion, visual density, z-depth, beat-map, karaoke, watermark. Invoke phase 2 sau TTS, trước hyperframes render --quality high.
+description: Kiểm tra bắt buộc trước render final short video — transcribe, caption sync, hf-seek beats, ambient motion, visual density, beat-map, karaoke, watermark. Invoke phase 2 sau TTS, trước hyperframes render --quality high.
 ---
 
 # Biong Short Video — Preflight
 
 **Chạy bắt buộc** trước mọi `hyperframes render --quality high`. Fail → **sửa code**, không render final.
 
-Đọc: [overlay-layer-stack.md](../biong-short-video-hyperframes/references/overlay-layer-stack.md) · [visual-shot-plan.md](../biong-short-video-hyperframes/references/visual-shot-plan.md) · [continuous-motion-patterns.md](../biong-short-video-hyperframes/references/continuous-motion-patterns.md)
+Đọc: [overlay-layer-stack.md](../biong-short-video-hyperframes/references/overlay-layer-stack.md) · [visual-shot-plan.md](../biong-short-video-hyperframes/references/visual-shot-plan.md) · [hf-prompt-beat-contract.md](../biong-short-video-hyperframes/references/hf-prompt-beat-contract.md) · [import-html-beat-render.md](../biong-short-video-hyperframes/references/import-html-beat-render.md) · [continuous-motion-patterns.md](../biong-short-video-hyperframes/references/continuous-motion-patterns.md)
 
 ---
 
@@ -19,7 +19,31 @@ description: Kiểm tra bắt buộc trước render final short video — trans
 
 ---
 
-## Bước 0 — Transcribe + caption sync (bắt buộc)
+## Import HTML (`render_mode=import_html`) — ghép beat chatbot
+
+Đọc [import-html-beat-render.md](../biong-short-video-hyperframes/references/import-html-beat-render.md).
+
+Sau ghi `compositions/beat_N.html` từ CMS — **bắt buộc normalize trước render**:
+
+```bash
+PROJ=storage/agent-renders/{id}/my-video
+
+node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/normalize-import-html-beat-for-render.mjs $PROJ --localize-images
+node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
+node .cursor/skills/biong-short-video-preflight/scripts/check-import-html-beat-render.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-overlay-stack.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
+```
+
+**Cấm** `check-hf-seek-beat.mjs` cho import_html (script tự skip). **Cấm** render nếu `check-import-html-beat-render` fail.
+
+---
+
+## Bước 0 — Transcribe + caption sync + prompt assign (bắt buộc)
 
 Từ repo root `_biong_backend_FE`, thay `{id}`:
 
@@ -30,14 +54,15 @@ node .cursor/skills/biong-short-video-preflight/scripts/bootstrap-phase2-assets.
 node .cursor/skills/biong-short-video-preflight/scripts/transcribe-audio.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-caption-from-script.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/verify-caption-sync.mjs $PROJ --strict
+node .cursor/skills/biong-short-video-preflight/scripts/assign-beat-prompt-types.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-map.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/build-beat-element-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
-# Agent viết compositions/beat_N.html thủ công — CẤM gen-beats-from-shot-plan.mjs
+# Agent viết compositions/beat_N.html theo hf_prompt_type + beat-timing — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 mkdir -p $PROJ/assets/images
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
-cp .cursor/skills/biong-short-video-hyperframes/assets/global-default-styles.css $PROJ/assets/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
 ```
 
@@ -45,14 +70,16 @@ node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs 
 
 ## Bước 1 — Visual + beat + overlay (bắt buộc)
 
-Sau `/continuous-motion` + registry blocks theo `visual_shot_plan`:
+Sau `/continuous-motion` + agent viết beat HTML theo `hyperframes/prompts/{hf_prompt_type}.md`:
 
 ```bash
 node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-stock-full-bleed.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-dynamic-background.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-floater-keepout.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-hf-seek-beat.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs $PROJ
+node .cursor/skills/biong-short-video-preflight/scripts/check-foreground-motion-density.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-typography-spacing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-beat-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/check-screen-fill.mjs $PROJ
@@ -80,10 +107,10 @@ node ../../../../.agents/skills/hyperframes-animation/scripts/animation-map.mjs 
 
 | # | Kiểm tra | Pass |
 |---|----------|------|
-| 1 | `visual_shot_plan` trong metadata | ✓ |
-| 2 | `compositions/ambient-layer.html` + `__timelines["ambient"]` | ✓ |
-| 3 | ≥1 non-caption registry block wired | ✓ |
-| 4 | Z-depth ≥2 bands (80–800) | ✓ |
+| 1 | `visual_shot_plan` + `hf_prompt_type` mỗi beat | ✓ |
+| 2 | `assets/beat-timing/beat_N.json` mỗi beat | ✓ |
+| 3 | `compositions/ambient-layer.html` + `__timelines["ambient"]` | ✓ |
+| 4 | Beat HTML hf-seek `render()` — không GSAP beat timeline | ✓ |
 | 5 | Caption z9000 + watermark z9500 | ✓ |
 
 ---
@@ -106,14 +133,13 @@ Pass vision → append [evolution-memory.md](../biong-short-video-hyperframes/re
 
 ## Quality gate
 
+- [ ] `check-hf-seek-beat.mjs` exit 0
 - [ ] `check-continuous-motion.mjs` exit 0
 - [ ] `check-dynamic-background.mjs` exit 0
-- [ ] `check-floater-keepout.mjs` exit 0
 - [ ] `check-visual-density.mjs` exit 0
-- [ ] `check-typography-spacing.mjs` exit 0
+- [ ] `check-foreground-motion-density.mjs` exit 0
 - [ ] `check-beat-timing.mjs` exit 0 — mỗi beat 5s–20s
-- [ ] `check-screen-fill.mjs` exit 0 — content-cluster min-height ≥960px + ≥2 block visual
-- [ ] `check-marketing-post-images.mjs` exit 0 — nếu có ảnh marketing post: 1 ảnh/beat, `.browser-mockup-card`
+- [ ] `check-screen-fill.mjs` exit 0
 - [ ] `check-overlay-stack.mjs` exit 0
 - [ ] `check-media-stack.mjs --strict` exit 0
 - [ ] `hyperframes lint` 0 errors

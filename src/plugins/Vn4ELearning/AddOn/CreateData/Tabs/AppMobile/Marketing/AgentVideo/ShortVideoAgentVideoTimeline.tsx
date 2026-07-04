@@ -14,9 +14,12 @@ import {
     AGENT_VIDEO_TRACK_ROW_HEIGHT,
     buildAgentVideoTimelineRows,
     resolveAgentVideoDurationSec,
+    timeSecToTimelineLeftPx,
 } from './agentVideoTimelineModel';
 import { resolveFilmstripTileDisplayWidthPx } from './agentVideoFilmstrip';
 import { useAgentVideoFilmstrip } from './useAgentVideoFilmstrip';
+import AgentVideoBeatBoundaryOverlay from './AgentVideoBeatBoundaryOverlay';
+import type { BeatMap } from './agentVideoBeatMap';
 
 const TRACK_LABELS_WIDTH = 100;
 const TIMELINE_SCALE_WIDTH = 56;
@@ -37,6 +40,32 @@ function getTimelineHorizontalScrollLeft(host: HTMLElement): number {
         return 0;
     }
     return grids[0].scrollLeft;
+}
+
+function scrollTimelineGrids(host: HTMLElement, deltaPx: number): boolean {
+    const grids = getTimelineScrollGrids(host);
+    if (grids.length === 0) {
+        return false;
+    }
+    const canScroll = grids.some((grid) => grid.scrollWidth > grid.clientWidth);
+    if (!canScroll) {
+        return false;
+    }
+    grids.forEach((grid) => {
+        grid.scrollLeft += deltaPx;
+    });
+    return true;
+}
+
+function resolveTimelineWheelDelta(event: WheelEvent): number {
+    const { deltaX, deltaY } = event;
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        return deltaY;
+    }
+    if (deltaX !== 0) {
+        return deltaX;
+    }
+    return 0;
 }
 
 function formatPlaybackClock(totalSec: number): string {
@@ -180,6 +209,17 @@ type Props = {
     clipLabel?: string;
     audioDurationSec?: number | null;
     estimatedDurationSec?: number | null;
+    customHtmlPreview?: boolean;
+    previewSourceKey?: string;
+    beatMap?: BeatMap | null;
+    beatHtml?: Record<string, { html?: string }>;
+    activeBeatId?: string;
+    onBeatClick?: (beatId: string) => void;
+    onCopyBeatPrompt?: (beatId: string) => void;
+    onPasteBeatHtml?: (beatId: string) => void;
+    copyingBeatHtmlPromptBeatId?: string;
+    pastingBeatHtmlBeatId?: string;
+    savingImportHtml?: boolean;
 };
 
 export default function ShortVideoAgentVideoTimeline({
@@ -190,6 +230,17 @@ export default function ShortVideoAgentVideoTimeline({
     clipLabel = 'HyperFrames',
     audioDurationSec,
     estimatedDurationSec,
+    customHtmlPreview = false,
+    previewSourceKey = '',
+    beatMap = null,
+    beatHtml = {},
+    activeBeatId = '',
+    onBeatClick,
+    onCopyBeatPrompt,
+    onPasteBeatHtml,
+    copyingBeatHtmlPromptBeatId = '',
+    pastingBeatHtmlBeatId = '',
+    savingImportHtml = false,
 }: Props) {
     const timelineRef = React.useRef<TimelineState>(null);
     const timelineHostRef = React.useRef<HTMLDivElement>(null);
@@ -198,9 +249,16 @@ export default function ShortVideoAgentVideoTimeline({
     const [mediaDurationSec, setMediaDurationSec] = React.useState<number | null>(null);
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [isPlaying, setIsPlaying] = React.useState(false);
+    const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const isPlayingRef = React.useRef(false);
 
-    const hasVideo = String(videoUrl || '').trim() !== '';
+    const timelineLayout = React.useMemo(() => ({
+        startLeft: TIMELINE_START_LEFT,
+        scaleWidth: TIMELINE_SCALE_WIDTH,
+        timelineScale: TIMELINE_SCALE,
+    }), []);
+
+    const hasVideo = customHtmlPreview || String(videoUrl || '').trim() !== '';
 
     const contentDurationSec = React.useMemo(
         () => resolveAgentVideoDurationSec({
@@ -212,7 +270,7 @@ export default function ShortVideoAgentVideoTimeline({
     );
 
     const { thumbnails, loading: filmstripLoading, failed: filmstripFailed } = useAgentVideoFilmstrip(
-        videoUrl,
+        customHtmlPreview ? '' : videoUrl,
         contentDurationSec,
         shortVideoId,
         agentVideoRenderedAt,
@@ -229,6 +287,10 @@ export default function ShortVideoAgentVideoTimeline({
     );
 
     const minScaleCount = Math.max(20, Math.ceil(timelineWorkspaceEndSec) + 2);
+    const timelineContentWidthPx = React.useMemo(
+        () => timeSecToTimelineLeftPx(minScaleCount, timelineLayout),
+        [minScaleCount, timelineLayout],
+    );
     const tracksViewportHeight = TIMELINE_EDIT_AREA_TOP_GAP + AGENT_VIDEO_TRACK_ROW_HEIGHT;
     const timelineContentHeight = TIMELINE_RULER_HEIGHT + tracksViewportHeight;
     const timelineTotalHeight = timelineContentHeight + HORIZONTAL_SCROLLBAR_HEIGHT + CURSOR_HEAD_OVERFLOW;
@@ -276,7 +338,10 @@ export default function ShortVideoAgentVideoTimeline({
         };
 
         const onTimeUpdate = () => {
-            if (isScrubbingRef.current || isPlayingRef.current) {
+            if (isScrubbingRef.current) {
+                return;
+            }
+            if (!customHtmlPreview && isPlayingRef.current) {
                 return;
             }
             const sec = video.currentTime;
@@ -315,10 +380,14 @@ export default function ShortVideoAgentVideoTimeline({
             video.removeEventListener('pause', onPause);
             video.removeEventListener('ended', onEnded);
         };
-    }, [hasVideo, syncTimelineCursor, videoRef, videoUrl]);
+    }, [customHtmlPreview, hasVideo, previewSourceKey, syncTimelineCursor, videoRef, videoUrl]);
 
     React.useEffect(() => {
-        if (!hasVideo || !isPlaying) {
+        if (!hasVideo) {
+            return undefined;
+        }
+
+        if (!customHtmlPreview && !isPlaying) {
             return undefined;
         }
 
@@ -342,7 +411,7 @@ export default function ShortVideoAgentVideoTimeline({
         return () => {
             window.cancelAnimationFrame(frameId);
         };
-    }, [hasVideo, isPlaying, syncTimelineCursor, videoRef]);
+    }, [customHtmlPreview, hasVideo, isPlaying, previewSourceKey, syncTimelineCursor, videoRef]);
 
     const updateTimeFromClientX = React.useCallback((clientX: number, interactArea: HTMLElement) => {
         const host = timelineHostRef.current;
@@ -436,6 +505,66 @@ export default function ShortVideoAgentVideoTimeline({
     const handleTimelineChange = React.useCallback(() => {
         // Read-only timeline — clip edits disabled via disableDrag.
     }, []);
+
+    React.useLayoutEffect(() => {
+        if (!hasVideo) {
+            setTimelineScrollLeft(0);
+            return undefined;
+        }
+
+        const host = timelineHostRef.current;
+        if (!host) {
+            return undefined;
+        }
+
+        const syncScrollLeft = () => {
+            setTimelineScrollLeft(getTimelineHorizontalScrollLeft(host));
+        };
+
+        syncScrollLeft();
+
+        const grids = getTimelineScrollGrids(host);
+        grids.forEach((grid) => {
+            grid.addEventListener('scroll', syncScrollLeft, { passive: true });
+        });
+
+        const observer = typeof ResizeObserver !== 'undefined'
+            ? new ResizeObserver(syncScrollLeft)
+            : null;
+        observer?.observe(host);
+
+        return () => {
+            grids.forEach((grid) => {
+                grid.removeEventListener('scroll', syncScrollLeft);
+            });
+            observer?.disconnect();
+        };
+    }, [editorData, hasVideo, thumbnails.length]);
+
+    React.useEffect(() => {
+        const host = timelineHostRef.current;
+        if (!host || !hasVideo) {
+            return undefined;
+        }
+
+        const onWheel = (event: WheelEvent) => {
+            const horizontalDelta = resolveTimelineWheelDelta(event);
+            if (horizontalDelta === 0) {
+                return;
+            }
+            const scrolled = scrollTimelineGrids(host, horizontalDelta);
+            if (!scrolled) {
+                return;
+            }
+            event.preventDefault();
+            setTimelineScrollLeft(getTimelineHorizontalScrollLeft(host));
+        };
+
+        host.addEventListener('wheel', onWheel, { passive: false, capture: true });
+        return () => {
+            host.removeEventListener('wheel', onWheel, { capture: true });
+        };
+    }, [editorData, hasVideo, thumbnails.length]);
 
     return (
         <Box
@@ -601,6 +730,24 @@ export default function ShortVideoAgentVideoTimeline({
                                     failed={filmstripFailed}
                                 />
                             )}
+                        />
+                        <AgentVideoBeatBoundaryOverlay
+                            beatMap={beatMap}
+                            beatHtml={beatHtml}
+                            activeBeatId={activeBeatId}
+                            copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}
+                            pastingBeatHtmlBeatId={pastingBeatHtmlBeatId}
+                            savingImportHtml={savingImportHtml}
+                            onBeatClick={onBeatClick ?? (() => {})}
+                            onCopyPrompt={onCopyBeatPrompt ?? (() => {})}
+                            onPasteHtml={onPasteBeatHtml ?? (() => {})}
+                            scrollLeft={timelineScrollLeft}
+                            contentWidthPx={timelineContentWidthPx}
+                            layout={timelineLayout}
+                            rulerHeight={TIMELINE_RULER_HEIGHT}
+                            trackTopGap={TIMELINE_EDIT_AREA_TOP_GAP}
+                            trackHeight={AGENT_VIDEO_TRACK_ROW_HEIGHT}
+                            totalHeight={timelineContentHeight}
                         />
                     </Box>
                 </Box>

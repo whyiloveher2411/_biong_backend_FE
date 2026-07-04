@@ -121,6 +121,14 @@ tl.fromTo(".premium-card", { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, d
 - **Cách vá:** Giảm beat bg-layer/animated → opacity .25; ambient `.gradient-flow` → .3; `@keyframes breathe` scale 1.05; border-3d inset 4px + opacity cao; thêm text-shadow tiered
 - **Rule cứng:** Beat overlay opacity ≤0.3 khi có stock-bg index.html; breathe max 1.05; đọc `text-shadow-guidelines.md`
 
+### [2026-07-03] short_video_15 — CV lọt mắt xanh AI 11 beats
+
+- **Kết quả:** score 8/10 — hook plate-rust article title + dual stat 7.3M/100+ CV + expert editorial + flow pipeline + scam warning + bento tips + AI bias contrast + browser mockup + exit CTA
+- **Caption fix:** medium Whisper + homophone `giềm giả`↔`rườm rà` trong vi-align-helpers — sync strict 489/489
+- **Lint fix:** giphy sticker dùng `.webp` `<img>` — cấm `<video>` trong beat sub-comp
+- **Rule cứng:** Audio TTS regenerate → re-download narration.mp3 + re-transcribe; beat-map phrase_anchor phải cho duration 5–20s
+- **Reuse:** content-cluster + plate-rust hook + split panel + exit_card_stack CTA
+
 ### [2026-07-03] short_video_12 v4 — fresh bootstrap 13 beats + caption align fix
 
 - **Kết quả:** score 8/10 — bootstrap sạch hyperframes vignelli; 13 beat 5–20s; hook plate-rust + dual stat 65/94 + 97/63 + browser mockup + CTA exit stack
@@ -406,4 +414,11 @@ Từ video 12 trở đi:
 - **Caption fix:** tryChongChongHomophone — script "chong chóng" ↔ Whisper "trong tróng"
 - **Rule cứng:** SFX beat-move track-index ≥22 khi beat 8+ (tránh overlap caption 20 / watermark 21)
 - **Reuse:** content-cluster + plate-rust hook + flow-stack timeline + exit_card_stack CTA
+
+### [2026-07-03] short_video_16 — AI chia 3 phe dev community 10 beats
+
+- **Kết quả:** score 8/10 — kinetic hook 60% + data-story survey reversal + 3 faction profiles (Dmitry/Cristina/Dan/Maahir/Mackenzie) + CTA poll 3 phe
+- **Caption fix:** transcribe medium model — 6 interpolated words với small → medium pass strict
+- **Lint fix:** beat fragment → full `<!DOCTYPE html><body>`; `assets/` root-relative; `data-width/height` 1080×1920; ambient GSAP finite repeat
+- **Reuse:** hf-seek maskReveal + faction chips + browser-mockup marketing post + exit poll CTA
 

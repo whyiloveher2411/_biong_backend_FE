@@ -8,7 +8,7 @@ import {
 
 const DEFAULT_DAEMON_URL = 'http://127.0.0.1:9477';
 
-export type AgentLaunchPhase = '1' | '2' | 'continue';
+export type AgentLaunchPhase = '1' | '2' | 'continue' | 'import_assemble';
 
 export type PrepareAgentRenderResponse = {
     success?: boolean;
@@ -44,7 +44,9 @@ function defaultPromptRelative(shortVideoId: number, phase: AgentLaunchPhase): s
         ? 'agent-script-prompt.md'
         : phase === 'continue'
             ? 'agent-continue-prompt.md'
-            : 'agent-render-prompt.md';
+            : phase === 'import_assemble'
+                ? 'agent-import-assemble-prompt.md'
+                : 'agent-render-prompt.md';
     return `storage/agent-renders/${shortVideoId}/assets/${fileName}`;
 }
 
@@ -186,7 +188,9 @@ export async function launchShortVideoAgent(
                     ? 'Không chuẩn bị được launch agent bước 1'
                     : phase === 'continue'
                         ? 'Không chuẩn bị được launch agent tiếp tục'
-                        : 'Không chuẩn bị được launch render'),
+                        : phase === 'import_assemble'
+                            ? 'Không chuẩn bị được launch agent ghép HTML'
+                            : 'Không chuẩn bị được launch render'),
         };
     }
 
@@ -231,6 +235,15 @@ export async function launchShortVideoAgent(
         };
     }
 
+    if (phase === 'import_assemble') {
+        return {
+            ok: true,
+            message: promptRelative
+                ? `Đã ghi ${promptRelative} và mở Cursor — agent ghép HTML chatbot + caption + ambient`
+                : 'Đã mở Cursor với prompt ghép HTML chatbot',
+        };
+    }
+
     return {
         ok: true,
         message: promptRelative
@@ -245,4 +258,8 @@ export async function launchShortVideoAgentRender(shortVideoId: number): Promise
 
 export async function launchShortVideoAgentContinue(shortVideoId: number): Promise<LaunchAgentRenderResult> {
     return launchShortVideoAgent(shortVideoId, 'continue');
+}
+
+export async function launchShortVideoAgentImportAssemble(shortVideoId: number): Promise<LaunchAgentRenderResult> {
+    return launchShortVideoAgent(shortVideoId, 'import_assemble');
 }

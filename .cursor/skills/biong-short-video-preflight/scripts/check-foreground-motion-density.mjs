@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Preflight: foreground continuous motion — no dead zones >1s on content elements.
+ * Preflight: t-based foreground motion density (hf-seek beats).
  *
  * Usage: node check-foreground-motion-density.mjs <project-dir>
  * Exit 0 = pass, 1 = fail.
@@ -26,109 +26,24 @@ function exists(rel) {
   return fs.existsSync(path.join(root, rel));
 }
 
-/** Foreground element class patterns (whitelist) */
-const FG_ELEMENT_PATTERNS = [
-  /class="[^"]*hook-title/i,
-  /class="[^"]*beat-progress/i,
-  /class="[^"]*hero/i,
-  /class="[^"]*kw\b/i,
-  /class="[^"]*ui-card/i,
-  /class="[^"]*premium-card/i,
-  /class="[^"]*support-card/i,
-  /class="[^"]*source-badge/i,
-  /class="[^"]*context-chip/i,
-  /class="[^"]*deco-icon/i,
-  /class="[^"]*particle/i,
-  /class="[^"]*glow-ring/i,
-  /class="[^"]*company-chip/i,
-  /class="[^"]*quote-box/i,
-  /class="[^"]*mockup/i,
-  /class="[^"]*stat-val/i,
-  /class="[^"]*badge/i,
-  /class="[^"]*vs-card/i,
-  /class="[^"]*flow-node/i,
-  /class="[^"]*bento/i,
-  /class="[^"]*word\b/i,
-  /class="[^"]*accent-line/i,
-  /data-registry-block/i,
-];
+const MIN_ELEMENTS = 3;
 
-const MIN_ELEMENTS = 5;
-
-function countDistinctElements(html) {
-  const classes = new Set();
-  const classRe = /class="([^"]+)"/g;
-  let m;
-  while ((m = classRe.exec(html)) !== null) {
-    for (const c of m[1].split(/\s+/)) {
-      if (
-        /hook-title|hero|kw|ui-card|premium-card|support|source-badge|context-chip|deco-icon|particle|glow-ring|company-chip|quote-box|mockup|stat-val|badge|vs-card|flow-node|card-title|accent-line/i.test(
-          c,
-        )
-      ) {
-        classes.add(c);
-      }
-    }
-  }
-  return classes.size;
+function countTimingElements(content) {
+  const idMatches = content.match(/\bid="[^"]+"/gi) ?? [];
+  const unique = new Set(
+    idMatches.map((m) => m.replace(/id="/i, "").replace(/"$/, "")),
+  );
+  unique.delete("root");
+  unique.delete("stage");
+  return unique.size;
 }
 
-function hasForegroundLoop(content) {
-  // Must have repeat: -1 or yoyo:true with repeat on foreground selectors
-  const hasRepeat = /repeat\s*:\s*-1/i.test(content);
-  const hasYoyoLoop =
-    /yoyo\s*:\s*true/i.test(content) && /repeat\s*:\s*[1-9]\d*/i.test(content);
-  if (!hasRepeat && !hasYoyoLoop) return false;
-
-  // Exclude pure bg-layer only loops — need foreground selectors
-  const fgSelectors = [
-    ".hook-title-plate",
-    ".hook-title-box",
-    ".hook-title-frame",
-    ".hero",
-    ".kw",
-    ".ui-card",
-    ".premium-card",
-    ".deco-icon",
-    ".particle",
-    ".glow-ring",
-    ".company-chip",
-    ".quote-box",
-    ".mockup",
-    ".stat-val",
-    ".badge",
-    ".vs-card",
-    ".flow-node",
-    ".word",
-    ".accent-line",
-    ".support",
-    ".card",
-    ".counter",
-  ];
-  const tweenBlocks = content.match(/tl\.(fromTo|to|from)\([^)]+\)/gs) ?? [];
-  for (const block of tweenBlocks) {
-    if (/bg-layer|grain-layer|stock-bg|ambient/i.test(block) && !fgSelectors.some((s) => block.includes(s))) {
-      continue;
-    }
-    if ((/repeat\s*:\s*-1/i.test(block) || (/yoyo\s*:\s*true/i.test(block) && /repeat/i.test(block))) &&
-        fgSelectors.some((s) => block.includes(s))) {
-      return true;
-    }
-  }
-  // Fallback: any repeat:-1 not only on bg-layer
-  if (hasRepeat) {
-    const nonBgRepeat = tweenBlocks.some(
-      (b) =>
-        /repeat\s*:\s*-1/i.test(b) &&
-        !/^tl\.(fromTo|to|from)\(\s*["']\.(bg-layer|grain-layer|stock-bg)/i.test(b),
-    );
-    if (nonBgRepeat) return true;
-  }
-  return hasRepeat || hasYoyoLoop;
-}
-
-function countTweens(content) {
-  return (content.match(/tl\.(from|fromTo|to)\(/g) ?? []).length;
+function hasTBasedMotion(content) {
+  return (
+    /function\s+render\s*\(/i.test(content) &&
+    (/show_at_local_sec|TIMINGS|maskReveal|wordStagger|easeOut/i.test(content) ||
+      /\.style\.(opacity|transform|clipPath)/i.test(content))
+  );
 }
 
 if (!exists("compositions")) {
@@ -148,29 +63,21 @@ if (!beatFiles.length) {
 for (const name of beatFiles) {
   const content = read(path.join("compositions", name));
   if (/<span class="header-badge"|class="header-badge">#\d/i.test(content)) {
-    errors.push(`${name}: còn header-badge hoặc #N/9 — dùng beat-progress-bar trong index.html`);
+    errors.push(`${name}: còn header-badge — dùng beat-progress-bar trong index.html`);
   }
-  if (/<span class="section-label"|class="section-label">/i.test(content)) {
-    warnings.push(`${name}: còn section-label trong HTML — khuyến nghị bỏ (dùng progress bar)`);
-  }
-  const elementCount = countDistinctElements(content);
+  const elementCount = countTimingElements(content);
   if (elementCount < MIN_ELEMENTS) {
     errors.push(
-      `${name}: insufficient_elements — cần ≥${MIN_ELEMENTS} distinct element classes, thấy ${elementCount}`,
+      `${name}: cần ≥${MIN_ELEMENTS} distinct element ids keyed in render(), thấy ${elementCount}`,
     );
   }
-  if (!hasForegroundLoop(content)) {
+  if (!hasTBasedMotion(content)) {
     errors.push(
-      `${name}: no_foreground_loop — cần ≥1 GSAP loop (repeat:-1 hoặc yoyo) trên foreground element`,
+      `${name}: thiếu t-based motion — render() phải drive opacity/transform/clip theo t`,
     );
   }
-  const tweens = countTweens(content);
-  if (tweens < 5) {
-    warnings.push(`${name}: chỉ ${tweens} tweens — khuyến nghị ≥5 cho dense motion`);
-  }
-  const hasStagger = /stagger\s*:/i.test(content);
-  if (!hasStagger) {
-    errors.push(`${name}: thiếu stagger — cần stagger group cho dense beats`);
+  if (/tl\.(from|fromTo|to)\(/i.test(content)) {
+    errors.push(`${name}: cấm GSAP tl.* — dùng hf-seek render()`);
   }
 }
 
@@ -181,7 +88,6 @@ if (exists("index.html")) {
   }
 }
 
-// Shot-plan continuous_motion_layers check
 let shotPlan = [];
 if (exists("assets/visual-shot-plan.json")) {
   try {
@@ -194,20 +100,9 @@ if (exists("assets/visual-shot-plan.json")) {
 
 for (const shot of shotPlan) {
   const id = shot.beat_id ?? "beat";
-  const minEl = shot.minimum_elements ?? 0;
-  if (minEl > 0 && minEl < MIN_ELEMENTS) {
-    errors.push(`${id}: minimum_elements=${minEl} — cần ≥${MIN_ELEMENTS}`);
-  }
-  const deco = shot.decorative_elements ?? [];
-  const support = shot.supporting_graphics ?? [];
   const enrich = shot.visual_enrichment ?? [];
-  if (deco.length === 0 && support.length === 0 && enrich.length < 2) {
-    warnings.push(
-      `${id}: thiếu decorative_elements/supporting_graphics — khuyến nghị ≥2 enrichment`,
-    );
-  }
-  if (!shot.continuous_motion_layers?.length) {
-    warnings.push(`${id}: thiếu continuous_motion_layers trong shot-plan`);
+  if (enrich.length < 1) {
+    warnings.push(`${id}: khuyến nghị ≥1 visual_enrichment`);
   }
 }
 
@@ -216,9 +111,7 @@ warnings.forEach((w) => console.error("WARN:", w));
 if (errors.length) {
   console.error("\n=== FOREGROUND MOTION DENSITY FAIL ===\n");
   errors.forEach((e) => console.error(`✗ ${e}`));
-  console.error(
-    "\nĐọc: foreground-continuous-motion.md + visual-layout-archetypes.md",
-  );
+  console.error("\nĐọc: hf-prompt-beat-contract.md + hf-prompt-art-direction.md");
   process.exit(1);
 }
 

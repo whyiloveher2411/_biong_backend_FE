@@ -135,6 +135,17 @@ function main() {
     JSON.stringify(metadata, null, 2),
   );
 
+  const renderMode =
+    ctx.render_mode === "import_html" ||
+    (ctx.import_html && typeof ctx.import_html === "object")
+      ? "import_html"
+      : "creative";
+  fs.writeFileSync(
+    path.join(projectDir, "assets/render-mode.json"),
+    JSON.stringify({ render_mode: renderMode }, null, 2),
+  );
+  console.log(`[bootstrap] wrote assets/render-mode.json (${renderMode})`);
+
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const skillAssetsDir = path.resolve(
     scriptDir,

@@ -1,0 +1,12 @@
+{
+  "hf_theme": "vignelli",
+  "visual_shot_plan": [
+    {
+      "beat_id": "beat_1",
+      "phrase_anchor": "Hello world test",
+      "hf_prompt_type": "kinetic-type",
+      "visual_story": "Kinetic hero line mask reveal",
+      "element_ids": ["hero_line"]
+    }
+  ]
+}

@@ -189,6 +189,7 @@ export function buildBeatMapFromShotPlan(shotPlan, captionWords, totalVideoSec) 
     sections.push({
       id: shot.beat_id ?? shot.section ?? `beat_${i + 1}`,
       beat_id: shot.beat_id ?? `beat_${i + 1}`,
+      hf_prompt_type: shot.hf_prompt_type ?? null,
       layout_archetype: shot.layout_archetype ?? null,
       narrative_role: shot.narrative_role ?? shot.section ?? null,
       phrase_anchor: phraseText,

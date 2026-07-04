@@ -10,10 +10,11 @@ rules
 ## HyperFrames agent — media MCP (bắt buộc phase render)
 
 - Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md` + `visual-shot-plan.md`
-- Phase render: `search_bgm` + `search_giphy` + stock **bg only** theo shot-plan; registry blocks hero
-- `media-plan.md`: sfx_hook + bgm_global + hero_type/registry_block/z_role mỗi beat
+- Phase render: `search_bgm` + `search_giphy` + stock **bg only** theo shot-plan; mỗi beat = `hyperframes/prompts/{hf_prompt_type}.md` (hf-seek)
+- `media-plan.md`: sfx_hook + bgm_global + `hf_prompt_type`/accent/bg mỗi beat
 - `/continuous-motion` → ambient-layer + `window.__timelines["ambient"]`
-- GSAP: `paused: true` + `window.__timelines[id]`; cấm `tl.play()` cho motion render
+- Beat HTML: hf-seek `render()` pure function of `t` — đọc `hf-prompt-beat-contract.md`
+- Ambient only: GSAP `paused: true` + `window.__timelines["ambient"]`; cấm `tl.play()`; cấm GSAP beat timeline
 
 ## HyperFrames agent — auto-evolution (bắt buộc phase render)
 
