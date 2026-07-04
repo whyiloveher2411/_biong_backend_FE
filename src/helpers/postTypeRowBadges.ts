@@ -12,12 +12,17 @@ export type PostTypeRowWorkflowBadge = {
         | 'short_video_script'
         | 'short_video_render'
         | 'short_video_generate_scene_audio'
-        | 'short_video_generate_vieneu_clone_audio';
+        | 'short_video_generate_vieneu_clone_audio'
+        | 'import_html_whisper'
+        | 'import_html_beat_division'
+        | 'import_html_beat_html'
+        | 'import_html_ready';
     target_lang?: string | null;
     translate_scope?: 'text' | 'caption' | string | null;
-    post_id: number;
+    post_id?: number;
     short_video_id?: number | null;
-    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'script' | 'scene_audio' | 'scene_audio_vieneu' | 'render' | 'done' | string;
+    beat_id?: string | null;
+    stage?: 'rewrite' | 'translate' | 'markdown_format' | 'facebook' | 'pro_value' | 'xai_tts' | 'script' | 'scene_audio' | 'scene_audio_vieneu' | 'render' | 'done' | 'whisper' | 'beat_map' | 'beat_html' | string;
     platform?: string | null;
     distribution_stage?: string | null;
 };

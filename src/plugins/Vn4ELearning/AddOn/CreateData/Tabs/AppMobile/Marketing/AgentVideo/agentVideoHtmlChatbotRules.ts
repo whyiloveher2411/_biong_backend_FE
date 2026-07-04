@@ -38,7 +38,8 @@ export function buildHtmlChatbotSingleHtmlFileRulesBlock(beatId: string): string
         '## Định dạng HTML (bắt buộc)',
         '- Một document hoàn chỉnh: `<!doctype html>` … `</html>`.',
         '- Không `import`, không `<link rel="stylesheet">` external, không file JS riêng.',
-        '- Response = **chỉ** chuỗi HTML thuần (bắt đầu bằng `<!doctype html>` hoặc `<html`).',
+        '- Response = **chỉ** chuỗi HTML thuần (bắt đầu bằng `<!doctype html>` hoặc `<html`, kết thúc `</html>`).',
+        '- **Không** dùng marker BEGIN/END — chỉ trả HTML thuần.',
         '',
     ].join('\n');
 }

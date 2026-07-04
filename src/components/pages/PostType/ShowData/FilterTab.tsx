@@ -105,9 +105,35 @@ function FilterTab({ data, name, tabs, queryUrl, setQueryUrl, ...props }: {
     }, [name, queryUrl.filter, queryUrl.filter_saved_name]);
 
     const dataConfig = data !== false ? data.config : null;
-    const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
     const mergedSavedFilters = getMergedCustomFilters(dataConfig);
     const selectedSavedFilter = mergedSavedFilters.find((item) => item.name === queryUrl.filter_saved_name);
+
+    React.useEffect(() => {
+        if (!queryUrl.filter_saved_name || !selectedSavedFilter?.sort) {
+            return;
+        }
+        let sort = { sortKey: '', sortType: '' };
+        try {
+            sort = JSON.parse(selectedSavedFilter.sort ?? '{"sortKey":"","sortType":""}');
+        } catch (error) {
+            return;
+        }
+        const nextSortKey = String(sort.sortKey || '').trim();
+        if (!nextSortKey) {
+            return;
+        }
+        const nextSortType = String(sort.sortType ?? '');
+        if (queryUrl.sortKey === nextSortKey && String(queryUrl.sortType ?? '') === nextSortType) {
+            return;
+        }
+        setQueryUrl((prev) => ({
+            ...prev,
+            sortKey: nextSortKey,
+            sortType: nextSortType,
+        }));
+    }, [queryUrl.filter_saved_name, selectedSavedFilter?.name, selectedSavedFilter?.sort]);
+
+    const filters = dataConfig?.filters ? Object.keys(dataConfig.filters).filter(key => dataConfig.filters[key].count > 0) : [];
     const selectedCustomFilterColor = resolvePostTypeColor(selectedSavedFilter?.color);
     const selectedSystemFilterColor = !selectedSavedFilter
         ? dataConfig?.filters?.[tabCurrent[name]]?.color

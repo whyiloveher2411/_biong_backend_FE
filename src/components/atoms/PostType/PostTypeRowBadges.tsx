@@ -16,7 +16,12 @@ import {
     openShortVideoSceneAudioWorkflow,
     shortVideoSceneAudioBatchApiUrl,
 } from 'helpers/marketingShortVideoSceneAudioWorkflow';
-import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
+import {
+    importHtmlBeatDivisionSaveApiUrl,
+    importHtmlBeatHtmlSaveApiUrl,
+    openImportHtmlGeminiWorkflow,
+    type ImportHtmlWorkflowAction,
+} from 'helpers/marketingImportHtmlWorkflow';
 import { getAccessToken } from 'store/user/user.reducers';
 import React from 'react';
 
@@ -125,6 +130,25 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
             }
             return;
         }
+        if (
+            wf.action === 'import_html_beat_division'
+            || wf.action === 'import_html_beat_html'
+        ) {
+            const shortVideoId = Number(wf.short_video_id || rowPostId || 0);
+            if (!shortVideoId) {
+                return;
+            }
+            try {
+                await openImportHtmlGeminiWorkflow({
+                    shortVideoId,
+                    action: wf.action as ImportHtmlWorkflowAction,
+                    beatId: wf.beat_id,
+                });
+            } catch (e) {
+                window.alert(e instanceof Error ? e.message : String(e));
+            }
+            return;
+        }
         if (!wf.post_id) {
             return;
         }
@@ -206,10 +230,14 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                     const isShortVideoSceneAudio =
                         wf?.action === 'short_video_generate_scene_audio'
                         || wf?.action === 'short_video_generate_vieneu_clone_audio';
+                    const isImportHtmlBeatDivision = wf?.action === 'import_html_beat_division';
+                    const isImportHtmlBeatHtml = wf?.action === 'import_html_beat_html';
+                    const isImportHtmlWorkflow = isImportHtmlBeatDivision || isImportHtmlBeatHtml;
                     const isShortVideoWorkflow =
                         isShortVideoScript ||
                         isShortVideoRender ||
-                        isShortVideoSceneAudio;
+                        isShortVideoSceneAudio ||
+                        isImportHtmlWorkflow;
                     const isWorkflow =
                         !!wf?.action &&
                         (isShortVideoWorkflow
@@ -225,7 +253,11 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                     const targetLang = wf?.target_lang
                         ? String(wf.target_lang).trim().toLowerCase()
                         : '';
-                    const apiUrl = isShortVideoScript
+                    const apiUrl = isImportHtmlBeatDivision
+                        ? importHtmlBeatDivisionSaveApiUrl()
+                        : isImportHtmlBeatHtml
+                            ? importHtmlBeatHtmlSaveApiUrl()
+                            : isShortVideoScript
                         ? shortVideoScriptSaveApiUrl()
                         : isShortVideoRender
                             ? shortVideoRenderApiUrl()
@@ -238,7 +270,7 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                                     action !== 'short_video_generate_vieneu_clone_audio'
                                   ? marketingWorkflowSaveApiUrl(action)
                                   : '';
-                    const clickable = isWorkflow || isFacebookPreview || isXaiTts;
+                    const clickable = (isWorkflow && wf?.action !== 'import_html_ready') || isFacebookPreview || isXaiTts;
 
                     return (
                         <Chip
@@ -261,6 +293,17 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                             }
                             data-marketing-short-video-workflow-action={
                                 isWorkflow && isShortVideoWorkflow ? action : undefined
+                            }
+                            data-import-html-workflow-action={
+                                isWorkflow && isImportHtmlWorkflow ? action : undefined
+                            }
+                            data-import-html-beat-id={
+                                isWorkflow && isImportHtmlBeatHtml && wf?.beat_id
+                                    ? String(wf.beat_id)
+                                    : undefined
+                            }
+                            data-import-html-in-pipeline={
+                                isWorkflow && isImportHtmlWorkflow ? '1' : undefined
                             }
                             data-marketing-workflow-action={isWorkflow ? action : undefined}
                             data-marketing-target-lang={
