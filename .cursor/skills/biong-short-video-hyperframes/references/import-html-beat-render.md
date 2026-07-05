@@ -51,12 +51,26 @@ Script **chỉ scaffolding** — giữ nguyên CSS, DOM, `render()`:
 
 | | import_html assemble |
 |--|---------------------|
-| Cấm | Sửa visual user; shot-plan; creative gen-beats |
-| Cho phép | normalize script; caption/ambient/watermark; wire index |
+| Cấm | Sửa visual user; shot-plan; creative gen-beats; stock/giphy/SFX MCP; BGM **loop** |
+| Cho phép | normalize script; caption/ambient/watermark; wire index; **search_bgm** + **wire-bgm-chain.mjs**; `bgm-chain.json` |
+
+---
+
+## Caption overlay — sát mép dưới (bắt buộc import_html)
+
+Beat HTML chatbot **không** chừa caption band. Agent ghép caption riêng:
+
+```bash
+node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
+```
+
+- Pill karaoke: **`bottom: 48px`** (cố định) — **cấm** `bottom: 12%` (đè UI beat).
+- Host `compositions/captions.html` z-index 9000 — xem [overlay-layer-stack.md](overlay-layer-stack.md).
 
 ---
 
 ## Liên quan
 
+- [import-html-assemble-bgm.md](import-html-assemble-bgm.md) — BGM global cho assemble
 - [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md) — creative pipeline (hf-seek fragment)
 - [overlay-layer-stack.md](overlay-layer-stack.md)

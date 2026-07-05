@@ -107,9 +107,16 @@ Trong `compositions/captions.html`:
 
 ```css
 html, body { background: transparent !important; }
+.caption-group-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 48px; /* sát mép dưới — beat import_html không chừa caption band */
+  transform: translateX(-50%);
+}
 ```
 
-- GSAP caption timeline: `window.__timelines["caption-pill-karaoke"]` — `paused: true`.
+- Sinh bằng `gen-captions-html.mjs` — **cấm** `bottom: 12%` (che nội dung beat full-bleed).
+- GSAP caption timeline: `window.__timelines["captions"]` — `paused: true`.
 - Karaoke active word: stagger `0.08–0.12` sync `word.start` / `word.end`.
 - Preflight: `/biong-short-video-preflight` hoặc `check-overlay-stack.mjs` — **pass trước render final**.
 

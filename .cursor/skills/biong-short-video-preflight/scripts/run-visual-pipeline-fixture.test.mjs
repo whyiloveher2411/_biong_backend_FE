@@ -291,7 +291,6 @@ write(
   <div class="clip hf-overlay-brand" data-composition-src="compositions/brand-watermark.html"
        data-start="0" data-duration="30" data-track-index="21"
        style="position:absolute;inset:0;z-index:9500;pointer-events:none"></div>
-  <audio class="clip" src="assets/audio/bgm.mp3" data-start="0" data-duration="30" data-track-index="11" data-volume="0.3"></audio>
   <audio class="clip" src="assets/audio/sfx_hook.mp3" data-start="0" data-duration="2" data-track-index="12" data-volume="0.45"></audio>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
@@ -315,12 +314,41 @@ write(
 | beat_6 | cta_orbit | kinetic_type | caption-kinetic-slam | hero_type |
 | sfx_hook | audio | — | — | short_video_search_meme_sound |
 | bgm_global | audio | — | — | short_video_search_bgm |
+| bgm_2 | audio | — | — | short_video_search_bgm |
 `,
+);
+
+write(
+  "assets/bgm-chain.json",
+  JSON.stringify(
+    {
+      mood: "lofi ambient fixture",
+      totalVideoSec: 30,
+      crossfadeSec: 0.5,
+      segments: [
+        {
+          id: "bgm-1",
+          file: "assets/audio/bgm_1.mp3",
+          trackIndex: 11,
+          fileDurationSec: 15,
+        },
+        {
+          id: "bgm-2",
+          file: "assets/audio/bgm_2.mp3",
+          trackIndex: 13,
+          fileDurationSec: 15,
+        },
+      ],
+    },
+    null,
+    2,
+  ),
 );
 
 fs.mkdirSync(path.join(FIXTURE, "assets/audio"), { recursive: true });
 fs.mkdirSync(path.join(FIXTURE, "assets/images"), { recursive: true });
-fs.writeFileSync(path.join(FIXTURE, "assets/audio/bgm.mp3"), "");
+fs.writeFileSync(path.join(FIXTURE, "assets/audio/bgm_1.mp3"), "");
+fs.writeFileSync(path.join(FIXTURE, "assets/audio/bgm_2.mp3"), "");
 fs.writeFileSync(path.join(FIXTURE, "assets/audio/sfx_hook.mp3"), "");
 fs.copyFileSync(
   path.join(__dirname, "../../biong-short-video-hyperframes/assets/spacedev-logo.png"),
@@ -334,6 +362,13 @@ if (r.code !== 0) {
 }
 console.log("OK map-shot-plan-to-beat-map.mjs");
 
+r = run("wire-bgm-chain.mjs");
+if (r.code !== 0) {
+  console.error(`FAIL wire-bgm-chain.mjs:\n${r.out}`);
+  process.exit(1);
+}
+console.log("OK wire-bgm-chain.mjs");
+
 const checks = [
   ["check-continuous-motion.mjs", []],
   ["check-visual-density.mjs", []],
@@ -342,6 +377,7 @@ const checks = [
   ["check-screen-fill.mjs", []],
   ["check-marketing-post-images.mjs", []],
   ["check-overlay-stack.mjs", []],
+  ["check-media-stack.mjs", ["--strict"]],
 ];
 
 let failed = false;

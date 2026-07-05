@@ -9,7 +9,9 @@ import {
 import {
     marketingWorkflowSaveApiUrl,
     openMarketingGeminiWorkflow,
+    type MarketingWorkflowAction,
 } from 'helpers/marketingGeminiWorkflow';
+import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { openShortVideoGeminiWorkflow, shortVideoScriptSaveApiUrl } from 'helpers/marketingShortVideoGeminiWorkflow';
 import { openShortVideoRenderWorkflow, shortVideoRenderApiUrl } from 'helpers/marketingShortVideoRenderWorkflow';
 import {
@@ -24,6 +26,22 @@ import {
 } from 'helpers/marketingImportHtmlWorkflow';
 import { getAccessToken } from 'store/user/user.reducers';
 import React from 'react';
+
+const MARKETING_GEMINI_ACTIONS = new Set<MarketingWorkflowAction>([
+    'article_rewrite',
+    'content_translate',
+    'content_markdown_format',
+    'facebook_distribution',
+    'pro_value_assessment',
+    'xai_tts',
+    'thumbnail_download',
+]);
+
+function isMarketingGeminiWorkflowAction(
+    action: string | undefined,
+): action is MarketingWorkflowAction {
+    return !!action && MARKETING_GEMINI_ACTIONS.has(action as MarketingWorkflowAction);
+}
 
 type PostTypeRowBadgesProps = {
     row: { id?: number | string; _row_badges?: PostTypeRowBadge[] };
@@ -142,7 +160,7 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                 await openImportHtmlGeminiWorkflow({
                     shortVideoId,
                     action: wf.action as ImportHtmlWorkflowAction,
-                    beatId: wf.beat_id,
+                    beatId: wf.beat_id ?? undefined,
                 });
             } catch (e) {
                 window.alert(e instanceof Error ? e.message : String(e));
@@ -161,6 +179,9 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
             } catch (e) {
                 window.alert(e instanceof Error ? e.message : String(e));
             }
+            return;
+        }
+        if (!isMarketingGeminiWorkflowAction(wf.action)) {
             return;
         }
         try {
@@ -261,13 +282,9 @@ export default function PostTypeRowBadges({ row, onListRefresh }: PostTypeRowBad
                         ? shortVideoScriptSaveApiUrl()
                         : isShortVideoRender
                             ? shortVideoRenderApiUrl()
-                            : isShortVideoSceneAudio
+                                : isShortVideoSceneAudio
                                 ? shortVideoSceneAudioBatchApiUrl()
-                                : action &&
-                                    action !== 'short_video_script' &&
-                                    action !== 'short_video_render' &&
-                                    action !== 'short_video_generate_scene_audio' &&
-                                    action !== 'short_video_generate_vieneu_clone_audio'
+                                : isMarketingGeminiWorkflowAction(action)
                                   ? marketingWorkflowSaveApiUrl(action)
                                   : '';
                     const clickable = (isWorkflow && wf?.action !== 'import_html_ready') || isFacebookPreview || isXaiTts;

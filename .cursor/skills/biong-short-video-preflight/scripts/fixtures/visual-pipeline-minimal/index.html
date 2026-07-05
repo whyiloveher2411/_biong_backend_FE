@@ -28,14 +28,26 @@
   <div class="clip hf-overlay-brand" data-composition-src="compositions/brand-watermark.html"
        data-start="0" data-duration="30" data-track-index="21"
        style="position:absolute;inset:0;z-index:9500;pointer-events:none"></div>
-  <audio class="clip" src="assets/audio/bgm.mp3" data-start="0" data-duration="30" data-track-index="11" data-volume="0.3"></audio>
-  <audio class="clip" src="assets/audio/sfx_hook.mp3" data-start="0" data-duration="2" data-track-index="12" data-volume="0.45"></audio>
+  <!-- bgm-chain:begin -->
+  <audio id="bgm-1" class="clip bgm-chain-segment" src="assets/audio/bgm_1.mp3"
+       data-start="0.000" data-duration="15.000"
+       data-track-index="11" data-volume="0.30"></audio>
+  <audio id="bgm-2" class="clip bgm-chain-segment" src="assets/audio/bgm_2.mp3"
+       data-start="14.500" data-duration="15.500"
+       data-track-index="13" data-volume="0.30"></audio>
+  <!-- bgm-chain:end -->
+
+<audio class="clip" src="assets/audio/sfx_hook.mp3" data-start="0" data-duration="2" data-track-index="12" data-volume="0.45"></audio>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 <script>
 window.__timelines=window.__timelines||{};
 const tl=gsap.timeline({paused:true});
 tl.fromTo(".scene",{opacity:0},{opacity:1,duration:0.5,stagger:0.05},0);
+  /* bgm-chain-fades:begin */
+  tl.to("#bgm-1", { volume: 0, duration: 0.5, ease: "none" }, 14.500);
+  tl.fromTo("#bgm-2", { volume: 0 }, { volume: 0.3, duration: 0.5, ease: "none" }, 14.500);
+  /* bgm-chain-fades:end */
 window.__timelines["main"]=tl;
 </script>
 </body></html>

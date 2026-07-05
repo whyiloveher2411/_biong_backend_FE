@@ -1,6 +1,8 @@
 {
   "short_video_id": 21,
-  "launched_at": "2026-07-02T14:18:47.253Z",
+  "phase": "import_assemble",
+  "launched_at": "2026-07-05T04:40:45.400Z",
   "method": "local_daemon",
-  "api_base_url": "http://localhost:9999"
+  "api_base_url": "http://localhost:9999",
+  "prompt_file": "agent-import-assemble-prompt.md"
 }

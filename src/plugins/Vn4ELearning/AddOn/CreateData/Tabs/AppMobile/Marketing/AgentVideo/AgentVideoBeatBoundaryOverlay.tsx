@@ -1,6 +1,8 @@
 import React from 'react';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import {
     Box,
     Button,
@@ -17,7 +19,7 @@ import {
     type AgentVideoTimelineLayout,
 } from './agentVideoTimelineModel';
 
-const MIN_SEGMENT_WIDTH_FOR_ACTION_LABELS = 110;
+const MIN_SEGMENT_WIDTH_FOR_ACTION_LABELS = 170;
 
 type BeatHtmlEntry = {
     html?: string;
@@ -29,10 +31,14 @@ type Props = {
     activeBeatId: string;
     copyingBeatHtmlPromptBeatId: string;
     pastingBeatHtmlBeatId: string;
+    deletingBeatHtmlBeatId?: string;
+    openingBeatGeminiBeatIds?: string[];
     savingImportHtml?: boolean;
-    onBeatClick: (beatId: string) => void;
-    onCopyPrompt: (beatId: string) => void;
-    onPasteHtml: (beatId: string) => void;
+    onBeatClick?: (beatId: string) => void;
+    onCopyPrompt?: (beatId: string) => void;
+    onPasteHtml?: (beatId: string) => void;
+    onDeleteBeatData?: (beatId: string) => void;
+    onOpenGemini?: (beatId: string) => void;
     scrollLeft: number;
     contentWidthPx: number;
     layout: AgentVideoTimelineLayout;
@@ -48,10 +54,14 @@ export default function AgentVideoBeatBoundaryOverlay({
     activeBeatId,
     copyingBeatHtmlPromptBeatId,
     pastingBeatHtmlBeatId,
+    deletingBeatHtmlBeatId = '',
+    openingBeatGeminiBeatIds = [],
     savingImportHtml = false,
     onBeatClick,
     onCopyPrompt,
     onPasteHtml,
+    onDeleteBeatData,
+    onOpenGemini,
     scrollLeft,
     contentWidthPx,
     layout,
@@ -119,6 +129,9 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const isActive = segment.beatId === activeBeatId;
                     const isCopying = copyingBeatHtmlPromptBeatId === segment.beatId;
                     const isPasting = pastingBeatHtmlBeatId === segment.beatId;
+                    const isDeleting = deletingBeatHtmlBeatId === segment.beatId;
+                    const isOpeningGemini = openingBeatGeminiBeatIds.includes(segment.beatId);
+                    const isBusy = isCopying || isPasting || isDeleting || isOpeningGemini;
                     const showActionLabels = widthPx >= MIN_SEGMENT_WIDTH_FOR_ACTION_LABELS;
 
                     return (
@@ -147,7 +160,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                 type="button"
                                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                                     event.stopPropagation();
-                                    onBeatClick(segment.beatId);
+                                    onBeatClick?.(segment.beatId);
                                 }}
                                 sx={{
                                     flex: '0 0 auto',
@@ -193,10 +206,10 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         <Button
                                             size="small"
                                             variant="contained"
-                                            disabled={isCopying || isPasting}
+                                            disabled={isBusy}
                                             onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                                                 event.stopPropagation();
-                                                void onCopyPrompt(segment.beatId);
+                                                void onCopyPrompt?.(segment.beatId);
                                             }}
                                             startIcon={isCopying ? (
                                                 <CircularProgress size={12} sx={{ color: 'inherit' }} />
@@ -227,10 +240,10 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         <Button
                                             size="small"
                                             variant="contained"
-                                            disabled={isCopying || isPasting || savingImportHtml}
+                                            disabled={isBusy || savingImportHtml}
                                             onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                                                 event.stopPropagation();
-                                                void onPasteHtml(segment.beatId);
+                                                void onPasteHtml?.(segment.beatId);
                                             }}
                                             startIcon={isPasting ? (
                                                 <CircularProgress size={12} sx={{ color: 'inherit' }} />
@@ -255,6 +268,78 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         </Button>
                                     </span>
                                 </Tooltip>
+
+                                {onOpenGemini ? (
+                                    <Tooltip title="Mở Gemini và điền prompt (bạn tự bấm Gửi)" placement="top">
+                                        <span>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                disabled={isBusy || savingImportHtml}
+                                                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                    event.stopPropagation();
+                                                    void onOpenGemini(segment.beatId);
+                                                }}
+                                                startIcon={isOpeningGemini ? (
+                                                    <CircularProgress size={12} sx={{ color: 'inherit' }} />
+                                                ) : (
+                                                    <AutoAwesomeIcon sx={{ fontSize: 12 }} />
+                                                )}
+                                                sx={{
+                                                    minWidth: showActionLabels ? 52 : 28,
+                                                    px: showActionLabels ? 0.75 : 0.5,
+                                                    py: 0.15,
+                                                    fontSize: 9,
+                                                    lineHeight: 1.2,
+                                                    textTransform: 'none',
+                                                    bgcolor: 'rgba(0,0,0,0.22)',
+                                                    color: 'common.white',
+                                                    boxShadow: 'none',
+                                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.36)', boxShadow: 'none' },
+                                                    '& .MuiButton-startIcon': { mr: showActionLabels ? 0.35 : 0 },
+                                                }}
+                                            >
+                                                {showActionLabels ? 'Gemini' : ''}
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
+
+                                {hasData && onDeleteBeatData ? (
+                                    <Tooltip title="Xóa HTML beat — pipeline có thể chạy lại" placement="top">
+                                        <span>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                disabled={isBusy || savingImportHtml}
+                                                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                    event.stopPropagation();
+                                                    void onDeleteBeatData(segment.beatId);
+                                                }}
+                                                startIcon={isDeleting ? (
+                                                    <CircularProgress size={12} sx={{ color: 'inherit' }} />
+                                                ) : (
+                                                    <DeleteOutlineIcon sx={{ fontSize: 12 }} />
+                                                )}
+                                                sx={{
+                                                    minWidth: showActionLabels ? 40 : 28,
+                                                    px: showActionLabels ? 0.75 : 0.5,
+                                                    py: 0.15,
+                                                    fontSize: 9,
+                                                    lineHeight: 1.2,
+                                                    textTransform: 'none',
+                                                    bgcolor: 'rgba(0,0,0,0.22)',
+                                                    color: 'common.white',
+                                                    boxShadow: 'none',
+                                                    '&:hover': { bgcolor: 'rgba(140,0,0,0.45)', boxShadow: 'none' },
+                                                    '& .MuiButton-startIcon': { mr: showActionLabels ? 0.35 : 0 },
+                                                }}
+                                            >
+                                                {showActionLabels ? 'Xóa' : ''}
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
                             </Box>
                         </Box>
                     );

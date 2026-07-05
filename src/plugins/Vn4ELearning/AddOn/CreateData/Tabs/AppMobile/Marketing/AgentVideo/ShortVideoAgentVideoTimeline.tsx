@@ -3,7 +3,10 @@ import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import { Box, CircularProgress, IconButton, Typography } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { Box, Button, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import LoadingButton from 'components/atoms/LoadingButton';
 import {
     TIMELINE_EDIT_AREA_TOP_GAP,
     TIMELINE_RULER_HEIGHT,
@@ -19,10 +22,14 @@ import {
 import { resolveFilmstripTileDisplayWidthPx } from './agentVideoFilmstrip';
 import { useAgentVideoFilmstrip } from './useAgentVideoFilmstrip';
 import AgentVideoBeatBoundaryOverlay from './AgentVideoBeatBoundaryOverlay';
-import type { BeatMap } from './agentVideoBeatMap';
+import AgentVideoHfPromptTypeSelect from './AgentVideoHfPromptTypeSelect';
+import TimelineZoomControls, {
+    SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
+    usePersistedTimelineScaleWidth,
+} from '../TimelineZoomControls';
+import { countBeatIdsWithHtml, type BeatHtmlEntry, type BeatMap } from './agentVideoBeatMap';
 
 const TRACK_LABELS_WIDTH = 100;
-const TIMELINE_SCALE_WIDTH = 56;
 const TIMELINE_SCALE = 1;
 const TIMELINE_SCALE_SPLIT_COUNT = 5;
 const TIMELINE_START_LEFT = 20;
@@ -212,14 +219,33 @@ type Props = {
     customHtmlPreview?: boolean;
     previewSourceKey?: string;
     beatMap?: BeatMap | null;
-    beatHtml?: Record<string, { html?: string }>;
+    beatHtml?: Record<string, BeatHtmlEntry>;
     activeBeatId?: string;
     onBeatClick?: (beatId: string) => void;
     onCopyBeatPrompt?: (beatId: string) => void;
     onPasteBeatHtml?: (beatId: string) => void;
+    onDeleteBeatHtml?: (beatId: string) => void;
+    onDeleteAllBeatHtml?: () => void;
+    onOpenAllMissingBeatGemini?: () => void;
+    onOpenBeatGemini?: (beatId: string) => void;
     copyingBeatHtmlPromptBeatId?: string;
     pastingBeatHtmlBeatId?: string;
+    deletingBeatHtmlBeatId?: string;
+    deletingAllBeatHtml?: boolean;
+    missingBeatHtmlCount?: number;
+    openingAllMissingBeatGemini?: boolean;
+    whisperStatus?: string;
+    openingBeatGeminiBeatIds?: string[];
     savingImportHtml?: boolean;
+    beatPlaybackSeekRequest?: { beatId: string; startSec: number; nonce: number } | null;
+    showHfPromptTypeSelect?: boolean;
+    hfPromptType?: string;
+    onHfPromptTypeChange?: (nextType: string) => void;
+    agentVideoStatus?: string;
+    showImportAssemble?: boolean;
+    hasAgentVideo?: boolean;
+    launchingImportAssemble?: boolean;
+    onLaunchImportAssemble?: () => void;
 };
 
 export default function ShortVideoAgentVideoTimeline({
@@ -238,9 +264,28 @@ export default function ShortVideoAgentVideoTimeline({
     onBeatClick,
     onCopyBeatPrompt,
     onPasteBeatHtml,
+    onDeleteBeatHtml,
+    onDeleteAllBeatHtml,
+    onOpenAllMissingBeatGemini,
+    onOpenBeatGemini,
     copyingBeatHtmlPromptBeatId = '',
     pastingBeatHtmlBeatId = '',
+    deletingBeatHtmlBeatId = '',
+    deletingAllBeatHtml = false,
+    missingBeatHtmlCount = 0,
+    openingAllMissingBeatGemini = false,
+    whisperStatus = 'none',
+    openingBeatGeminiBeatIds = [],
     savingImportHtml = false,
+    beatPlaybackSeekRequest = null,
+    showHfPromptTypeSelect = false,
+    hfPromptType = '',
+    onHfPromptTypeChange,
+    agentVideoStatus = 'none',
+    showImportAssemble = false,
+    hasAgentVideo = false,
+    launchingImportAssemble = false,
+    onLaunchImportAssemble,
 }: Props) {
     const timelineRef = React.useRef<TimelineState>(null);
     const timelineHostRef = React.useRef<HTMLDivElement>(null);
@@ -250,15 +295,38 @@ export default function ShortVideoAgentVideoTimeline({
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
+    const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
+        SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
+    );
     const isPlayingRef = React.useRef(false);
+
+    const beatsWithHtmlCount = React.useMemo(
+        () => countBeatIdsWithHtml(beatHtml),
+        [beatHtml],
+    );
+    const showDeleteAllBeatHtml = Boolean(beatMap?.sections?.length) && beatsWithHtmlCount > 0;
+    const showOpenAllMissingGemini = Boolean(beatMap?.sections?.length) && missingBeatHtmlCount > 0;
+    const showTimelineActions = showHfPromptTypeSelect
+        || showOpenAllMissingGemini
+        || showDeleteAllBeatHtml
+        || showImportAssemble;
+    const timelineActionsBusy = deletingAllBeatHtml
+        || openingAllMissingBeatGemini
+        || savingImportHtml
+        || launchingImportAssemble
+        || Boolean(deletingBeatHtmlBeatId);
+    const showBeatTimelineOverlay = customHtmlPreview && Boolean(beatMap?.sections?.length);
 
     const timelineLayout = React.useMemo(() => ({
         startLeft: TIMELINE_START_LEFT,
-        scaleWidth: TIMELINE_SCALE_WIDTH,
+        scaleWidth: timelineScaleWidth,
         timelineScale: TIMELINE_SCALE,
-    }), []);
+    }), [timelineScaleWidth]);
 
     const hasVideo = customHtmlPreview || String(videoUrl || '').trim() !== '';
+    const hfPromptTypeSelectDisabled = !hasVideo
+        || timelineActionsBusy
+        || agentVideoStatus === 'processing';
 
     const contentDurationSec = React.useMemo(
         () => resolveAgentVideoDurationSec({
@@ -316,6 +384,13 @@ export default function ShortVideoAgentVideoTimeline({
         setCurrentTimeSec(clamped);
         syncTimelineCursor(clamped);
     }, [contentDurationSec, syncTimelineCursor, videoRef]);
+
+    React.useEffect(() => {
+        if (!beatPlaybackSeekRequest) {
+            return;
+        }
+        seekToTime(beatPlaybackSeekRequest.startSec, { pauseVideo: true });
+    }, [beatPlaybackSeekRequest, seekToTime]);
 
     React.useLayoutEffect(() => {
         if (!hasVideo) {
@@ -423,9 +498,9 @@ export default function ShortVideoAgentVideoTimeline({
         const localX = clientX - rect.left;
         const scrollLeft = getTimelineHorizontalScrollLeft(host);
         const absoluteLeft = Math.max(TIMELINE_START_LEFT, localX + scrollLeft);
-        const time = ((absoluteLeft - TIMELINE_START_LEFT) / TIMELINE_SCALE_WIDTH) * TIMELINE_SCALE;
+        const time = ((absoluteLeft - TIMELINE_START_LEFT) / timelineScaleWidth) * TIMELINE_SCALE;
         seekToTime(time, { pauseVideo: true });
-    }, [seekToTime]);
+    }, [seekToTime, timelineScaleWidth]);
 
     React.useEffect(() => {
         const host = timelineHostRef.current;
@@ -600,6 +675,91 @@ export default function ShortVideoAgentVideoTimeline({
                 <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatPlaybackClock(currentTimeSec)} / {formatPlaybackClock(contentDurationSec)}
                 </Typography>
+                <Box sx={{ flex: 1, minWidth: 8 }} />
+                {hasVideo ? (
+                    <TimelineZoomControls
+                        value={timelineScaleWidth}
+                        onChange={setTimelineScaleWidth}
+                    />
+                ) : null}
+                {(showTimelineActions) ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        {showHfPromptTypeSelect && onHfPromptTypeChange ? (
+                            <AgentVideoHfPromptTypeSelect
+                                compact
+                                value={hfPromptType}
+                                missingBeatCount={missingBeatHtmlCount}
+                                disabled={hfPromptTypeSelectDisabled}
+                                onChange={onHfPromptTypeChange}
+                            />
+                        ) : null}
+                        {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
+                            <Tooltip
+                                title="Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab"
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="contained"
+                                        color="primary"
+                                        disabled={!hasVideo || timelineActionsBusy || whisperStatus !== 'completed'}
+                                        loading={openingAllMissingBeatGemini}
+                                        onClick={() => { onOpenAllMissingBeatGemini(); }}
+                                        startIcon={<AutoAwesomeIcon fontSize="small" />}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        {`Mở Gemini tất cả beat thiếu (${missingBeatHtmlCount})`}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                        {showImportAssemble && onLaunchImportAssemble ? (
+                            <Tooltip
+                                title={hasAgentVideo
+                                    ? 'Agent ghép lại video từ HTML beat đã lưu trên CMS'
+                                    : 'Agent ghép và render video từ HTML beat đã đủ'}
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        disabled={!hasVideo || timelineActionsBusy || agentVideoStatus === 'processing'}
+                                        loading={launchingImportAssemble}
+                                        onClick={() => { void onLaunchImportAssemble(); }}
+                                        startIcon={<PlayArrowIcon fontSize="small" />}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        {hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép từ HTML'}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                        {showDeleteAllBeatHtml && onDeleteAllBeatHtml ? (
+                            <Tooltip title={`Xóa HTML của ${beatsWithHtmlCount} beat đang có dữ liệu`} placement="top">
+                                <span>
+                                    <Button
+                                        size="small"
+                                        color="error"
+                                        variant="outlined"
+                                        disabled={!hasVideo || timelineActionsBusy}
+                                        onClick={() => { void onDeleteAllBeatHtml(); }}
+                                        startIcon={deletingAllBeatHtml ? (
+                                            <CircularProgress size={14} color="inherit" />
+                                        ) : (
+                                            <DeleteOutlineIcon fontSize="small" />
+                                        )}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        Xóa tất cả beat
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                    </Box>
+                ) : null}
             </Box>
 
             {!hasVideo ? (
@@ -706,7 +866,7 @@ export default function ShortVideoAgentVideoTimeline({
                             editorData={editorData}
                             effects={AGENT_VIDEO_TIMELINE_EFFECTS}
                             scale={TIMELINE_SCALE}
-                            scaleWidth={TIMELINE_SCALE_WIDTH}
+                            scaleWidth={timelineScaleWidth}
                             scaleSplitCount={TIMELINE_SCALE_SPLIT_COUNT}
                             startLeft={TIMELINE_START_LEFT}
                             minScaleCount={minScaleCount}
@@ -731,24 +891,30 @@ export default function ShortVideoAgentVideoTimeline({
                                 />
                             )}
                         />
-                        <AgentVideoBeatBoundaryOverlay
-                            beatMap={beatMap}
-                            beatHtml={beatHtml}
-                            activeBeatId={activeBeatId}
-                            copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}
-                            pastingBeatHtmlBeatId={pastingBeatHtmlBeatId}
-                            savingImportHtml={savingImportHtml}
-                            onBeatClick={onBeatClick ?? (() => {})}
-                            onCopyPrompt={onCopyBeatPrompt ?? (() => {})}
-                            onPasteHtml={onPasteBeatHtml ?? (() => {})}
-                            scrollLeft={timelineScrollLeft}
-                            contentWidthPx={timelineContentWidthPx}
-                            layout={timelineLayout}
-                            rulerHeight={TIMELINE_RULER_HEIGHT}
-                            trackTopGap={TIMELINE_EDIT_AREA_TOP_GAP}
-                            trackHeight={AGENT_VIDEO_TRACK_ROW_HEIGHT}
-                            totalHeight={timelineContentHeight}
-                        />
+                        {showBeatTimelineOverlay ? (
+                            <AgentVideoBeatBoundaryOverlay
+                                beatMap={beatMap}
+                                beatHtml={beatHtml}
+                                activeBeatId={activeBeatId}
+                                copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}
+                                pastingBeatHtmlBeatId={pastingBeatHtmlBeatId}
+                                deletingBeatHtmlBeatId={deletingBeatHtmlBeatId}
+                                openingBeatGeminiBeatIds={openingBeatGeminiBeatIds}
+                                savingImportHtml={savingImportHtml}
+                                onBeatClick={onBeatClick}
+                                onCopyPrompt={onCopyBeatPrompt}
+                                onPasteHtml={onPasteBeatHtml}
+                                onDeleteBeatData={onDeleteBeatHtml}
+                                onOpenGemini={onOpenBeatGemini}
+                                scrollLeft={timelineScrollLeft}
+                                contentWidthPx={timelineContentWidthPx}
+                                layout={timelineLayout}
+                                rulerHeight={TIMELINE_RULER_HEIGHT}
+                                trackTopGap={TIMELINE_EDIT_AREA_TOP_GAP}
+                                trackHeight={AGENT_VIDEO_TRACK_ROW_HEIGHT}
+                                totalHeight={timelineContentHeight}
+                            />
+                        ) : null}
                     </Box>
                 </Box>
             )}

@@ -248,10 +248,47 @@ export default function ShortVideoAgentVideoWorkspace({
                     activeBeatId={state.activeBeatId}
                     onBeatClick={state.focusBeatEditor}
                     onCopyBeatPrompt={(beatId) => { void state.handleCopyBeatHtmlPrompt(beatId); }}
-                    onPasteBeatHtml={(beatId) => { void state.handlePasteBeatHtml(beatId); }}
+                    onPasteBeatHtml={(beatId) => {
+                        setPreviewSource('html_beat');
+                        void state.handlePasteBeatHtml(beatId);
+                    }}
+                    onDeleteBeatHtml={(beatId) => {
+                        void state.handleDeleteBeatHtml(beatId);
+                    }}
+                    onDeleteAllBeatHtml={() => {
+                        void state.handleDeleteAllBeatHtml();
+                    }}
+                    onOpenAllMissingBeatGemini={() => {
+                        state.handleOpenAllMissingBeatGemini();
+                    }}
+                    onOpenBeatGemini={(beatId) => {
+                        void state.handleOpenBeatGemini(beatId);
+                    }}
                     copyingBeatHtmlPromptBeatId={state.copyingBeatHtmlPromptBeatId}
                     pastingBeatHtmlBeatId={state.pastingBeatHtmlBeatId}
+                    deletingBeatHtmlBeatId={state.deletingBeatHtmlBeatId}
+                    deletingAllBeatHtml={state.deletingAllBeatHtml}
+                    missingBeatHtmlCount={state.missingBeatHtmlCount}
+                    openingAllMissingBeatGemini={state.openingAllMissingBeatGemini}
+                    whisperStatus={state.whisperStatus}
+                    openingBeatGeminiBeatIds={state.openingBeatGeminiBeatIds}
                     savingImportHtml={state.savingImportHtml}
+                    beatPlaybackSeekRequest={state.beatPlaybackSeekRequest}
+                    showHfPromptTypeSelect={
+                        state.renderMode === 'import_html'
+                        && state.beatMapReady
+                        && Boolean(state.beatMap?.sections?.length)
+                    }
+                    hfPromptType={state.hfPromptType}
+                    onHfPromptTypeChange={(nextType) => { void state.handleHfPromptTypeChange(nextType); }}
+                    agentVideoStatus={state.agentVideoStatus}
+                    showImportAssemble={
+                        state.renderMode === 'import_html'
+                        && state.importHtmlReady
+                    }
+                    hasAgentVideo={state.hasAgentVideo}
+                    launchingImportAssemble={state.launchingImportAssemble}
+                    onLaunchImportAssemble={() => { void state.handleLaunchAgentImportAssemble(); }}
                 />
             </Box>
         </DrawerCustom>

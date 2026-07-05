@@ -8,6 +8,11 @@ import fs from "fs";
 import path from "path";
 import { tokenizeScript } from "./lib/caption-script-align.mjs";
 
+/** Caption pill sát mép dưới — beat import_html không chừa caption band */
+const CAPTION_BOTTOM_PX = 48;
+const CAPTION_HORIZONTAL_PX = 60;
+const CAPTION_MAX_WIDTH_PX = 1080 - CAPTION_HORIZONTAL_PX * 2;
+
 function assertCaptionMatchesScript(projectDir, captionWords) {
   const scriptPath = path.join(projectDir, "assets/audio-script.txt");
   if (!fs.existsSync(scriptPath)) {
@@ -121,26 +126,27 @@ function main() {
     .caption-group-wrap {
       position: absolute;
       left: 50%;
-      bottom: 12%;
+      bottom: ${CAPTION_BOTTOM_PX}px;
       transform: translateX(-50%);
       z-index: 2;
-      width: 960px;
+      width: ${CAPTION_MAX_WIDTH_PX}px;
+      max-width: calc(100% - ${CAPTION_HORIZONTAL_PX * 2}px);
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       justify-content: center;
     }
     .caption-group {
       position: absolute;
       left: 0;
-      top: 0;
-      width: 960px;
+      bottom: 0;
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       opacity: 0;
     }
     .caption-pill {
-      max-width: 960px;
+      max-width: ${CAPTION_MAX_WIDTH_PX}px;
       padding: 16px 36px 18px;
       border-radius: 20px;
       background: rgba(12, 18, 32, 0.82);

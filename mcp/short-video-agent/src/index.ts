@@ -294,7 +294,7 @@ server.tool(
 
 server.tool(
   'short_video_search_bgm',
-  'Tìm nhạc nền Pixabay — BẮT BUỘC 1 track/video (global BGM). Nhẹ nhàng, giọng đọc vẫn chính. Truyền min_duration_sec sau transcribe. Trả download_url — agent tải assets/audio/bgm.mp3.',
+  'Tìm nhạc nền Pixabay — BGM chain: trả nhiều candidate (limit=8), agent tải bgm_1.mp3, bgm_2.mp3… cùng mood rồi chạy wire-bgm-chain.mjs. Cấm min_duration_sec=totalVideoSec và cấm loop.',
   {
     query: z.string().min(1).describe('Mood/genre: lofi ambient, soft corporate, cinematic...'),
     min_duration_sec: z.number().positive().optional().describe('Lọc track ngắn hơn tổng video (giây)'),

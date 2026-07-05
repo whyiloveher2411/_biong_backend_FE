@@ -34,13 +34,17 @@ short_video_search_meme_sound({ query: "vine boom" })
 
 → `assets/audio/sfx_hook.mp3`
 
-**BGM (1 lần / video):**
+**BGM chain (nhiều segment / video):**
 
 ```text
-short_video_search_bgm({ query: "lofi ambient", min_duration_sec: totalVideoSec })
+short_video_search_bgm({ query: "lofi ambient", limit: 8 })
 ```
 
-→ `assets/audio/bgm.mp3`
+→ Tải `assets/audio/bgm_1.mp3`, `bgm_2.mp3`, … (candidate **khác nhau**, cùng mood) cho đến khi phủ `totalVideoSec`
+
+→ Ghi `assets/bgm-chain.json` → `node .cursor/skills/biong-short-video-preflight/scripts/wire-bgm-chain.mjs $PROJ`
+
+**Cấm** `min_duration_sec=totalVideoSec` và **cấm** `loop` — dùng BGM chain + crossfade 0.5s.
 
 **Stock — chỉ `bg_media`:**
 
@@ -75,7 +79,7 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 
 ### 3. Embed HyperFrames
 
-- BGM track 11, SFX track 12, narration track 10
+- BGM chain track 11/13/15…, SFX track 12, narration track 10
 - Registry blocks via `data-composition-src` — z 200–450
 - `compositions/ambient-layer.html` — z 6–10
 - GSAP `paused: true` — `main` + `ambient` timelines
@@ -87,7 +91,7 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 | Trigger | MCP / action | Ghi chú |
 |---------|--------------|---------|
 | `[SFX: ...]` | `short_video_search_meme_sound` | track 12, giây 0 |
-| `[BGM: ...]` | `short_video_search_bgm` | track 11, full duration |
+| `[BGM: ...]` | `short_video_search_bgm` + `wire-bgm-chain.mjs` | chain track 11/13/15…, crossfade 0.5s |
 | `bg_media.stock_*` | `short_video_search_stock_media` | bg only, opacity thấp |
 | `accent_media.giphy_*` | `short_video_search_giphy` | sticker/gif |
 | `accent_media.lottie` | Lottie bundle | `lottie_id` từ manifest |
@@ -99,7 +103,7 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 
 | Quy tắc | Chi tiết |
 |---------|----------|
-| Mỗi video | ≥1 BGM (track 11) |
+| Mỗi video | BGM chain phủ ≥ totalVideoSec (check-media-stack) |
 | Hook SFX | Bắt buộc nếu script có `[SFX: ...]` (track 12) |
 | Registry | ≥1 **non-caption** block (data-chart, flowchart, stat-motion…) |
 | Stock hero | ≤40% beat — còn lại registry/kinetic/diagram |
@@ -107,6 +111,8 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 | Dynamic BG | Mọi beat `stock_video`; timeline phủ kín — `check-dynamic-background.mjs` |
 | Floater lane | `floater-lane-right`; cấm đè text — `check-floater-keepout.mjs` |
 | BGM volume | 0.25–0.35; narration 1.0 |
+| BGM crossfade | 0.5s giữa segment — wire-bgm-chain.mjs |
+| Cấm BGM loop | Attribute `loop` không hoạt động khi render |
 
 ---
 
@@ -116,14 +122,12 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 | scope | time_sec | hero_type | registry_block | z_role | mcp_tool | query | local_path |
 |-------|----------|-----------|----------------|--------|----------|-------|------------|
 | sfx_hook | 0.0 | audio | — | — | short_video_search_meme_sound | vine boom | ../assets/audio/sfx_hook.mp3 |
-| bgm_global | 0.0 | audio | — | — | short_video_search_bgm | lofi ambient | ../assets/audio/bgm.mp3 |
+| bgm_global | 0.0 | audio | — | — | short_video_search_bgm | lofi ambient | ../assets/audio/bgm_1.mp3 |
+| bgm_2 | 44.5 | audio | — | — | short_video_search_bgm | lofi ambient | ../assets/audio/bgm_2.mp3 |
 | hook | 0.0 | kinetic_type | caption-kinetic-slam | hero_type | hyperframes add | — | compositions/… |
-| agitate | 5.0 | registry_block | stat-motion | hero_chart | hyperframes add | — | compositions/stat-motion.html |
-| agitate_bg | 5.0 | stock_bg | — | bg_stock | short_video_search_stock_media | dark city | ../assets/images/agitate_bg.mp4 |
-| agitate_accent | 5.0 | giphy_sticker | — | floater | short_video_search_giphy | shocked | ../assets/images/agitate_sticker.gif |
 ```
 
-**Quality gate:** `check-media-stack.mjs --strict` + `check-visual-density.mjs`
+**Quality gate:** `wire-bgm-chain.mjs` + `check-media-stack.mjs --strict` + `check-visual-density.mjs`
 
 ---
 
@@ -135,11 +139,13 @@ npx hyperframes add data-chart   # theo visual_shot_plan.registry_block
 | Bỏ qua visual_shot_plan | MCP theo shot-plan |
 | Chỉ caption registry blocks | ≥1 data-chart / flowchart / stat-motion |
 | `tl.play()` | paused + `window.__timelines` |
+| 1 file BGM + loop | BGM chain nhiều segment |
 
 ---
 
 ## Đọc kèm
 
+- [import-html-assemble-bgm.md](import-html-assemble-bgm.md) — import HTML assemble
 - [visual-shot-plan.md](visual-shot-plan.md)
 - [lottie-activation.md](lottie-activation.md)
 - [continuous-motion-patterns.md](continuous-motion-patterns.md)

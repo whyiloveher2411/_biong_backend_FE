@@ -1,0 +1,27 @@
+{
+  "mood": "lofi ambient fixture",
+  "totalVideoSec": 30,
+  "crossfadeSec": 0.5,
+  "volume": 0.3,
+  "coveredSec": 30,
+  "segments": [
+    {
+      "id": "bgm-1",
+      "file": "assets/audio/bgm_1.mp3",
+      "trackIndex": 11,
+      "fileDurationSec": 15,
+      "startSec": 0,
+      "durationSec": 15,
+      "title": ""
+    },
+    {
+      "id": "bgm-2",
+      "file": "assets/audio/bgm_2.mp3",
+      "trackIndex": 13,
+      "fileDurationSec": 15,
+      "startSec": 14.5,
+      "durationSec": 15.5,
+      "title": ""
+    }
+  ]
+}

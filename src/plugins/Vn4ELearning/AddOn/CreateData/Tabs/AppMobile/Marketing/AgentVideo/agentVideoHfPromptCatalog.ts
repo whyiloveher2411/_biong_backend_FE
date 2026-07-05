@@ -12,18 +12,56 @@ export type HfPromptTypeKey =
 export type HfPromptCatalogItem = {
     key: HfPromptTypeKey;
     label: string;
+    /** Giải thích ngắn cho user chọn phong cách */
+    descriptionVi: string;
 };
 
 export const HF_PROMPT_CATALOG: HfPromptCatalogItem[] = [
-    { key: 'cinematic-title', label: 'Cinematic title' },
-    { key: 'kinetic-type', label: 'Kinetic type' },
-    { key: 'social-reel', label: 'Social reel' },
-    { key: 'data-story', label: 'Data story' },
-    { key: 'product-reveal', label: 'Product reveal' },
-    { key: 'lower-third-overlay', label: 'Lower third overlay' },
-    { key: 'sting-transition', label: 'Sting transition' },
-    { key: 'premium-spot', label: 'Premium spot' },
-    { key: 'universal-composer', label: 'Universal composer' },
+    {
+        key: 'cinematic-title',
+        label: 'Cinematic title',
+        descriptionVi: 'Tiêu đề hoành tráng kiểu điện ảnh — chữ lớn, ánh sáng dramatic',
+    },
+    {
+        key: 'kinetic-type',
+        label: 'Kinetic type',
+        descriptionVi: 'Chữ chuyển động theo nhịp — typography động, năng lượng cao',
+    },
+    {
+        key: 'social-reel',
+        label: 'Social reel',
+        descriptionVi: 'Video ngắn mạng xã hội — nhanh, bắt mắt, dọc 9:16',
+    },
+    {
+        key: 'data-story',
+        label: 'Data story',
+        descriptionVi: 'Kể chuyện bằng số liệu — biểu đồ, counter, infographic',
+    },
+    {
+        key: 'product-reveal',
+        label: 'Product reveal',
+        descriptionVi: 'Giới thiệu sản phẩm — zoom, highlight, spotlight',
+    },
+    {
+        key: 'lower-third-overlay',
+        label: 'Lower third overlay',
+        descriptionVi: 'Chú thích góc dưới — tên, vai trò, thông tin phụ',
+    },
+    {
+        key: 'sting-transition',
+        label: 'Sting transition',
+        descriptionVi: 'Chuyển cảnh ngắn — logo, wipe, bridge giữa các đoạn',
+    },
+    {
+        key: 'premium-spot',
+        label: 'Premium spot',
+        descriptionVi: 'Quảng cáo cao cấp — gradient, glow, cảm giác sang trọng',
+    },
+    {
+        key: 'universal-composer',
+        label: 'Universal composer',
+        descriptionVi: 'Đa năng — agent tự chọn layout phù hợp từng beat',
+    },
 ];
 
 export const DEFAULT_HF_PROMPT_TYPE: HfPromptTypeKey = 'universal-composer';

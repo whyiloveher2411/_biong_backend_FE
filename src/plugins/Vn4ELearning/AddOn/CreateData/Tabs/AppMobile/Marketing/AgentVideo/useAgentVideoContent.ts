@@ -7,6 +7,11 @@ import {
 } from 'helpers/marketingShortVideoAgentPrompt';
 import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
 import {
+    IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
+    openImportHtmlBeatGeminiFillOnly,
+    openImportHtmlBeatGeminiForMissingBeats,
+} from 'helpers/marketingImportHtmlWorkflow';
+import {
     approveAudioScript,
     fetchImportHtmlContext,
     normalizePlatforms,
@@ -38,7 +43,11 @@ import {
 import { buildImproveAudioScriptPrompt } from './agentVideoImproveScriptPrompt';
 import { buildBeatDivisionPrompt } from './agentVideoBeatDivisionPrompt';
 import {
+    applyHfPromptTypeToMissingBeats,
     beatMapToJson,
+    countMissingBeatHtml,
+    listBeatIdsWithHtml,
+    listMissingBeatIds,
     parseBeatMapJson,
     validateBeatMap,
     type BeatMap,
@@ -52,6 +61,7 @@ import {
     type ImportHtmlContextPayload,
 } from './agentVideoImportHtmlPrompt';
 import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptCatalog';
+import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 
 type UseAgentVideoContentArgs = {
@@ -109,6 +119,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatId: string;
         nonce: number;
     } | null>(null);
+    const [beatPlaybackSeekRequest, setBeatPlaybackSeekRequest] = React.useState<{
+        beatId: string;
+        startSec: number;
+        nonce: number;
+    } | null>(null);
     const [hfPromptType, setHfPromptType] = React.useState(DEFAULT_HF_PROMPT_TYPE);
     const [whisperStatus, setWhisperStatus] = React.useState('none');
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
@@ -132,6 +147,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
+    const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
+    const [deletingAllBeatHtml, setDeletingAllBeatHtml] = React.useState(false);
+    const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
+    const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
 
     const savedScriptRef = React.useRef('');
     const savedImportHtmlRef = React.useRef('');
@@ -200,17 +219,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextBeatMapJson = nextBeatMap ? beatMapToJson(nextBeatMap) : '';
         setBeatMapJsonDraft(nextBeatMapJson);
         savedBeatMapJsonRef.current = nextBeatMapJson;
-        const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
-        const beatHtmlRaw = importSummary?.beat_html ?? {};
-        Object.entries(beatHtmlRaw).forEach(([beatId, entry]) => {
-            if (entry && typeof entry === 'object') {
-                nextBeatHtml[beatId] = {
-                    html: String(entry.html || ''),
-                    updated_at: entry.updated_at,
-                };
-            }
+        setBeatHtml((prev) => {
+            const beatHtmlRaw = importSummary?.beat_html ?? {};
+            const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
+            Object.entries(beatHtmlRaw).forEach(([beatId, entry]) => {
+                if (entry && typeof entry === 'object') {
+                    nextBeatHtml[beatId] = {
+                        html: String(entry.html || ''),
+                        updated_at: entry.updated_at,
+                    };
+                }
+            });
+            Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
+                if (prev[beatId]?.html?.trim()) {
+                    nextBeatHtml[beatId] = prev[beatId];
+                }
+            });
+            return nextBeatHtml;
         });
-        setBeatHtml(nextBeatHtml);
         setBeatMapReady(Boolean(importSummary?.beat_map_ready));
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
         setBeatsHtmlCompleted(Number(importSummary?.beats_html_completed || 0));
@@ -251,6 +277,27 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return;
         }
         loadRow({ syncTtsQueue: true });
+    }, [loadRow, open, shortVideoId]);
+
+    React.useEffect(() => {
+        if (!open || !shortVideoId) {
+            return undefined;
+        }
+        const onImportHtmlBeatHtmlSaved = (event: Event) => {
+            const custom = event as CustomEvent<{
+                shortVideoId?: number;
+                short_video_id?: number;
+            }>;
+            const detail = custom.detail || {};
+            const savedShortVideoId = Number(detail.shortVideoId ?? detail.short_video_id ?? 0);
+            if (savedShortVideoId > 0 && savedShortVideoId === shortVideoId) {
+                loadRow();
+            }
+        };
+        document.addEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
+        return () => {
+            document.removeEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
+        };
     }, [loadRow, open, shortVideoId]);
 
     const shouldPoll = ttsPending || agentVideoStatus === 'processing' || whisperStatus === 'processing';
@@ -427,16 +474,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setActiveBeatId((prev) => prev || summary.beat_map?.sections?.[0]?.id || '');
         }
         if (summary.beat_html) {
-            const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
-            Object.entries(summary.beat_html).forEach(([beatId, entry]) => {
-                if (entry && typeof entry === 'object') {
-                    nextBeatHtml[beatId] = {
-                        html: String(entry.html || ''),
-                        updated_at: entry.updated_at,
-                    };
-                }
+            setBeatHtml((prev) => {
+                const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
+                Object.entries(summary.beat_html ?? {}).forEach(([beatId, entry]) => {
+                    if (entry && typeof entry === 'object') {
+                        nextBeatHtml[beatId] = {
+                            html: String(entry.html || ''),
+                            updated_at: entry.updated_at,
+                        };
+                    }
+                });
+                Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
+                    if (prev[beatId]?.html?.trim()) {
+                        nextBeatHtml[beatId] = prev[beatId];
+                    }
+                });
+                return nextBeatHtml;
             });
-            setBeatHtml(nextBeatHtml);
         }
     }, []);
 
@@ -474,6 +528,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.import_html) {
                 applyImportHtmlSummary(res.import_html);
             }
+            if (payload.beatId) {
+                const pendingTimer = beatHtmlSaveTimerRef.current[payload.beatId];
+                if (pendingTimer != null) {
+                    window.clearTimeout(pendingTimer);
+                    delete beatHtmlSaveTimerRef.current[payload.beatId];
+                }
+            }
             if (payload.beatMap?.sections?.length) {
                 const validIds = new Set(payload.beatMap.sections.map((section) => section.id));
                 setBeatHtml((prev) => Object.fromEntries(
@@ -504,6 +565,20 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleLaunchAgentImportHtmlFull = async () => {
         setLaunchingImportHtmlFull(true);
         try {
+            if (beatMap && isHfPromptTypeKey(hfPromptType)) {
+                const updatedMap = applyHfPromptTypeToMissingBeats(beatMap, beatHtml, hfPromptType);
+                const beatMapChanged = updatedMap.sections.some(
+                    (section, index) => section.hf_prompt_type !== beatMap.sections[index]?.hf_prompt_type,
+                );
+                if (beatMapChanged) {
+                    const ok = await persistImportHtml({ beatMap: updatedMap, hfPromptType });
+                    if (!ok) {
+                        return;
+                    }
+                } else {
+                    await persistImportHtml({ hfPromptType });
+                }
+            }
             const result = await launchShortVideoAgentImportHtmlFull(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
             if (result.ok) {
@@ -540,6 +615,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return;
         }
         setHfPromptType(nextType);
+        if (beatMap) {
+            const updatedMap = applyHfPromptTypeToMissingBeats(beatMap, beatHtml, nextType);
+            const beatMapChanged = updatedMap.sections.some(
+                (section, index) => section.hf_prompt_type !== beatMap.sections[index]?.hf_prompt_type,
+            );
+            if (beatMapChanged) {
+                await persistImportHtml({ beatMap: updatedMap, hfPromptType: nextType });
+                return;
+            }
+        }
         await persistImportHtml({ hfPromptType: nextType });
     };
 
@@ -568,7 +653,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }, 1000);
     };
 
-    const handleBeatHtmlChange = (beatId: string, value: string) => {
+    const commitBeatHtmlChange = React.useCallback(async (
+        beatId: string,
+        value: string,
+        options?: { immediate?: boolean },
+    ): Promise<boolean> => {
         let next = value;
         const section = beatMap?.sections.find((item) => item.id === beatId);
         if (section && section.durationSec > 0) {
@@ -582,18 +671,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
         }
 
+        const draftUpdatedAt = new Date().toISOString();
         setBeatHtml((prev) => ({
             ...prev,
-            [beatId]: { html: next, updated_at: prev[beatId]?.updated_at },
+            [beatId]: { html: next, updated_at: draftUpdatedAt },
         }));
 
         const existingTimer = beatHtmlSaveTimerRef.current[beatId];
         if (existingTimer != null) {
             window.clearTimeout(existingTimer);
+            delete beatHtmlSaveTimerRef.current[beatId];
         }
+
+        if (options?.immediate) {
+            return persistImportHtml({ beatId, beatHtml: next });
+        }
+
         beatHtmlSaveTimerRef.current[beatId] = window.setTimeout(() => {
+            delete beatHtmlSaveTimerRef.current[beatId];
             void persistImportHtml({ beatId, beatHtml: next });
         }, 1000);
+        return true;
+    }, [beatMap, persistImportHtml, showMessage]);
+
+    const handleBeatHtmlChange = (beatId: string, value: string) => {
+        void commitBeatHtmlChange(beatId, value);
     };
 
     const focusBeatEditor = React.useCallback((beatId: string) => {
@@ -657,19 +759,191 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handlePasteBeatHtml = async (beatId: string) => {
         setPastingBeatHtmlBeatId(beatId);
         try {
-            const text = await readTextFromClipboard();
+            const raw = await readTextFromClipboard();
+            const text = extractBeatHtmlFromPastedText(raw);
             if (!text.trim()) {
-                showMessage('Clipboard trống', 'warning');
+                showMessage('Clipboard trống hoặc không có HTML hợp lệ', 'warning');
                 return;
             }
-            handleBeatHtmlChange(beatId, text);
+            const saved = await commitBeatHtmlChange(beatId, text, { immediate: true });
+            if (!saved) {
+                return;
+            }
             focusBeatEditor(beatId);
-            showMessage(`Đã dán HTML ${beatId}`, 'success');
+            const section = beatMap?.sections.find((item) => item.id === beatId);
+            if (section) {
+                setBeatPlaybackSeekRequest({
+                    beatId,
+                    startSec: section.startSec,
+                    nonce: Date.now(),
+                });
+            }
+            showMessage(`Đã dán và lưu HTML ${beatId}`, 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setPastingBeatHtmlBeatId('');
         }
+    };
+
+    const handleDeleteBeatHtml = async (beatId: string) => {
+        const beatLabel = beatMap?.sections.find((item) => item.id === beatId)?.id || beatId;
+        if (!beatHtml[beatId]?.html?.trim()) {
+            showMessage('Beat này chưa có HTML để xóa', 'warning');
+            return;
+        }
+        if (!window.confirm(`Xóa HTML của ${beatLabel}? Pipeline auto có thể chạy lại beat này.`)) {
+            return;
+        }
+
+        setDeletingBeatHtmlBeatId(beatId);
+        try {
+            const pendingTimer = beatHtmlSaveTimerRef.current[beatId];
+            if (pendingTimer != null) {
+                window.clearTimeout(pendingTimer);
+                delete beatHtmlSaveTimerRef.current[beatId];
+            }
+
+            const saved = await persistImportHtml({ beatId, beatHtml: '' });
+            if (!saved) {
+                return;
+            }
+
+            setBeatHtml((prev) => {
+                const next = { ...prev };
+                delete next[beatId];
+                return next;
+            });
+            focusBeatEditor(beatId);
+            showMessage(`Đã xóa HTML ${beatLabel} — có thể chạy lại pipeline`, 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setDeletingBeatHtmlBeatId('');
+        }
+    };
+
+    const handleDeleteAllBeatHtml = async () => {
+        const beatIds = listBeatIdsWithHtml(beatHtml);
+        if (!beatIds.length) {
+            showMessage('Không có beat nào có HTML để xóa', 'warning');
+            return;
+        }
+        if (!window.confirm(
+            `Xóa HTML của ${beatIds.length} beat đang có dữ liệu? Pipeline auto có thể chạy lại các beat này.`,
+        )) {
+            return;
+        }
+
+        setDeletingAllBeatHtml(true);
+        try {
+            Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
+                const pendingTimer = beatHtmlSaveTimerRef.current[beatId];
+                if (pendingTimer != null) {
+                    window.clearTimeout(pendingTimer);
+                    delete beatHtmlSaveTimerRef.current[beatId];
+                }
+            });
+
+            for (const beatId of beatIds) {
+                const saved = await persistImportHtml({ beatId, beatHtml: '' });
+                if (!saved) {
+                    return;
+                }
+            }
+
+            setBeatHtml((prev) => {
+                const next = { ...prev };
+                beatIds.forEach((beatId) => {
+                    delete next[beatId];
+                });
+                return next;
+            });
+            showMessage(`Đã xóa HTML ${beatIds.length} beat — có thể chạy lại pipeline`, 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setDeletingAllBeatHtml(false);
+        }
+    };
+
+    const handleOpenBeatGemini = (beatId: string) => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const beat = beatMap.sections.find((item) => item.id === beatId);
+        if (!beat) {
+            showMessage('Không tìm thấy beat', 'error');
+            return;
+        }
+        if (openingBeatGeminiBeatIds.includes(beatId)) {
+            return;
+        }
+
+        setOpeningBeatGeminiBeatIds((prev) => (prev.includes(beatId) ? prev : [...prev, beatId]));
+        void (async () => {
+            try {
+                await openImportHtmlBeatGeminiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    stage: 'import_html_beat_html',
+                });
+                focusBeatEditor(beatId);
+                showMessage(`Đã mở Gemini cho ${beatId} — kiểm tra tab mới và bấm Gửi`, 'success');
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => id !== beatId));
+            }
+        })();
+    };
+
+    const handleOpenAllMissingBeatGemini = () => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
+        if (!missingBeatIds.length) {
+            showMessage('Không có beat thiếu HTML', 'info');
+            return;
+        }
+        if (openingAllMissingBeatGemini) {
+            return;
+        }
+
+        setOpeningAllMissingBeatGemini(true);
+        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
+        void (async () => {
+            try {
+                const result = await openImportHtmlBeatGeminiForMissingBeats({
+                    shortVideoId,
+                    beatIds: missingBeatIds,
+                    autoSubmit: true,
+                });
+                const failNote = result.failed.length
+                    ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
+                    : '';
+                showMessage(
+                    `Đã mở ${result.opened} tab Gemini — kiểm tra từng tab, copy HTML rồi bấm Lưu HTML vào CMS${failNote}`,
+                    result.failed.length ? 'warning' : 'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningAllMissingBeatGemini(false);
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
+            }
+        })();
     };
 
     const handleImportHtmlChange = (value: string) => {
@@ -888,6 +1162,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const missingBeatHtmlCount = React.useMemo(
+        () => countMissingBeatHtml(beatMap, beatHtml),
+        [beatMap, beatHtml],
+    );
+
     return {
         title,
         shortVideoId,
@@ -927,12 +1206,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap,
         beatMapJsonDraft,
         beatHtml,
+        missingBeatHtmlCount,
         beatMapReady,
         beatsHtmlTotal,
         beatsHtmlCompleted,
         activeBeatId,
         setActiveBeatId,
         beatEditorFocusRequest,
+        beatPlaybackSeekRequest,
         focusBeatEditor,
         hfPromptType,
         whisperStatus,
@@ -956,6 +1237,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         copyingBeatDivisionPrompt,
         copyingBeatHtmlPromptBeatId,
         pastingBeatHtmlBeatId,
+        deletingBeatHtmlBeatId,
+        deletingAllBeatHtml,
+        openingBeatGeminiBeatIds,
+        openingAllMissingBeatGemini,
         hasScript,
         hasAudio,
         statusChip,
@@ -981,6 +1266,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleCopyBeatDivisionPrompt,
         handleCopyBeatHtmlPrompt,
         handlePasteBeatHtml,
+        handleDeleteBeatHtml,
+        handleDeleteAllBeatHtml,
+        handleOpenBeatGemini,
+        handleOpenAllMissingBeatGemini,
         handleImportHtmlChange,
         runWhisperTranscribe,
         handleCopyChatbotPrompt: handleCopyBeatDivisionPrompt,

@@ -4,7 +4,9 @@ import {
     buildBeatScaffoldInstructionsBlock,
     buildSingleBeatHtmlScaffold,
 } from './agentVideoImportHtmlScaffold';
-import { buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
+import { buildBeatHtmlContentLanguageBlock } from './agentVideoContentLanguageBlock';
+import { buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotNoLegacyBorrowRulesBlock, buildHtmlChatbotJsContractBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
+import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 import type { BeatMapSection } from './agentVideoBeatMap';
 
 export type ImportHtmlContextPayload = {
@@ -63,6 +65,7 @@ export async function buildBeatHtmlPrompt(
     const durationLabel = `${formatDurationSec(durationSec)}s`;
     const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id);
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
+    const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
 
     return [
@@ -72,35 +75,30 @@ export async function buildBeatHtmlPrompt(
         `BEAT_ID=${beat.id}`,
         `CLIP_TOTAL_SEC=${clipTotal}`,
         '',
+        buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
+        buildHtmlChatbotNoLegacyBorrowRulesBlock(),
         buildHtmlChatbotSingleHtmlFileRulesBlock(beat.id),
+        buildHtmlChatbotJsContractBlock(durationSec),
         '## BẮT BUỘC',
         `- Đây là **một beat** trong clip dài ${clipTotal}s — DURATION = **${formatDurationSec(durationSec)}** giây.`,
         `- \`data-duration="${formatDurationSec(durationSec)}"\` và \`const DURATION = ${formatDurationSec(durationSec)}\` — không đổi.`,
-        '- `render(t)` phải hoạt động với mọi t từ 0 đến DURATION.',
+        '- `render()` (đọc biến global `t` qua `hf-seek`) phải hoạt động với mọi time từ 0 đến DURATION.',
         '',
         '## Phong cách visual',
         template,
         '',
         '---',
         '',
-        `# Beat ${beat.id} — video Spacedev ID ${context.short_video_id ?? '?'}`,
+        `# Beat ${beat.id} — short video ID ${context.short_video_id ?? '?'}`,
         `Vị trí trong clip: ${formatDurationSec(beat.startSec)}s → ${formatDurationSec(beat.endSec)}s`,
         `phrase_anchor (metadata — KHÔNG render text này lên màn hình): ${beat.phrase_anchor}`,
         beat.image_url ? `image_url: ${beat.image_url}` : 'image_url: —',
         '',
         '## Whisper trong beat — CHỈ pacing, CẤM karaoke',
         'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',
-        '```json',
-        JSON.stringify(
-            beatWhisper.map((w) => ({
-                ...w,
-                start: Math.round((w.start - beat.startSec) * 10) / 10,
-                end: Math.round((w.end - beat.startSec) * 10) / 10,
-            })),
-            null,
-            2,
-        ),
+        '```text',
+        beatWhisperPrompt,
         '```',
         '',
         '## Ảnh marketing (tham khảo)',
@@ -112,6 +110,8 @@ export async function buildBeatHtmlPrompt(
         '## Checklist',
         `- [ ] data-duration="${formatDurationSec(durationSec)}"`,
         `- [ ] const DURATION = ${formatDurationSec(durationSec)}`,
+        '- [ ] `addEventListener(\'hf-seek\', ...)` còn nguyên — không chỉ `window.render`',
+        '- [ ] `function render()` không tham số; dùng `const time = clamp(t, 0, DURATION)`',
         `- [ ] render() tại t=0 và t=${formatDurationSec(durationSec)}`,
         '- [ ] Không có karaoke, subtitle, caption, hay text sync voiceover trong HTML',
         '- [ ] Response là **1 file HTML duy nhất** — không nhiều file, không tách css/js',

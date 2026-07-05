@@ -186,6 +186,15 @@ body { margin: 0; }
 
 Return only the HTML document.
 
+## Biong short-video beat overrides
+
+This prompt describes **visual craft in English** — English examples are direction only, not on-screen copy.
+
+- **Content language:** All visible text (headlines, labels, badges, decorative type, UI chrome) MUST match the **content language** from the beat prompt header (`Ngôn ngữ nội dung`). Never default to English when the video is Vietnamese or another locale.
+- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.
+- **No voiceover on screen:** Do not render audio script, captions, karaoke, or whisper words — beat HTML is pure visual motion.
+- **Skip wordmark sections:** Ignore craft notes below about wordmark holds, brand mark resolves, or "follow for more" end cards when building a beat sub-composition.
+
 ---
 
 ## What to make

@@ -1,11 +1,12 @@
 {
-  "generatedAt": "2026-07-02T12:57:38.671Z",
+  "generatedAt": "2026-07-05T03:55:21.311Z",
   "source": "visual-shot-plan",
   "totalVideoSec": 30,
   "sections": [
     {
       "id": "beat_1",
       "beat_id": "beat_1",
+      "hf_prompt_type": null,
       "layout_archetype": "kinetic_hook_slam",
       "narrative_role": null,
       "phrase_anchor": "Hook shock opener",
@@ -17,6 +18,7 @@
     {
       "id": "beat_2",
       "beat_id": "beat_2",
+      "hf_prompt_type": null,
       "layout_archetype": "stat_punch_card",
       "narrative_role": null,
       "phrase_anchor": "Ninety thousand jobs cut",
@@ -28,6 +30,7 @@
     {
       "id": "beat_3",
       "beat_id": "beat_3",
+      "hf_prompt_type": null,
       "layout_archetype": "process_flow",
       "narrative_role": null,
       "phrase_anchor": "AI investment flow steps",
@@ -39,6 +42,7 @@
     {
       "id": "beat_4",
       "beat_id": "beat_4",
+      "hf_prompt_type": null,
       "layout_archetype": "comparison_split",
       "narrative_role": null,
       "phrase_anchor": "Before after comparison chart",
@@ -50,6 +54,7 @@
     {
       "id": "beat_5",
       "beat_id": "beat_5",
+      "hf_prompt_type": null,
       "layout_archetype": "bento_insight_grid",
       "narrative_role": null,
       "phrase_anchor": "Three insight bento grid",
@@ -61,6 +66,7 @@
     {
       "id": "beat_6",
       "beat_id": "beat_6",
+      "hf_prompt_type": null,
       "layout_archetype": "cta_orbit",
       "narrative_role": null,
       "phrase_anchor": "Follow now call to action",

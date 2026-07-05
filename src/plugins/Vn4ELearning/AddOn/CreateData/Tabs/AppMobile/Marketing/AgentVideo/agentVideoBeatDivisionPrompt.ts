@@ -1,9 +1,13 @@
 import { HF_PROMPT_CATALOG } from './agentVideoHfPromptCatalog';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import { buildBeatDivisionLanguageBlock } from './agentVideoContentLanguageBlock';
 import { buildHtmlChatbotNoKaraokeRulesBlock, buildBeatDivisionSingleOutputRulesBlock } from './agentVideoHtmlChatbotRules';
 import type { ImportHtmlContextPayload } from './agentVideoImportHtmlPrompt';
+import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 
-const HF_PROMPT_LIST = HF_PROMPT_CATALOG.map((item) => `- \`${item.key}\` — ${item.label}`).join('\n');
+const HF_PROMPT_LIST = HF_PROMPT_CATALOG.map(
+    (item) => `- \`${item.key}\` — ${item.label}: ${item.descriptionVi}`,
+).join('\n');
 
 export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): string {
     const durationSec = Number(context.audio_file_duration_sec || 0);
@@ -17,10 +21,11 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const estimatedBeats = Math.max(1, Math.ceil(durationSec / 12));
 
     return [
-        '# Chia beat cho video marketing Spacedev',
+        '# Chia beat cho short video marketing',
         '',
         `CLIP_DURATION_SEC=${total}`,
         '',
+        buildBeatDivisionLanguageBlock(context.language),
         '## Nhiệm vụ',
         `Chia voiceover **${total}s** thành **${estimatedBeats}±** beat liên tục, mỗi beat khoảng **${beatTargetMin}–${beatTargetMax}s**.`,
         'Mỗi beat = một chapter visual riêng (HTML sẽ generate sau — **chỉ visual, không karaoke**).',
@@ -63,7 +68,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '',
         '---',
         '',
-        `# Video Spacedev (ID ${context.short_video_id ?? '?'})`,
+        `# Short video (ID ${context.short_video_id ?? '?'})`,
         `Tiêu đề: ${context.title || '—'}`,
         `Ngôn ngữ: ${context.language || 'vi'}`,
         `Thời lượng audio: ${total}s`,
@@ -72,8 +77,8 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         String(context.audio_script || '').trim() || '(trống)',
         '',
         '## Whisper word timing (chỉ pacing — KHÔNG dùng text làm karaoke/subtitle trong HTML beat)',
-        '```json',
-        JSON.stringify(context.whisper_words || [], null, 2),
+        '```text',
+        formatWhisperWordsForPrompt(context.whisper_words || []),
         '```',
         '',
         '## Ảnh marketing post (gán image_url khi phù hợp)',

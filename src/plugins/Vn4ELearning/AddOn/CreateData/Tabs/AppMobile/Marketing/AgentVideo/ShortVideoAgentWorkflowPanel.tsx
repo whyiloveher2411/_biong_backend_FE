@@ -282,24 +282,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     Cần Whisper hoàn tất — chạy transcribe trong panel HTML trước
                                 </Typography>
                             ) : null}
-                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
-                                {state.hasAgentVideo
-                                    ? 'Chỉ ghép lại (HTML đã đủ trên CMS)'
-                                    : 'Ghép thủ công khi đã dán đủ HTML beat'}
-                            </Typography>
-                            <LoadingButton
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={state.launchingImportAssemble}
-                                disabled={!state.importHtmlReady || state.agentVideoStatus === 'processing'}
-                                startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentImportAssemble(); }}
-                            >
-                                {state.hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép'}
-                            </LoadingButton>
                             <Button
                                 size="small"
                                 variant="outlined"

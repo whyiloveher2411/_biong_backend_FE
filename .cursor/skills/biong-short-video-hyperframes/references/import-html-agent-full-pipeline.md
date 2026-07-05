@@ -2,11 +2,15 @@
 
 Đọc khi chạy phase `import_html_full` — sinh beat HTML thiếu qua MCP, sau đó ghép video.
 
-**Đọc kèm:** [import-html-beat-render.md](import-html-beat-render.md) · [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md)
+**Đọc kèm:** [import-html-beat-render.md](import-html-beat-render.md) · [import-html-assemble-bgm.md](import-html-assemble-bgm.md) · [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md) · [import-html-beat-originality.md](import-html-beat-originality.md)
 
 ---
 
 ## Phần A — Beat HTML (CMS)
+
+### Originality (bắt buộc)
+
+Đọc [import-html-beat-originality.md](import-html-beat-originality.md) — **cấm** mượn beat HTML / layout từ `storage/agent-renders/{id_khác}/`. Chỉ dùng prompt MCP + skill + `hf_prompt_type` template. Mỗi beat thiết kế riêng; **cấm** bulk template (`joint-grid`, `metric-block`, script sinh hàng loạt).
 
 ### Nguồn truth
 
@@ -42,12 +46,14 @@ Sau gate phần A — làm giống `import_assemble`:
 1. `hyperframes init` → `storage/agent-renders/{id}/my-video`
 2. Ghi `compositions/beat_N.html` từ CMS `beat_html`
 3. `normalize-import-html-beat-for-render.mjs --localize-images`
-4. Caption từ `audio_script` + timing `whisper_words` CMS
-5. Ambient layer + watermark
-6. Preflight → `hyperframes render --quality high --strict`
-7. `short_video_upload_agent_video` + `short_video_update_agent_status(completed)`
+4. `bootstrap-phase2-assets.mjs` → caption từ `audio_script` + timing `whisper_words` CMS
+5. **BGM chain:** `search_bgm({ limit: 8 })` → `bgm_1…n.mp3` + `bgm-chain.json` → [import-html-assemble-bgm.md](import-html-assemble-bgm.md) → `wire-bgm-chain.mjs`
+6. Wire `index.html`: narration track 10 + BGM chain + beats + caption + ambient + watermark
+7. Preflight (`wire-bgm-chain.mjs`, `check-media-stack.mjs --strict`) → `hyperframes render --quality high --strict`
+8. `short_video_upload_agent_video` + `short_video_update_agent_status(completed)`
 
-**Cấm** ở phần B: sinh beat HTML mới, shot-plan, media MCP search (v1).
+**Cấm** ở phần B: sinh beat HTML mới, shot-plan, stock/giphy/SFX MCP, BGM `loop`.
+**Cho phép:** `short_video_search_bgm` + `wire-bgm-chain.mjs`.
 
 ---
 

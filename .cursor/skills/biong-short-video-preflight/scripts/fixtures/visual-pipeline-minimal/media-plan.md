@@ -7,3 +7,4 @@
 | beat_6 | cta_orbit | kinetic_type | caption-kinetic-slam | hero_type |
 | sfx_hook | audio | — | — | short_video_search_meme_sound |
 | bgm_global | audio | — | — | short_video_search_bgm |
+| bgm_2 | audio | — | — | short_video_search_bgm |

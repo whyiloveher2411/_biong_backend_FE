@@ -43,7 +43,7 @@ Agent tìm media — **chỉ trả URL**, tự tải về `storage/agent-renders
 |------|----------|--------|
 | `short_video_search_stock_media` | Pexels | `bg_media` only — không full-bleed hero |
 | `short_video_search_meme_sound` | Myinstants | SFX hook — giây 0 |
-| `short_video_search_bgm` | Pixabay | Nhạc nền — 1 track/video |
+| `short_video_search_bgm` | Pixabay | Nhạc nền — BGM chain (limit=8) + wire-bgm-chain.mjs |
 | `short_video_search_giphy` | Giphy | Sticker/gif accent — theo visual_shot_plan |
 
 **Backend `.env`:** `PEXELS_API_KEY`, `PIXABAY_API_KEY`, `GIPHY_API_KEY`
@@ -66,7 +66,7 @@ npx skills add https://github.com/greensock/gsap-skills
 | `short_video_generate_narration_tts` | CMS queue TTS nội bộ — **CẤM agent Phase 2**; reject nếu `audio_file` đã có |
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |
-| `short_video_search_bgm` | Nhạc nền Pixabay |
+| `short_video_search_bgm` | Nhạc nền Pixabay — BGM chain (nhiều segment + crossfade) |
 | `short_video_search_giphy` | GIF/sticker Giphy accent |
 | `short_video_upload_agent_video` | Upload MP4 → S3 |
 

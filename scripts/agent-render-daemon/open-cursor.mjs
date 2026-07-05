@@ -44,7 +44,7 @@ function buildBootstrapPrompt(shortVideoId, phase) {
       `Ghép HTML chatbot cho short video ID ${shortVideoId}.`,
       `Đọc prompt đã lưu: ${promptRelativePath(shortVideoId, normalized)}`,
       'Invoke MCP short_video_get_context — dùng import_html.html từ CMS.',
-      'CẤM sửa visual HTML user — chỉ ghép caption + ambient + watermark + render.',
+      'CẤM sửa visual HTML user — ghép caption + ambient + watermark + BGM chain (search_bgm + wire-bgm-chain.mjs) + render.',
     ].join('\n');
   }
 
@@ -53,7 +53,8 @@ function buildBootstrapPrompt(shortVideoId, phase) {
       `Tự động sinh HTML beat thiếu + ghép video cho short video ID ${shortVideoId}.`,
       `Đọc prompt đã lưu: ${promptRelativePath(shortVideoId, normalized)}`,
       'Phần A: MCP get_import_html_beat_prompt + save_import_html_beat cho từng beat thiếu.',
-      'Phần B: ghép caption + ambient + watermark + render (giống import_assemble).',
+      'CẤM mượn beat HTML video cũ — đọc @import-html-beat-originality.md; mỗi beat thiết kế mới từ prompt + hf_prompt_type.',
+      'Phần B: ghép caption + ambient + watermark + BGM chain (wire-bgm-chain.mjs) + render (giống import_assemble).',
     ].join('\n');
   }
 

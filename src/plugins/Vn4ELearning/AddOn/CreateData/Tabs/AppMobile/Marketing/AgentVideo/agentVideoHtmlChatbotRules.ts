@@ -2,14 +2,28 @@
  * Quy tắc dùng chung trong prompt copy cho chatbot HTML beat.
  * Caption/karaoke do agent ghép layer riêng — không nằm trong HTML user.
  */
+import { formatDurationSec } from './agentVideoHfPromptDuration';
+
+export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
+    return [
+        '## CẤM — mượn visual beat video cũ',
+        '- **TUYỆT ĐỐI KHÔNG** copy HTML/CSS/JS từ beat HTML video khác hoặc `storage/agent-renders/{id_khác}/`.',
+        '- **CẤM** đọc beat project cũ làm mẫu — chỉ dùng prompt server + `hf_prompt_type` + skill contract.',
+        '- **CẤM** reuse scaffold lặp mọi beat: `#joint-grid`, `.joint`, `#metric-block`, equalizer đỏ.',
+        '- **CẤM** script bulk sinh nhiều beat từ một template — mỗi beat thiết kế riêng.',
+        '',
+    ].join('\n');
+}
+
 export function buildHtmlChatbotNoKaraokeRulesBlock(): string {
     return [
         '## CẤM — karaoke / phụ đề / caption trong HTML beat',
         '- **TUYỆT ĐỐI KHÔNG** tạo text karaoke, phụ đề, subtitle, caption on-screen, word-by-word highlight.',
         '- **KHÔNG** hiển thị audio script, phrase_anchor, whisper text, hoặc bất kỳ câu voiceover nào sync theo thời gian.',
         '- **KHÔNG** dùng whisper_words để render chữ lên màn hình — whisper chỉ để tham khảo **pacing**, không phải nội dung hiển thị.',
-        '- Voiceover đã có trong audio — caption/karaoke do **Spacedev agent ghép layer riêng** (`compositions/captions.html`) khi render final.',
+        '- Voiceover đã có trong audio — caption/karaoke do **pipeline agent ghép layer riêng** (`compositions/captions.html`) khi render final.',
         '- HTML beat chỉ chứa **visual thuần**: layout, ảnh, shape, motion, graphic type — không lớp text đọc theo audio.',
+        '- **CẤM** logo, wordmark, watermark thương hiệu trong HTML beat — brand overlay do layer riêng khi render final.',
         '- Nếu template phong cách gợi ý caption on-screen → **bỏ qua** trong luồng HTML chatbot này.',
         '',
     ].join('\n');
@@ -40,6 +54,24 @@ export function buildHtmlChatbotSingleHtmlFileRulesBlock(beatId: string): string
         '- Không `import`, không `<link rel="stylesheet">` external, không file JS riêng.',
         '- Response = **chỉ** chuỗi HTML thuần (bắt đầu bằng `<!doctype html>` hoặc `<html`, kết thúc `</html>`).',
         '- **Không** dùng marker BEGIN/END — chỉ trả HTML thuần.',
+        '',
+    ].join('\n');
+}
+
+export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
+    const total = formatDurationSec(durationSec);
+    return [
+        '## JavaScript animation (bắt buộc — preview CMS)',
+        '- Preview timeline gọi `dispatchEvent(new CustomEvent(\'hf-seek\', { detail: { time } }))` — **phải giữ** listener scaffold:',
+        '  `addEventListener(\'hf-seek\', (e) => { t = e.detail.time; render(); });`',
+        '- **Cấm** chỉ gán `window.render = render` mà không có `hf-seek` — animation sẽ **đứng im**.',
+        '- Dùng `let t = 0` (global) + `function render()` **không tham số**. Trong `render()`: `const time = clamp(t, 0, DURATION)`.',
+        '- **Cấm** `function render(t)` — khi gọi `render()` không đối số, `t` bên trong = `undefined` → animation hỏng.',
+        '- Mọi easing helper (`easeOutExpo`, `easeOutCubic`, …) phải **định nghĩa trong cùng `<script>`** trước khi dùng.',
+        '- Mọi `document.getElementById(...)` phải khớp `id` trong DOM; trước khi set `.style` kiểm tra `if (el) { ... }`.',
+        `- Timing animation dùng **local beat time** 0…${total} (biến \`t\` / \`time\`), không hard-code giây tuyệt đối clip dài.`,
+        '- **Cấm** `setInterval`, `setTimeout`, `requestAnimationFrame` loop, GSAP timeline, CSS `@keyframes` / `transition` cho motion chính.',
+        '- Đóng ngoặc `{}` cân bằng — syntax error trong `<script>` làm **toàn bộ** beat không chạy.',
         '',
     ].join('\n');
 }

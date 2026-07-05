@@ -12,7 +12,7 @@ import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 
 type Props = {
     beatMap: BeatMap | null;
-    beatHtml: Record<string, { html?: string }>;
+    beatHtml: Record<string, { html?: string; updated_at?: string }>;
     audioUrl: string;
     audioDurationSec: number | null;
     videoRef: React.Ref<HTMLVideoElement>;
@@ -55,6 +55,9 @@ export default function ShortVideoAgentCustomHtmlPreview({
     );
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
+    const activeHtmlRevision = activeBeat
+        ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`
+        : 'empty';
     const containScale = computeContainScale(containerWidth || 360);
     const scaledStageHeight = computeScaledStageHeight(containScale);
 
@@ -159,6 +162,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
                     >
                         <Box
                             component="iframe"
+                            key={activeHtmlRevision}
                             ref={iframeRef}
                             title="HTML beat preview"
                             sandbox="allow-scripts allow-same-origin"

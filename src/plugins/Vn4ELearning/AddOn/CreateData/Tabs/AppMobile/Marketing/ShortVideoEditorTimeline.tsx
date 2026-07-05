@@ -2,18 +2,16 @@ import React from 'react';
 import type { PlayerRef } from '@remotion/player';
 import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
-import AddIcon from '@mui/icons-material/Add';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import RemoveIcon from '@mui/icons-material/Remove';
 import SyncIcon from '@mui/icons-material/Sync';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, Menu, MenuItem, Popover, Slider, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, Menu, MenuItem, Popover, TextField, Tooltip, Typography } from '@mui/material';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import ShortVideoTextClipAnimationDurationBars from './ShortVideoTextClipAnimationDurationBars';
 import type { ShortVideoRenderManifest } from 'helpers/shortVideoRenderManifest';
@@ -94,6 +92,10 @@ import {
     summarizeManifestLayout,
     summarizeTimelineRows,
 } from 'helpers/shortVideoTimelineDebug';
+import TimelineZoomControls, {
+    SHORT_VIDEO_EDITOR_TIMELINE_ZOOM_STORAGE_KEY,
+    usePersistedTimelineScaleWidth,
+} from './TimelineZoomControls';
 
 type Props = {
     manifest: ShortVideoRenderManifest;
@@ -133,30 +135,9 @@ function deleteTrackDialogItemCount(dialog: DeleteTrackDialogState): number {
 
 const TIMELINE_HEIGHT_STORAGE_KEY = 'short_video_editor_timeline_extra_height_v1';
 const TRACK_LABELS_COLUMN_WIDTH_STORAGE_KEY = 'short_video_editor_track_labels_column_width_v1';
-const TIMELINE_ZOOM_STORAGE_KEY = 'short_video_editor_timeline_scale_width_v1';
 const DEFAULT_TRACK_LABELS_COLUMN_WIDTH = 100;
 const MIN_TRACK_LABELS_COLUMN_WIDTH = 80;
 const MAX_TRACK_LABELS_COLUMN_WIDTH = 360;
-const TIMELINE_ZOOM_MIN = 24;
-const TIMELINE_ZOOM_MAX = 168;
-const TIMELINE_ZOOM_DEFAULT = 56;
-const TIMELINE_ZOOM_STEP = 8;
-
-function clampTimelineScaleWidth(value: number): number {
-    return Math.max(TIMELINE_ZOOM_MIN, Math.min(TIMELINE_ZOOM_MAX, value));
-}
-
-function readTimelineScaleWidth(): number {
-    if (typeof window === 'undefined') {
-        return TIMELINE_ZOOM_DEFAULT;
-    }
-    const raw = window.localStorage.getItem(TIMELINE_ZOOM_STORAGE_KEY);
-    const parsed = raw ? Number(raw) : TIMELINE_ZOOM_DEFAULT;
-    if (!Number.isFinite(parsed)) {
-        return TIMELINE_ZOOM_DEFAULT;
-    }
-    return clampTimelineScaleWidth(parsed);
-}
 
 function clampTrackLabelsColumnWidth(value: number): number {
     return Math.max(MIN_TRACK_LABELS_COLUMN_WIDTH, Math.min(MAX_TRACK_LABELS_COLUMN_WIDTH, value));
@@ -172,93 +153,6 @@ function readTrackLabelsColumnWidth(): number {
         return DEFAULT_TRACK_LABELS_COLUMN_WIDTH;
     }
     return clampTrackLabelsColumnWidth(parsed);
-}
-
-type TimelineZoomControlsProps = {
-    value: number;
-    onChange: (next: number) => void;
-};
-
-function TimelineZoomControls({ value, onChange }: TimelineZoomControlsProps) {
-    const zoomOut = () => onChange(clampTimelineScaleWidth(value - TIMELINE_ZOOM_STEP));
-    const zoomIn = () => onChange(clampTimelineScaleWidth(value + TIMELINE_ZOOM_STEP));
-
-    return (
-        <Box
-            sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.75,
-                width: 172,
-                flexShrink: 0,
-            }}
-        >
-            <Tooltip title="Thu nhỏ timeline">
-                <span>
-                    <IconButton
-                        size="small"
-                        aria-label="Thu nhỏ timeline"
-                        onClick={zoomOut}
-                        disabled={value <= TIMELINE_ZOOM_MIN}
-                        sx={{
-                            border: 1,
-                            borderColor: 'divider',
-                            borderRadius: 1,
-                            width: 28,
-                            height: 28,
-                            color: 'text.secondary',
-                        }}
-                    >
-                        <RemoveIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                </span>
-            </Tooltip>
-            <Slider
-                size="small"
-                value={value}
-                min={TIMELINE_ZOOM_MIN}
-                max={TIMELINE_ZOOM_MAX}
-                step={TIMELINE_ZOOM_STEP}
-                onChange={(_event, next) => {
-                    if (typeof next === 'number') {
-                        onChange(clampTimelineScaleWidth(next));
-                    }
-                }}
-                aria-label="Phóng to timeline"
-                sx={{
-                    flex: 1,
-                    mx: 0.25,
-                    color: 'text.secondary',
-                    height: 4,
-                    py: 0.75,
-                    '& .MuiSlider-thumb': {
-                        width: 12,
-                        height: 12,
-                    },
-                    '& .MuiSlider-rail': {
-                        opacity: 0.35,
-                    },
-                }}
-            />
-            <Tooltip title="Phóng to timeline">
-                <span>
-                    <IconButton
-                        size="small"
-                        aria-label="Phóng to timeline"
-                        onClick={zoomIn}
-                        disabled={value >= TIMELINE_ZOOM_MAX}
-                        sx={{
-                            width: 28,
-                            height: 28,
-                            color: 'text.secondary',
-                        }}
-                    >
-                        <AddIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                </span>
-            </Tooltip>
-        </Box>
-    );
 }
 
 function getTimelineScrollGrids(host: HTMLElement): HTMLElement[] {
@@ -1567,14 +1461,9 @@ export default function ShortVideoEditorTimeline({
     const [trackLabelsColumnWidth, setTrackLabelsColumnWidth] = React.useState(readTrackLabelsColumnWidth);
     const trackLabelsColumnWidthRef = React.useRef(trackLabelsColumnWidth);
     trackLabelsColumnWidthRef.current = trackLabelsColumnWidth;
-    const [timelineScaleWidth, setTimelineScaleWidth] = React.useState(readTimelineScaleWidth);
-
-    React.useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-        window.localStorage.setItem(TIMELINE_ZOOM_STORAGE_KEY, String(timelineScaleWidth));
-    }, [timelineScaleWidth]);
+    const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
+        SHORT_VIDEO_EDITOR_TIMELINE_ZOOM_STORAGE_KEY,
+    );
 
     React.useEffect(() => {
         if (saving) {

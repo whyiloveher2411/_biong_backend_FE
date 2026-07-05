@@ -100,11 +100,17 @@ html, body {
   z-index: 1;
   pointer-events: none;
 }
-.caption-group {
+.caption-group-wrap {
   position: absolute;
   left: 50%;
-  bottom: 12%;
+  bottom: 48px;   /* sát mép dưới — import_html beat không chừa caption band */
   transform: translateX(-50%);
+  z-index: 2;
+}
+.caption-group {
+  position: absolute;
+  left: 0;
+  bottom: 0;
   z-index: 2;
 }
 .caption-word--active {
@@ -129,8 +135,12 @@ html, body {
 | 1 | Beat scenes |
 | 2 | Ambient layer host |
 | 10 | Narration audio |
-| 11 | BGM global |
+| 11 | BGM chain segment 1 |
 | 12 | Hook SFX |
+| 13 | BGM chain segment 2 |
+| 15 | BGM chain segment 3 |
+| 17 | BGM chain segment 4 |
+| 19 | BGM chain segment 5 |
 | 20 | Caption host (full duration) |
 | 21 | Watermark host (full duration) |
 

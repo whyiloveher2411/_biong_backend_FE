@@ -212,3 +212,53 @@ export function resolveActiveBeatSection(map: BeatMap | null, timeSec: number): 
     }
     return map.sections[0];
 }
+
+export function isBeatHtmlMissing(beatHtml: Record<string, BeatHtmlEntry>, beatId: string): boolean {
+    return !String(beatHtml[beatId]?.html || '').trim();
+}
+
+export function countMissingBeatHtml(map: BeatMap | null, beatHtml: Record<string, BeatHtmlEntry>): number {
+    if (!map?.sections?.length) {
+        return 0;
+    }
+    return map.sections.filter((section) => isBeatHtmlMissing(beatHtml, section.id)).length;
+}
+
+export function listMissingBeatIds(map: BeatMap | null, beatHtml: Record<string, BeatHtmlEntry>): string[] {
+    if (!map?.sections?.length) {
+        return [];
+    }
+    return map.sections
+        .filter((section) => isBeatHtmlMissing(beatHtml, section.id))
+        .map((section) => section.id);
+}
+
+export function listBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): string[] {
+    return Object.entries(beatHtml)
+        .filter(([, entry]) => String(entry?.html || '').trim() !== '')
+        .map(([beatId]) => beatId);
+}
+
+export function countBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): number {
+    return listBeatIdsWithHtml(beatHtml).length;
+}
+
+/** Gán hf_prompt_type cho mọi beat chưa có HTML (trước khi agent tự sinh). */
+export function applyHfPromptTypeToMissingBeats(
+    map: BeatMap,
+    beatHtml: Record<string, BeatHtmlEntry>,
+    hfPromptType: HfPromptTypeKey | string,
+): BeatMap {
+    const type = String(hfPromptType || '').trim();
+    if (!type) {
+        return map;
+    }
+    return {
+        ...map,
+        sections: map.sections.map((section) => (
+            isBeatHtmlMissing(beatHtml, section.id)
+                ? { ...section, hf_prompt_type: type }
+                : section
+        )),
+    };
+}

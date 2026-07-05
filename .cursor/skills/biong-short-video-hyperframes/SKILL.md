@@ -66,18 +66,18 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 3. Sinh `visual_shot_plan` (**N beats** bám audio) → `update_agent_status` + `assets/visual-shot-plan.json`
 4. `assign-beat-prompt-types.mjs` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
 5. **Mỗi beat:** đọc `@hyperframes/prompts/{hf_prompt_type}.md` → viết `compositions/beat_N.html` (hf-seek)
-6. `search_meme_sound` (hook) + `search_bgm` + `search_giphy` / stock **bg only**
+6. `search_meme_sound` (hook) + `search_bgm` (limit=8, BGM chain) + `search_giphy` / stock **bg only**
 7. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
-8. Embed SFX track 12 (hook) + beat-move tracks 14–21 + BGM track 11
+8. `wire-bgm-chain.mjs` + SFX track 12 (hook) + beat-move tracks 14–21 + BGM chain track 11/13/15…
 
 | Tool | Dùng khi |
 |------|----------|
 | `short_video_search_meme_sound` | Hook SFX — vine boom, sấm sét (giây 0) |
 | `short_video_search_stock_media` | **bg_media** only — opacity 0.3–0.6, không hero full-bleed |
-| `short_video_search_bgm` | Nhạc nền Pixabay — 1 track/video |
+| `short_video_search_bgm` | Nhạc nền Pixabay — BGM chain (limit=8, cùng mood) + `wire-bgm-chain.mjs` |
 | `short_video_search_giphy` | accent_media sticker/gif từ shot-plan |
 
-Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global` + mỗi beat (`hf_prompt_type`, `accent_media`, `bg_media`).
+Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global`/`bgm_2`… + `assets/bgm-chain.json` + mỗi beat (`hf_prompt_type`, `accent_media`, `bg_media`).
 
 **Tần suất:** hook SFX bắt buộc; ≥1 BGM; ambient layer bắt buộc; preflight `check-continuous-motion.mjs` + `check-visual-density.mjs` + `check-hf-seek-beat.mjs`
 
@@ -130,12 +130,18 @@ short_video_save_audio_script({
 
 ## Import HTML assemble (`render_mode=import_html`)
 
-Admin dán beat HTML từ chatbot ngoài — **không** creative shot-plan. Đọc [import-html-beat-render.md](references/import-html-beat-render.md).
+Admin dán beat HTML từ chatbot ngoài — **không** creative shot-plan. Đọc [import-html-beat-render.md](references/import-html-beat-render.md) · [import-html-assemble-bgm.md](references/import-html-assemble-bgm.md) · [import-html-beat-originality.md](references/import-html-beat-originality.md).
+
+**Phần A (`import_html_full`):** sinh beat qua MCP prompt — **cấm** copy HTML từ video cũ (`storage/agent-renders/*/compositions/`, `beats-draft/`). Mỗi beat = prompt server + `hf_prompt_type` + thiết kế mới.
 
 1. Ghi `compositions/beat_N.html` từ CMS (giữ visual user)
 2. **Bắt buộc:** `normalize-import-html-beat-for-render.mjs --localize-images` (scaffolding `<template>` + `window.__timelines`)
-3. Preflight: `check-import-html-beat-render.mjs` (không dùng `check-hf-seek-beat.mjs`)
-4. Ghép caption / ambient / watermark → render
+3. `search_bgm({ limit: 8 })` → tải `bgm_1.mp3`, `bgm_2.mp3`… → `assets/bgm-chain.json` → **`wire-bgm-chain.mjs`**
+4. Wire `index.html`: narration track 10 + **BGM chain** (track 11/13/15…, crossfade 0.5s)
+5. Preflight: `check-import-html-beat-render.mjs` + `check-media-stack.mjs --strict`
+6. Ghép caption / ambient / watermark → render
+
+**Cấm** import assemble: stock/Giphy/SFX MCP; **cấm** BGM `loop`. **Cho phép:** `search_bgm` + `wire-bgm-chain.mjs`.
 
 Preview admin dùng `hf-seek` trong iframe — **không** sửa HTML trên CMS; normalize chỉ trên disk trước render.
 
@@ -338,7 +344,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] `compositions/ambient-layer.html` + `window.__timelines["ambient"]`
 - [ ] Z-depth ≥2 bands 80–800 — [overlay-layer-stack.md](references/overlay-layer-stack.md)
 - [ ] Stock chỉ bg_media — không full-bleed hero khi có registry
-- [ ] BGM track 11: `data-start=0`, `data-duration=totalVideoSec`, volume 0.3 (khoảng 0.25–0.35)
+- [ ] BGM chain: `bgm-chain.json` + `wire-bgm-chain.mjs` — coverage ≥ totalVideoSec, crossfade 0.5s, **cấm loop**
 - [ ] Không path `assets/` bịa — mọi file qua MCP (trừ logo Spacedev bundled)
 - [ ] Registry blocks installed + wired
 - [ ] Không linear entrance; stagger mỗi beat

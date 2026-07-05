@@ -278,6 +278,12 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                                 color={state.importHtmlReady ? 'success' : 'default'}
                             />
 
+                            {state.missingBeatHtmlCount > 0 ? (
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                                    Beat thiếu HTML: dùng nút &quot;Mở Gemini tất cả beat thiếu&quot; trên thanh timeline (góc phải) — extension tự điền prompt; bạn kiểm tra rồi Lưu HTML từng tab.
+                                </Typography>
+                            ) : null}
+
                             <Tabs
                                 value={state.activeBeatId || state.beatMap.sections[0]?.id}
                                 onChange={(_e, value) => state.setActiveBeatId(String(value))}
@@ -368,31 +374,16 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                                 Tự động HTML beat + ghép video
                             </LoadingButton>
                             {state.importHtmlReady ? (
-                                <>
-                                    <LoadingButton
-                                        size="small"
-                                        variant="outlined"
-                                        color="primary"
-                                        fullWidth
-                                        loading={state.launchingImportAssemble}
-                                        disabled={state.agentVideoStatus === 'processing'}
-                                        startIcon={<PlayArrowIcon />}
-                                        onClick={() => { void state.handleLaunchAgentImportAssemble(); }}
-                                        sx={{ mb: 1 }}
-                                    >
-                                        {state.hasAgentVideo ? 'Ghép lại từ HTML' : 'Chạy agent ghép từ HTML'}
-                                    </LoadingButton>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="primary"
-                                        fullWidth
-                                        startIcon={<ContentCopyIcon />}
-                                        onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
-                                    >
-                                        Copy prompt ghép
-                                    </Button>
-                                </>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    fullWidth
+                                    startIcon={<ContentCopyIcon />}
+                                    onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
+                                >
+                                    Copy prompt ghép
+                                </Button>
                             ) : (
                                 <Typography variant="caption" color="text.secondary" display="block">
                                     HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — agent sẽ sinh phần thiếu
@@ -405,8 +396,8 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                 {state.importHtmlReady ? (
                     <Alert severity="success">
                         {state.hasAgentVideo
-                            ? 'Sẵn sàng ghép lại — dùng "Tự động HTML beat + ghép video" hoặc "Ghép lại từ HTML".'
-                            : 'Sẵn sàng ghép — dùng "Tự động HTML beat + ghép video" hoặc "Chạy agent ghép từ HTML".'}
+                            ? 'Sẵn sàng ghép lại — dùng "Ghép lại từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'
+                            : 'Sẵn sàng ghép — dùng "Chạy agent ghép từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'}
                     </Alert>
                 ) : state.beatMapReady && state.whisperStatus === 'completed' ? (
                     <Alert severity="info">

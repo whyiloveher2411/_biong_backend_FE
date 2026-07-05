@@ -1,8 +1,15 @@
 import { getAccessToken } from 'store/user/user.reducers';
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
+import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
 
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
+
+const OPEN_IMPORT_HTML_GEMINI_EVENT = 'vn4-open-import-html-beat-gemini';
+const OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT = 'vn4-open-import-html-beat-gemini-result';
+
+/** Extension dispatch sau khi lưu beat HTML từ Gemini — drawer Agent Video lắng nghe để reload. */
+export const IMPORT_HTML_BEAT_HTML_SAVED_EVENT = 'vn4-import-html-beat-html-saved';
 
 export const IMPORT_HTML_PIPELINE_FILTER_NAME =
     'Pipeline HTML chatbot (whisper + chia beat + HTML beat)';
@@ -102,14 +109,174 @@ export async function fetchImportHtmlBeatHtmlPrompt(
     return res.json();
 }
 
+function resolveImportHtmlGeminiStage(
+    action: ImportHtmlWorkflowAction,
+): 'import_html_beat_division' | 'import_html_beat_html' | null {
+    if (action === 'import_html_beat_division') {
+        return 'import_html_beat_division';
+    }
+    if (action === 'import_html_beat_html') {
+        return 'import_html_beat_html';
+    }
+    return null;
+}
+
+function resolveImportHtmlSaveApiUrl(
+    stage: 'import_html_beat_division' | 'import_html_beat_html',
+): string {
+    return stage === 'import_html_beat_division'
+        ? importHtmlBeatDivisionSaveApiUrl()
+        : importHtmlBeatHtmlSaveApiUrl();
+}
+
+function createImportHtmlGeminiRequestId(): string {
+    return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function dispatchOpenImportHtmlGeminiEvent(detail: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+    const requestId = String(detail.request_id || createImportHtmlGeminiRequestId());
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (result: { ok: boolean; error?: string }) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            window.clearTimeout(timer);
+            document.removeEventListener(OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT, onResult);
+            resolve(result);
+        };
+
+        const onResult = (event: Event) => {
+            const custom = event as CustomEvent<{ ok?: boolean; error?: string; request_id?: string }>;
+            const resultRequestId = String(custom.detail?.request_id || '').trim();
+            if (resultRequestId && resultRequestId !== requestId) {
+                return;
+            }
+            finish({
+                ok: Boolean(custom.detail?.ok),
+                error: custom.detail?.error ? String(custom.detail.error) : undefined,
+            });
+        };
+
+        const timer = window.setTimeout(() => {
+            finish({ ok: false, error: 'Extension không phản hồi — hãy reload extension và F5 CMS' });
+        }, 15000);
+
+        document.addEventListener(OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT, onResult);
+        document.dispatchEvent(
+            new CustomEvent(OPEN_IMPORT_HTML_GEMINI_EVENT, {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    ...detail,
+                    request_id: requestId,
+                },
+            }),
+        );
+    });
+}
+
+const BULK_OPEN_IMPORT_HTML_GEMINI_DELAY_MS = 500;
+
+function sleepMs(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        window.setTimeout(resolve, ms);
+    });
+}
+
+export async function openImportHtmlBeatGeminiFillOnly(options: {
+    shortVideoId: number;
+    beatId?: string;
+    stage?: 'import_html_beat_division' | 'import_html_beat_html';
+    autoSubmit?: boolean;
+}): Promise<void> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+
+    const beatId = String(options.beatId || '').trim();
+    const stage = options.stage
+        ?? (beatId ? 'import_html_beat_html' : 'import_html_beat_division');
+
+    if (stage === 'import_html_beat_html' && !beatId) {
+        throw new Error('Thiếu beat_id');
+    }
+
+    const extensionReady = await waitForExtensionReady(8000);
+    if (!extensionReady) {
+        throw new Error(
+            'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
+        );
+    }
+
+    const saveApiUrl = resolveImportHtmlSaveApiUrl(stage);
+    const accessToken = getAccessToken() ?? '';
+    const result = await dispatchOpenImportHtmlGeminiEvent({
+        short_video_id: shortVideoId,
+        beat_id: beatId,
+        stage,
+        save_api_url: saveApiUrl,
+        access_token: accessToken,
+        ...(options.autoSubmit ? { auto_submit: true } : {}),
+    });
+
+    if (!result.ok) {
+        throw new Error(result.error || 'Không mở được tab Gemini');
+    }
+}
+
+export async function openImportHtmlBeatGeminiForMissingBeats(options: {
+    shortVideoId: number;
+    beatIds: string[];
+    autoSubmit?: boolean;
+}): Promise<{ opened: number; failed: string[] }> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const beatIds = (options.beatIds || []).map((id) => String(id).trim()).filter(Boolean);
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+    if (!beatIds.length) {
+        return { opened: 0, failed: [] };
+    }
+
+    const failed: string[] = [];
+    let opened = 0;
+
+    for (let i = 0; i < beatIds.length; i += 1) {
+        if (i > 0) {
+            await sleepMs(BULK_OPEN_IMPORT_HTML_GEMINI_DELAY_MS);
+        }
+        const beatId = beatIds[i];
+        try {
+            await openImportHtmlBeatGeminiFillOnly({
+                shortVideoId,
+                beatId,
+                stage: 'import_html_beat_html',
+                autoSubmit: options.autoSubmit,
+            });
+            opened += 1;
+        } catch {
+            failed.push(beatId);
+        }
+    }
+
+    if (opened === 0 && failed.length > 0) {
+        throw new Error(`Không mở được tab Gemini cho beat: ${failed.join(', ')}`);
+    }
+
+    return { opened, failed };
+}
+
+/** @deprecated Chỉ giữ metadata URL — prompt không gắn hash. Dùng openImportHtmlBeatGeminiFillOnly. */
 export function buildImportHtmlGeminiWorkflowUrl(options: {
     shortVideoId: number;
     stage: 'import_html_beat_division' | 'import_html_beat_html';
     beatId?: string;
-    prompt: string;
     auto?: boolean;
 }): string {
-    const { shortVideoId, stage, beatId, prompt, auto } = options;
+    const { shortVideoId, stage, beatId, auto } = options;
     const accessToken = getAccessToken() ?? '';
     const apiUrl = stage === 'import_html_beat_division'
         ? importHtmlBeatDivisionSaveApiUrl()
@@ -124,6 +291,7 @@ export function buildImportHtmlGeminiWorkflowUrl(options: {
         api_url: apiUrl,
         content_type: stage,
         fresh_session: '1',
+        marketing_fill_only: '1',
     });
 
     if (beatId) {
@@ -133,11 +301,6 @@ export function buildImportHtmlGeminiWorkflowUrl(options: {
     if (auto) {
         hashParams.set('marketing_workflow_auto', '1');
         hashParams.set('marketing_workflow_step', stage);
-    }
-
-    const promptTrimmed = prompt.trim();
-    if (promptTrimmed) {
-        hashParams.set('marketing_prompt', encodeURIComponent(promptTrimmed));
     }
 
     url.hash = hashParams.toString();
@@ -161,39 +324,30 @@ export async function openImportHtmlGeminiWorkflow(options: {
         return;
     }
 
+    const stage = resolveImportHtmlGeminiStage(options.action);
+    if (!stage) {
+        window.alert('Hành động HTML chatbot không hợp lệ');
+        return;
+    }
+
     const beatId = String(options.beatId || '').trim();
-    if (options.action === 'import_html_beat_html' && !beatId) {
+    if (stage === 'import_html_beat_html' && !beatId) {
         window.alert('Thiếu beat_id');
         return;
     }
 
-    const res = options.action === 'import_html_beat_division'
-        ? await fetchImportHtmlBeatDivisionPrompt(shortVideoId)
-        : await fetchImportHtmlBeatHtmlPrompt(shortVideoId, beatId);
-
-    if (!res?.success) {
-        const msg = typeof res?.message === 'object'
-            ? res.message?.content
-            : typeof res?.message === 'string'
-              ? res.message
-              : 'Không tạo được prompt HTML chatbot';
-        window.alert(msg || 'Không tạo được prompt HTML chatbot');
+    if (options.auto) {
+        window.alert('Auto HTML chatbot chạy qua extension trên list Short video — không mở tab thủ công.');
         return;
     }
 
-    const prompt = String(res.prompt || '').trim();
-    if (!prompt) {
-        window.alert('Prompt HTML chatbot trống');
-        return;
+    try {
+        await openImportHtmlBeatGeminiFillOnly({
+            shortVideoId,
+            beatId: beatId || undefined,
+            stage,
+        });
+    } catch (e) {
+        window.alert(e instanceof Error ? e.message : String(e));
     }
-
-    const geminiUrl = buildImportHtmlGeminiWorkflowUrl({
-        shortVideoId,
-        stage: options.action,
-        beatId: beatId || undefined,
-        prompt,
-        auto: options.auto,
-    });
-
-    window.open(geminiUrl, '_blank', 'noopener,noreferrer');
 }
