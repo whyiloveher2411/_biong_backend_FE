@@ -13,10 +13,12 @@ import {
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { formatTtsChain, hfThemeLabel, phaseLabel, platformLabel } from './agentVideoUi';
+import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -55,6 +57,38 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
+    const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
+    const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
+    const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+
+    const handleOpenCreateScriptGemini = async () => {
+        setOpeningCreateScriptGemini(true);
+        try {
+            await openCreateScriptGemini({
+                shortVideoId: state.shortVideoId,
+                title: state.title,
+                audioScript: state.audioScript,
+                hasScript: state.hasScript,
+            });
+        } finally {
+            setOpeningCreateScriptGemini(false);
+        }
+    };
+
+    const handleOpenImproveScriptGemini = async () => {
+        setOpeningImproveScriptGemini(true);
+        try {
+            await openImproveScriptGemini({
+                shortVideoId: state.shortVideoId,
+                title: state.title,
+                audioScript: state.audioScript,
+                hasScript: state.hasScript,
+            });
+        } finally {
+            setOpeningImproveScriptGemini(false);
+        }
+    };
+
     const chainDisplay = state.ttsChain.length > 0
         ? formatTtsChain(state.ttsChain)
         : state.chainLabel;
@@ -196,26 +230,27 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             color="primary"
                             fullWidth
                             sx={workflowActionButtonSx}
-                            loading={state.copyingCreateScriptPrompt}
-                            startIcon={<ContentCopyIcon />}
-                            onClick={() => { void state.handleCopyCreateScriptPrompt(); }}
+                            loading={openingCreateScriptGemini}
+                            startIcon={<OpenInNewIcon />}
+                            onClick={() => { void handleOpenCreateScriptGemini(); }}
                         >
-                            Copy prompt sinh script
+                            Mở Gemini sinh script
                         </LoadingButton>
                     )}
 
                     {state.hasScript && !state.scriptApproved && (
-                        <Button
+                        <LoadingButton
                             size="small"
                             variant="outlined"
                             color="primary"
                             fullWidth
                             sx={workflowActionButtonSx}
-                            startIcon={<ContentCopyIcon />}
-                            onClick={() => { void state.handleCopyImproveScriptPrompt(); }}
+                            loading={openingImproveScriptGemini}
+                            startIcon={<OpenInNewIcon />}
+                            onClick={() => { void handleOpenImproveScriptGemini(); }}
                         >
-                            Copy prompt cải thiện script
-                        </Button>
+                            Mở Gemini cải thiện script
+                        </LoadingButton>
                     )}
 
                     {!state.scriptApproved ? (

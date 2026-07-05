@@ -12,7 +12,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SaveIcon from '@mui/icons-material/Save';
@@ -20,6 +20,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { TTS_PLATFORM_OPTIONS } from './agentVideoUi';
+import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -67,6 +68,37 @@ function StepHeader({
 
 export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+    const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
+    const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
+    const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+
+    const handleOpenCreateScriptGemini = async () => {
+        setOpeningCreateScriptGemini(true);
+        try {
+            await openCreateScriptGemini({
+                shortVideoId: state.shortVideoId,
+                title: state.title,
+                audioScript: state.audioScript,
+                hasScript: state.hasScript,
+            });
+        } finally {
+            setOpeningCreateScriptGemini(false);
+        }
+    };
+
+    const handleOpenImproveScriptGemini = async () => {
+        setOpeningImproveScriptGemini(true);
+        try {
+            await openImproveScriptGemini({
+                shortVideoId: state.shortVideoId,
+                title: state.title,
+                audioScript: state.audioScript,
+                hasScript: state.hasScript,
+            });
+        } finally {
+            setOpeningImproveScriptGemini(false);
+        }
+    };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -95,32 +127,33 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         <StepHeader
                             step={1}
                             title="Sinh script (chatbot)"
-                            description="Copy prompt → dán vào ChatGPT / Claude / Gemini → dán kết quả vào ô dưới."
+                            description="Mở Gemini qua extension — tự điền prompt và Gửi."
                         />
                         <Typography variant="caption" color="text.secondary" component="div">
-                            <Box component="span" display="block">1. Bấm copy prompt sinh script.</Box>
-                            <Box component="span" display="block">2. Dán prompt vào chatbot bên ngoài và chờ audio script.</Box>
-                            <Box component="span" display="block">3. Dán kết quả vào ô script → sang bước 2 để lưu.</Box>
+                            <Box component="span" display="block">1. Bấm Mở Gemini sinh script (hoặc cải thiện).</Box>
+                            <Box component="span" display="block">2. Kiểm tra kết quả trên tab Gemini, copy audio script.</Box>
+                            <Box component="span" display="block">3. Bấm Lưu script vào CMS trên tab Gemini → sang bước 2 để duyệt.</Box>
                         </Typography>
                         <Stack direction="row" spacing={1} flexWrap="wrap">
                             <LoadingButton
                                 size="small"
                                 variant="contained"
-                                loading={state.copyingCreateScriptPrompt}
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyCreateScriptPrompt(); }}
+                                loading={openingCreateScriptGemini}
+                                startIcon={<OpenInNewIcon />}
+                                onClick={() => { void handleOpenCreateScriptGemini(); }}
                             >
-                                Copy prompt sinh script
+                                Mở Gemini sinh script
                             </LoadingButton>
-                            <Button
+                            <LoadingButton
                                 size="small"
                                 variant="outlined"
-                                startIcon={<ContentCopyIcon />}
+                                startIcon={<OpenInNewIcon />}
                                 disabled={!state.hasScript}
-                                onClick={() => { void state.handleCopyImproveScriptPrompt(); }}
+                                loading={openingImproveScriptGemini}
+                                onClick={() => { void handleOpenImproveScriptGemini(); }}
                             >
-                                Copy prompt cải thiện
-                            </Button>
+                                Mở Gemini cải thiện
+                            </LoadingButton>
                             <Button
                                 size="small"
                                 variant="text"
@@ -141,7 +174,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         />
                         {!state.hasScript ? (
                             <Alert severity="info">
-                                Chưa có nội dung script. Copy prompt sinh script và dán kết quả chatbot vào ô trên.
+                                Chưa có nội dung script. Bấm Mở Gemini sinh script — extension tự điền và Gửi.
                             </Alert>
                         ) : null}
                     </Stack>

@@ -243,6 +243,8 @@ function ActionOnPost({
                     if (result.ok) {
                         window.showMessage(result.message, 'info');
                         maybeRefreshAfterAction(item);
+                    } else {
+                        window.showMessage(result.message || 'Không copy được prompt', 'error');
                     }
                 } finally {
                     setLoadingStateButton((prev) => ({

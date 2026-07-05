@@ -2,6 +2,7 @@ import { getAccessToken } from 'store/user/user.reducers';
 import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
+import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
 
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
 
@@ -129,52 +130,13 @@ function resolveImportHtmlSaveApiUrl(
         : importHtmlBeatHtmlSaveApiUrl();
 }
 
-function createImportHtmlGeminiRequestId(): string {
-    return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
 function dispatchOpenImportHtmlGeminiEvent(detail: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const requestId = String(detail.request_id || createImportHtmlGeminiRequestId());
-    return new Promise((resolve) => {
-        let settled = false;
-        const finish = (result: { ok: boolean; error?: string }) => {
-            if (settled) {
-                return;
-            }
-            settled = true;
-            window.clearTimeout(timer);
-            document.removeEventListener(OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT, onResult);
-            resolve(result);
-        };
-
-        const onResult = (event: Event) => {
-            const custom = event as CustomEvent<{ ok?: boolean; error?: string; request_id?: string }>;
-            const resultRequestId = String(custom.detail?.request_id || '').trim();
-            if (resultRequestId && resultRequestId !== requestId) {
-                return;
-            }
-            finish({
-                ok: Boolean(custom.detail?.ok),
-                error: custom.detail?.error ? String(custom.detail.error) : undefined,
-            });
-        };
-
-        const timer = window.setTimeout(() => {
-            finish({ ok: false, error: 'Extension không phản hồi — hãy reload extension và F5 CMS' });
-        }, 15000);
-
-        document.addEventListener(OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT, onResult);
-        document.dispatchEvent(
-            new CustomEvent(OPEN_IMPORT_HTML_GEMINI_EVENT, {
-                bubbles: true,
-                composed: true,
-                detail: {
-                    ...detail,
-                    request_id: requestId,
-                },
-            }),
-        );
-    });
+    return dispatchCmsExtensionEvent(
+        OPEN_IMPORT_HTML_GEMINI_EVENT,
+        detail,
+        OPEN_IMPORT_HTML_GEMINI_RESULT_EVENT,
+        12000,
+    );
 }
 
 const BULK_OPEN_IMPORT_HTML_GEMINI_DELAY_MS = 500;

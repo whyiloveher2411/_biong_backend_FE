@@ -13,6 +13,7 @@ import {
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import Button from 'components/atoms/Button';
@@ -208,16 +209,22 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                         size="small"
                         variant="outlined"
                         fullWidth
-                        loading={state.copyingBeatDivisionPrompt}
+                        loading={state.openingBeatDivisionGemini}
                         disabled={state.whisperStatus !== 'completed'}
-                        startIcon={<ContentCopyIcon />}
-                        onClick={() => { void state.handleCopyBeatDivisionPrompt(); }}
+                        startIcon={<OpenInNewIcon />}
+                        onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
                     >
-                        Copy prompt chia beat
+                        Mở Gemini chia beat
                     </LoadingButton>
 
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 1 }}>
-                        Dán JSON beat-map từ chatbot (1 JSON duy nhất — không HTML).
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
+                        1. Bấm Mở Gemini chia beat — extension tự điền và Gửi.
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        2. Copy JSON beat-map từ Gemini → bấm Lưu beat-map vào CMS trên tab đó.
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        Hoặc dán JSON beat-map thủ công bên dưới (1 JSON duy nhất — không HTML).
                     </Typography>
 
                     <TextField

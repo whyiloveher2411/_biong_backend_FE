@@ -7,6 +7,9 @@ import {
 } from 'helpers/marketingShortVideoAgentPrompt';
 import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
 import {
+    AGENT_AUDIO_SCRIPT_SAVED_EVENT,
+} from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
+import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
     openImportHtmlBeatGeminiFillOnly,
     openImportHtmlBeatGeminiForMissingBeats,
@@ -40,7 +43,6 @@ import {
     readAgentVideoScriptDraft,
     writeAgentVideoScriptDraft,
 } from './agentVideoDraft';
-import { buildBeatDivisionPrompt } from './agentVideoBeatDivisionPrompt';
 import {
     applyHfPromptTypeToMissingBeats,
     beatMapToJson,
@@ -61,8 +63,8 @@ import {
 } from './agentVideoImportHtmlPrompt';
 import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptCatalog';
 import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
-import { buildImproveAudioScriptPrompt } from './agentVideoImproveScriptPrompt';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
+import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 
 type UseAgentVideoContentArgs = {
     open: boolean;
@@ -73,6 +75,7 @@ type UseAgentVideoContentArgs = {
 export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgentVideoContentArgs) {
     const api = useAjax();
     const { showMessage } = useFloatingMessages();
+    const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const apiRef = React.useRef(api);
     apiRef.current = api;
 
@@ -144,8 +147,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [launchingImportHtmlFull, setLaunchingImportHtmlFull] = React.useState(false);
     const [transcribingWhisper, setTranscribingWhisper] = React.useState(false);
     const [savingImportHtml, setSavingImportHtml] = React.useState(false);
-    const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
-    const [copyingCreateScriptPrompt, setCopyingCreateScriptPrompt] = React.useState(false);
+    const [openingBeatDivisionGemini, setOpeningBeatDivisionGemini] = React.useState(false);
+    const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
+    const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
@@ -295,9 +299,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 loadRow();
             }
         };
+        const onAgentAudioScriptSaved = (event: Event) => {
+            const custom = event as CustomEvent<{
+                shortVideoId?: number;
+                short_video_id?: number;
+            }>;
+            const detail = custom.detail || {};
+            const savedShortVideoId = Number(detail.shortVideoId ?? detail.short_video_id ?? 0);
+            if (savedShortVideoId > 0 && savedShortVideoId === shortVideoId) {
+                loadRow();
+            }
+        };
         document.addEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
+        document.addEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
         return () => {
             document.removeEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
+            document.removeEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
         };
     }, [loadRow, open, shortVideoId]);
 
@@ -398,7 +415,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const handleCopyScript = async () => {
         if (!audioScript) {
-            showMessage('Chưa có audio_script — hãy copy prompt sinh script trước', 'warning');
+            showMessage('Chưa có audio_script — hãy mở Gemini sinh script trước', 'warning');
             return;
         }
         try {
@@ -409,33 +426,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleCopyCreateScriptPrompt = async () => {
-        setCopyingCreateScriptPrompt(true);
+    const handleOpenCreateScriptGemini = async () => {
+        setOpeningCreateScriptGemini(true);
         try {
-            const result = await copyShortVideoAgentPromptToClipboard(shortVideoId, '1', { variant: 'chatbot' });
-            showMessage(result.message, result.ok ? 'success' : 'error');
-        } catch (e) {
-            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            await openCreateScriptGemini({
+                shortVideoId,
+                title,
+                audioScript,
+                hasScript,
+            });
         } finally {
-            setCopyingCreateScriptPrompt(false);
+            setOpeningCreateScriptGemini(false);
         }
     };
 
-    const handleCopyImproveScriptPrompt = async () => {
-        if (!audioScript.trim()) {
-            showMessage('Chưa có audio script', 'warning');
-            return;
-        }
-        const prompt = buildImproveAudioScriptPrompt(title, audioScript);
-        if (!prompt) {
-            showMessage('Chưa có audio script', 'warning');
-            return;
-        }
+    const handleOpenImproveScriptGemini = async () => {
+        setOpeningImproveScriptGemini(true);
         try {
-            await copyTextToClipboard(prompt);
-            showMessage('Đã copy prompt cải thiện script', 'success');
-        } catch {
-            showMessage('Không copy được prompt', 'error');
+            await openImproveScriptGemini({
+                shortVideoId,
+                title,
+                audioScript,
+                hasScript,
+            });
+        } finally {
+            setOpeningImproveScriptGemini(false);
         }
     };
 
@@ -738,7 +753,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
     }, []);
 
-    const handleCopyBeatDivisionPrompt = async () => {
+    const handleOpenBeatDivisionGemini = async () => {
         if (whisperStatus !== 'completed') {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
@@ -747,20 +762,18 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Chưa có thời lượng audio', 'warning');
             return;
         }
-        setCopyingBeatDivisionPrompt(true);
+        setOpeningBeatDivisionGemini(true);
         try {
-            const res = await fetchImportHtmlContext(shortVideoId) as ImportHtmlContextPayload;
-            if (!res?.success) {
-                showMessage(parseImportHtmlContextMessage(res?.message) || 'Không lấy được context', 'error');
-                return;
-            }
-            const prompt = buildBeatDivisionPrompt(res);
-            await copyTextToClipboard(prompt);
-            showMessage('Đã copy prompt chia beat', 'success');
+            await openImportHtmlBeatGeminiFillOnly({
+                shortVideoId,
+                stage: 'import_html_beat_division',
+                autoSubmit: true,
+            });
+            showMessage('Đã mở Gemini chia beat — copy JSON rồi bấm Lưu beat-map vào CMS', 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
-            setCopyingBeatDivisionPrompt(false);
+            setOpeningBeatDivisionGemini(false);
         }
     };
 
@@ -1269,8 +1282,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         launchingImportHtmlFull,
         transcribingWhisper,
         savingImportHtml,
-        copyingBeatDivisionPrompt,
-        copyingCreateScriptPrompt,
+        openingBeatDivisionGemini,
+        openingCreateScriptGemini,
+        openingImproveScriptGemini,
         copyingBeatHtmlPromptBeatId,
         pastingBeatHtmlBeatId,
         deletingBeatHtmlBeatId,
@@ -1288,8 +1302,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSocialPostedChange,
         handlePlatformToggle,
         handleCopyScript,
-        handleCopyCreateScriptPrompt,
-        handleCopyImproveScriptPrompt,
+        handleOpenCreateScriptGemini,
+        handleOpenImproveScriptGemini,
+        /** @deprecated Alias cho bundle cũ — dùng handleOpenCreateScriptGemini */
+        handleCopyCreateScriptPrompt: handleOpenCreateScriptGemini,
+        /** @deprecated Alias cho bundle cũ — dùng handleOpenImproveScriptGemini */
+        handleCopyImproveScriptPrompt: handleOpenImproveScriptGemini,
         handleCopyPrompt,
         handleLaunchAgentRender,
         handleLaunchAgentScript,
@@ -1300,7 +1318,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleHfPromptTypeChange,
         handleBeatMapJsonChange,
         handleBeatHtmlChange,
-        handleCopyBeatDivisionPrompt,
+        handleOpenBeatDivisionGemini,
+        /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */
+        handleCopyBeatDivisionPrompt: handleOpenBeatDivisionGemini,
         handleCopyBeatHtmlPrompt,
         handlePasteBeatHtml,
         handleDeleteBeatHtml,
@@ -1309,7 +1329,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenAllMissingBeatGemini,
         handleImportHtmlChange,
         runWhisperTranscribe,
-        handleCopyChatbotPrompt: handleCopyBeatDivisionPrompt,
+        /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */
+        handleCopyChatbotPrompt: handleOpenBeatDivisionGemini,
         handleSaveScript,
         handleApproveScript,
         handleRegenerateTts,
