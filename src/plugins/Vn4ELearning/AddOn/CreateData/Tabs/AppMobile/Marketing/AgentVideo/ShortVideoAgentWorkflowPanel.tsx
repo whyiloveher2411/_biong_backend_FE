@@ -189,33 +189,66 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         Hành động
                     </Typography>
 
-                    {!state.scriptApproved && (
+                    {!state.hasScript && (
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            color="primary"
+                            fullWidth
+                            sx={workflowActionButtonSx}
+                            loading={state.copyingCreateScriptPrompt}
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => { void state.handleCopyCreateScriptPrompt(); }}
+                        >
+                            Copy prompt sinh script
+                        </LoadingButton>
+                    )}
+
+                    {state.hasScript && !state.scriptApproved && (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            fullWidth
+                            sx={workflowActionButtonSx}
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => { void state.handleCopyImproveScriptPrompt(); }}
+                        >
+                            Copy prompt cải thiện script
+                        </Button>
+                    )}
+
+                    {!state.scriptApproved ? (
                         <>
+                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
+                                Nâng cao — agent local Cursor
+                            </Typography>
                             <LoadingButton
                                 size="small"
-                                variant="contained"
-                                color="primary"
+                                variant="outlined"
+                                color="inherit"
                                 fullWidth
                                 sx={workflowActionButtonSx}
                                 loading={state.launchingScript}
+                                disabled={state.hasScript}
                                 startIcon={<PlayArrowIcon />}
                                 onClick={() => { void state.handleLaunchAgentScript(); }}
                             >
-                                Chạy agent bước 1
+                                Chạy agent local bước 1
                             </LoadingButton>
                             <Button
                                 size="small"
-                                variant="outlined"
-                                color="primary"
+                                variant="text"
+                                color="inherit"
                                 fullWidth
                                 sx={workflowActionButtonSx}
                                 startIcon={<ContentCopyIcon />}
                                 onClick={() => { void state.handleCopyPrompt('1'); }}
                             >
-                                Copy prompt bước 1
+                                Copy prompt agent Cursor
                             </Button>
                         </>
-                    )}
+                    ) : null}
 
                     {state.renderMode === 'creative' && state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
                         <>

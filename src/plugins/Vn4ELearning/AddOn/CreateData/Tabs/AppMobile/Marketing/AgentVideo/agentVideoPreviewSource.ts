@@ -12,10 +12,6 @@ export type AgentPreviewSourceInput = {
     importHtml: string;
 };
 
-function hasLocalBeatHtml(beatHtml: Record<string, { html?: string }>): boolean {
-    return Object.values(beatHtml).some((entry) => String(entry?.html || '').trim() !== '');
-}
-
 export function canShowFinalPreview(input: AgentPreviewSourceInput): boolean {
     return String(input.agentVideoUrl || '').trim() !== '';
 }
@@ -24,7 +20,7 @@ export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean 
     if (input.renderMode !== 'import_html' || !input.hasAudio) {
         return false;
     }
-    if (input.beatMapReady && (input.beatsHtmlCompleted > 0 || hasLocalBeatHtml(input.beatHtml))) {
+    if (input.beatMapReady) {
         return true;
     }
     return input.importHtml.trim().length > 0;

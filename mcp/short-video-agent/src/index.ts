@@ -17,12 +17,17 @@ function apiBaseUrl(): string {
   return requireEnv('BIONG_API_BASE_URL').replace(/\/+$/, '');
 }
 
+function apiRootUrl(): string {
+  const baseUrl = apiBaseUrl();
+  return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+}
+
 function mcpToken(): string {
   return requireEnv('BIONG_MCP_TOKEN');
 }
 
 function mcpEndpoint(action: string): string {
-  return `${apiBaseUrl()}/api/admin/plugin/vn4-e-learning/mcp/short-video/${action}`;
+  return `${apiRootUrl()}/admin/plugin/vn4-e-learning/mcp/short-video/${action}`;
 }
 
 async function apiRequest(
@@ -68,7 +73,9 @@ async function apiRequest(
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new Error(`API ${action} trả về không phải JSON (${response.status}): ${text.slice(0, 500)}`);
+    throw new Error(
+      `API ${action} trả về không phải JSON (${response.status}) tại ${url.toString()}: ${text.slice(0, 500)}`
+    );
   }
 
   if (!response.ok) {
@@ -76,7 +83,7 @@ async function apiRequest(
       typeof payload === 'object' && payload !== null && 'message' in payload
         ? String((payload as { message?: unknown }).message ?? response.statusText)
         : response.statusText;
-    throw new Error(`API ${action} lỗi ${response.status}: ${message}`);
+    throw new Error(`API ${action} lỗi ${response.status} tại ${url.toString()}: ${message}`);
   }
 
   return payload;

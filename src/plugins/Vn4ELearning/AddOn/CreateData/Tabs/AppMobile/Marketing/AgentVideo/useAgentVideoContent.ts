@@ -40,7 +40,6 @@ import {
     readAgentVideoScriptDraft,
     writeAgentVideoScriptDraft,
 } from './agentVideoDraft';
-import { buildImproveAudioScriptPrompt } from './agentVideoImproveScriptPrompt';
 import { buildBeatDivisionPrompt } from './agentVideoBeatDivisionPrompt';
 import {
     applyHfPromptTypeToMissingBeats,
@@ -62,6 +61,7 @@ import {
 } from './agentVideoImportHtmlPrompt';
 import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptCatalog';
 import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
+import { buildImproveAudioScriptPrompt } from './agentVideoImproveScriptPrompt';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 
 type UseAgentVideoContentArgs = {
@@ -145,6 +145,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [transcribingWhisper, setTranscribingWhisper] = React.useState(false);
     const [savingImportHtml, setSavingImportHtml] = React.useState(false);
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
+    const [copyingCreateScriptPrompt, setCopyingCreateScriptPrompt] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
@@ -350,6 +351,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const applyBeatMapDraft = React.useCallback((nextBeatMap: BeatMap) => {
+        const json = beatMapToJson(nextBeatMap);
+        const validIds = new Set(nextBeatMap.sections.map((section) => section.id));
+
+        setBeatMap(nextBeatMap);
+        setBeatMapJsonDraft(json);
+        setBeatMapReady(nextBeatMap.sections.length > 0);
+        setBeatsHtmlTotal(nextBeatMap.sections.length);
+        setBeatHtml((prev) => Object.fromEntries(
+            Object.entries(prev).filter(([beatId]) => validIds.has(beatId)),
+        ));
+        setBeatsHtmlCompleted(nextBeatMap.sections.filter(
+            (section) => String(beatHtml[section.id]?.html || '').trim() !== '',
+        ).length);
+        setActiveBeatId((prev) => (prev && validIds.has(prev) ? prev : nextBeatMap.sections[0]?.id || ''));
+    }, [beatHtml]);
+
     const handleTtsAutoChange = async (checked: boolean) => {
         const platforms = checked && selectedPlatforms.length === 0
             ? DEFAULT_TTS_PLATFORMS
@@ -380,7 +398,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const handleCopyScript = async () => {
         if (!audioScript) {
-            showMessage('Chưa có audio_script — chạy agent bước 1 trước', 'warning');
+            showMessage('Chưa có audio_script — hãy copy prompt sinh script trước', 'warning');
             return;
         }
         try {
@@ -388,6 +406,18 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Đã copy audio_script', 'success');
         } catch {
             showMessage('Không copy được script', 'error');
+        }
+    };
+
+    const handleCopyCreateScriptPrompt = async () => {
+        setCopyingCreateScriptPrompt(true);
+        try {
+            const result = await copyShortVideoAgentPromptToClipboard(shortVideoId, '1', { variant: 'chatbot' });
+            showMessage(result.message, result.ok ? 'success' : 'error');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setCopyingCreateScriptPrompt(false);
         }
     };
 
@@ -460,18 +490,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setWhisperError(String(summary.whisper_error || '').trim());
         setImportHtmlReady(Boolean(summary.import_html_ready));
         setBeatMapReady(Boolean(summary.beat_map_ready));
-        setBeatsHtmlTotal(Number(summary.beats_html_total || 0));
-        setBeatsHtmlCompleted(Number(summary.beats_html_completed || 0));
         if (typeof summary.html === 'string') {
             setImportHtml(summary.html);
             savedImportHtmlRef.current = summary.html;
         }
         if (summary.beat_map) {
-            setBeatMap(summary.beat_map);
-            const json = beatMapToJson(summary.beat_map);
-            setBeatMapJsonDraft(json);
-            savedBeatMapJsonRef.current = json;
-            setActiveBeatId((prev) => prev || summary.beat_map?.sections?.[0]?.id || '');
+            applyBeatMapDraft(summary.beat_map);
+            savedBeatMapJsonRef.current = beatMapToJson(summary.beat_map);
         }
         if (summary.beat_html) {
             setBeatHtml((prev) => {
@@ -492,7 +517,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return nextBeatHtml;
             });
         }
-    }, []);
+        setBeatsHtmlTotal(Number(summary.beats_html_total || summary.beat_map?.sections?.length || 0));
+        setBeatsHtmlCompleted(Number(summary.beats_html_completed || 0));
+    }, [applyBeatMapDraft]);
 
     const persistImportHtml = React.useCallback(async (payload: {
         renderMode?: AgentRenderMode;
@@ -534,12 +561,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     window.clearTimeout(pendingTimer);
                     delete beatHtmlSaveTimerRef.current[payload.beatId];
                 }
-            }
-            if (payload.beatMap?.sections?.length) {
-                const validIds = new Set(payload.beatMap.sections.map((section) => section.id));
-                setBeatHtml((prev) => Object.fromEntries(
-                    Object.entries(prev).filter(([beatId]) => validIds.has(beatId)),
-                ));
             }
             return true;
         } catch (e) {
@@ -633,11 +654,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (beatMapSaveTimerRef.current != null) {
             window.clearTimeout(beatMapSaveTimerRef.current);
         }
+
+        const parsed = parseBeatMapJson(value);
+        if (parsed.map) {
+            const validation = audioDurationSec != null && audioDurationSec > 0
+                ? validateBeatMap(parsed.map, audioDurationSec)
+                : { valid: true, errors: [] };
+            if (validation.valid) {
+                setRenderMode('import_html');
+                applyBeatMapDraft(parsed.map);
+            }
+        }
+
         beatMapSaveTimerRef.current = window.setTimeout(() => {
             if (value === savedBeatMapJsonRef.current) {
                 return;
             }
-            const { map, errors } = parseBeatMapJson(value);
+            const { map, errors } = parsed;
             if (!map) {
                 showMessage(errors.join('; ') || 'beat_map JSON không hợp lệ', 'warning');
                 return;
@@ -649,7 +682,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     return;
                 }
             }
-            void persistImportHtml({ beatMap: map });
+            setRenderMode('import_html');
+            applyBeatMapDraft(map);
+            void persistImportHtml({ renderMode: 'import_html', beatMap: map });
         }, 1000);
     };
 
@@ -1235,6 +1270,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         transcribingWhisper,
         savingImportHtml,
         copyingBeatDivisionPrompt,
+        copyingCreateScriptPrompt,
         copyingBeatHtmlPromptBeatId,
         pastingBeatHtmlBeatId,
         deletingBeatHtmlBeatId,
@@ -1252,6 +1288,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSocialPostedChange,
         handlePlatformToggle,
         handleCopyScript,
+        handleCopyCreateScriptPrompt,
         handleCopyImproveScriptPrompt,
         handleCopyPrompt,
         handleLaunchAgentRender,

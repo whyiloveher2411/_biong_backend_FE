@@ -2,7 +2,7 @@
 
 MCP server cho Cursor agent — workflow video + **media search** (Pexels stock + Pixabay BGM).
 
-**Phiên bản:** 2.2.0
+**Phiên bản:** 2.3.1
 
 ## Luồng workflow (3 bước)
 
@@ -96,7 +96,15 @@ Cần `npm run build` trong `mcp/short-video-agent` trước lần đầu dùng 
 cd mcp/short-video-agent && npm install && npm run build
 ```
 
-Cấu hình Cursor MCP: `BIONG_API_BASE_URL`, `BIONG_MCP_TOKEN`.
+Cấu hình Cursor/Codex MCP: `BIONG_API_BASE_URL`, `BIONG_MCP_TOKEN`.
+
+Gợi ý giá trị:
+
+- `http://192.168.0.106:9999` nếu backend chạy trên LAN IP này
+- `http://192.168.0.106:9999/api` nếu bạn muốn set sẵn prefix `/api` ở base URL
+- URL tunnel/public nếu Codex không nhìn thấy backend local của Cursor
+
+Nếu Codex gọi tool được nhưng `fetch failed`, nguyên nhân thường là backend không reachable từ môi trường Codex, không phải do MCP token.
 
 API keys media cấu hình trên **backend** `_biong_backend/.env`, không phải MCP `.env`.
 

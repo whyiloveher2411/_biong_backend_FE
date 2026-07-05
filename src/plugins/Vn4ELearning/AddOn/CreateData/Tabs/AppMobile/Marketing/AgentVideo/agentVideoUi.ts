@@ -85,7 +85,7 @@ export function resolveWorkflowChip(input: {
     if (input.hasScript) {
         return { label: 'Chờ admin duyệt script', color: 'warning' };
     }
-    return { label: 'Chưa có script — chạy agent bước 1', color: 'default' };
+    return { label: 'Chưa có script — copy prompt sinh script', color: 'default' };
 }
 
 export function resolvePreviewPlaceholder(input: {
@@ -155,7 +155,7 @@ export function resolvePreviewPlaceholder(input: {
     return {
         severity: 'info',
         title: 'Chưa có video',
-        description: 'Copy prompt bước 1 và chạy agent để sinh audio script.',
+        description: 'Copy prompt sinh script → dán chatbot → lưu script ở cột trái.',
     };
 }
 

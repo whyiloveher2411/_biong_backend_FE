@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Divider,
     Checkbox,
     Chip,
     FormControlLabel,
@@ -26,6 +27,43 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 type Props = {
     state: AgentVideoState;
 };
+
+const stepCardSx = {
+    border: '1px solid',
+    borderColor: 'divider',
+    borderRadius: 2,
+    p: 1.5,
+    bgcolor: 'background.paper',
+} as const;
+
+function StepHeader({
+    step,
+    title,
+    description,
+    trailing,
+}: {
+    step: number;
+    title: string;
+    description?: string;
+    trailing?: React.ReactNode;
+}) {
+    return (
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+            <Box sx={{ minWidth: 0 }}>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: description ? 0.5 : 0 }}>
+                    <Chip label={`Bước ${step}`} size="small" color="primary" variant="outlined" />
+                    <Typography variant="subtitle2">{title}</Typography>
+                </Stack>
+                {description ? (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                        {description}
+                    </Typography>
+                ) : null}
+            </Box>
+            {trailing}
+        </Stack>
+    );
+}
 
 export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -52,69 +90,28 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                     Audio script & TTS
                 </Typography>
 
-                <FormControlLabel
-                    control={(
-                        <Switch
-                            checked={state.agentTtsAuto}
-                            disabled={state.savingTtsMode}
-                            onChange={(e) => { void state.handleTtsAutoChange(e.target.checked); }}
+                <Box sx={stepCardSx}>
+                    <Stack spacing={1.25}>
+                        <StepHeader
+                            step={1}
+                            title="Sinh script (chatbot)"
+                            description="Copy prompt → dán vào ChatGPT / Claude / Gemini → dán kết quả vào ô dưới."
                         />
-                    )}
-                    label="TTS tự động agent"
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-                    Sau duyệt script, CMS tự queue TTS. Khi có MP3 mới copy prompt render bước 2.
-                </Typography>
-
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Nền tảng TTS
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Thứ tự ưu tiên: OmniVoice → VieNeu → Saydi → Vbee
-                    </Typography>
-                    <FormGroup>
-                        {TTS_PLATFORM_OPTIONS.map((option) => (
-                            <FormControlLabel
-                                key={option.key}
-                                control={(
-                                    <Checkbox
-                                        checked={state.selectedPlatforms.includes(option.key)}
-                                        disabled={!state.agentTtsAuto || state.savingTtsMode}
-                                        onChange={() => { void state.handlePlatformToggle(option.key); }}
-                                    />
-                                )}
-                                label={option.label}
-                            />
-                        ))}
-                    </FormGroup>
-                    {state.agentTtsAuto && (
-                        <Chip
-                            label={`Chain: ${state.chainLabel}`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ mt: 1 }}
-                        />
-                    )}
-                </Box>
-
-                <Box>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                            <Typography variant="subtitle2">Audio script (agent)</Typography>
-                            {state.scriptDirty ? (
-                                <Chip label="Chưa lưu" size="small" color="warning" variant="outlined" />
-                            ) : null}
-                        </Stack>
-                        <Stack direction="row" spacing={1}>
-                            <Button
+                        <Typography variant="caption" color="text.secondary" component="div">
+                            <Box component="span" display="block">1. Bấm copy prompt sinh script.</Box>
+                            <Box component="span" display="block">2. Dán prompt vào chatbot bên ngoài và chờ audio script.</Box>
+                            <Box component="span" display="block">3. Dán kết quả vào ô script → sang bước 2 để lưu.</Box>
+                        </Typography>
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <LoadingButton
                                 size="small"
+                                variant="contained"
+                                loading={state.copyingCreateScriptPrompt}
                                 startIcon={<ContentCopyIcon />}
-                                disabled={!state.hasScript}
-                                onClick={() => { void state.handleCopyScript(); }}
+                                onClick={() => { void state.handleCopyCreateScriptPrompt(); }}
                             >
-                                Copy script
-                            </Button>
+                                Copy prompt sinh script
+                            </LoadingButton>
                             <Button
                                 size="small"
                                 variant="outlined"
@@ -124,18 +121,49 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             >
                                 Copy prompt cải thiện
                             </Button>
+                            <Button
+                                size="small"
+                                variant="text"
+                                disabled={!state.hasScript}
+                                onClick={() => { void state.handleCopyScript(); }}
+                            >
+                                Copy script
+                            </Button>
                         </Stack>
+                        <TextField
+                            multiline
+                            minRows={10}
+                            maxRows={20}
+                            fullWidth
+                            placeholder="Dán audio script từ chatbot vào đây…"
+                            value={state.audioScript}
+                            onChange={(e) => state.setAudioScript(e.target.value)}
+                        />
+                        {!state.hasScript ? (
+                            <Alert severity="info">
+                                Chưa có nội dung script. Copy prompt sinh script và dán kết quả chatbot vào ô trên.
+                            </Alert>
+                        ) : null}
                     </Stack>
-                    {state.hasScript ? (
-                        <>
-                            <TextField
-                                multiline
-                                minRows={10}
-                                maxRows={20}
-                                fullWidth
-                                value={state.audioScript}
-                                onChange={(e) => state.setAudioScript(e.target.value)}
-                                sx={{ mb: 1 }}
+                </Box>
+
+                {state.hasScript ? (
+                    <Box sx={stepCardSx}>
+                        <Stack spacing={1.25}>
+                            <StepHeader
+                                step={2}
+                                title="Lưu & duyệt script"
+                                description="Lưu script lên CMS trước khi duyệt để queue TTS."
+                                trailing={(
+                                    <Stack direction="row" spacing={0.5} flexShrink={0}>
+                                        {state.scriptDirty ? (
+                                            <Chip label="Chưa lưu" size="small" color="warning" variant="outlined" />
+                                        ) : null}
+                                        {state.scriptApproved ? (
+                                            <Chip label="Đã duyệt" size="small" color="success" variant="outlined" />
+                                        ) : null}
+                                    </Stack>
+                                )}
                             />
                             <Stack direction="row" spacing={1} flexWrap="wrap">
                                 <LoadingButton
@@ -159,68 +187,116 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     {state.scriptApproved ? 'Đã duyệt' : 'Duyệt script'}
                                 </LoadingButton>
                             </Stack>
-                        </>
-                    ) : (
-                        <Alert severity="info">
-                            Chưa có script. Copy prompt bước 1 và chạy agent trong Cursor.
-                        </Alert>
-                    )}
-                </Box>
+                        </Stack>
+                    </Box>
+                ) : null}
 
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Audio file (MP3 — TTS hoặc upload thủ công)
-                    </Typography>
-                    {state.hasAudio ? (
-                        <Stack spacing={1}>
-                            <audio controls src={state.audioFileUrl} style={{ width: '100%' }}>
-                                <track kind="captions" />
-                            </audio>
-                            {state.audioDurationSec != null && (
-                                <Typography variant="caption" color="text.secondary">
-                                    Thời lượng: {state.audioDurationSec.toFixed(1)}s
-                                </Typography>
+                <Box sx={stepCardSx}>
+                    <Stack spacing={1.25}>
+                        <StepHeader
+                            step={3}
+                            title="Audio (TTS + MP3)"
+                            description="Bật TTS tự động hoặc upload MP3 thủ công sau khi script được duyệt."
+                        />
+
+                        <FormControlLabel
+                            control={(
+                                <Switch
+                                    checked={state.agentTtsAuto}
+                                    disabled={state.savingTtsMode}
+                                    onChange={(e) => { void state.handleTtsAutoChange(e.target.checked); }}
+                                />
                             )}
-                            {state.scriptApproved && !state.ttsPending && (
-                                <LoadingButton
+                            label="TTS tự động agent"
+                        />
+
+                        <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                                Thứ tự ưu tiên: OmniVoice → VieNeu → Saydi → Vbee
+                            </Typography>
+                            <FormGroup>
+                                {TTS_PLATFORM_OPTIONS.map((option) => (
+                                    <FormControlLabel
+                                        key={option.key}
+                                        control={(
+                                            <Checkbox
+                                                checked={state.selectedPlatforms.includes(option.key)}
+                                                disabled={!state.agentTtsAuto || state.savingTtsMode}
+                                                onChange={() => { void state.handlePlatformToggle(option.key); }}
+                                            />
+                                        )}
+                                        label={option.label}
+                                    />
+                                ))}
+                            </FormGroup>
+                            {state.agentTtsAuto && (
+                                <Chip
+                                    label={`Chain: ${state.chainLabel}`}
                                     size="small"
                                     variant="outlined"
-                                    color="secondary"
-                                    loading={state.regeneratingTts}
-                                    startIcon={<ReplayIcon />}
-                                    onClick={() => { void state.handleRegenerateTts(); }}
-                                >
-                                    Tạo lại audio TTS (queue)
-                                </LoadingButton>
+                                    sx={{ mt: 1 }}
+                                />
                             )}
-                        </Stack>
-                    ) : (
-                        <Alert severity="warning" sx={{ mb: 1 }}>
-                            {state.ttsPending
-                                ? 'CMS đang sinh MP3 qua TTS — vui lòng chờ vài phút.'
-                                : state.scriptApproved
-                                    ? 'Chưa có MP3. CMS queue TTS sau duyệt, hoặc upload MP3 thủ công.'
-                                    : 'Chưa có MP3. Duyệt script trước — CMS sẽ queue TTS tự động.'}
-                        </Alert>
-                    )}
+                        </Box>
 
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="audio/mpeg,.mp3"
-                        hidden
-                        onChange={handleFileChange}
-                    />
-                    <LoadingButton
-                        loading={state.uploading}
-                        variant="contained"
-                        disabled={state.hasScript && !state.scriptApproved && !state.hasAudio}
-                        startIcon={<UploadFileIcon />}
-                        sx={{ mt: 1 }}
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        {state.hasAudio ? 'Upload lại MP3' : 'Upload MP3'}
-                    </LoadingButton>
+                        <Divider />
+
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Audio file (MP3)
+                            </Typography>
+                            {state.hasAudio ? (
+                                <Stack spacing={1}>
+                                    <audio controls src={state.audioFileUrl} style={{ width: '100%' }}>
+                                        <track kind="captions" />
+                                    </audio>
+                                    {state.audioDurationSec != null && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            Thời lượng: {state.audioDurationSec.toFixed(1)}s
+                                        </Typography>
+                                    )}
+                                    {state.scriptApproved && !state.ttsPending && (
+                                        <LoadingButton
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            loading={state.regeneratingTts}
+                                            startIcon={<ReplayIcon />}
+                                            onClick={() => { void state.handleRegenerateTts(); }}
+                                        >
+                                            Tạo lại audio TTS (queue)
+                                        </LoadingButton>
+                                    )}
+                                </Stack>
+                            ) : (
+                                <Alert severity="warning" sx={{ mb: 1 }}>
+                                    {state.ttsPending
+                                        ? 'CMS đang sinh MP3 qua TTS — vui lòng chờ vài phút.'
+                                        : state.scriptApproved
+                                            ? 'Chưa có MP3. CMS queue TTS sau duyệt, hoặc upload MP3 thủ công.'
+                                            : 'Chưa có MP3. Duyệt script trước — CMS sẽ queue TTS tự động.'}
+                                </Alert>
+                            )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="audio/mpeg,.mp3"
+                                hidden
+                                onChange={handleFileChange}
+                            />
+                            <LoadingButton
+                                loading={state.uploading}
+                                variant="contained"
+                                disabled={state.hasScript && !state.scriptApproved && !state.hasAudio}
+                                startIcon={<UploadFileIcon />}
+                                sx={{ mt: 1 }}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {state.hasAudio ? 'Upload lại MP3' : 'Upload MP3'}
+                            </LoadingButton>
+                        </Box>
+                    </Stack>
                 </Box>
             </Stack>
         </Box>
