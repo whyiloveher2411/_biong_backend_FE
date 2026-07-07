@@ -4,13 +4,15 @@ import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerU
 import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
+import ShortVideoAgentResourcesPanel from './ShortVideoAgentResourcesPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 const TAB = {
     script: 0,
     chatbot: 1,
-    facebook: 2,
+    resources: 2,
+    facebook: 3,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -24,6 +26,9 @@ type Props = {
 function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
     if (initialTab === 'facebook') {
         return TAB.facebook;
+    }
+    if (initialTab === 'resources') {
+        return TAB.resources;
     }
     if (initialTab === 'chatbot') {
         return TAB.chatbot;
@@ -65,6 +70,7 @@ export default function ShortVideoAgentLeftPanel({
                 tabs={[
                     { label: 'Script & TTS' },
                     { label: 'HTML chatbot' },
+                    { label: 'Tài nguyên' },
                     { label: 'Facebook' },
                 ]}
             />
@@ -74,6 +80,9 @@ export default function ShortVideoAgentLeftPanel({
                 ) : null}
                 {activeTab === TAB.chatbot ? (
                     <ShortVideoAgentChatbotHtmlPanel state={state} active={activeTab === TAB.chatbot} />
+                ) : null}
+                {activeTab === TAB.resources ? (
+                    <ShortVideoAgentResourcesPanel state={state} />
                 ) : null}
                 {activeTab === TAB.facebook ? (
                     state.marketingPostId > 0 ? (

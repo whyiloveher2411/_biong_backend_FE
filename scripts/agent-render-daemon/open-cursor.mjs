@@ -45,6 +45,7 @@ function buildBootstrapPrompt(shortVideoId, phase) {
       `Đọc prompt đã lưu: ${promptRelativePath(shortVideoId, normalized)}`,
       'Invoke MCP short_video_get_context — dùng import_html.html từ CMS.',
       'CẤM sửa visual HTML user — ghép caption + ambient + watermark + BGM chain (search_bgm + wire-bgm-chain.mjs) + render.',
+      'Sau khi tạo video, hãy upload video lên store bằng MCP tool',
       'Không sử dụng lại data cũ của short video này nếu có.',
     ].join('\n');
   }

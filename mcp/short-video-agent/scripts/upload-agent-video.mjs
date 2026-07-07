@@ -11,18 +11,10 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveApiBaseUrl, resolveMcpToken } from '../../../scripts/lib/biong-env.mjs';
 import { uploadVideoToApi } from '../dist/upload-video.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function requireEnv(name) {
-  const value = (process.env[name] ?? '').trim();
-  if (!value) {
-    console.error(`Thiếu biến môi trường ${name}`);
-    process.exit(1);
-  }
-  return value;
-}
 
 function parseArgs(argv) {
   const out = {
@@ -71,8 +63,12 @@ async function main() {
     process.exit(1);
   }
 
-  const apiBaseUrl = requireEnv('BIONG_API_BASE_URL');
-  const mcpToken = requireEnv('BIONG_MCP_TOKEN');
+  const apiBaseUrl = resolveApiBaseUrl();
+  const mcpToken = resolveMcpToken();
+  if (!mcpToken) {
+    console.error('Thiếu BIONG_MCP_TOKEN — thêm vào scripts/agent-render-daemon/.env.local hoặc .cursor/mcp.json');
+    process.exit(1);
+  }
 
   try {
     const result = await uploadVideoToApi({

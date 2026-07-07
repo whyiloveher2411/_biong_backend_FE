@@ -8,8 +8,10 @@ import fs from "fs";
 import path from "path";
 import { tokenizeScript } from "./lib/caption-script-align.mjs";
 
-/** Caption pill sát mép dưới — beat import_html không chừa caption band */
-const CAPTION_BOTTOM_PX = 48;
+/** Caption pill trong caption band — beat đã chừa bottom 360px; tránh platform description overlay */
+const CANVAS_HEIGHT = 1920;
+const CAPTION_BOTTOM_PCT = 180 / CANVAS_HEIGHT; // ~9.4% — thấp hơn 12% để tận dụng caption band
+const CAPTION_BOTTOM_PX = Math.round(CANVAS_HEIGHT * CAPTION_BOTTOM_PCT);
 const CAPTION_HORIZONTAL_PX = 60;
 const CAPTION_MAX_WIDTH_PX = 1080 - CAPTION_HORIZONTAL_PX * 2;
 
@@ -81,7 +83,7 @@ function main() {
   }
   duration = +Number(duration).toFixed(2);
 
-  const transcriptJson = JSON.stringify(words, null, 2);
+  const transcriptJson = JSON.stringify(words);
   const outPath = path.join(projectDir, "compositions/captions.html");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
 

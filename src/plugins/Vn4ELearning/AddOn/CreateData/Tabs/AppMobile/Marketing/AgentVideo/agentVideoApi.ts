@@ -14,6 +14,47 @@ export type HfThemeCatalogItem = {
 
 export type AgentRenderMode = 'creative' | 'import_html';
 
+export type ImportHtmlBgmSegment = {
+    id: string;
+    title?: string;
+    download_url: string;
+    preview_url?: string;
+    duration_sec: number;
+    provider?: string;
+};
+
+export type ImportHtmlMarketingPostImage = {
+    url: string;
+    caption?: string;
+};
+
+export type ImportHtmlVisualCatalogItem = {
+    id: string;
+    media_type: 'image' | 'video';
+    url: string;
+    preview_url?: string;
+    title?: string;
+    provider?: string;
+    duration_sec?: number;
+    caption?: string;
+    search_query?: string;
+    source?: string;
+};
+
+export type ImportHtmlAssets = {
+    bgm_segments?: ImportHtmlBgmSegment[];
+    sfx_beat_transition?: boolean;
+    sfx_hook?: boolean;
+    visual_catalog?: ImportHtmlVisualCatalogItem[];
+    updated_at?: string;
+};
+
+export type ImportHtmlComposition = {
+    assembled_at?: string;
+    assemble_status?: 'none' | 'ok' | 'failed' | string;
+    assemble_error?: string;
+};
+
 export type ImportHtmlSummary = {
     hf_prompt_type?: string;
     html_length?: number;
@@ -31,9 +72,14 @@ export type ImportHtmlSummary = {
     beats_html_ready?: boolean;
     import_html_ready?: boolean;
     missing_beat_ids?: string[];
+    assets?: ImportHtmlAssets;
+    composition?: ImportHtmlComposition;
+    bgm_total_sec?: number;
+    bgm_covers_video?: boolean;
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
     beat_html?: Record<string, { html?: string; updated_at?: string }>;
+    marketing_post_images?: ImportHtmlMarketingPostImage[];
 };
 
 export type AgentVideoContentResponse = {
@@ -81,6 +127,8 @@ export type AgentVideoContentResponse = {
         whisper_status?: string;
     };
     marketing_post_id?: number;
+    app_mobile_id?: number;
+    app_mobile_title?: string;
     thumbnail?: unknown;
     post_eligible?: boolean;
     social_posted?: boolean;
@@ -92,6 +140,19 @@ export type AgentVideoContentResponse = {
 export type JsonResponse = {
     success?: boolean;
     message?: ApiMessage;
+};
+
+export type SaveAdminAudioScriptResponse = JsonResponse & {
+    audio_script_approved?: boolean;
+    audio_reset?: boolean;
+};
+
+export type ApproveAudioScriptResponse = JsonResponse & {
+    tts_queued?: boolean;
+    tts_job_id?: string | number;
+    tts_enqueue_error?: string;
+    audio_reset?: boolean;
+    tts_status?: string;
 };
 
 export function parseApiMessage(message: ApiMessage | undefined): string {
@@ -226,18 +287,18 @@ export async function saveAgentTtsSettings(
 export async function saveAdminAudioScript(
     shortVideoId: number,
     audioScript: string,
-): Promise<JsonResponse> {
+): Promise<SaveAdminAudioScriptResponse> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-admin-audio-script',
         shortVideoBody(shortVideoId, { audio_script: audioScript }),
-    );
+    ) as Promise<SaveAdminAudioScriptResponse>;
 }
 
-export async function approveAudioScript(shortVideoId: number): Promise<JsonResponse> {
+export async function approveAudioScript(shortVideoId: number): Promise<ApproveAudioScriptResponse> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/approve-audio-script',
         shortVideoBody(shortVideoId),
-    );
+    ) as Promise<ApproveAudioScriptResponse>;
 }
 
 export async function regenerateAgentNarrationTts(shortVideoId: number): Promise<JsonResponse> {
@@ -268,6 +329,26 @@ export async function transcribeAgentAudio(
     );
 }
 
+export type AgentBgmSearchItem = {
+    id?: string | number;
+    title?: string;
+    download_url?: string;
+    preview_url?: string;
+    duration_sec?: number;
+    provider?: string;
+};
+
+export async function searchAgentBgm(query: string, limit = 8): Promise<{
+    success?: boolean;
+    items?: AgentBgmSearchItem[];
+    message?: ApiMessage;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/search-agent-bgm',
+        { query, limit },
+    );
+}
+
 export async function saveAgentImportHtml(
     shortVideoId: number,
     payload: {
@@ -277,6 +358,10 @@ export async function saveAgentImportHtml(
         beatMap?: import('./agentVideoBeatMap').BeatMap;
         beatId?: string;
         beatHtml?: string;
+        bgmSegments?: ImportHtmlBgmSegment[];
+        sfxBeatTransition?: boolean;
+        sfxHook?: boolean;
+        visualCatalog?: ImportHtmlVisualCatalogItem[];
     },
 ): Promise<JsonResponse & {
     render_mode?: AgentRenderMode;
@@ -298,6 +383,18 @@ export async function saveAgentImportHtml(
     if (payload.beatId !== undefined && payload.beatHtml !== undefined) {
         body.beat_id = payload.beatId;
         body.beat_html = payload.beatHtml;
+    }
+    if (payload.bgmSegments !== undefined) {
+        body.bgm_segments = payload.bgmSegments;
+    }
+    if (payload.sfxBeatTransition !== undefined) {
+        body.sfx_beat_transition = payload.sfxBeatTransition;
+    }
+    if (payload.sfxHook !== undefined) {
+        body.sfx_hook = payload.sfxHook;
+    }
+    if (payload.visualCatalog !== undefined) {
+        body.visual_catalog = payload.visualCatalog;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',

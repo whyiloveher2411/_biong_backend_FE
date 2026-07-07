@@ -11,6 +11,35 @@ import crypto from "crypto";
 export const GSAP_CDN =
   "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js";
 
+export const BE_VIETNAM_FONT_FACE_BLOCK = `@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/BeVietnamPro-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/fonts/BeVietnamPro-SemiBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/BeVietnamPro-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("assets/fonts/BeVietnamPro-ExtraBold.ttf") format("truetype");
+}`;
+
 const RENDER_MODE_REL = "assets/render-mode.json";
 const IMAGE_MAP_REL = "assets/image-url-map.json";
 
@@ -156,13 +185,287 @@ window.__timelines["${beatId}"] = _beatTl;
 render();`;
 }
 
+export function patchBeatFontsForRender(html) {
+  const patches = [];
+  let out = String(html || "");
+
+  if (!/@font-face[^}]*Be Vietnam Pro/i.test(out)) {
+    if (/<style[^>]*>/i.test(out)) {
+      out = out.replace(/(<style[^>]*>)/i, `$1\n${BE_VIETNAM_FONT_FACE_BLOCK}\n`);
+      patches.push("inject @font-face Be Vietnam Pro");
+    }
+  }
+
+  const before = out;
+  out = out.replace(
+    /--font(?:-[a-z0-9-]+)?\s*:\s*[^;]+;/gi,
+    (match) => {
+      const name = match.match(/^(--font(?:-[a-z0-9-]+)?)/i)?.[1];
+      return name ? `${name}: "Be Vietnam Pro", sans-serif;` : match;
+    },
+  );
+  out = out.replace(
+    /font-family\s*:\s*var\(--font(?:-[a-z0-9-]+)?\)[^;}]*/gi,
+    'font-family: "Be Vietnam Pro", sans-serif',
+  );
+  out = out.replace(
+    /font-family\s*:\s*[^;{}]*(?:system-ui|apple-system|blinkmacsystemfont|segoe ui|roboto|oxygen|ubuntu|cantarell|-apple-system|\binter\b|sf pro)[^;{}]*/gi,
+    'font-family: "Be Vietnam Pro", sans-serif',
+  );
+
+  out = out.replace(
+    /url\(\s*["']?\.\.\/assets\/fonts\//gi,
+    'url("assets/fonts/',
+  );
+
+  if (out !== before) {
+    patches.push("thay font → Be Vietnam Pro");
+  }
+
+  return { html: out, changed: out !== html, patches };
+}
+
+const PEXELS_VIDEO_ID_RE = /video-files\/(\d+)\//i;
+
+function readVideoPosterMap(projectDir) {
+  const mapPath = path.join(projectDir, "assets/video-poster-map.json");
+  if (!fs.existsSync(mapPath)) {
+    return {};
+  }
+  try {
+    return JSON.parse(fs.readFileSync(mapPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function parseCssOpacityForClass(html, className) {
+  const tokens = String(className || "")
+    .split(/\s+/)
+    .filter(Boolean);
+  for (const token of tokens) {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\.${escaped}[^{]*\\{[^}]*\\bopacity\\s*:\\s*([0-9.]+)`, "i");
+    const m = String(html || "").match(re);
+    if (m) {
+      const value = parseFloat(m[1]);
+      if (Number.isFinite(value)) return value;
+    }
+  }
+  return 0.15;
+}
+
+/**
+ * Trích <video> trong beat trước khi patch — dùng hoist lên index.html.
+ */
+export function extractBeatVideoSlots(html, beatId) {
+  const source = String(html || "");
+  const videoBlockRe = /<video\b([^>]*)>([\s\S]*?)<\/video>/gi;
+  const slots = [];
+  let m;
+  while ((m = videoBlockRe.exec(source)) !== null) {
+    const attrs = m[1];
+    const inner = m[2];
+    let src = attrs.match(/\bsrc=["']([^"']+)["']/i)?.[1] || "";
+    if (!src) {
+      src = inner.match(/<source\b[^>]*\bsrc=["']([^"']+)["']/i)?.[1] || "";
+    }
+    if (!src || !/\.(mp4|webm|mov|m4v)(\?|$)|^assets\/video\/|videos\.pexels\.com/i.test(src)) {
+      continue;
+    }
+    const className = attrs.match(/\bclass=["']([^"']+)["']/i)?.[1] || "bg-video";
+    const styleOpacity = attrs.match(/\bstyle=["'][^"']*\bopacity\s*:\s*([0-9.]+)/i)?.[1];
+    const opacity = styleOpacity
+      ? parseFloat(styleOpacity)
+      : parseCssOpacityForClass(source, className);
+    slots.push({
+      beatId,
+      src,
+      className,
+      opacity: Number.isFinite(opacity) ? opacity : 0.15,
+      muted: /\bmuted\b/i.test(attrs),
+      loop: /\bloop\b/i.test(attrs),
+    });
+  }
+  return slots;
+}
+
+function parseBeatHostsFromIndex(html) {
+  const hosts = [];
+  const re =
+    /<section\b[^>]*\bid="beat-(\d+)"[^>]*\bdata-composition-id="(beat_\d+)"[^>]*\bdata-start="([^"]+)"[^>]*\bdata-duration="([^"]+)"[^>]*style="[^"]*z-index:\s*(\d+)/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    hosts.push({
+      num: parseInt(m[1], 10),
+      beatId: m[2],
+      startSec: parseFloat(m[3]),
+      durationSec: parseFloat(m[4]),
+      zIndex: parseInt(m[5], 10),
+    });
+  }
+  hosts.sort((a, b) => a.num - b.num);
+  return hosts;
+}
+
+/**
+ * Hoist stock video từ beat lên index.html (#root direct child) — pass media_in_subcomposition.
+ */
+export function wireBeatStockVideosToIndex(projectDir, slots = []) {
+  const indexPath = path.join(projectDir, "index.html");
+  if (!fs.existsSync(indexPath) || !Array.isArray(slots) || slots.length === 0) {
+    return { wired: 0, skipped: 0, manifest: [] };
+  }
+
+  let html = fs.readFileSync(indexPath, "utf8");
+  html = html.replace(
+    /<video\b[^>]*\bclass="[^"]*\bbeat-stock-video\b[^"]*"[^>]*>\s*<\/video>\s*/gi,
+    "",
+  );
+
+  const hosts = parseBeatHostsFromIndex(html);
+  const hostByBeatId = new Map(hosts.map((h) => [h.beatId, h]));
+  const manifest = [];
+  const RESERVED_TRACKS = new Set([10, 11, 12, 20, 21, 30, 31]);
+  let trackIndex = 32;
+  function nextTrackIndex() {
+    while (RESERVED_TRACKS.has(trackIndex)) trackIndex += 1;
+    const idx = trackIndex;
+    trackIndex += 1;
+    return idx;
+  }
+  const clips = [];
+
+  for (const slot of slots) {
+    const host = hostByBeatId.get(slot.beatId);
+    if (!host) {
+      console.warn(`[wire-beat-stock-videos] ${slot.beatId}: không tìm beat-host trong index.html`);
+      continue;
+    }
+
+    const src = slot.src.startsWith("assets/")
+      ? slot.src
+      : slot.src.replace(/^\//, "");
+    const absVideo = path.join(projectDir, src);
+    if (!fs.existsSync(absVideo)) {
+      console.warn(`[wire-beat-stock-videos] ${slot.beatId}: thiếu file ${src}`);
+      continue;
+    }
+
+    const zIndex = Math.max(1, (host.zIndex || 10) - 1);
+    const opacity = Math.min(1, Math.max(0.05, Number(slot.opacity) || 0.15));
+    const id = `stock-video-${slot.beatId.replace(/_/g, "-")}`;
+    const ti = nextTrackIndex();
+    clips.push(
+      `    <video class="clip beat-stock-video" id="${id}" src="${src}"\n` +
+        `      data-start="${host.startSec.toFixed(3)}" data-duration="${host.durationSec.toFixed(3)}" data-track-index="${ti}"\n` +
+        `      muted loop playsinline\n` +
+        `      style="position:absolute;inset:0;width:1080px;height:1920px;object-fit:cover;opacity:${opacity};z-index:${zIndex};pointer-events:none;"></video>`,
+    );
+    manifest.push({
+      beatId: slot.beatId,
+      src,
+      startSec: host.startSec,
+      durationSec: host.durationSec,
+      zIndex,
+      trackIndex: ti,
+      opacity,
+    });
+  }
+
+  if (clips.length === 0) {
+    return { wired: 0, skipped: slots.length, manifest };
+  }
+
+  const insertBefore =
+    html.match(/\n\s*<section\b[^>]*\bid="beat-1"/i) ??
+    html.match(/\n\s*<audio\b[^>]*\bid="narration"/i);
+  if (!insertBefore) {
+    console.error("[wire-beat-stock-videos] không tìm vị trí chèn clip video");
+    return { wired: 0, skipped: slots.length, manifest };
+  }
+
+  html = html.replace(insertBefore[0], `\n${clips.join("\n")}\n${insertBefore[0]}`);
+  fs.writeFileSync(indexPath, html);
+
+  const manifestPath = path.join(projectDir, "assets/beat-stock-videos.json");
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  return { wired: clips.length, skipped: slots.length - clips.length, manifest };
+}
+
+export function injectBeatStockVideoTransparency(html) {
+  if (!/hf-beat-video-replaced|hf-beat-bg/i.test(html)) {
+    return html;
+  }
+  let out = html;
+  if (!/\bhf-beat-has-stock-video\b/i.test(out)) {
+    out = out.replace(/(<div[^>]*\bclass=")([^"]*\bscene-root\b[^"]*)(")/i, (full, p, cls, s) => {
+      if (/\bhf-beat-has-stock-video\b/.test(cls)) return full;
+      return `${p}${cls} hf-beat-has-stock-video${s}`;
+    });
+  }
+  if (/<style[^>]*>/i.test(out) && !/\.hf-beat-has-stock-video/i.test(out)) {
+    out = out.replace(
+      /(<style[^>]*>)/i,
+      `$1
+.hf-beat-has-stock-video,.hf-beat-has-stock-video #stage{background-color:transparent!important;background:transparent!important;}
+.hf-beat-has-stock-video .hf-beat-video-replaced,.hf-beat-has-stock-video .hf-beat-bg.hf-beat-video-replaced{display:none!important;}
+`,
+    );
+  }
+  return out;
+}
+
+/**
+ * HyperFrames cấm <video> trong beat sub-composition (media_in_subcomposition).
+ * Thay bằng placeholder — video thật được hoist lên index.html.
+ */
+export function patchBeatVideosForRender(html, projectDir = "") {
+  const patches = [];
+  const videoBlockRe = /<video\b([^>]*)>[\s\S]*?<\/video>/gi;
+
+  const out = String(html || "").replace(videoBlockRe, (full, attrs) => {
+    const classMatch = attrs.match(/\bclass=["']([^"']+)["']/i);
+    const cls = classMatch ? classMatch[1] : "hf-beat-bg";
+
+    patches.push("video→index hoist placeholder");
+    return `<div class="${cls} hf-beat-video-replaced" aria-hidden="true"></div>`;
+  });
+
+  let styled = out;
+  if (patches.length > 0) {
+    styled = injectBeatStockVideoTransparency(styled);
+    if (styled.includes("hf-beat-video-replaced") && !/\.hf-beat-video-replaced/i.test(styled)) {
+      if (/<style[^>]*>/i.test(styled)) {
+        styled = styled.replace(
+          /(<style[^>]*>)/i,
+          `$1\n.hf-beat-video-replaced{width:100%;height:100%;}\n`,
+        );
+        patches.push("inject .hf-beat-video-replaced");
+      }
+    }
+    patches.push("transparent stage for stock video");
+  }
+
+  return { html: styled, changed: styled !== html, patches };
+}
+
 export function normalizeBeatHtmlForRender(html, beatId) {
   if (!html.trim() || !beatId) {
     return { html, changed: false, patches: [] };
   }
 
+  const fontPatch = patchBeatFontsForRender(html);
+  html = fontPatch.html;
+  const fontPatches = [...fontPatch.patches];
+
   if (isBeatRenderReady(html, beatId)) {
-    return { html, changed: false, patches: ["already render-ready"] };
+    return {
+      html,
+      changed: fontPatch.changed,
+      patches: fontPatches.length ? fontPatches : ["already render-ready"],
+    };
   }
 
   const patches = [];
@@ -210,6 +513,7 @@ ${script}
   assembled = patchScaffoldHtml(assembled);
   patches.push("bọc <template>");
   patches.push(`đăng ký window.__timelines["${beatId}"]`);
+  patches.push(...fontPatches);
 
   return { html: assembled, changed: true, patches };
 }
@@ -226,6 +530,18 @@ export function collectExternalImageUrls(html) {
   }
   for (const m of html.matchAll(/url\(\s*['"]?(https?:\/\/[^'")]+)['"]?\s*\)/gi)) {
     if (isImageUrl(m[1])) urls.add(m[1]);
+  }
+  return [...urls];
+}
+
+export function collectExternalVideoUrls(html) {
+  const urls = new Set();
+  const isVideoUrl = (url) =>
+    /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ||
+    /videos\.pexels\.com|player\.vimeo|video/i.test(url);
+
+  for (const m of html.matchAll(/<(?:video|source)\b[^>]*\bsrc=["'](https?:\/\/[^"']+)["']/gi)) {
+    if (isVideoUrl(m[1])) urls.add(m[1]);
   }
   return [...urls];
 }
@@ -269,12 +585,23 @@ function localImageName(url) {
   return `article_${hash}.${ext}`;
 }
 
+function localVideoName(url) {
+  const hash = crypto.createHash("sha256").update(url).digest("hex").slice(0, 12);
+  const extMatch = url.match(/\.(mp4|webm|mov|m4v)(\?|$)/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : "mp4";
+  return `stock_${hash}.${ext}`;
+}
+
 export async function localizeExternalImages(projectDir, htmlFiles) {
   const imagesDir = path.join(projectDir, "assets/images");
+  const videosDir = path.join(projectDir, "assets/video");
   fs.mkdirSync(imagesDir, { recursive: true });
+  fs.mkdirSync(videosDir, { recursive: true });
 
   const mapPath = path.join(projectDir, IMAGE_MAP_REL);
+  const posterMapPath = path.join(projectDir, "assets/video-poster-map.json");
   let urlMap = {};
+  let videoPosterMap = {};
   if (fs.existsSync(mapPath)) {
     try {
       urlMap = JSON.parse(fs.readFileSync(mapPath, "utf8"));
@@ -282,18 +609,40 @@ export async function localizeExternalImages(projectDir, htmlFiles) {
       urlMap = {};
     }
   }
+  if (fs.existsSync(posterMapPath)) {
+    try {
+      videoPosterMap = JSON.parse(fs.readFileSync(posterMapPath, "utf8"));
+    } catch {
+      videoPosterMap = {};
+    }
+  }
+
+  // Backfill poster map for videos already localized (re-render without re-download).
+  for (const localRel of Object.values(urlMap)) {
+    if (!String(localRel).startsWith("assets/video/")) continue;
+    if (videoPosterMap[localRel]) continue;
+    const posterRel = String(localRel).replace(/\.mp4$/i, "_poster.jpg").replace("assets/video/", "assets/images/");
+    if (fs.existsSync(path.join(projectDir, posterRel))) {
+      videoPosterMap[localRel] = posterRel;
+    }
+  }
 
   const allUrls = new Set();
+  const allVideoUrls = new Set();
   for (const file of htmlFiles) {
     const html = fs.readFileSync(file, "utf8");
     for (const url of collectExternalImageUrls(html)) {
       allUrls.add(url);
     }
+    for (const url of collectExternalVideoUrls(html)) {
+      allVideoUrls.add(url);
+    }
   }
 
   const patches = [];
   for (const url of allUrls) {
-    if (urlMap[url]) continue;
+    const existing = urlMap[url];
+    if (existing && fs.existsSync(path.join(projectDir, existing))) continue;
     const filename = localImageName(url);
     const localRel = `assets/images/${filename}`;
     const dest = path.join(projectDir, localRel);
@@ -304,8 +653,59 @@ export async function localizeExternalImages(projectDir, htmlFiles) {
     urlMap[url] = localRel;
   }
 
+  for (const url of allVideoUrls) {
+    const existing = urlMap[url];
+    const filename = existing
+      ? path.basename(existing)
+      : localVideoName(url);
+    const localRel = existing || `assets/video/${filename}`;
+    const dest = path.join(projectDir, localRel);
+    if (!fs.existsSync(dest)) {
+      await downloadUrl(url, dest);
+      patches.push(`download ${filename}`);
+    }
+    urlMap[url] = localRel;
+
+    const idMatch = url.match(PEXELS_VIDEO_ID_RE);
+    if (idMatch) {
+      const posterFilename = filename.replace(/\.mp4$/i, "_poster.jpg");
+      const posterRel = `assets/images/${posterFilename}`;
+      const posterDest = path.join(projectDir, posterRel);
+      const previewUrl = `https://images.pexels.com/videos/${idMatch[1]}/pictures/preview-0.jpeg`;
+      if (!fs.existsSync(posterDest)) {
+        try {
+          await downloadUrl(previewUrl, posterDest);
+          patches.push(`download poster ${posterFilename}`);
+        } catch {
+          /* poster optional */
+        }
+      }
+      if (fs.existsSync(posterDest)) {
+        videoPosterMap[localRel] = posterRel;
+      }
+    }
+  }
+
+  for (const [url, localRel] of Object.entries(urlMap)) {
+    if (!String(localRel).startsWith("assets/video/")) continue;
+    const dest = path.join(projectDir, localRel);
+    if (fs.existsSync(dest) || !String(url).startsWith("http")) continue;
+    try {
+      await downloadUrl(url, dest);
+      patches.push(`re-download ${path.basename(localRel)}`);
+    } catch {
+      console.warn(`[localize] không tải lại được ${url}`);
+    }
+  }
+
   if (patches.length) {
     fs.writeFileSync(mapPath, JSON.stringify(urlMap, null, 2));
+  }
+  if (Object.keys(videoPosterMap).length > 0) {
+    fs.writeFileSync(
+      path.join(projectDir, "assets/video-poster-map.json"),
+      JSON.stringify(videoPosterMap, null, 2),
+    );
   }
 
   for (const file of htmlFiles) {
@@ -353,6 +753,11 @@ export function checkImportHtmlBeatFile(name, content) {
   if (collectExternalImageUrls(content).length > 0) {
     errors.push(
       `${name}: còn ảnh URL ngoài — chạy normalize-import-html-beat-for-render.mjs --localize-images`,
+    );
+  }
+  if (collectExternalVideoUrls(content).length > 0) {
+    errors.push(
+      `${name}: còn video URL ngoài — chạy normalize-import-html-beat-for-render.mjs --localize-images`,
     );
   }
 

@@ -7,6 +7,7 @@ type OpenGeminiScriptInput = {
     title: string;
     audioScript: string;
     hasScript: boolean;
+    appMobileTitle?: string;
 };
 
 export function useAgentVideoOpenGeminiScriptActions() {
@@ -37,7 +38,11 @@ export function useAgentVideoOpenGeminiScriptActions() {
             showMessage('Chưa có audio script', 'warning');
             return;
         }
-        const improvePrompt = buildImproveAudioScriptPrompt(input.title, input.audioScript);
+        const improvePrompt = buildImproveAudioScriptPrompt(
+            input.title,
+            input.audioScript,
+            input.appMobileTitle,
+        );
         if (!improvePrompt) {
             showMessage('Chưa có audio script', 'warning');
             return;

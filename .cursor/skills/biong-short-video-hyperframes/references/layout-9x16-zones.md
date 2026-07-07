@@ -28,7 +28,7 @@ Canvas mặc định: **1080×1920** (portrait TikTok/Reels).
 | Vùng | % cao | px (1920h) | Nội dung |
 |------|-------|------------|----------|
 | Safe content | 4–78% | 80–1498 | **Toàn bộ** `.content-cluster` (hero + support gom lại) |
-| Caption | 78–100% | 1498–1920 | Chỉ `compositions/captions.html` |
+| Caption | 78–100% | 1498–1920 | Chỉ `compositions/captions.html` — pill anchor `bottom: ~9.4%` (~180px) |
 
 **Tâm cụm mục tiêu:** `y ≈ 0.44 × 1920` (~845px) — giữa vùng an toàn, không dồn sát top.
 

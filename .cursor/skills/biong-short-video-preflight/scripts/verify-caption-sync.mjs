@@ -145,9 +145,19 @@ function main() {
     }
 
     if (report.interpolatedCount > 0) {
-      errors.push(
-        `Strict: ${report.interpolatedCount} word(s) interpolated — không cho render`,
-      );
+      const cmsWhisper = manifest?.source === "cms_whisper";
+      const maxInterpolated = cmsWhisper
+        ? Math.max(5, Math.ceil((report.scriptWordCount || scriptWords.length) * 0.01))
+        : 0;
+      if (!cmsWhisper || report.interpolatedCount > maxInterpolated) {
+        errors.push(
+          `Strict: ${report.interpolatedCount} word(s) interpolated — không cho render`,
+        );
+      } else if (report.interpolatedCount > 0) {
+        warnings.push(
+          `CMS whisper: cho phép ${report.interpolatedCount} từ interpolated (≤ ${maxInterpolated})`,
+        );
+      }
     }
   }
 

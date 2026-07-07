@@ -94,6 +94,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 title: state.title,
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
+                appMobileTitle: state.appMobileTitle,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -186,14 +187,17 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             <StepHeader
                                 step={2}
                                 title="Lưu & duyệt script"
-                                description="Lưu script lên CMS trước khi duyệt để queue TTS."
+                                description="Lưu script lên CMS, sau đó bấm Duyệt để queue TTS (kể cả khi đã có audio cũ)."
                                 trailing={(
                                     <Stack direction="row" spacing={0.5} flexShrink={0}>
                                         {state.scriptDirty ? (
                                             <Chip label="Chưa lưu" size="small" color="warning" variant="outlined" />
                                         ) : null}
-                                        {state.scriptApproved ? (
+                                        {state.scriptApproved && !state.scriptDirty ? (
                                             <Chip label="Đã duyệt" size="small" color="success" variant="outlined" />
+                                        ) : null}
+                                        {!state.scriptApproved && !state.scriptDirty ? (
+                                            <Chip label="Chờ duyệt" size="small" color="info" variant="outlined" />
                                         ) : null}
                                     </Stack>
                                 )}
@@ -213,11 +217,15 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     loading={state.approvingScript}
                                     variant="contained"
                                     color="success"
-                                    disabled={state.scriptApproved}
+                                    disabled={state.scriptDirty || !state.hasScript}
                                     startIcon={<CheckCircleOutlineIcon />}
                                     onClick={() => { void state.handleApproveScript(); }}
                                 >
-                                    {state.scriptApproved ? 'Đã duyệt' : 'Duyệt script'}
+                                    {state.scriptDirty
+                                        ? 'Lưu script trước'
+                                        : state.scriptApproved
+                                            ? 'Duyệt lại & queue TTS'
+                                            : 'Duyệt script'}
                                 </LoadingButton>
                             </Stack>
                         </Stack>

@@ -83,6 +83,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 title: state.title,
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
+                appMobileTitle: state.appMobileTitle,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -320,8 +321,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 {state.beatsHtmlCompleted < state.beatsHtmlTotal
                                     ? `Agent sẽ sinh ${state.beatsHtmlTotal - state.beatsHtmlCompleted} beat HTML thiếu, rồi ghép video`
                                     : state.hasAgentVideo
-                                        ? 'Đủ HTML — agent ghép lại rồi render video'
-                                        : 'Đủ HTML — agent ghép và render video'}
+                                        ? 'Đủ HTML — dùng tab Tài nguyên để ghép/render script, hoặc agent ghép lại'
+                                        : 'Đủ HTML — tab Tài nguyên: ghép & render không cần agent'}
                             </Typography>
                             <LoadingButton
                                 size="small"

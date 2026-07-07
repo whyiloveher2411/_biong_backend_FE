@@ -103,7 +103,7 @@ html, body {
 .caption-group-wrap {
   position: absolute;
   left: 50%;
-  bottom: 48px;   /* sát mép dưới — import_html beat không chừa caption band */
+  bottom: 180px;  /* ~9.4% canvas — caption band, tránh platform description overlay */
   transform: translateX(-50%);
   z-index: 2;
 }

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hydrateBiongEnv } from '../lib/biong-env.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +49,8 @@ export const DEFAULT_API_BASE_URL = String(
   process.env.BIONG_API_BASE_URL || 'http://127.0.0.1:9999',
 ).replace(/\/+$/, '');
 export const CURSOR_APP_NAME = String(process.env.CURSOR_APP_NAME || 'Cursor').trim();
+
+hydrateBiongEnv(BIONG_FE_ROOT);
 
 export function assertDaemonConfig() {
   if (!DAEMON_SECRET) {

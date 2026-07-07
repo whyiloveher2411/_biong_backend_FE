@@ -12,6 +12,9 @@ export function normalizeAgentPhase(raw) {
   if (phase === 'import_html_full') {
     return 'import_html_full';
   }
+  if (phase === 'import_assemble_script') {
+    return 'import_assemble_script';
+  }
   return '2';
 }
 

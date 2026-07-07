@@ -44,6 +44,33 @@ function scriptHasSfxTag() {
   return false;
 }
 
+function loadImportHtmlPreflight(root) {
+  if (!exists("assets/render-mode.json")) {
+    return null;
+  }
+  try {
+    const mode = JSON.parse(read("assets/render-mode.json"));
+    if (mode?.render_mode !== "import_html") {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  if (exists("assets/get-context-snapshot.json")) {
+    try {
+      const snap = JSON.parse(read("assets/get-context-snapshot.json"));
+      const assets = snap?.import_html?.assets;
+      if (assets && typeof assets === "object") {
+        return assets;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return {};
+}
+
 function extractAudioTracks(html) {
   const tracks = [];
   const re = /<audio\b[^>]*>/gi;
@@ -74,7 +101,30 @@ function extractBgmChainSegments(html) {
   return tracks.filter((t) => /bgm/i.test(t.src) || /bgm-chain-segment/.test(t.raw));
 }
 
-const needsSfx = scriptHasSfxTag();
+function hasBgmAudioLoop(html) {
+  const re = /<audio\b[^>]*>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const tag = m[0];
+    if (!/\bloop\b/i.test(tag)) continue;
+    if (/bgm/i.test(tag) || /bgm-chain-segment/i.test(tag)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const importHtmlAssets = loadImportHtmlPreflight(root);
+let needsSfx = scriptHasSfxTag();
+if (importHtmlAssets) {
+  if (importHtmlAssets.sfx_hook !== true) {
+    needsSfx = false;
+  }
+}
+const requireBgm =
+  importHtmlAssets == null
+    ? true
+    : Array.isArray(importHtmlAssets.bgm_segments) && importHtmlAssets.bgm_segments.length > 0;
 const totalVideoSec = parseTotalVideoSec(root);
 
 if (!exists("index.html")) {
@@ -108,18 +158,20 @@ if (!exists("index.html")) {
     fs.readdirSync(path.join(root, "assets/audio")).some((f) => /^bgm_\d+\.mp3$/i.test(f));
 
   if (!hasManifest && !hasLegacyBgm && !hasNumberedBgm) {
-    errors.push(`missing ${BGM_CHAIN_MANIFEST_REL} and no assets/audio/bgm_*.mp3 or bgm.mp3`);
+    if (requireBgm) {
+      errors.push(`missing ${BGM_CHAIN_MANIFEST_REL} and no assets/audio/bgm_*.mp3 or bgm.mp3`);
+    }
   }
 
-  if (track11.length === 0 && bgmSegments.length === 0) {
+  if (requireBgm && track11.length === 0 && bgmSegments.length === 0) {
     errors.push('index.html: no BGM chain segment on track 11 — chạy wire-bgm-chain.mjs');
   }
 
-  if (/\bloop\b/i.test(indexHtml) && /bgm/i.test(indexHtml)) {
+  if (hasBgmAudioLoop(indexHtml)) {
     errors.push("index.html: cấm loop trên BGM — dùng BGM chain (wire-bgm-chain.mjs)");
   }
 
-  if (totalVideoSec > 0 && (hasManifest || hasLegacyBgm || hasNumberedBgm)) {
+  if (totalVideoSec > 0 && requireBgm && (hasManifest || hasLegacyBgm || hasNumberedBgm)) {
     try {
       const manifest = loadOrBuildManifest(root, { totalVideoSec });
       const scheduled = manifest.segments.map((s, i) => ({

@@ -1,7 +1,7 @@
 export const SHORT_VIDEO_AGENT_VIDEO_URL_PARAM = 'short_video_agent_id';
 export const SHORT_VIDEO_AGENT_TAB_URL_PARAM = 'short_video_agent_tab';
 
-export type ShortVideoAgentLeftTab = 'script' | 'chatbot' | 'facebook';
+export type ShortVideoAgentLeftTab = 'script' | 'chatbot' | 'resources' | 'facebook';
 
 export function parseShortVideoAgentIdFromSearch(search: string): number | null {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
@@ -21,6 +21,9 @@ export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAge
     const raw = new URLSearchParams(normalized).get(SHORT_VIDEO_AGENT_TAB_URL_PARAM);
     if (raw === 'facebook') {
         return 'facebook';
+    }
+    if (raw === 'resources') {
+        return 'resources';
     }
     if (raw === 'chatbot') {
         return 'chatbot';
@@ -49,6 +52,8 @@ export function setShortVideoAgentTabInSearchParams(
     const next = new URLSearchParams(searchParams.toString());
     if (tab === 'facebook') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'facebook');
+    } else if (tab === 'resources') {
+        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'resources');
     } else if (tab === 'chatbot') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'chatbot');
     } else {
@@ -63,7 +68,7 @@ export function openShortVideoAgentInSearchParams(
     tab: ShortVideoAgentLeftTab = 'script',
 ): URLSearchParams {
     let next = setShortVideoAgentIdInSearchParams(searchParams, postId);
-    next = setShortVideoAgentTabInSearchParams(next, tab === 'facebook' || tab === 'chatbot' ? tab : null);
+    next = setShortVideoAgentTabInSearchParams(next, tab === 'facebook' || tab === 'chatbot' || tab === 'resources' ? tab : null);
     return next;
 }
 

@@ -12,6 +12,7 @@ export type StockImageSearchItem = {
     height: number;
     photographer: string;
     photographer_url: string;
+    alt?: string;
     provider: StockMediaProvider;
 };
 
@@ -24,6 +25,7 @@ export type StockVideoSearchItem = {
     duration: number;
     user: string;
     user_url: string;
+    alt?: string;
     provider: StockMediaProvider;
 };
 

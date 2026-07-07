@@ -118,6 +118,27 @@ const indexHtml = read("index.html");
 const captionsHtml = read("compositions/captions.html");
 const watermarkHtml = read("compositions/brand-watermark.html");
 
+// --- Caption pill vertical position ---
+const captionBottomMatch = captionsHtml.match(
+  /\.caption-group-wrap\s*\{[^}]*\bbottom\s*:\s*(\d+(?:\.\d+)?)\s*px/i,
+);
+if (captionBottomMatch) {
+  const bottomPx = parseFloat(captionBottomMatch[1]);
+  if (bottomPx < 180) {
+    errors.push(
+      `compositions/captions.html: caption pill bottom=${bottomPx}px quá sát mép — bắt buộc ≥180px (chuẩn ~180px / ~9.4%)`,
+    );
+  } else if (bottomPx > 360) {
+    warnings.push(
+      `compositions/captions.html: caption pill bottom=${bottomPx}px > 360px — có thể tràn caption band`,
+    );
+  }
+} else {
+  warnings.push(
+    "compositions/captions.html: không parse được .caption-group-wrap bottom — kiểm tra vị trí pill thủ công",
+  );
+}
+
 // --- Caption host in index.html ---
 const hasCaptionHost =
   /data-composition-src\s*=\s*["'][^"']*captions\.html["']/i.test(indexHtml) ||

@@ -56,15 +56,15 @@ Script **chỉ scaffolding** — giữ nguyên CSS, DOM, `render()`:
 
 ---
 
-## Caption overlay — sát mép dưới (bắt buộc import_html)
+## Caption overlay — trong caption band (bắt buộc import_html)
 
-Beat HTML chatbot **không** chừa caption band. Agent ghép caption riêng:
+Beat HTML chatbot **đã** chừa caption band 360px (`padding-bottom` trên `#stage`). Agent ghép caption riêng:
 
 ```bash
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 ```
 
-- Pill karaoke: **`bottom: 48px`** (cố định) — **cấm** `bottom: 12%` (đè UI beat).
+- Pill karaoke: **`bottom: ~9.4%` (~180px)** — sinh bởi `gen-captions-html.mjs`; **cấm** `bottom: 48px` (sát mép, bị platform description che).
 - Host `compositions/captions.html` z-index 9000 — xem [overlay-layer-stack.md](overlay-layer-stack.md).
 
 ---

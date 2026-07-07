@@ -110,12 +110,12 @@ html, body { background: transparent !important; }
 .caption-group-wrap {
   position: absolute;
   left: 50%;
-  bottom: 48px; /* sát mép dưới — beat import_html không chừa caption band */
+  bottom: 180px; /* ~9.4% canvas — trong caption band, tránh platform description overlay */
   transform: translateX(-50%);
 }
 ```
 
-- Sinh bằng `gen-captions-html.mjs` — **cấm** `bottom: 12%` (che nội dung beat full-bleed).
+- Sinh bằng `gen-captions-html.mjs` — **`bottom: ~9.4%` (~180px)** là chuẩn; **cấm** `bottom: 48px` (sát mép dưới, bị platform che).
 - GSAP caption timeline: `window.__timelines["captions"]` — `paused: true`.
 - Karaoke active word: stagger `0.08–0.12` sync `word.start` / `word.end`.
 - Preflight: `/biong-short-video-preflight` hoặc `check-overlay-stack.mjs` — **pass trước render final**.

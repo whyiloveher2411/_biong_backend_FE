@@ -5,7 +5,7 @@ import {
     copyShortVideoAgentPromptToClipboard,
     type ShortVideoAgentPromptPhase,
 } from 'helpers/marketingShortVideoAgentPrompt';
-import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender } from 'helpers/marketingShortVideoAgentLaunch';
+import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender, launchImportHtmlAssemble, launchImportHtmlPreview, launchImportHtmlRender } from 'helpers/marketingShortVideoAgentLaunch';
 import {
     AGENT_AUDIO_SCRIPT_SAVED_EVENT,
 } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
@@ -24,6 +24,7 @@ import {
     saveAdminAudioScript,
     saveAgentHfTheme,
     saveAgentImportHtml,
+    searchAgentBgm,
     saveAgentTtsSettings,
     savePublishFlags,
     transcribeAgentAudio,
@@ -32,7 +33,18 @@ import {
     type AgentVideoContentResponse,
     type HfThemeCatalogItem,
     type ImportHtmlSummary,
+    type ImportHtmlBgmSegment,
+    type ImportHtmlVisualCatalogItem,
+    type ImportHtmlMarketingPostImage,
+    type ImportHtmlComposition,
+    type AgentBgmSearchItem,
 } from './agentVideoApi';
+import {
+    bgmPreviewUrl,
+    enrichBgmSearchItems,
+    enrichBgmSegments,
+    probeAudioDurationSec,
+} from './agentBgmPreview';
 import {
     DEFAULT_TTS_PLATFORMS,
     formatTtsChain,
@@ -106,6 +118,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [hfThemeSource, setHfThemeSource] = React.useState('');
     const [hfThemeCatalog, setHfThemeCatalog] = React.useState<HfThemeCatalogItem[]>([]);
     const [marketingPostId, setMarketingPostId] = React.useState(0);
+    const [appMobileTitle, setAppMobileTitle] = React.useState('');
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
     const [socialPosted, setSocialPosted] = React.useState(false);
@@ -130,6 +143,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [hfPromptType, setHfPromptType] = React.useState(DEFAULT_HF_PROMPT_TYPE);
     const [whisperStatus, setWhisperStatus] = React.useState('none');
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
+    const [bgmSegments, setBgmSegments] = React.useState<ImportHtmlBgmSegment[]>([]);
+    const [sfxBeatTransition, setSfxBeatTransition] = React.useState(true);
+    const [sfxHook, setSfxHook] = React.useState(false);
+    const [composition, setComposition] = React.useState<ImportHtmlComposition | null>(null);
+    const [bgmTotalSec, setBgmTotalSec] = React.useState(0);
+    const [bgmCoversVideo, setBgmCoversVideo] = React.useState(false);
+    const [launchingAssemble, setLaunchingAssemble] = React.useState(false);
+    const [launchingPreview, setLaunchingPreview] = React.useState(false);
+    const [previewStudioUrl, setPreviewStudioUrl] = React.useState('');
+    const [launchingScriptRender, setLaunchingScriptRender] = React.useState(false);
+    const [savingImportAssets, setSavingImportAssets] = React.useState(false);
+    const [searchingBgm, setSearchingBgm] = React.useState(false);
+    const [bgmSearchQuery, setBgmSearchQuery] = React.useState('lofi ambient');
+    const [bgmSearchResults, setBgmSearchResults] = React.useState<AgentBgmSearchItem[]>([]);
+    const [visualCatalog, setVisualCatalog] = React.useState<ImportHtmlVisualCatalogItem[]>([]);
+    const [marketingPostImages, setMarketingPostImages] = React.useState<ImportHtmlMarketingPostImage[]>([]);
     const [whisperError, setWhisperError] = React.useState('');
 
     const [uploading, setUploading] = React.useState(false);
@@ -163,6 +192,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const importHtmlSaveTimerRef = React.useRef<number | null>(null);
     const beatMapSaveTimerRef = React.useRef<number | null>(null);
     const beatHtmlSaveTimerRef = React.useRef<Record<string, number>>({});
+    const visualCatalogSavedRef = React.useRef<string>('[]');
 
     const resolveScriptFromResponse = React.useCallback((serverScript: string): string => {
         const draft = readAgentVideoScriptDraft(shortVideoId);
@@ -174,6 +204,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return serverScript;
     }, [shortVideoId]);
+
+    const applyImportHtmlResources = React.useCallback((summary: ImportHtmlSummary | null | undefined) => {
+        if (!summary) {
+            return;
+        }
+        const segmentsRaw = summary.assets?.bgm_segments;
+        const segments = Array.isArray(segmentsRaw) ? segmentsRaw : [];
+        void enrichBgmSegments(segments).then(setBgmSegments);
+        if (summary.assets) {
+            setSfxBeatTransition(
+                typeof summary.assets.sfx_beat_transition === 'boolean'
+                    ? summary.assets.sfx_beat_transition
+                    : true,
+            );
+            setSfxHook(Boolean(summary.assets.sfx_hook));
+        }
+        if (summary.composition) {
+            setComposition(summary.composition);
+        }
+        setBgmTotalSec(Number(summary.bgm_total_sec || 0));
+        setBgmCoversVideo(Boolean(summary.bgm_covers_video));
+        const visualCatalogRaw = summary.assets?.visual_catalog;
+        const loadedVisualCatalog = Array.isArray(visualCatalogRaw) ? visualCatalogRaw : [];
+        setVisualCatalog(loadedVisualCatalog);
+        visualCatalogSavedRef.current = JSON.stringify(loadedVisualCatalog);
+        if (Array.isArray(summary.marketing_post_images)) {
+            setMarketingPostImages(summary.marketing_post_images);
+        }
+    }, []);
 
     const applyResponse = React.useCallback((res: AgentVideoContentResponse) => {
         if (!res?.success) {
@@ -210,6 +269,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setHfThemeCatalog(Array.isArray(res?.hf_theme_catalog) ? res.hf_theme_catalog : []);
         const mpId = Number(res?.marketing_post_id || 0);
         setMarketingPostId(Number.isFinite(mpId) && mpId > 0 ? mpId : 0);
+        setAppMobileTitle(String(res?.app_mobile_title || '').trim());
         setThumbnail(res?.thumbnail ?? null);
         setPostEligible(Boolean(res?.post_eligible));
         setSocialPosted(Boolean(res?.social_posted));
@@ -251,7 +311,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setWhisperStatus(String(importSummary?.whisper_status || res?.agent_workflow?.whisper_status || 'none'));
         setWhisperError(String(importSummary?.whisper_error || '').trim());
         setImportHtmlReady(Boolean(importSummary?.import_html_ready ?? res?.agent_workflow?.import_html_ready));
-    }, [resolveScriptFromResponse]);
+        applyImportHtmlResources(importSummary);
+    }, [applyImportHtmlResources, resolveScriptFromResponse]);
 
     const handleAudioScriptChange = React.useCallback((value: string) => {
         setAudioScript(value);
@@ -448,6 +509,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 title,
                 audioScript,
                 hasScript,
+                appMobileTitle,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -534,7 +596,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setBeatsHtmlTotal(Number(summary.beats_html_total || summary.beat_map?.sections?.length || 0));
         setBeatsHtmlCompleted(Number(summary.beats_html_completed || 0));
-    }, [applyBeatMapDraft]);
+        applyImportHtmlResources(summary);
+    }, [applyBeatMapDraft, applyImportHtmlResources]);
 
     const persistImportHtml = React.useCallback(async (payload: {
         renderMode?: AgentRenderMode;
@@ -585,6 +648,166 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setSavingImportHtml(false);
         }
     }, [applyImportHtmlSummary, shortVideoId, showMessage]);
+
+    const persistImportHtmlAssets = React.useCallback(async () => {
+        setSavingImportAssets(true);
+        try {
+            const res = await saveAgentImportHtml(shortVideoId, {
+                bgmSegments,
+                sfxBeatTransition,
+                sfxHook,
+                visualCatalog,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được tài nguyên', 'error');
+                return false;
+            }
+            if (res.import_html) {
+                applyImportHtmlSummary(res.import_html);
+            }
+            const savedBgmRaw = res.import_html?.assets?.bgm_segments;
+            const savedBgmCount = Array.isArray(savedBgmRaw) ? savedBgmRaw.length : 0;
+            if (bgmSegments.length > 0 && savedBgmCount === 0) {
+                showMessage('Không lưu được nhạc nền — URL tải không hợp lệ', 'error');
+                return false;
+            }
+            const savedVisualRaw = res.import_html?.assets?.visual_catalog;
+            const savedVisualCatalog = Array.isArray(savedVisualRaw) ? savedVisualRaw : [];
+            if (visualCatalog.length > 0 && savedVisualCatalog.length === 0) {
+                showMessage('Không lưu được thư viện hình ảnh/video — kiểm tra URL hoặc cập nhật backend', 'error');
+                return false;
+            }
+            visualCatalogSavedRef.current = JSON.stringify(savedVisualCatalog);
+            showMessage('Đã lưu tài nguyên ghép video', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingImportAssets(false);
+        }
+    }, [applyImportHtmlSummary, bgmSegments, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+
+    const handleAddVisualCatalogItem = React.useCallback((item: ImportHtmlVisualCatalogItem) => {
+        const url = String(item.url || '').trim();
+        if (!url) {
+            return;
+        }
+        setVisualCatalog((prev) => {
+            if (prev.some((entry) => entry.url === url)) {
+                return prev;
+            }
+            return [...prev, item];
+        });
+    }, []);
+
+    const handleRemoveVisualCatalogItem = React.useCallback((index: number) => {
+        setVisualCatalog((prev) => prev.filter((_, i) => i !== index));
+    }, []);
+
+    const isVisualCatalogDirty = JSON.stringify(visualCatalog) !== visualCatalogSavedRef.current;
+
+    const persistVisualCatalogIfDirty = React.useCallback(async () => {
+        if (!isVisualCatalogDirty) {
+            return true;
+        }
+        return persistImportHtmlAssets();
+    }, [isVisualCatalogDirty, persistImportHtmlAssets]);
+
+    const handleSearchAgentBgm = React.useCallback(async () => {
+        setSearchingBgm(true);
+        try {
+            const res = await searchAgentBgm(bgmSearchQuery.trim() || 'lofi ambient', 8);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Tìm BGM thất bại', 'error');
+                return;
+            }
+            const rawItems = Array.isArray(res.items) ? res.items : [];
+            const enriched = await enrichBgmSearchItems(rawItems);
+            setBgmSearchResults(enriched);
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSearchingBgm(false);
+        }
+    }, [bgmSearchQuery, showMessage]);
+
+    const handleAddBgmSegment = React.useCallback(async (item: AgentBgmSearchItem) => {
+        const downloadUrl = String(item.download_url || '').trim();
+        if (!downloadUrl) {
+            return;
+        }
+        const previewUrl = bgmPreviewUrl(item) || downloadUrl;
+        let durationSec = Number(item.duration_sec || 0);
+        if (durationSec <= 0 && previewUrl) {
+            durationSec = await probeAudioDurationSec(previewUrl);
+        }
+        setBgmSegments((prev) => {
+            if (prev.some((seg) => seg.download_url === downloadUrl)) {
+                return prev;
+            }
+            return [
+                ...prev,
+                {
+                    id: String(item.id || `bgm-${prev.length + 1}`),
+                    title: String(item.title || ''),
+                    download_url: downloadUrl,
+                    preview_url: previewUrl,
+                    duration_sec: durationSec,
+                    provider: String(item.provider || 'pixabay'),
+                },
+            ];
+        });
+    }, []);
+
+    const handleRemoveBgmSegment = React.useCallback((index: number) => {
+        setBgmSegments((prev) => prev.filter((_, i) => i !== index));
+    }, []);
+
+    const handleLaunchImportHtmlAssemble = async () => {
+        setLaunchingAssemble(true);
+        try {
+            const result = await launchImportHtmlAssemble(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+            if (result.ok) {
+                loadRow();
+            }
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingAssemble(false);
+        }
+    };
+
+    const handleLaunchImportHtmlPreview = async () => {
+        setLaunchingPreview(true);
+        try {
+            const result = await launchImportHtmlPreview(shortVideoId);
+            if (result.previewUrl) {
+                setPreviewStudioUrl(result.previewUrl);
+            }
+            showMessage(result.message, result.ok ? 'success' : 'error');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingPreview(false);
+        }
+    };
+
+    const handleLaunchImportHtmlRender = async () => {
+        setLaunchingScriptRender(true);
+        try {
+            const result = await launchImportHtmlRender(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+            if (result.ok) {
+                loadRow();
+            }
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setLaunchingScriptRender(false);
+        }
+    };
 
     const handleLaunchAgentImportAssemble = async () => {
         setLaunchingImportAssemble(true);
@@ -1058,9 +1281,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được script', 'error');
                 return;
             }
-            setScriptApproved(false);
+            setScriptApproved(Boolean(json?.audio_script_approved) === true);
             savedScriptRef.current = audioScript.trim();
             clearAgentVideoScriptDraft(shortVideoId);
+            if (json?.audio_reset) {
+                setAudioFileUrl('');
+                setAudioDurationSec(null);
+                setTtsPending(false);
+                setTtsFailed(false);
+            }
             showMessage(parseApiMessage(json?.message) || 'Đã lưu script', 'success');
             loadRow();
         } catch (e) {
@@ -1079,7 +1308,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             setScriptApproved(true);
-            showMessage(parseApiMessage(json?.message) || 'Đã duyệt script', 'success');
+            const ttsQueued = Boolean(json?.tts_queued ?? json?.tts_job_id);
+            const enqueueError = String(json?.tts_enqueue_error || '').trim();
+            if (ttsQueued) {
+                setTtsPending(true);
+                setTtsFailed(false);
+                setNeedsTtsEnqueue(false);
+                if (json?.audio_reset || json?.tts_status === 'queued') {
+                    setAudioFileUrl('');
+                    setAudioDurationSec(null);
+                }
+                showMessage(parseApiMessage(json?.message) || 'Đã duyệt script — đã queue TTS', 'success');
+            } else if (enqueueError) {
+                showMessage(enqueueError, 'error');
+            } else {
+                showMessage(parseApiMessage(json?.message) || 'Đã duyệt script nhưng chưa tạo được queue TTS', 'warning');
+            }
             loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -1246,6 +1490,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         hfThemeSource,
         hfThemeCatalog,
         marketingPostId,
+        appMobileTitle,
         thumbnail,
         postEligible,
         socialPosted,
@@ -1267,6 +1512,38 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         whisperStatus,
         whisperError,
         importHtmlReady,
+        bgmSegments,
+        setBgmSegments,
+        sfxBeatTransition,
+        setSfxBeatTransition,
+        sfxHook,
+        setSfxHook,
+        composition,
+        bgmTotalSec,
+        bgmCoversVideo,
+        launchingAssemble,
+        launchingPreview,
+        previewStudioUrl,
+        launchingScriptRender,
+        savingImportAssets,
+        searchingBgm,
+        bgmSearchQuery,
+        setBgmSearchQuery,
+        bgmSearchResults,
+        visualCatalog,
+        setVisualCatalog,
+        marketingPostImages,
+        handleAddVisualCatalogItem,
+        handleRemoveVisualCatalogItem,
+        isVisualCatalogDirty,
+        persistVisualCatalogIfDirty,
+        persistImportHtmlAssets,
+        handleSearchAgentBgm,
+        handleAddBgmSegment,
+        handleRemoveBgmSegment,
+        handleLaunchImportHtmlAssemble,
+        handleLaunchImportHtmlPreview,
+        handleLaunchImportHtmlRender,
         uploading,
         savingTtsMode,
         savingHfTheme,
