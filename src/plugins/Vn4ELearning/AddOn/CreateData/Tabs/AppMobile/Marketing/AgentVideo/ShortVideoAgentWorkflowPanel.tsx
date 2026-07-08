@@ -69,6 +69,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 title: state.title,
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
+                marketingPostId: state.marketingPostId,
+                sourceContent: state.contentPlainText || state.savedAgentSourceContent,
             });
         } finally {
             setOpeningCreateScriptGemini(false);
@@ -84,6 +86,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
                 appMobileTitle: state.appMobileTitle,
+                marketingPostId: state.marketingPostId,
+                sourceContent: state.contentPlainText || state.savedAgentSourceContent,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -128,6 +132,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
                     />
                     <MetaRow label="TTS chain" value={chainDisplay} />
+                    <MetaRow label="Giọng OmniVoice" value={state.omnivoiceVoice || 'minh_quân'} />
                     <MetaRow label="Video status" value={state.agentVideoStatus || 'none'} />
                     <MetaRow
                         label="Render mode"

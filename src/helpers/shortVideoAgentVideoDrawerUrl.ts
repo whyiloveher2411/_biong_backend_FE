@@ -1,7 +1,7 @@
 export const SHORT_VIDEO_AGENT_VIDEO_URL_PARAM = 'short_video_agent_id';
 export const SHORT_VIDEO_AGENT_TAB_URL_PARAM = 'short_video_agent_tab';
 
-export type ShortVideoAgentLeftTab = 'script' | 'chatbot' | 'resources' | 'facebook';
+export type ShortVideoAgentLeftTab = 'content' | 'script' | 'chatbot' | 'resources' | 'facebook';
 
 export function parseShortVideoAgentIdFromSearch(search: string): number | null {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
@@ -19,6 +19,9 @@ export function parseShortVideoAgentIdFromSearch(search: string): number | null 
 export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAgentLeftTab {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
     const raw = new URLSearchParams(normalized).get(SHORT_VIDEO_AGENT_TAB_URL_PARAM);
+    if (raw === 'content') {
+        return 'content';
+    }
     if (raw === 'facebook') {
         return 'facebook';
     }
@@ -50,7 +53,9 @@ export function setShortVideoAgentTabInSearchParams(
     tab: ShortVideoAgentLeftTab | null,
 ): URLSearchParams {
     const next = new URLSearchParams(searchParams.toString());
-    if (tab === 'facebook') {
+    if (tab === 'content') {
+        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'content');
+    } else if (tab === 'facebook') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'facebook');
     } else if (tab === 'resources') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'resources');
@@ -68,7 +73,11 @@ export function openShortVideoAgentInSearchParams(
     tab: ShortVideoAgentLeftTab = 'script',
 ): URLSearchParams {
     let next = setShortVideoAgentIdInSearchParams(searchParams, postId);
-    next = setShortVideoAgentTabInSearchParams(next, tab === 'facebook' || tab === 'chatbot' || tab === 'resources' ? tab : null);
+    const persistTab = tab === 'content'
+        || tab === 'facebook'
+        || tab === 'chatbot'
+        || tab === 'resources';
+    next = setShortVideoAgentTabInSearchParams(next, persistTab ? tab : null);
     return next;
 }
 

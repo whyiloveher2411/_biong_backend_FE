@@ -8,14 +8,39 @@ type OpenGeminiScriptInput = {
     audioScript: string;
     hasScript: boolean;
     appMobileTitle?: string;
+    marketingPostId?: number;
+    /** Nội dung nguồn đã lưu (agent_source_content / content_plain khi không có post). */
+    sourceContent?: string;
 };
+
+function resolveSourceContent(input: OpenGeminiScriptInput): string {
+    return String(input.sourceContent || '').trim();
+}
 
 export function useAgentVideoOpenGeminiScriptActions() {
     const { showMessage } = useFloatingMessages();
 
+    const assertSourceReady = (input: OpenGeminiScriptInput): boolean => {
+        const marketingPostId = Number(input.marketingPostId || 0);
+        if (marketingPostId > 0) {
+            return true;
+        }
+        if (resolveSourceContent(input)) {
+            return true;
+        }
+        showMessage(
+            'Chưa có nội dung nguồn — mở tab Content, nhập nội dung hoặc fetch README rồi Lưu trước khi sinh/cải thiện script',
+            'warning',
+        );
+        return false;
+    };
+
     const openCreateScriptGemini = async (input: OpenGeminiScriptInput) => {
         if (!input.shortVideoId) {
             showMessage('Thiếu short_video_id', 'error');
+            return;
+        }
+        if (!assertSourceReady(input)) {
             return;
         }
         try {
@@ -38,11 +63,17 @@ export function useAgentVideoOpenGeminiScriptActions() {
             showMessage('Chưa có audio script', 'warning');
             return;
         }
-        const improvePrompt = buildImproveAudioScriptPrompt(
-            input.title,
-            input.audioScript,
-            input.appMobileTitle,
-        );
+        if (!assertSourceReady(input)) {
+            return;
+        }
+        const marketingPostId = Number(input.marketingPostId || 0);
+        const improvePrompt = buildImproveAudioScriptPrompt({
+            title: input.title,
+            audioScript: input.audioScript,
+            appMobileTitle: input.appMobileTitle,
+            sourceContent: resolveSourceContent(input),
+            hasMarketingPost: marketingPostId > 0,
+        });
         if (!improvePrompt) {
             showMessage('Chưa có audio script', 'warning');
             return;

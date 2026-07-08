@@ -119,6 +119,48 @@ export type ImportHtmlSummary = {
     marketing_post_images?: ImportHtmlMarketingPostImage[];
 };
 
+export type OmnivoiceVoiceCatalogItem = {
+    key: string;
+    label: string;
+    source?: string;
+    preview_url?: string;
+};
+
+const OMNIVOICE_VOICE_PREVIEW_API_PATH =
+    'plugin/vn4-e-learning/app-mobile/marketing/short-video/preview-omnivoice-voice';
+
+export function resolveOmnivoiceVoicePreviewUrl(
+    item: Pick<OmnivoiceVoiceCatalogItem, 'key' | 'preview_url'> | string,
+): string {
+    const key = typeof item === 'string'
+        ? String(item || '').trim()
+        : String(item?.key || '').trim();
+    const rawPreview = typeof item === 'string'
+        ? ''
+        : String(item?.preview_url || '').trim();
+
+    let path = rawPreview;
+    if (!path && key) {
+        path = `${OMNIVOICE_VOICE_PREVIEW_API_PATH}?voice=${encodeURIComponent(key)}`;
+    }
+    if (!path) {
+        return '';
+    }
+
+    try {
+        const url = path.startsWith('http://') || path.startsWith('https://')
+            ? new URL(path)
+            : new URL(convertToURL(getAdminApiPrefix(), path));
+        const token = getAccessToken();
+        if (token && !url.searchParams.get('access_token')) {
+            url.searchParams.set('access_token', token);
+        }
+        return url.toString();
+    } catch {
+        return '';
+    }
+}
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -129,6 +171,8 @@ export type AgentVideoContentResponse = {
     audio_file_duration_sec?: number;
     agent_tts_auto?: boolean;
     agent_tts_platforms?: string[];
+    agent_omnivoice_voice?: string;
+    omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
     agent_video_status?: string;
     agent_video_url?: string;
     agent_video_rendered_at?: string;
@@ -167,6 +211,9 @@ export type AgentVideoContentResponse = {
     app_mobile_id?: number;
     app_mobile_title?: string;
     thumbnail?: unknown;
+    agent_source_content?: string;
+    agent_github_repo?: string;
+    content_plain_text?: string;
     post_eligible?: boolean;
     social_posted?: boolean;
     render_mode?: AgentRenderMode;
@@ -303,6 +350,19 @@ export async function saveAgentHfTheme(
     );
 }
 
+export async function saveAgentOmnivoiceVoice(
+    shortVideoId: number,
+    voice: string,
+): Promise<JsonResponse & {
+    agent_omnivoice_voice?: string;
+    omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-omnivoice-voice',
+        shortVideoBody(shortVideoId, { agent_omnivoice_voice: voice }),
+    );
+}
+
 export async function saveAgentTtsSettings(
     shortVideoId: number,
     enabled?: boolean,
@@ -329,6 +389,49 @@ export async function saveAdminAudioScript(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-admin-audio-script',
         shortVideoBody(shortVideoId, { audio_script: audioScript }),
     ) as Promise<SaveAdminAudioScriptResponse>;
+}
+
+export type SaveAgentSourceContentResponse = JsonResponse & {
+    agent_source_content?: string;
+    agent_github_repo?: string;
+    content_plain_text?: string;
+};
+
+export async function saveAgentSourceContent(
+    shortVideoId: number,
+    content: string,
+    githubRepo?: string,
+): Promise<SaveAgentSourceContentResponse> {
+    const extra: Record<string, unknown> = {
+        agent_source_content: content,
+    };
+    if (githubRepo !== undefined) {
+        extra.agent_github_repo = githubRepo;
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-source-content',
+        shortVideoBody(shortVideoId, extra),
+    ) as Promise<SaveAgentSourceContentResponse>;
+}
+
+export type FetchGithubReadmeResponse = JsonResponse & {
+    github_repo?: string;
+    agent_github_repo?: string;
+    readme?: string;
+    source_url?: string;
+};
+
+export async function fetchGithubReadme(
+    shortVideoId: number,
+    githubRepo: string,
+): Promise<FetchGithubReadmeResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/fetch-github-readme',
+        shortVideoBody(shortVideoId, {
+            github_repo: githubRepo,
+            agent_github_repo: githubRepo,
+        }),
+    ) as Promise<FetchGithubReadmeResponse>;
 }
 
 export async function approveAudioScript(shortVideoId: number): Promise<ApproveAudioScriptResponse> {

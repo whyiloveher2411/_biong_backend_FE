@@ -525,7 +525,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                                             mediaType="image"
                                             thumbnailUrl={item.preview_url}
                                             mediaUrl={item.url}
-                                            title={item.photographer || item.caption || 'Pexels'}
+                                            title={item.photographer || 'Pexels'}
                                             added={added}
                                             playing={false}
                                             onAdd={() => onAddItem(catalogItem)}

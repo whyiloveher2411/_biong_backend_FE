@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     Alert,
+    Avatar,
     Box,
     Divider,
     Checkbox,
@@ -12,6 +13,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -21,6 +23,10 @@ import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { TTS_PLATFORM_OPTIONS } from './agentVideoUi';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
+import ShortVideoAgentOmnivoiceVoiceDrawer, {
+    voiceAvatarColor,
+    voiceInitials,
+} from './ShortVideoAgentOmnivoiceVoiceDrawer';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -80,6 +86,8 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 title: state.title,
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
+                marketingPostId: state.marketingPostId,
+                sourceContent: state.contentPlainText || state.savedAgentSourceContent,
             });
         } finally {
             setOpeningCreateScriptGemini(false);
@@ -95,6 +103,8 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 audioScript: state.audioScript,
                 hasScript: state.hasScript,
                 appMobileTitle: state.appMobileTitle,
+                marketingPostId: state.marketingPostId,
+                sourceContent: state.contentPlainText || state.savedAgentSourceContent,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -278,6 +288,107 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     sx={{ mt: 1 }}
                                 />
                             )}
+                        </Box>
+
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Giọng OmniVoice
+                            </Typography>
+                            {(() => {
+                                const selectedKey = state.omnivoiceVoice || 'minh_quân';
+                                const catalog = state.omnivoiceVoiceCatalog.length > 0
+                                    ? state.omnivoiceVoiceCatalog
+                                    : [{ key: 'minh_quân', label: 'minh quân' }];
+                                const selected = catalog.find((item) => item.key === selectedKey)
+                                    || catalog[0];
+                                const displayName = selected?.label
+                                    || selectedKey.replace(/_/g, ' ');
+                                const initials = voiceInitials(selected?.label || selectedKey);
+                                const avatarColor = voiceAvatarColor(
+                                    selectedKey,
+                                    catalog.map((item) => item.key),
+                                );
+                                const disabled = state.savingOmnivoiceVoice || state.regeneratingTts;
+
+                                return (
+                                    <Box
+                                        component="button"
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() => state.setVoiceDrawerOpen(true)}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1.25,
+                                            width: '100%',
+                                            px: 1.5,
+                                            py: 1,
+                                            borderRadius: 999,
+                                            border: '1.5px solid',
+                                            borderColor: 'primary.main',
+                                            bgcolor: (theme) => theme.palette.mode === 'dark'
+                                                ? 'rgba(25, 118, 210, 0.18)'
+                                                : 'rgba(25, 118, 210, 0.08)',
+                                            cursor: disabled ? 'not-allowed' : 'pointer',
+                                            opacity: disabled ? 0.6 : 1,
+                                            textAlign: 'left',
+                                            font: 'inherit',
+                                            color: 'primary.main',
+                                            transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                                            '&:hover': disabled ? undefined : {
+                                                borderColor: 'primary.dark',
+                                                bgcolor: (theme) => theme.palette.mode === 'dark'
+                                                    ? 'rgba(25, 118, 210, 0.28)'
+                                                    : 'rgba(25, 118, 210, 0.14)',
+                                            },
+                                        }}
+                                    >
+                                        <Avatar
+                                            sx={{
+                                                width: 34,
+                                                height: 34,
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                bgcolor: avatarColor,
+                                                color: '#fff',
+                                            }}
+                                        >
+                                            {initials}
+                                        </Avatar>
+                                        <Typography
+                                            variant="body2"
+                                            fontWeight={700}
+                                            noWrap
+                                            sx={{ flex: 1, color: 'primary.dark' }}
+                                        >
+                                            {displayName}
+                                        </Typography>
+                                        <ChevronRightIcon
+                                            fontSize="small"
+                                            sx={{ color: 'primary.main' }}
+                                        />
+                                    </Box>
+                                );
+                            })()}
+                            <ShortVideoAgentOmnivoiceVoiceDrawer
+                                open={state.voiceDrawerOpen}
+                                onClose={() => state.setVoiceDrawerOpen(false)}
+                                catalog={state.omnivoiceVoiceCatalog}
+                                selectedVoice={state.omnivoiceVoice || 'minh_quân'}
+                                saving={state.savingOmnivoiceVoice || state.regeneratingTts}
+                                onSelect={async (voiceKey) => {
+                                    if (voiceKey === (state.omnivoiceVoice || 'minh_quân')) {
+                                        state.setVoiceDrawerOpen(false);
+                                        return;
+                                    }
+                                    const saved = await state.handleOmnivoiceVoiceChange(voiceKey);
+                                    if (saved) {
+                                        state.setVoiceDrawerOpen(false);
+                                    }
+                                }}
+                                onPlayPreview={state.handleOmnivoiceVoicePreview}
+                                playingUrl={state.playingVoiceUrl}
+                            />
                         </Box>
 
                         <Divider />

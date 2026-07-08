@@ -1,15 +1,34 @@
+export type ImproveAudioScriptPromptInput = {
+    title: string;
+    audioScript: string;
+    appMobileTitle?: string;
+    /** Plain text nguồn khi không liên kết marketing post (agent_source_content). */
+    sourceContent?: string;
+    hasMarketingPost?: boolean;
+};
+
 export function buildImproveAudioScriptPrompt(
-    title: string,
-    audioScript: string,
-    appMobileTitle?: string,
+    titleOrInput: string | ImproveAudioScriptPromptInput,
+    audioScriptArg?: string,
+    appMobileTitleArg?: string,
 ): string {
-    const script = String(audioScript || '').trim();
+    const input: ImproveAudioScriptPromptInput = typeof titleOrInput === 'object'
+        ? titleOrInput
+        : {
+            title: titleOrInput,
+            audioScript: String(audioScriptArg || ''),
+            appMobileTitle: appMobileTitleArg,
+        };
+
+    const script = String(input.audioScript || '').trim();
     if (!script) {
         return '';
     }
 
-    const articleTitle = String(title || '').trim() || '(chưa có tiêu đề)';
-    const appName = String(appMobileTitle || '').trim();
+    const articleTitle = String(input.title || '').trim() || '(chưa có tiêu đề)';
+    const appName = String(input.appMobileTitle || '').trim();
+    const sourceContent = String(input.sourceContent || '').trim();
+    const hasMarketingPost = Boolean(input.hasMarketingPost);
     const appCtaLines = appName
         ? [
             '## CTA cuối script — kéo user vào app (bắt buộc)',
@@ -26,14 +45,33 @@ export function buildImproveAudioScriptPrompt(
             '',
         ];
 
+    const sourceBlock = !hasMarketingPost && sourceContent
+        ? [
+            '## Nội dung nguồn (agent_source_content — bắt buộc bám theo)',
+            'Nội dung dưới đây đã lưu trên short video (tab Content / README). Mọi claim phải bám nguồn này; cấm bịa số liệu/tính năng không có trong nguồn.',
+            '```',
+            sourceContent.length > 12000
+                ? `${sourceContent.slice(0, 12000)}\n…(đã cắt bớt vì quá dài)`
+                : sourceContent,
+            '```',
+            '',
+        ].join('\n')
+        : !hasMarketingPost
+            ? [
+                '## Nội dung nguồn',
+                '(Chưa có agent_source_content — chỉ được viết lại theo script + tiêu đề hiện có; không bịa chi tiết mới.)',
+                '',
+            ].join('\n')
+            : '';
+
     return `Bạn là biên tập kịch bản voiceover short video tiếng Việt.
 
 ## Nhiệm vụ
-Viết lại (cải thiện) audio script bên dưới: văn nói tự nhiên hơn, retention tốt hơn, **làm giàu nội dung** nhưng giữ đúng ý chính từ bài marketing.
+Viết lại (cải thiện) audio script bên dưới: văn nói tự nhiên hơn, retention tốt hơn, **làm giàu nội dung** nhưng giữ đúng ý chính từ ${hasMarketingPost ? 'bài marketing / script gốc' : 'nội dung nguồn đã lưu + script gốc'}.
 
 ## Làm giàu nội dung (bắt buộc)
-- **Không chỉ paraphrase** 2–3 ý tiêu đề — mở rộng narrative bằng ví dụ đời, tình huống, cảm xúc suy ra từ script gốc.
-- **Cấm bịa** số liệu, tính năng, case study không có trong script gốc hoặc tiêu đề bài.
+- **Không chỉ paraphrase** 2–3 ý tiêu đề — mở rộng narrative bằng ví dụ đời, tình huống, cảm xúc suy ra từ script gốc${!hasMarketingPost && sourceContent ? ' và nội dung nguồn' : ''}.
+- **Cấm bịa** số liệu, tính năng, case study không có trong script gốc${!hasMarketingPost && sourceContent ? ', nội dung nguồn' : ''} hoặc tiêu đề bài.
 - Phần solve phải có **nhiều đoạn** (mỗi ý một đoạn); nếu script gốc quá ngắn, hãy khai thác sâu hơn các ý đã có thay vì thêm fact mới.
 - Nếu nội dung đủ dày: ưu tiên thời lượng **90–150 giây** thay vì rút gọn.
 
@@ -55,7 +93,7 @@ ${appCtaLines.join('\n')}
 ## Tiêu đề bài viết
 ${articleTitle}
 
-## Audio script hiện tại
+${sourceBlock}## Audio script hiện tại
 \`\`\`
 ${script}
 \`\`\`

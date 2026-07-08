@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Box } from '@mui/material';
 import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
 import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
+import ShortVideoAgentContentPanel from './ShortVideoAgentContentPanel';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
 import ShortVideoAgentResourcesPanel from './ShortVideoAgentResourcesPanel';
@@ -9,10 +10,11 @@ import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 const TAB = {
-    script: 0,
-    chatbot: 1,
-    resources: 2,
-    facebook: 3,
+    content: 0,
+    script: 1,
+    chatbot: 2,
+    resources: 3,
+    facebook: 4,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -24,6 +26,9 @@ type Props = {
 };
 
 function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
+    if (initialTab === 'content') {
+        return TAB.content;
+    }
     if (initialTab === 'facebook') {
         return TAB.facebook;
     }
@@ -68,6 +73,7 @@ export default function ShortVideoAgentLeftPanel({
                 value={activeTab}
                 onChange={setActiveTab}
                 tabs={[
+                    { label: 'Content' },
                     { label: 'Script & TTS' },
                     { label: 'HTML chatbot' },
                     { label: 'Tài nguyên' },
@@ -75,6 +81,9 @@ export default function ShortVideoAgentLeftPanel({
                 ]}
             />
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                {activeTab === TAB.content ? (
+                    <ShortVideoAgentContentPanel state={state} />
+                ) : null}
                 {activeTab === TAB.script ? (
                     <ShortVideoAgentScriptPanel state={state} />
                 ) : null}
