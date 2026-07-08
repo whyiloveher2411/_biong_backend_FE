@@ -31,12 +31,17 @@ import {
   tryThangNamPairCluster,
   tryWhisperSingleHomophone,
   trySkipTranscriptFiller,
+  tryMotMetMetricCluster,
+  tryLungLuongHomophone,
 } from "./vi-align-helpers.mjs";
 
 export const DEFAULT_LOOKAHEAD = 40;
 const MAX_FUZZY_JUMP = 8;
+/** Khoảng cách thời gian tối đa khi nhảy xa trong transcript (chống trùng từ như "một") */
+const MAX_TIME_JUMP_SEC = 3.5;
 export const DEFAULT_FUZZY_MIN = 0.72;
 export const DEFAULT_DENSITY_MAX = 0.25;
+export const DEFAULT_MAX_TIMING_GAP_SEC = 3;
 
 const OMNIVOICE_EMOTION_TAG_RE = /\[(?:laughter|laugh|sigh|dissatisfaction-hnn)\]/gi;
 
@@ -169,6 +174,145 @@ export function interpolateTiming(prev, next, index, total) {
     };
   }
   return { start: 0, end: 0.2 };
+}
+
+const UNTRUSTED_MATCH_TYPES = new Set([
+  "interpolate",
+  "positional",
+  "positional-gap",
+]);
+
+export function isTrustedCaptionMatch(matchType) {
+  return !UNTRUSTED_MATCH_TYPES.has(String(matchType ?? ""));
+}
+
+/**
+ * Phát hiện khoảng trống timing bất thường giữa các từ karaoke liên tiếp.
+ * @param {{ text: string, start: number, end: number }[]} words
+ */
+export function analyzeCaptionTimingGaps(words, options = {}) {
+  const maxAllowedGap = options.maxGapSec ?? DEFAULT_MAX_TIMING_GAP_SEC;
+  let maxGapSec = 0;
+  let largeGapCount = 0;
+  const largeGaps = [];
+
+  for (let i = 1; i < words.length; i++) {
+    const prev = words[i - 1];
+    const curr = words[i];
+    const gap = Number(curr.start) - Number(prev.end);
+    if (!Number.isFinite(gap)) continue;
+    if (gap > maxGapSec) maxGapSec = gap;
+
+    const prevEndsSentence = /[.!?][,]?$/u.test(String(prev.text ?? ""));
+    if (gap > maxAllowedGap && !prevEndsSentence) {
+      largeGapCount++;
+      if (largeGaps.length < 8) {
+        largeGaps.push({
+          index: i,
+          gapSec: +gap.toFixed(3),
+          prevWord: prev.text,
+          word: curr.text,
+        });
+      }
+    }
+  }
+
+  return {
+    maxGapSec: +maxGapSec.toFixed(3),
+    largeGapCount,
+    largeGaps,
+  };
+}
+
+function acceptFarExactMatch(dist, scriptWord, transcriptWord, prevEnd) {
+  if (dist <= MAX_FUZZY_JUMP) return true;
+  const rawSim = rawSimilarity(scriptWord, transcriptWord);
+  if (rawSim < FAR_MATCH_MIN_RAW_SIM) return false;
+  const timeGap = Number(transcriptWord.start) - Number(prevEnd);
+  return Number.isFinite(timeGap) && timeGap <= MAX_TIME_JUMP_SEC;
+}
+
+function findTrustedAnchor(mapped, index, direction, trustedAt) {
+  let j = index + direction;
+  while (j >= 0 && j < mapped.length) {
+    if (trustedAt[j]) {
+      return { index: j, start: mapped[j].start, end: mapped[j].end };
+    }
+    j += direction;
+  }
+  return null;
+}
+
+/**
+ * Sửa timing từ không tin cậy (interpolate/positional) bằng trung bình start anchor lân cận.
+ * Anchor tìm bằng cách mở rộng dần cho đến từ exact/fuzzy/cluster.
+ */
+export function repairUntrustedNeighborTiming(mapped, options = {}) {
+  const minDur = options.minDuration ?? 0.05;
+  const endPad = options.endPad ?? 0.1;
+  const words = mapped.map((w) => ({ ...w }));
+  const trustedAt = words.map((w) => isTrustedCaptionMatch(w.matchType));
+  const preRepairUntrustedCount = trustedAt.filter((t) => !t).length;
+  let repairedCount = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    if (trustedAt[i]) continue;
+
+    const left = findTrustedAnchor(words, i, -1, trustedAt);
+    const right = findTrustedAnchor(words, i, 1, trustedAt);
+
+    const leftBound = left ? left.index : -1;
+    const rightBound = right ? right.index : words.length;
+    const group = [];
+    for (let j = leftBound + 1; j < rightBound; j++) {
+      if (!trustedAt[j]) group.push(j);
+    }
+    const groupPos = group.indexOf(i);
+    const groupSize = group.length;
+
+    let start;
+    if (left && right) {
+      if (groupSize <= 1) {
+        start = (left.start + right.start) / 2;
+      } else {
+        const leftEdge = left.end;
+        const rightEdge = right.start;
+        const t = (groupPos + 1) / (groupSize + 1);
+        start = leftEdge + (rightEdge - leftEdge) * t;
+      }
+    } else if (left) {
+      start = left.end + 0.02;
+    } else if (right) {
+      start = Math.max(0, right.start - endPad);
+    } else {
+      continue;
+    }
+
+    let end = start + endPad;
+    if (i + 1 < words.length && Number.isFinite(words[i + 1].start)) {
+      end = Math.min(end, words[i + 1].start);
+    }
+    end = Math.max(end, start + minDur);
+
+    words[i].start = +start.toFixed(3);
+    words[i].end = +end.toFixed(3);
+    words[i].matchType = "repaired-neighbor";
+    repairedCount++;
+  }
+
+  for (let i = 0; i < words.length - 1; i++) {
+    if (words[i].end > words[i + 1].start) {
+      words[i].end = Math.max(
+        words[i].start + minDur,
+        +(words[i + 1].start - 0.001).toFixed(3),
+      );
+    }
+    if (words[i].start >= words[i].end) {
+      words[i].end = +(words[i].start + minDur).toFixed(3);
+    }
+  }
+
+  return { mapped: words, repairedCount, preRepairUntrustedCount };
 }
 
 /**
@@ -657,6 +801,52 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       continue;
     }
 
+    const motMetMetric = tryMotMetMetricCluster(
+      scriptWords,
+      i,
+      transcriptWords,
+      state.p,
+      lookahead,
+    );
+    if (motMetMetric) {
+      motMetMetric.words.forEach((w, k) => {
+        const t = motMetMetric.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: motMetMetric.matchType,
+          whisperText: motMetMetric.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += motMetMetric.words.length;
+      state.p = motMetMetric.transcriptEnd;
+      i += motMetMetric.consumed - 1;
+      continue;
+    }
+
+    const lungLuong = tryLungLuongHomophone(scriptWords, i, transcriptWords, state.p);
+    if (lungLuong) {
+      lungLuong.words.forEach((w, k) => {
+        const t = lungLuong.timings[k];
+        mapped.push({
+          text: w,
+          start: t.start,
+          end: t.end,
+          matchType: lungLuong.matchType,
+          whisperText: lungLuong.whisperText,
+          corrected: true,
+          transcriptIndex: state.p,
+        });
+      });
+      clusterCount += lungLuong.words.length;
+      state.p = lungLuong.transcriptEnd;
+      i += lungLuong.consumed - 1;
+      continue;
+    }
+
     const mergedTw = tryMergedTranscriptCluster(
       scriptWords,
       i,
@@ -752,6 +942,7 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
     }
 
     const target = norm(stripPunct(text));
+    const prevEnd = mapped.length > 0 ? Number(mapped[mapped.length - 1].end) : 0;
 
     let found = -1;
     let matchType = null;
@@ -763,9 +954,7 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
       const isNormMatch = twNorm && twNorm === target;
       if (isTokenMatch || isNormMatch) {
         const dist = j - state.p;
-        // Xa hơn MAX_FUZZY_JUMP: chỉ nhận nếu thật sự giống nhau (giữ dấu) —
-        // tránh nhảy pointer xa do trùng norm (tone-collision) như "mắt" vs "mật"
-        if (dist <= MAX_FUZZY_JUMP || rawSimilarity(text, transcriptWords[j].text) >= FAR_MATCH_MIN_RAW_SIM) {
+        if (acceptFarExactMatch(dist, text, transcriptWords[j], prevEnd)) {
           found = j;
           matchType = "exact";
           break;
@@ -786,14 +975,14 @@ export function alignScriptToWhisper(scriptWords, transcriptWords, options = {})
 
     // Resync: nhảy tới token Whisper khớp nếu pointer bị lệch (tránh cascade interpolate)
     if (found < 0) {
-      const target = norm(stripPunct(text));
+      const resyncTarget = norm(stripPunct(text));
       for (let j = state.p + 1; j < Math.min(transcriptWords.length, state.p + lookahead); j++) {
         const isTokenMatch = tokensMatchForAlign(text, transcriptWords[j].text);
         const twNorm = norm(stripPunct(transcriptWords[j].text));
-        const isNormMatch = twNorm && twNorm === target;
+        const isNormMatch = twNorm && twNorm === resyncTarget;
         if (isTokenMatch || isNormMatch) {
           const dist = j - state.p;
-          if (dist <= MAX_FUZZY_JUMP || rawSimilarity(text, transcriptWords[j].text) >= FAR_MATCH_MIN_RAW_SIM) {
+          if (acceptFarExactMatch(dist, text, transcriptWords[j], prevEnd)) {
             found = j;
             matchType = "exact";
             break;

@@ -3,6 +3,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
     Box,
     Button,
@@ -11,7 +12,10 @@ import {
 } from '@mui/material';
 import {
     getBeatBoundaryMarkers,
+    getBeatHtmlVisualState,
+    getBeatRenderErrorMessage,
     getBeatTimelineSegments,
+    type BeatHtmlEntry,
     type BeatMap,
 } from './agentVideoBeatMap';
 import {
@@ -20,10 +24,6 @@ import {
 } from './agentVideoTimelineModel';
 
 const MIN_SEGMENT_WIDTH_FOR_ACTION_LABELS = 170;
-
-type BeatHtmlEntry = {
-    html?: string;
-};
 
 type Props = {
     beatMap: BeatMap | null;
@@ -125,7 +125,11 @@ export default function AgentVideoBeatBoundaryOverlay({
                 {segments.map((segment) => {
                     const leftPx = toLeft(segment.startSec);
                     const widthPx = Math.max(2, toLeft(segment.endSec) - leftPx);
-                    const hasData = Boolean(beatHtml[segment.beatId]?.html?.trim());
+                    const visualState = getBeatHtmlVisualState(beatHtml, segment.beatId);
+                    const segmentColor = visualState === 'error'
+                        ? 'warning.main'
+                        : (visualState === 'ok' ? 'success.main' : 'error.main');
+                    const errorMessage = getBeatRenderErrorMessage(beatHtml, segment.beatId);
                     const isActive = segment.beatId === activeBeatId;
                     const isCopying = copyingBeatHtmlPromptBeatId === segment.beatId;
                     const isPasting = pastingBeatHtmlBeatId === segment.beatId;
@@ -147,7 +151,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                 display: 'flex',
                                 flexDirection: 'column',
                                 overflow: 'hidden',
-                                bgcolor: hasData ? 'success.main' : 'error.main',
+                                bgcolor: segmentColor,
                                 color: 'common.white',
                                 opacity: isActive ? 1 : 0.9,
                                 outline: isActive ? '2px solid rgba(255,255,255,0.9)' : 'none',
@@ -186,7 +190,14 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     },
                                 }}
                             >
-                                {`beat ${segment.beatIndex}`}
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, justifyContent: 'center', width: '100%' }}>
+                                    {visualState === 'error' ? (
+                                        <Tooltip title={errorMessage} placement="top">
+                                            <WarningAmberIcon sx={{ fontSize: 12, color: 'common.white' }} />
+                                        </Tooltip>
+                                    ) : null}
+                                    <span>{`beat ${segment.beatIndex}`}</span>
+                                </Box>
                             </Box>
 
                             <Box
@@ -305,7 +316,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     </Tooltip>
                                 ) : null}
 
-                                {hasData && onDeleteBeatData ? (
+                                {visualState !== 'missing' && onDeleteBeatData ? (
                                     <Tooltip title="Xóa HTML beat — pipeline có thể chạy lại" placement="top">
                                         <span>
                                             <Button

@@ -1,0 +1,454 @@
+[a] Skip to content
+[h2] Navigation Menu
+[a] Sign in
+[button] Platform
+[button] Solutions
+[button] Resources
+[button] Open Source
+[button] Enterprise
+[span] Search or jump to...
+[h1] Search code, repositories, users, issues, pull requests...
+[label] Search
+[span] Clear
+[a] Search syntax tips
+[h1] Provide feedback
+[p] We read every piece of feedback, and take your input very seriously.
+[label] Include my email address so I can be contacted
+[button] Cancel
+[button] Submit feedback
+[h1] Saved searches
+[h2] Use saved searches to filter your results more quickly
+[label] Name
+[label] Query
+[p] To see all available qualifiers, see our
+[a] documentation
+[button] Cancel
+[button] Create saved search
+[a] Sign in
+[a] Sign up
+[a] Reload
+[a] Reload
+[a] Reload
+[h3] Uh oh!
+[p] There was an error while loading.
+[a] Please reload this page
+[a] usestrix
+[a] strix
+[span] Public
+[a] Notifications
+[a] Fork
+[span] 3.9k
+[span] Star
+[span] 38.3k
+[span] Pull requests
+[span] Projects
+[span] Security and quality
+[span] Insights
+[h1] usestrix/strix
+[span] main
+[span] Branches
+[span] Tags
+[span] Go to file
+[span] Code
+[h2] Folders and files
+[span] Name
+[span] Name
+[span] Last commit message
+[span] Last commit date
+[h2] Latest commit
+[a] bearsyankees
+[a] Add target list CLI option (
+[a] #711
+[relative-time] Jul 7, 2026
+[a] 9f278b9
+[relative-time] Jul 7, 2026
+[h2] History
+[span] 520 Commits
+[a] .github
+[a] .github
+[a] feat: Migrate from Poetry to uv (
+[a] #379
+[relative-time] Apr 1, 2026
+[a] benchmarks
+[a] benchmarks
+[a] Update README with full details section
+[relative-time] Jan 24, 2026
+[a] containers
+[a] containers
+[a] Surface the previously-undocumented sandbox tools and unbreak two of …
+[relative-time] May 26, 2026
+[a] docs
+[a] docs
+[a] Add target list CLI option (
+[a] #711
+[relative-time] Jul 7, 2026
+[a] scripts
+[a] scripts
+[a] Bump to 1.0.0
+[relative-time] May 27, 2026
+[a] strix
+[a] strix
+[a] Add target list CLI option (
+[a] #711
+[relative-time] Jul 7, 2026
+[a] tests
+[a] tests
+[a] Add target list CLI option (
+[a] #711
+[relative-time] Jul 7, 2026
+[a] .gitignore
+[a] .gitignore
+[a] chore: nuke tests/ and the entire test toolchain
+[relative-time] Apr 26, 2026
+[a] .pre-commit-config.yaml
+[a] .pre-commit-config.yaml
+[a] fix(report): correct csv_path indentation in write_vulnerabilities (
+[a] #637
+[relative-time] Jul 3, 2026
+[a] CONTRIBUTING.md
+[a] CONTRIBUTING.md
+[a] feat: Migrate from Poetry to uv (
+[a] #379
+[relative-time] Apr 1, 2026
+[a] LICENSE
+[a] LICENSE
+[a] Open-source release for Alpha version
+[relative-time] Aug 9, 2025
+[a] Makefile
+[a] Makefile
+[a] refactor: lean on SDK for tracing + native session resume; nuke OTEL/…
+[relative-time] Apr 26, 2026
+[a] README.md
+[a] README.md
+[a] Add target list CLI option (
+[a] #711
+[relative-time] Jul 7, 2026
+[a] pyproject.toml
+[a] pyproject.toml
+[a] Add configurable token / cost usage limits (
+[a] #576
+[relative-time] Jun 22, 2026
+[a] strix.spec
+[a] strix.spec
+[a] fix: PyInstaller bundle is broken (missing agents SDK data + wrongly …
+[relative-time] May 27, 2026
+[a] uv.lock
+[a] uv.lock
+[a] chore(deps): refresh uv.lock to latest compatible versions (
+[a] #606
+[relative-time] Jun 30, 2026
+[button] View all files
+[h2] Repository files navigation
+[span] Contributing
+[span] Apache-2.0 license
+[h1] Strix
+[h3] The open-source AI pentesting tool. Autonomous AI hackers that find and fix your app’s vulnerabilities.
+[p] Tip
+[strong] New!
+[p] Strix integrates seamlessly with GitHub Actions and CI/CD pipelines. Automatically scan for vulnerabilities on every pull request and block insecure code before it reaches production -
+[a] Get started with no setup required
+[h2] Strix Overview
+[p] Strix are autonomous AI penetration testing agents that act just like real hackers - they run your code dynamically, find vulnerabilities, and validate them through actual proofs-of-concept. Built for developers and security teams who need fast, accurate security testing without the overhead of manual pentesting or the false positives of static analysis tools.
+[strong] Key Capabilities:
+[strong] Full pentesting toolkit
+[li] - reconnaissance, exploitation, and validation out of the box
+[strong] Multi-agent orchestration
+[li] - teams of AI pentesters that collaborate and scale
+[strong] Real exploit validation
+[li] - working PoCs, not false positives like legacy vulnerability scanners
+[strong] Developer‑first CLI
+[li] - actionable findings with remediation guidance
+[strong] Auto‑fix & reporting
+[li] - generate patches and compliance-ready pentest reports
+[h2] Use Cases
+[strong] Application Security Testing
+[li] - Detect and validate critical vulnerabilities in your applications
+[strong] Rapid Penetration Testing
+[li] - Get penetration tests done in hours, not weeks, with compliance reports
+[strong] Bug Bounty Automation
+[li] - Automate bug bounty research and generate PoCs for faster reporting
+[strong] CI/CD Integration
+[li] - Run tests in CI/CD to block vulnerabilities before reaching production
+[h2] 🚀 Quick Start
+[strong] Prerequisites:
+[li] Docker (running)
+[li] An LLM API key from any
+[a] supported provider
+[li] (OpenAI, Anthropic, Google, etc.)
+[h3] Installation & First Scan
+[span] Install Strix
+[pre] curl -sSL https://strix.ai/install
+[pre] bash
+[span] Configure your AI provider
+[span] export
+[pre] STRIX_LLM=
+[span] openai/gpt-5.4
+[span] export
+[pre] LLM_API_KEY=
+[span] your-api-key
+[span] Run your first security assessment
+[pre] strix --target ./app-directory
+[p] Note
+[p] First run automatically pulls the sandbox Docker image. Results are saved to
+[code] strix_runs/<run-name>
+[h2] ☁️ Strix Platform
+[p] Try the Strix full-stack penetration testing platform at
+[a] app.strix.ai
+[p] - sign up for free, connect your repos and domains, and launch a pentest in minutes.
+[strong] Validated findings with PoCs
+[li] - every vulnerability includes a working proof-of-concept exploit and reproduction steps
+[strong] One-click autofix
+[li] - AI-generated security patches as ready-to-merge pull requests
+[strong] Continuous pentesting
+[li] - always-on vulnerability scanning that keeps pace with your deployments
+[strong] DevSecOps integrations
+[li] - GitHub, GitLab, Bitbucket, Slack, Jira, Linear, and CI/CD pipelines
+[strong] Continuous learning
+[li] - AI that builds on past findings, adapts to your codebase, and reduces false positives over time
+[strong] Start your first pentest →
+[h2] ✨ Features
+[h3] Agentic Pentesting Tools
+[p] Strix agents come equipped with a comprehensive offensive security toolkit - the same tools used by professional penetration testers and ethical hackers:
+[strong] HTTP Interception Proxy
+[li] - Full request/response manipulation and analysis with Caido
+[strong] Browser Exploitation
+[li] - Automated browser for testing XSS, CSRF, clickjacking, and auth bypass flows
+[strong] Shell & Command Execution
+[li] - Interactive terminal for exploit development and post-exploitation
+[strong] Custom Exploit Runtime
+[li] - Python sandbox for writing and validating proof-of-concept exploits
+[strong] Reconnaissance & OSINT
+[li] - Automated attack surface mapping, subdomain enumeration, and fingerprinting
+[strong] Static & Dynamic Code Analysis
+[li] - SAST + DAST capabilities for comprehensive application security testing
+[strong] Vulnerability Knowledge Base
+[li] - Structured findings with CVSS scoring and OWASP classification
+[h3] Comprehensive Vulnerability Scanner
+[p] Strix identifies, validates, and exploits a wide range of security vulnerabilities across the OWASP Top 10 and beyond:
+[strong] Broken Access Control
+[li] - IDOR, privilege escalation, auth bypass
+[strong] Injection Attacks
+[li] - SQL injection, NoSQL injection, OS command injection, SSTI
+[strong] Server-Side Vulnerabilities
+[li] - SSRF, XXE, insecure deserialization, RCE
+[strong] Client-Side Attacks
+[li] - XSS (stored/reflected/DOM), prototype pollution, CSRF
+[strong] Business Logic Flaws
+[li] - Race conditions, payment manipulation, workflow bypass
+[strong] Authentication & Session
+[li] - JWT attacks, session fixation, credential stuffing vectors
+[strong] Infrastructure & Cloud
+[li] - Misconfigurations, exposed services, cloud security issues
+[strong] API Security
+[li] - Broken authentication, mass assignment, rate limiting bypass
+[h3] Graph of Agents (Multi-Agent Pentesting)
+[p] Advanced multi-agent orchestration for comprehensive automated penetration testing:
+[strong] Distributed Pentesting
+[li] - Specialized AI agents for recon, exploitation, and post-exploitation
+[strong] Scalable Security Testing
+[li] - Parallel execution across multiple targets for fast, comprehensive coverage
+[strong] Dynamic Coordination
+[li] - Agents share discoveries, chain vulnerabilities, and collaborate like a red team
+[h2] Usage Examples
+[h3] Basic Usage
+[span] Scan a local codebase
+[pre] strix --target ./app-directory
+[span] Security review of a GitHub repository
+[pre] strix --target https://github.com/org/repo
+[span] Black-box web application assessment
+[pre] strix --target https://your-app.com
+[h3] Advanced Testing Scenarios
+[span] Grey-box authenticated testing
+[pre] strix --target https://your-app.com --instruction
+[span] Perform authenticated testing using credentials: user:pass
+[span] Multi-target testing (source code + deployed app)
+[pre] strix -t https://github.com/org/app -t https://your-app.com
+[span] Targets from a file, one target per non-empty, non-comment line
+[pre] strix --target-list ./targets.txt
+[span] White-box source-aware scan (local repository)
+[pre] strix --target ./app-directory --scan-mode standard
+[span] Focused testing with custom instructions
+[pre] strix --target api.your-app.com --instruction
+[span] Focus on business logic flaws and IDOR vulnerabilities
+[span] Provide detailed instructions through file (e.g., rules of engagement, scope, exclusions)
+[pre] strix --target api.your-app.com --instruction-file ./instruction.md
+[span] Force PR diff-scope against a specific base branch
+[pre] strix -n --target ./ --scan-mode quick --scope-mode diff --diff-base origin/main
+[h3] Headless Mode
+[p] Run Strix programmatically without interactive UI using the
+[code] -n/--non-interactive
+[p] flag - perfect for servers and automated jobs. The CLI prints real-time vulnerability findings and the final report before exiting. Exits with non-zero code when vulnerabilities are found.
+[pre] strix -n --target https://your-app.com
+[h3] CI/CD (GitHub Actions)
+[p] Strix can be added to your pipeline to run a security test on pull requests with a lightweight GitHub Actions workflow:
+[span] name
+[span] strix-penetration-test
+[span] pull_request
+[span] jobs
+[span] security-scan
+[span] runs-on
+[span] ubuntu-latest
+[span] steps
+[pre] :
+      -
+[span] uses
+[span] actions/checkout@v6
+[span] with
+[span] fetch-depth
+[span] name
+[span] Install Strix
+[span] run
+[span] curl -sSL https://strix.ai/install | bash
+[span] name
+[span] Run Strix
+[span] env
+[span] STRIX_LLM
+[span] ${{ secrets.STRIX_LLM }}
+[span] LLM_API_KEY
+[span] ${{ secrets.LLM_API_KEY }}
+[span] run
+[span] strix -n -t ./ --scan-mode quick
+[p] Tip
+[p] In CI pull request runs, Strix automatically scopes quick reviews to changed files.
+If diff-scope cannot resolve, ensure checkout uses full history (
+[code] fetch-depth: 0
+[p] ) or pass
+[code] --diff-base
+[p] explicitly.
+[h3] Configuration
+[span] export
+[pre] STRIX_LLM=
+[span] openai/gpt-5.4
+[span] export
+[pre] LLM_API_KEY=
+[span] your-api-key
+[span] Optional
+[span] export
+[pre] LLM_API_BASE=
+[span] your-api-base-url
+[span] if using a local model, e.g. Ollama, LMStudio
+[span] export
+[pre] PERPLEXITY_API_KEY=
+[span] your-api-key
+[span] for search capabilities
+[span] export
+[pre] STRIX_REASONING_EFFORT=
+[span] high
+[span] control thinking effort (default: high, quick scan: medium)
+[p] Note
+[p] Strix automatically saves your configuration to
+[code] ~/.strix/cli-config.json
+[p] , so you don't have to re-enter it on every run.
+[strong] Recommended models for best results:
+[a] OpenAI GPT-5.4
+[code] openai/gpt-5.4
+[a] Anthropic Claude Sonnet 4.6
+[code] anthropic/claude-sonnet-4-6
+[a] Google Gemini 3 Pro Preview
+[code] vertex_ai/gemini-3-pro-preview
+[p] See the
+[a] LLM Providers documentation
+[p] for all supported providers including Vertex AI, Bedrock, Azure, and local models.
+[h2] Enterprise Pentesting
+[p] Get the same Strix experience with
+[a] enterprise-grade
+[p] controls: SSO (SAML/OIDC), custom compliance-ready penetration testing reports (SOC 2, ISO 27001, PCI DSS), dedicated support & SLA, custom deployment options (VPC/self-hosted), BYOK model support, and tailored AI pentesting agents optimized for your environment.
+[a] Learn more
+[h2] Documentation
+[p] Full documentation is available at
+[a] docs.strix.ai
+[p] - including detailed guides for usage, CI/CD integrations, skills, and advanced configuration.
+[h2] Contributing
+[p] We welcome contributions of code, docs, and new skills - check out our
+[a] Contributing Guide
+[p] to get started or open a
+[a] pull request
+[a] issue
+[h2] Join Our Community
+[p] Have questions? Found a bug? Want to contribute?
+[a] Join our Discord!
+[h2] Support the Project
+[strong] Love Strix?
+[p] Give us a ⭐ on GitHub!
+[h2] Acknowledgements
+[p] Strix builds on the incredible work of open-source projects like
+[a] LiteLLM
+[a] Caido
+[a] Nuclei
+[a] Playwright
+[p] , and
+[a] Textual
+[p] . Huge thanks to their maintainers!
+[p] Warning
+[p] Only test apps you own or have permission to test. You are responsible for using Strix ethically and legally.
+[h2] About
+[p] Open-source AI penetration testing tool to find and fix your app’s vulnerabilities.
+[a] strix.ai
+[h3] Topics
+[a] security
+[a] hacking
+[a] artificial-intelligence
+[a] cybersecurity
+[a] penetration-testing
+[a] bug-bounty
+[a] code-quality
+[a] agents
+[a] offensive-security
+[a] ethical-hacking
+[a] ctf-tools
+[a] security-automation
+[a] red-teaming
+[a] ai-security
+[a] pentesting-tools
+[a] cybersecurity-tools
+[a] llm-security
+[a] ai-penetration-testing
+[a] ai-hacking
+[a] ai-pentesting
+[h3] Resources
+[a] Readme
+[h3] License
+[a] Apache-2.0 license
+[h3] Contributing
+[a] Contributing
+[h3] Uh oh!
+[p] There was an error while loading.
+[a] Please reload this page
+[span] Activity
+[span] Custom properties
+[h3] Stars
+[strong] 38.3k
+[span] stars
+[h3] Watchers
+[strong] 156
+[span] watching
+[h3] Forks
+[strong] 3.9k
+[a] forks
+[a] Report repository
+[a] Releases
+[span] v1.0.4
+[span] Latest
+[relative-time] Jun 9, 2026
+[a] + 15 releases
+[h3] Uh oh!
+[p] There was an error while loading.
+[a] Please reload this page
+[a] Contributors
+[a] + 39 contributors
+[h2] Languages
+[span] Python
+[span] 91.8%
+[span] Jinja
+[span] 4.2%
+[span] Shell
+[span] 2.5%
+[span] Dockerfile
+[span] 1.2%
+[span] Makefile
+[span] 0.3%
+[span] © 2026 GitHub, Inc.
+[h3] Footer navigation
+[a] Security
+[a] Community
+[button] Do not share my personal information

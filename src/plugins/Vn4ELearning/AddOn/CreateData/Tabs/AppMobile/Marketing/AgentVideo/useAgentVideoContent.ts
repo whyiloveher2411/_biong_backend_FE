@@ -61,6 +61,8 @@ import {
     countMissingBeatHtml,
     listBeatIdsWithHtml,
     listMissingBeatIds,
+    listBeatRenderErrorIds,
+    parseBeatHtmlEntry,
     parseBeatMapJson,
     validateBeatMap,
     type BeatMap,
@@ -77,6 +79,10 @@ import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptC
 import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
+import {
+    buildAgentMediaSuggestionPrompt,
+    openAgentMediaSuggestionGemini,
+} from 'helpers/marketingAgentMediaSuggestGeminiWorkflow';
 
 type UseAgentVideoContentArgs = {
     open: boolean;
@@ -85,6 +91,7 @@ type UseAgentVideoContentArgs = {
 };
 
 export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgentVideoContentArgs) {
+    const MARKETING_POST_SAVED_EVENT = 'vn4-marketing-post-saved';
     const api = useAjax();
     const { showMessage } = useFloatingMessages();
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
@@ -179,6 +186,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [openingBeatDivisionGemini, setOpeningBeatDivisionGemini] = React.useState(false);
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+    const [openingMediaSuggestGemini, setOpeningMediaSuggestGemini] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
@@ -288,11 +296,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const beatHtmlRaw = importSummary?.beat_html ?? {};
             const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
             Object.entries(beatHtmlRaw).forEach(([beatId, entry]) => {
-                if (entry && typeof entry === 'object') {
-                    nextBeatHtml[beatId] = {
-                        html: String(entry.html || ''),
-                        updated_at: entry.updated_at,
-                    };
+                const parsed = parseBeatHtmlEntry(entry);
+                if (parsed) {
+                    nextBeatHtml[beatId] = parsed;
                 }
             });
             Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
@@ -371,13 +377,26 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 loadRow();
             }
         };
+        const onMarketingPostSaved = (event: Event) => {
+            const custom = event as CustomEvent<{
+                postId?: number;
+                post_id?: number;
+            }>;
+            const detail = custom.detail || {};
+            const savedPostId = Number(detail.postId ?? detail.post_id ?? 0);
+            if (savedPostId > 0 && savedPostId === marketingPostId) {
+                loadRow();
+            }
+        };
         document.addEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
         document.addEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
+        document.addEventListener(MARKETING_POST_SAVED_EVENT, onMarketingPostSaved);
         return () => {
             document.removeEventListener(IMPORT_HTML_BEAT_HTML_SAVED_EVENT, onImportHtmlBeatHtmlSaved);
             document.removeEventListener(AGENT_AUDIO_SCRIPT_SAVED_EVENT, onAgentAudioScriptSaved);
+            document.removeEventListener(MARKETING_POST_SAVED_EVENT, onMarketingPostSaved);
         };
-    }, [loadRow, open, shortVideoId]);
+    }, [loadRow, marketingPostId, open, shortVideoId]);
 
     const shouldPoll = ttsPending || agentVideoStatus === 'processing' || whisperStatus === 'processing';
     React.useEffect(() => {
@@ -516,6 +535,45 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleOpenMediaSuggestGemini = async () => {
+        if (!marketingPostId) {
+            showMessage('Thiếu marketing_post_id để mở gợi ý media', 'warning');
+            return;
+        }
+        setOpeningMediaSuggestGemini(true);
+        try {
+            const contextRes = await fetchImportHtmlContext(shortVideoId) as {
+                success?: boolean;
+                message?: unknown;
+            };
+            if (!contextRes?.success) {
+                showMessage(parseImportHtmlContextMessage(contextRes?.message) || 'Không lấy được context media', 'error');
+                return;
+            }
+            const prompt = buildAgentMediaSuggestionPrompt({
+                shortVideoId,
+                title,
+                appMobileTitle,
+                audioScript,
+                contextPayload: contextRes,
+            });
+            await openAgentMediaSuggestionGemini({
+                shortVideoId,
+                marketingPostId,
+                prompt,
+                autoSubmit: true,
+            });
+            showMessage('Đã mở Gemini gợi ý media — tab sẽ tự lưu về CMS khi hoàn tất', 'success');
+            window.setTimeout(() => {
+                loadRow();
+            }, 3000);
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningMediaSuggestGemini(false);
+        }
+    };
+
     const handleCopyPrompt = async (phase: ShortVideoAgentPromptPhase) => {
         const result = await copyShortVideoAgentPromptToClipboard(shortVideoId, phase);
         showMessage(result.message, result.ok ? 'success' : 'error');
@@ -579,11 +637,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setBeatHtml((prev) => {
                 const nextBeatHtml: Record<string, BeatHtmlEntry> = {};
                 Object.entries(summary.beat_html ?? {}).forEach(([beatId, entry]) => {
-                    if (entry && typeof entry === 'object') {
-                        nextBeatHtml[beatId] = {
-                            html: String(entry.html || ''),
-                            updated_at: entry.updated_at,
-                        };
+                    const parsed = parseBeatHtmlEntry(entry);
+                    if (parsed) {
+                        nextBeatHtml[beatId] = parsed;
                     }
                 });
                 Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
@@ -769,11 +825,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const result = await launchImportHtmlAssemble(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
-            if (result.ok) {
-                loadRow();
-            }
+            loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
+            loadRow();
         } finally {
             setLaunchingAssemble(false);
         }
@@ -799,11 +854,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const result = await launchImportHtmlRender(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
-            if (result.ok) {
-                loadRow();
-            }
+            loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
+            loadRow();
         } finally {
             setLaunchingScriptRender(false);
         }
@@ -947,7 +1001,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const draftUpdatedAt = new Date().toISOString();
         setBeatHtml((prev) => ({
             ...prev,
-            [beatId]: { html: next, updated_at: draftUpdatedAt },
+            [beatId]: {
+                ...prev[beatId],
+                html: next,
+                updated_at: draftUpdatedAt,
+            },
         }));
 
         const existingTimer = beatHtmlSaveTimerRef.current[beatId];
@@ -1459,6 +1517,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         [beatMap, beatHtml],
     );
 
+    const beatRenderErrorIds = React.useMemo(
+        () => listBeatRenderErrorIds(beatHtml),
+        [beatHtml],
+    );
+
+    const beatsRenderErrorCount = beatRenderErrorIds.length;
+
     return {
         title,
         shortVideoId,
@@ -1500,6 +1565,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMapJsonDraft,
         beatHtml,
         missingBeatHtmlCount,
+        beatsRenderErrorCount,
+        beatRenderErrorIds,
         beatMapReady,
         beatsHtmlTotal,
         beatsHtmlCompleted,
@@ -1562,6 +1629,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         openingBeatDivisionGemini,
         openingCreateScriptGemini,
         openingImproveScriptGemini,
+        openingMediaSuggestGemini,
         copyingBeatHtmlPromptBeatId,
         pastingBeatHtmlBeatId,
         deletingBeatHtmlBeatId,
@@ -1581,6 +1649,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleCopyScript,
         handleOpenCreateScriptGemini,
         handleOpenImproveScriptGemini,
+        handleOpenMediaSuggestGemini,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenCreateScriptGemini */
         handleCopyCreateScriptPrompt: handleOpenCreateScriptGemini,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenImproveScriptGemini */

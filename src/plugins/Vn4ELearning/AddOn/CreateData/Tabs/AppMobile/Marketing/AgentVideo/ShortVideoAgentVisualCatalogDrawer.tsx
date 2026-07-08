@@ -9,8 +9,6 @@ import {
     ImageList,
     ImageListItem,
     InputAdornment,
-    Tab,
-    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
@@ -22,8 +20,6 @@ import DrawerCustom from 'components/molecules/DrawerCustom';
 import {
     searchStockMedia,
     type StockImageSearchItem,
-    type StockMediaType,
-    type StockVideoSearchItem,
 } from 'helpers/marketingStockImageApi';
 import type {
     ImportHtmlMarketingPostImage,
@@ -395,32 +391,6 @@ function stockImageToCatalogItem(
     };
 }
 
-function stockVideoToCatalogItem(
-    item: StockVideoSearchItem,
-    index: number,
-    searchQuery: string,
-): ImportHtmlVisualCatalogItem {
-    const creator = item.user || 'Pexels';
-    const caption = buildStockVisualCaption({
-        mediaType: 'video',
-        alt: item.alt,
-        creator,
-        searchQuery,
-    });
-    return {
-        id: `vis-vid-${item.id || index + 1}`,
-        media_type: 'video',
-        url: item.url,
-        preview_url: item.preview_url || item.url,
-        title: caption,
-        caption,
-        search_query: searchQuery.trim() || undefined,
-        provider: 'pexels',
-        duration_sec: Number(item.duration || 0),
-        source: 'stock',
-    };
-}
-
 export default function ShortVideoAgentVisualCatalogDrawer({
     open,
     onClose,
@@ -432,10 +402,8 @@ export default function ShortVideoAgentVisualCatalogDrawer({
     saving = false,
     dirty = false,
 }: Props) {
-    const [mediaTab, setMediaTab] = React.useState<StockMediaType>('image');
     const [query, setQuery] = React.useState('');
     const [imageResults, setImageResults] = React.useState<StockImageSearchItem[]>([]);
-    const [videoResults, setVideoResults] = React.useState<StockVideoSearchItem[]>([]);
     const [searching, setSearching] = React.useState(false);
     const [searchError, setSearchError] = React.useState('');
     const [searched, setSearched] = React.useState(false);
@@ -446,10 +414,6 @@ export default function ShortVideoAgentVisualCatalogDrawer({
             setPlayingKey(null);
         }
     }, [open]);
-
-    React.useEffect(() => {
-        setPlayingKey(null);
-    }, [mediaTab]);
 
     const togglePlaying = React.useCallback((key: string) => {
         setPlayingKey((current) => (current === key ? null : key));
@@ -470,27 +434,20 @@ export default function ShortVideoAgentVisualCatalogDrawer({
         setSearchError('');
         try {
             const result = await searchStockMedia({
-                mediaType: mediaTab,
+                mediaType: 'image',
                 query: trimmed,
                 perPage: 12,
             });
-            if (mediaTab === 'video') {
-                setVideoResults((result.items ?? []) as StockVideoSearchItem[]);
-                setImageResults([]);
-            } else {
-                setImageResults((result.items ?? []) as StockImageSearchItem[]);
-                setVideoResults([]);
-            }
+            setImageResults((result.items ?? []) as StockImageSearchItem[]);
             setSearched(true);
         } catch (err) {
             setImageResults([]);
-            setVideoResults([]);
             setSearched(true);
             setSearchError(err instanceof Error ? err.message : 'Tìm kiếm thất bại');
         } finally {
             setSearching(false);
         }
-    }, [mediaTab, query]);
+    }, [query]);
 
     const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
@@ -503,7 +460,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
         <DrawerCustom
             open={open}
             onClose={onClose}
-            title="Hình ảnh / video cho beat HTML"
+            title="Hình ảnh cho beat HTML"
             width={680}
             ModalProps={{ sx: { zIndex: 1400 } }}
             restDialogContent={{
@@ -522,20 +479,12 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                     <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                         Tìm thêm (Pexels)
                     </Typography>
-                    <Tabs
-                        value={mediaTab}
-                        onChange={(_, value: StockMediaType) => setMediaTab(value)}
-                        sx={{ mb: 1, minHeight: 36 }}
-                    >
-                        <Tab label="Ảnh" value="image" sx={{ minHeight: 36, textTransform: 'none' }} />
-                        <Tab label="Video" value="video" sx={{ minHeight: 36, textTransform: 'none' }} />
-                    </Tabs>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextField
                             size="small"
                             fullWidth
                             value={query}
-                            placeholder={mediaTab === 'video' ? 'business office drone...' : 'technology abstract...'}
+                            placeholder="technology abstract..."
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
                             InputProps={{
@@ -564,7 +513,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                 </Box>
 
                 <Box sx={{ flex: 1, minHeight: 200, overflow: 'auto' }}>
-                    {mediaTab === 'image' && imageResults.length > 0 ? (
+                    {imageResults.length > 0 ? (
                         <ImageList variant="masonry" cols={2} gap={8}>
                             {imageResults.map((item, index) => {
                                 const catalogItem = stockImageToCatalogItem(item, index, query);
@@ -587,34 +536,8 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                         </ImageList>
                     ) : null}
 
-                    {mediaTab === 'video' && videoResults.length > 0 ? (
-                        <ImageList variant="masonry" cols={2} gap={8}>
-                            {videoResults.map((item, index) => {
-                                const catalogItem = stockVideoToCatalogItem(item, index, query);
-                                const cardKey = `search-vid-${item.id}-${index}`;
-                                const added = catalogUrls.has(catalogItem.url);
-                                const durationLabel = formatVideoDuration(Number(item.duration || 0));
-                                return (
-                                    <ImageListItem key={cardKey} sx={{ display: 'block' }}>
-                                        <VisualMediaCard
-                                            mediaType="video"
-                                            thumbnailUrl={item.preview_url}
-                                            mediaUrl={item.url}
-                                            title={item.user || item.caption || 'Video Pexels'}
-                                            subtitle={durationLabel}
-                                            added={added}
-                                            playing={playingKey === cardKey}
-                                            onPlayToggle={() => togglePlaying(cardKey)}
-                                            onAdd={() => onAddItem(catalogItem)}
-                                        />
-                                    </ImageListItem>
-                                );
-                            })}
-                        </ImageList>
-                    ) : null}
-
                     {searched && !searching && !searchError
-                        && imageResults.length === 0 && videoResults.length === 0 ? (
+                        && imageResults.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                             Không tìm thấy kết quả.
                         </Typography>

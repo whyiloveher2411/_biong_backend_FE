@@ -109,6 +109,10 @@ export async function runRenderImportHtml(body, authHeader) {
     "--short-video-id",
     String(shortVideoId),
     "--skip-assemble",
+    "--api-base-url",
+    apiBaseUrl,
+    "--access-token",
+    accessToken,
   ]);
 
   return {

@@ -7,6 +7,10 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  nextSfxTrackIndex,
+  parseBeatHostSections,
+} from "./lib/beat-host-sections.mjs";
 
 const args = process.argv.slice(2);
 const durationArg = args.find((a) => a.startsWith("--duration="));
@@ -51,22 +55,6 @@ if (!srcSfx) {
 }
 fs.copyFileSync(srcSfx, destSfx);
 
-function parseBeatStarts(html) {
-  const beats = [];
-  const re =
-    /<section\b[^>]*\b(?:id="beat-(\d+)"|data-composition-id="beat_(\d+)")[^>]*\bdata-start="([^"]+)"/gi;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const num = parseInt(m[1] ?? m[2], 10);
-    const start = parseFloat(m[3]);
-    if (Number.isFinite(num) && Number.isFinite(start)) {
-      beats.push({ num, start });
-    }
-  }
-  beats.sort((a, b) => a.num - b.num);
-  return beats;
-}
-
 let html = fs.readFileSync(indexPath, "utf8");
 html = html.replace(
   /<audio\b[^>]*class="[^"]*sfx-beat-move[^"]*"[^>]*>\s*<\/audio>\s*/gi,
@@ -77,27 +65,20 @@ html = html.replace(
   "",
 );
 
-const beats = parseBeatStarts(html);
+const beats = parseBeatHostSections(html);
 const transitions = beats.filter((b) => b.num >= 2);
 if (transitions.length === 0) {
   console.warn("[wire-beat-transition-sfx] không tìm thấy beat 2+ — bỏ qua wire clips");
   process.exit(0);
 }
 
-const RESERVED_TRACKS = new Set([20, 21]);
 let trackIndex = 14;
-function nextTrackIndex() {
-  while (RESERVED_TRACKS.has(trackIndex)) trackIndex += 1;
-  const idx = trackIndex;
-  trackIndex += 1;
-  return idx;
-}
-
 const clips = transitions
   .map(({ num, start }) => {
-    const ti = nextTrackIndex();
+    const track = nextSfxTrackIndex(trackIndex);
+    trackIndex = track.trackIndex;
     return `    <audio class="clip sfx-beat-move" id="sfx-beat-${num}" src="assets/audio/sfx_beat_move.mp3"
-      data-start="${start.toFixed(3)}" data-duration="${SFX_DURATION.toFixed(2)}" data-track-index="${ti}" data-volume="${SFX_VOLUME.toFixed(2)}"></audio>`;
+      data-start="${start.toFixed(3)}" data-duration="${SFX_DURATION.toFixed(2)}" data-track-index="${track.value}" data-volume="${SFX_VOLUME.toFixed(2)}"></audio>`;
   })
   .join("\n");
 

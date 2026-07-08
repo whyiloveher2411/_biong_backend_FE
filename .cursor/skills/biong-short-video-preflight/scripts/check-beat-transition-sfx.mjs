@@ -7,6 +7,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { parseBeatHostSections } from "./lib/beat-host-sections.mjs";
 
 const projectDir = process.argv[2];
 if (!projectDir) {
@@ -39,22 +40,6 @@ if (!exists("assets/audio/sfx_beat_move.mp3")) {
   );
 }
 
-function parseBeatStarts(html) {
-  const beats = [];
-  const re =
-    /<section\b[^>]*\b(?:id="beat-(\d+)"|data-composition-id="beat_(\d+)")[^>]*\bdata-start="([^"]+)"/gi;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const num = parseInt(m[1] ?? m[2], 10);
-    const start = parseFloat(m[3]);
-    if (Number.isFinite(num) && Number.isFinite(start)) {
-      beats.push({ num, start });
-    }
-  }
-  beats.sort((a, b) => a.num - b.num);
-  return beats;
-}
-
 function parseSfxClips(html) {
   const clips = [];
   const re = /<audio\b[^>]*>/gi;
@@ -75,7 +60,7 @@ function parseSfxClips(html) {
   return clips;
 }
 
-const beats = parseBeatStarts(indexHtml);
+const beats = parseBeatHostSections(indexHtml);
 const transitions = beats.filter((b) => b.num >= 2);
 const sfxClips = parseSfxClips(indexHtml);
 
@@ -87,9 +72,14 @@ if (transitions.length === 0) {
   );
 }
 
+const sfxIds = new Set();
 for (const clip of sfxClips) {
   if (!clip.id) {
     errors.push("sfx-beat-move: thiếu id (renderer strict mode) — id=\"sfx-beat-N\"");
+  } else if (sfxIds.has(clip.id)) {
+    errors.push(`sfx-beat-move: id trùng "${clip.id}" — mỗi beat-host cần id sfx riêng`);
+  } else {
+    sfxIds.add(clip.id);
   }
   if (!/sfx_beat_move\.mp3/i.test(clip.src)) {
     errors.push(

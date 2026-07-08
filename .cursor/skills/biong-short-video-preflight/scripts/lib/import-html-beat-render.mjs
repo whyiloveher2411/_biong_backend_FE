@@ -84,7 +84,7 @@ export function isImportHtmlProject(projectDir) {
 }
 
 export function beatIdFromFilename(name) {
-  const m = String(name).match(/^(beat_\d+)\.html$/i);
+  const m = String(name).match(/^(beat_\d+(?:_part\d+)?)\.html$/i);
   return m ? m[1] : null;
 }
 
@@ -174,6 +174,19 @@ export function patchScaffoldHtml(html) {
   return out;
 }
 
+/** Clone beat (beat_16 → beat_16_part2) giữ data-composition-id gốc — đồng bộ với beatId file. */
+export function patchBeatCompositionId(html, beatId) {
+  if (!beatId) return { html, changed: false };
+  const re = /(<div\b[^>]*\bid=["']root["'][^>]*\bdata-composition-id=["'])([^"']+)(["'])/i;
+  if (!re.test(html)) return { html, changed: false };
+  const current = html.match(re)?.[2];
+  if (current === beatId) return { html, changed: false };
+  return {
+    html: html.replace(re, `$1${beatId}$3`),
+    changed: true,
+  };
+}
+
 export function buildTimelineRegistration(beatId) {
   return `
 // HyperFrames import_html — đăng ký timeline (giữ nguyên render() user)
@@ -209,7 +222,7 @@ export function patchBeatFontsForRender(html) {
     'font-family: "Be Vietnam Pro", sans-serif',
   );
   out = out.replace(
-    /font-family\s*:\s*[^;{}]*(?:system-ui|apple-system|blinkmacsystemfont|segoe ui|roboto|oxygen|ubuntu|cantarell|-apple-system|\binter\b|sf pro)[^;{}]*/gi,
+    /font-family\s*:\s*[^;{}]*(?:system-ui|apple-system|blinkmacsystemfont|segoe ui|roboto|oxygen|ubuntu|cantarell|-apple-system|\binter\b|sf pro|\bimpact\b|arial black)[^;{}]*/gi,
     'font-family: "Be Vietnam Pro", sans-serif',
   );
 
@@ -223,6 +236,38 @@ export function patchBeatFontsForRender(html) {
   }
 
   return { html: out, changed: out !== html, patches };
+}
+
+export function patchBeatCssForRender(html) {
+  const patches = [];
+  let out = String(html || "");
+  const before = out;
+
+  out = out.replace(/;\s*uppercase\s*;/gi, "; text-transform: uppercase;");
+  out = out.replace(/([{;]\s*)uppercase\s*;/gi, "$1text-transform: uppercase;");
+  out = out.replace(/;\s*uppercase\s+(?=[a-z-])/gi, "; text-transform: uppercase; ");
+  out = out.replace(/tracking-spacing/gi, "letter-spacing");
+
+  if (/;\s*uppercase\b/i.test(out) && !/text-transform\s*:\s*uppercase/i.test(out)) {
+    out = out.replace(/;\s*uppercase\b/gi, "; text-transform: uppercase");
+  }
+
+  if (out !== before) {
+    patches.push("sửa CSS tailwind leak (uppercase/tracking-spacing)");
+  }
+
+  return { html: out, changed: out !== before, patches };
+}
+
+export function patchBeatDeterminismForRender(html) {
+  const patches = [];
+  let out = String(html || "");
+  if (!/Math\.random\s*\(/i.test(out)) {
+    return { html: out, changed: false, patches };
+  }
+  out = out.replace(/Math\.random\s*\(\s*\)/gi, "0.5");
+  patches.push("Math.random → 0.5 (deterministic)");
+  return { html: out, changed: true, patches };
 }
 
 const PEXELS_VIDEO_ID_RE = /video-files\/(\d+)\//i;
@@ -460,10 +505,16 @@ export function normalizeBeatHtmlForRender(html, beatId) {
   html = fontPatch.html;
   const fontPatches = [...fontPatch.patches];
 
+  const compPatch = patchBeatCompositionId(html, beatId);
+  html = compPatch.html;
+  if (compPatch.changed) {
+    fontPatches.push(`đồng bộ data-composition-id → ${beatId}`);
+  }
+
   if (isBeatRenderReady(html, beatId)) {
     return {
       html,
-      changed: fontPatch.changed,
+      changed: fontPatch.changed || compPatch.changed,
       patches: fontPatches.length ? fontPatches : ["already render-ready"],
     };
   }
@@ -511,6 +562,11 @@ ${script}
 </html>`;
 
   assembled = patchScaffoldHtml(assembled);
+  const compIdPatch = patchBeatCompositionId(assembled, beatId);
+  assembled = compIdPatch.html;
+  if (compIdPatch.changed) {
+    patches.push(`đồng bộ data-composition-id → ${beatId}`);
+  }
   patches.push("bọc <template>");
   patches.push(`đăng ký window.__timelines["${beatId}"]`);
   patches.push(...fontPatches);

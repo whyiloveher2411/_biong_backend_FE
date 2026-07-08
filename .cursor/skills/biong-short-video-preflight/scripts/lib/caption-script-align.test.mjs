@@ -106,6 +106,36 @@ describe("caption-script-align", () => {
     assert.ok(wordSimilarity("cá", "ca") >= 0.99);
   });
 
+  it("một mét tám ↔ Whisper 1m, tám — không nhảy tới một ở xa", () => {
+    const script = [
+      "gần",
+      "một",
+      "mét",
+      "tám",
+      "lững",
+      "lững",
+      "tiến",
+    ];
+    const transcript = tw([
+      { text: "gần", start: 6.03, end: 6.36 },
+      { text: "1m,", start: 6.36, end: 6.86 },
+      { text: "tám", start: 6.86, end: 7.07 },
+      { text: "lưỡng", start: 7.07, end: 7.48 },
+      { text: "lưỡng", start: 7.48, end: 7.99 },
+      { text: "tiến", start: 7.99, end: 8.25 },
+      { text: "một", start: 18.8, end: 19.06 },
+    ]);
+    const { mapped } = alignScriptToWhisper(script, transcript);
+
+    assert.equal(mapped[1].text, "một");
+    assert.ok(mapped[1].start < 7, "một phải sync gần gần, không nhảy 18s");
+    assert.equal(mapped[2].text, "mét");
+    assert.equal(mapped[3].text, "tám");
+    assert.equal(mapped[4].text, "lững");
+    assert.equal(mapped[5].text, "lững");
+    assert.ok(mapped[6].start < 9);
+  });
+
   it("EN transcript + VI script yields low trusted alignment", () => {
     const script = [
       "Google",

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Strix - CTA</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          container-type: size;
+          isolation: isolate;
+          background: #081016;
+          color: #f6f8fa;
+          font-family: "Mona Sans VF", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        @font-face {
+          font-family: "Mona Sans VF";
+          src: local("Mona Sans VF"), local("Mona Sans");
+          font-weight: 400 700;
+          font-style: normal;
+          font-display: swap;
+        }
+
+        [data-composition-id="05-cta"] .bg {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 18% 14%, rgba(31, 136, 61, 0.2), transparent 28%),
+            radial-gradient(circle at 82% 82%, rgba(255, 255, 255, 0.05), transparent 26%),
+            linear-gradient(180deg, #081016 0%, #0b1016 54%, #0b0f14 100%);
+        }
+
+        [data-composition-id="05-cta"] .grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+          background-size: 88px 88px;
+          opacity: 0.3;
+          mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 92%);
+        }
+
+        [data-composition-id="05-cta"] .layout {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          grid-template-columns: 1fr 0.92fr;
+          gap: 36px;
+          padding: 78px 84px 84px;
+        }
+
+        [data-composition-id="05-cta"] .left {
+          position: relative;
+          padding-top: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          z-index: 2;
+        }
+
+        [data-composition-id="05-cta"] .eyebrow {
+          width: fit-content;
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.16);
+          background: rgba(223, 246, 231, 0.06);
+          color: #dff6e7;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="05-cta"] h1 {
+          margin: 0;
+          max-width: 700px;
+          font-size: 116px;
+          line-height: 0.92;
+          letter-spacing: -0.05em;
+          color: #f6f8fa;
+        }
+
+        [data-composition-id="05-cta"] .sub {
+          max-width: 500px;
+          font-size: 22px;
+          line-height: 1.45;
+          color: rgba(246, 248, 250, 0.76);
+        }
+
+        [data-composition-id="05-cta"] .actions {
+          display: flex;
+          gap: 14px;
+          flex-wrap: wrap;
+          margin-top: 8px;
+        }
+
+        [data-composition-id="05-cta"] .cta {
+          min-height: 52px;
+          padding: 0 18px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.18);
+          background: #1f883d;
+          color: #ffffff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="05-cta"] .ghost {
+          min-height: 52px;
+          padding: 0 18px;
+          border-radius: 999px;
+          border: 1px solid rgba(246, 248, 250, 0.12);
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(246, 248, 250, 0.86);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="05-cta"] .right {
+          position: relative;
+          min-height: 874px;
+        }
+
+        [data-composition-id="05-cta"] .card {
+          position: absolute;
+          right: 4px;
+          top: 16px;
+          width: 100%;
+          min-height: 724px;
+          border-radius: 34px;
+          border: 1px solid rgba(223, 246, 231, 0.12);
+          overflow: hidden;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+        }
+
+        [data-composition-id="05-cta"] .card img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center top;
+          opacity: 0.92;
+          filter: saturate(0.7) contrast(1.05) brightness(0.82);
+          transform: scale(1.03);
+        }
+
+        [data-composition-id="05-cta"] .card::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(90deg, rgba(8, 16, 22, 0.12), rgba(8, 16, 22, 0.5)),
+            linear-gradient(180deg, rgba(8, 16, 22, 0.2), rgba(8, 16, 22, 0.62));
+          pointer-events: none;
+        }
+
+        [data-composition-id="05-cta"] .mini {
+          position: absolute;
+          left: 0;
+          bottom: 64px;
+          width: 58%;
+          display: grid;
+          gap: 12px;
+          z-index: 2;
+        }
+
+        [data-composition-id="05-cta"] .mini .panel {
+          padding: 18px 18px 16px;
+          border-radius: 22px;
+          border: 1px solid rgba(223, 246, 231, 0.12);
+          background: rgba(255, 255, 255, 0.03);
+          backdrop-filter: blur(14px);
+        }
+
+        [data-composition-id="05-cta"] .mini .panel .title {
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #dff6e7;
+        }
+
+        [data-composition-id="05-cta"] .mini .panel .desc {
+          margin-top: 8px;
+          font-size: 16px;
+          line-height: 1.35;
+          color: rgba(246, 248, 250, 0.82);
+        }
+
+        [data-composition-id="05-cta"] .edge {
+          position: absolute;
+          left: 84px;
+          right: 84px;
+          bottom: 72px;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(223, 246, 231, 0.15), rgba(223, 246, 231, 0.6), rgba(223, 246, 231, 0.15));
+          opacity: 0.62;
+        }
+      </style>
+
+      <div id="root" data-composition-id="05-cta" data-width="1920" data-height="1080" data-duration="6">
+        <div class="bg" aria-hidden="true"></div>
+        <div class="grid" aria-hidden="true"></div>
+
+        <div class="layout">
+          <div class="left">
+            <div class="eyebrow">Open source security</div>
+            <h1>Try Strix.</h1>
+            <div class="sub">Bring AI pentesting into your workflow and ship with confidence.</div>
+            <div class="actions">
+              <div class="cta">Open the repo</div>
+              <div class="ghost">View the workflow</div>
+            </div>
+
+            <div class="mini">
+              <div class="panel">
+                <div class="title">Continuous testing</div>
+                <div class="desc">Run it when the code moves, not when the incident lands.</div>
+              </div>
+              <div class="panel">
+                <div class="title">Developer friendly</div>
+                <div class="desc">Find the gap, validate it, and fix it with confidence.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="card">
+              <img src="assets/og-image.jpg" alt="Strix repository preview" />
+            </div>
+            <div class="edge"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .bg",
+          { opacity: 0, scale: 1.04 },
+          { opacity: 1, scale: 1, duration: 0.86, ease: "power2.out" },
+          0
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .grid",
+          { opacity: 0, y: 16 },
+          { opacity: 0.3, y: 0, duration: 0.76, ease: "power2.out" },
+          0.04
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .eyebrow",
+          { y: 12, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.68, ease: "power3.out" },
+          0.1
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] h1",
+          { y: 52, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.92, ease: "power4.out" },
+          0.16
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .sub",
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.42
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .cta, [data-composition-id='05-cta'] .ghost",
+          { y: 18, opacity: 0, scale: 0.98 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.68, stagger: 0.08, ease: "power3.out" },
+          0.56
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .card",
+          { x: 26, opacity: 0, scale: 0.98 },
+          { x: 0, opacity: 1, scale: 1, duration: 1.0, ease: "power4.out" },
+          0.12
+        );
+        tl.fromTo(
+          "[data-composition-id='05-cta'] .panel",
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.7, stagger: 0.08, ease: "power3.out" },
+          1.0
+        );
+        tl.to(
+          "[data-composition-id='05-cta'] .card img",
+          { scale: 1.06, duration: 3.5, ease: "none" },
+          1.0
+        );
+        tl.to(
+          "[data-composition-id='05-cta'] .edge",
+          { opacity: 1, duration: 1.6, ease: "power2.out" },
+          2.1
+        );
+
+        window.__timelines["05-cta"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

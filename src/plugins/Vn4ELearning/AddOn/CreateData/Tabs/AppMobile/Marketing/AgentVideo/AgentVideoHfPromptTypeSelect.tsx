@@ -6,7 +6,6 @@ import {
     InputLabel,
     MenuItem,
     Select,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import { HF_PROMPT_CATALOG } from './agentVideoHfPromptCatalog';
@@ -34,8 +33,6 @@ export default function AgentVideoHfPromptTypeSelect({
             ? `Gán vào ${missingBeatCount} beat thiếu HTML trong beat-map`
             : null,
     ].filter(Boolean);
-
-    const tooltipTitle = helperParts.join(' · ');
 
     const formControl = (
         <FormControl
@@ -79,14 +76,6 @@ export default function AgentVideoHfPromptTypeSelect({
             {!compact ? <FormHelperText>{helperParts.join(' · ')}</FormHelperText> : null}
         </FormControl>
     );
-
-    if (compact) {
-        return (
-            <Tooltip title={tooltipTitle || 'Chọn phong cách visual cho beat HTML'} placement="top">
-                <span>{formControl}</span>
-            </Tooltip>
-        );
-    }
 
     return formControl;
 }

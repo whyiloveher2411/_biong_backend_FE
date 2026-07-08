@@ -13,9 +13,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApiBaseUrl, resolveMcpToken } from "./lib/biong-env.mjs";
 import { fetchShortVideoContext, reportImportHtmlAssemble } from "./lib/fetch-short-video-context.mjs";
+import { collectImportHtmlBeatErrors } from "./lib/collect-import-html-beat-errors.mjs";
 import { downloadToUrl, copyIfExists } from "./lib/download-asset.mjs";
 import { buildAmbientLayerHtml } from "./lib/build-ambient-layer.mjs";
 import { buildImportHtmlIndexHtml } from "./lib/build-import-html-index.mjs";
+import { normalizeOversizedBeatSections } from "./lib/normalize-beat-map-sections.mjs";
 import { runNodeScript, runImportHtmlPreflight, PREFLIGHT } from "./lib/run-import-html-preflight.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,6 +65,94 @@ function resolveAudioUrl(ctx) {
     return String(ctx.audio_file.url || ctx.audio_file.vi?.url || "").trim();
   }
   return "";
+}
+
+function readCaptionSyncSummary(projectDir) {
+  const reportPath = path.join(projectDir, "assets/caption-sync-report.json");
+  if (!fs.existsSync(reportPath)) return null;
+  try {
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    return {
+      exact_ratio: report.exactRatio ?? null,
+      trusted_ratio: report.trustedRatio ?? null,
+      max_gap_sec: report.maxGapSec ?? null,
+      large_gap_count: report.largeGapCount ?? 0,
+      karaoke_quality: report.karaokeQuality ?? null,
+      synced_at: report.generatedAt ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildCaptionSyncFailureMessage(projectDir, fallback = "") {
+  const parts = [];
+  try {
+    const reportPath = path.join(projectDir, "assets/caption-sync-report.json");
+    if (fs.existsSync(reportPath)) {
+      const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+      const scriptCount = Number(report.scriptWordCount || 0);
+      const interpolated = Number(report.interpolatedCount || 0);
+      const unmatchedRatio = Number(report.unmatchedRatio || 0);
+      const trustedRatio = Number(report.trustedRatio || 0);
+      const source = String(report.source || "");
+
+      if (scriptCount > 0 && interpolated > 0) {
+        const pct = ((interpolated / scriptCount) * 100).toFixed(1);
+        parts.push(`Caption lệch script: ${interpolated}/${scriptCount} từ (${pct}%) chưa khớp timing Whisper`);
+      } else if (unmatchedRatio > 0.1) {
+        parts.push(`Caption lệch script ${(unmatchedRatio * 100).toFixed(1)}%`);
+      }
+      if (trustedRatio > 0 && trustedRatio < 0.7) {
+        parts.push(`Timing tin cậy ${(trustedRatio * 100).toFixed(1)}% (cần ≥70%)`);
+      }
+      const remainingUntrusted =
+        Number(report.preRepairUntrustedCount ?? 0) - Number(report.repairedCount ?? 0);
+      if (remainingUntrusted > 0) {
+        parts.push(
+          `${remainingUntrusted} từ chưa khớp Whisper sau sửa lân cận — kiểm tra transcribe hoặc audio script`,
+        );
+      } else if (Number(report.whisperWordCount || report.transcriptWordCount || 0) === 0) {
+        parts.push("Thiếu whisper_words — chạy transcribe Whisper trên tab HTML chatbot");
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+
+  if (parts.length > 0) {
+    return parts.join(". ");
+  }
+  return fallback || "verify-caption-sync thất bại — caption script và Whisper chưa khớp";
+}
+
+function buildBeatTimingFailureMessage(projectDir, fallback = "") {
+  const parts = [];
+  try {
+    const beatMapPath = path.join(projectDir, "assets/beat-map.json");
+    if (fs.existsSync(beatMapPath)) {
+      const beatMap = JSON.parse(fs.readFileSync(beatMapPath, "utf8"));
+      const oversized = (beatMap.sections ?? []).filter(
+        (sec) => Number(sec.durationSec ?? 0) > 20,
+      );
+      for (const sec of oversized) {
+        const id = sec.id || sec.beat_id || "beat";
+        const dur = Number(sec.durationSec ?? 0).toFixed(1);
+        parts.push(
+          `${id} dài ${dur}s (tối đa 20s/beat) — cần tách beat-map trong tab HTML chatbot (Mở Gemini chia beat)`,
+        );
+      }
+    }
+  } catch {
+    // ignore
+  }
+  if (parts.length > 0) {
+    return parts.join(". ");
+  }
+  if (/beat.*>.*20s/i.test(fallback) || /BEAT TIMING/i.test(fallback)) {
+    return "Beat vượt 20 giây — mỗi beat visual chỉ được 5–20s. Tách beat-map rồi sinh HTML beat mới.";
+  }
+  return fallback || "check-beat-timing thất bại — timing beat không hợp lệ";
 }
 
 function ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec) {
@@ -303,10 +393,19 @@ async function main() {
       throw new Error("import_html chưa sẵn sàng — cần đủ beat HTML + whisper");
     }
 
-    const beatMap = importHtml.beat_map;
-    const sections = beatMap?.sections || [];
+    const beatMap = { ...(importHtml.beat_map || {}) };
+    let sections = beatMap?.sections || [];
     if (!sections.length) {
       throw new Error("Thiếu beat_map.sections");
+    }
+
+    const normalizedBeats = normalizeOversizedBeatSections(sections);
+    sections = normalizedBeats.sections;
+    if (normalizedBeats.splitCount > 0) {
+      beatMap.sections = sections;
+      log(
+        `Tách beat >20s: ${normalizedBeats.splitDetails.join("; ")} — HTML phần sau dùng clone tạm từ beat gốc`,
+      );
     }
 
     const totalVideoSec = Number(
@@ -333,15 +432,25 @@ async function main() {
     );
 
     const beatHtmlRaw = importHtml.beat_html || {};
-    for (const sec of sections) {
+    const beatHtmlById = {};
+    for (const sec of importHtml.beat_map?.sections || []) {
       const beatId = sec.id || sec.beat_id;
       const entry = beatHtmlRaw[beatId];
       const html = typeof entry === "string" ? entry : entry?.html;
-      if (!html) {
-        throw new Error(`Thiếu beat_html cho ${beatId}`);
+      if (html) {
+        beatHtmlById[String(beatId)] = String(html);
       }
-      fs.writeFileSync(path.join(projectDir, "compositions", `${beatId}.html`), String(html), "utf8");
-      log(`Wrote compositions/${beatId}.html`);
+    }
+
+    for (const sec of sections) {
+      const beatId = sec.id || sec.beat_id;
+      const sourceId = sec.split_from || beatId;
+      const html = beatHtmlById[String(sourceId)] || beatHtmlById[String(beatId)];
+      if (!html) {
+        throw new Error(`Thiếu beat_html cho ${beatId}${sourceId !== beatId ? ` (clone từ ${sourceId})` : ""}`);
+      }
+      fs.writeFileSync(path.join(projectDir, "compositions", `${beatId}.html`), html, "utf8");
+      log(`Wrote compositions/${beatId}.html${sourceId !== beatId ? ` (clone ${sourceId})` : ""}`);
     }
 
     const audioUrl = resolveAudioUrl(ctx);
@@ -361,11 +470,8 @@ async function main() {
     copySharedAssets(projectDir);
 
     const whisperWords = importHtml.whisper_words || [];
+
     fs.writeFileSync(path.join(projectDir, "transcript.json"), JSON.stringify(whisperWords, null, 2));
-    fs.writeFileSync(
-      path.join(projectDir, "assets/transcribe-manifest.json"),
-      JSON.stringify({ source: "cms_whisper", language: "vi", word_count: whisperWords.length }, null, 2),
-    );
 
     fs.writeFileSync(
       path.join(projectDir, "compositions/ambient-layer.html"),
@@ -387,8 +493,28 @@ async function main() {
     log("Wrote index.html skeleton");
 
     runNodeScript("bootstrap-phase2-assets.mjs", projectDir, [], "bootstrap-phase2-assets");
+
+    if (!whisperWords.length) {
+      throw new Error(
+        "Thiếu whisper_words — chạy transcribe Whisper trên tab HTML chatbot trước khi ghép",
+      );
+    }
+
+    fs.writeFileSync(
+      path.join(projectDir, "assets/transcribe-manifest.json"),
+      JSON.stringify({ source: "cms_whisper", language: "vi", word_count: whisperWords.length }, null, 2),
+    );
     runNodeScript("sync-caption-from-script.mjs", projectDir, [], "sync-caption-from-script");
-    runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
+
+    try {
+      runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
+    } catch (verifyError) {
+      const detail = buildCaptionSyncFailureMessage(
+        projectDir,
+        verifyError instanceof Error ? verifyError.message : String(verifyError),
+      );
+      throw new Error(detail);
+    }
 
     const timelineSec = patchTimelineDurationFromCaption({
       projectDir,
@@ -425,12 +551,26 @@ async function main() {
     runNodeScript("sync-index-beats-from-map.mjs", projectDir, [], "sync-index-beats-final");
 
     if (!args.skipPreflight) {
-      runImportHtmlPreflight(projectDir);
+      try {
+        runImportHtmlPreflight(projectDir);
+      } catch (preflightError) {
+        const raw = preflightError instanceof Error ? preflightError.message : String(preflightError);
+        if (/check-beat-timing/i.test(raw)) {
+          throw new Error(buildBeatTimingFailureMessage(projectDir, raw));
+        }
+        throw preflightError;
+      }
+    }
+
+    const beatLint = collectImportHtmlBeatErrors(projectDir);
+    if (beatLint.beatIds.length > 0) {
+      log(`⚠️ ${beatLint.summary} — bỏ qua, tiếp tục ghép (lenient)`);
     }
 
     await reportImportHtmlAssemble({
       shortVideoId,
       status: "ok",
+      captionSync: readCaptionSyncSummary(projectDir),
       apiBaseUrl,
       accessToken,
     });
@@ -448,10 +588,16 @@ async function main() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log(`❌ ${message}`);
+    let beatErrors = {};
+    if (fs.existsSync(projectDir)) {
+      beatErrors = collectImportHtmlBeatErrors(projectDir).beatErrors;
+    }
     await reportImportHtmlAssemble({
       shortVideoId,
       status: "failed",
       error: message,
+      beatErrors,
+      stage: "assemble",
       apiBaseUrl,
       accessToken,
     });

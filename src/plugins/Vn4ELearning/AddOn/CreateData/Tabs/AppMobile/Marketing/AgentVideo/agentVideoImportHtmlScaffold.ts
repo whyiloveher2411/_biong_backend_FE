@@ -104,13 +104,24 @@ body { margin: 0; background: var(--ink); }
 #stage {
   width: 1080px; height: 1920px; position: relative; overflow: hidden;
 }
+.bg-layer {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+}
+.content-area {
+  position: relative; z-index: 1; width: 100%; height: 100%;
+  padding: 80px 48px 360px; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
 </style>
 </head>
 <body>
 <div id="root" data-composition-id="${compositionId}" data-duration="${total}">
   <div class="scene-root">
     <div id="stage">
-      <!-- TODO: visual thuần — CẤM karaoke/caption/subtitle/voiceover text -->
+      <div class="bg-layer" aria-hidden="true"><!-- gradient/mesh/grain — full canvas 1080x1920 --></div>
+      <div class="content-area">
+        <!-- TODO: foreground visual — CẤM karaoke/caption/subtitle/voiceover text -->
+      </div>
     </div>
   </div>
 </div>
@@ -145,7 +156,7 @@ export function buildBeatScaffoldInstructionsBlock(durationSec: number, beatId: 
     return [
         '## CÁCH LÀM (bắt buộc)',
         `1. Bắt đầu từ scaffold — giữ \`const DURATION = ${total}\` và \`data-duration="${total}"\`.`,
-        '2. Chỉ sửa CSS, DOM trong `#stage`, và **thân** hàm `render()`.',
+        '2. Chỉ sửa CSS, DOM trong `.bg-layer`, `.content-area`, và **thân** hàm `render()`.',
         '3. **Giữ nguyên** `let t = 0`, `addEventListener(\'hf-seek\', ...)`, và `function render()` **không tham số**.',
         `4. Đây là **một beat** (${beatId}) — animation chạy 0 → ${total}s, không rút ngắn.`,
         '5. **Cấm** karaoke, phụ đề, caption, subtitle, text sync whisper/voiceover trong HTML.',

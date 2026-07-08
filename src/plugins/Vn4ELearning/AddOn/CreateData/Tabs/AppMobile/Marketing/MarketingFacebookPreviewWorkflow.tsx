@@ -6,19 +6,14 @@ import {
     Divider,
     FormControlLabel,
     Paper,
-    TextField,
     Typography,
 } from '@mui/material';
-import { LoadingButton } from '@mui/lab';
+import { Button } from '@mui/material';
 import useAjax from 'hook/useApi';
 import { getAccessToken } from 'store/user/user.reducers';
-import {
-    MarketingCopyPromptButton,
-    MarketingReloadPromptButton,
-} from './MarketingPromptActionButtons';
+import { getApiHost } from 'helpers/apiHost';
+import { convertToURL } from 'helpers/url';
 import type { PlatformDistributionEntry } from './platformDistributionConstants';
-
-const RESULT_MARKER_HINT = '###RESULT: START### … ###RESULT: END###';
 
 type PipelineSlice = {
     platform_distribution?: Record<string, PlatformDistributionEntry>;
@@ -30,15 +25,49 @@ type Props = {
     facebookPostedAt: string;
     onFacebookPostedChange: (posted: boolean, postedAt: string) => void;
     onCopySaved: (pipeline: PipelineSlice) => void;
+    onRefreshPost?: () => void;
     onSaved?: () => void;
 };
+
+function buildGeminiFacebookDistributionUrl(
+    postId: number,
+    promptText: string,
+): string {
+    const accessToken = getAccessToken() ?? '';
+    const apiUrl = convertToURL(
+        getApiHost(),
+        '/api/admin/plugin/vn4-e-learning/app-mobile/marketing/content-ai/update-from-overview',
+    );
+    const url = new URL('https://gemini.google.com/app');
+    url.searchParams.set('hl', 'vi');
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const hashParams = new URLSearchParams({
+        copy_marketing_ai: '1',
+        marketing_post_id: String(postId),
+        marketing_stage: 'dist:facebook:plat_copy',
+        access_token: accessToken,
+        api_url: apiUrl,
+        content_type: 'long_form',
+        marketing_fill_only: '1',
+        marketing_auto_submit: '1',
+        platform: 'facebook',
+        distribution_stage: 'plat_copy',
+        marketing_workflow_cache_key: `fb_${postId}_${nonce}`,
+        open_nonce: nonce,
+    });
+    if (promptText.trim()) {
+        hashParams.set('marketing_prompt', encodeURIComponent(promptText));
+    }
+    url.hash = hashParams.toString();
+    return url.toString();
+}
 
 export default function MarketingFacebookPreviewWorkflow({
     postId,
     facebookPosted,
     facebookPostedAt,
     onFacebookPostedChange,
-    onCopySaved,
+    onRefreshPost,
     onSaved,
 }: Props) {
     const api = useAjax();
@@ -47,12 +76,9 @@ export default function MarketingFacebookPreviewWorkflow({
 
     const [stagePrompt, setStagePrompt] = React.useState('');
     const [promptLoading, setPromptLoading] = React.useState(false);
-    const [overviewPaste, setOverviewPaste] = React.useState('');
-    const [pasteSaving, setPasteSaving] = React.useState(false);
-    const [pasteSuccess, setPasteSuccess] = React.useState('');
-    const [pasteError, setPasteError] = React.useState('');
     const [postedSaving, setPostedSaving] = React.useState(false);
     const [postedError, setPostedError] = React.useState('');
+    const [refreshingPost, setRefreshingPost] = React.useState(false);
     const promptFetchIdRef = React.useRef(0);
 
     const fetchStagePrompt = React.useCallback(() => {
@@ -81,58 +107,9 @@ export default function MarketingFacebookPreviewWorkflow({
     React.useEffect(() => {
         if (!postId) return;
         setStagePrompt('');
-        setOverviewPaste('');
-        setPasteSuccess('');
-        setPasteError('');
         setPostedError('');
         fetchStagePrompt();
     }, [postId, fetchStagePrompt]);
-
-    const submitPaste = () => {
-        if (!overviewPaste.trim() || !postId) return;
-        setPasteSaving(true);
-        setPasteError('');
-        setPasteSuccess('');
-        apiAjaxRef.current({
-            url: 'plugin/vn4-e-learning/app-mobile/marketing/content-ai/update-from-overview',
-            method: 'POST',
-            data: {
-                post_id: postId,
-                marketing_post_id: postId,
-                platform: 'facebook',
-                distribution_stage: 'plat_copy',
-                stage: 'plat_copy',
-                overview_text: overviewPaste,
-                access_token: getAccessToken() || '',
-            },
-            loading: false,
-            success: (res: {
-                success?: boolean;
-                pipeline?: PipelineSlice;
-                message?: { content?: string } | string;
-            }) => {
-                setPasteSaving(false);
-                if (!res?.success) {
-                    const msg = typeof res?.message === 'string'
-                        ? res.message
-                        : res?.message?.content || 'Không lưu được kết quả AI';
-                    setPasteError(msg);
-                    return;
-                }
-                setOverviewPaste('');
-                setPasteSuccess('Đã lưu copy Facebook vào CMS');
-                if (res.pipeline) {
-                    onCopySaved(res.pipeline);
-                }
-                onSaved?.();
-            },
-            error: (err: unknown) => {
-                setPasteSaving(false);
-                const r = err as { message?: { content?: string } };
-                setPasteError(r?.message?.content || 'Không lưu được kết quả AI');
-            },
-        });
-    };
 
     const handlePostedToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         const nextPosted = event.target.checked;
@@ -181,23 +158,39 @@ export default function MarketingFacebookPreviewWorkflow({
                 Workflow đăng Facebook
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Copy prompt → dán vào AI → dán kết quả vào CMS → đăng thủ công lên Facebook → đánh dấu đã đăng.
+                Mở Gemini tự động → AI sinh nội dung → lưu ngược vào CMS từ tab Gemini → đăng thủ công lên Facebook → đánh dấu đã đăng.
             </Typography>
 
             <Typography variant="overline" color="text.secondary" display="block" sx={{ mb: 1 }}>
                 Bước 1 — Prompt AI
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
-                <MarketingCopyPromptButton
-                    promptText={stagePrompt}
-                    disabled={!stagePrompt.trim() || promptLoading}
-                />
-                <MarketingReloadPromptButton
-                    variant="text"
-                    size="small"
-                    loading={promptLoading}
-                    onReload={fetchStagePrompt}
-                />
+                <Button
+                    variant="contained"
+                    disabled={!stagePrompt.trim() || promptLoading || !postId}
+                    onClick={() => window.open(
+                        buildGeminiFacebookDistributionUrl(postId, stagePrompt),
+                        '_blank',
+                        'noopener,noreferrer',
+                    )}
+                >
+                    Mở Gemini tự động
+                </Button>
+                <Button
+                    variant="outlined"
+                    disabled={refreshingPost}
+                    onClick={() => {
+                        setRefreshingPost(true);
+                        try {
+                            onRefreshPost?.();
+                            onSaved?.();
+                        } finally {
+                            setTimeout(() => setRefreshingPost(false), 500);
+                        }
+                    }}
+                >
+                    {refreshingPost ? 'Đang refresh post…' : 'Refresh post'}
+                </Button>
                 {promptLoading && (
                     <Typography variant="caption" color="text.secondary">
                         Đang tải prompt…
@@ -205,43 +198,10 @@ export default function MarketingFacebookPreviewWorkflow({
                 )}
                 {!promptLoading && stagePrompt.trim() && (
                     <Typography variant="caption" color="text.secondary">
-                        Bấm sao chép prompt rồi dán vào chat AI.
+                        Gemini sẽ tự điền prompt và tự bấm gửi. Sau khi AI trả kết quả, copy rồi bấm Lưu vào CMS trên panel nổi của tab Gemini.
                     </Typography>
                 )}
             </Box>
-
-            <Divider sx={{ my: 2 }} />
-
-            <Typography variant="overline" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                Bước 2 — Dán kết quả AI
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                JSON giữa {RESULT_MARKER_HINT}
-            </Typography>
-            <TextField
-                multiline
-                minRows={6}
-                fullWidth
-                placeholder="Dán kết quả từ AI vào đây…"
-                value={overviewPaste}
-                onChange={(e) => setOverviewPaste(e.target.value)}
-                sx={{ mb: 1 }}
-            />
-            <LoadingButton
-                variant="contained"
-                color="primary"
-                loading={pasteSaving}
-                disabled={!overviewPaste.trim()}
-                onClick={submitPaste}
-            >
-                Lưu vào CMS
-            </LoadingButton>
-            {pasteSuccess && (
-                <Alert severity="success" sx={{ mt: 1.5 }}>{pasteSuccess}</Alert>
-            )}
-            {pasteError && (
-                <Alert severity="error" sx={{ mt: 1.5 }}>{pasteError}</Alert>
-            )}
 
             <Divider sx={{ my: 2 }} />
 

@@ -23,7 +23,67 @@ export type BeatMap = {
 export type BeatHtmlEntry = {
     html: string;
     updated_at?: string;
+    render_status?: 'error' | 'ok' | string;
+    render_error?: string;
+    render_error_code?: string;
+    render_error_stage?: 'assemble' | 'render' | string;
+    render_error_at?: string;
 };
+
+export type BeatHtmlVisualState = 'missing' | 'ok' | 'error';
+
+export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const raw = entry as Record<string, unknown>;
+    return {
+        html: String(raw.html || ''),
+        updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+        render_status: raw.render_status ? String(raw.render_status) : undefined,
+        render_error: raw.render_error ? String(raw.render_error) : undefined,
+        render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,
+        render_error_stage: raw.render_error_stage ? String(raw.render_error_stage) : undefined,
+        render_error_at: raw.render_error_at ? String(raw.render_error_at) : undefined,
+    };
+}
+
+export function isBeatHtmlRenderError(beatHtml: Record<string, BeatHtmlEntry>, beatId: string): boolean {
+    return beatHtml[beatId]?.render_status === 'error';
+}
+
+export function getBeatHtmlVisualState(
+    beatHtml: Record<string, BeatHtmlEntry>,
+    beatId: string,
+): BeatHtmlVisualState {
+    if (!String(beatHtml[beatId]?.html || '').trim()) {
+        return 'missing';
+    }
+    if (isBeatHtmlRenderError(beatHtml, beatId)) {
+        return 'error';
+    }
+    return 'ok';
+}
+
+export function countBeatRenderErrors(beatHtml: Record<string, BeatHtmlEntry>): number {
+    return listBeatRenderErrorIds(beatHtml).length;
+}
+
+export function listBeatRenderErrorIds(beatHtml: Record<string, BeatHtmlEntry>): string[] {
+    return Object.entries(beatHtml)
+        .filter(([, entry]) => entry?.render_status === 'error')
+        .map(([beatId]) => beatId)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+export function getBeatRenderErrorMessage(beatHtml: Record<string, BeatHtmlEntry>, beatId: string): string {
+    const entry = beatHtml[beatId];
+    if (!entry?.render_error?.trim()) {
+        return 'Beat lỗi render/assemble';
+    }
+    const stage = entry.render_error_stage ? ` (${entry.render_error_stage})` : '';
+    return `${entry.render_error.trim()}${stage}`;
+}
 
 export type BeatMapValidation = {
     valid: boolean;

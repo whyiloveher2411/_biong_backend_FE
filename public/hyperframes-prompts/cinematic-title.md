@@ -157,6 +157,8 @@ This prompt describes **visual craft in English** — English examples are direc
 - **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.
 - **No voiceover on screen:** Do not render audio script, captions, karaoke, or whisper words — beat HTML is pure visual motion.
 - **Skip wordmark sections:** Ignore craft notes below about wordmark holds, brand mark resolves, or "follow for more" end cards when building a beat sub-composition.
+- **Caption band (content only):** Reserve bottom 360px (y 1560–1920) and top 80px for karaoke/logo overlays — no readable text, cards, charts, or hero images in those bands.
+- **Background full-bleed:** Decorative backgrounds (gradient, mesh, grain, vignette, glow) MUST cover the entire 1080×1920 canvas including the caption band. Use `.bg-layer { position:absolute; inset:0; z-index:0 }` as a direct child of `#stage`, outside the padded `.content-area`.
 
 ---
 

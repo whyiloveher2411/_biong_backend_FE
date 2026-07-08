@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Strix - Hook</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          container-type: size;
+          isolation: isolate;
+          background: #0b1016;
+          color: #f6f8fa;
+          font-family: "Mona Sans VF", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        @font-face {
+          font-family: "Mona Sans VF";
+          src: local("Mona Sans VF"), local("Mona Sans");
+          font-weight: 400 700;
+          font-style: normal;
+          font-display: swap;
+        }
+
+        [data-composition-id="01-hook"] .bg {
+          position: absolute;
+          inset: -3%;
+          background:
+            radial-gradient(circle at 18% 24%, rgba(31, 136, 61, 0.22), transparent 36%),
+            radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.06), transparent 26%),
+            linear-gradient(135deg, rgba(6, 17, 14, 0.24), rgba(11, 16, 22, 0.82)),
+            #0b1016;
+          transform: scale(1.06);
+        }
+
+        [data-composition-id="01-hook"] .grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(209, 217, 224, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(209, 217, 224, 0.04) 1px, transparent 1px);
+          background-size: 88px 88px;
+          mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent 92%);
+          opacity: 0.6;
+        }
+
+        [data-composition-id="01-hook"] .layout {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          grid-template-columns: 1.02fr 0.98fr;
+          gap: 44px;
+          padding: 82px 84px 86px;
+          align-items: start;
+        }
+
+        [data-composition-id="01-hook"] .copy {
+          position: relative;
+          z-index: 2;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          padding-top: 18px;
+        }
+
+        [data-composition-id="01-hook"] .eyebrow {
+          width: fit-content;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 999px;
+          padding: 9px 14px;
+          color: #dff6e7;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          font-size: 12px;
+          font-weight: 600;
+          background: rgba(255, 255, 255, 0.04);
+          backdrop-filter: blur(18px);
+        }
+
+        [data-composition-id="01-hook"] h1 {
+          margin: 0;
+          max-width: 730px;
+          font-size: 112px;
+          line-height: 0.92;
+          letter-spacing: -0.04em;
+          text-wrap: balance;
+          color: #f6f8fa;
+        }
+
+        [data-composition-id="01-hook"] .sub {
+          max-width: 560px;
+          color: rgba(246, 248, 250, 0.78);
+          font-size: 22px;
+          line-height: 1.45;
+          margin-top: 2px;
+        }
+
+        [data-composition-id="01-hook"] .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 10px;
+        }
+
+        [data-composition-id="01-hook"] .chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 42px;
+          padding: 0 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.18);
+          background: rgba(223, 246, 231, 0.08);
+          color: #dff6e7;
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="01-hook"] .chip.ghost {
+          color: rgba(246, 248, 250, 0.86);
+          border-color: rgba(246, 248, 250, 0.12);
+          background: rgba(246, 248, 250, 0.03);
+        }
+
+        [data-composition-id="01-hook"] .hero {
+          position: relative;
+          min-height: 874px;
+          padding-top: 10px;
+        }
+
+        [data-composition-id="01-hook"] .frame {
+          position: absolute;
+          inset: 28px 0 54px 0;
+          border-radius: 30px;
+          border: 1px solid rgba(209, 217, 224, 0.16);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+          backdrop-filter: blur(12px);
+        }
+
+        [data-composition-id="01-hook"] .shot {
+          position: absolute;
+          left: 26px;
+          right: 26px;
+          top: 54px;
+          bottom: 132px;
+          overflow: hidden;
+          border-radius: 24px;
+          border: 1px solid rgba(209, 217, 224, 0.16);
+          background: #050607;
+        }
+
+        [data-composition-id="01-hook"] .shot img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center top;
+          opacity: 0.92;
+          filter: saturate(0.72) contrast(1.08) brightness(0.88);
+          transform: scale(1.02);
+        }
+
+        [data-composition-id="01-hook"] .shot::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(180deg, rgba(11, 16, 22, 0.18), rgba(11, 16, 22, 0.68)),
+            linear-gradient(90deg, rgba(31, 136, 61, 0.12), transparent 32%, transparent 68%, rgba(246, 248, 250, 0.04));
+          pointer-events: none;
+        }
+
+        [data-composition-id="01-hook"] .scanbar {
+          position: absolute;
+          left: 44px;
+          right: 44px;
+          top: 154px;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(31, 136, 61, 0.95), transparent);
+          opacity: 0.9;
+        }
+
+        [data-composition-id="01-hook"] .note {
+          position: absolute;
+          left: 58px;
+          bottom: 92px;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(223, 246, 231, 0.16);
+          background: rgba(11, 16, 22, 0.76);
+          color: rgba(246, 248, 250, 0.92);
+          font-size: 14px;
+          letter-spacing: 0.02em;
+          backdrop-filter: blur(14px);
+        }
+
+        [data-composition-id="01-hook"] .note strong {
+          color: #dff6e7;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          font-size: 11px;
+        }
+
+        [data-composition-id="01-hook"] .meter {
+          position: absolute;
+          right: 58px;
+          bottom: 94px;
+          display: grid;
+          gap: 6px;
+          align-items: end;
+          justify-items: end;
+          color: rgba(246, 248, 250, 0.82);
+        }
+
+        [data-composition-id="01-hook"] .meter .value {
+          font-size: 48px;
+          line-height: 1;
+          color: #dff6e7;
+          letter-spacing: -0.04em;
+          font-weight: 700;
+        }
+
+        [data-composition-id="01-hook"] .meter .label {
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+        }
+
+        [data-composition-id="01-hook"] .edge {
+          position: absolute;
+          left: 84px;
+          right: 84px;
+          bottom: 72px;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(223, 246, 231, 0.15), rgba(223, 246, 231, 0.62), rgba(223, 246, 231, 0.15));
+          opacity: 0.65;
+        }
+      </style>
+
+      <div id="root" data-composition-id="01-hook" data-width="1920" data-height="1080" data-duration="6">
+        <div class="bg" aria-hidden="true"></div>
+        <div class="grid" aria-hidden="true"></div>
+
+        <div class="layout">
+          <div class="copy">
+            <div class="eyebrow">AI Pentesting</div>
+            <h1>
+              <span class="line">Shipping</span><br />
+              <span class="line">blind</span>
+            </h1>
+            <div class="sub">Real attacks do not wait for a release window.</div>
+            <div class="chips">
+              <div class="chip">Live proof</div>
+              <div class="chip ghost">Before prod</div>
+            </div>
+          </div>
+
+          <div class="hero">
+            <div class="frame"></div>
+            <div class="shot">
+              <img src="assets/strix-demo.png" alt="Strix terminal demo" />
+            </div>
+            <div class="scanbar"></div>
+            <div class="note"><strong>Signal</strong> real findings, not a static scan</div>
+            <div class="meter">
+              <div class="value">01</div>
+              <div class="label">missed vuln can hurt</div>
+            </div>
+            <div class="edge"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .bg",
+          { opacity: 0, scale: 1.08 },
+          { opacity: 1, scale: 1, duration: 1.1, ease: "power2.out" },
+          0
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .grid",
+          { opacity: 0, y: 18 },
+          { opacity: 0.6, y: 0, duration: 1, ease: "power2.out" },
+          0.04
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .eyebrow",
+          { y: 16, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" },
+          0.08
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .line",
+          { y: 84, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.95, stagger: 0.06, ease: "power4.out" },
+          0.1
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .sub",
+          { y: 22, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" },
+          0.26
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .chips .chip",
+          { y: 22, opacity: 0, scale: 0.96 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.65, stagger: 0.08, ease: "power3.out" },
+          0.34
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .frame",
+          { opacity: 0, scale: 0.96, y: 12 },
+          { opacity: 1, scale: 1, y: 0, duration: 0.9, ease: "power3.out" },
+          0.12
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .shot",
+          { opacity: 0, x: 28, scale: 1.03 },
+          { opacity: 1, x: 0, scale: 1, duration: 1.05, ease: "power4.out" },
+          0.16
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .scanbar",
+          { opacity: 0, x: -32, y: -50 },
+          { opacity: 0.95, x: 0, y: 0, duration: 0.9, ease: "power2.out" },
+          0.76
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .note",
+          { y: 22, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.75, ease: "power3.out" },
+          0.92
+        );
+        tl.fromTo(
+          "[data-composition-id='01-hook'] .meter",
+          { y: 14, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.96
+        );
+        tl.to(
+          "[data-composition-id='01-hook'] .shot img",
+          { scale: 1.05, duration: 3.2, ease: "none" },
+          1.02
+        );
+        tl.to(
+          "[data-composition-id='01-hook'] .scanbar",
+          { y: 470, duration: 2.8, ease: "none" },
+          1.46
+        );
+        tl.to(
+          "[data-composition-id='01-hook'] .meter .value",
+          { color: "#ffffff", duration: 1.8, ease: "none" },
+          2.9
+        );
+
+        window.__timelines["01-hook"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

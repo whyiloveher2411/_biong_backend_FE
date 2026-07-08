@@ -763,6 +763,86 @@ export function tryRuomRaHomophone(scriptWords, i, transcriptWords, p) {
   };
 }
 
+/** Whisper "1m," / "1 m" ↔ script "một mét" (chiều cao robot, v.v.) */
+export function transcriptMetricMotMetToken(tw) {
+  const raw = stripPunct(tw?.text ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (/^1m$/i.test(raw)) return true;
+  return false;
+}
+
+/** "một mét" / "một mét tám" ↔ Whisper "1m," + optional "tám" */
+export function tryMotMetMetricCluster(scriptWords, i, transcriptWords, p, lookahead = 10) {
+  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
+  const w1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (w0 !== "mot" || w1 !== "met") return null;
+
+  let consumed = 2;
+  const w2 = norm(stripPunct(scriptWords[i + 2] ?? ""));
+  const hasTam = w2 === "tam";
+  if (hasTam) consumed = 3;
+
+  for (let j = p; j < Math.min(transcriptWords.length, p + lookahead); j++) {
+    if (!transcriptMetricMotMetToken(transcriptWords[j])) continue;
+
+    const words = scriptWords.slice(i, i + consumed);
+    let timings;
+    let transcriptEnd = j + 1;
+
+    if (hasTam) {
+      const tamTw = transcriptWords[j + 1];
+      const tamNorm = tamTw ? norm(stripPunct(tamTw.text)) : "";
+      if (tamNorm === "tam") {
+        const motMetTimings = splitClusterTiming(transcriptWords[j], 2);
+        timings = [
+          motMetTimings[0],
+          motMetTimings[1],
+          { start: tamTw.start, end: tamTw.end },
+        ];
+        transcriptEnd = j + 2;
+      } else {
+        timings = splitClusterTiming(transcriptWords[j], words.length);
+      }
+    } else {
+      timings = splitClusterTiming(transcriptWords[j], words.length);
+    }
+
+    return {
+      words,
+      consumed,
+      transcriptEnd,
+      timings,
+      whisperText: transcriptWords[j].text,
+      matchType: "cluster-mot-met-metric",
+    };
+  }
+  return null;
+}
+
+/** "lững lững" ↔ Whisper "lưỡng lưỡng" (TTS đồng âm) */
+export function tryLungLuongHomophone(scriptWords, i, transcriptWords, p) {
+  const a = norm(stripPunct(scriptWords[i] ?? ""));
+  const b = norm(stripPunct(scriptWords[i + 1] ?? ""));
+  if (a !== "lung" || b !== "lung") return null;
+  const t0 = norm(stripPunct(transcriptWords[p]?.text ?? ""));
+  const t1 = norm(stripPunct(transcriptWords[p + 1]?.text ?? ""));
+  if (t0 === "luong" && t1 === "luong") {
+    return {
+      words: [scriptWords[i], scriptWords[i + 1]],
+      consumed: 2,
+      transcriptEnd: p + 2,
+      timings: [
+        { start: transcriptWords[p].start, end: transcriptWords[p].end },
+        { start: transcriptWords[p + 1].start, end: transcriptWords[p + 1].end },
+      ],
+      whisperText: `${transcriptWords[p].text} ${transcriptWords[p + 1].text}`,
+      matchType: "cluster-lung-luong",
+    };
+  }
+  return null;
+}
+
 /** "lúc ra" ↔ Whisper "rút ra" (TTS đồng âm) */
 export function tryLucRaHomophone(scriptWords, i, transcriptWords, p) {
   const a = norm(stripPunct(scriptWords[i] ?? ""));

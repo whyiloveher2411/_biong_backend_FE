@@ -25,6 +25,11 @@ import { bgmPreviewUrl, formatBgmDuration } from './agentBgmPreview';
 import type { AgentBgmSearchItem, ImportHtmlBgmSegment } from './agentVideoApi';
 import ShortVideoAgentBgmSearchDrawer from './ShortVideoAgentBgmSearchDrawer';
 import ShortVideoAgentVisualCatalogDrawer from './ShortVideoAgentVisualCatalogDrawer';
+import {
+    buildImportHtmlAssembleBlockers,
+    buildImportHtmlRenderBlockers,
+    humanizeImportHtmlAssembleError,
+} from './agentVideoImportHtmlBlockers';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -54,6 +59,22 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
     const canAssemble = state.importHtmlReady && state.hasAudio && state.scriptApproved;
     const assembleOk = state.composition?.assemble_status === 'ok';
     const bgmInsufficient = targetSec > 0 && selectedBgmTotal > 0 && selectedBgmTotal + 0.01 < targetSec;
+
+    const pipelineInput = {
+        scriptApproved: state.scriptApproved,
+        hasAudio: state.hasAudio,
+        importHtmlReady: state.importHtmlReady,
+        whisperStatus: state.whisperStatus,
+        bgmSegmentCount: state.bgmSegments.length,
+        bgmInsufficient,
+        assembleOk,
+        assembleStatus: state.composition?.assemble_status,
+        assembleError: state.composition?.assemble_error,
+    };
+    const assembleBlockers = buildImportHtmlAssembleBlockers(pipelineInput);
+    const renderBlockers = buildImportHtmlRenderBlockers(pipelineInput);
+    const canRender = renderBlockers.length === 0;
+    const assembleErrorHuman = humanizeImportHtmlAssembleError(state.composition?.assemble_error || '');
 
     const handlePlayPreview = React.useCallback((item: AgentBgmSearchItem | ImportHtmlBgmSegment) => {
         const url = bgmPreviewUrl(item);
@@ -117,7 +138,7 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                 Tài nguyên ghép video
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                Chọn nhạc nền, hình ảnh/video cho Gemini, lưu tài nguyên, rồi render hoặc preview trên máy local.
+                Chọn nhạc nền, hình ảnh cho Gemini, lưu tài nguyên, rồi render hoặc preview trên máy local.
             </Typography>
 
             <Box
@@ -252,7 +273,7 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                     <PermMediaIcon fontSize="small" color="action" sx={{ mt: 0.25 }} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" fontWeight={600}>
-                            Hình ảnh / video
+                            Hình ảnh
                         </Typography>
                         <Typography variant="caption" color="text.secondary" display="block">
                             {state.marketingPostImages.length}
@@ -291,6 +312,15 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                             : 'Chọn'}
                     </Button>
                 </Box>
+                <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => { void state.handleOpenMediaSuggestGemini(); }}
+                    disabled={state.openingMediaSuggestGemini}
+                    sx={{ mt: 1, textTransform: 'none', px: 0 }}
+                >
+                    {state.openingMediaSuggestGemini ? 'Đang mở Gemini...' : 'Gợi ý media (Gemini Web)'}
+                </Button>
             </Box>
 
             <ShortVideoAgentVisualCatalogDrawer
@@ -368,9 +398,67 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                     {state.composition.assembled_at}
                 </Typography>
             ) : null}
-            {state.composition?.assemble_status === 'failed' && state.composition.assemble_error ? (
+            {state.composition?.assemble_status === 'failed' && assembleErrorHuman ? (
                 <Alert severity="error" sx={{ mb: 1.5 }}>
-                    {state.composition.assemble_error}
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                        Ghép composition thất bại
+                    </Typography>
+                    <Typography variant="body2">
+                        {assembleErrorHuman}
+                    </Typography>
+                </Alert>
+            ) : null}
+
+            {state.beatsRenderErrorCount > 0 ? (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                        Beat lỗi render/assemble
+                    </Typography>
+                    <Typography variant="body2">
+                        {state.beatRenderErrorIds.join(', ')}
+                        {' '}
+                        — hover tab beat hoặc segment timeline để xem chi tiết.
+                    </Typography>
+                    {state.composition?.render_error ? (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            {state.composition.render_error}
+                        </Typography>
+                    ) : null}
+                </Alert>
+            ) : null}
+
+            {state.composition?.render_status === 'failed' && state.beatsRenderErrorCount === 0 && state.composition?.render_error ? (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                        Render thất bại
+                    </Typography>
+                    <Typography variant="body2">
+                        {state.composition.render_error}
+                    </Typography>
+                </Alert>
+            ) : null}
+
+            {assembleBlockers.length > 0 ? (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
+                        Chưa thể ghép composition vì:
+                    </Typography>
+                    <Box component="ul" sx={{ m: 0, pl: 2.25 }}>
+                        {assembleBlockers.map((item) => (
+                            <Box component="li" key={item.id} sx={{ mb: 0.5 }}>
+                                <Typography variant="body2">
+                                    {item.message}
+                                </Typography>
+                                {item.hint ? (
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        →
+                                        {' '}
+                                        {item.hint}
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                        ))}
+                    </Box>
                 </Alert>
             ) : null}
 
@@ -425,7 +513,7 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                 color="primary"
                 fullWidth
                 loading={state.launchingScriptRender}
-                disabled={!canAssemble || state.bgmSegments.length === 0}
+                disabled={!canRender}
                 startIcon={<PlayArrowIcon />}
                 onClick={() => { void state.handleLaunchImportHtmlRender(); }}
                 sx={{ textTransform: 'none' }}
@@ -433,11 +521,33 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                 Render video
             </LoadingButton>
 
-            {!canAssemble ? (
-                <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
-                    Cần script duyệt, audio, beat-map + đủ HTML + whisper.
+            {!canRender ? (
+                <Alert severity="info" sx={{ mt: 1.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
+                        Chưa thể render vì:
+                    </Typography>
+                    <Box component="ul" sx={{ m: 0, pl: 2.25 }}>
+                        {renderBlockers.map((item) => (
+                            <Box component="li" key={item.id} sx={{ mb: 0.5 }}>
+                                <Typography variant="body2">
+                                    {item.message}
+                                </Typography>
+                                {item.hint ? (
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        →
+                                        {' '}
+                                        {item.hint}
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                        ))}
+                    </Box>
+                </Alert>
+            ) : (
+                <Typography variant="caption" color="success.main" display="block" sx={{ mt: 1 }}>
+                    Đủ điều kiện render — bấm Render video để chạy daemon local.
                 </Typography>
-            ) : null}
+            )}
         </Box>
     );
 }

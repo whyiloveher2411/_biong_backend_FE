@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Strix - Product Intro</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          container-type: size;
+          isolation: isolate;
+          background: #f6f8fa;
+          color: #1f2328;
+          font-family: "Mona Sans VF", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        @font-face {
+          font-family: "Mona Sans VF";
+          src: local("Mona Sans VF"), local("Mona Sans");
+          font-weight: 400 700;
+          font-style: normal;
+          font-display: swap;
+        }
+
+        [data-composition-id="02-product-intro"] .backdrop {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 84% 10%, rgba(31, 136, 61, 0.13), transparent 26%),
+            radial-gradient(circle at 12% 18%, rgba(9, 105, 218, 0.08), transparent 22%),
+            linear-gradient(180deg, #ffffff 0%, #f6f8fa 56%, #eef2f6 100%);
+        }
+
+        [data-composition-id="02-product-intro"] .grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(209, 217, 224, 0.5) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(209, 217, 224, 0.5) 1px, transparent 1px);
+          background-size: 76px 76px;
+          mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.56), transparent 86%);
+          opacity: 0.4;
+        }
+
+        [data-composition-id="02-product-intro"] .layout {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          grid-template-columns: 1.05fr 0.95fr;
+          gap: 32px;
+          padding: 76px 82px 84px;
+        }
+
+        [data-composition-id="02-product-intro"] .left {
+          position: relative;
+          padding-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        [data-composition-id="02-product-intro"] .eyebrow {
+          width: fit-content;
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(31, 136, 61, 0.2);
+          background: rgba(31, 136, 61, 0.08);
+          color: #1f883d;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="02-product-intro"] h1 {
+          margin: 0;
+          font-size: 104px;
+          line-height: 0.94;
+          letter-spacing: -0.05em;
+          max-width: 700px;
+          color: #1f2328;
+        }
+
+        [data-composition-id="02-product-intro"] .sub {
+          max-width: 540px;
+          font-size: 23px;
+          line-height: 1.42;
+          color: rgba(31, 35, 40, 0.74);
+        }
+
+        [data-composition-id="02-product-intro"] .pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 8px;
+        }
+
+        [data-composition-id="02-product-intro"] .pill {
+          min-height: 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(209, 217, 224, 0.92);
+          background: rgba(255, 255, 255, 0.9);
+          color: #0969da;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="02-product-intro"] .right {
+          position: relative;
+          min-height: 874px;
+        }
+
+        [data-composition-id="02-product-intro"] .banner {
+          position: absolute;
+          left: 6px;
+          right: 6px;
+          top: 8px;
+          height: 360px;
+          border-radius: 30px;
+          border: 1px solid rgba(209, 217, 224, 0.95);
+          background: #101114;
+          overflow: hidden;
+        }
+
+        [data-composition-id="02-product-intro"] .banner img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center;
+          opacity: 0.98;
+          filter: saturate(0.95) contrast(1.03);
+        }
+
+        [data-composition-id="02-product-intro"] .banner::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(246, 248, 250, 0) 0%, rgba(246, 248, 250, 0.06) 42%, rgba(246, 248, 250, 0.48) 100%);
+        }
+
+        [data-composition-id="02-product-intro"] .card {
+          position: absolute;
+          right: 4px;
+          bottom: 158px;
+          width: 58%;
+          min-height: 278px;
+          padding: 22px;
+          border-radius: 24px;
+          border: 1px solid rgba(209, 217, 224, 0.92);
+          background: rgba(255, 255, 255, 0.88);
+          backdrop-filter: blur(18px);
+          box-shadow: 0 24px 60px rgba(31, 35, 40, 0.08);
+          z-index: 2;
+        }
+
+        [data-composition-id="02-product-intro"] .card img {
+          width: 100%;
+          height: 100%;
+          border-radius: 16px;
+          object-fit: cover;
+          object-position: center top;
+          display: block;
+        }
+
+        [data-composition-id="02-product-intro"] .cardLabel {
+          position: absolute;
+          left: 26px;
+          top: 22px;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(31, 136, 61, 0.2);
+          background: rgba(246, 248, 250, 0.96);
+          color: #1f883d;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          z-index: 5;
+        }
+
+        [data-composition-id="02-product-intro"] .stats {
+          position: absolute;
+          left: 10px;
+          right: 6px;
+          bottom: 70px;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+          z-index: 4;
+        }
+
+        [data-composition-id="02-product-intro"] .stat {
+          min-height: 120px;
+          padding: 18px 18px 16px;
+          border-radius: 20px;
+          border: 1px solid rgba(209, 217, 224, 0.9);
+          background: rgba(255, 255, 255, 0.88);
+        }
+
+        [data-composition-id="02-product-intro"] .stat .top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 18px;
+        }
+
+        [data-composition-id="02-product-intro"] .stat .num {
+          font-size: 34px;
+          line-height: 1;
+          letter-spacing: -0.05em;
+          color: #1f883d;
+          font-weight: 800;
+        }
+
+        [data-composition-id="02-product-intro"] .stat .label {
+          color: rgba(31, 35, 40, 0.68);
+          font-size: 12px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        [data-composition-id="02-product-intro"] .stat .desc {
+          font-size: 17px;
+          line-height: 1.35;
+          color: #1f2328;
+        }
+
+        [data-composition-id="02-product-intro"] .corner {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 124px;
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #1f883d, rgba(31, 136, 61, 0.24));
+        }
+      </style>
+
+      <div id="root" data-composition-id="02-product-intro" data-width="1920" data-height="1080" data-duration="6">
+        <div class="backdrop" aria-hidden="true"></div>
+        <div class="grid" aria-hidden="true"></div>
+
+        <div class="layout">
+          <div class="left">
+            <div class="eyebrow">Open source / CI ready</div>
+            <h1>
+              <span class="line">Strix</span><br />
+              <span class="line">thinks like</span><br />
+              <span class="line">an attacker</span>
+            </h1>
+            <div class="sub">Autonomous AI pentesting for teams that need proof, speed, and something they can actually merge.</div>
+            <div class="pills">
+              <div class="pill">Open source</div>
+              <div class="pill">Real PoCs</div>
+              <div class="pill">CI/CD ready</div>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="banner">
+              <img src="assets/strix-banner.png" alt="Strix banner" />
+            </div>
+            <div class="card">
+              <img src="assets/og-image.jpg" alt="Strix repository preview" />
+              <div class="cardLabel">GitHub-first workflow</div>
+            </div>
+            <div class="stats">
+              <div class="stat">
+                <div class="top">
+                  <div class="num">01</div>
+                  <div class="label">agents</div>
+                </div>
+                <div class="desc">Red-team behavior without the overhead.</div>
+              </div>
+              <div class="stat">
+                <div class="top">
+                  <div class="num">POC</div>
+                  <div class="label">evidence</div>
+                </div>
+                <div class="desc">Working validation, not a noisy report.</div>
+              </div>
+              <div class="stat">
+                <div class="top">
+                  <div class="num">CI</div>
+                  <div class="label">gates</div>
+                </div>
+                <div class="desc">Stop weak code before merge.</div>
+              </div>
+            </div>
+            <div class="corner"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .backdrop",
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" },
+          0
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .grid",
+          { opacity: 0, scale: 1.02 },
+          { opacity: 0.42, scale: 1, duration: 0.8, ease: "power2.out" },
+          0.05
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .eyebrow",
+          { y: 14, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" },
+          0.12
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .line",
+          { y: 58, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.88, stagger: 0.07, ease: "power4.out" },
+          0.18
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .sub",
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.44
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .pill",
+          { y: 18, opacity: 0, scale: 0.96 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.62, stagger: 0.08, ease: "power3.out" },
+          0.58
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .banner",
+          { x: 22, y: 16, opacity: 0, scale: 0.98 },
+          { x: 0, y: 0, opacity: 1, scale: 1, duration: 1.0, ease: "power4.out" },
+          0.1
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .card",
+          { x: 36, y: 24, opacity: 0, scale: 0.97 },
+          { x: 0, y: 0, opacity: 1, scale: 1, duration: 0.96, ease: "power4.out" },
+          0.55
+        );
+        tl.fromTo(
+          "[data-composition-id='02-product-intro'] .stat",
+          { y: 20, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, stagger: 0.09, ease: "power3.out" },
+          1.08
+        );
+        tl.to(
+          "[data-composition-id='02-product-intro'] .banner img",
+          { scale: 1.04, duration: 3.6, ease: "none" },
+          1.0
+        );
+        tl.to(
+          "[data-composition-id='02-product-intro'] .card img",
+          { scale: 1.03, duration: 3.4, ease: "none" },
+          1.08
+        );
+        tl.to(
+          "[data-composition-id='02-product-intro'] .corner",
+          { width: 220, duration: 1.8, ease: "power2.out" },
+          2.3
+        );
+
+        window.__timelines["02-product-intro"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

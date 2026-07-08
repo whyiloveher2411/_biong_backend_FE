@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Strix - Feature Proof</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          container-type: size;
+          isolation: isolate;
+          background: #081016;
+          color: #f6f8fa;
+          font-family: "Mona Sans VF", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        @font-face {
+          font-family: "Mona Sans VF";
+          src: local("Mona Sans VF"), local("Mona Sans");
+          font-weight: 400 700;
+          font-style: normal;
+          font-display: swap;
+        }
+
+        [data-composition-id="03-feature-proof"] .bg {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 18% 10%, rgba(31, 136, 61, 0.22), transparent 24%),
+            radial-gradient(circle at 84% 80%, rgba(255, 255, 255, 0.05), transparent 26%),
+            linear-gradient(180deg, #081016 0%, #0b1016 56%, #0b0f14 100%);
+        }
+
+        [data-composition-id="03-feature-proof"] .grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+          background-size: 92px 92px;
+          opacity: 0.34;
+          mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 92%);
+        }
+
+        [data-composition-id="03-feature-proof"] .layout {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          gap: 36px;
+          padding: 76px 84px 84px;
+        }
+
+        [data-composition-id="03-feature-proof"] .hero {
+          position: relative;
+          min-height: 876px;
+          border-radius: 32px;
+          border: 1px solid rgba(223, 246, 231, 0.16);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+          overflow: hidden;
+        }
+
+        [data-composition-id="03-feature-proof"] .hero img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center top;
+          filter: saturate(0.72) contrast(1.08) brightness(0.88);
+          opacity: 0.95;
+          transform: scale(1.02);
+        }
+
+        [data-composition-id="03-feature-proof"] .hero::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(180deg, rgba(8, 16, 22, 0.08), rgba(8, 16, 22, 0.42)),
+            linear-gradient(90deg, rgba(31, 136, 61, 0.12), transparent 38%, transparent 62%, rgba(255, 255, 255, 0.03));
+          pointer-events: none;
+        }
+
+        [data-composition-id="03-feature-proof"] .badge {
+          position: absolute;
+          left: 28px;
+          top: 28px;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.16);
+          background: rgba(8, 16, 22, 0.74);
+          color: #dff6e7;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          font-size: 12px;
+          font-weight: 700;
+          backdrop-filter: blur(16px);
+        }
+
+        [data-composition-id="03-feature-proof"] .badge::before {
+          content: "";
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #1f883d;
+          box-shadow: 0 0 0 6px rgba(31, 136, 61, 0.12);
+        }
+
+        [data-composition-id="03-feature-proof"] .right {
+          position: relative;
+          min-height: 876px;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          padding-top: 8px;
+        }
+
+        [data-composition-id="03-feature-proof"] .eyebrow {
+          width: fit-content;
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.14);
+          background: rgba(223, 246, 231, 0.06);
+          color: #dff6e7;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="03-feature-proof"] h1 {
+          margin: 0;
+          font-size: 92px;
+          line-height: 0.95;
+          letter-spacing: -0.05em;
+          color: #f6f8fa;
+          max-width: 520px;
+        }
+
+        [data-composition-id="03-feature-proof"] .sub {
+          max-width: 480px;
+          font-size: 22px;
+          line-height: 1.45;
+          color: rgba(246, 248, 250, 0.76);
+          margin-top: 4px;
+        }
+
+        [data-composition-id="03-feature-proof"] .metrics {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+          margin-top: 18px;
+        }
+
+        [data-composition-id="03-feature-proof"] .metric {
+          min-height: 146px;
+          padding: 18px 18px 16px;
+          border-radius: 22px;
+          border: 1px solid rgba(223, 246, 231, 0.12);
+          background: rgba(255, 255, 255, 0.04);
+          backdrop-filter: blur(14px);
+        }
+
+        [data-composition-id="03-feature-proof"] .metric .num {
+          font-size: 54px;
+          line-height: 1;
+          font-weight: 800;
+          letter-spacing: -0.06em;
+          color: #dff6e7;
+        }
+
+        [data-composition-id="03-feature-proof"] .metric .label {
+          margin-top: 10px;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          color: rgba(246, 248, 250, 0.68);
+        }
+
+        [data-composition-id="03-feature-proof"] .result {
+          margin-top: 8px;
+          border-radius: 26px;
+          border: 1px solid rgba(223, 246, 231, 0.12);
+          background:
+            radial-gradient(circle at 20% 10%, rgba(31, 136, 61, 0.12), transparent 28%),
+            rgba(255, 255, 255, 0.03);
+          backdrop-filter: blur(14px);
+          padding: 20px 20px 18px;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 14px;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .row .title {
+          font-size: 15px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #dff6e7;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .row .pill {
+          min-height: 32px;
+          padding: 0 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(223, 246, 231, 0.16);
+          background: rgba(31, 136, 61, 0.08);
+          color: #dff6e7;
+          display: inline-flex;
+          align-items: center;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .list {
+          display: grid;
+          gap: 10px;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 12px 14px;
+          border-radius: 16px;
+          border: 1px solid rgba(209, 217, 224, 0.14);
+          background: rgba(246, 248, 250, 0.03);
+        }
+
+        [data-composition-id="03-feature-proof"] .result .item .k {
+          color: rgba(246, 248, 250, 0.82);
+          font-size: 15px;
+        }
+
+        [data-composition-id="03-feature-proof"] .result .item .v {
+          color: #dff6e7;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        [data-composition-id="03-feature-proof"] .glow {
+          position: absolute;
+          right: -70px;
+          top: 124px;
+          width: 320px;
+          height: 320px;
+          background: radial-gradient(circle, rgba(31, 136, 61, 0.22), transparent 68%);
+          filter: blur(12px);
+          opacity: 0.8;
+          pointer-events: none;
+        }
+      </style>
+
+      <div id="root" data-composition-id="03-feature-proof" data-width="1920" data-height="1080" data-duration="6">
+        <div class="bg" aria-hidden="true"></div>
+        <div class="grid" aria-hidden="true"></div>
+        <div class="glow" aria-hidden="true"></div>
+
+        <div class="layout">
+          <div class="hero">
+            <img src="assets/strix-demo.png" alt="Strix proof output" />
+            <div class="badge">Validated live</div>
+          </div>
+
+          <div class="right">
+            <div class="eyebrow">Proof, not noise</div>
+            <h1>It validates the exploit.</h1>
+            <div class="sub">Findings arrive with concrete evidence the team can use, not just a vague scan result.</div>
+
+            <div class="metrics">
+              <div class="metric">
+                <div class="num" data-count="12">00</div>
+                <div class="label">validated findings</div>
+              </div>
+              <div class="metric">
+                <div class="num" data-count="4">00</div>
+                <div class="label">poCs confirmed</div>
+              </div>
+              <div class="metric">
+                <div class="num" data-count="1">00</div>
+                <div class="label">ready report</div>
+              </div>
+            </div>
+
+            <div class="result">
+              <div class="row">
+                <div class="title">Exploit evidence</div>
+                <div class="pill">dynamic test</div>
+              </div>
+              <div class="list">
+                <div class="item">
+                  <div class="k">Attack surface</div>
+                  <div class="v">mapped</div>
+                </div>
+                <div class="item">
+                  <div class="k">PoC result</div>
+                  <div class="v">confirmed</div>
+                </div>
+                <div class="item">
+                  <div class="k">Remediation</div>
+                  <div class="v">actionable</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        const counters = Array.from(
+          document.querySelectorAll("[data-composition-id='03-feature-proof'] [data-count]")
+        ).map((el) => ({ el, value: 0, target: Number(el.dataset.count) }));
+
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .bg",
+          { opacity: 0, scale: 1.04 },
+          { opacity: 1, scale: 1, duration: 0.9, ease: "power2.out" },
+          0
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .grid",
+          { opacity: 0, y: 14 },
+          { opacity: 0.34, y: 0, duration: 0.8, ease: "power2.out" },
+          0.06
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .hero",
+          { x: -12, opacity: 0, scale: 0.98 },
+          { x: 0, opacity: 1, scale: 1, duration: 1.0, ease: "power4.out" },
+          0.1
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .eyebrow",
+          { y: 14, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.16
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] h1",
+          { y: 42, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.9, ease: "power4.out" },
+          0.22
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .sub",
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.46
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .metric",
+          { y: 20, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, stagger: 0.08, ease: "power3.out" },
+          0.58
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .result",
+          { y: 24, opacity: 0, scale: 0.985 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.86, ease: "power3.out" },
+          1.02
+        );
+        tl.fromTo(
+          "[data-composition-id='03-feature-proof'] .badge",
+          { y: 10, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+          0.76
+        );
+        tl.fromTo(
+          counters[0],
+          {
+            value: 0,
+            onUpdate() {
+              counters[0].el.textContent = String(Math.round(counters[0].value)).padStart(2, "0");
+            },
+          },
+          {
+            value: counters[0].target,
+            duration: 1.1,
+            ease: "power1.out",
+            onUpdate() {
+              counters[0].el.textContent = String(Math.round(counters[0].value)).padStart(2, "0");
+            },
+          },
+          1.55
+        );
+        tl.fromTo(
+          counters[1],
+          {
+            value: 0,
+            onUpdate() {
+              counters[1].el.textContent = String(Math.round(counters[1].value)).padStart(2, "0");
+            },
+          },
+          {
+            value: counters[1].target,
+            duration: 1.0,
+            ease: "power1.out",
+            onUpdate() {
+              counters[1].el.textContent = String(Math.round(counters[1].value)).padStart(2, "0");
+            },
+          },
+          1.63
+        );
+        tl.fromTo(
+          counters[2],
+          {
+            value: 0,
+            onUpdate() {
+              counters[2].el.textContent = String(Math.round(counters[2].value)).padStart(2, "0");
+            },
+          },
+          {
+            value: counters[2].target,
+            duration: 0.92,
+            ease: "power1.out",
+            onUpdate() {
+              counters[2].el.textContent = String(Math.round(counters[2].value)).padStart(2, "0");
+            },
+          },
+          1.7
+        );
+        tl.to(
+          "[data-composition-id='03-feature-proof'] .hero img",
+          { scale: 1.05, duration: 3.3, ease: "none" },
+          1.35
+        );
+        tl.to(
+          "[data-composition-id='03-feature-proof'] .glow",
+          { opacity: 0.55, duration: 2.6, ease: "none" },
+          1.5
+        );
+
+        window.__timelines["03-feature-proof"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

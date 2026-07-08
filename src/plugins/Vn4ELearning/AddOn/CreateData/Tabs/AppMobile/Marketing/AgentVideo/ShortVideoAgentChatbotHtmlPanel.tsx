@@ -10,15 +10,18 @@ import {
     TextField,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { parseBeatMapJson, validateBeatMap } from './agentVideoBeatMap';
+import { isKaraokeSyncPoor } from './agentVideoApi';
+import { getBeatHtmlVisualState, getBeatRenderErrorMessage, parseBeatMapJson, validateBeatMap } from './agentVideoBeatMap';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -122,6 +125,10 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
     const activeBeat = state.beatMap?.sections.find((item) => item.id === state.activeBeatId)
         ?? state.beatMap?.sections[0];
     const activeBeatHtml = activeBeat ? (state.beatHtml[activeBeat.id]?.html || '') : '';
+    const karaokeSyncPoor = isKaraokeSyncPoor(state.composition?.caption_sync);
+    const showWhisperRerun =
+        state.whisperStatus === 'failed'
+        || (state.whisperStatus === 'completed' && (karaokeSyncPoor || state.hasAgentVideo));
 
     return (
         <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
@@ -165,23 +172,42 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                             label={whisperStatusLabel(state.whisperStatus)}
                             color={whisperStatusColor(state.whisperStatus)}
                         />
+                        {state.whisperStatus === 'completed' ? (
+                            <Typography variant="caption" color="text.secondary">
+                                Karaoke sync tự động từ Whisper khi ghép video
+                            </Typography>
+                        ) : null}
+                        {karaokeSyncPoor ? (
+                            <Chip
+                                size="small"
+                                label="Karaoke có thể lệch"
+                                color="warning"
+                            />
+                        ) : null}
                         {(state.transcribingWhisper || state.whisperStatus === 'processing') ? (
                             <Typography variant="caption" color="text.secondary">
                                 Đang transcribe audio trên server…
                             </Typography>
                         ) : null}
-                        {state.whisperStatus === 'failed' ? (
+                        {showWhisperRerun ? (
                             <LoadingButton
                                 size="small"
-                                variant="outlined"
+                                variant={state.whisperStatus === 'failed' ? 'outlined' : 'outlined'}
+                                color={karaokeSyncPoor ? 'warning' : 'primary'}
                                 loading={state.transcribingWhisper}
                                 startIcon={<RefreshIcon />}
                                 onClick={() => { void state.runWhisperTranscribe({ force: true }); }}
                             >
-                                Chạy lại whisper
+                                {state.whisperStatus === 'failed' ? 'Chạy lại whisper' : 'Whisper lại'}
                             </LoadingButton>
                         ) : null}
                     </Box>
+                    {karaokeSyncPoor ? (
+                        <Alert severity="warning" sx={{ mt: 1 }}>
+                            Timing karaoke lệch nhiều (khoảng trống lớn hoặc ít từ khớp Whisper).
+                            Bấm Whisper lại, sau đó ghép lại video để cập nhật caption.
+                        </Alert>
+                    ) : null}
                 </Box>
 
                 {state.whisperError ? (
@@ -281,8 +307,16 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                             <Chip
                                 size="small"
                                 sx={{ mb: 1 }}
-                                label={`HTML: ${state.beatsHtmlCompleted}/${state.beatsHtmlTotal}`}
-                                color={state.importHtmlReady ? 'success' : 'default'}
+                                label={
+                                    state.beatsRenderErrorCount > 0
+                                        ? `HTML: ${state.beatsHtmlCompleted}/${state.beatsHtmlTotal} · Lỗi: ${state.beatsRenderErrorCount}`
+                                        : `HTML: ${state.beatsHtmlCompleted}/${state.beatsHtmlTotal}`
+                                }
+                                color={
+                                    state.beatsRenderErrorCount > 0
+                                        ? 'warning'
+                                        : (state.importHtmlReady ? 'success' : 'default')
+                                }
                             />
 
                             {state.missingBeatHtmlCount > 0 ? (
@@ -299,15 +333,35 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                                 sx={{ mb: 1, minHeight: 36 }}
                             >
                                 {state.beatMap.sections.map((beat) => {
-                                    const hasHtml = Boolean(state.beatHtml[beat.id]?.html?.trim());
-                                    return (
+                                    const visualState = getBeatHtmlVisualState(state.beatHtml, beat.id);
+                                    const tabLabel = visualState === 'ok'
+                                        ? `${beat.id} ✓`
+                                        : beat.id;
+                                    const errorMessage = getBeatRenderErrorMessage(state.beatHtml, beat.id);
+                                    const tab = (
                                         <Tab
                                             key={beat.id}
                                             value={beat.id}
-                                            label={hasHtml ? `${beat.id} ✓` : beat.id}
-                                            sx={{ minHeight: 36, py: 0.5 }}
+                                            icon={visualState === 'error' ? <WarningAmberIcon fontSize="small" /> : undefined}
+                                            iconPosition={visualState === 'error' ? 'end' : undefined}
+                                            label={tabLabel}
+                                            sx={{
+                                                minHeight: 36,
+                                                py: 0.5,
+                                                color: visualState === 'error' ? 'warning.main' : undefined,
+                                            }}
                                         />
                                     );
+                                    if (visualState === 'error') {
+                                        return (
+                                            <Tooltip key={beat.id} title={errorMessage} arrow>
+                                                <Box component="span" sx={{ display: 'inline-flex' }}>
+                                                    {tab}
+                                                </Box>
+                                            </Tooltip>
+                                        );
+                                    }
+                                    return tab;
                                 })}
                             </Tabs>
 

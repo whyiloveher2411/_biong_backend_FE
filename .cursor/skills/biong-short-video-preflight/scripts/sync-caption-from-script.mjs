@@ -15,6 +15,9 @@ import {
   totalVideoSec,
   DEFAULT_LOOKAHEAD,
   stripPunct,
+  repairUntrustedNeighborTiming,
+  isTrustedCaptionMatch,
+  analyzeCaptionTimingGaps,
 } from "./lib/caption-script-align.mjs";
 import {
   resolveTranscriptPath,
@@ -67,7 +70,7 @@ function main() {
   }
 
   const {
-    mapped,
+    mapped: aligned,
     exactCount,
     fuzzyCount,
     positionalCount,
@@ -81,6 +84,12 @@ function main() {
     lookahead: CAPTION_ALIGN_LOOKAHEAD,
   });
 
+  const {
+    mapped,
+    repairedCount,
+    preRepairUntrustedCount,
+  } = repairUntrustedNeighborTiming(aligned);
+
   const duration = totalVideoSec(transcriptWords, mapped);
   const captionWords = toCaptionWords(mapped, duration);
   const manifest = readTranscribeManifest(projectDir);
@@ -88,12 +97,25 @@ function main() {
   fs.mkdirSync(path.dirname(outWordsPath), { recursive: true });
   fs.writeFileSync(outWordsPath, JSON.stringify(captionWords, null, 2));
 
-  const timedCount = exactCount + fuzzyCount + positionalCount + clusterCount;
+  const timedCount =
+    exactCount + fuzzyCount + clusterCount + repairedCount;
   const positionalRatio = scriptWords.length
     ? +(positionalCount / scriptWords.length).toFixed(4)
     : 0;
   const trustedRatio = scriptWords.length
-    ? +((exactCount + fuzzyCount + clusterCount) / scriptWords.length).toFixed(4)
+    ? +(
+        (exactCount + fuzzyCount + clusterCount + repairedCount) /
+        scriptWords.length
+      ).toFixed(4)
+    : 0;
+
+  const remainingUntrustedWords = mapped
+    .filter((w) => !isTrustedCaptionMatch(w.matchType))
+    .map((w) => w.text);
+
+  const timingGaps = analyzeCaptionTimingGaps(captionWords);
+  const exactRatio = scriptWords.length
+    ? +(exactCount / scriptWords.length).toFixed(4)
     : 0;
 
   const report = {
@@ -111,27 +133,37 @@ function main() {
     positionalRatio,
     trustedRatio,
     interpolatedCount,
+    preRepairUntrustedCount,
+    repairedCount,
     timedCount,
-    unmatchedCount: unmatchedWords.length,
+    unmatchedCount: remainingUntrustedWords.length,
     unmatchedRatio: scriptWords.length
-      ? +(unmatchedWords.length / scriptWords.length).toFixed(4)
+      ? +(remainingUntrustedWords.length / scriptWords.length).toFixed(4)
       : 0,
-    unmatchedWords,
+    unmatchedWords: remainingUntrustedWords,
     corrections,
     densityDrift,
     totalVideoSec: duration,
     transcriptPointerEnd,
     scriptSample: scriptWords.slice(0, 8),
     captionSample: captionWords.slice(0, 8),
+    exactRatio,
+    maxGapSec: timingGaps.maxGapSec,
+    largeGapCount: timingGaps.largeGapCount,
+    largeGaps: timingGaps.largeGaps,
+    karaokeQuality:
+      timingGaps.largeGapCount > 0 || exactRatio < 0.7 ? "poor" : "ok",
   };
 
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
   console.log(
     `[sync-caption] ${timedCount}/${scriptWords.length} timed` +
-      ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount} cluster=${clusterCount})` +
+      ` (exact=${exactCount} fuzzy=${fuzzyCount} positional=${positionalCount} cluster=${clusterCount} repaired=${repairedCount})` +
       ` transcript=${report.transcriptPath}` +
-      (interpolatedCount ? `; ${interpolatedCount} interpolated` : " ✓"),
+      (preRepairUntrustedCount > repairedCount
+        ? `; ${preRepairUntrustedCount - repairedCount} untrusted chưa sửa`
+        : " ✓"),
   );
   if (corrections.length) {
     const sample = corrections

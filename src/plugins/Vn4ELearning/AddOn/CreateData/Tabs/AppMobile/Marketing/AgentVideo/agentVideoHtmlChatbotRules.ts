@@ -15,6 +15,23 @@ export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     ].join('\n');
 }
 
+export function buildHtmlChatbotLayoutSafeZonesBlock(): string {
+    return [
+        '## BẮT BUỘC — Safe Zones (content keep-out) + Background full-bleed',
+        '- Kích thước canvas là **1080x1920** (tỉ lệ 9:16).',
+        '- **Caption band (content only):** bottom **360px** (y = 1560–1920) và top **80px** (y = 0–80) là vùng **cấm đặt foreground** — không headline, card, chart, ảnh hero, text đọc được. Karaoke/Logo do layer riêng khi render final.',
+        '- **Background full-bleed (bắt buộc):** gradient, mesh, grain, vignette, glow phải phủ **toàn canvas 1080×1920** kể cả caption band — vùng dưới **có nền**, chỉ không có content.',
+        '- **Cấu trúc scaffold (bắt buộc):**',
+        '  1. `.bg-layer` — con trực tiếp của `#stage`, `position:absolute; inset:0; z-index:0; pointer-events:none` — chứa toàn bộ nền trang trí.',
+        '  2. `.content-area` — con trực tiếp của `#stage`, `position:relative; z-index:1` — đã có `padding: 80px 48px 360px` để gom foreground vào safe zone giữa.',
+        '- **Cấm trên background:** `height: 1480px`, `top: 80px`, hoặc đặt nền bên trong `.content-area` / container có padding — sẽ để trống caption band.',
+        '- **Quy tắc định vị foreground (bắt buộc):**',
+        '  1. Mọi nội dung đọc được (text, card, chart, ảnh hero) đặt trong `.content-area` hoặc tuân padding keep-out.',
+        '  2. `position: absolute` cho **foreground** (không áp dụng `.bg-layer`): **CẤM** `top < 80px` hoặc `bottom < 360px` — tọa độ y phải trong 80px–1560px.',
+        '',
+    ].join('\n');
+}
+
 export function buildHtmlChatbotNoKaraokeRulesBlock(): string {
     return [
         '## CẤM — karaoke / phụ đề / caption trong HTML beat',

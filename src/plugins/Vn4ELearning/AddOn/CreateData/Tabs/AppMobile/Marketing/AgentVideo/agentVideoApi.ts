@@ -49,11 +49,43 @@ export type ImportHtmlAssets = {
     updated_at?: string;
 };
 
+export type CaptionSyncSummary = {
+    exact_ratio?: number | null;
+    trusted_ratio?: number | null;
+    max_gap_sec?: number | null;
+    large_gap_count?: number;
+    karaoke_quality?: 'ok' | 'poor' | string | null;
+    synced_at?: string | null;
+};
+
 export type ImportHtmlComposition = {
     assembled_at?: string;
     assemble_status?: 'none' | 'ok' | 'failed' | string;
     assemble_error?: string;
+    render_status?: 'none' | 'ok' | 'failed' | string;
+    render_error?: string;
+    render_failed_at?: string;
+    caption_sync?: CaptionSyncSummary | null;
 };
+
+export function isKaraokeSyncPoor(captionSync?: CaptionSyncSummary | null): boolean {
+    if (!captionSync) {
+        return false;
+    }
+    if (captionSync.karaoke_quality === 'poor') {
+        return true;
+    }
+    if ((captionSync.large_gap_count ?? 0) > 0) {
+        return true;
+    }
+    if (captionSync.exact_ratio != null && captionSync.exact_ratio < 0.85) {
+        return true;
+    }
+    if (captionSync.max_gap_sec != null && captionSync.max_gap_sec > 3) {
+        return true;
+    }
+    return false;
+}
 
 export type ImportHtmlSummary = {
     hf_prompt_type?: string;
@@ -64,6 +96,9 @@ export type ImportHtmlSummary = {
     whisper_word_count?: number;
     whisper_transcribed_at?: string;
     whisper_error?: string;
+    caption_words_status?: 'none' | 'validated' | 'failed' | string;
+    caption_words_count?: number;
+    caption_words_saved_at?: string;
     beat_map_ready?: boolean;
     beat_count?: number;
     beat_map_updated_at?: string;
@@ -72,13 +107,15 @@ export type ImportHtmlSummary = {
     beats_html_ready?: boolean;
     import_html_ready?: boolean;
     missing_beat_ids?: string[];
+    beats_render_error_count?: number;
+    beat_render_error_ids?: string[];
     assets?: ImportHtmlAssets;
     composition?: ImportHtmlComposition;
     bgm_total_sec?: number;
     bgm_covers_video?: boolean;
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
-    beat_html?: Record<string, { html?: string; updated_at?: string }>;
+    beat_html?: Record<string, import('./agentVideoBeatMap').BeatHtmlEntry>;
     marketing_post_images?: ImportHtmlMarketingPostImage[];
 };
 
@@ -362,6 +399,7 @@ export async function saveAgentImportHtml(
         sfxBeatTransition?: boolean;
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
+        visualSearchQueries?: string[];
     },
 ): Promise<JsonResponse & {
     render_mode?: AgentRenderMode;
@@ -395,6 +433,9 @@ export async function saveAgentImportHtml(
     }
     if (payload.visualCatalog !== undefined) {
         body.visual_catalog = payload.visualCatalog;
+    }
+    if (payload.visualSearchQueries !== undefined) {
+        body.visual_search_queries = payload.visualSearchQueries;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',

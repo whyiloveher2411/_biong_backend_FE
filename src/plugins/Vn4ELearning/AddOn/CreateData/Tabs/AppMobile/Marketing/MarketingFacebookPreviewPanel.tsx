@@ -32,6 +32,7 @@ export default function MarketingFacebookPreviewPanel({
         facebookPostedAt,
         handleCopySaved,
         handleFacebookPostedChange,
+        reload,
     } = useMarketingFacebookPreviewData({
         postId,
         fallbackThumbnail,
@@ -73,6 +74,7 @@ export default function MarketingFacebookPreviewPanel({
                 facebookPostedAt={facebookPostedAt}
                 onFacebookPostedChange={handleFacebookPostedChange}
                 onCopySaved={handleCopySaved}
+                onRefreshPost={reload}
                 onSaved={onSaved}
             />
             <PlatformDistributionPreview

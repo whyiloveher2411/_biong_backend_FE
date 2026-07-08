@@ -5,7 +5,7 @@ import {
     buildSingleBeatHtmlScaffold,
 } from './agentVideoImportHtmlScaffold';
 import { buildBeatHtmlContentLanguageBlock } from './agentVideoContentLanguageBlock';
-import { buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotNoLegacyBorrowRulesBlock, buildHtmlChatbotJsContractBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
+import { buildHtmlChatbotLayoutSafeZonesBlock, buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotNoLegacyBorrowRulesBlock, buildHtmlChatbotJsContractBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 import type { BeatMapSection } from './agentVideoBeatMap';
 
@@ -77,6 +77,7 @@ export async function buildBeatHtmlPrompt(
         '',
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
+        buildHtmlChatbotLayoutSafeZonesBlock(),
         buildHtmlChatbotNoLegacyBorrowRulesBlock(),
         buildHtmlChatbotSingleHtmlFileRulesBlock(beat.id),
         buildHtmlChatbotJsContractBlock(durationSec),

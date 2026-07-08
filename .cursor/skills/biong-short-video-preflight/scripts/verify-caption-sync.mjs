@@ -6,7 +6,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { norm, stripPunct, tokenizeScript } from "./lib/caption-script-align.mjs";
+import { norm, stripPunct, tokenizeScript, analyzeCaptionTimingGaps } from "./lib/caption-script-align.mjs";
 import { resolveTranscriptPath, loadTranscriptWords, readTranscribeManifest } from "./lib/transcript-path.mjs";
 import { detectWrongLanguageTranscript } from "./lib/transcribe-sanity.mjs";
 import { resolveTranscribeConfig } from "./lib/transcribe-locale.mjs";
@@ -16,6 +16,8 @@ const DEFAULT_MAX_UNMATCHED = 0.1;
 const MAX_COUNT_DRIFT_RATIO = 0.15;
 const STRICT_MAX_POSITIONAL_RATIO = 0.15;
 const STRICT_MIN_TRUSTED_RATIO = 0.7;
+const STRICT_MAX_TIMING_GAP_SEC = 3;
+const STRICT_MAX_LARGE_GAP_COUNT = 0;
 
 function parseArgs(argv) {
   const out = { strict: false, maxUnmatched: DEFAULT_MAX_UNMATCHED };
@@ -135,29 +137,58 @@ function main() {
     const trustedRatio =
       report.trustedRatio ??
       (report.scriptWordCount
-        ? (report.exactCount + report.fuzzyCount + (report.clusterCount ?? 0)) /
+        ? (report.exactCount +
+            report.fuzzyCount +
+            (report.clusterCount ?? 0) +
+            (report.repairedCount ?? 0)) /
           report.scriptWordCount
         : 0);
     if (trustedRatio < STRICT_MIN_TRUSTED_RATIO) {
       errors.push(
-        `Strict: exact+fuzzy ${(trustedRatio * 100).toFixed(1)}% < ${(STRICT_MIN_TRUSTED_RATIO * 100).toFixed(0)}% — timing không đáng tin`,
+        `Strict: exact+fuzzy+repaired ${(trustedRatio * 100).toFixed(1)}% < ${(STRICT_MIN_TRUSTED_RATIO * 100).toFixed(0)}% — timing không đáng tin`,
       );
     }
 
-    if (report.interpolatedCount > 0) {
+    const remainingUntrusted = Math.max(
+      0,
+      Number(report.preRepairUntrustedCount ?? report.interpolatedCount ?? 0) -
+        Number(report.repairedCount ?? 0),
+    );
+    if (remainingUntrusted > 0) {
       const cmsWhisper = manifest?.source === "cms_whisper";
-      const maxInterpolated = cmsWhisper
+      const maxRemaining = cmsWhisper
         ? Math.max(5, Math.ceil((report.scriptWordCount || scriptWords.length) * 0.01))
         : 0;
-      if (!cmsWhisper || report.interpolatedCount > maxInterpolated) {
+      if (!cmsWhisper || remainingUntrusted > maxRemaining) {
         errors.push(
-          `Strict: ${report.interpolatedCount} word(s) interpolated — không cho render`,
+          `Strict: ${remainingUntrusted} từ chưa khớp Whisper sau sửa lân cận — không cho render`,
         );
-      } else if (report.interpolatedCount > 0) {
+      } else {
         warnings.push(
-          `CMS whisper: cho phép ${report.interpolatedCount} từ interpolated (≤ ${maxInterpolated})`,
+          `CMS whisper: cho phép ${remainingUntrusted} từ chưa sửa (≤ ${maxRemaining})`,
         );
       }
+    }
+
+    const gapStats =
+      report.maxGapSec != null
+        ? {
+            maxGapSec: report.maxGapSec,
+            largeGapCount: report.largeGapCount ?? 0,
+            largeGaps: report.largeGaps ?? [],
+          }
+        : analyzeCaptionTimingGaps(captionWords, {
+            maxGapSec: STRICT_MAX_TIMING_GAP_SEC,
+          });
+
+    if (gapStats.largeGapCount > STRICT_MAX_LARGE_GAP_COUNT) {
+      const sample = (gapStats.largeGaps || [])
+        .slice(0, 3)
+        .map((g) => `#${g.index} gap ${g.gapSec}s (${g.prevWord} → ${g.word})`)
+        .join("; ");
+      errors.push(
+        `Strict: ${gapStats.largeGapCount} khoảng trống timing > ${STRICT_MAX_TIMING_GAP_SEC}s — karaoke sẽ nhảy sai (${sample})`,
+      );
     }
   }
 
