@@ -161,6 +161,12 @@ export function resolveOmnivoiceVoicePreviewUrl(
     }
 }
 
+export type AgentSourceFormatCatalogItem = {
+    key: string;
+    label: string;
+    description?: string;
+};
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -213,6 +219,8 @@ export type AgentVideoContentResponse = {
     thumbnail?: unknown;
     agent_source_content?: string;
     agent_github_repo?: string;
+    agent_source_format?: string;
+    agent_source_format_catalog?: AgentSourceFormatCatalogItem[];
     content_plain_text?: string;
     post_eligible?: boolean;
     social_posted?: boolean;
@@ -394,6 +402,8 @@ export async function saveAdminAudioScript(
 export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_source_content?: string;
     agent_github_repo?: string;
+    agent_source_format?: string;
+    agent_source_format_label?: string;
     content_plain_text?: string;
 };
 
@@ -401,12 +411,16 @@ export async function saveAgentSourceContent(
     shortVideoId: number,
     content: string,
     githubRepo?: string,
+    sourceFormat?: string,
 ): Promise<SaveAgentSourceContentResponse> {
     const extra: Record<string, unknown> = {
         agent_source_content: content,
     };
     if (githubRepo !== undefined) {
         extra.agent_github_repo = githubRepo;
+    }
+    if (sourceFormat !== undefined) {
+        extra.agent_source_format = sourceFormat;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-source-content',

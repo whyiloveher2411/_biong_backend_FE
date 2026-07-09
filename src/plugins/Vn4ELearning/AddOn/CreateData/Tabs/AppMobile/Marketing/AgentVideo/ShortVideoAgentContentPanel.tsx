@@ -2,6 +2,10 @@ import React from 'react';
 import {
     Alert,
     Box,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
     Stack,
     TextField,
     Typography,
@@ -9,6 +13,7 @@ import {
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import LoadingButton from 'components/atoms/LoadingButton';
+import TextareaForm from 'components/atoms/fields/textarea/Form';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -19,10 +24,37 @@ type Props = {
 
 export default function ShortVideoAgentContentPanel({ state }: Props) {
     const linked = state.marketingPostId > 0;
-    const contentDirty = !linked
-        && state.agentSourceContent !== state.savedAgentSourceContent;
-    const githubDirty = !linked
-        && state.agentGithubRepo !== state.savedAgentGithubRepo;
+    const contentPostRef = React.useRef({
+        agent_source_content: state.agentSourceContent,
+    });
+    const [contentFieldKey, setContentFieldKey] = React.useState(0);
+    const prevFetchingReadmeRef = React.useRef(false);
+
+    React.useEffect(() => {
+        contentPostRef.current.agent_source_content = state.savedAgentSourceContent;
+        setContentFieldKey((prev) => prev + 1);
+    }, [state.shortVideoId, state.savedAgentSourceContent]);
+
+    React.useEffect(() => {
+        if (prevFetchingReadmeRef.current && !state.fetchingGithubReadme) {
+            contentPostRef.current.agent_source_content = state.agentSourceContent;
+            setContentFieldKey((prev) => prev + 1);
+        }
+        prevFetchingReadmeRef.current = state.fetchingGithubReadme;
+    }, [state.fetchingGithubReadme, state.agentSourceContent]);
+
+    const handleSave = () => {
+        const content = String(contentPostRef.current.agent_source_content || '');
+        if (
+            content === state.savedAgentSourceContent
+            && state.agentGithubRepo === state.savedAgentGithubRepo
+            && state.agentSourceFormat === state.savedAgentSourceFormat
+        ) {
+            return;
+        }
+        state.setAgentSourceContent(content);
+        void state.handleSaveSourceContent(content);
+    };
 
     return (
         <Box
@@ -73,18 +105,39 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
             ) : (
                 <Stack spacing={1.5}>
                     <Alert severity="info">
-                        Chưa liên kết marketing post — nhập nội dung nguồn tại đây
+                        Chưa liên kết marketing post — chọn loại nội dung, nhập nguồn
                         (hoặc fetch README từ GitHub). Agent dùng nội dung này cho creative brief.
                     </Alert>
-                    <TextField
-                        label="Nội dung nguồn"
-                        value={state.agentSourceContent}
-                        onChange={(e) => state.setAgentSourceContent(e.target.value)}
-                        multiline
-                        minRows={12}
-                        fullWidth
-                        size="small"
-                        placeholder="Dán hoặc viết nội dung nguồn cho short video…"
+                    <FormControl fullWidth size="small">
+                        <InputLabel id="agent-source-format-label">Loại nội dung nguồn</InputLabel>
+                        <Select
+                            labelId="agent-source-format-label"
+                            label="Loại nội dung nguồn"
+                            value={state.agentSourceFormat}
+                            onChange={(e) => state.setAgentSourceFormat(String(e.target.value))}
+                        >
+                            {state.agentSourceFormatCatalog.map((item) => (
+                                <MenuItem key={item.key} value={item.key}>
+                                    {item.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <TextareaForm
+                        key={contentFieldKey}
+                        component="textarea"
+                        name="agent_source_content"
+                        post={contentPostRef.current}
+                        config={{
+                            title: 'Nội dung nguồn',
+                            rows: 12,
+                            note: 'Dán hoặc viết nội dung nguồn cho short video',
+                        }}
+                        onReview={(value) => {
+                            const nextValue = String(value ?? '');
+                            contentPostRef.current.agent_source_content = nextValue;
+                            state.setAgentSourceContent(nextValue);
+                        }}
                     />
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
                         <TextField
@@ -111,8 +164,8 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             variant="contained"
                             loading={state.savingSourceContent}
                             startIcon={<SaveIcon />}
-                            onClick={() => void state.handleSaveSourceContent()}
-                            disabled={!contentDirty && !githubDirty}
+                            onClick={handleSave}
+                            disabled={state.savingSourceContent}
                         >
                             Lưu nội dung
                         </LoadingButton>

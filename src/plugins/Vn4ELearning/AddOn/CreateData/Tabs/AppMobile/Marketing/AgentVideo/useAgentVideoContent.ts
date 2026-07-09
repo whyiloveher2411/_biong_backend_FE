@@ -35,6 +35,7 @@ import {
     uploadAgentAudioMp3,
     type AgentRenderMode,
     type AgentVideoContentResponse,
+    type AgentSourceFormatCatalogItem,
     type HfThemeCatalogItem,
     type OmnivoiceVoiceCatalogItem,
     type ImportHtmlSummary,
@@ -140,6 +141,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savedAgentSourceContent, setSavedAgentSourceContent] = React.useState('');
     const [agentGithubRepo, setAgentGithubRepo] = React.useState('');
     const [savedAgentGithubRepo, setSavedAgentGithubRepo] = React.useState('');
+    const [agentSourceFormat, setAgentSourceFormat] = React.useState('github_repo_review');
+    const [savedAgentSourceFormat, setSavedAgentSourceFormat] = React.useState('github_repo_review');
+    const [agentSourceFormatCatalog, setAgentSourceFormatCatalog] = React.useState<AgentSourceFormatCatalogItem[]>([]);
     const [contentPlainText, setContentPlainText] = React.useState('');
     const [savingSourceContent, setSavingSourceContent] = React.useState(false);
     const [fetchingGithubReadme, setFetchingGithubReadme] = React.useState(false);
@@ -305,6 +309,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextGithub = String(res?.agent_github_repo || '').trim();
         setAgentGithubRepo(nextGithub);
         setSavedAgentGithubRepo(nextGithub);
+        const nextFormat = String(res?.agent_source_format || 'github_repo_review').trim() || 'github_repo_review';
+        setAgentSourceFormat(nextFormat);
+        setSavedAgentSourceFormat(nextFormat);
+        setAgentSourceFormatCatalog(
+            Array.isArray(res?.agent_source_format_catalog) ? res.agent_source_format_catalog : [],
+        );
         setContentPlainText(String(res?.content_plain_text || '').trim());
         setAppMobileTitle(String(res?.app_mobile_title || '').trim());
         setThumbnail(res?.thumbnail ?? null);
@@ -1387,28 +1397,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleSaveSourceContent = async () => {
+    const handleSaveSourceContent = async (contentOverride?: string) => {
         if (marketingPostId > 0) {
             showMessage('Đã liên kết marketing post — không lưu agent_source_content', 'warning');
             return;
         }
+        const contentToSave = contentOverride !== undefined
+            ? String(contentOverride)
+            : agentSourceContent;
         setSavingSourceContent(true);
         try {
             const json = await saveAgentSourceContent(
                 shortVideoId,
-                agentSourceContent,
+                contentToSave,
                 agentGithubRepo.trim(),
+                agentSourceFormat,
             );
             if (!json?.success) {
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được nội dung', 'error');
                 return;
             }
-            const nextSource = String(json?.agent_source_content ?? agentSourceContent);
+            const nextSource = String(json?.agent_source_content ?? contentToSave);
             const nextGithub = String(json?.agent_github_repo ?? agentGithubRepo).trim();
+            const nextFormat = String(json?.agent_source_format ?? agentSourceFormat).trim() || 'github_repo_review';
             setAgentSourceContent(nextSource);
             setSavedAgentSourceContent(nextSource);
             setAgentGithubRepo(nextGithub);
             setSavedAgentGithubRepo(nextGithub);
+            setAgentSourceFormat(nextFormat);
+            setSavedAgentSourceFormat(nextFormat);
             setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
             showMessage(parseApiMessage(json?.message) || 'Đã lưu nội dung nguồn', 'success');
         } catch (e) {
@@ -1435,7 +1452,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 showMessage(parseApiMessage(json?.message) || 'Không tải được README', 'error');
                 return;
             }
-            const readme = String(json?.readme || '');
+            const readme = String(json?.readme || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n');
             if (!readme.trim()) {
                 showMessage('README trống', 'warning');
                 return;
@@ -1781,6 +1800,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentGithubRepo,
         setAgentGithubRepo,
         savedAgentGithubRepo,
+        agentSourceFormat,
+        setAgentSourceFormat,
+        savedAgentSourceFormat,
+        agentSourceFormatCatalog,
         contentPlainText,
         savingSourceContent,
         fetchingGithubReadme,
