@@ -11,6 +11,8 @@ type OpenGeminiScriptInput = {
     marketingPostId?: number;
     /** Nội dung nguồn đã lưu (agent_source_content / content_plain khi không có post). */
     sourceContent?: string;
+    /** Thông tin thêm đã lưu (agent_additional_info). */
+    additionalInfo?: string;
 };
 
 function resolveSourceContent(input: OpenGeminiScriptInput): string {
@@ -72,6 +74,7 @@ export function useAgentVideoOpenGeminiScriptActions() {
             audioScript: input.audioScript,
             appMobileTitle: input.appMobileTitle,
             sourceContent: resolveSourceContent(input),
+            additionalInfo: String(input.additionalInfo || '').trim(),
             hasMarketingPost: marketingPostId > 0,
         });
         if (!improvePrompt) {

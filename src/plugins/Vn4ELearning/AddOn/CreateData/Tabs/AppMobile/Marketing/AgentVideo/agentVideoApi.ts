@@ -58,6 +58,22 @@ export type CaptionSyncSummary = {
     synced_at?: string | null;
 };
 
+export type WhisperWord = {
+    text: string;
+    start: number;
+    end: number;
+};
+
+export type CaptionAlignOverride = {
+    index: number;
+    text: string;
+    whisperText?: string;
+    matchType?: string;
+    start: number;
+    end: number;
+    useWhisperText?: boolean;
+};
+
 export type ImportHtmlComposition = {
     assembled_at?: string;
     assemble_status?: 'none' | 'ok' | 'failed' | string;
@@ -94,11 +110,14 @@ export type ImportHtmlSummary = {
     has_html?: boolean;
     whisper_status?: 'none' | 'processing' | 'completed' | 'failed' | string;
     whisper_word_count?: number;
+    whisper_words?: WhisperWord[];
     whisper_transcribed_at?: string;
+    whisper_stale?: boolean;
     whisper_error?: string;
     caption_words_status?: 'none' | 'validated' | 'failed' | string;
     caption_words_count?: number;
     caption_words_saved_at?: string;
+    caption_align_overrides?: CaptionAlignOverride[];
     beat_map_ready?: boolean;
     beat_count?: number;
     beat_map_updated_at?: string;
@@ -126,8 +145,40 @@ export type OmnivoiceVoiceCatalogItem = {
     preview_url?: string;
 };
 
+export type OmnivoiceVoiceMode = 'clone' | 'design';
+
+export type OmnivoiceVoiceDesignTokenGroup = {
+    id: string;
+    label: string;
+    tokens: string[];
+};
+
+export type SaveOmnivoiceVoicePayload = {
+    mode: OmnivoiceVoiceMode;
+    voice?: string;
+    design?: string;
+};
+
 const OMNIVOICE_VOICE_PREVIEW_API_PATH =
     'plugin/vn4-e-learning/app-mobile/marketing/short-video/preview-omnivoice-voice';
+
+function withAccessToken(path: string): string {
+    if (!path) {
+        return '';
+    }
+    try {
+        const url = path.startsWith('http://') || path.startsWith('https://')
+            ? new URL(path)
+            : new URL(convertToURL(getAdminApiPrefix(), path));
+        const token = getAccessToken();
+        if (token && !url.searchParams.get('access_token')) {
+            url.searchParams.set('access_token', token);
+        }
+        return url.toString();
+    } catch {
+        return '';
+    }
+}
 
 export function resolveOmnivoiceVoicePreviewUrl(
     item: Pick<OmnivoiceVoiceCatalogItem, 'key' | 'preview_url'> | string,
@@ -143,22 +194,16 @@ export function resolveOmnivoiceVoicePreviewUrl(
     if (!path && key) {
         path = `${OMNIVOICE_VOICE_PREVIEW_API_PATH}?voice=${encodeURIComponent(key)}`;
     }
-    if (!path) {
-        return '';
-    }
+    return withAccessToken(path);
+}
 
-    try {
-        const url = path.startsWith('http://') || path.startsWith('https://')
-            ? new URL(path)
-            : new URL(convertToURL(getAdminApiPrefix(), path));
-        const token = getAccessToken();
-        if (token && !url.searchParams.get('access_token')) {
-            url.searchParams.set('access_token', token);
-        }
-        return url.toString();
-    } catch {
+export function resolveOmnivoiceVoiceDesignPreviewUrl(design: string): string {
+    const trimmed = String(design || '').trim();
+    if (!trimmed) {
         return '';
     }
+    const path = `${OMNIVOICE_VOICE_PREVIEW_API_PATH}?mode=design&voice_design=${encodeURIComponent(trimmed)}`;
+    return withAccessToken(path);
 }
 
 export type AgentSourceFormatCatalogItem = {
@@ -178,7 +223,10 @@ export type AgentVideoContentResponse = {
     agent_tts_auto?: boolean;
     agent_tts_platforms?: string[];
     agent_omnivoice_voice?: string;
+    agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
+    agent_omnivoice_voice_design?: string;
     omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
+    omnivoice_voice_design_tokens?: OmnivoiceVoiceDesignTokenGroup[];
     agent_video_status?: string;
     agent_video_url?: string;
     agent_video_rendered_at?: string;
@@ -218,6 +266,7 @@ export type AgentVideoContentResponse = {
     app_mobile_title?: string;
     thumbnail?: unknown;
     agent_source_content?: string;
+    agent_additional_info?: string;
     agent_github_repo?: string;
     agent_source_format?: string;
     agent_source_format_catalog?: AgentSourceFormatCatalogItem[];
@@ -327,6 +376,46 @@ export async function uploadAgentAudioMp3(shortVideoId: number, file: File): Pro
     return result;
 }
 
+export async function uploadAgentVisualImage(shortVideoId: number, file: File): Promise<JsonResponse & {
+    url?: string;
+    preview_url?: string;
+    s3_key?: string;
+}> {
+    const formData = new FormData();
+    formData.append('short_video_id', String(shortVideoId));
+    formData.append('id', String(shortVideoId));
+    formData.append('image', file);
+    formData.append('__l', window.btoa(`${getLanguage().code}#${Date.now()}`));
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAccessToken();
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/upload-agent-visual-image',
+        ),
+        {
+            method: 'POST',
+            headers,
+            body: formData,
+        },
+    );
+
+    const result = await response.json() as JsonResponse & {
+        url?: string;
+        preview_url?: string;
+        s3_key?: string;
+    };
+    if (!response.ok && !result?.message) {
+        throw new Error(response.statusText || 'Upload ảnh thất bại');
+    }
+    return result;
+}
+
 export async function savePublishFlags(
     shortVideoId: number,
     flags: { postEligible?: boolean; socialPosted?: boolean },
@@ -360,14 +449,26 @@ export async function saveAgentHfTheme(
 
 export async function saveAgentOmnivoiceVoice(
     shortVideoId: number,
-    voice: string,
+    payload: SaveOmnivoiceVoicePayload,
 ): Promise<JsonResponse & {
     agent_omnivoice_voice?: string;
+    agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
+    agent_omnivoice_voice_design?: string;
     omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
+    omnivoice_voice_design_tokens?: OmnivoiceVoiceDesignTokenGroup[];
 }> {
+    const body: Record<string, unknown> = shortVideoBody(shortVideoId, {
+        agent_omnivoice_voice_mode: payload.mode,
+    });
+    if (payload.mode === 'clone' && payload.voice) {
+        body.agent_omnivoice_voice = payload.voice;
+    }
+    if (payload.mode === 'design' && payload.design) {
+        body.agent_omnivoice_voice_design = payload.design;
+    }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-omnivoice-voice',
-        shortVideoBody(shortVideoId, { agent_omnivoice_voice: voice }),
+        body,
     );
 }
 
@@ -401,6 +502,7 @@ export async function saveAdminAudioScript(
 
 export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_source_content?: string;
+    agent_additional_info?: string;
     agent_github_repo?: string;
     agent_source_format?: string;
     agent_source_format_label?: string;
@@ -412,6 +514,7 @@ export async function saveAgentSourceContent(
     content: string,
     githubRepo?: string,
     sourceFormat?: string,
+    additionalInfo?: string,
 ): Promise<SaveAgentSourceContentResponse> {
     const extra: Record<string, unknown> = {
         agent_source_content: content,
@@ -421,6 +524,9 @@ export async function saveAgentSourceContent(
     }
     if (sourceFormat !== undefined) {
         extra.agent_source_format = sourceFormat;
+    }
+    if (additionalInfo !== undefined) {
+        extra.agent_additional_info = additionalInfo;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-source-content',
@@ -433,18 +539,30 @@ export type FetchGithubReadmeResponse = JsonResponse & {
     agent_github_repo?: string;
     readme?: string;
     source_url?: string;
+    repo_stats?: {
+        stars?: string;
+        forks?: string;
+        line?: string;
+    };
+    additional_info_merged?: string;
+    partial?: boolean;
 };
 
 export async function fetchGithubReadme(
     shortVideoId: number,
     githubRepo: string,
+    currentAdditionalInfo?: string,
 ): Promise<FetchGithubReadmeResponse> {
+    const extra: Record<string, unknown> = {
+        github_repo: githubRepo,
+        agent_github_repo: githubRepo,
+    };
+    if (currentAdditionalInfo !== undefined) {
+        extra.agent_additional_info = currentAdditionalInfo;
+    }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/fetch-github-readme',
-        shortVideoBody(shortVideoId, {
-            github_repo: githubRepo,
-            agent_github_repo: githubRepo,
-        }),
+        shortVideoBody(shortVideoId, extra),
     ) as Promise<FetchGithubReadmeResponse>;
 }
 
@@ -557,6 +675,25 @@ export async function saveAgentImportHtml(
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',
         body,
+    );
+}
+
+export async function saveAgentCaptionAlignments(
+    shortVideoId: number,
+    payload: {
+        words: Array<{ text: string; start: number; end: number }>;
+        overrides?: CaptionAlignOverride[];
+        captionSync?: CaptionSyncSummary;
+    },
+): Promise<JsonResponse & { import_html?: ImportHtmlSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-caption-alignments',
+        {
+            ...shortVideoBody(shortVideoId),
+            words: payload.words,
+            overrides: payload.overrides ?? [],
+            caption_sync: payload.captionSync ?? {},
+        },
     );
 }
 

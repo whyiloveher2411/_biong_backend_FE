@@ -48,7 +48,7 @@ export function humanizeImportHtmlAssembleError(rawError: string): string {
     }
 
     if (/sync-caption-from-script|whisper_words/i.test(text)) {
-        return 'Không align được script với Whisper — chạy transcribe Whisper trên tab HTML chatbot rồi ghép lại.';
+        return 'Không align được script với Whisper — chạy transcribe Whisper trên tab Script & TTS rồi ghép lại.';
     }
 
     if (/exit\s*1/i.test(text) && !text.includes(':')) {
@@ -88,7 +88,7 @@ export function buildImportHtmlAssembleBlockers(
         blockers.push({
             id: 'whisper',
             message: `Whisper chưa sẵn sàng (${whisperLabel(input.whisperStatus)})`,
-            hint: 'Tab HTML chatbot → chạy transcribe Whisper (karaoke sync tự động khi ghép)',
+            hint: 'Tab Script & TTS → bước 4 Karaoke sync (Whisper tự chạy sau audio mới)',
         });
     }
 

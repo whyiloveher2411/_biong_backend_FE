@@ -4,7 +4,6 @@ import {
     Box,
     Button,
     Chip,
-    Divider,
     IconButton,
     ImageList,
     ImageListItem,
@@ -16,11 +15,13 @@ import { LoadingButton } from '@mui/lab';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import {
     searchStockMedia,
     type StockImageSearchItem,
 } from 'helpers/marketingStockImageApi';
+import { uploadAgentVisualImage, parseApiMessage } from './agentVideoApi';
 import type {
     ImportHtmlMarketingPostImage,
     ImportHtmlVisualCatalogItem,
@@ -29,9 +30,11 @@ import type {
 type Props = {
     open: boolean;
     onClose: () => void;
+    shortVideoId: number;
     marketingPostImages: ImportHtmlMarketingPostImage[];
     visualCatalog: ImportHtmlVisualCatalogItem[];
     onAddItem: (item: ImportHtmlVisualCatalogItem) => void;
+    onUpdateItem: (index: number, partial: Partial<ImportHtmlVisualCatalogItem>) => void;
     onRemoveItem: (index: number) => void;
     onSave: () => void | Promise<void>;
     saving?: boolean;
@@ -75,14 +78,215 @@ function PexelsBadge() {
     );
 }
 
-function formatVideoDuration(seconds: number): string {
-    if (!Number.isFinite(seconds) || seconds <= 0) {
-        return '';
+function DrawerSection({
+    title,
+    subtitle,
+    children,
+    sx,
+}: {
+    title: string;
+    subtitle?: string;
+    children: React.ReactNode;
+    sx?: object;
+}) {
+    return (
+        <Box sx={sx}>
+            <Typography variant="subtitle2" sx={{ mb: subtitle ? 0.25 : 0.75, fontWeight: 600 }}>
+                {title}
+            </Typography>
+            {subtitle ? (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    {subtitle}
+                </Typography>
+            ) : null}
+            {children}
+        </Box>
+    );
+}
+
+function LibraryCountChips({
+    marketing,
+    upload,
+    stock,
+}: {
+    marketing: number;
+    upload: number;
+    stock: number;
+}) {
+    const chips = [
+        { label: `${marketing} marketing`, show: marketing > 0 },
+        { label: `${upload} upload`, show: upload > 0 },
+        { label: `${stock} stock`, show: stock > 0 },
+    ].filter((item) => item.show);
+
+    if (chips.length === 0) {
+        return (
+            <Typography variant="caption" color="text.secondary">
+                Chưa có ảnh
+            </Typography>
+        );
     }
-    const total = Math.round(seconds);
-    const mins = Math.floor(total / 60);
-    const secs = total % 60;
-    return `${mins}:${String(secs).padStart(2, '0')}`;
+
+    return (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+            {chips.map((chip) => (
+                <Chip key={chip.label} label={chip.label} size="small" variant="outlined" sx={{ height: 22 }} />
+            ))}
+        </Box>
+    );
+}
+
+function SourceBadge({ source }: { source: 'user_upload' | 'stock' | 'marketing_post' }) {
+    const config = {
+        user_upload: { label: 'Upload', bgcolor: 'rgba(25, 118, 210, 0.12)', color: '#1976d2' },
+        stock: { label: 'Pexels', bgcolor: 'rgba(5, 151, 104, 0.12)', color: '#059768' },
+        marketing_post: { label: 'Marketing', bgcolor: 'rgba(0, 0, 0, 0.08)', color: 'text.secondary' },
+    }[source];
+
+    return (
+        <Box
+            component="span"
+            sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                px: 0.75,
+                py: 0.25,
+                borderRadius: 1,
+                bgcolor: config.bgcolor,
+                color: config.color,
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            {config.label}
+        </Box>
+    );
+}
+
+function CatalogLibraryCard({
+    item,
+    playing,
+    onPlayToggle,
+    onCaptionChange,
+    onRemove,
+}: {
+    item: ImportHtmlVisualCatalogItem;
+    playing: boolean;
+    onPlayToggle?: () => void;
+    onCaptionChange: (caption: string) => void;
+    onRemove: () => void;
+}) {
+    const [captionDraft, setCaptionDraft] = React.useState(String(item.caption || item.title || ''));
+    const videoRef = React.useRef<HTMLVideoElement | null>(null);
+    const thumbUrl = item.preview_url || item.url;
+    const source = item.source === 'user_upload' ? 'user_upload' : 'stock';
+
+    React.useEffect(() => {
+        setCaptionDraft(String(item.caption || item.title || ''));
+    }, [item.caption, item.title]);
+
+    React.useEffect(() => {
+        if (!playing && videoRef.current) {
+            videoRef.current.pause();
+        }
+    }, [playing]);
+
+    const commitCaption = () => {
+        const next = captionDraft.trim();
+        if (next !== String(item.caption || '').trim()) {
+            onCaptionChange(next);
+        }
+    };
+
+    return (
+        <Box
+            sx={{
+                borderRadius: 1.5,
+                overflow: 'hidden',
+                border: 1,
+                borderColor: playing ? 'primary.main' : 'divider',
+                bgcolor: 'background.paper',
+                width: 132,
+                flexShrink: 0,
+            }}
+        >
+            <Box
+                sx={{
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'grey.50',
+                    height: 80,
+                    cursor: item.media_type === 'video' && !playing ? 'pointer' : 'default',
+                }}
+                onClick={item.media_type === 'video' && !playing ? onPlayToggle : undefined}
+            >
+                {item.media_type === 'video' && playing ? (
+                    <video
+                        ref={videoRef}
+                        src={item.url}
+                        autoPlay
+                        controls
+                        muted
+                        playsInline
+                        onClick={(event) => event.stopPropagation()}
+                        onEnded={onPlayToggle}
+                        style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }}
+                    />
+                ) : (
+                    <img
+                        src={thumbUrl}
+                        alt={item.caption || item.title || item.id}
+                        loading="lazy"
+                        style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }}
+                    />
+                )}
+                <Box sx={{ position: 'absolute', top: 4, left: 4 }}>
+                    <SourceBadge source={source} />
+                </Box>
+                <IconButton
+                    size="small"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onRemove();
+                    }}
+                    aria-label="Xóa"
+                    sx={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        bgcolor: 'rgba(255,255,255,0.92)',
+                        '&:hover': { bgcolor: '#fff' },
+                        p: 0.25,
+                    }}
+                >
+                    <DeleteOutlineIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+            </Box>
+            <Box sx={{ p: 0.75 }}>
+                <TextField
+                    size="small"
+                    fullWidth
+                    value={captionDraft}
+                    placeholder="Mô tả (tuỳ chọn)"
+                    onChange={(e) => setCaptionDraft(e.target.value)}
+                    onBlur={commitCaption}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitCaption();
+                        }
+                    }}
+                    sx={{
+                        '& .MuiInputBase-input': { fontSize: 11, py: 0.75 },
+                    }}
+                />
+            </Box>
+        </Box>
+    );
 }
 
 function VisualMediaCard({
@@ -290,23 +494,20 @@ function MarketingThumbCard({ image }: { image: ImportHtmlMarketingPostImage }) 
     return (
         <Box
             sx={{
-                borderRadius: 1,
+                borderRadius: 1.5,
                 overflow: 'hidden',
                 border: 1,
                 borderColor: 'divider',
                 bgcolor: 'background.paper',
-                width: 108,
+                width: 132,
                 flexShrink: 0,
             }}
         >
             <Box
                 sx={{
                     position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'grey.100',
-                    height: 72,
+                    bgcolor: 'grey.50',
+                    height: 80,
                 }}
             >
                 <img
@@ -315,26 +516,23 @@ function MarketingThumbCard({ image }: { image: ImportHtmlMarketingPostImage }) 
                     loading="lazy"
                     style={{
                         width: '100%',
-                        height: 72,
-                        objectFit: 'contain',
+                        height: 80,
+                        objectFit: 'cover',
                         display: 'block',
                     }}
                 />
-                <Chip
-                    label="Marketing"
-                    size="small"
-                    sx={{
-                        position: 'absolute',
-                        top: 4,
-                        left: 4,
-                        height: 18,
-                        fontSize: 9,
-                        '& .MuiChip-label': { px: 0.5 },
-                    }}
-                />
+                <Box sx={{ position: 'absolute', top: 4, left: 4 }}>
+                    <SourceBadge source="marketing_post" />
+                </Box>
             </Box>
-            <Box sx={{ p: 0.5 }}>
-                <Typography variant="caption" noWrap display="block" title={image.caption || 'Ảnh marketing'} sx={{ fontSize: 10 }}>
+            <Box sx={{ px: 0.75, py: 0.5 }}>
+                <Typography
+                    variant="caption"
+                    noWrap
+                    display="block"
+                    title={image.caption || 'Ảnh marketing'}
+                    sx={{ fontSize: 11, color: 'text.secondary' }}
+                >
                     {image.caption || 'Ảnh marketing'}
                 </Typography>
             </Box>
@@ -391,12 +589,43 @@ function stockImageToCatalogItem(
     };
 }
 
+function extractImageFileFromClipboard(clipboardData: DataTransfer | null): File | null {
+    if (!clipboardData?.items?.length) {
+        return null;
+    }
+    for (let index = 0; index < clipboardData.items.length; index += 1) {
+        const item = clipboardData.items[index];
+        if (item.kind !== 'file' || !item.type.startsWith('image/')) {
+            continue;
+        }
+        const file = item.getAsFile();
+        if (file) {
+            return file;
+        }
+    }
+    return null;
+}
+
+function normalizeClipboardImageFile(file: File): File {
+    if (file.name && file.name.trim() !== '') {
+        return file;
+    }
+    const ext = file.type === 'image/png'
+        ? 'png'
+        : file.type === 'image/webp'
+            ? 'webp'
+            : 'jpg';
+    return new File([file], `clipboard-${Date.now()}.${ext}`, { type: file.type || 'image/png' });
+}
+
 export default function ShortVideoAgentVisualCatalogDrawer({
     open,
     onClose,
+    shortVideoId,
     marketingPostImages,
     visualCatalog,
     onAddItem,
+    onUpdateItem,
     onRemoveItem,
     onSave,
     saving = false,
@@ -408,12 +637,34 @@ export default function ShortVideoAgentVisualCatalogDrawer({
     const [searchError, setSearchError] = React.useState('');
     const [searched, setSearched] = React.useState(false);
     const [playingKey, setPlayingKey] = React.useState<string | null>(null);
+    const [uploadCaption, setUploadCaption] = React.useState('');
+    const [uploading, setUploading] = React.useState(false);
+    const [uploadError, setUploadError] = React.useState('');
+    const [uploadPreviewUrl, setUploadPreviewUrl] = React.useState('');
+    const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+    const uploadCount = React.useMemo(
+        () => visualCatalog.filter((item) => item.source === 'user_upload').length,
+        [visualCatalog],
+    );
+    const stockCount = React.useMemo(
+        () => visualCatalog.filter((item) => item.source !== 'user_upload').length,
+        [visualCatalog],
+    );
 
     React.useEffect(() => {
         if (!open) {
             setPlayingKey(null);
+            setUploadError('');
+            setUploadPreviewUrl('');
         }
     }, [open]);
+
+    React.useEffect(() => () => {
+        if (uploadPreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(uploadPreviewUrl);
+        }
+    }, [uploadPreviewUrl]);
 
     const togglePlaying = React.useCallback((key: string) => {
         setPlayingKey((current) => (current === key ? null : key));
@@ -456,6 +707,92 @@ export default function ShortVideoAgentVisualCatalogDrawer({
         }
     };
 
+    const handlePickUploadFile = () => {
+        fileInputRef.current?.click();
+    };
+
+    const uploadVisualImageFile = React.useCallback(async (file: File) => {
+        if (!shortVideoId) {
+            setUploadError('Thiếu short video id');
+            return;
+        }
+
+        const caption = uploadCaption.trim();
+        const localPreview = URL.createObjectURL(file);
+        setUploadPreviewUrl((prev) => {
+            if (prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
+            return localPreview;
+        });
+        setUploading(true);
+        setUploadError('');
+        try {
+            const res = await uploadAgentVisualImage(shortVideoId, file);
+            if (!res?.success) {
+                throw new Error(parseApiMessage(res?.message) || 'Upload ảnh thất bại');
+            }
+            const url = String(res.url || '').trim();
+            if (!url) {
+                throw new Error('Server không trả URL ảnh');
+            }
+            const previewUrl = String(res.preview_url || url).trim() || url;
+            const nextId = `vis-upload-${Date.now()}`;
+            onAddItem({
+                id: nextId,
+                media_type: 'image',
+                url,
+                preview_url: previewUrl,
+                title: caption || 'Ảnh upload',
+                caption,
+                provider: 'upload',
+                source: 'user_upload',
+            });
+            setUploadPreviewUrl((prev) => {
+                if (prev.startsWith('blob:')) {
+                    URL.revokeObjectURL(prev);
+                }
+                return '';
+            });
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : 'Upload ảnh thất bại');
+        } finally {
+            setUploading(false);
+        }
+    }, [onAddItem, shortVideoId, uploadCaption]);
+
+    const handleUploadFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        await uploadVisualImageFile(file);
+    };
+
+    React.useEffect(() => {
+        if (!open) {
+            return undefined;
+        }
+
+        const onPaste = (event: Event) => {
+            if (!(event instanceof ClipboardEvent) || uploading) {
+                return;
+            }
+            const imageFile = extractImageFileFromClipboard(event.clipboardData);
+            if (!imageFile) {
+                return;
+            }
+            event.preventDefault();
+            void uploadVisualImageFile(normalizeClipboardImageFile(imageFile));
+        };
+
+        window.addEventListener('paste', onPaste);
+        return () => {
+            window.removeEventListener('paste', onPaste);
+        };
+    }, [open, uploadVisualImageFile, uploading]);
+
     return (
         <DrawerCustom
             open={open}
@@ -474,12 +811,181 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                 },
             }}
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: '100%', minHeight: 0, mt: 1 }}>
-                <Box sx={{ flexShrink: 0 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Tìm thêm (Pexels)
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', minHeight: 0, mt: 0.5 }}>
+                <DrawerSection
+                    title="Thư viện visual"
+                    subtitle="Ảnh upload được ưu tiên khi sinh beat — có thể thêm mô tả sau"
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                        <LibraryCountChips
+                            marketing={marketingPostImages.length}
+                            upload={uploadCount}
+                            stock={stockCount}
+                        />
+                    </Box>
+                    {marketingPostImages.length === 0 && visualCatalog.length === 0 ? (
+                        <Box
+                            sx={{
+                                py: 2,
+                                px: 1.5,
+                                borderRadius: 1.5,
+                                border: 1,
+                                borderColor: 'divider',
+                                borderStyle: 'dashed',
+                                bgcolor: 'grey.50',
+                                textAlign: 'center',
+                            }}
+                        >
+                            <Typography variant="body2" color="text.secondary">
+                                Chưa có ảnh — thêm bên dưới rồi Lưu để ghi CMS
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                gap: 1,
+                                overflowX: 'auto',
+                                overflowY: 'hidden',
+                                pb: 0.5,
+                            }}
+                        >
+                            {marketingPostImages.map((img) => (
+                                <MarketingThumbCard key={img.url} image={img} />
+                            ))}
+                            {visualCatalog.map((item, index) => {
+                                const cardKey = `catalog-${item.id}-${index}`;
+                                return (
+                                    <CatalogLibraryCard
+                                        key={cardKey}
+                                        item={item}
+                                        playing={playingKey === cardKey}
+                                        onPlayToggle={() => togglePlaying(cardKey)}
+                                        onCaptionChange={(caption) => onUpdateItem(index, {
+                                            caption,
+                                            title: caption || item.title || 'Ảnh upload',
+                                        })}
+                                        onRemove={() => onRemoveItem(index)}
+                                    />
+                                );
+                            })}
+                        </Box>
+                    )}
+                </DrawerSection>
+
+                <DrawerSection title="Thêm ảnh">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        onChange={(e) => { void handleUploadFileChange(e); }}
+                    />
+                    <Box
+                        role="button"
+                        tabIndex={0}
+                        onClick={uploading ? undefined : handlePickUploadFile}
+                        onKeyDown={(event) => {
+                            if (uploading) {
+                                return;
+                            }
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handlePickUploadFile();
+                            }
+                        }}
+                        sx={{
+                            borderRadius: 1.5,
+                            border: 1,
+                            borderColor: uploadError ? 'error.light' : 'divider',
+                            borderStyle: 'dashed',
+                            bgcolor: uploading ? 'action.hover' : 'grey.50',
+                            px: 2,
+                            py: 1.75,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            cursor: uploading ? 'default' : 'pointer',
+                            transition: 'border-color 0.15s, background-color 0.15s',
+                            '&:hover': uploading ? undefined : {
+                                borderColor: 'primary.light',
+                                bgcolor: 'action.hover',
+                            },
+                        }}
+                    >
+                        {uploadPreviewUrl ? (
+                            <Box
+                                component="img"
+                                src={uploadPreviewUrl}
+                                alt="Đang upload"
+                                sx={{
+                                    width: 52,
+                                    height: 52,
+                                    objectFit: 'cover',
+                                    borderRadius: 1,
+                                    flexShrink: 0,
+                                }}
+                            />
+                        ) : (
+                            <Box
+                                sx={{
+                                    width: 52,
+                                    height: 52,
+                                    borderRadius: 1,
+                                    bgcolor: 'background.paper',
+                                    border: 1,
+                                    borderColor: 'divider',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <CloudUploadIcon color="action" />
+                            </Box>
+                        )}
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Typography variant="body2" fontWeight={600}>
+                                {uploading ? 'Đang upload...' : 'Chọn file hoặc dán ảnh'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                                JPG, PNG, WebP · tối đa 10MB · ⌘V / Ctrl+V khi drawer đang mở
+                            </Typography>
+                        </Box>
+                        <LoadingButton
+                            variant="outlined"
+                            size="small"
+                            loading={uploading}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                handlePickUploadFile();
+                            }}
+                            sx={{ textTransform: 'none', flexShrink: 0 }}
+                        >
+                            Chọn file
+                        </LoadingButton>
+                    </Box>
+                    <TextField
+                        size="small"
+                        fullWidth
+                        value={uploadCaption}
+                        placeholder="Mô tả tuỳ chọn — giúp prompt chọn ảnh đúng beat"
+                        onChange={(e) => setUploadCaption(e.target.value)}
+                        sx={{ mt: 1 }}
+                    />
+                    {uploadError ? (
+                        <Alert severity="error" sx={{ py: 0, mt: 1 }}>
+                            {uploadError}
+                        </Alert>
+                    ) : null}
+                </DrawerSection>
+
+                <DrawerSection
+                    title="Tìm stock Pexels"
+                    subtitle="Bổ sung ảnh minh hoạ khi cần"
+                    sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                >
+                    <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                         <TextField
                             size="small"
                             fullWidth
@@ -506,120 +1012,61 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                         </LoadingButton>
                     </Box>
                     {searchError ? (
-                        <Alert severity="error" sx={{ py: 0.25, mt: 1 }}>
+                        <Alert severity="error" sx={{ py: 0, mb: 1 }}>
                             {searchError}
                         </Alert>
                     ) : null}
-                </Box>
+                    <Box sx={{ flex: 1, minHeight: 120, overflow: 'auto' }}>
+                        {imageResults.length > 0 ? (
+                            <ImageList variant="masonry" cols={2} gap={8}>
+                                {imageResults.map((item, index) => {
+                                    const catalogItem = stockImageToCatalogItem(item, index, query);
+                                    const cardKey = `search-img-${item.id}-${index}`;
+                                    const added = catalogUrls.has(catalogItem.url);
+                                    return (
+                                        <ImageListItem key={cardKey} sx={{ display: 'block' }}>
+                                            <VisualMediaCard
+                                                mediaType="image"
+                                                thumbnailUrl={item.preview_url}
+                                                mediaUrl={item.url}
+                                                title={item.photographer || 'Pexels'}
+                                                added={added}
+                                                playing={false}
+                                                onAdd={() => onAddItem(catalogItem)}
+                                            />
+                                        </ImageListItem>
+                                    );
+                                })}
+                            </ImageList>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                                {searched && !searching && !searchError
+                                    ? 'Không tìm thấy kết quả.'
+                                    : 'Nhập từ khóa tiếng Anh và bấm Tìm.'}
+                            </Typography>
+                        )}
+                    </Box>
+                </DrawerSection>
 
-                <Box sx={{ flex: 1, minHeight: 200, overflow: 'auto' }}>
-                    {imageResults.length > 0 ? (
-                        <ImageList variant="masonry" cols={2} gap={8}>
-                            {imageResults.map((item, index) => {
-                                const catalogItem = stockImageToCatalogItem(item, index, query);
-                                const cardKey = `search-img-${item.id}-${index}`;
-                                const added = catalogUrls.has(catalogItem.url);
-                                return (
-                                    <ImageListItem key={cardKey} sx={{ display: 'block' }}>
-                                        <VisualMediaCard
-                                            mediaType="image"
-                                            thumbnailUrl={item.preview_url}
-                                            mediaUrl={item.url}
-                                            title={item.photographer || 'Pexels'}
-                                            added={added}
-                                            playing={false}
-                                            onAdd={() => onAddItem(catalogItem)}
-                                        />
-                                    </ImageListItem>
-                                );
-                            })}
-                        </ImageList>
-                    ) : null}
-
-                    {searched && !searching && !searchError
-                        && imageResults.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                            Không tìm thấy kết quả.
-                        </Typography>
-                    ) : null}
-
-                    {!searched && !searching ? (
-                        <Typography variant="body2" color="text.secondary">
-                            Nhập từ khóa và bấm Tìm.
-                        </Typography>
-                    ) : null}
-                </Box>
-
-                <Divider sx={{ flexShrink: 0 }} />
-
-                <Box sx={{ flexShrink: 0 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Thư viện visual (
-                        {marketingPostImages.length}
-                        {' '}
-                        marketing ·
-                        {' '}
-                        {visualCatalog.length}
-                        {' '}
-                        stock)
-                    </Typography>
-                    {marketingPostImages.length === 0 && visualCatalog.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                            Bấm Thêm ở kết quả tìm kiếm, rồi Lưu hoặc Xong để ghi CMS.
-                        </Typography>
-                    ) : (
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1,
-                                overflowX: 'auto',
-                                overflowY: 'hidden',
-                                pb: 0.5,
-                                maxHeight: 130,
-                            }}
-                        >
-                            {marketingPostImages.map((img) => (
-                                <MarketingThumbCard key={img.url} image={img} />
-                            ))}
-                            {visualCatalog.map((item, index) => {
-                                const cardKey = `catalog-${item.id}-${index}`;
-                                const thumbUrl = item.preview_url || item.url;
-                                return (
-                                    <VisualMediaCard
-                                        key={cardKey}
-                                        compact
-                                        mediaType={item.media_type}
-                                        thumbnailUrl={thumbUrl}
-                                        mediaUrl={item.url}
-                                            title={item.caption || item.title || item.id}
-                                        subtitle={
-                                            item.media_type === 'video' && item.duration_sec
-                                                ? formatVideoDuration(Number(item.duration_sec))
-                                                : undefined
-                                        }
-                                        playing={playingKey === cardKey}
-                                        onPlayToggle={() => togglePlaying(cardKey)}
-                                        onRemove={() => onRemoveItem(index)}
-                                    />
-                                );
-                            })}
-                        </Box>
-                    )}
-                    {marketingPostImages.length > 0 ? (
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Ảnh marketing tự động đưa vào prompt beat HTML.
-                        </Typography>
-                    ) : null}
-                </Box>
-
-                <Box sx={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                <Box
+                    sx={{
+                        flexShrink: 0,
+                        pt: 1,
+                        borderTop: 1,
+                        borderColor: 'divider',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: 0.75,
+                    }}
+                >
                     {dirty ? (
-                        <Typography variant="caption" color="warning.main" align="right">
-                            Có thay đổi chưa lưu — bấm Lưu hoặc Xong để ghi CMS.
+                        <Typography variant="caption" color="warning.main">
+                            Có thay đổi chưa lưu
                         </Typography>
                     ) : (
-                        <Typography variant="caption" color="text.secondary" align="right">
-                            Đã đồng bộ với CMS.
+                        <Typography variant="caption" color="text.secondary">
+                            Đã đồng bộ CMS
                         </Typography>
                     )}
                     <Box sx={{ display: 'flex', gap: 1 }}>

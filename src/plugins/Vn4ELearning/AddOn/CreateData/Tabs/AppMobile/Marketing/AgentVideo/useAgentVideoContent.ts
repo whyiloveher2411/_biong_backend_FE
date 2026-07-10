@@ -11,6 +11,7 @@ import {
 } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
+    fetchImportHtmlBeatHtmlPrompt,
     openImportHtmlBeatGeminiFillOnly,
     openImportHtmlBeatGeminiForMissingBeats,
 } from 'helpers/marketingImportHtmlWorkflow';
@@ -26,11 +27,13 @@ import {
     saveAgentImportHtml,
     saveAgentOmnivoiceVoice,
     saveAgentSourceContent,
+    saveAgentCaptionAlignments,
     fetchGithubReadme,
     searchAgentBgm,
     saveAgentTtsSettings,
     savePublishFlags,
     resolveOmnivoiceVoicePreviewUrl,
+    resolveOmnivoiceVoiceDesignPreviewUrl,
     transcribeAgentAudio,
     uploadAgentAudioMp3,
     type AgentRenderMode,
@@ -38,12 +41,17 @@ import {
     type AgentSourceFormatCatalogItem,
     type HfThemeCatalogItem,
     type OmnivoiceVoiceCatalogItem,
+    type OmnivoiceVoiceMode,
+    type OmnivoiceVoiceDesignTokenGroup,
+    type SaveOmnivoiceVoicePayload,
     type ImportHtmlSummary,
     type ImportHtmlBgmSegment,
     type ImportHtmlVisualCatalogItem,
     type ImportHtmlMarketingPostImage,
     type ImportHtmlComposition,
     type AgentBgmSearchItem,
+    type WhisperWord,
+    type CaptionAlignOverride,
 } from './agentVideoApi';
 import {
     bgmPreviewUrl,
@@ -85,6 +93,16 @@ import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptC
 import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
+import { mergeGithubStatsIntoAdditionalInfo } from './agentVideoGithubStatsMerge';
+import {
+    applyTokenOverride,
+    buildCaptionSyncPayload,
+    hasCaptionOverrideChanges,
+    mergeCaptionOverrides,
+    overridesToList,
+    useWhisperScriptAlign,
+} from './useWhisperScriptAlign';
+import type { WhisperCompareFilter } from './agentVideoWhisperCompareUi';
 import {
     buildAgentMediaSuggestionPrompt,
     openAgentMediaSuggestionGemini,
@@ -131,14 +149,19 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [hfThemeSource, setHfThemeSource] = React.useState('');
     const [hfThemeCatalog, setHfThemeCatalog] = React.useState<HfThemeCatalogItem[]>([]);
     const [omnivoiceVoice, setOmnivoiceVoice] = React.useState('minh_quân');
+    const [omnivoiceVoiceMode, setOmnivoiceVoiceMode] = React.useState<OmnivoiceVoiceMode>('clone');
+    const [omnivoiceVoiceDesign, setOmnivoiceVoiceDesign] = React.useState('male, middle-aged, very low pitch');
     const [omnivoiceVoiceCatalog, setOmnivoiceVoiceCatalog] = React.useState<OmnivoiceVoiceCatalogItem[]>([]);
+    const [omnivoiceVoiceDesignTokens, setOmnivoiceVoiceDesignTokens] = React.useState<OmnivoiceVoiceDesignTokenGroup[]>([]);
     const [savingOmnivoiceVoice, setSavingOmnivoiceVoice] = React.useState(false);
-    const [voiceDrawerOpen, setVoiceDrawerOpen] = React.useState(false);
+    const [previewingVoiceDesign, setPreviewingVoiceDesign] = React.useState(false);
     const [playingVoiceUrl, setPlayingVoiceUrl] = React.useState<string | null>(null);
     const voicePreviewAudioRef = React.useRef<HTMLAudioElement | null>(null);
     const [marketingPostId, setMarketingPostId] = React.useState(0);
     const [agentSourceContent, setAgentSourceContent] = React.useState('');
     const [savedAgentSourceContent, setSavedAgentSourceContent] = React.useState('');
+    const [agentAdditionalInfo, setAgentAdditionalInfo] = React.useState('');
+    const [savedAgentAdditionalInfo, setSavedAgentAdditionalInfo] = React.useState('');
     const [agentGithubRepo, setAgentGithubRepo] = React.useState('');
     const [savedAgentGithubRepo, setSavedAgentGithubRepo] = React.useState('');
     const [agentSourceFormat, setAgentSourceFormat] = React.useState('github_repo_review');
@@ -171,6 +194,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     } | null>(null);
     const [hfPromptType, setHfPromptType] = React.useState(DEFAULT_HF_PROMPT_TYPE);
     const [whisperStatus, setWhisperStatus] = React.useState('none');
+    const [whisperStale, setWhisperStale] = React.useState(false);
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
     const [bgmSegments, setBgmSegments] = React.useState<ImportHtmlBgmSegment[]>([]);
     const [sfxBeatTransition, setSfxBeatTransition] = React.useState(true);
@@ -189,6 +213,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [visualCatalog, setVisualCatalog] = React.useState<ImportHtmlVisualCatalogItem[]>([]);
     const [marketingPostImages, setMarketingPostImages] = React.useState<ImportHtmlMarketingPostImage[]>([]);
     const [whisperError, setWhisperError] = React.useState('');
+    const [whisperWords, setWhisperWords] = React.useState<WhisperWord[]>([]);
+    const [captionOverrides, setCaptionOverrides] = React.useState<Record<number, CaptionAlignOverride>>({});
+    const [compareDrawerOpen, setCompareDrawerOpen] = React.useState(false);
+    const [compareFocusIndex, setCompareFocusIndex] = React.useState<number | null>(null);
+    const [compareFilter, setCompareFilter] = React.useState<WhisperCompareFilter>('all');
+    const [whisperCompareIssuesOnly, setWhisperCompareIssuesOnly] = React.useState(false);
+    const [savingCaptionAlignments, setSavingCaptionAlignments] = React.useState(false);
 
     const [uploading, setUploading] = React.useState(false);
     const [savingTtsMode, setSavingTtsMode] = React.useState(false);
@@ -223,6 +254,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const beatMapSaveTimerRef = React.useRef<number | null>(null);
     const beatHtmlSaveTimerRef = React.useRef<Record<string, number>>({});
     const visualCatalogSavedRef = React.useRef<string>('[]');
+    const autoWhisperStartedRef = React.useRef('');
 
     const resolveScriptFromResponse = React.useCallback((serverScript: string): string => {
         const draft = readAgentVideoScriptDraft(shortVideoId);
@@ -298,14 +330,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setHfThemeSource(String(res?.hf_theme_source || '').trim());
         setHfThemeCatalog(Array.isArray(res?.hf_theme_catalog) ? res.hf_theme_catalog : []);
         setOmnivoiceVoice(String(res?.agent_omnivoice_voice || 'minh_quân').trim() || 'minh_quân');
+        setOmnivoiceVoiceMode(res?.agent_omnivoice_voice_mode === 'design' ? 'design' : 'clone');
+        setOmnivoiceVoiceDesign(
+            String(res?.agent_omnivoice_voice_design || 'male, middle-aged, very low pitch').trim()
+                || 'male, middle-aged, very low pitch',
+        );
         setOmnivoiceVoiceCatalog(
             Array.isArray(res?.omnivoice_voice_catalog) ? res.omnivoice_voice_catalog : [],
+        );
+        setOmnivoiceVoiceDesignTokens(
+            Array.isArray(res?.omnivoice_voice_design_tokens) ? res.omnivoice_voice_design_tokens : [],
         );
         const mpId = Number(res?.marketing_post_id || 0);
         setMarketingPostId(Number.isFinite(mpId) && mpId > 0 ? mpId : 0);
         const nextSource = String(res?.agent_source_content || '');
         setAgentSourceContent(nextSource);
         setSavedAgentSourceContent(nextSource);
+        const nextAdditional = String(res?.agent_additional_info || '');
+        setAgentAdditionalInfo(nextAdditional);
+        setSavedAgentAdditionalInfo(nextAdditional);
         const nextGithub = String(res?.agent_github_repo || '').trim();
         setAgentGithubRepo(nextGithub);
         setSavedAgentGithubRepo(nextGithub);
@@ -354,7 +397,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextPromptType = String(importSummary?.hf_prompt_type || '').trim();
         setHfPromptType(isHfPromptTypeKey(nextPromptType) ? nextPromptType : DEFAULT_HF_PROMPT_TYPE);
         setWhisperStatus(String(importSummary?.whisper_status || res?.agent_workflow?.whisper_status || 'none'));
+        setWhisperStale(Boolean(importSummary?.whisper_stale));
         setWhisperError(String(importSummary?.whisper_error || '').trim());
+        if (Array.isArray(importSummary?.whisper_words)) {
+            setWhisperWords(importSummary?.whisper_words ?? []);
+        }
         setImportHtmlReady(Boolean(importSummary?.import_html_ready ?? res?.agent_workflow?.import_html_ready));
         applyImportHtmlResources(importSummary);
     }, [applyImportHtmlResources, resolveScriptFromResponse]);
@@ -555,6 +602,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 hasScript,
                 marketingPostId,
                 sourceContent: contentPlainText || savedAgentSourceContent,
+                additionalInfo: savedAgentAdditionalInfo,
             });
         } finally {
             setOpeningCreateScriptGemini(false);
@@ -572,6 +620,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 appMobileTitle,
                 marketingPostId,
                 sourceContent: contentPlainText || savedAgentSourceContent,
+                additionalInfo: savedAgentAdditionalInfo,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -662,7 +711,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (summary.whisper_status) {
             setWhisperStatus(summary.whisper_status);
         }
+        setWhisperStale(Boolean(summary.whisper_stale));
         setWhisperError(String(summary.whisper_error || '').trim());
+        if (Array.isArray(summary.whisper_words)) {
+            setWhisperWords(summary.whisper_words);
+        }
         setImportHtmlReady(Boolean(summary.import_html_ready));
         setBeatMapReady(Boolean(summary.beat_map_ready));
         if (typeof summary.html === 'string') {
@@ -799,6 +852,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const handleRemoveVisualCatalogItem = React.useCallback((index: number) => {
         setVisualCatalog((prev) => prev.filter((_, i) => i !== index));
+    }, []);
+
+    const handleUpdateVisualCatalogItem = React.useCallback((
+        index: number,
+        partial: Partial<ImportHtmlVisualCatalogItem>,
+    ) => {
+        setVisualCatalog((prev) => {
+            if (index < 0 || index >= prev.length) {
+                return prev;
+            }
+            const current = prev[index];
+            const nextCaption = partial.caption !== undefined
+                ? String(partial.caption).trim()
+                : String(current.caption || '').trim();
+            const nextTitle = partial.title !== undefined
+                ? String(partial.title).trim()
+                : (nextCaption || String(current.title || '').trim());
+            const nextItem: ImportHtmlVisualCatalogItem = {
+                ...current,
+                ...partial,
+                caption: nextCaption,
+                title: nextTitle || nextCaption || current.title || current.id,
+            };
+            return prev.map((item, i) => (i === index ? nextItem : item));
+        });
     }, []);
 
     const isVisualCatalogDirty = JSON.stringify(visualCatalog) !== visualCatalogSavedRef.current;
@@ -1110,12 +1188,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setCopyingBeatHtmlPromptBeatId(beatId);
         try {
-            const res = await fetchImportHtmlContext(shortVideoId) as ImportHtmlContextPayload;
-            if (!res?.success) {
-                showMessage(parseImportHtmlContextMessage(res?.message) || 'Không lấy được context', 'error');
-                return;
+            const serverRes = await fetchImportHtmlBeatHtmlPrompt(shortVideoId, beatId);
+            let prompt = String(serverRes?.prompt || '').trim();
+            if (!serverRes?.success || !prompt) {
+                const res = await fetchImportHtmlContext(shortVideoId) as ImportHtmlContextPayload;
+                if (!res?.success) {
+                    showMessage(
+                        parseImportHtmlContextMessage(res?.message)
+                            || parseApiMessage(serverRes?.message)
+                            || 'Không lấy được prompt beat HTML',
+                        'error',
+                    );
+                    return;
+                }
+                prompt = await buildBeatHtmlPrompt({ ...res, beat_map: beatMap }, beat);
             }
-            const prompt = await buildBeatHtmlPrompt({ ...res, beat_map: beatMap }, beat);
             await copyTextToClipboard(prompt);
             showMessage(`Đã copy prompt HTML ${beatId}`, 'success');
         } catch (e) {
@@ -1355,6 +1442,112 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [applyImportHtmlSummary, hasAudio, loadRow, scriptApproved, shortVideoId, showMessage]);
 
+    const whisperScriptAlign = useWhisperScriptAlign({
+        audioScript,
+        whisperWords,
+        overrides: captionOverrides,
+    });
+
+    const whisperAlignKeyRef = React.useRef('');
+    React.useEffect(() => {
+        const nextKey = `${audioScript}::${whisperWords.map((w) => `${w.text}:${w.start}`).join('|')}`;
+        if (whisperAlignKeyRef.current && whisperAlignKeyRef.current !== nextKey) {
+            setCaptionOverrides({});
+        }
+        whisperAlignKeyRef.current = nextKey;
+    }, [audioScript, whisperWords]);
+
+    const openWhisperCompare = React.useCallback((focusIndex?: number) => {
+        setCompareFocusIndex(focusIndex ?? null);
+        setCompareDrawerOpen(true);
+    }, []);
+
+    const handleWhisperChooseToken = React.useCallback((tokenIndex: number, choice: 'script' | 'whisper') => {
+        if (!whisperScriptAlign) {
+            return;
+        }
+        const patch = applyTokenOverride(whisperScriptAlign, tokenIndex, choice, whisperWords);
+        setCaptionOverrides((prev) => mergeCaptionOverrides(prev, patch));
+    }, [whisperScriptAlign, whisperWords]);
+
+    const saveCaptionAlignments = React.useCallback(async () => {
+        if (!whisperScriptAlign) {
+            return false;
+        }
+        setSavingCaptionAlignments(true);
+        try {
+            const res = await saveAgentCaptionAlignments(shortVideoId, {
+                words: whisperScriptAlign.captionWords,
+                overrides: overridesToList(captionOverrides),
+                captionSync: buildCaptionSyncPayload(whisperScriptAlign),
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được karaoke', 'error');
+                return false;
+            }
+            setCaptionOverrides({});
+            if (res.import_html) {
+                applyImportHtmlSummary(res.import_html);
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu chỉnh sửa karaoke', 'success');
+            loadRow();
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingCaptionAlignments(false);
+        }
+    }, [
+        applyImportHtmlSummary,
+        captionOverrides,
+        loadRow,
+        shortVideoId,
+        showMessage,
+        whisperScriptAlign,
+    ]);
+
+    React.useEffect(() => {
+        if (!open) {
+            autoWhisperStartedRef.current = '';
+            return;
+        }
+        if (!scriptApproved || !hasAudio) {
+            return;
+        }
+        if (transcribingWhisper || whisperStatus === 'processing') {
+            return;
+        }
+
+        const needsWhisper = whisperStatus === 'none'
+            || whisperStatus === 'failed'
+            || whisperStale;
+        if (!needsWhisper) {
+            return;
+        }
+
+        const audioKey = audioFileUrl.trim();
+        if (!audioKey) {
+            return;
+        }
+
+        const runKey = `${audioKey}:${whisperStatus}:${whisperStale}`;
+        if (autoWhisperStartedRef.current === runKey) {
+            return;
+        }
+        autoWhisperStartedRef.current = runKey;
+        void runWhisperTranscribe();
+    }, [
+        audioFileUrl,
+        hasAudio,
+        open,
+        runWhisperTranscribe,
+        scriptApproved,
+        transcribingWhisper,
+        whisperStale,
+        whisperStatus,
+    ]);
+
     React.useEffect(() => () => {
         if (importHtmlSaveTimerRef.current != null) {
             window.clearTimeout(importHtmlSaveTimerRef.current);
@@ -1397,37 +1590,59 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleSaveSourceContent = async (contentOverride?: string) => {
-        if (marketingPostId > 0) {
-            showMessage('Đã liên kết marketing post — không lưu agent_source_content', 'warning');
-            return;
-        }
+    const handleSaveSourceContent = async (contentOverride?: string, additionalInfoOverride?: string) => {
         const contentToSave = contentOverride !== undefined
             ? String(contentOverride)
             : agentSourceContent;
+        const additionalToSave = additionalInfoOverride !== undefined
+            ? String(additionalInfoOverride)
+            : agentAdditionalInfo;
+        const linked = marketingPostId > 0;
+
+        if (linked) {
+            if (additionalToSave === savedAgentAdditionalInfo) {
+                return;
+            }
+        } else if (
+            contentToSave === savedAgentSourceContent
+            && agentGithubRepo === savedAgentGithubRepo
+            && agentSourceFormat === savedAgentSourceFormat
+            && additionalToSave === savedAgentAdditionalInfo
+        ) {
+            return;
+        }
+
         setSavingSourceContent(true);
         try {
             const json = await saveAgentSourceContent(
                 shortVideoId,
-                contentToSave,
-                agentGithubRepo.trim(),
-                agentSourceFormat,
+                linked ? '' : contentToSave,
+                linked ? undefined : agentGithubRepo.trim(),
+                linked ? undefined : agentSourceFormat,
+                additionalToSave,
             );
             if (!json?.success) {
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được nội dung', 'error');
                 return;
             }
-            const nextSource = String(json?.agent_source_content ?? contentToSave);
-            const nextGithub = String(json?.agent_github_repo ?? agentGithubRepo).trim();
-            const nextFormat = String(json?.agent_source_format ?? agentSourceFormat).trim() || 'github_repo_review';
-            setAgentSourceContent(nextSource);
-            setSavedAgentSourceContent(nextSource);
-            setAgentGithubRepo(nextGithub);
-            setSavedAgentGithubRepo(nextGithub);
-            setAgentSourceFormat(nextFormat);
-            setSavedAgentSourceFormat(nextFormat);
-            setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
-            showMessage(parseApiMessage(json?.message) || 'Đã lưu nội dung nguồn', 'success');
+            const nextAdditional = String(json?.agent_additional_info ?? additionalToSave);
+            setAgentAdditionalInfo(nextAdditional);
+            setSavedAgentAdditionalInfo(nextAdditional);
+
+            if (!linked) {
+                const nextSource = String(json?.agent_source_content ?? contentToSave);
+                const nextGithub = String(json?.agent_github_repo ?? agentGithubRepo).trim();
+                const nextFormat = String(json?.agent_source_format ?? agentSourceFormat).trim() || 'github_repo_review';
+                setAgentSourceContent(nextSource);
+                setSavedAgentSourceContent(nextSource);
+                setAgentGithubRepo(nextGithub);
+                setSavedAgentGithubRepo(nextGithub);
+                setAgentSourceFormat(nextFormat);
+                setSavedAgentSourceFormat(nextFormat);
+                setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
+            }
+
+            showMessage(parseApiMessage(json?.message) || (linked ? 'Đã lưu thông tin thêm' : 'Đã lưu nội dung nguồn'), 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -1437,7 +1652,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const handleFetchGithubReadme = async () => {
         if (marketingPostId > 0) {
-            showMessage('Đã liên kết marketing post — không fetch README', 'warning');
+            showMessage('Đã liên kết marketing post — không lấy thông tin GitHub', 'warning');
             return;
         }
         const repo = agentGithubRepo.trim();
@@ -1447,28 +1662,48 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setFetchingGithubReadme(true);
         try {
-            const json = await fetchGithubReadme(shortVideoId, repo);
+            const json = await fetchGithubReadme(shortVideoId, repo, agentAdditionalInfo);
             if (!json?.success) {
-                showMessage(parseApiMessage(json?.message) || 'Không tải được README', 'error');
+                showMessage(parseApiMessage(json?.message) || 'Không lấy được thông tin repo', 'error');
                 return;
             }
-            const readme = String(json?.readme || '')
-                .replace(/\r\n/g, '\n')
-                .replace(/\r/g, '\n');
-            if (!readme.trim()) {
-                showMessage('README trống', 'warning');
-                return;
-            }
+
             const normalizedRepo = String(json?.agent_github_repo || json?.github_repo || repo).trim();
             if (normalizedRepo) {
                 setAgentGithubRepo(normalizedRepo);
             }
-            const block = `\n\n---\n# README\n\n${readme.trim()}\n`;
-            setAgentSourceContent((prev) => {
-                const base = prev.trimEnd();
-                return base ? `${base}${block}` : readme.trim();
-            });
-            showMessage(parseApiMessage(json?.message) || 'Đã thêm README vào nội dung', 'success');
+
+            const readme = String(json?.readme || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n');
+            const hasReadme = readme.trim() !== '';
+            const statsLine = String(json?.repo_stats?.line || '').trim();
+            const hasStats = statsLine !== '';
+
+            if (!hasReadme && !hasStats) {
+                showMessage('Không lấy được README hoặc thống kê repo', 'warning');
+                return;
+            }
+
+            if (hasReadme) {
+                const block = `\n\n---\n# README\n\n${readme.trim()}\n`;
+                setAgentSourceContent((prev) => {
+                    const base = prev.trimEnd();
+                    return base ? `${base}${block}` : readme.trim();
+                });
+            }
+
+            if (hasStats) {
+                const merged = json?.additional_info_merged
+                    ?? mergeGithubStatsIntoAdditionalInfo(
+                        agentAdditionalInfo,
+                        statsLine,
+                        normalizedRepo,
+                    );
+                setAgentAdditionalInfo(merged);
+            }
+
+            showMessage(parseApiMessage(json?.message) || 'Đã lấy thông tin repo', 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -1529,9 +1764,62 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleOmnivoiceVoiceChange = async (nextVoice: string): Promise<boolean> => {
-        const voice = String(nextVoice || '').trim();
-        if (!voice || voice === omnivoiceVoice) {
+    const applyOmnivoiceVoiceResponse = React.useCallback((
+        res: Awaited<ReturnType<typeof saveAgentOmnivoiceVoice>>,
+    ) => {
+        if (res?.agent_omnivoice_voice) {
+            setOmnivoiceVoice(String(res.agent_omnivoice_voice).trim() || 'minh_quân');
+        }
+        if (res?.agent_omnivoice_voice_mode === 'design' || res?.agent_omnivoice_voice_mode === 'clone') {
+            setOmnivoiceVoiceMode(res.agent_omnivoice_voice_mode);
+        }
+        if (res?.agent_omnivoice_voice_design) {
+            setOmnivoiceVoiceDesign(String(res.agent_omnivoice_voice_design).trim());
+        }
+        if (Array.isArray(res?.omnivoice_voice_catalog) && res.omnivoice_voice_catalog.length > 0) {
+            setOmnivoiceVoiceCatalog(res.omnivoice_voice_catalog);
+        }
+        if (Array.isArray(res?.omnivoice_voice_design_tokens) && res.omnivoice_voice_design_tokens.length > 0) {
+            setOmnivoiceVoiceDesignTokens(res.omnivoice_voice_design_tokens);
+        }
+    }, []);
+
+    const maybeRegenerateOmnivoiceTts = async (shouldAskRerender: boolean): Promise<void> => {
+        if (!shouldAskRerender) {
+            return;
+        }
+        setRegeneratingTts(true);
+        try {
+            const regen = await regenerateAgentNarrationTts(shortVideoId);
+            if (!regen?.success) {
+                showMessage(
+                    parseApiMessage(regen?.message) || 'Không tạo lại được audio TTS',
+                    'error',
+                );
+            } else {
+                setAudioFileUrl('');
+                setAudioDurationSec(null);
+                setTtsPending(true);
+                showMessage(
+                    parseApiMessage(regen?.message) || 'Đã queue tạo lại audio TTS',
+                    'success',
+                );
+            }
+        } finally {
+            setRegeneratingTts(false);
+        }
+    };
+
+    const handleOmnivoiceVoiceChange = async (payload: SaveOmnivoiceVoicePayload): Promise<boolean> => {
+        const mode = payload.mode;
+        const voice = String(payload.voice || '').trim();
+        const design = String(payload.design || '').trim();
+
+        if (mode === 'clone') {
+            if (!voice || (voice === omnivoiceVoice && omnivoiceVoiceMode === 'clone')) {
+                return false;
+            }
+        } else if (!design || (design === omnivoiceVoiceDesign && omnivoiceVoiceMode === 'design')) {
             return false;
         }
 
@@ -1547,40 +1835,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         setSavingOmnivoiceVoice(true);
         try {
-            const res = await saveAgentOmnivoiceVoice(shortVideoId, voice);
+            const res = await saveAgentOmnivoiceVoice(shortVideoId, payload);
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được giọng OmniVoice', 'error');
                 return false;
             }
-            const savedVoice = String(res?.agent_omnivoice_voice || voice).trim() || voice;
-            setOmnivoiceVoice(savedVoice);
-            if (Array.isArray(res?.omnivoice_voice_catalog) && res.omnivoice_voice_catalog.length > 0) {
-                setOmnivoiceVoiceCatalog(res.omnivoice_voice_catalog);
-            }
+            applyOmnivoiceVoiceResponse(res);
             showMessage(parseApiMessage(res?.message) || 'Đã lưu giọng OmniVoice', 'success');
-
-            if (shouldAskRerender) {
-                setRegeneratingTts(true);
-                try {
-                    const regen = await regenerateAgentNarrationTts(shortVideoId);
-                    if (!regen?.success) {
-                        showMessage(
-                            parseApiMessage(regen?.message) || 'Không tạo lại được audio TTS',
-                            'error',
-                        );
-                    } else {
-                        setAudioFileUrl('');
-                        setAudioDurationSec(null);
-                        setTtsPending(true);
-                        showMessage(
-                            parseApiMessage(regen?.message) || 'Đã queue tạo lại audio TTS',
-                            'success',
-                        );
-                    }
-                } finally {
-                    setRegeneratingTts(false);
-                }
-            }
+            await maybeRegenerateOmnivoiceTts(shouldAskRerender);
             loadRow();
             return true;
         } catch (e) {
@@ -1629,13 +1891,64 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         });
     }, [playingVoiceUrl, showMessage]);
 
-    React.useEffect(() => {
-        if (!voiceDrawerOpen && voicePreviewAudioRef.current) {
+    const handleOmnivoiceVoiceDesignPreview = React.useCallback((design: string) => {
+        const trimmed = String(design || '').trim();
+        if (!trimmed) {
+            showMessage('Nhập voice design trước khi nghe thử', 'warning');
+            return;
+        }
+
+        const url = resolveOmnivoiceVoiceDesignPreviewUrl(trimmed);
+        if (!url) {
+            showMessage('Không tạo được URL nghe thử voice design', 'warning');
+            return;
+        }
+
+        if (playingVoiceUrl === url && voicePreviewAudioRef.current) {
             voicePreviewAudioRef.current.pause();
             voicePreviewAudioRef.current = null;
             setPlayingVoiceUrl(null);
+            setPreviewingVoiceDesign(false);
+            return;
         }
-    }, [voiceDrawerOpen]);
+
+        if (voicePreviewAudioRef.current) {
+            voicePreviewAudioRef.current.pause();
+        }
+
+        setPreviewingVoiceDesign(true);
+        const audio = new Audio(url);
+        voicePreviewAudioRef.current = audio;
+        audio.onended = () => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+            setPreviewingVoiceDesign(false);
+        };
+        audio.onerror = () => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+            setPreviewingVoiceDesign(false);
+            showMessage('Không phát được preview voice design', 'warning');
+        };
+        void audio.play().then(() => {
+            setPlayingVoiceUrl(url);
+            setPreviewingVoiceDesign(false);
+        }).catch(() => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+            setPreviewingVoiceDesign(false);
+            showMessage('Trình duyệt chặn phát audio — thử bấm lại', 'warning');
+        });
+    }, [playingVoiceUrl, showMessage]);
+
+    const stopVoicePreview = React.useCallback(() => {
+        if (voicePreviewAudioRef.current) {
+            voicePreviewAudioRef.current.pause();
+            voicePreviewAudioRef.current = null;
+        }
+        setPlayingVoiceUrl(null);
+        setPreviewingVoiceDesign(false);
+    }, []);
 
     React.useEffect(() => () => {
         if (voicePreviewAudioRef.current) {
@@ -1789,14 +2102,20 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         hfThemeSource,
         hfThemeCatalog,
         omnivoiceVoice,
+        omnivoiceVoiceMode,
+        omnivoiceVoiceDesign,
         omnivoiceVoiceCatalog,
-        voiceDrawerOpen,
-        setVoiceDrawerOpen,
+        omnivoiceVoiceDesignTokens,
         playingVoiceUrl,
+        previewingVoiceDesign,
+        stopVoicePreview,
         marketingPostId,
         agentSourceContent,
         setAgentSourceContent,
         savedAgentSourceContent,
+        agentAdditionalInfo,
+        setAgentAdditionalInfo,
+        savedAgentAdditionalInfo,
         agentGithubRepo,
         setAgentGithubRepo,
         savedAgentGithubRepo,
@@ -1829,7 +2148,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         focusBeatEditor,
         hfPromptType,
         whisperStatus,
+        whisperStale,
         whisperError,
+        whisperWords,
+        whisperScriptAlign,
+        compareDrawerOpen,
+        setCompareDrawerOpen,
+        compareFocusIndex,
+        setCompareFocusIndex,
+        compareFilter,
+        setCompareFilter,
+        whisperCompareIssuesOnly,
+        setWhisperCompareIssuesOnly,
+        captionOverrides,
+        hasCaptionOverrideChanges: hasCaptionOverrideChanges(captionOverrides),
+        openWhisperCompare,
+        handleWhisperChooseToken,
+        saveCaptionAlignments,
+        savingCaptionAlignments,
         importHtmlReady,
         bgmSegments,
         setBgmSegments,
@@ -1854,6 +2190,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         marketingPostImages,
         handleAddVisualCatalogItem,
         handleRemoveVisualCatalogItem,
+        handleUpdateVisualCatalogItem,
         isVisualCatalogDirty,
         persistVisualCatalogIfDirty,
         persistImportHtmlAssets,
@@ -1898,6 +2235,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleHfThemeChange,
         handleOmnivoiceVoiceChange,
         handleOmnivoiceVoicePreview,
+        handleOmnivoiceVoiceDesignPreview,
         handlePostEligibleChange,
         handleSocialPostedChange,
         handlePlatformToggle,

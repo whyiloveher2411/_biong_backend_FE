@@ -16,11 +16,9 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { isKaraokeSyncPoor } from './agentVideoApi';
 import { getBeatHtmlVisualState, getBeatRenderErrorMessage, parseBeatMapJson, validateBeatMap } from './agentVideoBeatMap';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -31,34 +29,7 @@ type Props = {
     active: boolean;
 };
 
-function whisperStatusLabel(status: string): string {
-    switch (status) {
-        case 'completed':
-            return 'Whisper sẵn sàng';
-        case 'processing':
-            return 'Đang chạy whisper…';
-        case 'failed':
-            return 'Whisper lỗi';
-        default:
-            return 'Chưa có whisper';
-    }
-}
-
-function whisperStatusColor(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
-    switch (status) {
-        case 'completed':
-            return 'success';
-        case 'processing':
-            return 'info';
-        case 'failed':
-            return 'error';
-        default:
-            return 'default';
-    }
-}
-
 export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props) {
-    const autoWhisperStartedRef = React.useRef(false);
     const beatEditorSectionRef = React.useRef<HTMLDivElement>(null);
 
     const beatMapValidation = React.useMemo(() => {
@@ -72,31 +43,6 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
         const validation = validateBeatMap(map, state.audioDurationSec);
         return { valid: validation.valid, errors: validation.errors, map };
     }, [state.audioDurationSec, state.beatMapJsonDraft]);
-
-    React.useEffect(() => {
-        if (!active) {
-            autoWhisperStartedRef.current = false;
-            return;
-        }
-        if (!state.scriptApproved || !state.hasAudio) {
-            return;
-        }
-        if (state.whisperStatus === 'completed' || state.whisperStatus === 'processing') {
-            return;
-        }
-        if (autoWhisperStartedRef.current) {
-            return;
-        }
-        autoWhisperStartedRef.current = true;
-        void state.runWhisperTranscribe();
-    }, [
-        active,
-        state,
-        state.hasAudio,
-        state.runWhisperTranscribe,
-        state.scriptApproved,
-        state.whisperStatus,
-    ]);
 
     React.useEffect(() => {
         if (!active || !state.beatEditorFocusRequest) {
@@ -125,10 +71,7 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
     const activeBeat = state.beatMap?.sections.find((item) => item.id === state.activeBeatId)
         ?? state.beatMap?.sections[0];
     const activeBeatHtml = activeBeat ? (state.beatHtml[activeBeat.id]?.html || '') : '';
-    const karaokeSyncPoor = isKaraokeSyncPoor(state.composition?.caption_sync);
-    const showWhisperRerun =
-        state.whisperStatus === 'failed'
-        || (state.whisperStatus === 'completed' && (karaokeSyncPoor || state.hasAgentVideo));
+    const whisperReady = state.whisperStatus === 'completed' && !state.whisperStale;
 
     return (
         <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
@@ -162,63 +105,17 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                     </ToggleButtonGroup>
                 </Box>
 
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Bước 1 — Whisper
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip
-                            size="small"
-                            label={whisperStatusLabel(state.whisperStatus)}
-                            color={whisperStatusColor(state.whisperStatus)}
-                        />
-                        {state.whisperStatus === 'completed' ? (
-                            <Typography variant="caption" color="text.secondary">
-                                Karaoke sync tự động từ Whisper khi ghép video
-                            </Typography>
-                        ) : null}
-                        {karaokeSyncPoor ? (
-                            <Chip
-                                size="small"
-                                label="Karaoke có thể lệch"
-                                color="warning"
-                            />
-                        ) : null}
-                        {(state.transcribingWhisper || state.whisperStatus === 'processing') ? (
-                            <Typography variant="caption" color="text.secondary">
-                                Đang transcribe audio trên server…
-                            </Typography>
-                        ) : null}
-                        {showWhisperRerun ? (
-                            <LoadingButton
-                                size="small"
-                                variant={state.whisperStatus === 'failed' ? 'outlined' : 'outlined'}
-                                color={karaokeSyncPoor ? 'warning' : 'primary'}
-                                loading={state.transcribingWhisper}
-                                startIcon={<RefreshIcon />}
-                                onClick={() => { void state.runWhisperTranscribe({ force: true }); }}
-                            >
-                                {state.whisperStatus === 'failed' ? 'Chạy lại whisper' : 'Whisper lại'}
-                            </LoadingButton>
-                        ) : null}
-                    </Box>
-                    {karaokeSyncPoor ? (
-                        <Alert severity="warning" sx={{ mt: 1 }}>
-                            Timing karaoke lệch nhiều (khoảng trống lớn hoặc ít từ khớp Whisper).
-                            Bấm Whisper lại, sau đó ghép lại video để cập nhật caption.
-                        </Alert>
-                    ) : null}
-                </Box>
-
-                {state.whisperError ? (
-                    <Alert severity="error">{state.whisperError}</Alert>
+                {!whisperReady ? (
+                    <Alert severity="info">
+                        Chờ Whisper trên tab Script & TTS (bước 4 — Karaoke sync) trước khi chia beat.
+                    </Alert>
                 ) : null}
 
                 <Divider />
 
                 <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Bước 2 — Chia beat
+                        Bước 1 — Chia beat
                     </Typography>
                     <Chip
                         size="small"
@@ -236,7 +133,7 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                         variant="outlined"
                         fullWidth
                         loading={state.openingBeatDivisionGemini}
-                        disabled={state.whisperStatus !== 'completed'}
+                        disabled={!whisperReady}
                         startIcon={<OpenInNewIcon />}
                         onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
                     >
@@ -262,7 +159,7 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                         minRows={8}
                         maxRows={16}
                         fullWidth
-                        disabled={state.savingImportHtml || state.whisperStatus !== 'completed'}
+                        disabled={state.savingImportHtml || !whisperReady}
                         helperText={state.savingImportHtml ? 'Đang lưu beat map…' : 'JSON phải phủ liên tục từ 0 đến hết audio'}
                         InputProps={{
                             sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 },
@@ -302,7 +199,7 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                         <Divider />
                         <Box ref={beatEditorSectionRef}>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Bước 3 — HTML từng beat
+                                Bước 2 — HTML từng beat
                             </Typography>
                             <Chip
                                 size="small"
@@ -414,12 +311,12 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                     </>
                 ) : null}
 
-                {state.renderMode === 'import_html' && state.beatMapReady && state.whisperStatus === 'completed' ? (
+                {state.renderMode === 'import_html' && state.beatMapReady && whisperReady ? (
                     <>
                         <Divider />
                         <Box>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Bước 4 — Tự động HTML beat + ghép video
+                                Bước 3 — Tự động HTML beat + ghép video
                             </Typography>
                             <LoadingButton
                                 size="small"
@@ -460,13 +357,13 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                             ? 'Sẵn sàng ghép lại — dùng "Ghép lại từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'
                             : 'Sẵn sàng ghép — dùng "Chạy agent ghép từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'}
                     </Alert>
-                ) : state.beatMapReady && state.whisperStatus === 'completed' ? (
+                ) : state.beatMapReady && whisperReady ? (
                     <Alert severity="info">
                         HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — bấm &quot;Tự động HTML beat + ghép video&quot; để agent sinh phần thiếu rồi render.
                     </Alert>
                 ) : (
                     <Alert severity="info">
-                        Cần whisper và beat-map hợp lệ trước khi chạy auto HTML + ghép video.
+                        Cần Whisper (tab Script & TTS) và beat-map hợp lệ trước khi chạy auto HTML + ghép video.
                     </Alert>
                 )}
 

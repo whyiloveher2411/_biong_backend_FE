@@ -1,4 +1,6 @@
 import type { HfThemeCatalogItem } from './agentVideoApi';
+import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
+import { voiceAvatarColor, voiceInitials } from './ShortVideoAgentOmnivoiceVoicePicker';
 
 export const TTS_PLATFORM_OPTIONS = [
     { key: 'omnivoice_local', label: 'OmniVoice (local)' },
@@ -177,4 +179,65 @@ export function phaseLabel(phase?: string): string {
         default:
             return 'Chưa bắt đầu';
     }
+}
+
+export function whisperStatusLabel(status: string): string {
+    switch (status) {
+        case 'completed':
+            return 'Whisper sẵn sàng';
+        case 'processing':
+            return 'Đang chạy whisper…';
+        case 'failed':
+            return 'Whisper lỗi';
+        default:
+            return 'Chưa có whisper';
+    }
+}
+
+export function whisperStatusColor(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
+    switch (status) {
+        case 'completed':
+            return 'success';
+        case 'processing':
+            return 'info';
+        case 'failed':
+            return 'error';
+        default:
+            return 'default';
+    }
+}
+
+export type OmnivoiceDisplaySummary = {
+    displayName: string;
+    initials: string;
+    avatarColor: string;
+    isDesignMode: boolean;
+};
+
+export function resolveOmnivoiceDisplaySummary(input: {
+    voiceKey: string;
+    voiceMode: 'clone' | 'design';
+    voiceDesign: string;
+    catalog: Array<{ key: string; label?: string }>;
+}): OmnivoiceDisplaySummary {
+    const isDesignMode = input.voiceMode === 'design';
+    const catalog = input.catalog.length > 0
+        ? input.catalog
+        : [{ key: 'minh_quân', label: 'minh quân' }];
+    const selectedKey = input.voiceKey || 'minh_quân';
+    const selected = catalog.find((item) => item.key === selectedKey) || catalog[0];
+    const cloneDisplayName = selected?.label || selectedKey.replace(/_/g, ' ');
+
+    const designDisplayName = formatOmnivoiceVoiceDesignVi(
+        input.voiceDesign || 'male, middle-aged, very low pitch',
+    );
+
+    return {
+        displayName: isDesignMode ? `Thiết kế giọng · ${designDisplayName}` : cloneDisplayName,
+        initials: isDesignMode ? 'VD' : voiceInitials(selected?.label || selectedKey),
+        avatarColor: isDesignMode
+            ? '#5e35b1'
+            : voiceAvatarColor(selectedKey, catalog.map((item) => item.key)),
+        isDesignMode,
+    };
 }

@@ -280,7 +280,11 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
                             {' '}
                             ảnh marketing ·
                             {' '}
-                            {state.visualCatalog.length}
+                            {state.visualCatalog.filter((item) => item.source === 'user_upload').length}
+                            {' '}
+                            upload ·
+                            {' '}
+                            {state.visualCatalog.filter((item) => item.source !== 'user_upload').length}
                             {' '}
                             stock
                         </Typography>
@@ -326,9 +330,11 @@ export default function ShortVideoAgentResourcesPanel({ state }: Props) {
             <ShortVideoAgentVisualCatalogDrawer
                 open={visualDrawerOpen}
                 onClose={() => { void handleCloseVisualDrawer(); }}
+                shortVideoId={state.shortVideoId}
                 marketingPostImages={state.marketingPostImages}
                 visualCatalog={state.visualCatalog}
                 onAddItem={state.handleAddVisualCatalogItem}
+                onUpdateItem={state.handleUpdateVisualCatalogItem}
                 onRemoveItem={state.handleRemoveVisualCatalogItem}
                 onSave={async () => { await state.persistImportHtmlAssets(); }}
                 saving={state.savingImportAssets}

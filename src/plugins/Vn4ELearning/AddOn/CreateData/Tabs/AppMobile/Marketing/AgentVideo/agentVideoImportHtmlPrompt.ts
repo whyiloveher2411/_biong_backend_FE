@@ -8,6 +8,7 @@ import { buildBeatHtmlContentLanguageBlock } from './agentVideoContentLanguageBl
 import { buildHtmlChatbotLayoutSafeZonesBlock, buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotNoLegacyBorrowRulesBlock, buildHtmlChatbotJsContractBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 import type { BeatMapSection } from './agentVideoBeatMap';
+import type { ImportHtmlVisualCatalogItem } from './agentVideoApi';
 
 export type ImportHtmlContextPayload = {
     success?: boolean;
@@ -24,6 +25,7 @@ export type ImportHtmlContextPayload = {
     timeline?: Record<string, unknown> | null;
     core_signals?: Record<string, unknown> | null;
     marketing_post_images?: Array<{ url?: string; caption?: string; [key: string]: unknown }>;
+    visual_catalog?: ImportHtmlVisualCatalogItem[];
     thumbnail_url?: string;
     beat_map?: {
         totalVideoSec?: number;
@@ -31,6 +33,108 @@ export type ImportHtmlContextPayload = {
     } | null;
     message?: { content?: string } | string;
 };
+
+type VisualLibraryEntry = {
+    media_type: 'image' | 'video';
+    url: string;
+    preview_url: string;
+    title: string;
+    caption: string;
+    source: 'user_upload' | 'marketing_post' | 'stock';
+    provider?: string;
+    search_query?: string;
+    duration_sec?: number;
+};
+
+function resolveVisualCatalogCaption(item: ImportHtmlVisualCatalogItem): string {
+    const caption = String(item.caption || '').trim();
+    if (caption) {
+        return caption;
+    }
+    const alt = String((item as { alt?: string }).alt || '').trim();
+    if (alt) {
+        return alt;
+    }
+    const searchQuery = String(item.search_query || '').trim();
+    const title = String(item.title || '').trim();
+    if (searchQuery && title) {
+        return `${searchQuery} — ${title}`;
+    }
+    if (searchQuery) {
+        return searchQuery;
+    }
+    if (title) {
+        return title;
+    }
+    return item.media_type === 'video' ? 'Stock video Pexels' : 'Stock image Pexels';
+}
+
+export function buildVisualLibraryForPrompt(context: ImportHtmlContextPayload): VisualLibraryEntry[] {
+    const uploads: VisualLibraryEntry[] = [];
+    const marketing: VisualLibraryEntry[] = [];
+    const stock: VisualLibraryEntry[] = [];
+
+    (context.visual_catalog || []).forEach((item) => {
+        const url = String(item.url || '').trim();
+        if (!url) {
+            return;
+        }
+        const mediaType = item.media_type === 'video' ? 'video' : 'image';
+        const source = item.source === 'user_upload' ? 'user_upload' : 'stock';
+        const caption = resolveVisualCatalogCaption(item);
+        const title = String(item.title || '').trim() || caption;
+        const entry: VisualLibraryEntry = {
+            media_type: mediaType,
+            url,
+            preview_url: String(item.preview_url || url).trim() || url,
+            title,
+            caption,
+            source,
+            provider: String(item.provider || (source === 'user_upload' ? 'upload' : 'pexels')),
+        };
+        if (item.search_query) {
+            entry.search_query = String(item.search_query);
+        }
+        if (mediaType === 'video' && item.duration_sec) {
+            entry.duration_sec = Number(item.duration_sec);
+        }
+        if (source === 'user_upload') {
+            uploads.push(entry);
+        } else {
+            stock.push(entry);
+        }
+    });
+
+    (context.marketing_post_images || []).forEach((item) => {
+        const url = String(item.url || '').trim();
+        if (!url) {
+            return;
+        }
+        marketing.push({
+            media_type: 'image',
+            url,
+            preview_url: url,
+            title: String(item.caption || '').trim(),
+            caption: String(item.caption || '').trim(),
+            source: 'marketing_post',
+        });
+    });
+
+    return [...uploads, ...marketing, ...stock];
+}
+
+function buildVisualLibraryRulesBlock(): string {
+    return [
+        '## Thư viện visual (user upload + marketing post + Pexels stock)',
+        '- Chọn **0–1** media hero phù hợp nội dung beat này; không bắt buộc dùng hết catalog',
+        '- **Ưu tiên 1 — `source: user_upload`**: đọc `caption` (mô tả user) so khớp `phrase_anchor` + nhịp whisper; dùng đúng `url` nếu phù hợp',
+        '- **Ưu tiên 2 — `source: marketing_post`**: `.browser-mockup-card` + `data-marketing-post-image` + `data-marketing-post-image-url`',
+        '- **Ưu tiên 3 — `source: stock` (Pexels)**: chỉ khi không có upload/marketing khớp beat',
+        '- Ảnh (`media_type: image`): bọc trong `.browser-mockup-card` (traffic-light bar macOS, không padding quanh img)',
+        '- Video stock (`media_type: video`): **CẤM** thẻ `<video>` trong beat — dùng `preview_url` làm `<img>` nền (opacity 0.3–0.6) + GSAP parallax/zoom',
+        '- Dùng đúng `url` từ JSON — không bịa URL',
+    ].join('\n');
+}
 
 function parseMessage(message: ImportHtmlContextPayload['message']): string {
     if (typeof message === 'object' && message?.content) {
@@ -67,6 +171,7 @@ export async function buildBeatHtmlPrompt(
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
+    const visualLibrary = buildVisualLibraryForPrompt(context);
 
     return [
         `# HyperFrames — HTML beat ${beat.id} (${durationLabel})`,
@@ -102,9 +207,9 @@ export async function buildBeatHtmlPrompt(
         beatWhisperPrompt,
         '```',
         '',
-        '## Ảnh marketing (tham khảo)',
+        buildVisualLibraryRulesBlock(),
         '```json',
-        JSON.stringify(context.marketing_post_images || [], null, 2),
+        JSON.stringify(visualLibrary, null, 2),
         '```',
         '',
         buildBeatScaffoldInstructionsBlock(durationSec, beat.id, scaffold),

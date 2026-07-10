@@ -18,6 +18,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { formatTtsChain, hfThemeLabel, phaseLabel, platformLabel } from './agentVideoUi';
+import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -71,6 +72,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 hasScript: state.hasScript,
                 marketingPostId: state.marketingPostId,
                 sourceContent: state.contentPlainText || state.savedAgentSourceContent,
+                additionalInfo: state.savedAgentAdditionalInfo,
             });
         } finally {
             setOpeningCreateScriptGemini(false);
@@ -88,6 +90,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 appMobileTitle: state.appMobileTitle,
                 marketingPostId: state.marketingPostId,
                 sourceContent: state.contentPlainText || state.savedAgentSourceContent,
+                additionalInfo: state.savedAgentAdditionalInfo,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -132,7 +135,14 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
                     />
                     <MetaRow label="TTS chain" value={chainDisplay} />
-                    <MetaRow label="Giọng OmniVoice" value={state.omnivoiceVoice || 'minh_quân'} />
+                    <MetaRow
+                        label="Giọng OmniVoice"
+                        value={
+                            state.omnivoiceVoiceMode === 'design'
+                                ? `Thiết kế giọng · ${formatOmnivoiceVoiceDesignVi(state.omnivoiceVoiceDesign || '') || '—'}`
+                                : (state.omnivoiceVoice || 'minh_quân')
+                        }
+                    />
                     <MetaRow label="Video status" value={state.agentVideoStatus || 'none'} />
                     <MetaRow
                         label="Render mode"
@@ -339,6 +349,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 disabled={
                                     !state.beatMapReady
                                     || state.whisperStatus !== 'completed'
+                                    || state.whisperStale
                                     || state.agentVideoStatus === 'processing'
                                 }
                                 startIcon={<PlayArrowIcon />}
@@ -351,9 +362,9 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     Cần beat-map hợp lệ — chia beat trong panel HTML trước
                                 </Typography>
                             ) : null}
-                            {state.beatMapReady && state.whisperStatus !== 'completed' ? (
+                            {state.beatMapReady && (state.whisperStatus !== 'completed' || state.whisperStale) ? (
                                 <Typography variant="caption" color="warning.main" display="block">
-                                    Cần Whisper hoàn tất — chạy transcribe trong panel HTML trước
+                                    Cần Whisper hoàn tất — chờ hoặc chạy lại trên tab Script & TTS (bước 4)
                                 </Typography>
                             ) : null}
                             <Button
