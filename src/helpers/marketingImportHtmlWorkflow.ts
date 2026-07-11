@@ -110,6 +110,59 @@ export async function fetchImportHtmlBeatHtmlPrompt(
     return res.json();
 }
 
+/** Full API: Puppeteer Gemini Web → extract HTML → save CMS (headed lúc debug). */
+export async function generateBeatHtmlViaGeminiWeb(
+    shortVideoId: number,
+    beatId: string,
+): Promise<{
+    success?: boolean;
+    beat_id?: string;
+    message?: { content?: string } | string;
+    attempts?: number;
+    raw_preview?: string;
+}> {
+    const token = getAccessToken() ?? '';
+    try {
+        const res = await fetch(
+            pluginApiPath('short-video/import-html-workflow/generate-beat-html-via-gemini-web'),
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    short_video_id: shortVideoId,
+                    beat_id: beatId,
+                    id: shortVideoId,
+                    access_token: token,
+                }),
+            },
+        );
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+            return {
+                success: false,
+                message:
+                    (data && (data.message || data.error)) ||
+                    `HTTP ${res.status}: Gemini Headless thất bại`,
+            };
+        }
+        return data ?? { success: false, message: 'Phản hồi rỗng từ server' };
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/socket hang up|Failed to fetch|NetworkError|aborted|ECONNRESET/i.test(msg)) {
+            return {
+                success: false,
+                message:
+                    'Mất kết nối tới server khi chạy Gemini Headless (timeout/socket hang up). Thử lại — tránh chạy Crawl song song.',
+            };
+        }
+        return { success: false, message: msg };
+    }
+}
+
 function resolveImportHtmlGeminiStage(
     action: ImportHtmlWorkflowAction,
 ): 'import_html_beat_division' | 'import_html_beat_html' | null {

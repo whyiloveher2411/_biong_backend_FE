@@ -12,6 +12,7 @@ import {
 import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
     fetchImportHtmlBeatHtmlPrompt,
+    generateBeatHtmlViaGeminiWeb,
     openImportHtmlBeatGeminiFillOnly,
     openImportHtmlBeatGeminiForMissingBeats,
 } from 'helpers/marketingImportHtmlWorkflow';
@@ -32,6 +33,10 @@ import {
     fetchGithubReadme,
     searchAgentBgm,
     saveAgentTtsSettings,
+    saveAgentAutoFillBeatHtml,
+    enqueueGeminiWebBeatFill,
+    enqueueGeminiWebBeatDivision,
+    enqueueGeminiWebAudioScript,
     savePublishFlags,
     resolveOmnivoiceVoicePreviewUrl,
     resolveOmnivoiceVoiceDesignPreviewUrl,
@@ -65,6 +70,7 @@ import {
 } from './agentBgmPreview';
 import {
     DEFAULT_TTS_PLATFORMS,
+    TTS_PLATFORM_KEYS,
     formatTtsChain,
     resolveWorkflowChip,
 } from './agentVideoUi';
@@ -137,7 +143,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [scriptApproved, setScriptApproved] = React.useState(false);
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
     const [audioDurationSec, setAudioDurationSec] = React.useState<number | null>(null);
-    const [agentTtsAuto, setAgentTtsAuto] = React.useState(false);
+    const [agentTtsAuto, setAgentTtsAuto] = React.useState(true);
+    const [agentAutoFillBeatHtml, setAgentAutoFillBeatHtml] = React.useState(false);
+    const [savingAutoFillBeatHtml, setSavingAutoFillBeatHtml] = React.useState(false);
+    const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
+    const [geminiFillProgress, setGeminiFillProgress] = React.useState<{
+        current: number;
+        total: number;
+        beatId: string;
+        succeeded: number;
+        failed: string[];
+        error: string;
+    } | null>(null);
+    const [geminiDivisionStatus, setGeminiDivisionStatus] = React.useState('none');
+    const [geminiDivisionError, setGeminiDivisionError] = React.useState('');
+    const [geminiScriptStatus, setGeminiScriptStatus] = React.useState('none');
+    const [geminiScriptMode, setGeminiScriptMode] = React.useState('');
+    const [geminiScriptError, setGeminiScriptError] = React.useState('');
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
     const [ttsPending, setTtsPending] = React.useState(false);
     const [ttsFailed, setTtsFailed] = React.useState(false);
@@ -254,8 +276,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [transcribingWhisper, setTranscribingWhisper] = React.useState(false);
     const [savingImportHtml, setSavingImportHtml] = React.useState(false);
     const [openingBeatDivisionGemini, setOpeningBeatDivisionGemini] = React.useState(false);
+    const [openingBeatDivisionGeminiHeadless, setOpeningBeatDivisionGeminiHeadless] = React.useState(false);
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+    const [openingCreateScriptGeminiHeadless, setOpeningCreateScriptGeminiHeadless] = React.useState(false);
+    const [openingImproveScriptGeminiHeadless, setOpeningImproveScriptGeminiHeadless] = React.useState(false);
     const [openingMediaSuggestGemini, setOpeningMediaSuggestGemini] = React.useState(false);
     const [openingGithubImageShotsGemini, setOpeningGithubImageShotsGemini] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
@@ -263,7 +288,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
     const [deletingAllBeatHtml, setDeletingAllBeatHtml] = React.useState(false);
     const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
+    const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
+    const [fillingAllMissingBeatGeminiHeadless, setFillingAllMissingBeatGeminiHeadless] = React.useState(false);
+    const [fillingAllMissingBeatGeminiHeadlessProgress, setFillingAllMissingBeatGeminiHeadlessProgress] = React.useState<{
+        current: number;
+        total: number;
+        beatId: string;
+    } | null>(null);
 
     const savedScriptRef = React.useRef('');
     const savedImportHtmlRef = React.useRef('');
@@ -333,6 +365,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setScriptApproved(Boolean(res?.audio_script_approved ?? res?.agent_workflow?.script_approved));
         setAudioFileUrl(String(res?.audio_file || '').trim());
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
+        setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
+        const geminiFill = res?.import_html?.gemini_fill;
+        const nextGeminiStatus = String(geminiFill?.status || 'none');
+        setGeminiFillStatus(nextGeminiStatus);
+        if (geminiFill?.progress || nextGeminiStatus !== 'none') {
+            setGeminiFillProgress({
+                current: Number(geminiFill?.progress?.current || 0),
+                total: Number(geminiFill?.progress?.total || 0),
+                beatId: String(geminiFill?.progress?.beat_id || ''),
+                succeeded: Number(geminiFill?.progress?.succeeded || 0),
+                failed: Array.isArray(geminiFill?.progress?.failed)
+                    ? geminiFill.progress.failed.map(String)
+                    : [],
+                error: String(geminiFill?.error || '').trim(),
+            });
+        } else {
+            setGeminiFillProgress(null);
+        }
+        const geminiDivision = res?.import_html?.gemini_division;
+        setGeminiDivisionStatus(String(geminiDivision?.status || 'none'));
+        setGeminiDivisionError(String(geminiDivision?.error || '').trim());
+        const geminiScript = res?.gemini_script;
+        setGeminiScriptStatus(String(geminiScript?.status || 'none'));
+        setGeminiScriptMode(String(geminiScript?.mode || '').trim());
+        setGeminiScriptError(String(geminiScript?.error || '').trim());
         setTtsPending(Boolean(res?.tts_pending ?? res?.agent_workflow?.tts_pending));
         setTtsFailed(Boolean(res?.tts_failed ?? res?.agent_workflow?.tts_failed));
         setNeedsTtsEnqueue(Boolean(res?.needs_tts_enqueue));
@@ -517,7 +574,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         };
     }, [loadRow, marketingPostId, open, shortVideoId]);
 
-    const shouldPoll = ttsPending || agentVideoStatus === 'processing' || whisperStatus === 'processing';
+    const shouldPoll = ttsPending
+        || agentVideoStatus === 'processing'
+        || whisperStatus === 'processing'
+        || geminiFillStatus === 'queued'
+        || geminiFillStatus === 'processing'
+        || geminiDivisionStatus === 'queued'
+        || geminiDivisionStatus === 'processing'
+        || geminiScriptStatus === 'queued'
+        || geminiScriptStatus === 'processing';
     React.useEffect(() => {
         if (!open || !shortVideoId || !shouldPoll) {
             return undefined;
@@ -539,6 +604,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         ttsPending,
         ttsFailed,
         agentVideoStatus,
+        geminiFillStatus,
     });
     const chainLabel = formatTtsChain(selectedPlatforms);
 
@@ -617,7 +683,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return;
         }
 
-        const ordered = DEFAULT_TTS_PLATFORMS.filter((key) => nextPlatforms.includes(key));
+        const ordered = TTS_PLATFORM_KEYS.filter((key) => nextPlatforms.includes(key));
         await persistTtsSettings(agentTtsAuto, ordered);
     };
 
@@ -696,6 +762,120 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             });
         } finally {
             setOpeningImproveScriptGemini(false);
+        }
+    };
+
+    const assertScriptSourceReady = (): boolean => {
+        if (Number(marketingPostId || 0) > 0) {
+            return true;
+        }
+        if (String(contentPlainText || savedAgentSourceContent || '').trim()) {
+            return true;
+        }
+        showMessage(
+            'Chưa có nội dung nguồn — mở tab Content, nhập nội dung hoặc fetch README rồi Lưu trước khi sinh/cải thiện script',
+            'warning',
+        );
+        return false;
+    };
+
+    const handleEnqueueCreateScriptGeminiHeadless = async () => {
+        if (!shortVideoId) {
+            showMessage('Thiếu short_video_id', 'error');
+            return;
+        }
+        if (!assertScriptSourceReady()) {
+            return;
+        }
+        if (
+            openingCreateScriptGeminiHeadless
+            || openingImproveScriptGeminiHeadless
+            || geminiScriptStatus === 'queued'
+            || geminiScriptStatus === 'processing'
+        ) {
+            return;
+        }
+        setOpeningCreateScriptGeminiHeadless(true);
+        try {
+            const res = await enqueueGeminiWebAudioScript(shortVideoId, 'create', true);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Enqueue sinh script Headless thất bại',
+                    'error',
+                );
+                return;
+            }
+            if (res.gemini_script) {
+                setGeminiScriptStatus(String(res.gemini_script.status || 'queued'));
+                setGeminiScriptMode(String(res.gemini_script.mode || 'create'));
+                setGeminiScriptError(String(res.gemini_script.error || '').trim());
+            } else {
+                setGeminiScriptStatus('queued');
+                setGeminiScriptMode('create');
+                setGeminiScriptError('');
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || 'Đã đưa sinh script vào queue Gemini Headless — có thể đóng CMS',
+                'success',
+            );
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningCreateScriptGeminiHeadless(false);
+        }
+    };
+
+    const handleEnqueueImproveScriptGeminiHeadless = async () => {
+        if (!shortVideoId) {
+            showMessage('Thiếu short_video_id', 'error');
+            return;
+        }
+        if (!hasScript || !audioScript.trim()) {
+            showMessage('Chưa có audio script', 'warning');
+            return;
+        }
+        if (!assertScriptSourceReady()) {
+            return;
+        }
+        if (
+            openingCreateScriptGeminiHeadless
+            || openingImproveScriptGeminiHeadless
+            || geminiScriptStatus === 'queued'
+            || geminiScriptStatus === 'processing'
+        ) {
+            return;
+        }
+        setOpeningImproveScriptGeminiHeadless(true);
+        try {
+            const res = await enqueueGeminiWebAudioScript(shortVideoId, 'improve', true);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Enqueue cải thiện script Headless thất bại',
+                    'error',
+                );
+                return;
+            }
+            if (res.gemini_script) {
+                setGeminiScriptStatus(String(res.gemini_script.status || 'queued'));
+                setGeminiScriptMode(String(res.gemini_script.mode || 'improve'));
+                setGeminiScriptError(String(res.gemini_script.error || '').trim());
+            } else {
+                setGeminiScriptStatus('queued');
+                setGeminiScriptMode('improve');
+                setGeminiScriptError('');
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || 'Đã đưa cải thiện script vào queue Gemini Headless — có thể đóng CMS',
+                'success',
+            );
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningImproveScriptGeminiHeadless(false);
         }
     };
 
@@ -821,6 +1001,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setImportHtmlReady(Boolean(summary.import_html_ready));
         setBeatMapReady(Boolean(summary.beat_map_ready));
+        if (summary.gemini_fill) {
+            const nextGeminiStatus = String(summary.gemini_fill.status || 'none');
+            setGeminiFillStatus(nextGeminiStatus);
+            setGeminiFillProgress({
+                current: Number(summary.gemini_fill.progress?.current || 0),
+                total: Number(summary.gemini_fill.progress?.total || 0),
+                beatId: String(summary.gemini_fill.progress?.beat_id || ''),
+                succeeded: Number(summary.gemini_fill.progress?.succeeded || 0),
+                failed: Array.isArray(summary.gemini_fill.progress?.failed)
+                    ? summary.gemini_fill.progress.failed.map(String)
+                    : [],
+                error: String(summary.gemini_fill.error || '').trim(),
+            });
+        }
+        if (summary.gemini_division) {
+            setGeminiDivisionStatus(String(summary.gemini_division.status || 'none'));
+            setGeminiDivisionError(String(summary.gemini_division.error || '').trim());
+        }
         if (typeof summary.html === 'string') {
             setImportHtml(summary.html);
             savedImportHtmlRef.current = summary.html;
@@ -1146,8 +1344,20 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             const rawItems = Array.isArray(res.items) ? res.items : [];
-            const enriched = await enrichBgmSearchItems(rawItems);
+            const playable = rawItems.filter((item) => Boolean(bgmPreviewUrl(item)));
+            if (playable.length === 0) {
+                showMessage(
+                    'Không có track nào có URL audio trực tiếp (Pixabay Audio API có thể bị 403).',
+                    'error',
+                );
+                setBgmSearchResults([]);
+                return;
+            }
+            const enriched = await enrichBgmSearchItems(playable);
             setBgmSearchResults(enriched);
+            if (typeof res.fallback_note === 'string' && res.fallback_note.trim()) {
+                showMessage(res.fallback_note.trim(), 'info');
+            }
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -1160,7 +1370,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (!downloadUrl) {
             return;
         }
-        const previewUrl = bgmPreviewUrl(item) || downloadUrl;
+        const previewUrl = bgmPreviewUrl(item);
+        if (!previewUrl) {
+            showMessage(
+                'Track này không có URL audio trực tiếp — không thể preview/tải. Thử tìm lại hoặc chọn bài khác.',
+                'error',
+            );
+            return;
+        }
         let durationSec = Number(item.duration_sec || 0);
         if (durationSec <= 0 && previewUrl) {
             durationSec = await probeAudioDurationSec(previewUrl);
@@ -1187,7 +1404,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (nextSegments) {
             await persistImportHtmlAssets({ bgmSegments: nextSegments, silent: true });
         }
-    }, [persistImportHtmlAssets]);
+    }, [persistImportHtmlAssets, showMessage]);
 
     const handleRemoveBgmSegment = React.useCallback(async (index: number) => {
         let nextSegments: ImportHtmlBgmSegment[] | null = null;
@@ -1504,6 +1721,56 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleEnqueueBeatDivisionGeminiHeadless = async () => {
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        if (!audioDurationSec || audioDurationSec <= 0) {
+            showMessage('Chưa có thời lượng audio', 'warning');
+            return;
+        }
+        if (renderMode !== 'import_html') {
+            showMessage('Chỉ áp dụng khi render_mode = HTML chatbot', 'warning');
+            return;
+        }
+        if (
+            openingBeatDivisionGeminiHeadless
+            || geminiDivisionStatus === 'queued'
+            || geminiDivisionStatus === 'processing'
+        ) {
+            return;
+        }
+        setOpeningBeatDivisionGeminiHeadless(true);
+        try {
+            const res = await enqueueGeminiWebBeatDivision(shortVideoId, true);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Enqueue chia beat Headless thất bại',
+                    'error',
+                );
+                return;
+            }
+            if (res.gemini_division) {
+                setGeminiDivisionStatus(String(res.gemini_division.status || 'queued'));
+                setGeminiDivisionError(String(res.gemini_division.error || '').trim());
+            } else {
+                setGeminiDivisionStatus('queued');
+                setGeminiDivisionError('');
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || 'Đã đưa chia beat vào queue Gemini Headless — có thể đóng CMS',
+                'success',
+            );
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningBeatDivisionGeminiHeadless(false);
+        }
+    };
+
     const handleCopyBeatHtmlPrompt = async (beatId: string) => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -1687,6 +1954,63 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const handleOpenBeatGeminiHeadless = (beatId: string) => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const beat = beatMap.sections.find((item) => item.id === beatId);
+        if (!beat) {
+            showMessage('Không tìm thấy beat', 'error');
+            return;
+        }
+        if (
+            openingBeatGeminiHeadlessBeatIds.includes(beatId)
+            || openingBeatGeminiBeatIds.includes(beatId)
+            || fillingAllMissingBeatGeminiHeadless
+        ) {
+            return;
+        }
+
+        setOpeningBeatGeminiHeadlessBeatIds((prev) => (
+            prev.includes(beatId) ? prev : [...prev, beatId]
+        ));
+        void (async () => {
+            try {
+                showMessage(
+                    `Đang chạy Gemini Headless cho ${beatId}…`,
+                    'info',
+                );
+                showMessage(
+                    `Đang chạy Gemini Headless cho ${beatId} (queue worker / API sync)…`,
+                    'info',
+                );
+                const res = await generateBeatHtmlViaGeminiWeb(shortVideoId, beatId);
+                if (!res?.success) {
+                    showMessage(
+                        parseApiMessage(res?.message) || 'Gemini Headless thất bại',
+                        'error',
+                    );
+                    return;
+                }
+                focusBeatEditor(beatId);
+                await loadRow();
+                showMessage(
+                    parseApiMessage(res?.message) || `Đã lưu HTML ${beatId} qua Gemini Headless`,
+                    'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningBeatGeminiHeadlessBeatIds((prev) => prev.filter((id) => id !== beatId));
+            }
+        })();
+    };
+
     const handleOpenAllMissingBeatGemini = () => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -1701,7 +2025,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Không có beat thiếu HTML', 'info');
             return;
         }
-        if (openingAllMissingBeatGemini) {
+        if (openingAllMissingBeatGemini || fillingAllMissingBeatGeminiHeadless) {
             return;
         }
 
@@ -1728,6 +2052,104 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
             }
         })();
+    };
+
+    const handleFillAllMissingBeatGeminiHeadless = () => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
+        if (!missingBeatIds.length) {
+            showMessage('Không có beat thiếu HTML', 'info');
+            return;
+        }
+        if (
+            fillingAllMissingBeatGeminiHeadless
+            || openingAllMissingBeatGemini
+            || geminiFillStatus === 'queued'
+            || geminiFillStatus === 'processing'
+        ) {
+            return;
+        }
+
+        setFillingAllMissingBeatGeminiHeadless(true);
+        setFillingAllMissingBeatGeminiHeadlessProgress({
+            current: 0,
+            total: missingBeatIds.length,
+            beatId: '',
+        });
+        void (async () => {
+            try {
+                const res = await enqueueGeminiWebBeatFill(shortVideoId, missingBeatIds, true);
+                if (!res?.success) {
+                    showMessage(
+                        parseApiMessage(res?.message) || 'Enqueue Gemini fill thất bại',
+                        'error',
+                    );
+                    return;
+                }
+                if (res.gemini_fill) {
+                    setGeminiFillStatus(String(res.gemini_fill.status || 'queued'));
+                    setGeminiFillProgress({
+                        current: Number(res.gemini_fill.progress?.current || 0),
+                        total: Number(res.gemini_fill.progress?.total || missingBeatIds.length),
+                        beatId: String(res.gemini_fill.progress?.beat_id || ''),
+                        succeeded: Number(res.gemini_fill.progress?.succeeded || 0),
+                        failed: Array.isArray(res.gemini_fill.progress?.failed)
+                            ? res.gemini_fill.progress.failed.map(String)
+                            : [],
+                        error: String(res.gemini_fill.error || '').trim(),
+                    });
+                } else {
+                    setGeminiFillStatus('queued');
+                }
+                await loadRow();
+                showMessage(
+                    parseApiMessage(res?.message)
+                        || `Đã đưa ${res.queued ?? missingBeatIds.length} beat vào queue — có thể đóng CMS`,
+                    'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setFillingAllMissingBeatGeminiHeadless(false);
+                setFillingAllMissingBeatGeminiHeadlessProgress(null);
+            }
+        })();
+    };
+
+    const handleAutoFillBeatHtmlChange = async (checked: boolean) => {
+        if (savingAutoFillBeatHtml) {
+            return;
+        }
+        setSavingAutoFillBeatHtml(true);
+        try {
+            const res = await saveAgentAutoFillBeatHtml(shortVideoId, checked);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình auto-fill beat',
+                    'error',
+                );
+                return;
+            }
+            setAgentAutoFillBeatHtml(checked);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked
+                        ? 'Đã bật tự động fill HTML beat (queue)'
+                        : 'Đã tắt tự động fill HTML beat'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingAutoFillBeatHtml(false);
+        }
     };
 
     const handleImportHtmlChange = (value: string) => {
@@ -2456,6 +2878,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         audioFileUrl,
         audioDurationSec,
         agentTtsAuto,
+        agentAutoFillBeatHtml,
+        geminiFillStatus,
+        geminiFillProgress,
+        geminiDivisionStatus,
+        geminiDivisionError,
+        geminiScriptStatus,
+        geminiScriptMode,
+        geminiScriptError,
         selectedPlatforms,
         ttsPending,
         ttsFailed,
@@ -2593,6 +3023,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleLaunchImportHtmlRenderAllowMismatch,
         uploading,
         savingTtsMode,
+        savingAutoFillBeatHtml,
         savingHfTheme,
         savingOmnivoiceVoice,
         savingPublishFlags,
@@ -2608,8 +3039,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         transcribingWhisper,
         savingImportHtml,
         openingBeatDivisionGemini,
+        openingBeatDivisionGeminiHeadless,
         openingCreateScriptGemini,
         openingImproveScriptGemini,
+        openingCreateScriptGeminiHeadless,
+        openingImproveScriptGeminiHeadless,
         openingMediaSuggestGemini,
         openingGithubImageShotsGemini,
         copyingBeatHtmlPromptBeatId,
@@ -2617,13 +3051,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         deletingBeatHtmlBeatId,
         deletingAllBeatHtml,
         openingBeatGeminiBeatIds,
+        openingBeatGeminiHeadlessBeatIds,
         openingAllMissingBeatGemini,
+        fillingAllMissingBeatGeminiHeadless,
+        fillingAllMissingBeatGeminiHeadlessProgress,
         hasScript,
         hasAudio,
         statusChip,
         chainLabel,
         loadRow,
         handleTtsAutoChange,
+        handleAutoFillBeatHtmlChange,
         handleOmnivoiceSpeedChange,
         handleHfThemeChange,
         handleOmnivoiceVoiceChange,
@@ -2635,6 +3073,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleCopyScript,
         handleOpenCreateScriptGemini,
         handleOpenImproveScriptGemini,
+        handleEnqueueCreateScriptGeminiHeadless,
+        handleEnqueueImproveScriptGeminiHeadless,
         handleOpenMediaSuggestGemini,
         handleOpenGithubImageShotsGemini,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenCreateScriptGemini */
@@ -2652,6 +3092,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatMapJsonChange,
         handleBeatHtmlChange,
         handleOpenBeatDivisionGemini,
+        handleEnqueueBeatDivisionGeminiHeadless,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */
         handleCopyBeatDivisionPrompt: handleOpenBeatDivisionGemini,
         handleCopyBeatHtmlPrompt,
@@ -2659,7 +3100,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleDeleteBeatHtml,
         handleDeleteAllBeatHtml,
         handleOpenBeatGemini,
+        handleOpenBeatGeminiHeadless,
         handleOpenAllMissingBeatGemini,
+        handleFillAllMissingBeatGeminiHeadless,
         handleImportHtmlChange,
         runWhisperTranscribe,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */

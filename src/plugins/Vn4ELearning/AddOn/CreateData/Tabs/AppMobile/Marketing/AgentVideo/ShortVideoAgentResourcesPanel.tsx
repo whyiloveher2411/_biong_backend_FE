@@ -816,7 +816,7 @@ export default function ShortVideoAgentResourcesPanel({ state, embedded = false 
             ) : null}
 
             <StepCard
-                step={2}
+                step={3}
                 title="Tài nguyên"
                 accent={ACCENT_RESOURCES}
                 done={resourcesReady}
@@ -840,7 +840,7 @@ export default function ShortVideoAgentResourcesPanel({ state, embedded = false 
             </StepCard>
 
             <StepCard
-                step={3}
+                step={4}
                 title="Render video"
                 accent={ACCENT_RENDER}
                 done={canRender}

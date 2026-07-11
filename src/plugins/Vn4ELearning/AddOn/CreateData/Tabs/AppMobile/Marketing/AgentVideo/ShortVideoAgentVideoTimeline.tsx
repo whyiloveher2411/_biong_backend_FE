@@ -227,15 +227,33 @@ type Props = {
     onDeleteBeatHtml?: (beatId: string) => void;
     onDeleteAllBeatHtml?: () => void;
     onOpenAllMissingBeatGemini?: () => void;
+    onFillAllMissingBeatGeminiHeadless?: () => void;
     onOpenBeatGemini?: (beatId: string) => void;
+    onOpenBeatGeminiHeadless?: (beatId: string) => void;
     copyingBeatHtmlPromptBeatId?: string;
     pastingBeatHtmlBeatId?: string;
     deletingBeatHtmlBeatId?: string;
     deletingAllBeatHtml?: boolean;
     missingBeatHtmlCount?: number;
     openingAllMissingBeatGemini?: boolean;
+    fillingAllMissingBeatGeminiHeadless?: boolean;
+    fillingAllMissingBeatGeminiHeadlessProgress?: {
+        current: number;
+        total: number;
+        beatId: string;
+    } | null;
+    geminiFillStatus?: string;
+    geminiFillProgress?: {
+        current: number;
+        total: number;
+        beatId: string;
+        succeeded?: number;
+        failed?: string[];
+        error?: string;
+    } | null;
     whisperStatus?: string;
     openingBeatGeminiBeatIds?: string[];
+    openingBeatGeminiHeadlessBeatIds?: string[];
     savingImportHtml?: boolean;
     beatPlaybackSeekRequest?: { beatId: string; startSec: number; nonce: number } | null;
     showHfPromptTypeSelect?: boolean;
@@ -267,15 +285,22 @@ export default function ShortVideoAgentVideoTimeline({
     onDeleteBeatHtml,
     onDeleteAllBeatHtml,
     onOpenAllMissingBeatGemini,
+    onFillAllMissingBeatGeminiHeadless,
     onOpenBeatGemini,
+    onOpenBeatGeminiHeadless,
     copyingBeatHtmlPromptBeatId = '',
     pastingBeatHtmlBeatId = '',
     deletingBeatHtmlBeatId = '',
     deletingAllBeatHtml = false,
     missingBeatHtmlCount = 0,
     openingAllMissingBeatGemini = false,
+    fillingAllMissingBeatGeminiHeadless = false,
+    fillingAllMissingBeatGeminiHeadlessProgress = null,
+    geminiFillStatus = 'none',
+    geminiFillProgress = null,
     whisperStatus = 'none',
     openingBeatGeminiBeatIds = [],
+    openingBeatGeminiHeadlessBeatIds = [],
     savingImportHtml = false,
     beatPlaybackSeekRequest = null,
     showHfPromptTypeSelect = false,
@@ -304,14 +329,22 @@ export default function ShortVideoAgentVideoTimeline({
         () => countBeatIdsWithHtml(beatHtml),
         [beatHtml],
     );
+    const geminiFillQueueActive = geminiFillStatus === 'queued'
+        || geminiFillStatus === 'processing';
     const showDeleteAllBeatHtml = Boolean(beatMap?.sections?.length) && beatsWithHtmlCount > 0;
     const showOpenAllMissingGemini = Boolean(beatMap?.sections?.length) && missingBeatHtmlCount > 0;
+    const showFillAllMissingGeminiHeadless = (
+        showOpenAllMissingGemini || geminiFillQueueActive
+    ) && Boolean(onFillAllMissingBeatGeminiHeadless);
     const showTimelineActions = showHfPromptTypeSelect
         || showOpenAllMissingGemini
+        || showFillAllMissingGeminiHeadless
         || showDeleteAllBeatHtml
         || showImportAssemble;
     const timelineActionsBusy = deletingAllBeatHtml
         || openingAllMissingBeatGemini
+        || fillingAllMissingBeatGeminiHeadless
+        || geminiFillQueueActive
         || savingImportHtml
         || launchingImportAssemble
         || Boolean(deletingBeatHtmlBeatId);
@@ -714,6 +747,56 @@ export default function ShortVideoAgentVideoTimeline({
                                 </span>
                             </Tooltip>
                         ) : null}
+                        {showFillAllMissingGeminiHeadless ? (
+                            <Tooltip
+                                title="Đưa beat thiếu vào queue nền (worker Gemini Headless). Có thể đóng CMS — progress cập nhật trên chip/badge."
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        color="secondary"
+                                        disabled={
+                                            !hasVideo
+                                            || timelineActionsBusy
+                                            || whisperStatus !== 'completed'
+                                            || geminiFillQueueActive
+                                        }
+                                        loading={
+                                            fillingAllMissingBeatGeminiHeadless
+                                            || geminiFillQueueActive
+                                        }
+                                        onClick={() => { onFillAllMissingBeatGeminiHeadless?.(); }}
+                                        startIcon={<AutoAwesomeIcon fontSize="small" />}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        {(() => {
+                                            const progress = geminiFillQueueActive
+                                                ? geminiFillProgress
+                                                : fillingAllMissingBeatGeminiHeadlessProgress;
+                                            if (
+                                                progress
+                                                && Number(progress.total || 0) > 0
+                                                && (
+                                                    geminiFillQueueActive
+                                                    || fillingAllMissingBeatGeminiHeadless
+                                                )
+                                            ) {
+                                                const beatNote = progress.beatId
+                                                    ? `: ${progress.beatId}`
+                                                    : '';
+                                                return `Queue fill ${progress.current}/${progress.total}${beatNote}`;
+                                            }
+                                            if (geminiFillQueueActive) {
+                                                return 'Đang fill HTML beat (queue)…';
+                                            }
+                                            return `API fill tất cả beat thiếu (${missingBeatHtmlCount})`;
+                                        })()}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
+                        ) : null}
                         {showImportAssemble && onLaunchImportAssemble ? (
                             <Tooltip
                                 title={hasAgentVideo
@@ -900,12 +983,14 @@ export default function ShortVideoAgentVideoTimeline({
                                 pastingBeatHtmlBeatId={pastingBeatHtmlBeatId}
                                 deletingBeatHtmlBeatId={deletingBeatHtmlBeatId}
                                 openingBeatGeminiBeatIds={openingBeatGeminiBeatIds}
+                                openingBeatGeminiHeadlessBeatIds={openingBeatGeminiHeadlessBeatIds}
                                 savingImportHtml={savingImportHtml}
                                 onBeatClick={onBeatClick}
                                 onCopyPrompt={onCopyBeatPrompt}
                                 onPasteHtml={onPasteBeatHtml}
                                 onDeleteBeatData={onDeleteBeatHtml}
                                 onOpenGemini={onOpenBeatGemini}
+                                onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
                                 scrollLeft={timelineScrollLeft}
                                 contentWidthPx={timelineContentWidthPx}
                                 layout={timelineLayout}

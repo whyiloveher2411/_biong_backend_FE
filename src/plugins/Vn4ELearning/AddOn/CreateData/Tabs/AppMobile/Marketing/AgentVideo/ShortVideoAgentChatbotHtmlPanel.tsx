@@ -4,7 +4,9 @@ import {
     Avatar,
     Box,
     Chip,
+    FormControlLabel,
     Stack,
+    Switch,
     ToggleButton,
     ToggleButtonGroup,
     Typography,
@@ -97,6 +99,49 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state }: Props) {
     const beatCount = state.beatMap?.sections.length ?? 0;
     const beatDone = Boolean(state.beatMapReady && beatCount > 0);
     const isImportHtml = state.renderMode === 'import_html';
+    const geminiDivisionStatus = String(state.geminiDivisionStatus || 'none');
+    const geminiDivisionQueueActive = geminiDivisionStatus === 'queued'
+        || geminiDivisionStatus === 'processing';
+    const geminiFillStatus = String(state.geminiFillStatus || 'none');
+    const geminiFillQueueActive = geminiFillStatus === 'queued'
+        || geminiFillStatus === 'processing';
+    const missingBeatCount = Number(state.missingBeatHtmlCount || 0);
+    const autoFillDone = geminiFillStatus === 'completed'
+        || (beatDone && missingBeatCount === 0 && geminiFillStatus !== 'failed');
+    const beatDivisionStatusLabel = (() => {
+        if (geminiDivisionQueueActive) {
+            return 'Đang chia…';
+        }
+        if (geminiDivisionStatus === 'failed') {
+            return 'Thất bại';
+        }
+        if (beatDone) {
+            return `${beatCount} beat`;
+        }
+        return 'Chưa có';
+    })();
+    const autoFillStatusLabel = (() => {
+        if (geminiFillQueueActive) {
+            const progress = state.geminiFillProgress;
+            if (progress && Number(progress.total || 0) > 0) {
+                return `${progress.current}/${progress.total}`;
+            }
+            return 'Đang fill…';
+        }
+        if (geminiFillStatus === 'completed') {
+            return 'Sẵn sàng — kiểm tra';
+        }
+        if (geminiFillStatus === 'failed') {
+            return 'Thất bại';
+        }
+        if (missingBeatCount > 0) {
+            return `${missingBeatCount} thiếu`;
+        }
+        if (beatDone) {
+            return 'Đủ HTML';
+        }
+        return 'Chờ beat-map';
+    })();
 
     return (
         <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
@@ -163,24 +208,165 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state }: Props) {
                     status={(
                         <Chip
                             size="small"
-                            label={beatDone ? `${beatCount} beat` : 'Chưa có'}
-                            color={beatDone ? 'success' : 'default'}
-                            variant={beatDone ? 'filled' : 'outlined'}
+                            label={beatDivisionStatusLabel}
+                            color={
+                                geminiDivisionStatus === 'failed'
+                                    ? 'error'
+                                    : geminiDivisionQueueActive
+                                        ? 'info'
+                                        : beatDone
+                                            ? 'success'
+                                            : 'default'
+                            }
+                            variant={
+                                beatDone || geminiDivisionQueueActive || geminiDivisionStatus === 'failed'
+                                    ? 'filled'
+                                    : 'outlined'
+                            }
                             sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
                         />
                     )}
                     action={(
-                        <LoadingButton
+                        <Stack direction="row" alignItems="center" spacing={1} flexShrink={0}>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                loading={
+                                    state.openingBeatDivisionGeminiHeadless
+                                    || geminiDivisionQueueActive
+                                }
+                                disabled={
+                                    !whisperReady
+                                    || !isImportHtml
+                                    || geminiDivisionQueueActive
+                                    || state.openingBeatDivisionGeminiHeadless
+                                }
+                                onClick={() => {
+                                    void state.handleEnqueueBeatDivisionGeminiHeadless();
+                                }}
+                                sx={{
+                                    whiteSpace: 'nowrap',
+                                    color: '#00838f',
+                                    borderColor: '#00838f',
+                                    '&:hover': {
+                                        borderColor: '#006064',
+                                        bgcolor: 'rgba(0, 131, 143, 0.06)',
+                                    },
+                                }}
+                            >
+                                {geminiDivisionQueueActive ? 'Đang queue…' : 'Headless'}
+                            </LoadingButton>
+                            <LoadingButton
+                                size="small"
+                                variant={beatDone ? 'outlined' : 'contained'}
+                                loading={state.openingBeatDivisionGemini}
+                                disabled={!whisperReady || !isImportHtml || geminiDivisionQueueActive}
+                                startIcon={<OpenInNewIcon />}
+                                onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
+                                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                            >
+                                {beatDone ? 'Chia lại' : 'Mở Gemini'}
+                            </LoadingButton>
+                        </Stack>
+                    )}
+                />
+
+                <StepLine
+                    step={2}
+                    title="Fill HTML beat"
+                    done={beatDone}
+                    locked={!isImportHtml || !whisperReady || !beatDone}
+                    accent="#ad1457"
+                    status={(
+                        <Chip
                             size="small"
-                            variant={beatDone ? 'outlined' : 'contained'}
-                            loading={state.openingBeatDivisionGemini}
-                            disabled={!whisperReady || !isImportHtml}
-                            startIcon={<OpenInNewIcon />}
-                            onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
-                            sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                        >
-                            {beatDone ? 'Chia lại' : 'Mở Gemini'}
-                        </LoadingButton>
+                            label={autoFillStatusLabel}
+                            color={
+                                geminiFillStatus === 'failed'
+                                    ? 'error'
+                                    : geminiFillQueueActive
+                                        ? 'info'
+                                        : autoFillDone
+                                            ? 'success'
+                                            : missingBeatCount > 0
+                                                ? 'warning'
+                                                : state.agentAutoFillBeatHtml
+                                                    ? 'info'
+                                                    : 'default'
+                            }
+                            variant={
+                                autoFillDone || geminiFillQueueActive || missingBeatCount > 0
+                                    ? 'filled'
+                                    : 'outlined'
+                            }
+                            sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                        />
+                    )}
+                    action={(
+                        <Stack direction="row" alignItems="center" spacing={1} flexShrink={0}>
+                            {beatDone && missingBeatCount > 0 ? (
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    loading={
+                                        state.fillingAllMissingBeatGeminiHeadless
+                                        || geminiFillQueueActive
+                                    }
+                                    disabled={
+                                        !isImportHtml
+                                        || !whisperReady
+                                        || geminiFillQueueActive
+                                        || state.fillingAllMissingBeatGeminiHeadless
+                                    }
+                                    onClick={() => {
+                                        state.handleFillAllMissingBeatGeminiHeadless();
+                                    }}
+                                    sx={{
+                                        whiteSpace: 'nowrap',
+                                        color: '#ad1457',
+                                        borderColor: '#ad1457',
+                                        '&:hover': {
+                                            borderColor: '#880e4f',
+                                            bgcolor: 'rgba(173, 20, 87, 0.06)',
+                                        },
+                                    }}
+                                >
+                                    {geminiFillQueueActive ? 'Đang queue…' : `Enqueue (${missingBeatCount})`}
+                                </LoadingButton>
+                            ) : null}
+                            <FormControlLabel
+                                sx={{ mr: 0, ml: 0 }}
+                                control={(
+                                    <Switch
+                                        size="small"
+                                        checked={state.agentAutoFillBeatHtml}
+                                        disabled={
+                                            !isImportHtml
+                                            || !whisperReady
+                                            || !beatDone
+                                            || state.savingAutoFillBeatHtml
+                                        }
+                                        onChange={(e) => {
+                                            void state.handleAutoFillBeatHtmlChange(e.target.checked);
+                                        }}
+                                        color="default"
+                                        sx={{
+                                            '& .MuiSwitch-switchBase.Mui-checked': {
+                                                color: '#ad1457',
+                                            },
+                                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                                bgcolor: '#ad1457',
+                                            },
+                                        }}
+                                    />
+                                )}
+                                label={(
+                                    <Typography variant="caption" fontWeight={600} noWrap>
+                                        Tự động
+                                    </Typography>
+                                )}
+                            />
+                        </Stack>
                     )}
                 />
 

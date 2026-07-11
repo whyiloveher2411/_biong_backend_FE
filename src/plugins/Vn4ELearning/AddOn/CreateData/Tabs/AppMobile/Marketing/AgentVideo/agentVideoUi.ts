@@ -9,7 +9,11 @@ export const TTS_PLATFORM_OPTIONS = [
     { key: 'vbee', label: 'Vbee (API)' },
 ] as const;
 
-export const DEFAULT_TTS_PLATFORMS = TTS_PLATFORM_OPTIONS.map((item) => item.key);
+/** Thứ tự ưu tiên đầy đủ (dùng khi sắp xếp lựa chọn user). */
+export const TTS_PLATFORM_KEYS = TTS_PLATFORM_OPTIONS.map((item) => item.key);
+
+/** Mặc định khi tạo mới / chưa cấu hình: chỉ OmniVoice. */
+export const DEFAULT_TTS_PLATFORMS: string[] = ['omnivoice_local'];
 
 export type AgentWorkflowPhase =
     | 'pending'
@@ -62,6 +66,7 @@ export function resolveWorkflowChip(input: {
     ttsPending: boolean;
     ttsFailed: boolean;
     agentVideoStatus: string;
+    geminiFillStatus?: string;
 }): WorkflowChip {
     if (input.hasAgentVideo) {
         return { label: 'Video HyperFrames sẵn sàng', color: 'success' };
@@ -71,6 +76,15 @@ export function resolveWorkflowChip(input: {
     }
     if (input.agentVideoStatus === 'failed') {
         return { label: 'Render video thất bại', color: 'error' };
+    }
+    if (input.geminiFillStatus === 'queued' || input.geminiFillStatus === 'processing') {
+        return { label: 'Đang fill HTML beat (Gemini queue)…', color: 'info' };
+    }
+    if (input.geminiFillStatus === 'completed') {
+        return { label: 'HTML beat sẵn sàng — kiểm tra lại', color: 'success' };
+    }
+    if (input.geminiFillStatus === 'failed') {
+        return { label: 'Fill HTML beat thất bại', color: 'error' };
     }
     if (input.hasAudio) {
         return { label: 'Audio sẵn sàng — chờ render video', color: 'success' };

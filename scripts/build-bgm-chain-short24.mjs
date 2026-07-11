@@ -38,7 +38,15 @@ let covered = 0;
 for (const item of items) {
   const id = segments.length + 1;
   const out = path.join(audioDir, `bgm_${id}.mp3`);
-  const response = await fetch(item.download_url);
+  const response = await fetch(item.download_url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      ...(String(item.download_url || "").includes("mixkit.co")
+        ? { Referer: "https://mixkit.co/" }
+        : { Referer: "https://pixabay.com/" }),
+    },
+  });
   if (!response.ok) {
     console.warn(`[bgm] skip ${item.id}: HTTP ${response.status}`);
     continue;

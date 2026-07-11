@@ -142,6 +142,27 @@ export type ImportHtmlSummary = {
     missing_beat_ids?: string[];
     beats_render_error_count?: number;
     beat_render_error_ids?: string[];
+    gemini_fill?: {
+        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+        job_ids?: number[];
+        queued_at?: string;
+        updated_at?: string;
+        error?: string;
+        progress?: {
+            current?: number;
+            total?: number;
+            beat_id?: string;
+            succeeded?: number;
+            failed?: string[];
+        };
+    };
+    gemini_division?: {
+        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+        job_ids?: number[];
+        queued_at?: string;
+        updated_at?: string;
+        error?: string;
+    };
     assets?: ImportHtmlAssets;
     composition?: ImportHtmlComposition;
     bgm_total_sec?: number;
@@ -235,6 +256,7 @@ export type AgentVideoContentResponse = {
     audio_file?: string;
     audio_file_duration_sec?: number;
     agent_tts_auto?: boolean;
+    agent_auto_fill_beat_html?: boolean;
     agent_tts_platforms?: string[];
     agent_omnivoice_voice?: string;
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
@@ -275,6 +297,14 @@ export type AgentVideoContentResponse = {
         render_mode?: AgentRenderMode;
         import_html_ready?: boolean;
         whisper_status?: string;
+    };
+    gemini_script?: {
+        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+        mode?: 'create' | 'improve' | string;
+        job_ids?: number[];
+        queued_at?: string;
+        updated_at?: string;
+        error?: string;
     };
     marketing_post_id?: number;
     app_mobile_id?: number;
@@ -510,6 +540,92 @@ export async function saveAgentTtsSettings(
     );
 }
 
+export async function saveAgentAutoFillBeatHtml(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_auto_fill_beat_html?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-auto-fill-beat-html',
+        shortVideoBody(shortVideoId, {
+            agent_auto_fill_beat_html: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_auto_fill_beat_html?: boolean }>;
+}
+
+export async function enqueueGeminiWebBeatFill(
+    shortVideoId: number,
+    beatIds?: string[],
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    beat_ids?: string[];
+    job_ids?: number[];
+    gemini_fill?: ImportHtmlSummary['gemini_fill'];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-fill',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+            ...(beatIds ? { beat_ids: beatIds } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        beat_ids?: string[];
+        job_ids?: number[];
+        gemini_fill?: ImportHtmlSummary['gemini_fill'];
+    }>;
+}
+
+export async function enqueueGeminiWebBeatDivision(
+    shortVideoId: number,
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    gemini_division?: ImportHtmlSummary['gemini_division'];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-division',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        job_ids?: number[];
+        gemini_division?: ImportHtmlSummary['gemini_division'];
+    }>;
+}
+
+export async function enqueueGeminiWebAudioScript(
+    shortVideoId: number,
+    mode: 'create' | 'improve',
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    mode?: string;
+    job_ids?: number[];
+    gemini_script?: AgentVideoContentResponse['gemini_script'];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/enqueue-gemini-web-audio-script',
+        shortVideoBody(shortVideoId, {
+            mode,
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        mode?: string;
+        job_ids?: number[];
+        gemini_script?: AgentVideoContentResponse['gemini_script'];
+    }>;
+}
+
 export async function saveAdminAudioScript(
     shortVideoId: number,
     audioScript: string,
@@ -659,6 +775,9 @@ export async function searchAgentBgm(query: string, limit = 8): Promise<{
     success?: boolean;
     items?: AgentBgmSearchItem[];
     message?: ApiMessage;
+    source?: string;
+    fallback_note?: string;
+    provider?: string;
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/search-agent-bgm',

@@ -3,6 +3,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ComputerIcon from '@mui/icons-material/Computer';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
     Box,
@@ -33,12 +34,14 @@ type Props = {
     pastingBeatHtmlBeatId: string;
     deletingBeatHtmlBeatId?: string;
     openingBeatGeminiBeatIds?: string[];
+    openingBeatGeminiHeadlessBeatIds?: string[];
     savingImportHtml?: boolean;
     onBeatClick?: (beatId: string) => void;
     onCopyPrompt?: (beatId: string) => void;
     onPasteHtml?: (beatId: string) => void;
     onDeleteBeatData?: (beatId: string) => void;
     onOpenGemini?: (beatId: string) => void;
+    onOpenGeminiHeadless?: (beatId: string) => void;
     scrollLeft: number;
     contentWidthPx: number;
     layout: AgentVideoTimelineLayout;
@@ -56,12 +59,14 @@ export default function AgentVideoBeatBoundaryOverlay({
     pastingBeatHtmlBeatId,
     deletingBeatHtmlBeatId = '',
     openingBeatGeminiBeatIds = [],
+    openingBeatGeminiHeadlessBeatIds = [],
     savingImportHtml = false,
     onBeatClick,
     onCopyPrompt,
     onPasteHtml,
     onDeleteBeatData,
     onOpenGemini,
+    onOpenGeminiHeadless,
     scrollLeft,
     contentWidthPx,
     layout,
@@ -135,7 +140,8 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const isPasting = pastingBeatHtmlBeatId === segment.beatId;
                     const isDeleting = deletingBeatHtmlBeatId === segment.beatId;
                     const isOpeningGemini = openingBeatGeminiBeatIds.includes(segment.beatId);
-                    const isBusy = isCopying || isPasting || isDeleting || isOpeningGemini;
+                    const isOpeningGeminiHeadless = openingBeatGeminiHeadlessBeatIds.includes(segment.beatId);
+                    const isBusy = isCopying || isPasting || isDeleting || isOpeningGemini || isOpeningGeminiHeadless;
                     const showActionLabels = widthPx >= MIN_SEGMENT_WIDTH_FOR_ACTION_LABELS;
 
                     return (
@@ -311,6 +317,42 @@ export default function AgentVideoBeatBoundaryOverlay({
                                                 }}
                                             >
                                                 {showActionLabels ? 'Gemini' : ''}
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
+
+                                {onOpenGeminiHeadless ? (
+                                    <Tooltip title="Gemini Headless — full auto (điền → Gửi → lưu CMS)" placement="top">
+                                        <span>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                disabled={isBusy || savingImportHtml}
+                                                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                    event.stopPropagation();
+                                                    void onOpenGeminiHeadless(segment.beatId);
+                                                }}
+                                                startIcon={isOpeningGeminiHeadless ? (
+                                                    <CircularProgress size={12} sx={{ color: 'inherit' }} />
+                                                ) : (
+                                                    <ComputerIcon sx={{ fontSize: 12 }} />
+                                                )}
+                                                sx={{
+                                                    minWidth: showActionLabels ? 40 : 28,
+                                                    px: showActionLabels ? 0.75 : 0.5,
+                                                    py: 0.15,
+                                                    fontSize: 9,
+                                                    lineHeight: 1.2,
+                                                    textTransform: 'none',
+                                                    bgcolor: 'rgba(0,0,0,0.32)',
+                                                    color: 'common.white',
+                                                    boxShadow: 'none',
+                                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.46)', boxShadow: 'none' },
+                                                    '& .MuiButton-startIcon': { mr: showActionLabels ? 0.35 : 0 },
+                                                }}
+                                            >
+                                                {showActionLabels ? 'API' : ''}
                                             </Button>
                                         </span>
                                     </Tooltip>

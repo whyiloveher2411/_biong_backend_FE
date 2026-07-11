@@ -61,6 +61,9 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+    const geminiScriptStatus = String(state.geminiScriptStatus || 'none');
+    const geminiScriptQueueActive = geminiScriptStatus === 'queued'
+        || geminiScriptStatus === 'processing';
 
     const handleOpenCreateScriptGemini = async () => {
         setOpeningCreateScriptGemini(true);
@@ -240,33 +243,73 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </Typography>
 
                     {!state.hasScript && (
-                        <LoadingButton
-                            size="small"
-                            variant="contained"
-                            color="primary"
-                            fullWidth
-                            sx={workflowActionButtonSx}
-                            loading={openingCreateScriptGemini}
-                            startIcon={<OpenInNewIcon />}
-                            onClick={() => { void handleOpenCreateScriptGemini(); }}
-                        >
-                            Mở Gemini sinh script
-                        </LoadingButton>
+                        <Stack spacing={1}>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={
+                                    state.openingCreateScriptGeminiHeadless
+                                    || geminiScriptQueueActive
+                                }
+                                disabled={geminiScriptQueueActive}
+                                onClick={() => {
+                                    void state.handleEnqueueCreateScriptGeminiHeadless();
+                                }}
+                            >
+                                {geminiScriptQueueActive ? 'Đang queue…' : 'Queue sinh script'}
+                            </LoadingButton>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={openingCreateScriptGemini}
+                                disabled={geminiScriptQueueActive}
+                                startIcon={<OpenInNewIcon />}
+                                onClick={() => { void handleOpenCreateScriptGemini(); }}
+                            >
+                                Mở Gemini sinh script
+                            </LoadingButton>
+                        </Stack>
                     )}
 
                     {state.hasScript && !state.scriptApproved && (
-                        <LoadingButton
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            fullWidth
-                            sx={workflowActionButtonSx}
-                            loading={openingImproveScriptGemini}
-                            startIcon={<OpenInNewIcon />}
-                            onClick={() => { void handleOpenImproveScriptGemini(); }}
-                        >
-                            Mở Gemini cải thiện script
-                        </LoadingButton>
+                        <Stack spacing={1}>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={
+                                    state.openingImproveScriptGeminiHeadless
+                                    || geminiScriptQueueActive
+                                }
+                                disabled={geminiScriptQueueActive}
+                                onClick={() => {
+                                    void state.handleEnqueueImproveScriptGeminiHeadless();
+                                }}
+                            >
+                                {geminiScriptQueueActive ? 'Đang queue…' : 'Queue cải thiện'}
+                            </LoadingButton>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={openingImproveScriptGemini}
+                                disabled={geminiScriptQueueActive}
+                                startIcon={<OpenInNewIcon />}
+                                onClick={() => { void handleOpenImproveScriptGemini(); }}
+                            >
+                                Mở Gemini cải thiện script
+                            </LoadingButton>
+                        </Stack>
                     )}
 
                     {!state.scriptApproved ? (

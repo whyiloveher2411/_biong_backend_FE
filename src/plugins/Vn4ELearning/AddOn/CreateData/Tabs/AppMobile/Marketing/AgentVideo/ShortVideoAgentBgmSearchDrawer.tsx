@@ -39,7 +39,8 @@ type Props = {
     playingUrl: string | null;
 };
 
-function PixabayProviderBadge() {
+function ProviderBadge({ provider }: { provider?: string }) {
+    const label = String(provider || 'pixabay').toLowerCase() === 'mixkit' ? 'Mixkit' : 'Pixabay';
     return (
         <Box
             component="span"
@@ -57,7 +58,7 @@ function PixabayProviderBadge() {
                 whiteSpace: 'nowrap',
             }}
         >
-            Pixabay
+            {label}
         </Box>
     );
 }
@@ -149,7 +150,13 @@ export default function ShortVideoAgentBgmSearchDrawer({
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <PixabayProviderBadge />
+                                    <ProviderBadge
+                                        provider={
+                                            searchResults[0]?.provider
+                                            || segments[0]?.provider
+                                            || 'pixabay'
+                                        }
+                                    />
                                 </InputAdornment>
                             ),
                         }}

@@ -38,6 +38,7 @@ import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
+import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -46,6 +47,7 @@ import MarketingCrawlAutoToggle from './MarketingCrawlAutoToggle';
 import MarketingSourcesDrawer from './MarketingSourcesDrawer';
 import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
 import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
+import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -463,6 +465,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openSourcesDrawer, setOpenSourcesDrawer] = useState(false);
     const [openCategoriesDrawer, setOpenCategoriesDrawer] = useState(false);
     const [openNewsPushConfigDrawer, setOpenNewsPushConfigDrawer] = useState(false);
+    const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -761,6 +764,23 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                         </>
                     )}
 
+                    {viewMode === 'short_video' && (
+                        <>
+                            <Divider />
+                            <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<TravelExploreIcon fontSize="small" />}
+                                    onClick={() => setOpenGithubTrendingDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    GitHub Trending
+                                </Button>
+                            </Stack>
+                        </>
+                    )}
+
                     {viewMode === 'calendar' && (
                         <>
                             <Divider />
@@ -1026,6 +1046,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                 open={openNewsPushConfigDrawer}
                 onClose={() => setOpenNewsPushConfigDrawer(false)}
                 appMobileId={Number(data?.post?.id || 0)}
+            />
+
+            <MarketingGithubTrendingDrawer
+                open={openGithubTrendingDrawer}
+                onClose={() => setOpenGithubTrendingDrawer(false)}
+                appMobileId={Number(data?.post?.id || 0)}
+                onCreatedShortVideo={() => {
+                    setShortVideoTableKey((k) => k + 1);
+                }}
             />
         </div >
     );

@@ -8,7 +8,8 @@ export function isDirectAudioUrl(url: string): boolean {
     if (/\.(mp3|wav|m4a|ogg)(\?|$)/i.test(trimmed)) {
         return true;
     }
-    return /cdn\.pixabay\.com\/(download\/)?audio\//i.test(trimmed);
+    return /cdn\.pixabay\.com\/(download\/)?audio\//i.test(trimmed)
+        || /assets\.mixkit\.co\/music\//i.test(trimmed);
 }
 
 export function bgmPreviewUrl(item: { preview_url?: string; download_url?: string }): string {

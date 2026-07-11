@@ -3,8 +3,10 @@ import {
     Alert,
     Avatar,
     Box,
+    ButtonGroup,
     Chip,
     Collapse,
+    Divider,
     Stack,
     Typography,
 } from '@mui/material';
@@ -16,6 +18,8 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TuneIcon from '@mui/icons-material/Tune';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import CheckIcon from '@mui/icons-material/Check';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
@@ -134,6 +138,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const [selectionAnchor, setSelectionAnchor] = React.useState<ScriptTextSelectionAnchor | null>(null);
     const [phoneticDrawerOpen, setPhoneticDrawerOpen] = React.useState(false);
     const [phoneticDrawerTerm, setPhoneticDrawerTerm] = React.useState('');
+    const [scriptEditMode, setScriptEditMode] = React.useState(false);
     const lastPointerRef = React.useRef({ clientX: 0, clientY: 0 });
 
     const existingPhoneticEntry = React.useMemo(
@@ -150,12 +155,30 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
         clearScriptTextSelection(scriptFieldRef.current);
     }, []);
 
-    /** Selection từ textarea script — nguồn đúng duy nhất cho ô kịch bản */
+    const toggleScriptEditMode = React.useCallback(() => {
+        setScriptEditMode((prev) => {
+            const next = !prev;
+            setSelectionAnchor(null);
+            clearScriptTextSelection(scriptFieldRef.current);
+            if (next) {
+                window.setTimeout(() => {
+                    scriptFieldRef.current?.focus();
+                }, 0);
+            }
+            return next;
+        });
+    }, []);
+
+    /** Selection từ box xem kịch bản — chỉ khi không ở chế độ sửa */
     const handleScriptTextSelection = React.useCallback((payload: {
         text: string;
         clientX: number;
         clientY: number;
     }) => {
+        if (scriptEditMode) {
+            setSelectionAnchor(null);
+            return;
+        }
         lastPointerRef.current = {
             clientX: payload.clientX,
             clientY: payload.clientY,
@@ -170,10 +193,14 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
             left: payload.clientX,
             top: payload.clientY,
         });
-    }, []);
+    }, [scriptEditMode]);
 
     const refreshScriptSelectionMenu = React.useCallback(() => {
-        // Ưu tiên textarea; không dùng DOM selection trong zone (dễ lệch với overlay/whisper)
+        if (scriptEditMode) {
+            setSelectionAnchor(null);
+            return;
+        }
+
         const fromField = scriptFieldRef.current
             ? buildSelectionAnchor(scriptFieldRef.current, lastPointerRef.current)
             : null;
@@ -195,7 +222,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
 
         const fromDom = buildDomSelectionAnchor(phoneticZoneRef.current, lastPointerRef.current);
         setSelectionAnchor(fromDom);
-    }, []);
+    }, [scriptEditMode]);
 
     const handleScriptPointerDown = (event: React.MouseEvent<HTMLElement>) => {
         lastPointerRef.current = {
@@ -273,6 +300,18 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const scriptPipeline = resolveScriptPipelineState(state);
     const audioPipeline = resolveAudioPipelineState(state);
     const whisperPipeline = resolveWhisperPipelineState(state);
+    const geminiScriptStatus = String(state.geminiScriptStatus || 'none');
+    const geminiScriptQueueActive = geminiScriptStatus === 'queued'
+        || geminiScriptStatus === 'processing';
+    const geminiScriptChipLabel = (() => {
+        if (!geminiScriptQueueActive && geminiScriptStatus !== 'failed') {
+            return '';
+        }
+        if (geminiScriptQueueActive) {
+            return state.geminiScriptMode === 'improve' ? 'Queue cải thiện…' : 'Queue sinh…';
+        }
+        return 'Queue thất bại';
+    })();
 
     const handleOpenCreateScriptGemini = async () => {
         setOpeningCreateScriptGemini(true);
@@ -352,40 +391,131 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                     <Stack spacing={1.25}>
                         <Stack
                             direction="row"
-                            alignItems="center"
+                            alignItems="flex-start"
                             justifyContent="space-between"
                             flexWrap="wrap"
                             useFlexGap
-                            spacing={1}
+                            spacing={1.5}
                         >
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                <LoadingButton
-                                    size="small"
-                                    variant="contained"
-                                    loading={openingCreateScriptGemini}
-                                    startIcon={<OpenInNewIcon />}
-                                    onClick={() => { void handleOpenCreateScriptGemini(); }}
-                                >
-                                    Gemini sinh script
-                                </LoadingButton>
-                                <LoadingButton
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<OpenInNewIcon />}
-                                    disabled={!state.hasScript}
-                                    loading={openingImproveScriptGemini}
-                                    onClick={() => { void handleOpenImproveScriptGemini(); }}
-                                >
-                                    Cải thiện
-                                </LoadingButton>
+                            <Stack
+                                direction="row"
+                                spacing={1.5}
+                                flexWrap="wrap"
+                                useFlexGap
+                                alignItems="flex-end"
+                            >
+                                <Stack spacing={0.5}>
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ lineHeight: 1.2, px: 0.25 }}
+                                    >
+                                        Sinh script
+                                    </Typography>
+                                    <ButtonGroup size="small" variant="outlined" color="primary">
+                                        <LoadingButton
+                                            loading={openingCreateScriptGemini}
+                                            disabled={geminiScriptQueueActive}
+                                            startIcon={<OpenInNewIcon />}
+                                            onClick={() => { void handleOpenCreateScriptGemini(); }}
+                                            sx={{
+                                                whiteSpace: 'nowrap',
+                                                bgcolor: 'primary.main',
+                                                color: 'primary.contrastText',
+                                                '&:hover': { bgcolor: 'primary.dark' },
+                                                '&.Mui-disabled': {
+                                                    bgcolor: 'action.disabledBackground',
+                                                    color: 'action.disabled',
+                                                },
+                                            }}
+                                        >
+                                            Gemini
+                                        </LoadingButton>
+                                        <LoadingButton
+                                            loading={
+                                                state.openingCreateScriptGeminiHeadless
+                                                || (
+                                                    geminiScriptQueueActive
+                                                    && state.geminiScriptMode !== 'improve'
+                                                )
+                                            }
+                                            disabled={geminiScriptQueueActive}
+                                            onClick={() => {
+                                                void state.handleEnqueueCreateScriptGeminiHeadless();
+                                            }}
+                                            sx={{ whiteSpace: 'nowrap' }}
+                                        >
+                                            Queue
+                                        </LoadingButton>
+                                    </ButtonGroup>
+                                </Stack>
+
+                                <Divider
+                                    orientation="vertical"
+                                    flexItem
+                                    sx={{ display: { xs: 'none', sm: 'block' }, my: 0.5 }}
+                                />
+
+                                <Stack spacing={0.5}>
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ lineHeight: 1.2, px: 0.25 }}
+                                    >
+                                        Cải thiện
+                                    </Typography>
+                                    <ButtonGroup size="small" variant="outlined" color="primary">
+                                        <LoadingButton
+                                            disabled={!state.hasScript || geminiScriptQueueActive}
+                                            loading={openingImproveScriptGemini}
+                                            startIcon={<OpenInNewIcon />}
+                                            onClick={() => { void handleOpenImproveScriptGemini(); }}
+                                            sx={{ whiteSpace: 'nowrap' }}
+                                        >
+                                            Gemini
+                                        </LoadingButton>
+                                        <LoadingButton
+                                            loading={
+                                                state.openingImproveScriptGeminiHeadless
+                                                || (
+                                                    geminiScriptQueueActive
+                                                    && state.geminiScriptMode === 'improve'
+                                                )
+                                            }
+                                            disabled={!state.hasScript || geminiScriptQueueActive}
+                                            onClick={() => {
+                                                void state.handleEnqueueImproveScriptGeminiHeadless();
+                                            }}
+                                            sx={{ whiteSpace: 'nowrap' }}
+                                        >
+                                            Queue
+                                        </LoadingButton>
+                                    </ButtonGroup>
+                                </Stack>
+
                                 <Button
                                     size="small"
                                     variant="text"
                                     disabled={!state.hasScript}
                                     onClick={() => { void state.handleCopyScript(); }}
+                                    sx={{ alignSelf: 'flex-end', mb: 0.15 }}
                                 >
                                     Copy
                                 </Button>
+
+                                {geminiScriptChipLabel ? (
+                                    <Chip
+                                        size="small"
+                                        label={geminiScriptChipLabel}
+                                        color={geminiScriptStatus === 'failed' ? 'error' : 'info'}
+                                        sx={{
+                                            alignSelf: 'flex-end',
+                                            mb: 0.25,
+                                            height: 22,
+                                            '& .MuiChip-label': { px: 0.75, fontSize: 11 },
+                                        }}
+                                    />
+                                ) : null}
                             </Stack>
                             <Button
                                 size="small"
@@ -400,7 +530,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     />
                                 )}
                                 onClick={() => setGuideOpen((prev) => !prev)}
-                                sx={{ color: 'text.secondary', minWidth: 'auto' }}
+                                sx={{ color: 'text.secondary', minWidth: 'auto', mt: 0.5 }}
                             >
                                 Hướng dẫn
                             </Button>
@@ -408,72 +538,92 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
 
                         <Collapse in={guideOpen}>
                             <Alert severity="info" sx={{ py: 0.5 }}>
-                                Mở Gemini → copy script → dán vào ô dưới → Lưu → Duyệt để queue TTS.
+                                <strong>Gemini</strong>
+                                {' '}
+                                mở tab (extension) — copy rồi Lưu.
+                                {' '}
+                                <strong>Queue</strong>
+                                {' '}
+                                chạy Headless nền, tự lưu CMS (không tự duyệt).
                             </Alert>
                         </Collapse>
 
                         <Box>
                             <ShortVideoAgentPhoneticScriptField
                                 inputRef={scriptFieldRef}
+                                editMode={scriptEditMode}
                                 minRows={6}
                                 maxRows={14}
                                 placeholder="Dán audio script từ chatbot vào đây…"
                                 value={state.audioScript}
                                 onChange={state.setAudioScript}
                                 phoneticDict={state.ttsPhoneticDict}
-                                onTextSelection={handleScriptTextSelection}
+                                onTextSelection={scriptEditMode ? undefined : handleScriptTextSelection}
                             />
                         </Box>
 
                         <ShortVideoAgentPhoneticQuickMenu
-                            anchor={state.compareDrawerOpen ? null : selectionAnchor}
+                            anchor={state.compareDrawerOpen || scriptEditMode ? null : selectionAnchor}
                             isEdit={quickMenuIsEdit}
                             onCreateOrEdit={handleOpenPhoneticDrawer}
                             onClose={closePhoneticQuickMenu}
                         />
 
-                        {!state.hasScript ? (
-                            <Typography variant="caption" color="text.secondary">
-                                Chưa có nội dung — bấm Gemini sinh script để bắt đầu.
-                            </Typography>
-                        ) : (
-                            <Stack
-                                direction="row"
-                                spacing={1}
-                                flexWrap="wrap"
-                                useFlexGap
-                                sx={{
-                                    pt: 0.5,
-                                    borderTop: '1px solid',
-                                    borderColor: 'divider',
-                                }}
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            flexWrap="wrap"
+                            useFlexGap
+                            alignItems="center"
+                            sx={{
+                                pt: 0.5,
+                                borderTop: '1px solid',
+                                borderColor: 'divider',
+                            }}
+                        >
+                            {!state.hasScript ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                                    Chưa có nội dung — bấm Gemini sinh script để bắt đầu.
+                                </Typography>
+                            ) : (
+                                <>
+                                    <LoadingButton
+                                        size="small"
+                                        loading={state.savingScript}
+                                        variant="outlined"
+                                        startIcon={<SaveIcon />}
+                                        onClick={() => { void state.handleSaveScript(); }}
+                                    >
+                                        Lưu script
+                                    </LoadingButton>
+                                    <LoadingButton
+                                        size="small"
+                                        loading={state.approvingScript}
+                                        variant="contained"
+                                        color="success"
+                                        disabled={state.scriptDirty || !state.hasScript}
+                                        startIcon={<CheckCircleOutlineIcon />}
+                                        onClick={() => { void state.handleApproveScript(); }}
+                                    >
+                                        {state.scriptDirty
+                                            ? 'Lưu trước khi duyệt'
+                                            : state.scriptApproved
+                                                ? 'Duyệt lại & queue TTS'
+                                                : 'Duyệt script'}
+                                    </LoadingButton>
+                                </>
+                            )}
+                            <Button
+                                size="small"
+                                variant={scriptEditMode ? 'contained' : 'outlined'}
+                                color="primary"
+                                startIcon={scriptEditMode ? <CheckIcon /> : <EditOutlinedIcon />}
+                                onClick={toggleScriptEditMode}
+                                sx={{ ml: 'auto', whiteSpace: 'nowrap' }}
                             >
-                                <LoadingButton
-                                    size="small"
-                                    loading={state.savingScript}
-                                    variant="outlined"
-                                    startIcon={<SaveIcon />}
-                                    onClick={() => { void state.handleSaveScript(); }}
-                                >
-                                    Lưu script
-                                </LoadingButton>
-                                <LoadingButton
-                                    size="small"
-                                    loading={state.approvingScript}
-                                    variant="contained"
-                                    color="success"
-                                    disabled={state.scriptDirty || !state.hasScript}
-                                    startIcon={<CheckCircleOutlineIcon />}
-                                    onClick={() => { void state.handleApproveScript(); }}
-                                >
-                                    {state.scriptDirty
-                                        ? 'Lưu trước khi duyệt'
-                                        : state.scriptApproved
-                                            ? 'Duyệt lại & queue TTS'
-                                            : 'Duyệt script'}
-                                </LoadingButton>
-                            </Stack>
-                        )}
+                                {scriptEditMode ? 'Xong' : 'Sửa kịch bản'}
+                            </Button>
+                        </Stack>
                     </Stack>
                 </SectionShell>
 
@@ -717,8 +867,12 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 filter={state.compareFilter}
                 onFilterChange={state.setCompareFilter}
                 onFocusScript={() => {
-                    scriptFieldRef.current?.focus();
-                    scriptFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setScriptEditMode(true);
+                    setSelectionAnchor(null);
+                    window.setTimeout(() => {
+                        scriptFieldRef.current?.focus();
+                        scriptFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 0);
                 }}
                 onSave={async () => { await state.saveCaptionAlignments(); }}
                 saving={state.savingCaptionAlignments}

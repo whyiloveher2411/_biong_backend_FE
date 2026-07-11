@@ -261,8 +261,14 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenAllMissingBeatGemini={() => {
                         state.handleOpenAllMissingBeatGemini();
                     }}
+                    onFillAllMissingBeatGeminiHeadless={() => {
+                        state.handleFillAllMissingBeatGeminiHeadless();
+                    }}
                     onOpenBeatGemini={(beatId) => {
                         void state.handleOpenBeatGemini(beatId);
+                    }}
+                    onOpenBeatGeminiHeadless={(beatId) => {
+                        void state.handleOpenBeatGeminiHeadless(beatId);
                     }}
                     copyingBeatHtmlPromptBeatId={state.copyingBeatHtmlPromptBeatId}
                     pastingBeatHtmlBeatId={state.pastingBeatHtmlBeatId}
@@ -270,8 +276,15 @@ export default function ShortVideoAgentVideoWorkspace({
                     deletingAllBeatHtml={state.deletingAllBeatHtml}
                     missingBeatHtmlCount={state.missingBeatHtmlCount}
                     openingAllMissingBeatGemini={state.openingAllMissingBeatGemini}
+                    fillingAllMissingBeatGeminiHeadless={state.fillingAllMissingBeatGeminiHeadless}
+                    fillingAllMissingBeatGeminiHeadlessProgress={
+                        state.fillingAllMissingBeatGeminiHeadlessProgress
+                    }
+                    geminiFillStatus={state.geminiFillStatus}
+                    geminiFillProgress={state.geminiFillProgress}
                     whisperStatus={state.whisperStatus}
                     openingBeatGeminiBeatIds={state.openingBeatGeminiBeatIds}
+                    openingBeatGeminiHeadlessBeatIds={state.openingBeatGeminiHeadlessBeatIds}
                     savingImportHtml={state.savingImportHtml}
                     beatPlaybackSeekRequest={state.beatPlaybackSeekRequest}
                     showHfPromptTypeSelect={
