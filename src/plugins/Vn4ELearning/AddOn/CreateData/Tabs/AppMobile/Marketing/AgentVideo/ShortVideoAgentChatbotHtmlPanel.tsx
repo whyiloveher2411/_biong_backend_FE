@@ -1,25 +1,17 @@
 import React from 'react';
 import {
     Alert,
+    Avatar,
     Box,
     Chip,
-    Divider,
     Stack,
-    Tab,
-    Tabs,
-    TextField,
     ToggleButton,
     ToggleButtonGroup,
-    Tooltip,
     Typography,
 } from '@mui/material';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { getBeatHtmlVisualState, getBeatRenderErrorMessage, parseBeatMapJson, validateBeatMap } from './agentVideoBeatMap';
+import ShortVideoAgentResourcesPanel from './ShortVideoAgentResourcesPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -29,60 +21,89 @@ type Props = {
     active: boolean;
 };
 
-export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props) {
-    const beatEditorSectionRef = React.useRef<HTMLDivElement>(null);
+function StepLine({
+    step,
+    title,
+    status,
+    done,
+    locked,
+    accent,
+    action,
+}: {
+    step: number;
+    title: string;
+    status?: React.ReactNode;
+    done?: boolean;
+    locked?: boolean;
+    accent: string;
+    action: React.ReactNode;
+}) {
+    return (
+        <Box
+            sx={{
+                px: 1.25,
+                py: 1,
+                borderRadius: 1.5,
+                border: '1px solid',
+                borderColor: done ? accent : 'divider',
+                bgcolor: (t) => (
+                    t.palette.mode === 'dark'
+                        ? 'rgba(255,255,255,0.03)'
+                        : done
+                            ? `${accent}12`
+                            : 'background.paper'
+                ),
+                opacity: locked ? 0.5 : 1,
+                pointerEvents: locked ? 'none' : 'auto',
+            }}
+        >
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                <Avatar
+                    sx={{
+                        width: 22,
+                        height: 22,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        bgcolor: done ? accent : locked ? 'action.disabledBackground' : accent,
+                        color: '#fff',
+                        flexShrink: 0,
+                    }}
+                >
+                    {step}
+                </Avatar>
+                <Typography variant="body2" fontWeight={700} noWrap sx={{ minWidth: 0 }}>
+                    {title}
+                </Typography>
+                {status}
+                <Box sx={{ flex: 1, minWidth: 8 }} />
+                {action}
+            </Stack>
+        </Box>
+    );
+}
 
-    const beatMapValidation = React.useMemo(() => {
-        if (!state.beatMapJsonDraft.trim() || state.audioDurationSec == null || state.audioDurationSec <= 0) {
-            return null;
-        }
-        const { map, errors } = parseBeatMapJson(state.beatMapJsonDraft);
-        if (!map) {
-            return { valid: false, errors, map: null };
-        }
-        const validation = validateBeatMap(map, state.audioDurationSec);
-        return { valid: validation.valid, errors: validation.errors, map };
-    }, [state.audioDurationSec, state.beatMapJsonDraft]);
-
-    React.useEffect(() => {
-        if (!active || !state.beatEditorFocusRequest) {
-            return;
-        }
-        if (state.beatEditorFocusRequest.beatId !== state.activeBeatId) {
-            return;
-        }
-        beatEditorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, [
-        active,
-        state.activeBeatId,
-        state.beatEditorFocusRequest,
-    ]);
-
+export default function ShortVideoAgentChatbotHtmlPanel({ state }: Props) {
     if (!state.scriptApproved || !state.hasAudio) {
         return (
             <Box sx={{ p: 2 }}>
                 <Alert severity="info">
-                    Cần duyệt script và có audio narration trước khi dùng HTML chatbot.
+                    Cần duyệt script và có audio narration trước khi dùng tab Render.
                 </Alert>
             </Box>
         );
     }
 
-    const activeBeat = state.beatMap?.sections.find((item) => item.id === state.activeBeatId)
-        ?? state.beatMap?.sections[0];
-    const activeBeatHtml = activeBeat ? (state.beatHtml[activeBeat.id]?.html || '') : '';
     const whisperReady = state.whisperStatus === 'completed' && !state.whisperStale;
+    const beatCount = state.beatMap?.sections.length ?? 0;
+    const beatDone = Boolean(state.beatMapReady && beatCount > 0);
+    const isImportHtml = state.renderMode === 'import_html';
 
     return (
         <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
-            <Stack spacing={2}>
-                <Typography variant="subtitle2" fontWeight={600}>
-                    HTML chatbot
-                </Typography>
-
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Luồng render
+            <Stack spacing={1.5}>
+                <Stack spacing={1}>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                        Render
                     </Typography>
                     <ToggleButtonGroup
                         exclusive
@@ -94,283 +115,77 @@ export default function ShortVideoAgentChatbotHtmlPanel({ state, active }: Props
                             }
                         }}
                         disabled={state.savingImportHtml}
-                        fullWidth
+                        sx={{
+                            width: 'fit-content',
+                            '& .MuiToggleButton-root': {
+                                px: 1.25,
+                                py: 0.35,
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                fontSize: 13,
+                            },
+                        }}
                     >
-                        <ToggleButton value="creative" sx={{ flex: 1 }}>
-                            Agent sáng tạo
-                        </ToggleButton>
-                        <ToggleButton value="import_html" sx={{ flex: 1 }}>
+                        <ToggleButton
+                            value="import_html"
+                            sx={{
+                                '&.Mui-selected': {
+                                    bgcolor: 'primary.main',
+                                    color: '#fff',
+                                    '&:hover': { bgcolor: 'primary.dark' },
+                                },
+                            }}
+                        >
                             HTML chatbot
                         </ToggleButton>
+                        <ToggleButton value="creative">
+                            Agent sáng tạo
+                        </ToggleButton>
                     </ToggleButtonGroup>
-                </Box>
-
-                {!whisperReady ? (
-                    <Alert severity="info">
-                        Chờ Whisper trên tab Script & TTS (bước 4 — Karaoke sync) trước khi chia beat.
-                    </Alert>
-                ) : null}
-
-                <Divider />
-
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Bước 1 — Chia beat
-                    </Typography>
-                    <Chip
-                        size="small"
-                        sx={{ mb: 1 }}
-                        label={
-                            state.beatMapReady
-                                ? `Đã có ${state.beatMap?.sections.length ?? 0} beat`
-                                : 'Chưa chia beat'
-                        }
-                        color={state.beatMapReady ? 'success' : 'default'}
-                    />
-
-                    <LoadingButton
-                        size="small"
-                        variant="outlined"
-                        fullWidth
-                        loading={state.openingBeatDivisionGemini}
-                        disabled={!whisperReady}
-                        startIcon={<OpenInNewIcon />}
-                        onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
-                    >
-                        Mở Gemini chia beat
-                    </LoadingButton>
-
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
-                        1. Bấm Mở Gemini chia beat — extension tự điền và Gửi.
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        2. Copy JSON beat-map từ Gemini → bấm Lưu beat-map vào CMS trên tab đó.
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Hoặc dán JSON beat-map thủ công bên dưới (1 JSON duy nhất — không HTML).
-                    </Typography>
-
-                    <TextField
-                        label="Beat map JSON"
-                        placeholder='{"totalVideoSec":140.1,"sections":[...]}'
-                        value={state.beatMapJsonDraft}
-                        onChange={(e) => state.handleBeatMapJsonChange(e.target.value)}
-                        multiline
-                        minRows={8}
-                        maxRows={16}
-                        fullWidth
-                        disabled={state.savingImportHtml || !whisperReady}
-                        helperText={state.savingImportHtml ? 'Đang lưu beat map…' : 'JSON phải phủ liên tục từ 0 đến hết audio'}
-                        InputProps={{
-                            sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 },
-                        }}
-                    />
-
-                    {beatMapValidation && !beatMapValidation.valid ? (
-                        <Alert severity="warning" sx={{ mt: 1 }}>
-                            {(beatMapValidation.errors || []).join('; ')}
+                    {!isImportHtml ? (
+                        <Alert severity="warning" sx={{ py: 0.5 }}>
+                            Đang ở Agent sáng tạo — chọn HTML chatbot để chia beat, tài nguyên và render.
                         </Alert>
                     ) : null}
-
-                    {state.beatMapReady && state.beatMap?.sections?.length ? (
-                        <Stack spacing={0.5} sx={{ mt: 1 }}>
-                            {state.beatMap.sections.map((beat) => (
-                                <Typography key={beat.id} variant="caption" color="text.secondary">
-                                    {beat.id}
-                                    {' '}
-                                    (
-                                    {beat.startSec.toFixed(1)}
-                                    –
-                                    {beat.endSec.toFixed(1)}
-                                    s)
-                                    {' · '}
-                                    {beat.hf_prompt_type}
-                                    {' · '}
-                                    {beat.phrase_anchor.slice(0, 48)}
-                                    {beat.phrase_anchor.length > 48 ? '…' : ''}
-                                </Typography>
-                            ))}
-                        </Stack>
+                    {!whisperReady ? (
+                        <Alert severity="info" sx={{ py: 0.5 }}>
+                            Chờ Whisper xong trên tab Script & TTS.
+                        </Alert>
                     ) : null}
-                </Box>
+                </Stack>
 
-                {state.beatMapReady && state.beatMap?.sections?.length ? (
-                    <>
-                        <Divider />
-                        <Box ref={beatEditorSectionRef}>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Bước 2 — HTML từng beat
-                            </Typography>
-                            <Chip
-                                size="small"
-                                sx={{ mb: 1 }}
-                                label={
-                                    state.beatsRenderErrorCount > 0
-                                        ? `HTML: ${state.beatsHtmlCompleted}/${state.beatsHtmlTotal} · Lỗi: ${state.beatsRenderErrorCount}`
-                                        : `HTML: ${state.beatsHtmlCompleted}/${state.beatsHtmlTotal}`
-                                }
-                                color={
-                                    state.beatsRenderErrorCount > 0
-                                        ? 'warning'
-                                        : (state.importHtmlReady ? 'success' : 'default')
-                                }
-                            />
+                <StepLine
+                    step={1}
+                    title="Chia beat"
+                    done={beatDone}
+                    locked={!isImportHtml || !whisperReady}
+                    accent="#00838f"
+                    status={(
+                        <Chip
+                            size="small"
+                            label={beatDone ? `${beatCount} beat` : 'Chưa có'}
+                            color={beatDone ? 'success' : 'default'}
+                            variant={beatDone ? 'filled' : 'outlined'}
+                            sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                        />
+                    )}
+                    action={(
+                        <LoadingButton
+                            size="small"
+                            variant={beatDone ? 'outlined' : 'contained'}
+                            loading={state.openingBeatDivisionGemini}
+                            disabled={!whisperReady || !isImportHtml}
+                            startIcon={<OpenInNewIcon />}
+                            onClick={() => { void state.handleOpenBeatDivisionGemini(); }}
+                            sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                        >
+                            {beatDone ? 'Chia lại' : 'Mở Gemini'}
+                        </LoadingButton>
+                    )}
+                />
 
-                            {state.missingBeatHtmlCount > 0 ? (
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                    Beat thiếu HTML: dùng nút &quot;Mở Gemini tất cả beat thiếu&quot; trên thanh timeline (góc phải) — extension tự điền prompt; bạn kiểm tra rồi Lưu HTML từng tab.
-                                </Typography>
-                            ) : null}
-
-                            <Tabs
-                                value={state.activeBeatId || state.beatMap.sections[0]?.id}
-                                onChange={(_e, value) => state.setActiveBeatId(String(value))}
-                                variant="scrollable"
-                                scrollButtons="auto"
-                                sx={{ mb: 1, minHeight: 36 }}
-                            >
-                                {state.beatMap.sections.map((beat) => {
-                                    const visualState = getBeatHtmlVisualState(state.beatHtml, beat.id);
-                                    const tabLabel = visualState === 'ok'
-                                        ? `${beat.id} ✓`
-                                        : beat.id;
-                                    const errorMessage = getBeatRenderErrorMessage(state.beatHtml, beat.id);
-                                    const tab = (
-                                        <Tab
-                                            key={beat.id}
-                                            value={beat.id}
-                                            icon={visualState === 'error' ? <WarningAmberIcon fontSize="small" /> : undefined}
-                                            iconPosition={visualState === 'error' ? 'end' : undefined}
-                                            label={tabLabel}
-                                            sx={{
-                                                minHeight: 36,
-                                                py: 0.5,
-                                                color: visualState === 'error' ? 'warning.main' : undefined,
-                                            }}
-                                        />
-                                    );
-                                    if (visualState === 'error') {
-                                        return (
-                                            <Tooltip key={beat.id} title={errorMessage} arrow>
-                                                <Box component="span" sx={{ display: 'inline-flex' }}>
-                                                    {tab}
-                                                </Box>
-                                            </Tooltip>
-                                        );
-                                    }
-                                    return tab;
-                                })}
-                            </Tabs>
-
-                            {activeBeat ? (
-                                <>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                        {activeBeat.startSec.toFixed(1)}
-                                        s →
-                                        {activeBeat.endSec.toFixed(1)}
-                                        s ·
-                                        {activeBeat.durationSec.toFixed(1)}
-                                        s ·
-                                        {activeBeat.hf_prompt_type}
-                                    </Typography>
-
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                        Copy prompt → chatbot trả 1 file HTML cho beat này — dán vào ô dưới.
-                                    </Typography>
-                                    <LoadingButton
-                                        size="small"
-                                        variant="outlined"
-                                        fullWidth
-                                        loading={state.copyingBeatHtmlPromptBeatId === activeBeat.id}
-                                        startIcon={<ContentCopyIcon />}
-                                        onClick={() => { void state.handleCopyBeatHtmlPrompt(activeBeat.id); }}
-                                    >
-                                        Copy prompt HTML
-                                        {' '}
-                                        {activeBeat.id}
-                                    </LoadingButton>
-
-                                    <TextField
-                                        label={`HTML ${activeBeat.id}`}
-                                        placeholder="Dán 1 file HTML beat (self-contained) — CẤM karaoke/caption, CẤM nhiều file"
-                                        value={activeBeatHtml}
-                                        onChange={(e) => state.handleBeatHtmlChange(activeBeat.id, e.target.value)}
-                                        multiline
-                                        minRows={10}
-                                        maxRows={20}
-                                        fullWidth
-                                        disabled={state.savingImportHtml}
-                                        sx={{ mt: 1 }}
-                                        InputProps={{
-                                            sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 },
-                                        }}
-                                    />
-                                </>
-                            ) : null}
-                        </Box>
-                    </>
-                ) : null}
-
-                {state.renderMode === 'import_html' && state.beatMapReady && whisperReady ? (
-                    <>
-                        <Divider />
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Bước 3 — Tự động HTML beat + ghép video
-                            </Typography>
-                            <LoadingButton
-                                size="small"
-                                variant="contained"
-                                color="secondary"
-                                fullWidth
-                                loading={state.launchingImportHtmlFull}
-                                disabled={state.agentVideoStatus === 'processing'}
-                                startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentImportHtmlFull(); }}
-                                sx={{ mb: 1 }}
-                            >
-                                Tự động HTML beat + ghép video
-                            </LoadingButton>
-                            {state.importHtmlReady ? (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="primary"
-                                    fullWidth
-                                    startIcon={<ContentCopyIcon />}
-                                    onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
-                                >
-                                    Copy prompt ghép
-                                </Button>
-                            ) : (
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — agent sẽ sinh phần thiếu
-                                </Typography>
-                            )}
-                        </Box>
-                    </>
-                ) : null}
-
-                {state.importHtmlReady ? (
-                    <Alert severity="success">
-                        {state.hasAgentVideo
-                            ? 'Sẵn sàng ghép lại — dùng "Ghép lại từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'
-                            : 'Sẵn sàng ghép — dùng "Chạy agent ghép từ HTML" trên timeline hoặc "Tự động HTML beat + ghép video".'}
-                    </Alert>
-                ) : state.beatMapReady && whisperReady ? (
-                    <Alert severity="info">
-                        HTML beat: {state.beatsHtmlCompleted}/{state.beatsHtmlTotal || 0} — bấm &quot;Tự động HTML beat + ghép video&quot; để agent sinh phần thiếu rồi render.
-                    </Alert>
-                ) : (
-                    <Alert severity="info">
-                        Cần Whisper (tab Script & TTS) và beat-map hợp lệ trước khi chạy auto HTML + ghép video.
-                    </Alert>
-                )}
-
-                {state.renderMode !== 'import_html' ? (
-                    <Alert severity="warning">
-                        Đang ở luồng agent sáng tạo — chuyển sang &quot;HTML chatbot&quot; để dùng preview và agent ghép.
-                    </Alert>
+                {isImportHtml ? (
+                    <ShortVideoAgentResourcesPanel state={state} embedded />
                 ) : null}
             </Stack>
         </Box>

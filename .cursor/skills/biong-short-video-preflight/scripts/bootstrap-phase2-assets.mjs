@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 const DEFAULT_CONTEXT_REL = "assets/get-context-snapshot.json";
 const AUDIO_SCRIPT_REL = "assets/audio-script.txt";
 const AGENT_METADATA_REL = "assets/agent-metadata.json";
+const TTS_PHONETIC_DICT_REL = "assets/tts-phonetic-dict.json";
 
 function parseArgs(argv) {
   const out = { projectDir: "", contextRel: DEFAULT_CONTEXT_REL };
@@ -134,6 +135,13 @@ function main() {
     path.join(projectDir, AGENT_METADATA_REL),
     JSON.stringify(metadata, null, 2),
   );
+
+  const phoneticDict = Array.isArray(ctx.tts_phonetic_dict) ? ctx.tts_phonetic_dict : [];
+  fs.writeFileSync(
+    path.join(projectDir, TTS_PHONETIC_DICT_REL),
+    JSON.stringify(phoneticDict, null, 2),
+  );
+  console.log(`[bootstrap] wrote ${TTS_PHONETIC_DICT_REL} (${phoneticDict.length} entries)`);
 
   const renderMode =
     ctx.render_mode === "import_html" ||

@@ -3,6 +3,43 @@ import path from "node:path";
 import { BIONG_FE_ROOT } from "./config.mjs";
 import { diagnoseLaunchToken } from "./launch-token.mjs";
 
+/** Ưu tiên dòng Caption lệch script / lỗi gọn — tránh trả cả log bootstrap+verify. */
+function extractAssembleFailureMessage(stderr, stdout, exitCode) {
+  const text = `${stderr}\n${stdout}`;
+  const captionLine = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .reverse()
+    .find((line) => /Caption lệch script/i.test(line));
+  if (captionLine) return captionLine;
+
+  const verifyFail = text.match(/=== CAPTION SYNC FAIL ===[\s\S]*?(?=\n\[|\n▶|$)/);
+  if (verifyFail) {
+    const firstError = verifyFail[0]
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("✗"));
+    if (firstError) return firstError.replace(/^✗\s*/, "");
+  }
+
+  const stderrTrim = String(stderr || "").trim();
+  if (stderrTrim) {
+    const lines = stderrTrim.split("\n").map((l) => l.trim()).filter(Boolean);
+    const last = lines[lines.length - 1];
+    if (last && last.length < 500) return last;
+  }
+
+  const stdoutTrim = String(stdout || "").trim();
+  if (stdoutTrim) {
+    const lines = stdoutTrim.split("\n").map((l) => l.trim()).filter(Boolean);
+    const last = lines[lines.length - 1];
+    if (last && last.length < 500) return last;
+  }
+
+  return `Script exit ${exitCode}`;
+}
+
 function spawnNodeScript(scriptRelative, args, envExtra = {}) {
   const scriptPath = path.join(BIONG_FE_ROOT, scriptRelative);
   return new Promise((resolve, reject) => {
@@ -25,7 +62,7 @@ function spawnNodeScript(scriptRelative, args, envExtra = {}) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(stderr.trim() || stdout.trim() || `Script exit ${code}`));
+        reject(new Error(extractAssembleFailureMessage(stderr, stdout, code)));
         return;
       }
       const lastLine = stdout
@@ -51,6 +88,7 @@ export async function runAssembleImportHtml(body, authHeader) {
   const accessToken = String(body?.access_token || "").trim();
   const apiBaseUrl = String(body?.api_base_url || "").trim();
   const launchToken = String(authHeader || body?.launch_token || "").trim();
+  const allowCaptionMismatch = Boolean(body?.allow_caption_mismatch);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -61,14 +99,22 @@ export async function runAssembleImportHtml(body, authHeader) {
     throw new Error(tokenCheck.message || "launch_token không hợp lệ");
   }
 
-  const result = await spawnNodeScript("scripts/assemble-import-html.mjs", [
+  const assembleArgs = [
     "--short-video-id",
     String(shortVideoId),
     "--api-base-url",
     apiBaseUrl,
     "--access-token",
     accessToken,
-  ]);
+  ];
+  if (allowCaptionMismatch) {
+    assembleArgs.push("--allow-caption-mismatch");
+    console.log(
+      `[agent-render-daemon] assemble allow_caption_mismatch=true short_video_id=${shortVideoId}`,
+    );
+  }
+
+  const result = await spawnNodeScript("scripts/assemble-import-html.mjs", assembleArgs);
 
   return {
     success: true,
@@ -84,6 +130,7 @@ export async function runRenderImportHtml(body, authHeader) {
   const apiBaseUrl = String(body?.api_base_url || "").trim();
   const launchToken = String(authHeader || body?.launch_token || "").trim();
   const forceAssemble = Boolean(body?.force_assemble);
+  const allowCaptionMismatch = Boolean(body?.allow_caption_mismatch);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -95,14 +142,18 @@ export async function runRenderImportHtml(body, authHeader) {
   }
 
   if (forceAssemble) {
-    await spawnNodeScript("scripts/assemble-import-html.mjs", [
+    const assembleArgs = [
       "--short-video-id",
       String(shortVideoId),
       "--api-base-url",
       apiBaseUrl,
       "--access-token",
       accessToken,
-    ]);
+    ];
+    if (allowCaptionMismatch) {
+      assembleArgs.push("--allow-caption-mismatch");
+    }
+    await spawnNodeScript("scripts/assemble-import-html.mjs", assembleArgs);
   }
 
   const result = await spawnNodeScript("scripts/render-import-html.mjs", [

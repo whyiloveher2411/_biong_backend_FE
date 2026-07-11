@@ -4,16 +4,19 @@ import {
     Chip,
     Divider,
     IconButton,
+    Slider,
     Stack,
     Typography,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import EditIcon from '@mui/icons-material/Edit';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import LoadingButton from 'components/atoms/LoadingButton';
 import type { CaptionAlignResult } from './agentVideoCaptionScriptAlign';
-import type { WhisperWord } from './agentVideoApi';
+import type { TtsPhoneticDictEntry, WhisperWord } from './agentVideoApi';
 import ShortVideoAgentWhisperCompareText, { WHISPER_AUDIO_SEEK_PADDING_SEC } from './ShortVideoAgentWhisperCompareText';
 import { WHISPER_TIER_STYLES, type WhisperCompareFilter } from './agentVideoWhisperCompareUi';
 import { resolveActiveTokenIndex } from './agentVideoWhisperActiveToken';
@@ -25,6 +28,7 @@ type Props = {
     audioScript: string;
     alignResult: CaptionAlignResult | null;
     whisperWords: WhisperWord[];
+    phoneticDict?: TtsPhoneticDictEntry[];
     audioFileUrl: string;
     focusIndex?: number | null;
     filter: WhisperCompareFilter;
@@ -33,6 +37,13 @@ type Props = {
     onSave: () => void | Promise<void>;
     saving: boolean;
     hasUnsavedChanges: boolean;
+    onPhoneticSelection?: (payload: {
+        text: string;
+        clientX: number;
+        clientY: number;
+    }) => void;
+    /** Menu tạo/sửa phiên âm — render trong drawer để không bị Modal ẩn */
+    phoneticQuickMenu?: React.ReactNode;
 };
 
 function formatClock(sec: number): string {
@@ -48,6 +59,7 @@ export default function ShortVideoAgentWhisperCompareDrawer({
     audioScript,
     alignResult,
     whisperWords,
+    phoneticDict = [],
     audioFileUrl,
     focusIndex = null,
     filter,
@@ -56,11 +68,14 @@ export default function ShortVideoAgentWhisperCompareDrawer({
     onSave,
     saving,
     hasUnsavedChanges,
+    onPhoneticSelection,
+    phoneticQuickMenu,
 }: Props) {
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
     const tokenRefs = React.useRef<Record<number, HTMLSpanElement | null>>({});
     const [currentTime, setCurrentTime] = React.useState(0);
     const [duration, setDuration] = React.useState(0);
+    const [playing, setPlaying] = React.useState(false);
     const [issueCursor, setIssueCursor] = React.useState(0);
     const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
 
@@ -90,6 +105,31 @@ export default function ShortVideoAgentWhisperCompareDrawer({
         audioRef.current.currentTime = Math.max(0, token.start - WHISPER_AUDIO_SEEK_PADDING_SEC);
         void audioRef.current.play().catch(() => undefined);
     }, [alignResult]);
+
+    const togglePlay = React.useCallback(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (audio.paused) {
+            void audio.play().catch(() => undefined);
+            return;
+        }
+        audio.pause();
+    }, []);
+
+    const seekBySlider = React.useCallback((_: Event | React.SyntheticEvent, value: number | number[]) => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        const next = Array.isArray(value) ? value[0] : value;
+        audio.currentTime = Math.max(0, next);
+        setCurrentTime(audio.currentTime);
+    }, []);
+
+    React.useEffect(() => {
+        if (!open) {
+            audioRef.current?.pause();
+            setPlaying(false);
+        }
+    }, [open]);
 
     React.useEffect(() => {
         if (!open || focusIndex == null || !alignResult) {
@@ -179,20 +219,68 @@ export default function ShortVideoAgentWhisperCompareDrawer({
         >
             <Stack spacing={1.5}>
                 {audioFileUrl ? (
-                    <Box sx={{ position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper', pb: 1 }}>
+                    <Box
+                        sx={{
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 2,
+                            bgcolor: 'background.paper',
+                            pb: 1,
+                            width: '100%',
+                        }}
+                    >
+                        {/* Hidden — native controls Chrome hay thu nhỏ; UI custom luôn full width */}
                         <audio
                             ref={audioRef}
                             src={audioFileUrl}
-                            controls
-                            style={{ width: '100%' }}
+                            preload="metadata"
+                            style={{ display: 'none' }}
                             onTimeUpdate={(event) => handleAudioTime(event.currentTarget.currentTime)}
                             onSeeked={(event) => handleAudioTime(event.currentTarget.currentTime)}
-                            onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+                            onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+                            onPlay={() => setPlaying(true)}
+                            onPause={() => setPlaying(false)}
+                            onEnded={() => setPlaying(false)}
                         />
-                        <Typography variant="caption" color="text.secondary">
-                            {formatClock(currentTime)} / {formatClock(duration)}
-                            {' · '}
-                            Click từ vàng/đỏ để nghe đoạn audio (−{WHISPER_AUDIO_SEEK_PADDING_SEC}s)
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{
+                                width: '100%',
+                                px: 1,
+                                py: 0.75,
+                                borderRadius: 2,
+                                bgcolor: 'action.hover',
+                            }}
+                        >
+                            <IconButton
+                                size="small"
+                                onClick={togglePlay}
+                                aria-label={playing ? 'Tạm dừng' : 'Phát'}
+                            >
+                                {playing ? <PauseIcon /> : <PlayArrowIcon />}
+                            </IconButton>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ minWidth: 72, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}
+                            >
+                                {formatClock(currentTime)} / {formatClock(duration)}
+                            </Typography>
+                            <Slider
+                                size="small"
+                                value={Math.min(currentTime, duration || 0)}
+                                min={0}
+                                max={Math.max(duration, 0.1)}
+                                step={0.05}
+                                onChange={seekBySlider}
+                                aria-label="Tua audio"
+                                sx={{ flex: 1, mx: 0.5 }}
+                            />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            Click từ thường để nghe (−{WHISPER_AUDIO_SEEK_PADDING_SEC}s) · Click từ có phiên âm để sửa
                         </Typography>
                     </Box>
                 ) : null}
@@ -239,11 +327,13 @@ export default function ShortVideoAgentWhisperCompareDrawer({
                         audioScript={audioScript}
                         tokens={alignResult.tokens}
                         whisperWords={whisperWords}
+                        phoneticDict={phoneticDict}
                         filter={filter}
                         selectedIndex={selectedIndex}
                         playingIndex={playingIndex}
                         tokenRefs={tokenRefs}
                         onSeekToken={seekToToken}
+                        onPhoneticSelection={onPhoneticSelection}
                     />
                 ) : null}
 
@@ -289,6 +379,7 @@ export default function ShortVideoAgentWhisperCompareDrawer({
                     </>
                 ) : null}
             </Stack>
+            {phoneticQuickMenu}
         </DrawerCustom>
     );
 }

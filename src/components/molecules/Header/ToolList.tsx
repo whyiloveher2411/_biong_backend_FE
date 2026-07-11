@@ -207,6 +207,17 @@ function Tools() {
             //     },
             //     disable: false,
             // }
+        ],
+        [
+            {
+                title: 'Danh sách từ phiên âm',
+                icon: 'LanguageOutlined',
+                href: '/post-type/tts_phonetic_dict/list',
+                onClick: () => {
+                    // 
+                },
+                disable: false,
+            },
         ]
     ];
 

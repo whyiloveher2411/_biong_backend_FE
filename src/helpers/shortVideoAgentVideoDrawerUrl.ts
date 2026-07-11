@@ -1,7 +1,8 @@
 export const SHORT_VIDEO_AGENT_VIDEO_URL_PARAM = 'short_video_agent_id';
 export const SHORT_VIDEO_AGENT_TAB_URL_PARAM = 'short_video_agent_tab';
 
-export type ShortVideoAgentLeftTab = 'content' | 'script' | 'chatbot' | 'resources' | 'facebook';
+/** `chatbot` / `resources` giữ để tương thích URL cũ — map vào tab Render. */
+export type ShortVideoAgentLeftTab = 'content' | 'script' | 'chatbot' | 'resources' | 'render' | 'facebook';
 
 export function parseShortVideoAgentIdFromSearch(search: string): number | null {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
@@ -25,11 +26,8 @@ export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAge
     if (raw === 'facebook') {
         return 'facebook';
     }
-    if (raw === 'resources') {
-        return 'resources';
-    }
-    if (raw === 'chatbot') {
-        return 'chatbot';
+    if (raw === 'render' || raw === 'resources' || raw === 'chatbot') {
+        return 'render';
     }
     return 'script';
 }
@@ -57,10 +55,8 @@ export function setShortVideoAgentTabInSearchParams(
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'content');
     } else if (tab === 'facebook') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'facebook');
-    } else if (tab === 'resources') {
-        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'resources');
-    } else if (tab === 'chatbot') {
-        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'chatbot');
+    } else if (tab === 'render' || tab === 'resources' || tab === 'chatbot') {
+        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'render');
     } else {
         next.delete(SHORT_VIDEO_AGENT_TAB_URL_PARAM);
     }
@@ -76,7 +72,8 @@ export function openShortVideoAgentInSearchParams(
     const persistTab = tab === 'content'
         || tab === 'facebook'
         || tab === 'chatbot'
-        || tab === 'resources';
+        || tab === 'resources'
+        || tab === 'render';
     next = setShortVideoAgentTabInSearchParams(next, persistTab ? tab : null);
     return next;
 }

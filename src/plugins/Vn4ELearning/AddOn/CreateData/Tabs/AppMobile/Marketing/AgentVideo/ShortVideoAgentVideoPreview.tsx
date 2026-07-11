@@ -63,7 +63,7 @@ function HtmlBeatMissingPlaceholder() {
                 Chưa có HTML beat
             </Typography>
             <Typography variant="body2" color="text.secondary">
-                Dán HTML từng beat ở tab HTML chatbot bên trái.
+                Dùng timeline hoặc tab Render bên trái để sinh HTML từng beat.
             </Typography>
         </Box>
     );

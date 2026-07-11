@@ -41,11 +41,18 @@ export type ImportHtmlVisualCatalogItem = {
     source?: string;
 };
 
+export type ImportHtmlGithubImageShot = {
+    id: string;
+    description: string;
+    visual_catalog_id?: string;
+};
+
 export type ImportHtmlAssets = {
     bgm_segments?: ImportHtmlBgmSegment[];
     sfx_beat_transition?: boolean;
     sfx_hook?: boolean;
     visual_catalog?: ImportHtmlVisualCatalogItem[];
+    github_image_shots?: ImportHtmlGithubImageShot[];
     updated_at?: string;
 };
 
@@ -62,6 +69,13 @@ export type WhisperWord = {
     text: string;
     start: number;
     end: number;
+};
+
+export type TtsPhoneticDictEntry = {
+    id?: number;
+    source_term: string;
+    phonetic: string;
+    phonetic_tokens?: string[];
 };
 
 export type CaptionAlignOverride = {
@@ -225,6 +239,7 @@ export type AgentVideoContentResponse = {
     agent_omnivoice_voice?: string;
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
     agent_omnivoice_voice_design?: string;
+    agent_omnivoice_speed?: number;
     omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
     omnivoice_voice_design_tokens?: OmnivoiceVoiceDesignTokenGroup[];
     agent_video_status?: string;
@@ -276,6 +291,7 @@ export type AgentVideoContentResponse = {
     render_mode?: AgentRenderMode;
     import_html?: ImportHtmlSummary;
     hf_prompt_types_catalog?: string[];
+    tts_phonetic_dict?: TtsPhoneticDictEntry[];
 };
 
 export type JsonResponse = {
@@ -476,6 +492,7 @@ export async function saveAgentTtsSettings(
     shortVideoId: number,
     enabled?: boolean,
     platforms?: string[],
+    speed?: number,
 ): Promise<JsonResponse> {
     const body: Record<string, unknown> = shortVideoBody(shortVideoId);
     if (enabled !== undefined) {
@@ -483,6 +500,9 @@ export async function saveAgentTtsSettings(
     }
     if (platforms !== undefined) {
         body.agent_tts_platforms = platforms;
+    }
+    if (speed !== undefined) {
+        body.agent_omnivoice_speed = speed;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-tts-mode',
@@ -601,6 +621,31 @@ export async function transcribeAgentAudio(
     );
 }
 
+export async function fetchTtsPhoneticDict(): Promise<{
+    success?: boolean;
+    entries?: TtsPhoneticDictEntry[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-tts-phonetic-dict',
+        {},
+    );
+}
+
+export async function saveTtsPhoneticDict(payload: {
+    source_term: string;
+    phonetic: string;
+    id?: number;
+    enabled?: boolean;
+}): Promise<JsonResponse & {
+    entry?: TtsPhoneticDictEntry;
+    entries?: TtsPhoneticDictEntry[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-tts-phonetic-dict',
+        payload,
+    );
+}
+
 export type AgentBgmSearchItem = {
     id?: string | number;
     title?: string;
@@ -635,6 +680,7 @@ export async function saveAgentImportHtml(
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
         visualSearchQueries?: string[];
+        githubImageShots?: ImportHtmlGithubImageShot[];
     },
 ): Promise<JsonResponse & {
     render_mode?: AgentRenderMode;
@@ -671,6 +717,9 @@ export async function saveAgentImportHtml(
     }
     if (payload.visualSearchQueries !== undefined) {
         body.visual_search_queries = payload.visualSearchQueries;
+    }
+    if (payload.githubImageShots !== undefined) {
+        body.github_image_shots = payload.githubImageShots;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',

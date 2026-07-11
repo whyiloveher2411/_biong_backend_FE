@@ -5,16 +5,14 @@ import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
 import ShortVideoAgentContentPanel from './ShortVideoAgentContentPanel';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
-import ShortVideoAgentResourcesPanel from './ShortVideoAgentResourcesPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 const TAB = {
     content: 0,
     script: 1,
-    chatbot: 2,
-    resources: 3,
-    facebook: 4,
+    render: 2,
+    facebook: 3,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -32,11 +30,8 @@ function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
     if (initialTab === 'facebook') {
         return TAB.facebook;
     }
-    if (initialTab === 'resources') {
-        return TAB.resources;
-    }
-    if (initialTab === 'chatbot') {
-        return TAB.chatbot;
+    if (initialTab === 'resources' || initialTab === 'chatbot' || initialTab === 'render') {
+        return TAB.render;
     }
     return TAB.script;
 }
@@ -54,7 +49,7 @@ export default function ShortVideoAgentLeftPanel({
 
     React.useEffect(() => {
         if (state.beatEditorFocusRequest?.nonce) {
-            setActiveTab(TAB.chatbot);
+            setActiveTab(TAB.render);
         }
     }, [state.beatEditorFocusRequest?.nonce]);
 
@@ -75,8 +70,7 @@ export default function ShortVideoAgentLeftPanel({
                 tabs={[
                     { label: 'Content' },
                     { label: 'Script & TTS' },
-                    { label: 'HTML chatbot' },
-                    { label: 'Tài nguyên' },
+                    { label: 'Render' },
                     { label: 'Facebook' },
                 ]}
             />
@@ -87,11 +81,8 @@ export default function ShortVideoAgentLeftPanel({
                 {activeTab === TAB.script ? (
                     <ShortVideoAgentScriptPanel state={state} />
                 ) : null}
-                {activeTab === TAB.chatbot ? (
-                    <ShortVideoAgentChatbotHtmlPanel state={state} active={activeTab === TAB.chatbot} />
-                ) : null}
-                {activeTab === TAB.resources ? (
-                    <ShortVideoAgentResourcesPanel state={state} />
+                {activeTab === TAB.render ? (
+                    <ShortVideoAgentChatbotHtmlPanel state={state} active={activeTab === TAB.render} />
                 ) : null}
                 {activeTab === TAB.facebook ? (
                     state.marketingPostId > 0 ? (

@@ -23,6 +23,7 @@ import {
 } from 'helpers/marketingStockImageApi';
 import { uploadAgentVisualImage, parseApiMessage } from './agentVideoApi';
 import type {
+    ImportHtmlGithubImageShot,
     ImportHtmlMarketingPostImage,
     ImportHtmlVisualCatalogItem,
 } from './agentVideoApi';
@@ -33,6 +34,11 @@ type Props = {
     shortVideoId: number;
     marketingPostImages: ImportHtmlMarketingPostImage[];
     visualCatalog: ImportHtmlVisualCatalogItem[];
+    githubImageShots?: ImportHtmlGithubImageShot[];
+    pastingGithubShotId?: string | null;
+    onPasteGithubShot?: (shotId: string) => void;
+    onUnlinkGithubShot?: (shotId: string) => void;
+    onUpdateGithubShotDescription?: (shotId: string, description: string) => void;
     onAddItem: (item: ImportHtmlVisualCatalogItem) => void;
     onUpdateItem: (index: number, partial: Partial<ImportHtmlVisualCatalogItem>) => void;
     onRemoveItem: (index: number) => void;
@@ -624,6 +630,11 @@ export default function ShortVideoAgentVisualCatalogDrawer({
     shortVideoId,
     marketingPostImages,
     visualCatalog,
+    githubImageShots = [],
+    pastingGithubShotId = null,
+    onPasteGithubShot,
+    onUnlinkGithubShot,
+    onUpdateGithubShotDescription,
     onAddItem,
     onUpdateItem,
     onRemoveItem,
@@ -812,6 +823,114 @@ export default function ShortVideoAgentVisualCatalogDrawer({
             }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', minHeight: 0, mt: 0.5 }}>
+                {githubImageShots.length > 0 ? (
+                    <DrawerSection
+                        title="Ảnh GitHub cần chuẩn bị"
+                        subtitle={`${githubImageShots.filter((s) => Boolean(s.visual_catalog_id)).length}/${githubImageShots.length} đã gắn ảnh — Paste từ clipboard sau khi copy ảnh`}
+                    >
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                            {githubImageShots.map((shot) => {
+                                const linkedItem = shot.visual_catalog_id
+                                    ? visualCatalog.find((item) => item.id === shot.visual_catalog_id)
+                                    : undefined;
+                                const pasting = pastingGithubShotId === shot.id;
+                                return (
+                                    <Box
+                                        key={shot.id}
+                                        sx={{
+                                            border: 1,
+                                            borderColor: 'divider',
+                                            borderRadius: 1.5,
+                                            p: 1.25,
+                                            display: 'flex',
+                                            gap: 1.25,
+                                            alignItems: 'flex-start',
+                                        }}
+                                    >
+                                        {linkedItem ? (
+                                            <Box
+                                                component="img"
+                                                src={linkedItem.preview_url || linkedItem.url}
+                                                alt={shot.description}
+                                                sx={{
+                                                    width: 56,
+                                                    height: 56,
+                                                    objectFit: 'cover',
+                                                    borderRadius: 1,
+                                                    flexShrink: 0,
+                                                    bgcolor: 'grey.100',
+                                                }}
+                                            />
+                                        ) : (
+                                            <Box
+                                                sx={{
+                                                    width: 56,
+                                                    height: 56,
+                                                    borderRadius: 1,
+                                                    flexShrink: 0,
+                                                    bgcolor: 'grey.100',
+                                                    border: 1,
+                                                    borderColor: 'divider',
+                                                    borderStyle: 'dashed',
+                                                }}
+                                            />
+                                        )}
+                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            {onUpdateGithubShotDescription ? (
+                                                <TextField
+                                                    size="small"
+                                                    fullWidth
+                                                    multiline
+                                                    minRows={1}
+                                                    maxRows={3}
+                                                    value={shot.description}
+                                                    onChange={(e) => onUpdateGithubShotDescription(shot.id, e.target.value)}
+                                                    sx={{ mb: 0.75 }}
+                                                />
+                                            ) : (
+                                                <Typography variant="body2" sx={{ mb: 0.75 }}>
+                                                    {shot.description}
+                                                </Typography>
+                                            )}
+                                            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                                                {!linkedItem && onPasteGithubShot ? (
+                                                    <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        disabled={pasting || saving}
+                                                        onClick={() => onPasteGithubShot(shot.id)}
+                                                        sx={{ textTransform: 'none' }}
+                                                    >
+                                                        {pasting ? 'Đang dán...' : 'Paste từ clipboard'}
+                                                    </Button>
+                                                ) : null}
+                                                {linkedItem && onUnlinkGithubShot ? (
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="inherit"
+                                                        disabled={saving}
+                                                        onClick={() => onUnlinkGithubShot(shot.id)}
+                                                        sx={{ textTransform: 'none' }}
+                                                    >
+                                                        Bỏ gắn ảnh
+                                                    </Button>
+                                                ) : null}
+                                                <Chip
+                                                    size="small"
+                                                    label={linkedItem ? 'Đã có ảnh' : 'Chưa có ảnh'}
+                                                    color={linkedItem ? 'success' : 'default'}
+                                                    variant={linkedItem ? 'filled' : 'outlined'}
+                                                />
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                    </DrawerSection>
+                ) : null}
+
                 <DrawerSection
                     title="Thư viện visual"
                     subtitle="Ảnh upload được ưu tiên khi sinh beat — có thể thêm mô tả sau"

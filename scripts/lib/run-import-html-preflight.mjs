@@ -19,11 +19,16 @@ export function runNodeScript(scriptName, projectDir, extraArgs = [], label = sc
   }
 }
 
-export function runImportHtmlPreflight(projectDir, { strictCaption = true } = {}) {
+export function runImportHtmlPreflight(
+  projectDir,
+  { strictCaption = true, skipCaptionVerify = false } = {},
+) {
   const checks = [
     ["check-import-html-beat-render.mjs", []],
     ["check-overlay-stack.mjs", []],
-    ["verify-caption-sync.mjs", strictCaption ? ["--strict"] : []],
+    ...(skipCaptionVerify
+      ? []
+      : [["verify-caption-sync.mjs", strictCaption ? ["--strict"] : []]]),
     ["check-beat-timing.mjs", []],
     ["check-media-stack.mjs", ["--strict"]],
     ["check-continuous-motion.mjs", []],

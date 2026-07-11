@@ -6,6 +6,7 @@ import {
     Divider,
     FormControlLabel,
     FormGroup,
+    Slider,
     Stack,
     Switch,
     Typography,
@@ -28,6 +29,8 @@ type Props = {
     chainLabel: string;
     onTtsAutoChange: (enabled: boolean) => void | Promise<void>;
     onPlatformToggle: (platformKey: string) => void | Promise<void>;
+    omnivoiceSpeed: number;
+    onOmnivoiceSpeedChange: (speed: number) => void | Promise<void>;
     catalog: OmnivoiceVoiceCatalogItem[];
     selectedVoice: string;
     selectedVoiceMode: OmnivoiceVoiceMode;
@@ -43,6 +46,12 @@ type Props = {
     onPlayDesignPreview: (design: string) => void;
 };
 
+const SPEED_MARKS = [
+    { value: 0.5, label: '0.5' },
+    { value: 1, label: '1' },
+    { value: 1.5, label: '1.5' },
+];
+
 export default function ShortVideoAgentAudioSettingsDrawer({
     open,
     onClose,
@@ -52,6 +61,8 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     chainLabel,
     onTtsAutoChange,
     onPlatformToggle,
+    omnivoiceSpeed,
+    onOmnivoiceSpeedChange,
     catalog,
     selectedVoice,
     selectedVoiceMode,
@@ -67,6 +78,13 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     onPlayDesignPreview,
 }: Props) {
     const voiceSaving = savingVoice || regeneratingTts;
+    const [draftSpeed, setDraftSpeed] = React.useState(omnivoiceSpeed);
+
+    React.useEffect(() => {
+        if (open) {
+            setDraftSpeed(omnivoiceSpeed);
+        }
+    }, [open, omnivoiceSpeed]);
 
     const handleSelectClone = async (voiceKey: string) => {
         if (voiceKey === (selectedVoice || 'minh_quân') && selectedVoiceMode === 'clone') {
@@ -145,6 +163,34 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                         sx={{ mt: 1 }}
                     />
                 ) : null}
+            </Box>
+
+            <Box sx={{ px: 0.5 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                    <Typography variant="subtitle2">
+                        Tốc độ OmniVoice
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                        {`x${draftSpeed.toFixed(2)}`}
+                    </Typography>
+                </Stack>
+                <Slider
+                    value={draftSpeed}
+                    min={0.5}
+                    max={1.5}
+                    step={0.05}
+                    marks={SPEED_MARKS}
+                    disabled={savingTtsMode}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(v) => `x${Number(v).toFixed(2)}`}
+                    onChange={(_e, value) => {
+                        setDraftSpeed(Array.isArray(value) ? value[0] : value);
+                    }}
+                    onChangeCommitted={(_e, value) => {
+                        const next = Array.isArray(value) ? value[0] : value;
+                        void onOmnivoiceSpeedChange(next);
+                    }}
+                />
             </Box>
 
             <Divider />

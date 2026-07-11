@@ -28,6 +28,7 @@ import {
     saveAgentOmnivoiceVoice,
     saveAgentSourceContent,
     saveAgentCaptionAlignments,
+    saveTtsPhoneticDict,
     fetchGithubReadme,
     searchAgentBgm,
     saveAgentTtsSettings,
@@ -36,6 +37,7 @@ import {
     resolveOmnivoiceVoiceDesignPreviewUrl,
     transcribeAgentAudio,
     uploadAgentAudioMp3,
+    uploadAgentVisualImage,
     type AgentRenderMode,
     type AgentVideoContentResponse,
     type AgentSourceFormatCatalogItem,
@@ -47,11 +49,13 @@ import {
     type ImportHtmlSummary,
     type ImportHtmlBgmSegment,
     type ImportHtmlVisualCatalogItem,
+    type ImportHtmlGithubImageShot,
     type ImportHtmlMarketingPostImage,
     type ImportHtmlComposition,
     type AgentBgmSearchItem,
     type WhisperWord,
     type CaptionAlignOverride,
+    type TtsPhoneticDictEntry,
 } from './agentVideoApi';
 import {
     bgmPreviewUrl,
@@ -69,6 +73,7 @@ import {
     readAgentVideoScriptDraft,
     writeAgentVideoScriptDraft,
 } from './agentVideoDraft';
+import { isCaptionSyncAssembleError } from './agentVideoImportHtmlBlockers';
 import {
     applyHfPromptTypeToMissingBeats,
     beatMapToJson,
@@ -103,10 +108,15 @@ import {
     useWhisperScriptAlign,
 } from './useWhisperScriptAlign';
 import type { WhisperCompareFilter } from './agentVideoWhisperCompareUi';
+import { normalizePhoneticSourceTerm, mergeTtsPhoneticDictEntries } from './agentVideoPhoneticDictUi';
 import {
     buildAgentMediaSuggestionPrompt,
     openAgentMediaSuggestionGemini,
 } from 'helpers/marketingAgentMediaSuggestGeminiWorkflow';
+import {
+    buildAgentGithubImageShotsPrompt,
+    openAgentGithubImageShotsGemini,
+} from 'helpers/marketingAgentGithubImageShotsGeminiWorkflow';
 
 type UseAgentVideoContentArgs = {
     open: boolean;
@@ -151,6 +161,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [omnivoiceVoice, setOmnivoiceVoice] = React.useState('minh_quân');
     const [omnivoiceVoiceMode, setOmnivoiceVoiceMode] = React.useState<OmnivoiceVoiceMode>('clone');
     const [omnivoiceVoiceDesign, setOmnivoiceVoiceDesign] = React.useState('male, middle-aged, very low pitch');
+    const [omnivoiceSpeed, setOmnivoiceSpeed] = React.useState(1);
     const [omnivoiceVoiceCatalog, setOmnivoiceVoiceCatalog] = React.useState<OmnivoiceVoiceCatalogItem[]>([]);
     const [omnivoiceVoiceDesignTokens, setOmnivoiceVoiceDesignTokens] = React.useState<OmnivoiceVoiceDesignTokenGroup[]>([]);
     const [savingOmnivoiceVoice, setSavingOmnivoiceVoice] = React.useState(false);
@@ -174,7 +185,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
     const [socialPosted, setSocialPosted] = React.useState(false);
-    const [renderMode, setRenderMode] = React.useState<AgentRenderMode>('creative');
+    const [renderMode, setRenderMode] = React.useState<AgentRenderMode>('import_html');
     const [importHtml, setImportHtml] = React.useState('');
     const [beatMap, setBeatMap] = React.useState<BeatMap | null>(null);
     const [beatMapJsonDraft, setBeatMapJsonDraft] = React.useState('');
@@ -203,6 +214,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [bgmTotalSec, setBgmTotalSec] = React.useState(0);
     const [bgmCoversVideo, setBgmCoversVideo] = React.useState(false);
     const [launchingAssemble, setLaunchingAssemble] = React.useState(false);
+    const [captionMismatchDialogOpen, setCaptionMismatchDialogOpen] = React.useState(false);
+    const [captionMismatchDialogMessage, setCaptionMismatchDialogMessage] = React.useState('');
     const [launchingPreview, setLaunchingPreview] = React.useState(false);
     const [previewStudioUrl, setPreviewStudioUrl] = React.useState('');
     const [launchingScriptRender, setLaunchingScriptRender] = React.useState(false);
@@ -211,9 +224,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [bgmSearchQuery, setBgmSearchQuery] = React.useState('lofi ambient');
     const [bgmSearchResults, setBgmSearchResults] = React.useState<AgentBgmSearchItem[]>([]);
     const [visualCatalog, setVisualCatalog] = React.useState<ImportHtmlVisualCatalogItem[]>([]);
+    const [githubImageShots, setGithubImageShots] = React.useState<ImportHtmlGithubImageShot[]>([]);
     const [marketingPostImages, setMarketingPostImages] = React.useState<ImportHtmlMarketingPostImage[]>([]);
+    const [pastingGithubShotId, setPastingGithubShotId] = React.useState<string | null>(null);
     const [whisperError, setWhisperError] = React.useState('');
     const [whisperWords, setWhisperWords] = React.useState<WhisperWord[]>([]);
+    const [ttsPhoneticDict, setTtsPhoneticDict] = React.useState<TtsPhoneticDictEntry[]>([]);
+    const [savingPhoneticDict, setSavingPhoneticDict] = React.useState(false);
     const [captionOverrides, setCaptionOverrides] = React.useState<Record<number, CaptionAlignOverride>>({});
     const [compareDrawerOpen, setCompareDrawerOpen] = React.useState(false);
     const [compareFocusIndex, setCompareFocusIndex] = React.useState<number | null>(null);
@@ -240,6 +257,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
     const [openingMediaSuggestGemini, setOpeningMediaSuggestGemini] = React.useState(false);
+    const [openingGithubImageShotsGemini, setOpeningGithubImageShotsGemini] = React.useState(false);
     const [copyingBeatHtmlPromptBeatId, setCopyingBeatHtmlPromptBeatId] = React.useState('');
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
@@ -254,6 +272,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const beatMapSaveTimerRef = React.useRef<number | null>(null);
     const beatHtmlSaveTimerRef = React.useRef<Record<string, number>>({});
     const visualCatalogSavedRef = React.useRef<string>('[]');
+    const githubImageShotsSavedRef = React.useRef<string>('[]');
     const autoWhisperStartedRef = React.useRef('');
 
     const resolveScriptFromResponse = React.useCallback((serverScript: string): string => {
@@ -291,6 +310,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const loadedVisualCatalog = Array.isArray(visualCatalogRaw) ? visualCatalogRaw : [];
         setVisualCatalog(loadedVisualCatalog);
         visualCatalogSavedRef.current = JSON.stringify(loadedVisualCatalog);
+        const githubShotsRaw = summary.assets?.github_image_shots;
+        const loadedGithubShots = Array.isArray(githubShotsRaw) ? githubShotsRaw : [];
+        setGithubImageShots(loadedGithubShots);
+        githubImageShotsSavedRef.current = JSON.stringify(loadedGithubShots);
         if (Array.isArray(summary.marketing_post_images)) {
             setMarketingPostImages(summary.marketing_post_images);
         }
@@ -303,6 +326,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const serverScript = String(res?.audio_script || '').trim();
         savedScriptRef.current = serverScript;
         setTitle(String(res?.title || '').trim());
+        setTtsPhoneticDict(mergeTtsPhoneticDictEntries(
+            Array.isArray(res?.tts_phonetic_dict) ? res.tts_phonetic_dict : [],
+        ));
         setAudioScript(resolveScriptFromResponse(serverScript));
         setScriptApproved(Boolean(res?.audio_script_approved ?? res?.agent_workflow?.script_approved));
         setAudioFileUrl(String(res?.audio_file || '').trim());
@@ -335,6 +361,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             String(res?.agent_omnivoice_voice_design || 'male, middle-aged, very low pitch').trim()
                 || 'male, middle-aged, very low pitch',
         );
+        {
+            const rawSpeed = Number(res?.agent_omnivoice_speed);
+            const nextSpeed = Number.isFinite(rawSpeed)
+                ? Math.max(0.5, Math.min(1.5, rawSpeed))
+                : 1;
+            setOmnivoiceSpeed(nextSpeed);
+        }
         setOmnivoiceVoiceCatalog(
             Array.isArray(res?.omnivoice_voice_catalog) ? res.omnivoice_voice_catalog : [],
         );
@@ -513,16 +546,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         nextAuto: boolean,
         nextPlatforms: string[],
         successMessage?: string,
+        nextSpeed?: number,
     ) => {
         setSavingTtsMode(true);
         try {
-            const res = await saveAgentTtsSettings(shortVideoId, nextAuto, nextPlatforms);
+            const res = await saveAgentTtsSettings(
+                shortVideoId,
+                nextAuto,
+                nextPlatforms,
+                nextSpeed,
+            );
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được cấu hình TTS', 'error');
                 return;
             }
             setAgentTtsAuto(nextAuto);
             setSelectedPlatforms(nextPlatforms);
+            if (nextSpeed !== undefined) {
+                setOmnivoiceSpeed(nextSpeed);
+            }
             if (successMessage) {
                 showMessage(successMessage, 'success');
             }
@@ -577,6 +619,36 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         const ordered = DEFAULT_TTS_PLATFORMS.filter((key) => nextPlatforms.includes(key));
         await persistTtsSettings(agentTtsAuto, ordered);
+    };
+
+    const handleOmnivoiceSpeedChange = async (nextSpeed: number) => {
+        if (savingTtsMode) {
+            return;
+        }
+        const clamped = Math.max(0.5, Math.min(1.5, nextSpeed));
+        if (Math.abs(clamped - omnivoiceSpeed) < 0.001) {
+            return;
+        }
+        setSavingTtsMode(true);
+        try {
+            const res = await saveAgentTtsSettings(
+                shortVideoId,
+                undefined,
+                undefined,
+                clamped,
+            );
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được tốc độ OmniVoice', 'error');
+                return;
+            }
+            setOmnivoiceSpeed(clamped);
+            showMessage('Đã lưu tốc độ OmniVoice', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingTtsMode(false);
+        }
     };
 
     const handleCopyScript = async () => {
@@ -660,6 +732,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setOpeningMediaSuggestGemini(false);
+        }
+    };
+
+    const handleOpenGithubImageShotsGemini = async () => {
+        if (!String(audioScript || '').trim()) {
+            showMessage('Cần có audio script trước khi gợi ý image GitHub', 'warning');
+            return;
+        }
+        setOpeningGithubImageShotsGemini(true);
+        try {
+            const prompt = buildAgentGithubImageShotsPrompt({
+                shortVideoId,
+                title,
+                appMobileTitle,
+                githubRepo: agentGithubRepo,
+                audioScript,
+                sourceContent: savedAgentSourceContent,
+            });
+            await openAgentGithubImageShotsGemini({
+                shortVideoId,
+                prompt,
+                autoSubmit: true,
+            });
+            showMessage('Đã mở Gemini gợi ý image GitHub — tab sẽ tự lưu về CMS khi hoàn tất', 'success');
+            window.setTimeout(() => {
+                loadRow();
+            }, 3000);
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningGithubImageShotsGemini(false);
         }
     };
 
@@ -798,14 +901,29 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [applyImportHtmlSummary, shortVideoId, showMessage]);
 
-    const persistImportHtmlAssets = React.useCallback(async () => {
+    const persistImportHtmlAssets = React.useCallback(async (options?: {
+        bgmSegments?: ImportHtmlBgmSegment[];
+        sfxBeatTransition?: boolean;
+        sfxHook?: boolean;
+        visualCatalog?: ImportHtmlVisualCatalogItem[];
+        githubImageShots?: ImportHtmlGithubImageShot[];
+        silent?: boolean;
+    }) => {
+        const nextBgm = options?.bgmSegments ?? bgmSegments;
+        const nextSfxBeat = options?.sfxBeatTransition ?? sfxBeatTransition;
+        const nextSfxHook = options?.sfxHook ?? sfxHook;
+        const nextVisual = options?.visualCatalog ?? visualCatalog;
+        const nextGithubShots = options?.githubImageShots ?? githubImageShots;
+        const silent = Boolean(options?.silent);
+
         setSavingImportAssets(true);
         try {
             const res = await saveAgentImportHtml(shortVideoId, {
-                bgmSegments,
-                sfxBeatTransition,
-                sfxHook,
-                visualCatalog,
+                bgmSegments: nextBgm,
+                sfxBeatTransition: nextSfxBeat,
+                sfxHook: nextSfxHook,
+                visualCatalog: nextVisual,
+                githubImageShots: nextGithubShots,
             });
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được tài nguyên', 'error');
@@ -816,18 +934,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             const savedBgmRaw = res.import_html?.assets?.bgm_segments;
             const savedBgmCount = Array.isArray(savedBgmRaw) ? savedBgmRaw.length : 0;
-            if (bgmSegments.length > 0 && savedBgmCount === 0) {
+            if (nextBgm.length > 0 && savedBgmCount === 0) {
                 showMessage('Không lưu được nhạc nền — URL tải không hợp lệ', 'error');
                 return false;
             }
             const savedVisualRaw = res.import_html?.assets?.visual_catalog;
             const savedVisualCatalog = Array.isArray(savedVisualRaw) ? savedVisualRaw : [];
-            if (visualCatalog.length > 0 && savedVisualCatalog.length === 0) {
+            if (nextVisual.length > 0 && savedVisualCatalog.length === 0) {
                 showMessage('Không lưu được thư viện hình ảnh/video — kiểm tra URL hoặc cập nhật backend', 'error');
                 return false;
             }
             visualCatalogSavedRef.current = JSON.stringify(savedVisualCatalog);
-            showMessage('Đã lưu tài nguyên ghép video', 'success');
+            const savedGithubRaw = res.import_html?.assets?.github_image_shots;
+            githubImageShotsSavedRef.current = JSON.stringify(Array.isArray(savedGithubRaw) ? savedGithubRaw : []);
+            if (!silent) {
+                showMessage('Đã lưu tài nguyên ghép video', 'success');
+            }
             return true;
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -835,7 +957,133 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setSavingImportAssets(false);
         }
-    }, [applyImportHtmlSummary, bgmSegments, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+    }, [applyImportHtmlSummary, bgmSegments, githubImageShots, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+
+    const readClipboardImageFile = React.useCallback(async (): Promise<File | null> => {
+        if (!navigator.clipboard?.read) {
+            return null;
+        }
+        try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+                const imageType = item.types.find((type) => type.startsWith('image/'));
+                if (!imageType) {
+                    continue;
+                }
+                const blob = await item.getType(imageType);
+                const ext = imageType === 'image/png'
+                    ? 'png'
+                    : imageType === 'image/webp'
+                        ? 'webp'
+                        : 'jpg';
+                return new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imageType });
+            }
+        } catch {
+            return null;
+        }
+        return null;
+    }, []);
+
+    const handlePasteGithubImageShot = React.useCallback(async (shotId: string) => {
+        const shot = githubImageShots.find((item) => item.id === shotId);
+        if (!shot) {
+            return;
+        }
+        setPastingGithubShotId(shotId);
+        try {
+            const file = await readClipboardImageFile();
+            if (!file) {
+                showMessage('Clipboard không có ảnh — hãy copy ảnh rồi thử lại', 'warning');
+                return;
+            }
+            const res = await uploadAgentVisualImage(shortVideoId, file);
+            if (!res?.success) {
+                throw new Error(parseApiMessage(res?.message) || 'Upload ảnh thất bại');
+            }
+            const url = String(res.url || '').trim();
+            if (!url) {
+                throw new Error('Server không trả URL ảnh');
+            }
+            const previewUrl = String(res.preview_url || url).trim() || url;
+            const nextId = `vis-upload-${Date.now()}`;
+            const caption = shot.description;
+            const nextCatalogItem: ImportHtmlVisualCatalogItem = {
+                id: nextId,
+                media_type: 'image',
+                url,
+                preview_url: previewUrl,
+                title: caption,
+                caption,
+                provider: 'upload',
+                source: 'user_upload',
+            };
+            const prevCatalogId = String(shot.visual_catalog_id || '').trim();
+            let nextCatalog = visualCatalog.filter((entry) => (
+                entry.id !== prevCatalogId && entry.url !== url
+            ));
+            nextCatalog = [...nextCatalog, nextCatalogItem];
+            const nextShots = githubImageShots.map((item) => (
+                item.id === shotId
+                    ? { ...item, visual_catalog_id: nextId }
+                    : item
+            ));
+            setVisualCatalog(nextCatalog);
+            setGithubImageShots(nextShots);
+            const ok = await persistImportHtmlAssets({
+                visualCatalog: nextCatalog,
+                githubImageShots: nextShots,
+                silent: true,
+            });
+            if (ok) {
+                showMessage(
+                    prevCatalogId ? 'Đã cập nhật ảnh từ clipboard' : 'Đã gắn ảnh từ clipboard vào mô tả',
+                    'success',
+                );
+            }
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setPastingGithubShotId(null);
+        }
+    }, [
+        githubImageShots,
+        persistImportHtmlAssets,
+        readClipboardImageFile,
+        shortVideoId,
+        showMessage,
+        visualCatalog,
+    ]);
+
+    const handleUnlinkGithubImageShot = React.useCallback(async (shotId: string) => {
+        const shot = githubImageShots.find((item) => item.id === shotId);
+        if (!shot?.visual_catalog_id) {
+            return;
+        }
+        const catalogId = shot.visual_catalog_id;
+        const nextShots = githubImageShots.map((item) => {
+            if (item.id !== shotId) {
+                return item;
+            }
+            return {
+                id: item.id,
+                description: item.description,
+            };
+        });
+        const nextCatalog = visualCatalog.filter((item) => item.id !== catalogId);
+        setGithubImageShots(nextShots);
+        setVisualCatalog(nextCatalog);
+        await persistImportHtmlAssets({
+            visualCatalog: nextCatalog,
+            githubImageShots: nextShots,
+            silent: true,
+        });
+    }, [githubImageShots, persistImportHtmlAssets, visualCatalog]);
+
+    const handleUpdateGithubImageShotDescription = React.useCallback((shotId: string, description: string) => {
+        setGithubImageShots((prev) => prev.map((item) => (
+            item.id === shotId ? { ...item, description } : item
+        )));
+    }, []);
 
     const handleAddVisualCatalogItem = React.useCallback((item: ImportHtmlVisualCatalogItem) => {
         const url = String(item.url || '').trim();
@@ -879,13 +1127,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         });
     }, []);
 
-    const isVisualCatalogDirty = JSON.stringify(visualCatalog) !== visualCatalogSavedRef.current;
+    const isVisualCatalogDirty = JSON.stringify(visualCatalog) !== visualCatalogSavedRef.current
+        || JSON.stringify(githubImageShots) !== githubImageShotsSavedRef.current;
 
     const persistVisualCatalogIfDirty = React.useCallback(async () => {
         if (!isVisualCatalogDirty) {
             return true;
         }
-        return persistImportHtmlAssets();
+        return persistImportHtmlAssets({ silent: true });
     }, [isVisualCatalogDirty, persistImportHtmlAssets]);
 
     const handleSearchAgentBgm = React.useCallback(async () => {
@@ -916,11 +1165,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (durationSec <= 0 && previewUrl) {
             durationSec = await probeAudioDurationSec(previewUrl);
         }
+        let nextSegments: ImportHtmlBgmSegment[] | null = null;
         setBgmSegments((prev) => {
             if (prev.some((seg) => seg.download_url === downloadUrl)) {
+                nextSegments = prev;
                 return prev;
             }
-            return [
+            nextSegments = [
                 ...prev,
                 {
                     id: String(item.id || `bgm-${prev.length + 1}`),
@@ -931,17 +1182,68 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     provider: String(item.provider || 'pixabay'),
                 },
             ];
+            return nextSegments;
         });
-    }, []);
+        if (nextSegments) {
+            await persistImportHtmlAssets({ bgmSegments: nextSegments, silent: true });
+        }
+    }, [persistImportHtmlAssets]);
 
-    const handleRemoveBgmSegment = React.useCallback((index: number) => {
-        setBgmSegments((prev) => prev.filter((_, i) => i !== index));
-    }, []);
+    const handleRemoveBgmSegment = React.useCallback(async (index: number) => {
+        let nextSegments: ImportHtmlBgmSegment[] | null = null;
+        setBgmSegments((prev) => {
+            nextSegments = prev.filter((_, i) => i !== index);
+            return nextSegments;
+        });
+        if (nextSegments) {
+            await persistImportHtmlAssets({ bgmSegments: nextSegments, silent: true });
+        }
+    }, [persistImportHtmlAssets]);
+
+    const handleSfxBeatTransitionChange = React.useCallback(async (checked: boolean) => {
+        setSfxBeatTransition(checked);
+        await persistImportHtmlAssets({ sfxBeatTransition: checked, silent: true });
+    }, [persistImportHtmlAssets]);
+
+    const handleSfxHookChange = React.useCallback(async (checked: boolean) => {
+        setSfxHook(checked);
+        await persistImportHtmlAssets({ sfxHook: checked, silent: true });
+    }, [persistImportHtmlAssets]);
 
     const handleLaunchImportHtmlAssemble = async () => {
         setLaunchingAssemble(true);
         try {
             const result = await launchImportHtmlAssemble(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+            loadRow();
+            if (!result.ok && isCaptionSyncAssembleError(result.message || '')) {
+                setCaptionMismatchDialogMessage(String(result.message || '').trim());
+                setCaptionMismatchDialogOpen(true);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            showMessage(message, 'error');
+            loadRow();
+            if (isCaptionSyncAssembleError(message)) {
+                setCaptionMismatchDialogMessage(message);
+                setCaptionMismatchDialogOpen(true);
+            }
+        } finally {
+            setLaunchingAssemble(false);
+        }
+    };
+
+    const handleDismissCaptionMismatchDialog = React.useCallback(() => {
+        setCaptionMismatchDialogOpen(false);
+    }, []);
+
+    const handleLaunchImportHtmlAssembleAllowMismatch = async () => {
+        setCaptionMismatchDialogOpen(false);
+        setLaunchingAssemble(true);
+        try {
+            const result = await launchImportHtmlAssemble(shortVideoId, {
+                allowCaptionMismatch: true,
+            });
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
         } catch (e) {
@@ -971,6 +1273,32 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setLaunchingScriptRender(true);
         try {
             const result = await launchImportHtmlRender(shortVideoId);
+            showMessage(result.message, result.ok ? 'success' : 'error');
+            loadRow();
+            if (!result.ok && isCaptionSyncAssembleError(result.message || '')) {
+                setCaptionMismatchDialogMessage(String(result.message || '').trim());
+                setCaptionMismatchDialogOpen(true);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            showMessage(message, 'error');
+            loadRow();
+            if (isCaptionSyncAssembleError(message)) {
+                setCaptionMismatchDialogMessage(message);
+                setCaptionMismatchDialogOpen(true);
+            }
+        } finally {
+            setLaunchingScriptRender(false);
+        }
+    };
+
+    const handleLaunchImportHtmlRenderAllowMismatch = async () => {
+        setCaptionMismatchDialogOpen(false);
+        setLaunchingScriptRender(true);
+        try {
+            const result = await launchImportHtmlRender(shortVideoId, {
+                allowCaptionMismatch: true,
+            });
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
         } catch (e) {
@@ -1446,6 +1774,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         audioScript,
         whisperWords,
         overrides: captionOverrides,
+        phoneticDict: ttsPhoneticDict,
     });
 
     const whisperAlignKeyRef = React.useRef('');
@@ -1506,6 +1835,52 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         showMessage,
         whisperScriptAlign,
     ]);
+
+    const handleSavePhoneticDict = React.useCallback(async (payload: {
+        sourceTerm: string;
+        phonetic: string;
+        id?: number;
+    }) => {
+        const sourceTerm = normalizePhoneticSourceTerm(payload.sourceTerm);
+        const phonetic = payload.phonetic.trim();
+        if (!sourceTerm || !phonetic) {
+            showMessage('Từ gốc và phiên âm không được để trống', 'error');
+            return false;
+        }
+
+        setSavingPhoneticDict(true);
+        try {
+            const res = await saveTtsPhoneticDict({
+                source_term: sourceTerm,
+                phonetic,
+                id: payload.id,
+                enabled: true,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được phiên âm', 'error');
+                return false;
+            }
+
+            if (Array.isArray(res.entries)) {
+                setTtsPhoneticDict(mergeTtsPhoneticDictEntries(res.entries));
+            } else if (res.entry) {
+                setTtsPhoneticDict((prev) => {
+                    const next = prev.filter((item) => item.source_term.trim().toLowerCase()
+                        !== sourceTerm.toLowerCase());
+                    next.push(res.entry as TtsPhoneticDictEntry);
+                    return mergeTtsPhoneticDictEntries(next);
+                });
+            }
+
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu phiên âm', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingPhoneticDict(false);
+        }
+    }, [showMessage]);
 
     React.useEffect(() => {
         if (!open) {
@@ -2104,6 +2479,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         omnivoiceVoice,
         omnivoiceVoiceMode,
         omnivoiceVoiceDesign,
+        omnivoiceSpeed,
         omnivoiceVoiceCatalog,
         omnivoiceVoiceDesignTokens,
         playingVoiceUrl,
@@ -2152,6 +2528,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         whisperError,
         whisperWords,
         whisperScriptAlign,
+        ttsPhoneticDict,
+        savingPhoneticDict,
+        handleSavePhoneticDict,
         compareDrawerOpen,
         setCompareDrawerOpen,
         compareFocusIndex,
@@ -2171,12 +2550,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBgmSegments,
         sfxBeatTransition,
         setSfxBeatTransition,
+        handleSfxBeatTransitionChange,
         sfxHook,
         setSfxHook,
+        handleSfxHookChange,
         composition,
         bgmTotalSec,
         bgmCoversVideo,
         launchingAssemble,
+        captionMismatchDialogOpen,
+        captionMismatchDialogMessage,
         launchingPreview,
         previewStudioUrl,
         launchingScriptRender,
@@ -2187,6 +2570,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         bgmSearchResults,
         visualCatalog,
         setVisualCatalog,
+        githubImageShots,
+        pastingGithubShotId,
+        handlePasteGithubImageShot,
+        handleUnlinkGithubImageShot,
+        handleUpdateGithubImageShotDescription,
         marketingPostImages,
         handleAddVisualCatalogItem,
         handleRemoveVisualCatalogItem,
@@ -2198,8 +2586,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleAddBgmSegment,
         handleRemoveBgmSegment,
         handleLaunchImportHtmlAssemble,
+        handleLaunchImportHtmlAssembleAllowMismatch,
+        handleDismissCaptionMismatchDialog,
         handleLaunchImportHtmlPreview,
         handleLaunchImportHtmlRender,
+        handleLaunchImportHtmlRenderAllowMismatch,
         uploading,
         savingTtsMode,
         savingHfTheme,
@@ -2220,6 +2611,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         openingCreateScriptGemini,
         openingImproveScriptGemini,
         openingMediaSuggestGemini,
+        openingGithubImageShotsGemini,
         copyingBeatHtmlPromptBeatId,
         pastingBeatHtmlBeatId,
         deletingBeatHtmlBeatId,
@@ -2232,6 +2624,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         chainLabel,
         loadRow,
         handleTtsAutoChange,
+        handleOmnivoiceSpeedChange,
         handleHfThemeChange,
         handleOmnivoiceVoiceChange,
         handleOmnivoiceVoicePreview,
@@ -2243,6 +2636,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenCreateScriptGemini,
         handleOpenImproveScriptGemini,
         handleOpenMediaSuggestGemini,
+        handleOpenGithubImageShotsGemini,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenCreateScriptGemini */
         handleCopyCreateScriptPrompt: handleOpenCreateScriptGemini,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenImproveScriptGemini */

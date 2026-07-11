@@ -6,7 +6,6 @@ import {
     Chip,
     Collapse,
     Stack,
-    TextField,
     Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -32,7 +31,23 @@ import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScri
 import ShortVideoAgentAudioSettingsDrawer from './ShortVideoAgentAudioSettingsDrawer';
 import ShortVideoAgentWhisperCompareDrawer from './ShortVideoAgentWhisperCompareDrawer';
 import ShortVideoAgentWhisperCompareSummary from './ShortVideoAgentWhisperCompareSummary';
+import ShortVideoAgentPhoneticQuickMenu from './ShortVideoAgentPhoneticQuickMenu';
+import ShortVideoAgentPhoneticDictDrawer from './ShortVideoAgentPhoneticDictDrawer';
+import ShortVideoAgentPhoneticScriptField from './ShortVideoAgentPhoneticScriptField';
+import {
+    buildDomSelectionAnchor,
+    buildPhoneticAnchorFromTerm,
+    buildSelectionAnchor,
+    clearScriptTextSelection,
+    findPhoneticDictEntry,
+    type ScriptTextSelectionAnchor,
+} from './agentVideoPhoneticDictUi';
 import type { useAgentVideoContent } from './useAgentVideoContent';
+import {
+    SECTION_THEMES,
+    SectionShell,
+    subPanelSx,
+} from './ShortVideoAgentSectionShell';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -41,131 +56,6 @@ type Props = {
 };
 
 type PipelineStepState = 'idle' | 'active' | 'done' | 'warning' | 'locked';
-
-type SectionTheme = {
-    accent: string;
-    border: string;
-    headerBg: string;
-    surfaceLight: string;
-    surfaceDark: string;
-    innerLight: string;
-    innerDark: string;
-};
-
-const SECTION_THEMES = {
-    script: {
-        accent: '#1565c0',
-        border: '#64b5f6',
-        headerBg: '#1565c0',
-        surfaceLight: '#e3f2fd',
-        surfaceDark: 'rgba(21, 101, 192, 0.2)',
-        innerLight: '#ffffff',
-        innerDark: 'rgba(0, 0, 0, 0.22)',
-    },
-    audio: {
-        accent: '#2e7d32',
-        border: '#66bb6a',
-        headerBg: '#2e7d32',
-        surfaceLight: '#e8f5e9',
-        surfaceDark: 'rgba(46, 125, 50, 0.2)',
-        innerLight: '#ffffff',
-        innerDark: 'rgba(0, 0, 0, 0.22)',
-    },
-    whisper: {
-        accent: '#6a1b9a',
-        border: '#ab47bc',
-        headerBg: '#6a1b9a',
-        surfaceLight: '#f3e5f5',
-        surfaceDark: 'rgba(106, 27, 154, 0.22)',
-        innerLight: '#ffffff',
-        innerDark: 'rgba(0, 0, 0, 0.22)',
-    },
-} as const;
-
-function sectionCardSx(theme: SectionTheme, muted = false) {
-    return {
-        border: '2px solid',
-        borderColor: theme.border,
-        borderRadius: 2,
-        overflow: 'hidden',
-        bgcolor: (t: { palette: { mode: string } }) => (
-            t.palette.mode === 'dark' ? theme.surfaceDark : theme.surfaceLight
-        ),
-        opacity: muted ? 0.78 : 1,
-        transition: 'opacity 0.15s ease',
-        boxShadow: (t: { palette: { mode: string } }) => (
-            t.palette.mode === 'dark'
-                ? 'none'
-                : `0 1px 3px ${theme.accent}22`
-        ),
-    } as const;
-}
-
-function sectionHeaderSx(theme: SectionTheme) {
-    return {
-        px: 1.5,
-        py: 1.25,
-        bgcolor: theme.headerBg,
-        color: '#fff',
-    } as const;
-}
-
-function subPanelSx(theme: SectionTheme) {
-    return {
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid',
-        borderColor: (t: { palette: { mode: string } }) => (
-            t.palette.mode === 'dark' ? `${theme.border}55` : `${theme.border}99`
-        ),
-        bgcolor: (t: { palette: { mode: string } }) => (
-            t.palette.mode === 'dark' ? theme.innerDark : theme.innerLight
-        ),
-    } as const;
-}
-
-function SectionShell({
-    step,
-    title,
-    icon,
-    theme,
-    muted,
-    trailing,
-    children,
-}: {
-    step: number;
-    title: string;
-    icon: React.ReactNode;
-    theme: SectionTheme;
-    muted?: boolean;
-    trailing?: React.ReactNode;
-    children: React.ReactNode;
-}) {
-    return (
-        <Box sx={sectionCardSx(theme, muted)}>
-            <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                spacing={1}
-                sx={sectionHeaderSx(theme)}
-            >
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', color: '#fff' }}>
-                        {icon}
-                    </Box>
-                    <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ color: '#fff' }}>
-                        {step}. {title}
-                    </Typography>
-                </Stack>
-                {trailing}
-            </Stack>
-            <Box sx={{ p: 1.5 }}>
-                {children}
-            </Box>
-        </Box>
-    );
-}
 
 function resolveScriptPipelineState(state: AgentVideoState): {
     step: PipelineStepState;
@@ -234,12 +124,144 @@ function resolveWhisperPipelineState(state: AgentVideoState): { step: PipelineSt
 
 export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-    const scriptFieldRef = React.useRef<HTMLInputElement | null>(null);
+    const scriptFieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const phoneticZoneRef = React.useRef<HTMLDivElement | null>(null);
     const [audioSettingsOpen, setAudioSettingsOpen] = React.useState(false);
     const [guideOpen, setGuideOpen] = React.useState(false);
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
     const [openingImproveScriptGemini, setOpeningImproveScriptGemini] = React.useState(false);
+    const [selectionAnchor, setSelectionAnchor] = React.useState<ScriptTextSelectionAnchor | null>(null);
+    const [phoneticDrawerOpen, setPhoneticDrawerOpen] = React.useState(false);
+    const [phoneticDrawerTerm, setPhoneticDrawerTerm] = React.useState('');
+    const lastPointerRef = React.useRef({ clientX: 0, clientY: 0 });
+
+    const existingPhoneticEntry = React.useMemo(
+        () => findPhoneticDictEntry(state.ttsPhoneticDict, phoneticDrawerTerm),
+        [phoneticDrawerTerm, state.ttsPhoneticDict],
+    );
+    const quickMenuIsEdit = React.useMemo(
+        () => Boolean(selectionAnchor && findPhoneticDictEntry(state.ttsPhoneticDict, selectionAnchor.text)),
+        [selectionAnchor, state.ttsPhoneticDict],
+    );
+
+    const closePhoneticQuickMenu = React.useCallback(() => {
+        setSelectionAnchor(null);
+        clearScriptTextSelection(scriptFieldRef.current);
+    }, []);
+
+    /** Selection từ textarea script — nguồn đúng duy nhất cho ô kịch bản */
+    const handleScriptTextSelection = React.useCallback((payload: {
+        text: string;
+        clientX: number;
+        clientY: number;
+    }) => {
+        lastPointerRef.current = {
+            clientX: payload.clientX,
+            clientY: payload.clientY,
+        };
+        const term = payload.text.trim();
+        if (!term) {
+            setSelectionAnchor(null);
+            return;
+        }
+        setSelectionAnchor({
+            text: term,
+            left: payload.clientX,
+            top: payload.clientY,
+        });
+    }, []);
+
+    const refreshScriptSelectionMenu = React.useCallback(() => {
+        // Ưu tiên textarea; không dùng DOM selection trong zone (dễ lệch với overlay/whisper)
+        const fromField = scriptFieldRef.current
+            ? buildSelectionAnchor(scriptFieldRef.current, lastPointerRef.current)
+            : null;
+        if (fromField) {
+            setSelectionAnchor(fromField);
+            return;
+        }
+
+        const active = typeof document !== 'undefined' ? document.activeElement : null;
+        const scriptFocused = Boolean(
+            scriptFieldRef.current
+            && active
+            && (active === scriptFieldRef.current || scriptFieldRef.current.contains(active as Node)),
+        );
+        if (scriptFocused) {
+            setSelectionAnchor(null);
+            return;
+        }
+
+        const fromDom = buildDomSelectionAnchor(phoneticZoneRef.current, lastPointerRef.current);
+        setSelectionAnchor(fromDom);
+    }, []);
+
+    const handleScriptPointerDown = (event: React.MouseEvent<HTMLElement>) => {
+        lastPointerRef.current = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+        };
+    };
+
+    const handleScriptPointerUp = (event: React.MouseEvent<HTMLElement>) => {
+        lastPointerRef.current = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+        };
+        // Bỏ qua nếu target nằm trong ô script — field tự emit onTextSelection
+        const field = scriptFieldRef.current;
+        const target = event.target as Node | null;
+        if (field && target) {
+            const fieldRoot = field.closest('.MuiFormControl-root') || field.parentElement;
+            if (fieldRoot?.contains(target)) {
+                return;
+            }
+        }
+        window.requestAnimationFrame(() => {
+            refreshScriptSelectionMenu();
+        });
+    };
+
+    const handlePhoneticSelection = React.useCallback((payload: {
+        text: string;
+        clientX: number;
+        clientY: number;
+    }) => {
+        lastPointerRef.current = {
+            clientX: payload.clientX,
+            clientY: payload.clientY,
+        };
+        const term = payload.text.trim();
+        if (!term) {
+            return;
+        }
+
+        // Đã có trong dict → mở thẳng drawer sửa
+        if (findPhoneticDictEntry(state.ttsPhoneticDict, term)) {
+            setSelectionAnchor(null);
+            setPhoneticDrawerTerm(term);
+            setPhoneticDrawerOpen(true);
+            return;
+        }
+
+        // Chưa có → hiện menu tạo phiên âm
+        const anchor = buildPhoneticAnchorFromTerm(term, payload);
+        setSelectionAnchor(anchor);
+    }, [state.ttsPhoneticDict]);
+
+    const handleOpenPhoneticDrawer = React.useCallback((termFromMenu?: string) => {
+        const term = String(termFromMenu || selectionAnchor?.text || phoneticDrawerTerm || '').trim();
+        if (!term) {
+            return;
+        }
+        setPhoneticDrawerTerm(term);
+        setPhoneticDrawerOpen(true);
+    }, [phoneticDrawerTerm, selectionAnchor?.text]);
+
+    const handleClosePhoneticDrawer = () => {
+        setPhoneticDrawerOpen(false);
+    };
 
     const voiceSummary = resolveOmnivoiceDisplaySummary({
         voiceKey: state.omnivoiceVoice || 'minh_quân',
@@ -302,7 +324,12 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     };
 
     return (
-        <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
+        <Box
+            ref={phoneticZoneRef}
+            onMouseDown={handleScriptPointerDown}
+            onMouseUp={handleScriptPointerUp}
+            sx={{ height: '100%', overflow: 'auto', p: 2 }}
+        >
             <Stack spacing={2}>
                 <SectionShell
                     step={1}
@@ -385,22 +412,24 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             </Alert>
                         </Collapse>
 
-                        <TextField
-                            inputRef={scriptFieldRef}
-                            multiline
-                            minRows={6}
-                            maxRows={14}
-                            fullWidth
-                            size="small"
-                            placeholder="Dán audio script từ chatbot vào đây…"
-                            value={state.audioScript}
-                            onChange={(e) => state.setAudioScript(e.target.value)}
-                            sx={{
-                                '& .MuiInputBase-root': {
-                                    fontSize: 13,
-                                    lineHeight: 1.55,
-                                },
-                            }}
+                        <Box>
+                            <ShortVideoAgentPhoneticScriptField
+                                inputRef={scriptFieldRef}
+                                minRows={6}
+                                maxRows={14}
+                                placeholder="Dán audio script từ chatbot vào đây…"
+                                value={state.audioScript}
+                                onChange={state.setAudioScript}
+                                phoneticDict={state.ttsPhoneticDict}
+                                onTextSelection={handleScriptTextSelection}
+                            />
+                        </Box>
+
+                        <ShortVideoAgentPhoneticQuickMenu
+                            anchor={state.compareDrawerOpen ? null : selectionAnchor}
+                            isEdit={quickMenuIsEdit}
+                            onCreateOrEdit={handleOpenPhoneticDrawer}
+                            onClose={closePhoneticQuickMenu}
                         />
 
                         {!state.hasScript ? (
@@ -516,6 +545,11 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                         </Avatar>
                                     )}
                                     label={voiceSummary.displayName}
+                                    variant="outlined"
+                                />
+                                <Chip
+                                    size="small"
+                                    label={`x${Number(state.omnivoiceSpeed || 1).toFixed(2)}`}
                                     variant="outlined"
                                 />
                             </Stack>
@@ -648,15 +682,17 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                 </Alert>
                             ) : null}
                             {state.whisperStatus === 'completed' && state.whisperWords.length > 0 ? (
-                                <ShortVideoAgentWhisperCompareSummary
+                <ShortVideoAgentWhisperCompareSummary
                                     audioScript={state.audioScript}
                                     alignResult={state.whisperScriptAlign}
                                     whisperWords={state.whisperWords}
+                                    phoneticDict={state.ttsPhoneticDict}
                                     issuesOnly={state.whisperCompareIssuesOnly}
                                     onToggleIssuesOnly={() => {
                                         state.setWhisperCompareIssuesOnly((prev) => !prev);
                                     }}
                                     onOpenCompare={state.openWhisperCompare}
+                                    onPhoneticSelection={handlePhoneticSelection}
                                     dimmed={state.whisperStale}
                                 />
                             ) : null}
@@ -670,10 +706,12 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 onClose={() => {
                     state.setCompareDrawerOpen(false);
                     state.setCompareFocusIndex(null);
+                    closePhoneticQuickMenu();
                 }}
                 audioScript={state.audioScript}
                 alignResult={state.whisperScriptAlign}
                 whisperWords={state.whisperWords}
+                phoneticDict={state.ttsPhoneticDict}
                 audioFileUrl={state.audioFileUrl}
                 focusIndex={state.compareFocusIndex}
                 filter={state.compareFilter}
@@ -685,6 +723,26 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 onSave={async () => { await state.saveCaptionAlignments(); }}
                 saving={state.savingCaptionAlignments}
                 hasUnsavedChanges={state.hasCaptionOverrideChanges}
+                onPhoneticSelection={handlePhoneticSelection}
+                phoneticQuickMenu={(
+                    <ShortVideoAgentPhoneticQuickMenu
+                        anchor={selectionAnchor}
+                        isEdit={quickMenuIsEdit}
+                        onCreateOrEdit={handleOpenPhoneticDrawer}
+                        onClose={closePhoneticQuickMenu}
+                    />
+                )}
+            />
+
+            <ShortVideoAgentPhoneticDictDrawer
+                open={phoneticDrawerOpen}
+                onClose={handleClosePhoneticDrawer}
+                shortVideoId={state.shortVideoId}
+                sourceTerm={phoneticDrawerTerm}
+                initialPhonetic={existingPhoneticEntry?.phonetic ?? ''}
+                existingEntry={existingPhoneticEntry}
+                saving={state.savingPhoneticDict}
+                onSave={state.handleSavePhoneticDict}
             />
 
             <ShortVideoAgentAudioSettingsDrawer
@@ -696,6 +754,8 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 chainLabel={state.chainLabel}
                 onTtsAutoChange={state.handleTtsAutoChange}
                 onPlatformToggle={state.handlePlatformToggle}
+                omnivoiceSpeed={state.omnivoiceSpeed}
+                onOmnivoiceSpeedChange={state.handleOmnivoiceSpeedChange}
                 catalog={state.omnivoiceVoiceCatalog}
                 selectedVoice={state.omnivoiceVoice || 'minh_quân'}
                 selectedVoiceMode={state.omnivoiceVoiceMode}

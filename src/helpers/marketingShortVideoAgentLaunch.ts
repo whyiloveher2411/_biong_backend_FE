@@ -126,6 +126,7 @@ async function triggerImportHtmlDaemonDirect(
         api_base_url: string;
         daemon_action: ImportHtmlDaemonAction;
         force_assemble?: boolean;
+        allow_caption_mismatch?: boolean;
     },
     timeoutMs = 120000,
 ): Promise<{ ok: boolean; error?: string; result?: unknown }> {
@@ -149,6 +150,7 @@ async function triggerImportHtmlDaemonDirect(
                 api_base_url: payload.api_base_url,
                 launch_token: payload.launch_token,
                 force_assemble: Boolean(payload.force_assemble),
+                allow_caption_mismatch: Boolean(payload.allow_caption_mismatch),
             }),
             signal: controller.signal,
         });
@@ -273,6 +275,7 @@ async function triggerAgentLaunchViaExtension(payload: {
     api_base_url: string;
     daemon_action?: ImportHtmlDaemonAction;
     force_assemble?: boolean;
+    allow_caption_mismatch?: boolean;
 }, timeoutMs = 120000): Promise<{ ok: boolean; error?: string; result?: unknown }> {
     const result = await dispatchExtensionEvent(
         'vn4-trigger-agent-render',
@@ -415,7 +418,7 @@ export async function launchShortVideoAgentImportAssemble(shortVideoId: number):
 export async function launchImportHtmlDaemonAction(
     shortVideoId: number,
     daemonAction: ImportHtmlDaemonAction,
-    options: { forceAssemble?: boolean } = {},
+    options: { forceAssemble?: boolean; allowCaptionMismatch?: boolean } = {},
 ): Promise<LaunchAgentRenderResult> {
     const id = Number(shortVideoId || 0);
     if (!Number.isInteger(id) || id <= 0) {
@@ -460,6 +463,7 @@ export async function launchImportHtmlDaemonAction(
         api_base_url: getApiHost(),
         daemon_action: daemonAction,
         force_assemble: options.forceAssemble,
+        allow_caption_mismatch: options.allowCaptionMismatch === true,
     };
     const timeoutMs = daemonAction === 'render-import-html' ? 900000 : 300000;
     const trigger = useDirectDaemon
@@ -513,16 +517,27 @@ export async function launchImportHtmlDaemonAction(
     };
 }
 
-export async function launchImportHtmlAssemble(shortVideoId: number): Promise<LaunchAgentRenderResult> {
-    return launchImportHtmlDaemonAction(shortVideoId, 'assemble');
+export async function launchImportHtmlAssemble(
+    shortVideoId: number,
+    options: { allowCaptionMismatch?: boolean } = {},
+): Promise<LaunchAgentRenderResult> {
+    return launchImportHtmlDaemonAction(shortVideoId, 'assemble', {
+        allowCaptionMismatch: options.allowCaptionMismatch,
+    });
 }
 
 export async function launchImportHtmlPreview(shortVideoId: number): Promise<LaunchAgentRenderResult> {
     return launchImportHtmlDaemonAction(shortVideoId, 'preview');
 }
 
-export async function launchImportHtmlRender(shortVideoId: number): Promise<LaunchAgentRenderResult> {
-    return launchImportHtmlDaemonAction(shortVideoId, 'render-import-html', { forceAssemble: true });
+export async function launchImportHtmlRender(
+    shortVideoId: number,
+    options: { allowCaptionMismatch?: boolean } = {},
+): Promise<LaunchAgentRenderResult> {
+    return launchImportHtmlDaemonAction(shortVideoId, 'render-import-html', {
+        forceAssemble: true,
+        allowCaptionMismatch: options.allowCaptionMismatch,
+    });
 }
 
 export async function launchShortVideoAgentImportHtmlFull(shortVideoId: number): Promise<LaunchAgentRenderResult> {

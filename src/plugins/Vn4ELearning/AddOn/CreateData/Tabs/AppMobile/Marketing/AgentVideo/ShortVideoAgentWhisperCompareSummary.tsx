@@ -8,16 +8,22 @@ import {
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import Button from 'components/atoms/Button';
 import type { CaptionAlignResult } from './agentVideoCaptionScriptAlign';
-import type { WhisperWord } from './agentVideoApi';
+import type { TtsPhoneticDictEntry, WhisperWord } from './agentVideoApi';
 import ShortVideoAgentWhisperCompareText from './ShortVideoAgentWhisperCompareText';
 
 type Props = {
     audioScript: string;
     alignResult: CaptionAlignResult | null;
     whisperWords: WhisperWord[];
+    phoneticDict?: TtsPhoneticDictEntry[];
     issuesOnly: boolean;
     onToggleIssuesOnly: () => void;
     onOpenCompare: (focusIndex?: number) => void;
+    onPhoneticSelection?: (payload: {
+        text: string;
+        clientX: number;
+        clientY: number;
+    }) => void;
     dimmed?: boolean;
 };
 
@@ -25,9 +31,11 @@ export default function ShortVideoAgentWhisperCompareSummary({
     audioScript,
     alignResult,
     whisperWords,
+    phoneticDict = [],
     issuesOnly,
     onToggleIssuesOnly,
     onOpenCompare,
+    onPhoneticSelection,
     dimmed = false,
 }: Props) {
     if (!alignResult) {
@@ -71,10 +79,12 @@ export default function ShortVideoAgentWhisperCompareSummary({
                     audioScript={audioScript}
                     tokens={alignResult.tokens}
                     whisperWords={whisperWords}
+                    phoneticDict={phoneticDict}
                     filter={issuesOnly ? 'issues' : 'all'}
                     compact
                     maxHeight={140}
                     onSeekToken={(index) => onOpenCompare(index)}
+                    onPhoneticSelection={onPhoneticSelection}
                 />
             </Box>
 

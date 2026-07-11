@@ -1,6 +1,7 @@
 import {
     alignScriptToWhisper,
     buildCaptionAlignResult,
+    extractOrphanWhisperWords,
     resolveTokenTier,
     tokenizeScript,
 } from './agentVideoCaptionScriptAlign';
@@ -29,6 +30,10 @@ describe('agentVideoCaptionScriptAlign', () => {
 
     it('resolveTokenTier: exact with different whisper text is yellow', () => {
         expect(resolveTokenTier('exact', 'ca', 'cá')).toBe('yellow');
+    });
+
+    it('resolveTokenTier: phonetic-dict-exact is green even when script differs from whisper', () => {
+        expect(resolveTokenTier('phonetic-dict-exact', 'Ê sơ ai', 'AI')).toBe('green');
     });
 
     it('resolveTokenTier: exact with punctuation-only diff is green', () => {
@@ -77,5 +82,40 @@ describe('agentVideoCaptionScriptAlign', () => {
         expect(result.stats.total).toBe(3);
         expect(result.stats.green + result.stats.yellow + result.stats.red).toBe(3);
         expect(tokenizeScript(script)).toEqual(['Con', 'cá', 'lớn']);
+    });
+
+    it('phonetic dict: AI + Whisper Ê sơ ai → xanh, không orphan', () => {
+        const script = 'AI là gì?';
+        const whisper = tw(['Ê', 'sơ', 'ai', 'là', 'gì']);
+        const dict = [{ source_term: 'AI', phonetic: 'Ây ai', phonetic_tokens: ['Ây', 'ai'] }];
+        const result = buildCaptionAlignResult(script, whisper, undefined, dict);
+
+        expect(result.tokens[0].text).toBe('AI');
+        expect(result.tokens[0].matchType).toBe('phonetic-dict-exact');
+        expect(result.tokens[0].tier).toBe('green');
+        expect(result.tokens[0].transcriptIndexes).toEqual([0, 1, 2]);
+
+        const orphans = extractOrphanWhisperWords(result.tokens, whisper);
+        expect(orphans.map((word) => word.text)).not.toContain('Ê');
+        expect(orphans.map((word) => word.text)).not.toContain('sơ');
+        expect(orphans.map((word) => word.text)).not.toContain('ai');
+        expect(result.orphans.map((word) => word.text)).not.toContain('Ê');
+    });
+
+    it('phonetic dict: Whisper A.I. khớp gốc — không gom là gì vào AI', () => {
+        const script = 'AI là gì?';
+        const whisper = tw(['A.I.', 'là', 'gì']);
+        const dict = [{ source_term: 'AI', phonetic: 'Ây ai', phonetic_tokens: ['Ây', 'ai'] }];
+        const result = buildCaptionAlignResult(script, whisper, undefined, dict);
+
+        expect(result.tokens[0].text).toBe('AI');
+        expect(result.tokens[0].matchType).toBe('phonetic-dict-exact');
+        expect(result.tokens[0].tier).toBe('green');
+        expect(result.tokens[0].transcriptIndexes).toEqual([0]);
+        expect(result.tokens[0].whisperText).toBe('A.I.');
+        expect(result.tokens[1].text).toBe('là');
+        expect(result.tokens[1].tier).toBe('green');
+        expect(result.tokens[1].whisperText).toBe('là');
+        expect(result.tokens[2].tier).toBe('green');
     });
 });

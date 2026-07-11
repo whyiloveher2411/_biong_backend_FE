@@ -10,6 +10,10 @@ import {
     toCaptionWords,
     totalVideoSec,
 } from './captionAlign/captionScriptAlign';
+import {
+    alignScriptToWhisperWithPhoneticDict,
+    type PhoneticDictEntry,
+} from './captionAlign/phoneticDictHelpers';
 
 export type WhisperWord = {
     text: string;
@@ -26,6 +30,7 @@ export type CaptionAlignToken = {
     whisperText?: string;
     corrected?: boolean;
     transcriptIndex?: number | null;
+    transcriptIndexes?: number[];
     tier: CaptionAlignTier;
     hasTimingGap?: boolean;
     gapSec?: number;
@@ -71,9 +76,10 @@ type MappedAlignWord = {
     whisperText?: string;
     corrected?: boolean;
     transcriptIndex?: number | null;
+    transcriptIndexes?: number[];
 };
 
-const RED_MATCH_TYPES = new Set(['interpolate', 'positional', 'positional-gap']);
+const RED_MATCH_TYPES = new Set(['interpolate', 'positional', 'positional-gap', 'phonetic-dict-interpolate']);
 
 export function stripPunctForCompare(text?: string): string {
     return stripPunct(String(text ?? '')).toLowerCase();
@@ -94,9 +100,13 @@ export function resolveTokenTier(
     if (RED_MATCH_TYPES.has(matchType)) {
         return 'red';
     }
+    if (matchType === 'phonetic-dict-exact') {
+        return 'green';
+    }
     if (
         matchType === 'fuzzy'
         || matchType.startsWith('cluster')
+        || matchType.startsWith('phonetic-dict')
         || scriptWhisperTextsDiffer(scriptText, whisperText)
     ) {
         return 'yellow';
@@ -135,11 +145,19 @@ export function extractOrphanWhisperWords(
     tokens: CaptionAlignToken[],
     whisperWords: WhisperWord[],
 ): WhisperWord[] {
-    const used = new Set(
-        tokens
-            .map((token) => token.transcriptIndex)
-            .filter((index): index is number => index != null && index >= 0),
-    );
+    const used = new Set<number>();
+    for (const token of tokens) {
+        if (Array.isArray(token.transcriptIndexes)) {
+            for (const index of token.transcriptIndexes) {
+                if (typeof index === 'number' && index >= 0) {
+                    used.add(index);
+                }
+            }
+        }
+        if (typeof token.transcriptIndex === 'number' && token.transcriptIndex >= 0) {
+            used.add(token.transcriptIndex);
+        }
+    }
     return whisperWords.filter((_, index) => !used.has(index));
 }
 
@@ -147,6 +165,7 @@ export function buildCaptionAlignResult(
     audioScript: string,
     whisperWords: WhisperWord[],
     overrides?: Record<number, CaptionAlignOverride>,
+    phoneticDict?: PhoneticDictEntry[],
 ): CaptionAlignResult {
     const scriptWords = tokenizeScript(audioScript);
     const {
@@ -154,9 +173,15 @@ export function buildCaptionAlignResult(
         exactCount,
         corrections,
         transcriptPointerEnd,
-    } = alignScriptToWhisper(scriptWords, whisperWords, {
-        lookahead: DEFAULT_LOOKAHEAD,
-    });
+    } = alignScriptToWhisperWithPhoneticDict(
+        scriptWords,
+        whisperWords,
+        phoneticDict ?? [],
+        alignScriptToWhisper,
+        {
+            lookahead: DEFAULT_LOOKAHEAD,
+        },
+    );
 
     const { mapped: repaired } = repairUntrustedNeighborTiming(aligned) as { mapped: MappedAlignWord[] };
     const duration = totalVideoSec(whisperWords, repaired);
@@ -179,6 +204,14 @@ export function buildCaptionAlignResult(
         const matchType = override?.matchType ?? entry.matchType ?? 'interpolate';
         const tier = resolveTokenTier(matchType, whisperText, text);
 
+        const transcriptIndexes = Array.isArray(entry.transcriptIndexes)
+            ? entry.transcriptIndexes.filter((item): item is number => typeof item === 'number' && item >= 0)
+            : (
+                typeof entry.transcriptIndex === 'number' && entry.transcriptIndex >= 0
+                    ? [entry.transcriptIndex]
+                    : []
+            );
+
         return {
             index,
             text,
@@ -187,7 +220,8 @@ export function buildCaptionAlignResult(
             matchType,
             whisperText,
             corrected: entry.corrected,
-            transcriptIndex: entry.transcriptIndex ?? null,
+            transcriptIndex: transcriptIndexes[0] ?? entry.transcriptIndex ?? null,
+            transcriptIndexes,
             tier,
             hasTimingGap: gapByIndex.has(index),
             gapSec: gapByIndex.get(index),

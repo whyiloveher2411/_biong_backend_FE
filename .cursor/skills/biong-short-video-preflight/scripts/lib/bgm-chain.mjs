@@ -248,6 +248,7 @@ export function renderBgmFadeScript(scheduled, crossfadeSec, volume, timelineVar
 }
 
 function detectMainTimelineVar(html) {
+  if (/\b_mainTl\b/.test(html)) return "_mainTl";
   if (/\bmainTl\b/.test(html)) return "mainTl";
   if (/\bconst\s+tl\s*=/.test(html) || /\blet\s+tl\s*=/.test(html)) return "tl";
   return "mainTl";
@@ -285,7 +286,9 @@ export function patchIndexHtml(html, scheduled, crossfadeSec, volume) {
   const fadeBlock = renderBgmFadeScript(scheduled, crossfadeSec, volume, timelineVar);
   if (fadeBlock) {
     const mainAssign = out.match(
-      new RegExp(`(\\n\\s*window\\.__timelines\\[['"]main['"]\\]\\s*=\\s*${timelineVar}\\s*;)`),
+      new RegExp(
+        `(\\n\\s*window\\.__timelines(?:\\[['"]main['"]\\]|\\.main)\\s*=\\s*${timelineVar}\\s*;)`,
+      ),
     );
     if (mainAssign) {
       out = out.replace(mainAssign[1], `\n${fadeBlock}${mainAssign[1]}`);

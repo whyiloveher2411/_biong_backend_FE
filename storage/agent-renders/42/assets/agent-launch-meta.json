@@ -1,0 +1,8 @@
+{
+  "short_video_id": 42,
+  "phase": "import_html_full",
+  "launched_at": "2026-07-10T13:20:09.951Z",
+  "method": "local_daemon",
+  "api_base_url": "http://localhost:9999",
+  "prompt_file": "agent-import-html-full-prompt.md"
+}

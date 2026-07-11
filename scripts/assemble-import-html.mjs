@@ -6,6 +6,7 @@
  *   node scripts/assemble-import-html.mjs --short-video-id 24
  *     [--api-base-url URL] [--access-token TOKEN] [--mcp-token TOKEN]
  *     [--skip-bgm-download] [--dry-run] [--skip-preflight]
+ *     [--allow-caption-mismatch]  # bỏ verify --strict; karaoke text = script
  *     [--context-snapshot PATH]  # bỏ qua MCP fetch, dùng file JSON local
  */
 import fs from "node:fs";
@@ -19,6 +20,10 @@ import { buildAmbientLayerHtml } from "./lib/build-ambient-layer.mjs";
 import { buildImportHtmlIndexHtml } from "./lib/build-import-html-index.mjs";
 import { normalizeOversizedBeatSections } from "./lib/normalize-beat-map-sections.mjs";
 import { runNodeScript, runImportHtmlPreflight, PREFLIGHT } from "./lib/run-import-html-preflight.mjs";
+import {
+  tokenizeScript,
+  interpolateTiming,
+} from "../.cursor/skills/biong-short-video-preflight/scripts/lib/caption-script-align.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HF_ASSETS = path.join(REPO_ROOT, ".cursor/skills/biong-short-video-hyperframes/assets");
@@ -32,6 +37,7 @@ function parseArgs(argv) {
     skipBgmDownload: false,
     dryRun: false,
     skipPreflight: false,
+    allowCaptionMismatch: false,
     contextSnapshot: "",
   };
   for (let i = 2; i < argv.length; i++) {
@@ -52,9 +58,92 @@ function parseArgs(argv) {
       out.dryRun = true;
     } else if (arg === "--skip-preflight") {
       out.skipPreflight = true;
+    } else if (arg === "--allow-caption-mismatch") {
+      out.allowCaptionMismatch = true;
     }
   }
   return out;
+}
+
+/**
+ * Ép caption-words.json: text = audio script, timing giữ từ sync (nội suy nếu thiếu).
+ * Dùng khi user xác nhận tiếp tục dù verify --strict fail.
+ */
+function forceCaptionWordsTextFromScript(projectDir) {
+  const scriptPath = path.join(projectDir, "assets/audio-script.txt");
+  const wordsPath = path.join(projectDir, "assets/caption-words.json");
+  if (!fs.existsSync(scriptPath) || !fs.existsSync(wordsPath)) {
+    throw new Error("Thiếu audio-script.txt hoặc caption-words.json — không ép text script được");
+  }
+
+  const scriptWords = tokenizeScript(fs.readFileSync(scriptPath, "utf8"));
+  if (!scriptWords.length) {
+    throw new Error("audio-script.txt rỗng sau tokenize");
+  }
+
+  let existing = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(wordsPath, "utf8"));
+    existing = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    existing = [];
+  }
+
+  const n = scriptWords.length;
+  const rebuilt = [];
+
+  for (let i = 0; i < n; i++) {
+    const prevExisting = existing[i - 1];
+    const curExisting = existing[i];
+    const nextExisting = existing[i + 1];
+
+    const hasCur =
+      curExisting &&
+      Number.isFinite(Number(curExisting.start)) &&
+      Number.isFinite(Number(curExisting.end));
+
+    let start;
+    let end;
+    if (hasCur) {
+      start = Number(curExisting.start);
+      end = Number(curExisting.end);
+    } else {
+      const prev = rebuilt[i - 1]
+        ? { start: rebuilt[i - 1].start, end: rebuilt[i - 1].end }
+        : prevExisting && Number.isFinite(Number(prevExisting.start))
+          ? { start: Number(prevExisting.start), end: Number(prevExisting.end) }
+          : null;
+      const next =
+        nextExisting && Number.isFinite(Number(nextExisting.start))
+          ? { start: Number(nextExisting.start), end: Number(nextExisting.end) }
+          : null;
+      const timing = interpolateTiming(prev, next, i, n);
+      start = timing.start;
+      end = timing.end;
+    }
+
+    if (end <= start) {
+      end = start + 0.08;
+    }
+
+    rebuilt.push({
+      text: scriptWords[i],
+      start: +start.toFixed(3),
+      end: +end.toFixed(3),
+    });
+  }
+
+  for (let i = 1; i < rebuilt.length; i++) {
+    if (rebuilt[i].start < rebuilt[i - 1].end) {
+      rebuilt[i].start = rebuilt[i - 1].end;
+    }
+    if (rebuilt[i].end <= rebuilt[i].start) {
+      rebuilt[i].end = +(rebuilt[i].start + 0.08).toFixed(3);
+    }
+  }
+
+  fs.writeFileSync(wordsPath, JSON.stringify(rebuilt, null, 2));
+  return { scriptWordCount: n, previousWordCount: existing.length };
 }
 
 function resolveAudioUrl(ctx) {
@@ -506,14 +595,22 @@ async function main() {
     );
     runNodeScript("sync-caption-from-script.mjs", projectDir, [], "sync-caption-from-script");
 
-    try {
-      runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
-    } catch (verifyError) {
-      const detail = buildCaptionSyncFailureMessage(
-        projectDir,
-        verifyError instanceof Error ? verifyError.message : String(verifyError),
+    if (args.allowCaptionMismatch) {
+      log("⚠️ allow-caption-mismatch — bỏ verify strict; karaoke text = script");
+      const forced = forceCaptionWordsTextFromScript(projectDir);
+      log(
+        `Ép caption text từ script: ${forced.scriptWordCount} từ (trước đó ${forced.previousWordCount})`,
       );
-      throw new Error(detail);
+    } else {
+      try {
+        runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
+      } catch (verifyError) {
+        const detail = buildCaptionSyncFailureMessage(
+          projectDir,
+          verifyError instanceof Error ? verifyError.message : String(verifyError),
+        );
+        throw new Error(detail);
+      }
     }
 
     const timelineSec = patchTimelineDurationFromCaption({
@@ -552,7 +649,10 @@ async function main() {
 
     if (!args.skipPreflight) {
       try {
-        runImportHtmlPreflight(projectDir);
+        runImportHtmlPreflight(projectDir, {
+          strictCaption: !args.allowCaptionMismatch,
+          skipCaptionVerify: args.allowCaptionMismatch,
+        });
       } catch (preflightError) {
         const raw = preflightError instanceof Error ? preflightError.message : String(preflightError);
         if (/check-beat-timing/i.test(raw)) {
@@ -588,8 +688,13 @@ async function main() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log(`❌ ${message}`);
+    const isCaptionSyncFail =
+      /Caption lệch script|verify-caption-sync|cấm dùng Whisper text|chưa khớp timing Whisper/i.test(
+        message,
+      );
     let beatErrors = {};
-    if (fs.existsSync(projectDir)) {
+    // Caption sync fail không phải lỗi HTML beat — tránh gắn nhầm lên mọi beat.
+    if (!isCaptionSyncFail && fs.existsSync(projectDir)) {
       beatErrors = collectImportHtmlBeatErrors(projectDir).beatErrors;
     }
     await reportImportHtmlAssemble({

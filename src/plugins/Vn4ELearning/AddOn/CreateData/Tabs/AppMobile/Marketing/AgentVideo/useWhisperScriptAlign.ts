@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CaptionAlignOverride, WhisperWord } from './agentVideoApi';
+import type { CaptionAlignOverride, TtsPhoneticDictEntry, WhisperWord } from './agentVideoApi';
 import {
     buildCaptionAlignResult,
     type CaptionAlignResult,
@@ -10,19 +10,21 @@ type UseWhisperScriptAlignArgs = {
     audioScript: string;
     whisperWords: WhisperWord[];
     overrides?: Record<number, CaptionAlignOverride>;
+    phoneticDict?: TtsPhoneticDictEntry[];
 };
 
 export function useWhisperScriptAlign({
     audioScript,
     whisperWords,
     overrides,
+    phoneticDict,
 }: UseWhisperScriptAlignArgs) {
     return React.useMemo(() => {
         if (!audioScript.trim() || whisperWords.length === 0) {
             return null;
         }
-        return buildCaptionAlignResult(audioScript, whisperWords, overrides);
-    }, [audioScript, overrides, whisperWords]);
+        return buildCaptionAlignResult(audioScript, whisperWords, overrides, phoneticDict);
+    }, [audioScript, overrides, phoneticDict, whisperWords]);
 }
 
 export function listIssueTokenIndexes(tokens: CaptionAlignToken[]): number[] {

@@ -56,6 +56,7 @@ function DrawerCustom({ title, content, activeOnClose, headerAction = false, act
             disableEnforceFocus
             open={open}
             variant="temporary"
+            {...restWithoutModal}
             ModalProps={{
                 ...restModalProps,
                 onClick: (e: React.MouseEvent) => {
@@ -67,7 +68,6 @@ function DrawerCustom({ title, content, activeOnClose, headerAction = false, act
                     restModalProps?.onMouseDown?.(e);
                 },
             }}
-            {...restWithoutModal}
         >
             <DialogTitle className={classes.header}>
                 <Box

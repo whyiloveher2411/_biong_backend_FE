@@ -20,6 +20,10 @@ import {
   analyzeCaptionTimingGaps,
 } from "./lib/caption-script-align.mjs";
 import {
+  alignScriptToWhisperWithPhoneticDict,
+  loadTtsPhoneticDict,
+} from "./lib/phonetic-dict-helpers.mjs";
+import {
   resolveTranscriptPath,
   readTranscribeManifest,
   loadTranscriptWords,
@@ -55,6 +59,7 @@ function main() {
 
   const scriptText = fs.readFileSync(scriptPath, "utf8");
   const scriptWords = tokenizeScript(scriptText);
+  const phoneticDict = loadTtsPhoneticDict(projectDir);
   const { words: transcriptWords } = loadTranscriptWords(projectDir, {
     stripEmotion: true,
     stripPunctFn: stripPunct,
@@ -80,9 +85,15 @@ function main() {
     transcriptPointerEnd,
     densityDrift,
     clusterCount,
-  } = alignScriptToWhisper(scriptWords, transcriptWords, {
-    lookahead: CAPTION_ALIGN_LOOKAHEAD,
-  });
+  } = alignScriptToWhisperWithPhoneticDict(
+    scriptWords,
+    transcriptWords,
+    phoneticDict,
+    alignScriptToWhisper,
+    {
+      lookahead: CAPTION_ALIGN_LOOKAHEAD,
+    },
+  );
 
   const {
     mapped,
