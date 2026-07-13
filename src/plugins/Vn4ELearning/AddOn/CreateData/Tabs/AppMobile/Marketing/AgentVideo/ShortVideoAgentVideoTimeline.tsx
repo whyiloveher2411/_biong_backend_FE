@@ -19,8 +19,6 @@ import {
     resolveAgentVideoDurationSec,
     timeSecToTimelineLeftPx,
 } from './agentVideoTimelineModel';
-import { resolveFilmstripTileDisplayWidthPx } from './agentVideoFilmstrip';
-import { useAgentVideoFilmstrip } from './useAgentVideoFilmstrip';
 import AgentVideoBeatBoundaryOverlay from './AgentVideoBeatBoundaryOverlay';
 import AgentVideoHfPromptTypeSelect from './AgentVideoHfPromptTypeSelect';
 import TimelineZoomControls, {
@@ -35,7 +33,6 @@ const TIMELINE_SCALE_SPLIT_COUNT = 5;
 const TIMELINE_START_LEFT = 20;
 const CURSOR_HEAD_OVERFLOW = 10;
 const HORIZONTAL_SCROLLBAR_HEIGHT = 12;
-const FILMSTRIP_TILE_WIDTH_PX = resolveFilmstripTileDisplayWidthPx();
 
 function getTimelineScrollGrids(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('.timeline-editor-edit-area .ReactVirtualized__Grid'));
@@ -92,21 +89,11 @@ function truncateLabel(label: string, maxLen = 48): string {
     return `${text.slice(0, maxLen - 1)}…`;
 }
 
-type AgentVideoFilmstripClipProps = {
+type AgentVideoSimpleClipProps = {
     clipLabel: string;
-    thumbnails: string[];
-    loading: boolean;
-    failed: boolean;
 };
 
-function AgentVideoFilmstripClip({
-    clipLabel,
-    thumbnails,
-    loading,
-    failed,
-}: AgentVideoFilmstripClipProps) {
-    const showFallback = !loading && thumbnails.length === 0;
-
+function AgentVideoSimpleClip({ clipLabel }: AgentVideoSimpleClipProps) {
     return (
         <Box
             sx={{
@@ -116,102 +103,32 @@ function AgentVideoFilmstripClip({
                 overflow: 'hidden',
                 borderRadius: 0.75,
                 border: '1px solid rgba(147, 197, 253, 0.45)',
-                bgcolor: showFallback ? 'rgba(30, 58, 138, 0.72)' : 'rgba(15, 23, 42, 0.95)',
+                bgcolor: 'rgba(30, 58, 138, 0.72)',
+                display: 'flex',
+                alignItems: 'center',
+                px: 1,
             }}
         >
-            {thumbnails.length > 0 ? (
-                <Box
-                    sx={{
-                        display: 'flex',
-                        width: '100%',
-                        height: '100%',
-                        overflow: 'hidden',
-                    }}
-                >
-                    {thumbnails.map((src, index) => (
-                        <Box
-                            key={`filmstrip-${index}`}
-                            component="img"
-                            src={src}
-                            alt=""
-                            sx={{
-                                width: FILMSTRIP_TILE_WIDTH_PX,
-                                flexShrink: 0,
-                                height: '100%',
-                                objectFit: 'cover',
-                                display: 'block',
-                                borderRight: index < thumbnails.length - 1
-                                    ? '1px solid rgba(255,255,255,0.08)'
-                                    : undefined,
-                            }}
-                        />
-                    ))}
-                </Box>
-            ) : null}
-
-            {loading ? (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: 'rgba(15, 23, 42, 0.55)',
-                    }}
-                >
-                    <CircularProgress size={18} sx={{ color: '#93c5fd' }} />
-                </Box>
-            ) : null}
-
-            {failed && !loading && thumbnails.length === 0 ? (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: 6,
-                        right: 8,
-                    }}
-                >
-                    <Typography variant="caption" sx={{ color: 'rgba(248, 113, 113, 0.95)', fontSize: 10 }}>
-                        Không tạo được thumbnail
-                    </Typography>
-                </Box>
-            ) : null}
-
-            <Box
+            <Typography
+                variant="caption"
                 sx={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    px: 0.75,
-                    py: 0.35,
-                    background: 'linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.82) 100%)',
+                    color: '#eff6ff',
+                    fontSize: 11,
+                    lineHeight: 1.2,
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                 }}
             >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        color: '#eff6ff',
-                        fontSize: 11,
-                        lineHeight: 1.2,
-                        display: 'block',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {truncateLabel(clipLabel)}
-                </Typography>
-            </Box>
+                {truncateLabel(clipLabel)}
+            </Typography>
         </Box>
     );
 }
 
 type Props = {
-    shortVideoId: number;
     videoUrl: string;
-    agentVideoRenderedAt?: string;
     videoRef: React.RefObject<HTMLVideoElement>;
     clipLabel?: string;
     audioDurationSec?: number | null;
@@ -268,9 +185,7 @@ type Props = {
 };
 
 export default function ShortVideoAgentVideoTimeline({
-    shortVideoId,
     videoUrl,
-    agentVideoRenderedAt = '',
     videoRef,
     clipLabel = 'HyperFrames',
     audioDurationSec,
@@ -372,21 +287,14 @@ export default function ShortVideoAgentVideoTimeline({
         [audioDurationSec, estimatedDurationSec, mediaDurationSec],
     );
 
-    const { thumbnails, loading: filmstripLoading, failed: filmstripFailed } = useAgentVideoFilmstrip(
-        customHtmlPreview ? '' : videoUrl,
-        contentDurationSec,
-        shortVideoId,
-        agentVideoRenderedAt,
-    );
-
     const timelineWorkspaceEndSec = React.useMemo(
         () => timelineEditorWorkspaceEndSec(contentDurationSec),
         [contentDurationSec],
     );
 
     const editorData = React.useMemo(
-        () => buildAgentVideoTimelineRows(contentDurationSec, thumbnails.length),
-        [contentDurationSec, thumbnails.length],
+        () => buildAgentVideoTimelineRows(contentDurationSec),
+        [contentDurationSec],
     );
 
     const minScaleCount = Math.max(20, Math.ceil(timelineWorkspaceEndSec) + 2);
@@ -649,7 +557,7 @@ export default function ShortVideoAgentVideoTimeline({
             });
             observer?.disconnect();
         };
-    }, [editorData, hasVideo, thumbnails.length]);
+    }, [editorData, hasVideo]);
 
     React.useEffect(() => {
         const host = timelineHostRef.current;
@@ -674,7 +582,7 @@ export default function ShortVideoAgentVideoTimeline({
         return () => {
             host.removeEventListener('wheel', onWheel, { capture: true });
         };
-    }, [editorData, hasVideo, thumbnails.length]);
+    }, [editorData, hasVideo]);
 
     return (
         <Box
@@ -968,11 +876,8 @@ export default function ShortVideoAgentVideoTimeline({
                             onCursorDrag={handleCursorDrag}
                             onClickTimeArea={handleClickTimeArea}
                             getActionRender={() => (
-                                <AgentVideoFilmstripClip
+                                <AgentVideoSimpleClip
                                     clipLabel={clipLabel}
-                                    thumbnails={thumbnails}
-                                    loading={filmstripLoading}
-                                    failed={filmstripFailed}
                                 />
                             )}
                         />

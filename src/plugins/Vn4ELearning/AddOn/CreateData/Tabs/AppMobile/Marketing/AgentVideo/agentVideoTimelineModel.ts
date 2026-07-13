@@ -25,17 +25,13 @@ export function timeSecToTimelineLeftPx(
 
 export function buildAgentVideoTimelineRows(
     durationSec: number,
-    filmstripVersion = 0,
 ): TimelineRow[] {
     const duration = Math.max(1, durationSec);
-    const clipId = filmstripVersion > 0
-        ? `${AGENT_VIDEO_CLIP_ID}-${filmstripVersion}`
-        : AGENT_VIDEO_CLIP_ID;
 
     return [{
         id: AGENT_VIDEO_TRACK_ID,
         actions: [{
-            id: clipId,
+            id: AGENT_VIDEO_CLIP_ID,
             start: 0,
             end: duration,
             effectId: 'video',

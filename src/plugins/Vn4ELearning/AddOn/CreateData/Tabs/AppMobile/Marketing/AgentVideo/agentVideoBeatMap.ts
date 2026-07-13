@@ -23,6 +23,8 @@ export type BeatMap = {
 export type BeatHtmlEntry = {
     html: string;
     updated_at?: string;
+    /** Prompt sáng tạo / refine — user hoặc pipeline AI ghi để dùng lại. */
+    creative_prompt?: string;
     render_status?: 'error' | 'ok' | string;
     render_error?: string;
     render_error_code?: string;
@@ -37,9 +39,13 @@ export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
         return null;
     }
     const raw = entry as Record<string, unknown>;
+    const creativePrompt = raw.creative_prompt != null
+        ? String(raw.creative_prompt)
+        : undefined;
     return {
         html: String(raw.html || ''),
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+        creative_prompt: creativePrompt !== undefined ? creativePrompt : undefined,
         render_status: raw.render_status ? String(raw.render_status) : undefined,
         render_error: raw.render_error ? String(raw.render_error) : undefined,
         render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,

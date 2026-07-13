@@ -349,6 +349,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [deletingAllBeatHtml, setDeletingAllBeatHtml] = React.useState(false);
     const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
+    const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadless, setFillingAllMissingBeatGeminiHeadless] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadlessProgress, setFillingAllMissingBeatGeminiHeadlessProgress] = React.useState<{
@@ -1171,6 +1172,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap?: BeatMap;
         beatId?: string;
         beatHtml?: string;
+        creativePrompt?: string;
     }) => {
         setSavingImportHtml(true);
         try {
@@ -1181,6 +1183,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatMap: payload.beatMap,
                 beatId: payload.beatId,
                 beatHtml: payload.beatHtml,
+                creativePrompt: payload.creativePrompt,
             });
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được HTML chatbot', 'error');
@@ -1767,7 +1770,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const commitBeatHtmlChange = React.useCallback(async (
         beatId: string,
         value: string,
-        options?: { immediate?: boolean },
+        options?: { immediate?: boolean; creativePrompt?: string },
     ): Promise<boolean> => {
         let next = value;
         const section = beatMap?.sections.find((item) => item.id === beatId);
@@ -1783,12 +1786,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
 
         const draftUpdatedAt = new Date().toISOString();
+        const creativePrompt = options?.creativePrompt;
         setBeatHtml((prev) => ({
             ...prev,
             [beatId]: {
                 ...prev[beatId],
                 html: next,
                 updated_at: draftUpdatedAt,
+                ...(creativePrompt !== undefined ? { creative_prompt: creativePrompt } : {}),
             },
         }));
 
@@ -1799,15 +1804,82 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
 
         if (options?.immediate) {
-            return persistImportHtml({ beatId, beatHtml: next });
+            return persistImportHtml({
+                beatId,
+                beatHtml: next,
+                ...(creativePrompt !== undefined ? { creativePrompt } : {}),
+            });
         }
 
         beatHtmlSaveTimerRef.current[beatId] = window.setTimeout(() => {
             delete beatHtmlSaveTimerRef.current[beatId];
-            void persistImportHtml({ beatId, beatHtml: next });
+            void persistImportHtml({
+                beatId,
+                beatHtml: next,
+                ...(creativePrompt !== undefined ? { creativePrompt } : {}),
+            });
         }, 1000);
         return true;
     }, [beatMap, persistImportHtml, showMessage]);
+
+    const handleRefineBeatHtmlViaGemini = React.useCallback(async (
+        beatId: string,
+        input: { prompt: string; html: string },
+    ): Promise<string | null> => {
+        const prompt = String(input.prompt || '').trim();
+        if (!prompt) {
+            showMessage('Nhập prompt trước khi gọi AI', 'warning');
+            return null;
+        }
+        const existingHtml = String(input.html || '').trim();
+        if (!existingHtml) {
+            showMessage('Chưa có HTML beat để refine', 'warning');
+            return null;
+        }
+
+        setRefiningBeatHtmlBeatId(beatId);
+        try {
+            const res = await generateBeatHtmlViaGeminiWeb(shortVideoId, beatId, {
+                mode: 'refine',
+                userPrompt: prompt,
+                existingHtml,
+                persistHtml: false,
+                persistPrompt: true,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Gemini refine thất bại', 'error');
+                return null;
+            }
+
+            setBeatHtml((prev) => ({
+                ...prev,
+                [beatId]: {
+                    ...prev[beatId],
+                    // Giữ html cũ trên state CMS; draft drawer nhận HTML mới qua return value.
+                    html: prev[beatId]?.html || existingHtml,
+                    creative_prompt: prompt,
+                    updated_at: prev[beatId]?.updated_at,
+                },
+            }));
+
+            const html = String(res.html || '').trim();
+            if (!html) {
+                showMessage('Gemini trả HTML trống', 'error');
+                return null;
+            }
+            if (html === existingHtml) {
+                showMessage(
+                    'Gemini trả HTML giống bản cũ — thử prompt cụ thể hơn hoặc chạy lại AI',
+                    'warning',
+                );
+            } else {
+                showMessage(`Đã refine ${beatId} — kiểm tra draft rồi bấm Lưu`, 'success');
+            }
+            return html;
+        } finally {
+            setRefiningBeatHtmlBeatId('');
+        }
+    }, [shortVideoId, showMessage]);
 
     const handleBeatHtmlChange = (beatId: string, value: string) => {
         void commitBeatHtmlChange(beatId, value);
@@ -3327,6 +3399,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         deletingAllBeatHtml,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
+        refiningBeatHtmlBeatId,
         openingAllMissingBeatGemini,
         fillingAllMissingBeatGeminiHeadless,
         fillingAllMissingBeatGeminiHeadlessProgress,
@@ -3369,6 +3442,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatMapJsonChange,
         handleBeatHtmlChange,
         commitBeatHtmlChange,
+        handleRefineBeatHtmlViaGemini,
         handleOpenBeatDivisionGemini,
         handleEnqueueBeatDivisionGeminiHeadless,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */

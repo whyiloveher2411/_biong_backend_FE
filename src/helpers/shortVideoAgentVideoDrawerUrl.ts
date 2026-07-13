@@ -20,8 +20,8 @@ export function parseShortVideoAgentIdFromSearch(search: string): number | null 
 export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAgentLeftTab {
     const normalized = search.startsWith('?') ? search.slice(1) : search;
     const raw = new URLSearchParams(normalized).get(SHORT_VIDEO_AGENT_TAB_URL_PARAM);
-    if (raw === 'content') {
-        return 'content';
+    if (raw === 'script') {
+        return 'script';
     }
     if (raw === 'facebook') {
         return 'facebook';
@@ -29,7 +29,7 @@ export function parseShortVideoAgentTabFromSearch(search: string): ShortVideoAge
     if (raw === 'render' || raw === 'resources' || raw === 'chatbot') {
         return 'render';
     }
-    return 'script';
+    return 'content';
 }
 
 export function setShortVideoAgentIdInSearchParams(
@@ -51,13 +51,14 @@ export function setShortVideoAgentTabInSearchParams(
     tab: ShortVideoAgentLeftTab | null,
 ): URLSearchParams {
     const next = new URLSearchParams(searchParams.toString());
-    if (tab === 'content') {
-        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'content');
+    if (tab === 'script') {
+        next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'script');
     } else if (tab === 'facebook') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'facebook');
     } else if (tab === 'render' || tab === 'resources' || tab === 'chatbot') {
         next.set(SHORT_VIDEO_AGENT_TAB_URL_PARAM, 'render');
     } else {
+        // content = default — không ghi URL
         next.delete(SHORT_VIDEO_AGENT_TAB_URL_PARAM);
     }
     return next;
@@ -66,10 +67,10 @@ export function setShortVideoAgentTabInSearchParams(
 export function openShortVideoAgentInSearchParams(
     searchParams: URLSearchParams,
     postId: number,
-    tab: ShortVideoAgentLeftTab = 'script',
+    tab: ShortVideoAgentLeftTab = 'content',
 ): URLSearchParams {
     let next = setShortVideoAgentIdInSearchParams(searchParams, postId);
-    const persistTab = tab === 'content'
+    const persistTab = tab === 'script'
         || tab === 'facebook'
         || tab === 'chatbot'
         || tab === 'resources'

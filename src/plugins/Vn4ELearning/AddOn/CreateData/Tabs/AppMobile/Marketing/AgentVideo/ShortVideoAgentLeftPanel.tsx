@@ -24,8 +24,8 @@ type Props = {
 };
 
 function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
-    if (initialTab === 'content') {
-        return TAB.content;
+    if (initialTab === 'script') {
+        return TAB.script;
     }
     if (initialTab === 'facebook') {
         return TAB.facebook;
@@ -33,12 +33,12 @@ function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
     if (initialTab === 'resources' || initialTab === 'chatbot' || initialTab === 'render') {
         return TAB.render;
     }
-    return TAB.script;
+    return TAB.content;
 }
 
 export default function ShortVideoAgentLeftPanel({
     state,
-    initialTab = 'script',
+    initialTab = 'content',
     onSaved,
 }: Props) {
     const [activeTab, setActiveTab] = React.useState<number>(() => resolveInitialTabIndex(initialTab));

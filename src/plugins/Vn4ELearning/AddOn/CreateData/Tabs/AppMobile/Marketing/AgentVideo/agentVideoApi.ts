@@ -961,6 +961,7 @@ export async function saveAgentImportHtml(
         beatMap?: import('./agentVideoBeatMap').BeatMap;
         beatId?: string;
         beatHtml?: string;
+        creativePrompt?: string;
         bgmSegments?: ImportHtmlBgmSegment[];
         sfxBeatTransition?: boolean;
         sfxHook?: boolean;
@@ -985,9 +986,17 @@ export async function saveAgentImportHtml(
     if (payload.beatMap !== undefined) {
         body.beat_map = payload.beatMap;
     }
-    if (payload.beatId !== undefined && payload.beatHtml !== undefined) {
+    if (payload.beatId !== undefined && (
+        payload.beatHtml !== undefined
+        || payload.creativePrompt !== undefined
+    )) {
         body.beat_id = payload.beatId;
-        body.beat_html = payload.beatHtml;
+        if (payload.beatHtml !== undefined) {
+            body.beat_html = payload.beatHtml;
+        }
+        if (payload.creativePrompt !== undefined) {
+            body.creative_prompt = payload.creativePrompt;
+        }
     }
     if (payload.bgmSegments !== undefined) {
         body.bgm_segments = payload.bgmSegments;
@@ -1047,52 +1056,4 @@ export async function fetchImportHtmlContext(shortVideoId: number) {
         },
     );
     return response.json();
-}
-
-const AGENT_VIDEO_STREAM_API_PATH =
-    'plugin/vn4-e-learning/app-mobile/marketing/short-video/stream-agent-video';
-
-export function resolveAgentVideoStreamUrl(shortVideoId: number): string {
-    const id = Number(shortVideoId || 0);
-    if (!Number.isFinite(id) || id <= 0) {
-        return '';
-    }
-
-    const url = new URL(convertToURL(getAdminApiPrefix(), AGENT_VIDEO_STREAM_API_PATH));
-    url.searchParams.set('short_video_id', String(id));
-    url.searchParams.set('id', String(id));
-
-    const token = getAccessToken();
-    if (token) {
-        url.searchParams.set('access_token', token);
-    }
-
-    return url.toString();
-}
-
-export function isCrossOriginMediaUrl(mediaUrl: string): boolean {
-    const trimmed = String(mediaUrl || '').trim();
-    if (!trimmed) {
-        return false;
-    }
-    try {
-        const parsed = new URL(trimmed, window.location.origin);
-        return parsed.origin !== window.location.origin;
-    } catch {
-        return false;
-    }
-}
-
-export function resolveAgentVideoFilmstripFetchUrl(
-    videoUrl: string,
-    shortVideoId: number,
-): string {
-    const trimmed = String(videoUrl || '').trim();
-    if (!trimmed) {
-        return '';
-    }
-    if (isCrossOriginMediaUrl(trimmed)) {
-        return resolveAgentVideoStreamUrl(shortVideoId);
-    }
-    return trimmed;
 }

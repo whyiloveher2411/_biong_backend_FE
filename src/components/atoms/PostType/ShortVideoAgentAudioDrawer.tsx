@@ -15,7 +15,7 @@ export default function ShortVideoAgentAudioDrawer({
     shortVideoId,
     onClose,
     onUploaded,
-    initialTab = 'script',
+    initialTab = 'content',
 }: Props) {
     return (
         <ShortVideoAgentVideoWorkspace

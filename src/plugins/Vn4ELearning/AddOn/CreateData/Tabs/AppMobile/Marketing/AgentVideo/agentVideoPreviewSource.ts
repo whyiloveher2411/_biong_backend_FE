@@ -31,32 +31,32 @@ export function canShowPreviewSourceTabs(input: AgentPreviewSourceInput): boolea
 }
 
 export function resolveDefaultPreviewSource(input: AgentPreviewSourceInput): AgentPreviewSource {
-    if (canShowFinalPreview(input)) {
-        return 'final';
-    }
     if (canShowHtmlBeatPreview(input)) {
         return 'html_beat';
     }
-    return 'final';
+    if (canShowFinalPreview(input)) {
+        return 'final';
+    }
+    return 'html_beat';
 }
 
 export function resolveActivePreviewSource(
     source: AgentPreviewSource,
     input: AgentPreviewSourceInput,
 ): AgentPreviewSource {
-    if (source === 'final' && canShowFinalPreview(input)) {
-        return 'final';
-    }
     if (source === 'html_beat' && canShowHtmlBeatPreview(input)) {
         return 'html_beat';
     }
-    if (canShowFinalPreview(input)) {
+    if (source === 'final' && canShowFinalPreview(input)) {
         return 'final';
     }
     if (canShowHtmlBeatPreview(input)) {
         return 'html_beat';
     }
-    return 'final';
+    if (canShowFinalPreview(input)) {
+        return 'final';
+    }
+    return 'html_beat';
 }
 
 export function resolvePreviewSourceTitle(source: AgentPreviewSource): string {

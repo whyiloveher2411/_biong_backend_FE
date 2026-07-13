@@ -114,9 +114,19 @@ export async function fetchImportHtmlBeatHtmlPrompt(
 export async function generateBeatHtmlViaGeminiWeb(
     shortVideoId: number,
     beatId: string,
+    options?: {
+        mode?: 'create' | 'refine';
+        userPrompt?: string;
+        existingHtml?: string;
+        persistHtml?: boolean;
+        persistPrompt?: boolean;
+    },
 ): Promise<{
     success?: boolean;
     beat_id?: string;
+    html?: string;
+    mode?: string;
+    persisted_html?: boolean;
     message?: { content?: string } | string;
     attempts?: number;
     raw_preview?: string;
@@ -137,6 +147,14 @@ export async function generateBeatHtmlViaGeminiWeb(
                     beat_id: beatId,
                     id: shortVideoId,
                     access_token: token,
+                    mode: options?.mode || 'create',
+                    user_prompt: options?.userPrompt || '',
+                    existing_html: options?.existingHtml || '',
+                    // 0/1 — tránh framework bỏ qua boolean false trong has()
+                    persist_html: options?.persistHtml === false ? 0 : 1,
+                    persist_prompt: options?.persistPrompt === false
+                        ? 0
+                        : (options?.persistPrompt === true || options?.mode === 'refine' ? 1 : undefined),
                 }),
             },
         );

@@ -44,11 +44,11 @@ export default function ShortVideoAgentVideoWorkspace({
     shortVideoId,
     onClose,
     onUploaded,
-    initialTab = 'script',
+    initialTab = 'content',
 }: Props) {
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
     const videoRef = React.useRef<HTMLVideoElement>(null);
-    const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('final');
+    const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('html_beat');
     const [editBeatHtmlId, setEditBeatHtmlId] = React.useState('');
 
     const editBeatSegment = React.useMemo(() => {
@@ -80,12 +80,28 @@ export default function ShortVideoAgentVideoWorkspace({
         setEditBeatHtmlId('');
     }, []);
 
-    const handleSaveEditBeatHtml = React.useCallback(async (html: string) => {
+    const handleSaveEditBeatHtml = React.useCallback(async (payload: {
+        html: string;
+        creativePrompt: string;
+    }) => {
         if (!editBeatHtmlId) {
             return false;
         }
-        return state.commitBeatHtmlChange(editBeatHtmlId, html, { immediate: true });
+        return state.commitBeatHtmlChange(editBeatHtmlId, payload.html, {
+            immediate: true,
+            creativePrompt: payload.creativePrompt,
+        });
     }, [editBeatHtmlId, state.commitBeatHtmlChange]);
+
+    const handleAiRefineEditBeatHtml = React.useCallback(async (payload: {
+        prompt: string;
+        html: string;
+    }) => {
+        if (!editBeatHtmlId) {
+            return null;
+        }
+        return state.handleRefineBeatHtmlViaGemini(editBeatHtmlId, payload);
+    }, [editBeatHtmlId, state.handleRefineBeatHtmlViaGemini]);
 
     const previewInput = React.useMemo(() => ({
         renderMode: state.renderMode,
@@ -273,9 +289,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     </Box>
                 </Box>
                 <ShortVideoAgentVideoTimeline
-                    shortVideoId={shortVideoId}
                     videoUrl={state.agentVideoUrl}
-                    agentVideoRenderedAt={state.agentVideoRenderedAt}
                     videoRef={videoRef}
                     clipLabel={state.title || `Short video #${shortVideoId}`}
                     audioDurationSec={state.audioDurationSec}
@@ -351,8 +365,11 @@ export default function ShortVideoAgentVideoWorkspace({
                 beatIndex={editBeatSegment?.beatIndex ?? null}
                 durationSec={editBeatSection?.durationSec ?? null}
                 initialHtml={String(state.beatHtml[editBeatHtmlId]?.html || '')}
+                initialCreativePrompt={String(state.beatHtml[editBeatHtmlId]?.creative_prompt || '')}
                 saving={state.savingImportHtml}
+                refining={state.refiningBeatHtmlBeatId === editBeatHtmlId}
                 onSave={handleSaveEditBeatHtml}
+                onAiRefine={handleAiRefineEditBeatHtml}
             />
         </DrawerCustom>
     );
