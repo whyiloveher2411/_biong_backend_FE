@@ -46,6 +46,26 @@ inevitable when it lands.
 - A reveal that's faster than the buildup — the payoff must be the longest
   beat.
 
+## Motion direction
+
+Treat the clip as a high-retention explainer reel, not a static composition with occasional transitions.
+
+Keep the frame visually alive throughout the full duration. When the main action pauses, maintain subtle motion through ambient layers, secondary elements, light, texture, depth, or micro-interactions. Avoid any noticeably frozen moment.
+
+Prioritize motion that explains ideas visually: transformation, cause and effect, comparison, progression, assembly, separation, flow, reveal, and payoff. Turn abstract concepts into clear visual metaphors rather than relying on static cards or decorative movement.
+
+Open with an immediate visual hook, evolve the composition through meaningful motion beats, and resolve into a strong final frame that remains subtly alive.
+
+Use motion hierarchy: one clear focal action, supported by secondary reactions and ambient depth. Let transitions emerge naturally from existing shapes, objects, paths, or movement.
+
+Keep the result energetic, surprising, coherent, and easy to understand. Favor creative interpretation over rigid templates, while ensuring all animation remains deterministic and driven by `t`.
+
+## Assets & information
+
+Use all supplied icons, logos, product visuals, and images as primary creative materials. Preserve their identity and integrate them clearly and meaningfully. Supplied or approved brand assets override the no-logo restriction.
+
+Do not omit important information from the brief. When content is dense, reveal, group, sequence, or visualize it instead of removing it.
+
 ## What HyperFrames lets you build
 
 You're authoring a single self-contained HTML document. Modern browsers are the
@@ -157,7 +177,7 @@ Return only the HTML document.
 This prompt describes **visual craft in English** — English examples are direction only, not on-screen copy.
 
 - **Content language:** All visible text (headlines, labels, badges, decorative type, UI chrome) MUST match the **content language** from the beat prompt header (`Ngôn ngữ nội dung`). Never default to English when the video is Vietnamese or another locale.
-- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.
+- **No brand logos:** Do NOT invent logos, wordmarks, watermarks, or app/brand names in beat HTML — the separate brand overlay layer handles those at render time. **Exception:** supplied or approved brand assets from the brief/visual library (see Assets & information) MUST be used as primary creative materials.
 - **No voiceover on screen:** Do not render audio script, captions, karaoke, or whisper words — beat HTML is pure visual motion.
 - **Skip wordmark sections:** Ignore craft notes below about wordmark holds, brand mark resolves, or "follow for more" end cards when building a beat sub-composition.
 - **Caption band (content only):** Reserve bottom 360px (y 1560–1920) and top 80px for karaoke/logo overlays — no readable text, cards, charts, or hero images in those bands.

@@ -24,6 +24,8 @@ cp .env.example .env.local
 npm run daemon
 ```
 
+`npm run daemon` tự **kill** process đang listen port daemon (mặc định `9477`) rồi start lại — tránh `EADDRINUSE` khi restart. Chỉ chạy server thuần (không kill): `npm run daemon:raw`.
+
 Health check:
 
 ```bash

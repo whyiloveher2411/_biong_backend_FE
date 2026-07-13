@@ -93,12 +93,25 @@ export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
     ].join('\n');
 }
 
-export function buildBeatDivisionSingleOutputRulesBlock(): string {
+export function buildBeatDivisionSingleOutputRulesBlock(options?: {
+    relaxDurationBounds?: boolean;
+}): string {
+    void options;
+    const durationRules = [
+        '## Beat duration (khuyến nghị phân bố nội dung — không validate cứng)',
+        '- **Khuyến nghị** mỗi beat khoảng **5–20s** để AI phân bố ý/visual hợp lý khi chia beat.',
+        '- Beat ngắn hơn/dài hơn vẫn **được chấp nhận** nếu khớp đoạn audio và phủ liên tục 0 → totalVideoSec.',
+        '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+        '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
+    ];
+
     return [
         '## OUTPUT — đúng 1 artifact duy nhất (bắt buộc)',
         '- Trả về **một JSON object** beat-map duy nhất — không HTML, không nhiều file.',
         '- **Cấm** trả kèm file HTML, beat HTML mẫu, hoặc nhiều JSON riêng lẻ.',
         '- **Cấm** markdown fence trong response cuối — chỉ JSON thuần.',
+        '',
+        ...durationRules,
         '',
     ].join('\n');
 }

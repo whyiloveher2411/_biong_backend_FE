@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Chuẩn hóa beat HTML chatbot → format HyperFrames render.
- * Chỉ scaffolding — không sửa visual CSS/DOM/render() logic.
+ * Scaffolding + patch CSS cấu trúc (:root → #root) + seek bridge cho beat split.
  *
  * Usage:
  *   node normalize-import-html-beat-for-render.mjs <project-dir> [--localize-images] [--force]
@@ -14,6 +14,7 @@ import {
   isImportHtmlProject,
   localizeExternalImages,
   normalizeBeatHtmlForRender,
+  resolveBeatSeekBridgeFromMap,
 } from "./lib/import-html-beat-render.mjs";
 
 function parseArgs(argv) {
@@ -28,6 +29,24 @@ function parseArgs(argv) {
     else if (!argv[i].startsWith("-") && !out.projectDir) out.projectDir = argv[i];
   }
   return out;
+}
+
+function loadBeatMapSections(projectDir) {
+  const candidates = [
+    path.join(projectDir, "assets/beat-map.json"),
+    path.join(projectDir, "beat-map.json"),
+  ];
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const data = JSON.parse(fs.readFileSync(file, "utf8"));
+      const sections = data?.sections || data?.beat_map?.sections;
+      if (Array.isArray(sections)) return sections;
+    } catch {
+      /* skip */
+    }
+  }
+  return [];
 }
 
 async function main() {
@@ -53,6 +72,7 @@ async function main() {
     process.exit(0);
   }
 
+  const sections = loadBeatMapSections(projectDir);
   const beatFiles = fs
     .readdirSync(compDir)
     .filter((n) => beatIdFromFilename(n))
@@ -64,13 +84,13 @@ async function main() {
   }
 
   let changedCount = 0;
-  const allPatches = [];
 
   for (const file of beatFiles) {
     const name = path.basename(file);
     const beatId = beatIdFromFilename(name);
     const html = fs.readFileSync(file, "utf8");
-    const result = normalizeBeatHtmlForRender(html, beatId);
+    const seekBridge = resolveBeatSeekBridgeFromMap(sections, beatId);
+    const result = normalizeBeatHtmlForRender(html, beatId, { seekBridge });
 
     if (result.error) {
       console.error(`✗ ${result.error}`);
@@ -81,7 +101,6 @@ async function main() {
       fs.writeFileSync(file, result.html, "utf8");
       changedCount += 1;
       console.log(`✓ ${name}: ${result.patches.join(", ")}`);
-      allPatches.push(...result.patches);
     } else {
       console.log(`· ${name}: ${result.patches[0] ?? "không đổi"}`);
     }

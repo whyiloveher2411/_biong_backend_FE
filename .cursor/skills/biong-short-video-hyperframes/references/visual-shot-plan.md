@@ -39,21 +39,18 @@ Chia beat khi: đổi chủ đề · số liệu mới · quy trình mới · so
 
 ---
 
-## Beat duration — 5s–20s (bắt buộc)
+## Beat duration — khuyến nghị 5s–20s (prompt chia beat)
 
 | Rule | Giá trị |
 |------|---------|
-| Min duration/beat | **5s** — beat ngắn hơn phải gộp với beat liền kề |
-| Max duration/beat | **20s** — không ngoại lệ (kể cả beat 1 hook) |
-| Video 60s | Khoảng **3–12 beat** (60÷20 … 60÷5) |
+| Khuyến nghị min | **~5s** — tránh micro-beat khi AI chia beat |
+| Khuyến nghị max | **~20s** — mỗi beat ~1 ý / chapter visual |
+| Video 60s | Khoảng **3–12 beat** (tham chiếu) |
 | Video 90s | Khoảng **5–18 beat** |
 | Video 120–180s | Khoảng **6–36 beat** |
-| Beat quá dài | **Tách thành nhiều beat** — mỗi beat = 1 ý / số liệu / câu, mỗi beat ≤20s |
-| Beat quá ngắn | **Gộp** — không tách micro-beat <5s |
 
-**Cấm:** 1 beat >20s ôm nhiều ý → màn hình trống chờ.  
-**Cấm:** beat <5s (trừ beat cuối nếu dư <5s sau khi chia).  
-**Cấm:** 2 beat liền kề dùng cùng `phrase_anchor` hoặc cùng `hf_prompt_type`.
+**Prompt AI:** gợi ý tách/gộp để phân bố nội dung hợp lý trong khoảng ~5–20s.  
+**Code / assemble / preflight:** **không** tách `beat_N` thành `beat_N_part2` — beat-map từ CMS giữ nguyên; chỉ bắt buộc duration > 0 và phủ liên tục.
 
 ---
 
@@ -107,8 +104,8 @@ Một entry = **một visual beat** (content unit):
 | `hf_prompt_type` | Gán bởi script — xem [hf-prompt-catalog.md](hf-prompt-catalog.md) |
 | `visual_story` | Mô tả visual **không** chỉ echo text — preflight kiểm tra |
 | `element_ids` | Danh sách id element cho `build-beat-element-timing.mjs` |
-| `min_duration_sec` | ≥ 5.0 — preflight FAIL nếu beat-map < 5s (trừ beat cuối dư) |
-| `max_duration_sec` | ≤ 20.0 — preflight FAIL nếu beat-map > 20s |
+| `min_duration_sec` | Khuyến nghị ≥ 5.0 khi AI chia beat (code không FAIL) |
+| `max_duration_sec` | Khuyến nghị ≤ 20.0 khi AI chia beat (code không FAIL / không tách part) |
 | `content_unique` | `phrase_anchor` phải khác tất cả beat khác trong video |
 
 ### Trường tùy chọn

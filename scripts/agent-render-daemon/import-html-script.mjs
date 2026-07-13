@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { resolveMcpToken } from "../lib/biong-env.mjs";
 import { BIONG_FE_ROOT } from "./config.mjs";
 import { diagnoseLaunchToken } from "./launch-token.mjs";
 
@@ -86,9 +87,12 @@ function spawnNodeScript(scriptRelative, args, envExtra = {}) {
 export async function runAssembleImportHtml(body, authHeader) {
   const shortVideoId = Number(body?.short_video_id || 0);
   const accessToken = String(body?.access_token || "").trim();
+  // access_token từ FE là JWT user — không dùng làm MCP Bearer
+  const mcpToken = resolveMcpToken(String(body?.mcp_token || "").trim(), BIONG_FE_ROOT);
   const apiBaseUrl = String(body?.api_base_url || "").trim();
   const launchToken = String(authHeader || body?.launch_token || "").trim();
-  const allowCaptionMismatch = Boolean(body?.allow_caption_mismatch);
+  const allowCaptionMismatch =
+    Boolean(body?.allow_caption_mismatch) || Boolean(body?.auto_confirm);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -102,11 +106,14 @@ export async function runAssembleImportHtml(body, authHeader) {
   const assembleArgs = [
     "--short-video-id",
     String(shortVideoId),
-    "--api-base-url",
-    apiBaseUrl,
     "--access-token",
     accessToken,
+    "--mcp-token",
+    mcpToken,
   ];
+  if (apiBaseUrl) {
+    assembleArgs.push("--api-base-url", apiBaseUrl);
+  }
   if (allowCaptionMismatch) {
     assembleArgs.push("--allow-caption-mismatch");
     console.log(
@@ -127,10 +134,14 @@ export async function runAssembleImportHtml(body, authHeader) {
 export async function runRenderImportHtml(body, authHeader) {
   const shortVideoId = Number(body?.short_video_id || 0);
   const accessToken = String(body?.access_token || "").trim();
+  // access_token từ FE là JWT user — không dùng làm MCP Bearer
+  const mcpToken = resolveMcpToken(String(body?.mcp_token || "").trim(), BIONG_FE_ROOT);
   const apiBaseUrl = String(body?.api_base_url || "").trim();
   const launchToken = String(authHeader || body?.launch_token || "").trim();
   const forceAssemble = Boolean(body?.force_assemble);
-  const allowCaptionMismatch = Boolean(body?.allow_caption_mismatch);
+  // Pipeline full-auto gửi auto_confirm / allow_caption_mismatch — luôn bypass verify caption
+  const allowCaptionMismatch =
+    Boolean(body?.allow_caption_mismatch) || Boolean(body?.auto_confirm);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -145,31 +156,65 @@ export async function runRenderImportHtml(body, authHeader) {
     const assembleArgs = [
       "--short-video-id",
       String(shortVideoId),
-      "--api-base-url",
-      apiBaseUrl,
       "--access-token",
       accessToken,
+      "--mcp-token",
+      mcpToken,
     ];
+    if (apiBaseUrl) {
+      assembleArgs.push("--api-base-url", apiBaseUrl);
+    }
     if (allowCaptionMismatch) {
       assembleArgs.push("--allow-caption-mismatch");
+      console.log(
+        `[agent-render-daemon] render force_assemble allow_caption_mismatch=true short_video_id=${shortVideoId}`,
+      );
     }
     await spawnNodeScript("scripts/assemble-import-html.mjs", assembleArgs);
   }
 
-  const result = await spawnNodeScript("scripts/render-import-html.mjs", [
+  const renderArgs = [
     "--short-video-id",
     String(shortVideoId),
     "--skip-assemble",
-    "--api-base-url",
-    apiBaseUrl,
     "--access-token",
     accessToken,
-  ]);
+  ];
+  if (apiBaseUrl) {
+    renderArgs.push("--api-base-url", apiBaseUrl);
+  }
+  const result = await spawnNodeScript("scripts/render-import-html.mjs", renderArgs);
 
   return {
     success: true,
     short_video_id: shortVideoId,
     action: "render-import-html",
+    result,
+  };
+}
+
+export async function runUploadAgentVideo(body, authHeader) {
+  const shortVideoId = Number(body?.short_video_id || 0);
+  const launchToken = String(authHeader || body?.launch_token || "").trim();
+
+  if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
+    throw new Error("Thiếu short_video_id hợp lệ");
+  }
+
+  const tokenCheck = diagnoseLaunchToken(shortVideoId, launchToken);
+  if (!tokenCheck.ok) {
+    throw new Error(tokenCheck.message || "launch_token không hợp lệ");
+  }
+
+  const result = await spawnNodeScript("scripts/upload-import-html.mjs", [
+    "--short-video-id",
+    String(shortVideoId),
+  ]);
+
+  return {
+    success: true,
+    short_video_id: shortVideoId,
+    action: "upload-agent-video",
     result,
   };
 }

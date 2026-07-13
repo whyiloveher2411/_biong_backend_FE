@@ -57,12 +57,10 @@ export function humanizeImportHtmlAssembleError(rawError: string): string {
         ].join(' ');
     }
 
-    if (/check-beat-timing|beat timing fail|> 20s|>20s/i.test(text)) {
-        const beatMatch = text.match(/(beat_\d+)[^:]*:\s*[^>]*>\s*20s/i);
-        const beatId = beatMatch?.[1] || 'một beat';
+    if (/check-beat-timing|beat timing fail/i.test(text)) {
         return [
-            `Beat-map không hợp lệ: ${beatId} dài hơn 20 giây (quy tắc visual-shot-plan: mỗi beat 5–20s).`,
-            'Vào tab Render → Mở Gemini chia beat lại, hoặc render lại (hệ thống sẽ tự tách beat dài và clone HTML tạm).',
+            'Beat-map timing không hợp lệ (liên tục / khớp audio / duration > 0).',
+            'Vào tab Render → Mở Gemini chia beat lại, rồi assemble/render. Hệ thống không tự tách beat trong code.',
         ].join(' ');
     }
 

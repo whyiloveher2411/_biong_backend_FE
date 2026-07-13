@@ -18,7 +18,6 @@ import { collectImportHtmlBeatErrors } from "./lib/collect-import-html-beat-erro
 import { downloadToUrl, copyIfExists } from "./lib/download-asset.mjs";
 import { buildAmbientLayerHtml } from "./lib/build-ambient-layer.mjs";
 import { buildImportHtmlIndexHtml } from "./lib/build-import-html-index.mjs";
-import { normalizeOversizedBeatSections } from "./lib/normalize-beat-map-sections.mjs";
 import { runNodeScript, runImportHtmlPreflight, PREFLIGHT } from "./lib/run-import-html-preflight.mjs";
 import {
   tokenizeScript,
@@ -216,32 +215,7 @@ function buildCaptionSyncFailureMessage(projectDir, fallback = "") {
 }
 
 function buildBeatTimingFailureMessage(projectDir, fallback = "") {
-  const parts = [];
-  try {
-    const beatMapPath = path.join(projectDir, "assets/beat-map.json");
-    if (fs.existsSync(beatMapPath)) {
-      const beatMap = JSON.parse(fs.readFileSync(beatMapPath, "utf8"));
-      const oversized = (beatMap.sections ?? []).filter(
-        (sec) => Number(sec.durationSec ?? 0) > 20,
-      );
-      for (const sec of oversized) {
-        const id = sec.id || sec.beat_id || "beat";
-        const dur = Number(sec.durationSec ?? 0).toFixed(1);
-        parts.push(
-          `${id} dài ${dur}s (tối đa 20s/beat) — cần tách beat-map trong tab HTML chatbot (Mở Gemini chia beat)`,
-        );
-      }
-    }
-  } catch {
-    // ignore
-  }
-  if (parts.length > 0) {
-    return parts.join(". ");
-  }
-  if (/beat.*>.*20s/i.test(fallback) || /BEAT TIMING/i.test(fallback)) {
-    return "Beat vượt 20 giây — mỗi beat visual chỉ được 5–20s. Tách beat-map rồi sinh HTML beat mới.";
-  }
-  return fallback || "check-beat-timing thất bại — timing beat không hợp lệ";
+  return fallback || "check-beat-timing thất bại — timing beat không hợp lệ (liên tục / khớp audio)";
 }
 
 function ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec) {
@@ -467,11 +441,18 @@ async function main() {
       ctx = JSON.parse(fs.readFileSync(snapPath, "utf8"));
       log(`Loaded context snapshot: ${snapPath}`);
     } else {
-      ctx = await fetchShortVideoContext({
-        shortVideoId,
-        apiBaseUrl,
-        mcpToken,
-      });
+      try {
+        ctx = await fetchShortVideoContext({
+          shortVideoId,
+          apiBaseUrl,
+          mcpToken,
+        });
+      } catch (fetchError) {
+        const detail = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        throw new Error(
+          `fetch context failed (${apiBaseUrl || "default"}): ${detail}`,
+        );
+      }
     }
 
     if (ctx.render_mode !== "import_html") {
@@ -487,15 +468,8 @@ async function main() {
     if (!sections.length) {
       throw new Error("Thiếu beat_map.sections");
     }
-
-    const normalizedBeats = normalizeOversizedBeatSections(sections);
-    sections = normalizedBeats.sections;
-    if (normalizedBeats.splitCount > 0) {
-      beatMap.sections = sections;
-      log(
-        `Tách beat >20s: ${normalizedBeats.splitDetails.join("; ")} — HTML phần sau dùng clone tạm từ beat gốc`,
-      );
-    }
+    // Giữ nguyên sections từ CMS — không tách beat_*_partN trong code.
+    // Gợi ý 5–20s chỉ nằm ở prompt chia beat (AI phân bố nội dung).
 
     const totalVideoSec = Number(
       beatMap.totalVideoSec || ctx.audio_file_duration_sec || sections.at(-1)?.endSec || 0,
@@ -533,13 +507,12 @@ async function main() {
 
     for (const sec of sections) {
       const beatId = sec.id || sec.beat_id;
-      const sourceId = sec.split_from || beatId;
-      const html = beatHtmlById[String(sourceId)] || beatHtmlById[String(beatId)];
+      const html = beatHtmlById[String(beatId)];
       if (!html) {
-        throw new Error(`Thiếu beat_html cho ${beatId}${sourceId !== beatId ? ` (clone từ ${sourceId})` : ""}`);
+        throw new Error(`Thiếu beat_html cho ${beatId}`);
       }
       fs.writeFileSync(path.join(projectDir, "compositions", `${beatId}.html`), html, "utf8");
-      log(`Wrote compositions/${beatId}.html${sourceId !== beatId ? ` (clone ${sourceId})` : ""}`);
+      log(`Wrote compositions/${beatId}.html`);
     }
 
     const audioUrl = resolveAudioUrl(ctx);

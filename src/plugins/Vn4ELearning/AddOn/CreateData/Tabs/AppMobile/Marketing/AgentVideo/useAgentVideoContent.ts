@@ -31,12 +31,16 @@ import {
     saveAgentCaptionAlignments,
     saveTtsPhoneticDict,
     fetchGithubReadme,
+    importGithubReadmeMedia,
     searchAgentBgm,
     saveAgentTtsSettings,
     saveAgentAutoFillBeatHtml,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
     enqueueGeminiWebAudioScript,
+    startFullAutoPipeline,
+    cancelFullAutoPipeline,
+    FULL_AUTO_PIPELINE_STEP_LABELS,
     savePublishFlags,
     resolveOmnivoiceVoicePreviewUrl,
     resolveOmnivoiceVoiceDesignPreviewUrl,
@@ -46,16 +50,20 @@ import {
     type AgentRenderMode,
     type AgentVideoContentResponse,
     type AgentSourceFormatCatalogItem,
+    type FullAutoPipelineSummary,
+    type GithubTopEnrichSummary,
     type HfThemeCatalogItem,
     type OmnivoiceVoiceCatalogItem,
     type OmnivoiceVoiceMode,
     type OmnivoiceVoiceDesignTokenGroup,
     type SaveOmnivoiceVoicePayload,
     type ImportHtmlSummary,
+    type ImportHtmlAssets,
     type ImportHtmlBgmSegment,
     type ImportHtmlVisualCatalogItem,
     type ImportHtmlGithubImageShot,
     type ImportHtmlMarketingPostImage,
+    type GithubReadmeMediaItem,
     type ImportHtmlComposition,
     type AgentBgmSearchItem,
     type WhisperWord,
@@ -76,7 +84,7 @@ import {
 } from './agentVideoUi';
 import {
     clearAgentVideoScriptDraft,
-    readAgentVideoScriptDraft,
+    readAgentVideoScriptDraftRecord,
     writeAgentVideoScriptDraft,
 } from './agentVideoDraft';
 import { isCaptionSyncAssembleError } from './agentVideoImportHtmlBlockers';
@@ -105,6 +113,50 @@ import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import { mergeGithubStatsIntoAdditionalInfo } from './agentVideoGithubStatsMerge';
+
+function normalizeGithubReadmeMediaList(raw: unknown): GithubReadmeMediaItem[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    return raw
+        .filter((item): item is GithubReadmeMediaItem => (
+            Boolean(item)
+            && typeof item === 'object'
+            && typeof (item as GithubReadmeMediaItem).resolved_url === 'string'
+            && String((item as GithubReadmeMediaItem).resolved_url).trim() !== ''
+        ))
+        .map((item, index) => ({
+            id: String(item.id || `gh-media-${index + 1}`),
+            media_type: item.media_type === 'video' ? 'video' : 'image',
+            resolved_url: String(item.resolved_url).trim(),
+            origin_path: String(item.origin_path || '').trim(),
+            alt: String(item.alt || '').trim(),
+            ext: String(item.ext || '').trim(),
+        }));
+}
+
+function toStringIdList(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const out: string[] = [];
+    for (let i = 0; i < value.length; i += 1) {
+        out.push(String(value[i]));
+    }
+    return out;
+}
+
+function mergeUniqueIds(prev: string[], ids: string[]): string[] {
+    const merged = prev.slice();
+    for (let i = 0; i < ids.length; i += 1) {
+        const id = ids[i];
+        if (merged.indexOf(id) === -1) {
+            merged.push(id);
+        }
+    }
+    return merged;
+}
+
 import {
     applyTokenOverride,
     buildCaptionSyncPayload,
@@ -160,6 +212,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [geminiScriptStatus, setGeminiScriptStatus] = React.useState('none');
     const [geminiScriptMode, setGeminiScriptMode] = React.useState('');
     const [geminiScriptError, setGeminiScriptError] = React.useState('');
+    const [fullAutoPipeline, setFullAutoPipeline] = React.useState<FullAutoPipelineSummary | null>(null);
+    const [githubTopEnrich, setGithubTopEnrich] = React.useState<GithubTopEnrichSummary | null>(null);
+    const [githubTopRepos, setGithubTopRepos] = React.useState<NonNullable<ImportHtmlAssets['github_top_repos']> | null>(null);
+    const [startingFullAuto, setStartingFullAuto] = React.useState(false);
+    const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
     const [ttsPending, setTtsPending] = React.useState(false);
     const [ttsFailed, setTtsFailed] = React.useState(false);
@@ -247,6 +304,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [bgmSearchResults, setBgmSearchResults] = React.useState<AgentBgmSearchItem[]>([]);
     const [visualCatalog, setVisualCatalog] = React.useState<ImportHtmlVisualCatalogItem[]>([]);
     const [githubImageShots, setGithubImageShots] = React.useState<ImportHtmlGithubImageShot[]>([]);
+    const [readmeMedia, setReadmeMedia] = React.useState<GithubReadmeMediaItem[]>([]);
+    const [importingReadmeMediaIds, setImportingReadmeMediaIds] = React.useState<string[]>([]);
+    const [importingAllReadmeMedia, setImportingAllReadmeMedia] = React.useState(false);
     const [marketingPostImages, setMarketingPostImages] = React.useState<ImportHtmlMarketingPostImage[]>([]);
     const [pastingGithubShotId, setPastingGithubShotId] = React.useState<string | null>(null);
     const [whisperError, setWhisperError] = React.useState('');
@@ -307,14 +367,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const githubImageShotsSavedRef = React.useRef<string>('[]');
     const autoWhisperStartedRef = React.useRef('');
 
-    const resolveScriptFromResponse = React.useCallback((serverScript: string): string => {
-        const draft = readAgentVideoScriptDraft(shortVideoId);
-        if (draft !== null && draft !== serverScript) {
+    const resolveScriptFromResponse = React.useCallback((
+        serverScript: string,
+        options?: {
+            serverUpdatedAt?: string;
+            preferServer?: boolean;
+        },
+    ): string => {
+        const draftRecord = readAgentVideoScriptDraftRecord(shortVideoId);
+        if (!draftRecord) {
+            return serverScript;
+        }
+
+        const draft = draftRecord.script;
+        const preferServer = Boolean(options?.preferServer)
+            || (draft.trim() === '' && serverScript.trim() !== '');
+
+        const serverUpdatedMs = Date.parse(String(options?.serverUpdatedAt || '').trim());
+        const serverIsNewer = Number.isFinite(serverUpdatedMs)
+            && serverUpdatedMs > 0
+            && serverUpdatedMs > (draftRecord.at || 0);
+
+        if (preferServer || serverIsNewer) {
+            clearAgentVideoScriptDraft(shortVideoId);
+            return serverScript;
+        }
+
+        if (draft !== serverScript) {
             return draft;
         }
-        if (draft !== null && draft === serverScript) {
-            clearAgentVideoScriptDraft(shortVideoId);
-        }
+
+        clearAgentVideoScriptDraft(shortVideoId);
         return serverScript;
     }, [shortVideoId]);
 
@@ -346,6 +429,20 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const loadedGithubShots = Array.isArray(githubShotsRaw) ? githubShotsRaw : [];
         setGithubImageShots(loadedGithubShots);
         githubImageShotsSavedRef.current = JSON.stringify(loadedGithubShots);
+        const readmeMediaRaw = summary.assets?.readme_media;
+        if (Array.isArray(readmeMediaRaw) && readmeMediaRaw.length > 0) {
+            setReadmeMedia(normalizeGithubReadmeMediaList(readmeMediaRaw));
+        }
+        const topReposRaw = summary.assets?.github_top_repos;
+        if (topReposRaw && typeof topReposRaw === 'object') {
+            setGithubTopRepos({
+                period: String(topReposRaw.period || ''),
+                limit: topReposRaw.limit,
+                repos: Array.isArray(topReposRaw.repos) ? topReposRaw.repos : [],
+            });
+        } else {
+            setGithubTopRepos(null);
+        }
         if (Array.isArray(summary.marketing_post_images)) {
             setMarketingPostImages(summary.marketing_post_images);
         }
@@ -361,7 +458,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setTtsPhoneticDict(mergeTtsPhoneticDictEntries(
             Array.isArray(res?.tts_phonetic_dict) ? res.tts_phonetic_dict : [],
         ));
-        setAudioScript(resolveScriptFromResponse(serverScript));
+        const geminiScript = res?.gemini_script;
+        const geminiScriptStatusNext = String(geminiScript?.status || 'none');
+        const pipelineStatus = String(res?.full_auto_pipeline?.status || '').trim();
+        const serverScriptUpdatedAt = String(
+            res?.audio_script_updated_at
+            || res?.audio_script_generated_at
+            || '',
+        ).trim();
+        setAudioScript(resolveScriptFromResponse(serverScript, {
+            serverUpdatedAt: serverScriptUpdatedAt,
+            // Full-auto đang chạy: server là nguồn sự thật (tránh draft trống/cũ đè script pipeline).
+            preferServer: pipelineStatus === 'running'
+                || geminiScriptStatusNext === 'processing'
+                || geminiScriptStatusNext === 'queued',
+        }));
         setScriptApproved(Boolean(res?.audio_script_approved ?? res?.agent_workflow?.script_approved));
         setAudioFileUrl(String(res?.audio_file || '').trim());
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
@@ -375,9 +486,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 total: Number(geminiFill?.progress?.total || 0),
                 beatId: String(geminiFill?.progress?.beat_id || ''),
                 succeeded: Number(geminiFill?.progress?.succeeded || 0),
-                failed: Array.isArray(geminiFill?.progress?.failed)
-                    ? geminiFill.progress.failed.map(String)
-                    : [],
+                failed: toStringIdList(geminiFill?.progress?.failed),
                 error: String(geminiFill?.error || '').trim(),
             });
         } else {
@@ -386,8 +495,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const geminiDivision = res?.import_html?.gemini_division;
         setGeminiDivisionStatus(String(geminiDivision?.status || 'none'));
         setGeminiDivisionError(String(geminiDivision?.error || '').trim());
-        const geminiScript = res?.gemini_script;
-        setGeminiScriptStatus(String(geminiScript?.status || 'none'));
+        setGeminiScriptStatus(geminiScriptStatusNext);
         setGeminiScriptMode(String(geminiScript?.mode || '').trim());
         setGeminiScriptError(String(geminiScript?.error || '').trim());
         setTtsPending(Boolean(res?.tts_pending ?? res?.agent_workflow?.tts_pending));
@@ -494,6 +602,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setImportHtmlReady(Boolean(importSummary?.import_html_ready ?? res?.agent_workflow?.import_html_ready));
         applyImportHtmlResources(importSummary);
+        // readme_media top-level (quét từ content) ưu tiên hơn assets
+        if (Array.isArray(res?.readme_media)) {
+            setReadmeMedia(normalizeGithubReadmeMediaList(res.readme_media));
+        }
+        setFullAutoPipeline(res?.full_auto_pipeline ?? null);
+        setGithubTopEnrich(res?.github_top_enrich ?? null);
     }, [applyImportHtmlResources, resolveScriptFromResponse]);
 
     const handleAudioScriptChange = React.useCallback((value: string) => {
@@ -582,7 +696,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || geminiDivisionStatus === 'queued'
         || geminiDivisionStatus === 'processing'
         || geminiScriptStatus === 'queued'
-        || geminiScriptStatus === 'processing';
+        || geminiScriptStatus === 'processing'
+        || fullAutoPipeline?.status === 'running'
+        || githubTopEnrich?.status === 'preparing';
     React.useEffect(() => {
         if (!open || !shortVideoId || !shouldPoll) {
             return undefined;
@@ -1002,17 +1118,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setImportHtmlReady(Boolean(summary.import_html_ready));
         setBeatMapReady(Boolean(summary.beat_map_ready));
         if (summary.gemini_fill) {
-            const nextGeminiStatus = String(summary.gemini_fill.status || 'none');
+            const fill = summary.gemini_fill;
+            const nextGeminiStatus = String(fill.status || 'none');
             setGeminiFillStatus(nextGeminiStatus);
             setGeminiFillProgress({
-                current: Number(summary.gemini_fill.progress?.current || 0),
-                total: Number(summary.gemini_fill.progress?.total || 0),
-                beatId: String(summary.gemini_fill.progress?.beat_id || ''),
-                succeeded: Number(summary.gemini_fill.progress?.succeeded || 0),
-                failed: Array.isArray(summary.gemini_fill.progress?.failed)
-                    ? summary.gemini_fill.progress.failed.map(String)
-                    : [],
-                error: String(summary.gemini_fill.error || '').trim(),
+                current: Number(fill.progress?.current || 0),
+                total: Number(fill.progress?.total || 0),
+                beatId: String(fill.progress?.beat_id || ''),
+                succeeded: Number(fill.progress?.succeeded || 0),
+                failed: toStringIdList(fill.progress?.failed),
+                error: String(fill.error || '').trim(),
             });
         }
         if (summary.gemini_division) {
@@ -1612,8 +1727,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         const parsed = parseBeatMapJson(value);
         if (parsed.map) {
+            const relaxDurationBounds = ['github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
+                String(agentSourceFormat || ''),
+            );
             const validation = audioDurationSec != null && audioDurationSec > 0
-                ? validateBeatMap(parsed.map, audioDurationSec)
+                ? validateBeatMap(parsed.map, audioDurationSec, { relaxDurationBounds })
                 : { valid: true, errors: [] };
             if (validation.valid) {
                 setRenderMode('import_html');
@@ -1631,7 +1749,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             if (audioDurationSec != null && audioDurationSec > 0) {
-                const validation = validateBeatMap(map, audioDurationSec);
+                const relaxDurationBounds = ['github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
+                    String(agentSourceFormat || ''),
+                );
+                const validation = validateBeatMap(map, audioDurationSec, { relaxDurationBounds });
                 if (!validation.valid) {
                     showMessage(validation.errors.join('; '), 'warning');
                     return;
@@ -2094,16 +2215,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     return;
                 }
                 if (res.gemini_fill) {
-                    setGeminiFillStatus(String(res.gemini_fill.status || 'queued'));
+                    const fill = res.gemini_fill;
+                    setGeminiFillStatus(String(fill.status || 'queued'));
                     setGeminiFillProgress({
-                        current: Number(res.gemini_fill.progress?.current || 0),
-                        total: Number(res.gemini_fill.progress?.total || missingBeatIds.length),
-                        beatId: String(res.gemini_fill.progress?.beat_id || ''),
-                        succeeded: Number(res.gemini_fill.progress?.succeeded || 0),
-                        failed: Array.isArray(res.gemini_fill.progress?.failed)
-                            ? res.gemini_fill.progress.failed.map(String)
-                            : [],
-                        error: String(res.gemini_fill.error || '').trim(),
+                        current: Number(fill.progress?.current || 0),
+                        total: Number(fill.progress?.total || missingBeatIds.length),
+                        beatId: String(fill.progress?.beat_id || ''),
+                        succeeded: Number(fill.progress?.succeeded || 0),
+                        failed: toStringIdList(fill.progress?.failed),
+                        error: String(fill.error || '').trim(),
                     });
                 } else {
                     setGeminiFillStatus('queued');
@@ -2149,6 +2269,73 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingAutoFillBeatHtml(false);
+        }
+    };
+
+    const handleStartFullAutoPipeline = async (
+        mode: 'resume' | 'restart' = 'resume',
+        fromStep?: string,
+    ) => {
+        if (startingFullAuto) {
+            return;
+        }
+        setStartingFullAuto(true);
+        try {
+            const res = await startFullAutoPipeline(shortVideoId, mode, fromStep);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không khởi chạy được pipeline A→Z',
+                    'error',
+                );
+                return;
+            }
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            const stepLabel = fromStep
+                && (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[fromStep]
+                ? (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[fromStep]
+                : fromStep;
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (mode === 'restart'
+                        ? (fromStep && fromStep !== 'script_create'
+                            ? `Đã chạy lại từ bước «${stepLabel}»`
+                            : 'Đã chạy lại pipeline A→Z từ đầu')
+                        : 'Đã bật / tiếp tục pipeline A→Z'),
+                'success',
+            );
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setStartingFullAuto(false);
+        }
+    };
+
+    const handleCancelFullAutoPipeline = async () => {
+        if (cancellingFullAuto) {
+            return;
+        }
+        setCancellingFullAuto(true);
+        try {
+            const res = await cancelFullAutoPipeline(shortVideoId);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không tạm dừng được pipeline',
+                    'error',
+                );
+                return;
+            }
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã tạm dừng pipeline A→Z', 'success');
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setCancellingFullAuto(false);
         }
     };
 
@@ -2262,6 +2449,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         sourceTerm: string;
         phonetic: string;
         id?: number;
+        caseSensitive?: boolean;
     }) => {
         const sourceTerm = normalizePhoneticSourceTerm(payload.sourceTerm);
         const phonetic = payload.phonetic.trim();
@@ -2277,6 +2465,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 phonetic,
                 id: payload.id,
                 enabled: true,
+                case_sensitive: Boolean(payload.caseSensitive),
             });
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được phiên âm', 'error');
@@ -2437,6 +2626,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setAgentSourceFormat(nextFormat);
                 setSavedAgentSourceFormat(nextFormat);
                 setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
+                if (Array.isArray(json?.readme_media)) {
+                    setReadmeMedia(normalizeGithubReadmeMediaList(json.readme_media));
+                }
             }
 
             showMessage(parseApiMessage(json?.message) || (linked ? 'Đã lưu thông tin thêm' : 'Đã lưu nội dung nguồn'), 'success');
@@ -2500,6 +2692,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setAgentAdditionalInfo(merged);
             }
 
+            const mediaRaw = Array.isArray(json?.readme_media) ? json.readme_media : [];
+            setReadmeMedia(normalizeGithubReadmeMediaList(mediaRaw));
+
             showMessage(parseApiMessage(json?.message) || 'Đã lấy thông tin repo', 'success');
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -2507,6 +2702,75 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setFetchingGithubReadme(false);
         }
     };
+
+    const normalizeMediaUrlKey = React.useCallback((url: string): string => {
+        return String(url || '').trim().toLowerCase().replace(/\?.*$/, '');
+    }, []);
+
+    const isReadmeMediaImported = React.useCallback((item: GithubReadmeMediaItem): boolean => {
+        const key = normalizeMediaUrlKey(item.resolved_url);
+        if (!key) {
+            return false;
+        }
+        return visualCatalog.some((entry) => {
+            const originKey = normalizeMediaUrlKey(String(entry.origin_url || ''));
+            const urlKey = normalizeMediaUrlKey(String(entry.url || ''));
+            return originKey === key || urlKey === key;
+        });
+    }, [normalizeMediaUrlKey, visualCatalog]);
+
+    const handleImportReadmeMediaItems = React.useCallback(async (items: GithubReadmeMediaItem[]) => {
+        const pending = items.filter((item) => !isReadmeMediaImported(item));
+        if (pending.length === 0) {
+            showMessage('Media đã có trong thư viện — không import lại', 'info');
+            return;
+        }
+
+        const ids = pending.map((item) => item.id);
+        setImportingReadmeMediaIds((prev) => mergeUniqueIds(prev, ids));
+        try {
+            const res = await importGithubReadmeMedia(shortVideoId, pending);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không import được media README', 'error');
+                return;
+            }
+
+            let nextCatalog: ImportHtmlVisualCatalogItem[] | null = null;
+            if (Array.isArray(res.visual_catalog)) {
+                nextCatalog = res.visual_catalog;
+            } else {
+                const fromAssets = res.import_html && res.import_html.assets
+                    ? res.import_html.assets.visual_catalog
+                    : undefined;
+                if (Array.isArray(fromAssets)) {
+                    nextCatalog = fromAssets;
+                }
+            }
+            if (nextCatalog) {
+                setVisualCatalog(nextCatalog);
+                visualCatalogSavedRef.current = JSON.stringify(nextCatalog);
+            }
+
+            showMessage(parseApiMessage(res?.message) || 'Đã import media từ README', 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setImportingReadmeMediaIds((prev) => prev.filter((id) => !ids.includes(id)));
+        }
+    }, [isReadmeMediaImported, shortVideoId, showMessage]);
+
+    const handleImportReadmeMediaItem = React.useCallback(async (item: GithubReadmeMediaItem) => {
+        await handleImportReadmeMediaItems([item]);
+    }, [handleImportReadmeMediaItems]);
+
+    const handleImportAllReadmeMedia = React.useCallback(async () => {
+        setImportingAllReadmeMedia(true);
+        try {
+            await handleImportReadmeMediaItems(readmeMedia);
+        } finally {
+            setImportingAllReadmeMedia(false);
+        }
+    }, [handleImportReadmeMediaItems, readmeMedia]);
 
     const handleApproveScript = async () => {
         setApprovingScript(true);
@@ -2886,6 +3150,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         geminiScriptStatus,
         geminiScriptMode,
         geminiScriptError,
+        fullAutoPipeline,
+        githubTopEnrich,
+        githubTopRepos,
+        startingFullAuto,
+        cancellingFullAuto,
         selectedPlatforms,
         ttsPending,
         ttsFailed,
@@ -3000,6 +3269,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         bgmSearchResults,
         visualCatalog,
         setVisualCatalog,
+        readmeMedia,
+        importingReadmeMediaIds,
+        importingAllReadmeMedia,
+        isReadmeMediaImported,
+        handleImportReadmeMediaItem,
+        handleImportAllReadmeMedia,
         githubImageShots,
         pastingGithubShotId,
         handlePasteGithubImageShot,
@@ -3062,6 +3337,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         loadRow,
         handleTtsAutoChange,
         handleAutoFillBeatHtmlChange,
+        handleStartFullAutoPipeline,
+        handleCancelFullAutoPipeline,
         handleOmnivoiceSpeedChange,
         handleHfThemeChange,
         handleOmnivoiceVoiceChange,
@@ -3091,6 +3368,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleHfPromptTypeChange,
         handleBeatMapJsonChange,
         handleBeatHtmlChange,
+        commitBeatHtmlChange,
         handleOpenBeatDivisionGemini,
         handleEnqueueBeatDivisionGeminiHeadless,
         /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */

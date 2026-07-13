@@ -57,6 +57,20 @@ is what tells you it's craft.
 - Everything centered with equal weight — lead the eye somewhere.
 - Character-by-character typewriter reveals.
 
+## Motion direction
+
+Treat the clip as a high-retention explainer reel, not a static composition with occasional transitions.
+
+Keep the frame visually alive throughout the full duration. When the main action pauses, maintain subtle motion through ambient layers, secondary elements, light, texture, depth, or micro-interactions. Avoid any noticeably frozen moment.
+
+Prioritize motion that explains ideas visually: transformation, cause and effect, comparison, progression, assembly, separation, flow, reveal, and payoff. Turn abstract concepts into clear visual metaphors rather than relying on static cards or decorative movement.
+
+Open with an immediate visual hook, evolve the composition through meaningful motion beats, and resolve into a strong final frame that remains subtly alive.
+
+Use motion hierarchy: one clear focal action, supported by secondary reactions and ambient depth. Let transitions emerge naturally from existing shapes, objects, paths, or movement.
+
+Keep the result energetic, surprising, coherent, and easy to understand. Favor creative interpretation over rigid templates, while ensuring all animation remains deterministic and driven by `t`.
+
 ## What HyperFrames lets you build
 
 You're authoring a single self-contained HTML document. Modern browsers are the

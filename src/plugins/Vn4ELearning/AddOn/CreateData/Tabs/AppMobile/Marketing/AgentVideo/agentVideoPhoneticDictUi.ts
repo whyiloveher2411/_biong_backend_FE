@@ -2,16 +2,6 @@ import type { TtsPhoneticDictEntry } from './agentVideoApi';
 
 type ScriptSelectionField = HTMLInputElement | HTMLTextAreaElement;
 
-/** Default đồng bộ backend `marketing_tts_phonetic_dict_default_map`. */
-export const DEFAULT_TTS_PHONETIC_DICT: TtsPhoneticDictEntry[] = [
-    { source_term: 'AI Agent', phonetic: 'Ei-Ai Êi-gừnt' },
-    { source_term: 'HyperFrames', phonetic: 'Hai-pơ-phờ-reim' },
-    { source_term: 'TikTok', phonetic: 'Tíc-tóc' },
-    { source_term: 'API', phonetic: 'A-pi-ai' },
-    { source_term: 'AI', phonetic: 'Ây ai' },
-    { source_term: 'App', phonetic: 'Áp' },
-];
-
 /** Trim + gộp khoảng trắng — `AI  Agent` ≈ `AI Agent`. */
 export function normalizePhoneticSourceTerm(sourceTerm?: string): string {
     return String(sourceTerm ?? '')
@@ -62,35 +52,41 @@ export function sortDictEntriesLongestFirst<T extends { source_term?: string; ph
         .sort(compareDictEntryPriority);
 }
 
-/**
- * Gộp default + entries từ API (API thắng nếu trùng source_term).
- * Đảm bảo UI luôn có AI Agent dù cache/DB seed cũ thiếu.
- */
+/** Chuẩn hóa entries từ API — không seed/fallback mặc định. */
 export function mergeTtsPhoneticDictEntries(
     entries: TtsPhoneticDictEntry[] | undefined,
 ): TtsPhoneticDictEntry[] {
-    const map = new Map<string, TtsPhoneticDictEntry>();
-    for (const entry of DEFAULT_TTS_PHONETIC_DICT) {
-        const key = normalizePhoneticSourceTerm(entry.source_term).toLowerCase();
-        if (key) map.set(key, { ...entry });
-    }
-    for (const entry of entries ?? []) {
-        const key = normalizePhoneticSourceTerm(entry.source_term).toLowerCase();
-        const phonetic = String(entry.phonetic ?? '').trim();
-        if (!key || !phonetic) continue;
-        map.set(key, {
-            ...entry,
-            source_term: normalizePhoneticSourceTerm(entry.source_term),
-            phonetic,
-        });
-    }
-    return sortDictEntriesLongestFirst(Array.from(map.values()));
+    const fromApi = (entries ?? [])
+        .map((entry) => {
+            const source_term = normalizePhoneticSourceTerm(entry.source_term);
+            const phonetic = String(entry.phonetic ?? '').trim();
+            if (!source_term || !phonetic) return null;
+            return {
+                ...entry,
+                source_term,
+                phonetic,
+                case_sensitive: Boolean(entry.case_sensitive),
+            } as TtsPhoneticDictEntry;
+        })
+        .filter((entry): entry is TtsPhoneticDictEntry => entry != null);
+
+    return sortDictEntriesLongestFirst(fromApi);
 }
 
-export function comparePhoneticSourceTerm(a?: string, b?: string): boolean {
-    const left = normalizePhoneticSourceTerm(a).toLowerCase();
-    const right = normalizePhoneticSourceTerm(b).toLowerCase();
-    return left !== '' && left === right;
+/**
+ * So khớp source_term.
+ * caseSensitive=true → AI ≠ ai.
+ */
+export function comparePhoneticSourceTerm(
+    a?: string,
+    b?: string,
+    caseSensitive = false,
+): boolean {
+    const left = normalizePhoneticSourceTerm(a);
+    const right = normalizePhoneticSourceTerm(b);
+    if (!left || !right) return false;
+    if (caseSensitive) return left === right;
+    return left.toLowerCase() === right.toLowerCase();
 }
 
 export function findPhoneticDictEntry(
@@ -102,7 +98,13 @@ export function findPhoneticDictEntry(
         return null;
     }
 
-    return entries.find((entry) => comparePhoneticSourceTerm(entry.source_term, normalized)) ?? null;
+    return entries.find((entry) => (
+        comparePhoneticSourceTerm(
+            entry.source_term,
+            normalized,
+            Boolean(entry.case_sensitive),
+        )
+    )) ?? null;
 }
 
 export function getTextareaSelectedText(field: ScriptSelectionField | null): string {

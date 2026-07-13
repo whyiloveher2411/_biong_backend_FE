@@ -224,6 +224,7 @@ type Props = {
     onBeatClick?: (beatId: string) => void;
     onCopyBeatPrompt?: (beatId: string) => void;
     onPasteBeatHtml?: (beatId: string) => void;
+    onEditBeatHtml?: (beatId: string) => void;
     onDeleteBeatHtml?: (beatId: string) => void;
     onDeleteAllBeatHtml?: () => void;
     onOpenAllMissingBeatGemini?: () => void;
@@ -282,6 +283,7 @@ export default function ShortVideoAgentVideoTimeline({
     onBeatClick,
     onCopyBeatPrompt,
     onPasteBeatHtml,
+    onEditBeatHtml,
     onDeleteBeatHtml,
     onDeleteAllBeatHtml,
     onOpenAllMissingBeatGemini,
@@ -988,6 +990,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onBeatClick={onBeatClick}
                                 onCopyPrompt={onCopyBeatPrompt}
                                 onPasteHtml={onPasteBeatHtml}
+                                onEditHtml={onEditBeatHtml}
                                 onDeleteBeatData={onDeleteBeatHtml}
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}

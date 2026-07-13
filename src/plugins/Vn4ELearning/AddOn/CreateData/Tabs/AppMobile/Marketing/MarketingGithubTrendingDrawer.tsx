@@ -7,6 +7,8 @@ import {
     CircularProgress,
     LinearProgress,
     Link,
+    Menu,
+    MenuItem,
     Stack,
     ToggleButton,
     ToggleButtonGroup,
@@ -17,6 +19,7 @@ import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import TranslateIcon from '@mui/icons-material/Translate';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { useSearchParams } from 'react-router-dom';
@@ -65,6 +68,7 @@ type Props = {
 };
 
 type PeriodFilter = 'all' | 'daily' | 'weekly' | 'monthly';
+type TopLimitChoice = 5 | 10 | 'all';
 
 const PERIOD_FILTERS: Array<{ value: PeriodFilter; label: string }> = [
     { value: 'all', label: 'Tất cả' },
@@ -72,6 +76,25 @@ const PERIOD_FILTERS: Array<{ value: PeriodFilter; label: string }> = [
     { value: 'weekly', label: 'Tuần' },
     { value: 'monthly', label: 'Tháng' },
 ];
+
+const TOP_LIMIT_OPTIONS: Array<{ value: TopLimitChoice; label: string }> = [
+    { value: 5, label: 'Top 5' },
+    { value: 10, label: 'Top 10' },
+    { value: 'all', label: 'Tất cả' },
+];
+
+function periodReviewButtonLabel(period: PeriodFilter): string {
+    switch (period) {
+        case 'daily':
+            return 'Tạo short video review ngày';
+        case 'weekly':
+            return 'Tạo short video review tuần';
+        case 'monthly':
+            return 'Tạo short video review tháng';
+        default:
+            return 'Tạo short video review';
+    }
+}
 
 function filterReposByPeriod(
     items: TrendingRepoItem[],
@@ -263,6 +286,8 @@ export default function MarketingGithubTrendingDrawer({
     const [loading, setLoading] = React.useState(false);
     const [crawling, setCrawling] = React.useState(false);
     const [creatingId, setCreatingId] = React.useState<number | null>(null);
+    const [creatingTop, setCreatingTop] = React.useState(false);
+    const [topMenuAnchor, setTopMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [describingId, setDescribingId] = React.useState<number | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [info, setInfo] = React.useState<string | null>(null);
@@ -286,6 +311,15 @@ export default function MarketingGithubTrendingDrawer({
         }),
         [items]
     );
+
+    const showTopReviewButton =
+        periodFilter === 'daily' || periodFilter === 'weekly' || periodFilter === 'monthly';
+
+    React.useEffect(() => {
+        if (!showTopReviewButton) {
+            setTopMenuAnchor(null);
+        }
+    }, [showTopReviewButton]);
 
     const loadList = React.useCallback(
         (opts?: { silent?: boolean }) => {
@@ -432,6 +466,55 @@ export default function MarketingGithubTrendingDrawer({
         });
     };
 
+    const handleCreateTopReview = (limit: TopLimitChoice) => {
+        if (!appMobileId || !showTopReviewButton) {
+            return;
+        }
+        setTopMenuAnchor(null);
+        setCreatingTop(true);
+        setError(null);
+        setInfo(null);
+
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/github-trending/create-top-short-video',
+            method: 'POST',
+            data: {
+                app_mobile_id: appMobileId,
+                period: periodFilter,
+                limit,
+            },
+            loading: false,
+            success: (res: {
+                success?: boolean;
+                message?: unknown;
+                short_video_id?: number;
+            }) => {
+                setCreatingTop(false);
+                if (!res?.success) {
+                    setError(parseApiMessage(res));
+                    return;
+                }
+                const shortVideoId = Number(res.short_video_id || 0);
+                setInfo(parseApiMessage(res) || 'Đã tạo short video top repo');
+                loadList({ silent: true });
+                onCreatedShortVideo?.(shortVideoId);
+                if (shortVideoId > 0) {
+                    const next = openShortVideoAgentInSearchParams(
+                        searchParams,
+                        shortVideoId,
+                        'content'
+                    );
+                    setSearchParams(next, { replace: true });
+                    onClose();
+                }
+            },
+            error: (err: unknown) => {
+                setCreatingTop(false);
+                setError(parseApiMessage(err));
+            },
+        });
+    };
+
     const handleGenerateDescriptionVi = (item: TrendingRepoItem) => {
         if (!appMobileId || !item.id) {
             return;
@@ -549,28 +632,86 @@ export default function MarketingGithubTrendingDrawer({
                 {error && <Alert severity="error">{error}</Alert>}
                 {info && <Alert severity="success">{info}</Alert>}
 
-                <ToggleButtonGroup
-                    exclusive
-                    size="small"
-                    value={periodFilter}
-                    onChange={(_event, next: PeriodFilter | null) => {
-                        if (next) setPeriodFilter(next);
-                    }}
-                    aria-label="Lọc theo kỳ trending"
-                    sx={{
-                        flexWrap: 'wrap',
-                        '& .MuiToggleButton-root': {
-                            textTransform: 'none',
-                            px: 1.5,
-                        },
-                    }}
+                <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    alignItems={{ xs: 'stretch', sm: 'center' }}
+                    justifyContent="space-between"
+                    flexWrap="wrap"
+                    useFlexGap
                 >
-                    {PERIOD_FILTERS.map((tab) => (
-                        <ToggleButton key={tab.value} value={tab.value}>
-                            {tab.label} ({periodCounts[tab.value]})
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={periodFilter}
+                        onChange={(_event, next: PeriodFilter | null) => {
+                            if (next) setPeriodFilter(next);
+                        }}
+                        aria-label="Lọc theo kỳ trending"
+                        sx={{
+                            flexWrap: 'wrap',
+                            '& .MuiToggleButton-root': {
+                                textTransform: 'none',
+                                px: 1.5,
+                            },
+                        }}
+                    >
+                        {PERIOD_FILTERS.map((tab) => (
+                            <ToggleButton key={tab.value} value={tab.value}>
+                                {tab.label} ({periodCounts[tab.value]})
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+
+                    {showTopReviewButton ? (
+                        <>
+                            <Button
+                                size="small"
+                                variant="contained"
+                                color="error"
+                                startIcon={
+                                    creatingTop ? (
+                                        <CircularProgress size={14} color="inherit" />
+                                    ) : (
+                                        <VideoLibraryOutlinedIcon fontSize="small" />
+                                    )
+                                }
+                                endIcon={<ArrowDropDownIcon fontSize="small" />}
+                                onClick={(event) => setTopMenuAnchor(event.currentTarget)}
+                                disabled={
+                                    loading ||
+                                    crawling ||
+                                    creatingTop ||
+                                    creatingId !== null ||
+                                    filteredItems.length === 0
+                                }
+                                sx={{ textTransform: 'none', flexShrink: 0 }}
+                            >
+                                {periodReviewButtonLabel(periodFilter)}
+                            </Button>
+                            <Menu
+                                anchorEl={topMenuAnchor}
+                                open={Boolean(topMenuAnchor)}
+                                onClose={() => setTopMenuAnchor(null)}
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            >
+                                {TOP_LIMIT_OPTIONS.map((opt) => (
+                                    <MenuItem
+                                        key={String(opt.value)}
+                                        onClick={() => handleCreateTopReview(opt.value)}
+                                        disabled={creatingTop}
+                                    >
+                                        {opt.label}
+                                        {opt.value !== 'all'
+                                            ? ` (${Math.min(Number(opt.value), filteredItems.length)} repo)`
+                                            : ` (${filteredItems.length} repo)`}
+                                    </MenuItem>
+                                ))}
+                            </Menu>
+                        </>
+                    ) : null}
+                </Stack>
 
                 {loading && (
                     <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
@@ -752,7 +893,7 @@ export default function MarketingGithubTrendingDrawer({
                                                     <VideoLibraryOutlinedIcon fontSize="small" />
                                                 )
                                             }
-                                            disabled={creating || describing || loading}
+                                            disabled={creating || creatingTop || describing || loading}
                                             onClick={() => handleCreate(item)}
                                             sx={{ textTransform: 'none' }}
                                         >
@@ -769,7 +910,7 @@ export default function MarketingGithubTrendingDrawer({
                                                     <TranslateIcon fontSize="small" />
                                                 )
                                             }
-                                            disabled={creating || describing || loading}
+                                            disabled={creating || creatingTop || describing || loading}
                                             onClick={() => handleGenerateDescriptionVi(item)}
                                             sx={{ textTransform: 'none' }}
                                         >

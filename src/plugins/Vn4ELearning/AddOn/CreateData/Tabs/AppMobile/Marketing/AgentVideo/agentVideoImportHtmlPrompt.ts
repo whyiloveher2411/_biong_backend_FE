@@ -26,6 +26,18 @@ export type ImportHtmlContextPayload = {
     core_signals?: Record<string, unknown> | null;
     marketing_post_images?: Array<{ url?: string; caption?: string; [key: string]: unknown }>;
     visual_catalog?: ImportHtmlVisualCatalogItem[];
+    github_top_repos?: {
+        period?: string;
+        limit?: number | string;
+        repos?: Array<{
+            full_name?: string;
+            cover_image_url?: string;
+            cover_visual_catalog_id?: string;
+            visual_catalog_ids?: string[];
+            [key: string]: unknown;
+        }>;
+    };
+    source_format?: string;
     thumbnail_url?: string;
     beat_map?: {
         totalVideoSec?: number;
@@ -154,6 +166,68 @@ function filterWhisperForBeat(
     return words.filter((word) => word.end >= startSec && word.start <= endSec);
 }
 
+const GITHUB_TOP_FORMATS = new Set(['github_top_daily', 'github_top_weekly', 'github_top_monthly']);
+
+function resolveGithubTopBeatRole(
+    context: ImportHtmlContextPayload,
+    beat: BeatMapSection,
+): { role: 'intro' | 'repo' | 'outro' | 'unknown'; repoIndex: number } {
+    const sections = context.beat_map?.sections || [];
+    const sectionIndex = Math.max(0, sections.findIndex((sec) => sec.id === beat.id));
+    const sectionCount = sections.length;
+    const repos = Array.isArray(context.github_top_repos?.repos) ? context.github_top_repos.repos : [];
+    const repoCount = repos.length;
+
+    if (sectionCount >= 2) {
+        if (sectionIndex === 0) return { role: 'intro', repoIndex: -1 };
+        if (sectionIndex === sectionCount - 1) return { role: 'outro', repoIndex: -1 };
+    } else if (sectionIndex === 0 && beat.id === 'beat_1') {
+        return { role: 'intro', repoIndex: -1 };
+    }
+
+    const repoIndex = sectionIndex - 1;
+    if (repoIndex >= 0 && repoIndex < repoCount) {
+        return { role: 'repo', repoIndex };
+    }
+
+    const match = /^beat_(\d+)$/.exec(String(beat.id || ''));
+    if (match) {
+        const n = Number(match[1]);
+        if (n === 1) return { role: 'intro', repoIndex: -1 };
+        if (repoCount > 0 && n === repoCount + 2) return { role: 'outro', repoIndex: -1 };
+        const idx = n - 2;
+        if (idx >= 0 && idx < repoCount) return { role: 'repo', repoIndex: idx };
+    }
+
+    return { role: 'unknown', repoIndex: -1 };
+}
+
+function buildGithubTopIntroRankRulesBlock(context: ImportHtmlContextPayload): string {
+    const repos = Array.isArray(context.github_top_repos?.repos) ? context.github_top_repos.repos : [];
+    const rankLines = repos
+        .map((repo, i) => {
+            const name = String(repo.full_name || '').trim();
+            return name ? `- Rank **#${i + 1}**: \`${name}\`` : '';
+        })
+        .filter(Boolean);
+
+    return [
+        '## Visual top-repo — MỞ ĐẦU',
+        '- **CẤM** dùng ảnh từ visual library / catalog / stock.',
+        '- Chỉ dùng element HTML/CSS/JS (typography, shape, motion) để mở đầu.',
+        '',
+        '## Rank list trên UI (BẮT BUỘC — github top intro)',
+        '- Nếu chia danh sách repo thành **nhiều nhóm / panel / trang / list** theo thời gian (vd list A rồi list B), số thứ tự rank phải **liên tục theo danh sách nguồn** — **CẤM** reset về #1 ở nhóm sau.',
+        '- Ví dụ đúng: nhóm 1 = **#1→#5**, nhóm 2 = **#6→#10** (không phải #1→#5 lần nữa).',
+        '- Ví dụ sai: nhóm 1 = #1→#5 rồi nhóm 2 cũng #1→#5 / #01→#05.',
+        '- Label UI (`#01`, `#1`, `01.`, rank badge, …) phải khớp **rank toàn cục** trong nguồn bên dưới — không đánh số lại theo vị trí trong nhóm.',
+        '- Khi reveal từng item theo thời gian, item tiếp theo lấy rank kế tiếp (sau item vừa hiện), không quay lại rank đã dùng.',
+        rankLines.length ? '' : '',
+        rankLines.length ? '## Danh sách rank nguồn (dùng đúng số này trên UI)' : '',
+        ...rankLines,
+    ].filter((line, index, arr) => !(line === '' && arr[index - 1] === '')).join('\n');
+}
+
 export async function buildBeatHtmlPrompt(
     context: ImportHtmlContextPayload,
     beat: BeatMapSection,
@@ -171,7 +245,14 @@ export async function buildBeatHtmlPrompt(
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
-    const visualLibrary = buildVisualLibraryForPrompt(context);
+    const sourceFormat = String(context.source_format || '').trim();
+    const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
+    const githubRole = isGithubTop ? resolveGithubTopBeatRole(context, beat) : null;
+    const isGithubIntro = githubRole?.role === 'intro';
+    const visualLibrary = isGithubIntro || githubRole?.role === 'outro'
+        ? []
+        : buildVisualLibraryForPrompt(context);
+    const githubIntroRules = isGithubIntro ? buildGithubTopIntroRankRulesBlock(context) : '';
 
     return [
         `# HyperFrames — HTML beat ${beat.id} (${durationLabel})`,
@@ -199,7 +280,10 @@ export async function buildBeatHtmlPrompt(
         `# Beat ${beat.id} — short video ID ${context.short_video_id ?? '?'}`,
         `Vị trí trong clip: ${formatDurationSec(beat.startSec)}s → ${formatDurationSec(beat.endSec)}s`,
         `phrase_anchor (metadata — KHÔNG render text này lên màn hình): ${beat.phrase_anchor}`,
-        beat.image_url ? `image_url: ${beat.image_url}` : 'image_url: —',
+        githubRole?.role ? `beat_role: ${githubRole.role}` : '',
+        beat.image_url && !isGithubIntro && githubRole?.role !== 'outro'
+            ? `image_url: ${beat.image_url}`
+            : 'image_url: —',
         '',
         '## Whisper trong beat — CHỈ pacing, CẤM karaoke',
         'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',
@@ -207,10 +291,11 @@ export async function buildBeatHtmlPrompt(
         beatWhisperPrompt,
         '```',
         '',
-        buildVisualLibraryRulesBlock(),
-        '```json',
-        JSON.stringify(visualLibrary, null, 2),
-        '```',
+        githubIntroRules,
+        githubIntroRules ? '' : buildVisualLibraryRulesBlock(),
+        githubIntroRules ? '' : '```json',
+        githubIntroRules ? '' : JSON.stringify(visualLibrary, null, 2),
+        githubIntroRules ? '' : '```',
         '',
         buildBeatScaffoldInstructionsBlock(durationSec, beat.id, scaffold),
         '## Checklist',
@@ -221,7 +306,10 @@ export async function buildBeatHtmlPrompt(
         `- [ ] render() tại t=0 và t=${formatDurationSec(durationSec)}`,
         '- [ ] Không có karaoke, subtitle, caption, hay text sync voiceover trong HTML',
         '- [ ] Response là **1 file HTML duy nhất** — không nhiều file, không tách css/js',
-    ].join('\n');
+        isGithubIntro
+            ? '- [ ] (github top intro) Nếu chia nhiều list/panel: rank liên tục (#1→#5 rồi #6→#10) — **không** reset về #1'
+            : '',
+    ].filter((line, index, arr) => !(line === '' && arr[index - 1] === '')).join('\n');
 }
 
 export { parseMessage as parseImportHtmlContextMessage };

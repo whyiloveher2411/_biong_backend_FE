@@ -11,7 +11,26 @@ import {
   beatIdFromFilename,
   checkImportHtmlBeatFile,
   isImportHtmlProject,
+  resolveBeatSeekBridgeFromMap,
 } from "./lib/import-html-beat-render.mjs";
+
+function loadBeatMapSections(projectDir) {
+  const candidates = [
+    path.join(projectDir, "assets/beat-map.json"),
+    path.join(projectDir, "beat-map.json"),
+  ];
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const data = JSON.parse(fs.readFileSync(file, "utf8"));
+      const sections = data?.sections || data?.beat_map?.sections;
+      if (Array.isArray(sections)) return sections;
+    } catch {
+      /* skip */
+    }
+  }
+  return [];
+}
 
 function main() {
   const projectDir = process.argv[2];
@@ -32,11 +51,14 @@ function main() {
     process.exit(1);
   }
 
+  const sections = loadBeatMapSections(root);
   const errors = [];
   for (const name of fs.readdirSync(compDir)) {
     if (!beatIdFromFilename(name)) continue;
+    const beatId = beatIdFromFilename(name);
     const content = fs.readFileSync(path.join(compDir, name), "utf8");
-    errors.push(...checkImportHtmlBeatFile(name, content));
+    const seekBridge = resolveBeatSeekBridgeFromMap(sections, beatId);
+    errors.push(...checkImportHtmlBeatFile(name, content, { seekBridge }));
   }
 
   if (!errors.length) {

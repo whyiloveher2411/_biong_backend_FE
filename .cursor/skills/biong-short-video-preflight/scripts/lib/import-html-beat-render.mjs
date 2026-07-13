@@ -1,6 +1,8 @@
 /**
  * Chuẩn hóa beat HTML từ chatbot (preview hf-seek) → format HyperFrames render
- * (<template> + window.__timelines). Không đụng visual CSS/DOM/render() logic.
+ * (<template> + window.__timelines).
+ * Không restyle creative; chỉ patch CSS cấu trúc cần cho HyperFrames
+ * (font, scoping token `:root` → `#root` khi composite).
  */
 import fs from "fs";
 import path from "path";
@@ -187,15 +189,95 @@ export function patchBeatCompositionId(html, beatId) {
   };
 }
 
-export function buildTimelineRegistration(beatId) {
+export function buildTimelineRegistration(beatId, seekBridge = {}) {
+  const offsetSec = Math.max(0, Number(seekBridge.offsetSec) || 0);
+  const durationSec = Number(seekBridge.durationSec);
+  const hasPartDuration = Number.isFinite(durationSec) && durationSec > 0;
+  const durationExpr = hasPartDuration ? durationSec.toFixed(3) : "DURATION";
+  const offsetExpr = offsetSec.toFixed(3);
   return `
 // HyperFrames import_html — đăng ký timeline (giữ nguyên render() user)
 const _beatTl = gsap.timeline({ paused: true });
-_beatTl.to({ _v: 0 }, { _v: 1, duration: DURATION, ease: "none",
-  onUpdate: function() { t = _beatTl.time(); render(); }
+_beatTl.to({ _v: 0 }, { _v: 1, duration: ${durationExpr}, ease: "none",
+  onUpdate: function() { t = ${offsetExpr} + _beatTl.time(); render(); }
 });
 window.__timelines["${beatId}"] = _beatTl;
 render();`;
+}
+
+/**
+ * Offset seek trong beat gốc khi assemble tách beat >20s (clone part2+).
+ * Host chỉ chạy ~nửa beat; timeline phải map localTime → t = offset + localTime.
+ */
+export function resolveBeatSeekBridgeFromMap(sections, beatId) {
+  const list = Array.isArray(sections) ? sections : [];
+  const id = String(beatId || "");
+  const sec = list.find((item) => String(item.id || item.beat_id || "") === id);
+  if (!sec) {
+    return { offsetSec: 0, durationSec: null };
+  }
+
+  const sourceId = String(sec.split_from || id);
+  const family = list.filter((item) => {
+    const itemId = String(item.id || item.beat_id || "");
+    return itemId === sourceId || String(item.split_from || "") === sourceId;
+  });
+  const first = family.find((item) => String(item.id || item.beat_id || "") === sourceId)
+    || family[0]
+    || sec;
+  const firstStart = Number(first.startSec ?? 0);
+  const offsetSec = Math.max(0, Number(sec.startSec ?? 0) - firstStart);
+  const durationSec = Number(sec.durationSec ?? 0);
+
+  return {
+    offsetSec: Math.round(offsetSec * 1000) / 1000,
+    durationSec: durationSec > 0 ? Math.round(durationSec * 1000) / 1000 : null,
+  };
+}
+
+const SEEK_BRIDGE_RE =
+  /\/\/\s*HyperFrames import_html[\s\S]*?window\.__timelines\s*\[\s*["'][^"']+["']\s*\]\s*=\s*_beatTl\s*;\s*\n?\s*render\(\)\s*;?/;
+
+export function patchBeatSeekBridge(html, beatId, seekBridge = {}) {
+  const registration = buildTimelineRegistration(beatId, seekBridge).trim();
+  let out = String(html || "");
+  const before = out;
+
+  if (SEEK_BRIDGE_RE.test(out)) {
+    out = out.replace(SEEK_BRIDGE_RE, registration);
+  } else if (/const\s+_beatTl\s*=\s*gsap\.timeline/i.test(out)) {
+    out = out.replace(
+      /const\s+_beatTl\s*=\s*gsap\.timeline\([\s\S]*?window\.__timelines\s*\[\s*["'][^"']+["']\s*\]\s*=\s*_beatTl\s*;\s*\n?\s*render\(\)\s*;?/,
+      registration,
+    );
+  } else if (/<\/script>\s*<\/template>/i.test(out)) {
+    out = out.replace(
+      /<\/script>(\s*<\/template>)/i,
+      `\n${registration}\n</script>$1`,
+    );
+  } else {
+    return { html: out, changed: false, patches: [] };
+  }
+
+  const durationSec = Number(seekBridge.durationSec);
+  if (Number.isFinite(durationSec) && durationSec > 0) {
+    const durAttr = durationSec.toFixed(3);
+    out = out.replace(
+      /(id=["']root["'][^>]*\bdata-duration=["'])([^"']+)(["'])/i,
+      `$1${durAttr}$3`,
+    );
+  }
+
+  const offsetSec = Math.max(0, Number(seekBridge.offsetSec) || 0);
+  const patches = [];
+  if (out !== before) {
+    patches.push(
+      offsetSec > 0.0005 || (Number.isFinite(durationSec) && durationSec > 0)
+        ? `seek bridge offset=${offsetSec.toFixed(3)}s duration=${Number.isFinite(durationSec) && durationSec > 0 ? durationSec.toFixed(3) : "DURATION"}`
+        : "seek bridge (offset=0)",
+    );
+  }
+  return { html: out, changed: out !== before, patches };
 }
 
 export function patchBeatFontsForRender(html) {
@@ -257,6 +339,43 @@ export function patchBeatCssForRender(html) {
   }
 
   return { html: out, changed: out !== before, patches };
+}
+
+/**
+ * HyperFrames scopes sub-comp CSS by data-composition-id, nhưng `:root { --token }`
+ * vẫn gắn documentElement chung → beat sau ghi đè màu/panel của beat trước.
+ * Gắn token lên `#root` (HF special-case) để mỗi beat giữ biến riêng.
+ */
+export function patchCssRootCustomProperties(html) {
+  const patches = [];
+  let out = String(html || "");
+  if (!/<style[\s>]/i.test(out) || !/:root\b/.test(out)) {
+    return { html: out, changed: false, patches };
+  }
+
+  const before = out;
+  out = out.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (full, attrs, css) => {
+    if (!/:root\b/.test(css)) return full;
+    const rewritten = css.replace(/(^|[^#\w-]):root\b/g, "$1#root");
+    return `<style${attrs}>${rewritten}</style>`;
+  });
+
+  if (out !== before) {
+    patches.push("css :root → #root (tránh leak biến khi composite)");
+  }
+
+  return { html: out, changed: out !== before, patches };
+}
+
+/** True nếu <style> còn :root kèm custom property --* (nguy cơ leak khi composite). */
+export function styleHasRootCustomProperties(html) {
+  for (const match of String(html || "").matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+    const css = match[1] || "";
+    if (/:root\b/.test(css) && /--[a-zA-Z_][\w-]*\s*:/.test(css)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function patchBeatDeterminismForRender(html) {
@@ -496,14 +615,20 @@ export function patchBeatVideosForRender(html, projectDir = "") {
   return { html: styled, changed: styled !== html, patches };
 }
 
-export function normalizeBeatHtmlForRender(html, beatId) {
+export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
   if (!html.trim() || !beatId) {
     return { html, changed: false, patches: [] };
   }
 
+  const seekBridge = options.seekBridge || { offsetSec: 0, durationSec: null };
+
   const fontPatch = patchBeatFontsForRender(html);
   html = fontPatch.html;
   const fontPatches = [...fontPatch.patches];
+
+  const rootCssPatch = patchCssRootCustomProperties(html);
+  html = rootCssPatch.html;
+  fontPatches.push(...rootCssPatch.patches);
 
   const compPatch = patchBeatCompositionId(html, beatId);
   html = compPatch.html;
@@ -512,9 +637,16 @@ export function normalizeBeatHtmlForRender(html, beatId) {
   }
 
   if (isBeatRenderReady(html, beatId)) {
+    const bridgePatch = patchBeatSeekBridge(html, beatId, seekBridge);
+    html = bridgePatch.html;
+    fontPatches.push(...bridgePatch.patches);
+    const earlyChanged = fontPatch.changed
+      || rootCssPatch.changed
+      || compPatch.changed
+      || bridgePatch.changed;
     return {
       html,
-      changed: fontPatch.changed || compPatch.changed,
+      changed: earlyChanged,
       patches: fontPatches.length ? fontPatches : ["already render-ready"],
     };
   }
@@ -542,7 +674,7 @@ export function normalizeBeatHtmlForRender(html, beatId) {
   }
 
   script = `window.__timelines = window.__timelines || {};\n${script.trim()}`;
-  script += buildTimelineRegistration(beatId);
+  script += buildTimelineRegistration(beatId, seekBridge);
 
   let assembled = `<!DOCTYPE html>
 <html lang="vi">
@@ -567,6 +699,9 @@ ${script}
   if (compIdPatch.changed) {
     patches.push(`đồng bộ data-composition-id → ${beatId}`);
   }
+  const bridgePatch = patchBeatSeekBridge(assembled, beatId, seekBridge);
+  assembled = bridgePatch.html;
+  patches.push(...bridgePatch.patches);
   patches.push("bọc <template>");
   patches.push(`đăng ký window.__timelines["${beatId}"]`);
   patches.push(...fontPatches);
@@ -782,7 +917,7 @@ export async function localizeExternalImages(projectDir, htmlFiles) {
   return patches;
 }
 
-export function checkImportHtmlBeatFile(name, content) {
+export function checkImportHtmlBeatFile(name, content, options = {}) {
   const errors = [];
   const beatId = beatIdFromFilename(name);
   if (!beatId) return errors;
@@ -814,6 +949,28 @@ export function checkImportHtmlBeatFile(name, content) {
   if (collectExternalVideoUrls(content).length > 0) {
     errors.push(
       `${name}: còn video URL ngoài — chạy normalize-import-html-beat-for-render.mjs --localize-images`,
+    );
+  }
+  if (styleHasRootCustomProperties(content)) {
+    errors.push(
+      `${name}: còn :root { --* } trong <style> — sẽ leak màu khi composite; chạy normalize-import-html-beat-for-render.mjs`,
+    );
+  }
+
+  const seekBridge = options.seekBridge;
+  if (seekBridge && Number(seekBridge.offsetSec) > 0.0005) {
+    const offset = Number(seekBridge.offsetSec).toFixed(3);
+    const offsetRe = new RegExp(
+      `t\\s*=\\s*${offset.replace(".", "\\.")}\\s*\\+\\s*_beatTl\\.time\\(\\)`,
+    );
+    if (!offsetRe.test(content)) {
+      errors.push(
+        `${name}: thiếu seek offset ${offset}s (beat split) — sẽ lặp lại nửa đầu beat; chạy normalize-import-html-beat-for-render.mjs`,
+      );
+    }
+  } else if (/_part\d+$/i.test(beatId) && /t\s*=\s*_beatTl\.time\(\)/.test(content)) {
+    errors.push(
+      `${name}: beat part còn seek từ t=0 — sẽ lặp nửa đầu; chạy normalize-import-html-beat-for-render.mjs`,
     );
   }
 

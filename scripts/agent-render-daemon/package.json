@@ -5,8 +5,9 @@
   "description": "Local daemon — CMS extension trigger render agent bước 2",
   "type": "module",
   "scripts": {
-    "daemon": "node server.mjs",
-    "start": "node server.mjs",
+    "daemon": "node start-daemon.mjs",
+    "start": "node start-daemon.mjs",
+    "daemon:raw": "node server.mjs",
     "test": "node launch-token.test.mjs"
   }
 }

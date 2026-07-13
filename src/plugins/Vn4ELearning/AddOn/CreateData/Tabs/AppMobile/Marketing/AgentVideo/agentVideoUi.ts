@@ -68,7 +68,7 @@ export function resolveWorkflowChip(input: {
     agentVideoStatus: string;
     geminiFillStatus?: string;
 }): WorkflowChip {
-    if (input.hasAgentVideo) {
+    if (input.hasAgentVideo || input.agentVideoStatus === 'completed') {
         return { label: 'Video HyperFrames sẵn sàng', color: 'success' };
     }
     if (input.agentVideoStatus === 'processing') {

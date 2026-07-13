@@ -2,8 +2,11 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Chip,
     FormControl,
     InputLabel,
+    LinearProgress,
+    Menu,
     MenuItem,
     Select,
     Stack,
@@ -12,9 +15,19 @@ import {
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import TextareaForm from 'components/atoms/fields/textarea/Form';
 import type { useAgentVideoContent } from './useAgentVideoContent';
+import {
+    FULL_AUTO_PIPELINE_STEP_LABELS,
+    FULL_AUTO_PIPELINE_STEP_ORDER,
+    type FullAutoPipelineStepKey,
+} from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -29,11 +42,122 @@ const sectionCardSx = {
     p: 1.5,
 } as const;
 
+function ReadmeMediaThumb({
+    mediaType,
+    url,
+    label,
+}: {
+    mediaType: 'image' | 'video';
+    url: string;
+    label: string;
+}) {
+    const [failed, setFailed] = React.useState(false);
+
+    return (
+        <Box
+            sx={{
+                width: 56,
+                height: 56,
+                flexShrink: 0,
+                borderRadius: 0.75,
+                overflow: 'hidden',
+                bgcolor: 'action.hover',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            {mediaType === 'video' || failed ? (
+                mediaType === 'video'
+                    ? <VideocamOutlinedIcon color="action" />
+                    : <ImageOutlinedIcon color="action" />
+            ) : (
+                <Box
+                    component="img"
+                    src={url}
+                    alt={label}
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={() => setFailed(true)}
+                />
+            )}
+        </Box>
+    );
+}
+
+function resolveRestartableSet(
+    restartable?: string[] | null,
+    steps?: Record<string, { status?: string }> | null,
+    currentStep?: string,
+): Set<string> {
+    if (Array.isArray(restartable) && restartable.length > 0) {
+        return new Set(restartable);
+    }
+    // Fallback FE nếu API cũ chưa trả restartable_steps
+    let maxIdx = 0;
+    FULL_AUTO_PIPELINE_STEP_ORDER.forEach((key, idx) => {
+        const status = String(steps?.[key]?.status || 'pending');
+        if (['done', 'skipped', 'running', 'failed'].includes(status)) {
+            maxIdx = idx;
+        }
+    });
+    if (currentStep) {
+        const cur = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
+            currentStep as FullAutoPipelineStepKey,
+        );
+        if (cur > maxIdx) maxIdx = cur;
+    }
+    const lastIdx = FULL_AUTO_PIPELINE_STEP_ORDER.length - 1;
+    if (maxIdx < lastIdx) {
+        const topKey = FULL_AUTO_PIPELINE_STEP_ORDER[maxIdx];
+        const topStatus = String(steps?.[topKey]?.status || 'pending');
+        if (topStatus === 'done' || topStatus === 'skipped') {
+            maxIdx += 1;
+        }
+    }
+    return new Set(FULL_AUTO_PIPELINE_STEP_ORDER.slice(0, maxIdx + 1));
+}
+
+const PIPELINE_STEP_STATUS_LABEL: Record<string, string> = {
+    done: 'Xong',
+    skipped: 'Bỏ qua',
+    running: 'Đang chạy',
+    failed: 'Lỗi',
+    pending: 'Chưa làm',
+};
+
+function pipelineStepStatusColor(status: string): string {
+    switch (status) {
+        case 'done':
+            return 'success.main';
+        case 'skipped':
+            return 'text.secondary';
+        case 'running':
+            return 'info.main';
+        case 'failed':
+            return 'error.main';
+        default:
+            return 'text.disabled';
+    }
+}
+
 export default function ShortVideoAgentContentPanel({ state }: Props) {
     const linked = state.marketingPostId > 0;
     const contentPostRef = React.useRef({
         agent_source_content: state.agentSourceContent,
     });
+    const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
+    const restartableSet = React.useMemo(
+        () => resolveRestartableSet(
+            state.fullAutoPipeline?.restartable_steps,
+            state.fullAutoPipeline?.steps,
+            state.fullAutoPipeline?.current_step,
+        ),
+        [
+            state.fullAutoPipeline?.restartable_steps,
+            state.fullAutoPipeline?.steps,
+            state.fullAutoPipeline?.current_step,
+        ],
+    );
     const [contentFieldKey, setContentFieldKey] = React.useState(0);
     const prevFetchingReadmeRef = React.useRef(false);
 
@@ -122,6 +246,73 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             </Stack>
                         ) : (
                             <Stack spacing={1.5}>
+                                {state.githubTopEnrich?.status === 'preparing' ? (
+                                    <Box
+                                        sx={{
+                                            border: '1px solid',
+                                            borderColor: 'info.light',
+                                            borderRadius: 1,
+                                            bgcolor: 'rgba(2, 136, 209, 0.06)',
+                                            p: 1.25,
+                                        }}
+                                    >
+                                        <Stack spacing={0.75}>
+                                            <Typography variant="body2" fontWeight={600}>
+                                                Đang lấy nguồn top repo
+                                                {typeof state.githubTopEnrich.percent === 'number'
+                                                    ? ` — ${state.githubTopEnrich.percent}%`
+                                                    : ''}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {typeof state.githubTopEnrich.current_index === 'number'
+                                                && state.githubTopEnrich.current_index > 0
+                                                && typeof state.githubTopEnrich.total === 'number'
+                                                    ? `Đang xử lý repo ${state.githubTopEnrich.current_index}/${state.githubTopEnrich.total}`
+                                                    : 'Đang xếp hàng trên queue'}
+                                                {state.githubTopEnrich.current_full_name
+                                                    ? `: ${state.githubTopEnrich.current_full_name}`
+                                                    : ''}
+                                                {typeof state.githubTopEnrich.done === 'number'
+                                                && typeof state.githubTopEnrich.total === 'number'
+                                                    ? ` · Hoàn tất ${state.githubTopEnrich.done}/${state.githubTopEnrich.total}`
+                                                    : ''}
+                                                {typeof state.githubTopEnrich.failed === 'number'
+                                                && state.githubTopEnrich.failed > 0
+                                                    ? ` · Lỗi ${state.githubTopEnrich.failed}`
+                                                    : ''}
+                                            </Typography>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={Math.max(
+                                                    0,
+                                                    Math.min(100, Number(state.githubTopEnrich.percent || 0))
+                                                )}
+                                                sx={{ height: 8, borderRadius: 4 }}
+                                            />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Nội dung sẽ tự cập nhật khi xong — có thể để drawer mở.
+                                            </Typography>
+                                        </Stack>
+                                    </Box>
+                                ) : null}
+                                {state.githubTopEnrich?.status === 'failed' ? (
+                                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                                        Lấy nguồn top repo thất bại
+                                        {state.githubTopEnrich.error
+                                            ? `: ${state.githubTopEnrich.error}`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
+                                {state.githubTopEnrich?.status === 'ready' ? (
+                                    <Alert severity="success" sx={{ py: 0.5 }}>
+                                        Đã lấy xong nguồn top repo
+                                        {typeof state.githubTopEnrich.done === 'number'
+                                            ? ` (${state.githubTopEnrich.done}/${state.githubTopEnrich.total || state.githubTopEnrich.done} repo)`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
                                 <Typography variant="caption" color="text.secondary">
                                     Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.
                                 </Typography>
@@ -197,6 +388,324 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             value={state.agentAdditionalInfo}
                             onChange={(e) => state.setAgentAdditionalInfo(e.target.value)}
                         />
+                    </Box>
+
+                    {!linked ? (
+                        <Box sx={sectionCardSx}>
+                            <Stack
+                                direction={{ xs: 'column', sm: 'row' }}
+                                spacing={1}
+                                alignItems={{ xs: 'stretch', sm: 'center' }}
+                                justifyContent="space-between"
+                                sx={{ mb: 1 }}
+                            >
+                                <Box>
+                                    <Typography variant="subtitle2" fontWeight={600}>
+                                        Media từ README
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        Ảnh/GIF/video quét từ từng repo — import vào tài nguyên video (ưu tiên như user upload).
+                                        Repo không có ảnh sẽ dùng screenshot trang GitHub làm cover.
+                                    </Typography>
+                                </Box>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    loading={state.importingAllReadmeMedia}
+                                    disabled={
+                                        state.readmeMedia.length === 0
+                                        || state.readmeMedia.every((item) => state.isReadmeMediaImported(item))
+                                        || state.importingReadmeMediaIds.length > 0
+                                    }
+                                    onClick={() => void state.handleImportAllReadmeMedia()}
+                                    startIcon={<CloudDownloadIcon />}
+                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                >
+                                    Import tất cả
+                                </LoadingButton>
+                            </Stack>
+                            {Array.isArray(state.githubTopRepos?.repos) && state.githubTopRepos.repos.length > 0 ? (
+                                <Stack spacing={0.75} sx={{ mb: 1.5 }}>
+                                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                        Cover theo repo
+                                    </Typography>
+                                    {state.githubTopRepos.repos.map((repo) => {
+                                        const name = String(repo.full_name || '').trim() || '—';
+                                        const cover = String(repo.cover_image_url || '').trim();
+                                        const imgCount = Array.isArray(repo.visual_catalog_ids)
+                                            ? repo.visual_catalog_ids.length
+                                            : 0;
+                                        const st = String(repo.status || 'pending');
+                                        return (
+                                            <Stack
+                                                key={name}
+                                                direction="row"
+                                                spacing={1}
+                                                alignItems="center"
+                                                sx={{
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    borderRadius: 1,
+                                                    p: 0.75,
+                                                }}
+                                            >
+                                                <Box
+                                                    sx={{
+                                                        width: 48,
+                                                        height: 48,
+                                                        borderRadius: 0.75,
+                                                        overflow: 'hidden',
+                                                        bgcolor: 'action.hover',
+                                                        flexShrink: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    {cover ? (
+                                                        <Box
+                                                            component="img"
+                                                            src={cover}
+                                                            alt={name}
+                                                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        />
+                                                    ) : (
+                                                        <ImageOutlinedIcon fontSize="small" color="disabled" />
+                                                    )}
+                                                </Box>
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography variant="body2" noWrap fontWeight={500} title={name}>
+                                                        {name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {imgCount > 0
+                                                            ? `${imgCount} ảnh trong catalog`
+                                                            : 'Chưa có ảnh'}
+                                                        {cover ? ' · có cover' : ' · thiếu cover'}
+                                                    </Typography>
+                                                </Box>
+                                                <Chip
+                                                    size="small"
+                                                    label={st}
+                                                    color={
+                                                        st === 'ready'
+                                                            ? (cover ? 'success' : 'warning')
+                                                            : st === 'failed'
+                                                                ? 'error'
+                                                                : 'default'
+                                                    }
+                                                    sx={{ height: 22 }}
+                                                />
+                                            </Stack>
+                                        );
+                                    })}
+                                </Stack>
+                            ) : null}
+                            {state.readmeMedia.length === 0 ? (
+                                <Typography variant="body2" color="text.secondary">
+                                    Chưa có media — bấm «Lấy thông tin» hoặc đợi enrich top repo xong (kèm screenshot nếu thiếu ảnh).
+                                </Typography>
+                            ) : (
+                                <Stack spacing={1}>
+                                    {state.readmeMedia.map((item) => {
+                                        const imported = state.isReadmeMediaImported(item);
+                                        const importing = state.importingAllReadmeMedia
+                                            || state.importingReadmeMediaIds.includes(item.id);
+                                        const label = item.alt?.trim()
+                                            || item.origin_path?.trim()
+                                            || item.resolved_url;
+                                        return (
+                                            <Stack
+                                                key={item.id}
+                                                direction="row"
+                                                spacing={1.25}
+                                                alignItems="center"
+                                                sx={{
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    borderRadius: 1,
+                                                    p: 1,
+                                                }}
+                                            >
+                                                <ReadmeMediaThumb
+                                                    mediaType={item.media_type}
+                                                    url={item.resolved_url}
+                                                    label={label}
+                                                />
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        noWrap
+                                                        title={label}
+                                                        sx={{ fontWeight: 500 }}
+                                                    >
+                                                        {label}
+                                                    </Typography>
+                                                    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
+                                                        <Chip
+                                                            size="small"
+                                                            icon={item.media_type === 'video'
+                                                                ? <VideocamOutlinedIcon />
+                                                                : <ImageOutlinedIcon />}
+                                                            label={item.media_type === 'video' ? 'Video' : 'Ảnh'}
+                                                            sx={{ height: 22 }}
+                                                        />
+                                                        {item.origin_path ? (
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                                noWrap
+                                                                title={item.origin_path}
+                                                                sx={{ maxWidth: 180 }}
+                                                            >
+                                                                {item.origin_path}
+                                                            </Typography>
+                                                        ) : null}
+                                                    </Stack>
+                                                </Box>
+                                                {imported ? (
+                                                    <Chip size="small" color="success" label="Đã import" />
+                                                ) : (
+                                                    <LoadingButton
+                                                        size="small"
+                                                        variant="contained"
+                                                        loading={importing}
+                                                        disabled={state.importingAllReadmeMedia}
+                                                        onClick={() => void state.handleImportReadmeMediaItem(item)}
+                                                    >
+                                                        Import
+                                                    </LoadingButton>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })}
+                                </Stack>
+                            )}
+                        </Box>
+                    ) : null}
+
+                    <Box sx={sectionCardSx}>
+                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                            Pipeline tự động A→Z
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                            Script → cải thiện (nếu mới sinh) → duyệt/TTS → Whisper → chia beat → fill HTML → BGM → render.
+                            Tiến trình lưu DB, refresh không mất.
+                        </Typography>
+                        {state.fullAutoPipeline ? (
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+                                <Chip
+                                    size="small"
+                                    label={`Status: ${state.fullAutoPipeline.status || 'idle'}`}
+                                    color={
+                                        state.fullAutoPipeline.status === 'completed'
+                                            ? 'success'
+                                            : state.fullAutoPipeline.status === 'failed'
+                                                ? 'error'
+                                                : state.fullAutoPipeline.status === 'running'
+                                                    ? 'primary'
+                                                    : 'default'
+                                    }
+                                />
+                                {state.fullAutoPipeline.current_step ? (
+                                    <Chip
+                                        size="small"
+                                        variant="outlined"
+                                        label={`Bước: ${state.fullAutoPipeline.current_step}`}
+                                    />
+                                ) : null}
+                            </Stack>
+                        ) : null}
+                        {state.fullAutoPipeline?.last_error?.message ? (
+                            <Alert severity="error" sx={{ mb: 1.5, py: 0.5 }}>
+                                [{state.fullAutoPipeline.last_error.step || '?'}]
+                                {' '}
+                                {state.fullAutoPipeline.last_error.message}
+                            </Alert>
+                        ) : null}
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                startIcon={<PlayArrowIcon />}
+                                endIcon={<ArrowDropDownIcon />}
+                                loading={state.startingFullAuto}
+                                disabled={state.fullAutoPipeline?.status === 'running'}
+                                onClick={(event) => {
+                                    setRestartMenuAnchor(event.currentTarget);
+                                }}
+                            >
+                                Chạy từ bước…
+                            </LoadingButton>
+                            <Menu
+                                anchorEl={restartMenuAnchor}
+                                open={Boolean(restartMenuAnchor)}
+                                onClose={() => setRestartMenuAnchor(null)}
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                            >
+                                {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
+                                    const enabled = restartableSet.has(stepKey);
+                                    const stepInfo = state.fullAutoPipeline?.steps?.[stepKey];
+                                    const status = String(stepInfo?.status || 'pending');
+                                    const statusLabel = PIPELINE_STEP_STATUS_LABEL[status]
+                                        || status;
+                                    return (
+                                        <MenuItem
+                                            key={stepKey}
+                                            disabled={!enabled || state.startingFullAuto}
+                                            onClick={() => {
+                                                setRestartMenuAnchor(null);
+                                                void state.handleStartFullAutoPipeline('restart', stepKey);
+                                            }}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: 2,
+                                                minWidth: 300,
+                                                py: 1,
+                                            }}
+                                        >
+                                            <Typography
+                                                component="span"
+                                                variant="body2"
+                                                sx={{
+                                                    color: enabled ? 'text.primary' : 'text.disabled',
+                                                    fontWeight: status === 'running' ? 600 : 400,
+                                                }}
+                                            >
+                                                {index + 1}. {FULL_AUTO_PIPELINE_STEP_LABELS[stepKey]}
+                                            </Typography>
+                                            <Typography
+                                                component="span"
+                                                variant="caption"
+                                                sx={{
+                                                    color: enabled
+                                                        ? pipelineStepStatusColor(status)
+                                                        : 'text.disabled',
+                                                    fontWeight: 600,
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {statusLabel}
+                                            </Typography>
+                                        </MenuItem>
+                                    );
+                                })}
+                            </Menu>
+                            {state.fullAutoPipeline?.status === 'running' ? (
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    color="inherit"
+                                    startIcon={<PauseIcon />}
+                                    loading={state.cancellingFullAuto}
+                                    onClick={() => { void state.handleCancelFullAutoPipeline(); }}
+                                >
+                                    Tạm dừng
+                                </LoadingButton>
+                            ) : null}
+                        </Stack>
                     </Box>
                 </Stack>
             </Box>

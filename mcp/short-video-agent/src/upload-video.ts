@@ -26,6 +26,22 @@ function buildUploadUrl(apiBaseUrl: string, shortVideoId: number): string {
   return url.toString();
 }
 
+function extractApiMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === 'object' && payload !== null && 'message' in payload) {
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim() !== '') {
+      return message.trim();
+    }
+    if (typeof message === 'object' && message !== null && 'content' in message) {
+      const content = String((message as { content?: unknown }).content ?? '').trim();
+      if (content !== '') {
+        return content;
+      }
+    }
+  }
+  return fallback;
+}
+
 function parseApiPayload(text: string, statusHint?: number): unknown {
   let payload: unknown;
   try {
@@ -37,11 +53,20 @@ function parseApiPayload(text: string, statusHint?: number): unknown {
   }
 
   if (statusHint !== undefined && statusHint >= 400) {
-    const message =
-      typeof payload === 'object' && payload !== null && 'message' in payload
-        ? String((payload as { message?: unknown }).message ?? statusHint)
-        : String(statusHint);
-    throw new Error(`API upload-video lỗi ${statusHint}: ${message}`);
+    throw new Error(
+      `API upload-video lỗi ${statusHint}: ${extractApiMessage(payload, String(statusHint))}`
+    );
+  }
+
+  if (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'success' in payload &&
+    (payload as { success?: unknown }).success === false
+  ) {
+    throw new Error(
+      `API upload-video thất bại: ${extractApiMessage(payload, 'success=false')}`
+    );
   }
 
   return payload;

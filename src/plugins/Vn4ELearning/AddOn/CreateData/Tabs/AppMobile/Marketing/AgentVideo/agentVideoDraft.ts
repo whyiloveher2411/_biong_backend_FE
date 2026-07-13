@@ -1,11 +1,11 @@
 const DRAFT_STORAGE_PREFIX = 'agent_video_script_draft_';
 
-type ScriptDraftRecord = {
+export type ScriptDraftRecord = {
     script: string;
     at: number;
 };
 
-export function readAgentVideoScriptDraft(shortVideoId: number): string | null {
+export function readAgentVideoScriptDraftRecord(shortVideoId: number): ScriptDraftRecord | null {
     if (!shortVideoId || typeof window === 'undefined') {
         return null;
     }
@@ -15,10 +15,20 @@ export function readAgentVideoScriptDraft(shortVideoId: number): string | null {
             return null;
         }
         const parsed = JSON.parse(raw) as ScriptDraftRecord;
-        return typeof parsed?.script === 'string' ? parsed.script : null;
+        if (typeof parsed?.script !== 'string') {
+            return null;
+        }
+        return {
+            script: parsed.script,
+            at: Number(parsed.at) || 0,
+        };
     } catch {
         return null;
     }
+}
+
+export function readAgentVideoScriptDraft(shortVideoId: number): string | null {
+    return readAgentVideoScriptDraftRecord(shortVideoId)?.script ?? null;
 }
 
 export function writeAgentVideoScriptDraft(shortVideoId: number, script: string): void {

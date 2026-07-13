@@ -2,6 +2,8 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Chip,
+    CircularProgress,
     Divider,
     FormControl,
     FormControlLabel,
@@ -12,11 +14,18 @@ import {
     Switch,
     Typography,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ErrorIcon from '@mui/icons-material/Error';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
+import {
+    FULL_AUTO_PIPELINE_STEP_LABELS,
+    FULL_AUTO_PIPELINE_STEP_ORDER,
+    type FullAutoPipelineStepKey,
+} from './agentVideoApi';
 import { formatTtsChain, hfThemeLabel, phaseLabel, platformLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
@@ -27,6 +36,8 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 type Props = {
     state: AgentVideoState;
 };
+
+type StatusTone = 'default' | 'success' | 'info' | 'warning' | 'error';
 
 /** Sidebar 300px — theme Button có whiteSpace: nowrap nên cần cho phép wrap. */
 const workflowActionButtonSx = {
@@ -44,17 +55,143 @@ const workflowActionButtonSx = {
     },
 } as const;
 
-function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
+const statusChipSx = {
+    height: 20,
+    maxWidth: '100%',
+    '& .MuiChip-icon': {
+        ml: 0.5,
+        mr: -0.25,
+        fontSize: 14,
+        color: 'inherit',
+    },
+    '& .MuiChip-label': {
+        px: 0.75,
+        fontSize: 11,
+        fontWeight: 600,
+        lineHeight: 1.2,
+    },
+} as const;
+
+function resolveStatusTone(raw: string): StatusTone {
+    const value = String(raw || '').trim().toLowerCase();
+    if (!value || value === '—' || value === 'none' || value === 'idle' || value === 'pending') {
+        return 'default';
+    }
+
+    const progressMatch = value.match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (progressMatch) {
+        const done = Number(progressMatch[1]);
+        const total = Number(progressMatch[2]);
+        if (total > 0 && done >= total) {
+            return 'success';
+        }
+        if (done > 0) {
+            return 'info';
+        }
+        return 'warning';
+    }
+
+    if (/^\d+\s*beat$/.test(value)) {
+        return 'success';
+    }
+
+    if (
+        value === 'done'
+        || value === 'completed'
+        || value === 'success'
+        || value === 'ready'
+        || value.includes('sẵn sàng')
+        || value.includes('hoàn tất')
+        || value.includes('hoàn thành')
+    ) {
+        return 'success';
+    }
+    if (
+        value === 'running'
+        || value === 'processing'
+        || value === 'queued'
+        || value === 'preparing'
+        || value.includes('đang')
+    ) {
+        return 'info';
+    }
+    if (value === 'failed' || value === 'error' || value.includes('thất bại') || value.includes('lỗi')) {
+        return 'error';
+    }
+    if (
+        value === 'skipped'
+        || value === 'paused'
+        || value === 'stale'
+        || value.includes('chưa')
+        || value.includes('chờ')
+    ) {
+        return 'warning';
+    }
+    return 'default';
+}
+
+function statusChipIcon(tone: StatusTone): React.ReactElement | undefined {
+    if (tone === 'success') {
+        return <CheckCircleIcon />;
+    }
+    if (tone === 'info') {
+        return <CircularProgress size={12} color="inherit" thickness={5} />;
+    }
+    if (tone === 'error') {
+        return <ErrorIcon />;
+    }
+    return undefined;
+}
+
+function StatusChip({ label, tone }: { label: string; tone?: StatusTone }) {
+    const resolvedTone = tone ?? resolveStatusTone(label);
+    const icon = statusChipIcon(resolvedTone);
     return (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, py: 0.5 }}>
-            <Typography variant="caption" color="text.secondary">
+        <Chip
+            size="small"
+            label={label}
+            color={resolvedTone}
+            variant={resolvedTone === 'default' ? 'outlined' : 'filled'}
+            icon={icon}
+            sx={statusChipSx}
+        />
+    );
+}
+
+function MetaRow({
+    label,
+    value,
+    status,
+    statusTone,
+}: {
+    label: string;
+    value?: React.ReactNode;
+    status?: string | null;
+    statusTone?: StatusTone;
+}) {
+    return (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, py: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
                 {label}
             </Typography>
-            <Typography variant="caption" fontWeight={500} sx={{ textAlign: 'right' }}>
-                {value}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', minWidth: 0 }}>
+                {status != null ? (
+                    <StatusChip label={status || '—'} tone={statusTone} />
+                ) : (
+                    <Typography variant="caption" fontWeight={500} sx={{ textAlign: 'right' }}>
+                        {value}
+                    </Typography>
+                )}
+            </Box>
         </Box>
     );
+}
+
+function pipelineStepLabel(step: string): string {
+    if (step in FULL_AUTO_PIPELINE_STEP_LABELS) {
+        return FULL_AUTO_PIPELINE_STEP_LABELS[step as FullAutoPipelineStepKey];
+    }
+    return step;
 }
 
 export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
@@ -125,14 +262,14 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
 
                 <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Trạng thái
+                        Thông tin chung
                     </Typography>
-                    <MetaRow label="Phase" value={phaseLabel(state.workflowPhase)} />
+                    <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                     <MetaRow
                         label="Workflow mode"
                         value={state.workflowMode === 'auto_tts_full' ? 'TTS tự động' : '2 bước thủ công'}
                     />
-                    <MetaRow label="TTS status" value={state.agentTtsStatus || '—'} />
+                    <MetaRow label="TTS status" status={state.agentTtsStatus || '—'} />
                     <MetaRow
                         label="TTS job"
                         value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
@@ -146,25 +283,25 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 : (state.omnivoiceVoice || 'minh_quân')
                         }
                     />
-                    <MetaRow label="Video status" value={state.agentVideoStatus || 'none'} />
+                    <MetaRow label="Video status" status={state.agentVideoStatus || 'none'} />
                     <MetaRow
                         label="Render mode"
                         value={state.renderMode === 'import_html' ? 'HTML chatbot' : 'Agent sáng tạo'}
                     />
                     {state.renderMode === 'import_html' ? (
                         <>
-                            <MetaRow label="Whisper" value={state.whisperStatus || 'none'} />
+                            <MetaRow label="Whisper" status={state.whisperStatus || 'none'} />
                             <MetaRow
                                 label="Beat map"
-                                value={state.beatMapReady ? `${state.beatMap?.sections.length ?? 0} beat` : 'Chưa chia'}
+                                status={state.beatMapReady ? `${state.beatMap?.sections.length ?? 0} beat` : 'Chưa chia'}
                             />
                             <MetaRow
                                 label="HTML beats"
-                                value={`${state.beatsHtmlCompleted}/${state.beatsHtmlTotal || 0}`}
+                                status={`${state.beatsHtmlCompleted}/${state.beatsHtmlTotal || 0}`}
                             />
                             <MetaRow
                                 label="HTML chatbot"
-                                value={state.importHtmlReady ? 'Sẵn sàng ghép' : 'Chưa đủ'}
+                                status={state.importHtmlReady ? 'Sẵn sàng ghép' : 'Chưa đủ'}
                             />
                         </>
                     ) : null}
@@ -173,6 +310,61 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         value={state.agentVideoRenderedAt || '—'}
                     />
                 </Box>
+
+                {state.fullAutoPipeline && (state.fullAutoPipeline.enabled || state.fullAutoPipeline.status !== 'idle') ? (
+                    <>
+                        <Divider />
+                        <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                                Pipeline A→Z
+                            </Typography>
+                            <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
+                            <MetaRow
+                                label="Bước hiện tại"
+                                status={
+                                    state.fullAutoPipeline.current_step
+                                        ? pipelineStepLabel(state.fullAutoPipeline.current_step)
+                                        : '—'
+                                }
+                                statusTone={
+                                    state.fullAutoPipeline.status === 'running'
+                                        ? 'info'
+                                        : state.fullAutoPipeline.status === 'failed'
+                                            ? 'error'
+                                            : state.fullAutoPipeline.status === 'completed'
+                                                ? 'success'
+                                                : 'default'
+                                }
+                            />
+                            {FULL_AUTO_PIPELINE_STEP_ORDER.map((step) => {
+                                const info = state.fullAutoPipeline?.steps?.[step];
+                                return (
+                                    <MetaRow
+                                        key={step}
+                                        label={pipelineStepLabel(step)}
+                                        status={String(info?.status || 'pending')}
+                                    />
+                                );
+                            })}
+                            {state.fullAutoPipeline.steps
+                                ? Object.entries(state.fullAutoPipeline.steps)
+                                    .filter(([step]) => !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step))
+                                    .map(([step, info]) => (
+                                        <MetaRow
+                                            key={step}
+                                            label={pipelineStepLabel(step)}
+                                            status={String(info?.status || 'pending')}
+                                        />
+                                    ))
+                                : null}
+                            {state.fullAutoPipeline.last_error?.message ? (
+                                <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
+                                    {state.fullAutoPipeline.last_error.message}
+                                </Alert>
+                            ) : null}
+                        </Box>
+                    </>
+                ) : null}
 
                 {state.agentVideoSummary ? (
                     <>

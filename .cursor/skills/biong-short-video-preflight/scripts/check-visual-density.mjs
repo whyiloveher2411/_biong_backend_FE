@@ -181,14 +181,17 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
         const dur = sections[i].durationSec ?? 0;
         const shot = shotPlan[i];
         const isLastBeat = i === sections.length - 1;
-        if (dur < 5 && !(isLastBeat && dur > 0)) {
+        if (dur <= 0) {
           errors.push(
-            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s <5s — gộp beat`,
+            `${shot.beat_id ?? sections[i].id}: beat duration phải > 0`,
           );
-        }
-        if (dur > 20) {
-          errors.push(
-            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >20s — tách beat`,
+        } else if (dur < 5 && !(isLastBeat && dur > 0)) {
+          warnings.push(
+            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s <5s — khuyến nghị gộp khi chia beat (prompt AI)`,
+          );
+        } else if (dur > 20) {
+          warnings.push(
+            `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >20s — khuyến nghị tách khi chia beat (prompt AI); code giữ nguyên`,
           );
         }
         if (shot.hf_prompt_type === "sting-transition" && dur > 10) {

@@ -10,8 +10,8 @@ import {
 } from './agentVideoPhoneticDictUi';
 
 const OVERLAP_DICT = [
-    { source_term: 'AI', phonetic: 'Ây ai' },
-    { source_term: 'AI Agent', phonetic: 'Ây-ai Êi-gừnt' },
+    { source_term: 'AI', phonetic: 'Ây ai', case_sensitive: true },
+    { source_term: 'AI Agent', phonetic: 'Ây-ai Êi-gừnt', case_sensitive: true },
 ];
 
 describe('phonetic longest-match', () => {
@@ -105,11 +105,23 @@ describe('phonetic longest-match', () => {
         expect(marked[1].phonetic).toBe('Ây-ai Êi-gừnt');
     });
 
-    it('merge defaults: luôn có AI Agent dù API chỉ trả AI', () => {
-        const merged = mergeTtsPhoneticDictEntries([{ source_term: 'AI', phonetic: 'Ây ai' }]);
-        expect(merged.some((entry) => entry.source_term === 'AI Agent')).toBe(true);
-        const segments = buildPhoneticMarkedSegments('AI là gì?, AI Agent', merged);
+    it('merge: chỉ lấy data từ API, không seed', () => {
+        const merged = mergeTtsPhoneticDictEntries([
+            { source_term: 'HyperFrames', phonetic: 'Hai-pơ-phờ-reim' },
+        ]);
+        expect(merged.map((entry) => entry.source_term)).toEqual(['HyperFrames']);
+    });
+
+    it('merge: API trống thì dict trống', () => {
+        expect(mergeTtsPhoneticDictEntries([])).toEqual([]);
+        expect(mergeTtsPhoneticDictEntries(undefined)).toEqual([]);
+    });
+
+    it('case_sensitive: AI ≠ ai', () => {
+        const segments = buildPhoneticMarkedSegments('có ai biết AI không', OVERLAP_DICT);
         const marked = segments.filter((segment) => segment.phonetic);
-        expect(marked.map((segment) => segment.text)).toEqual(['AI', 'AI Agent']);
+        expect(marked).toHaveLength(1);
+        expect(marked[0].text).toBe('AI');
+        expect(marked[0].phonetic).toBe('Ây ai');
     });
 });

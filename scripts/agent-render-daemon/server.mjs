@@ -6,7 +6,7 @@ import {
   DAEMON_VERSION,
 } from './config.mjs';
 import { triggerAgentRender } from './trigger-render.mjs';
-import { runAssembleImportHtml, runRenderImportHtml } from './import-html-script.mjs';
+import { runAssembleImportHtml, runRenderImportHtml, runUploadAgentVideo } from './import-html-script.mjs';
 import { getPreviewStatus, startPreviewServer } from './preview-server.mjs';
 import { diagnoseLaunchToken } from './launch-token.mjs';
 
@@ -138,6 +138,24 @@ async function handleRequest(req, res) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[agent-render-daemon] render-import-html fail short_video_id=${shortVideoId}: ${message}`);
+      sendJson(res, 400, { success: false, message }, req);
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/v1/upload-agent-video') {
+    let shortVideoId = 0;
+    try {
+      const body = await readJsonBody(req);
+      shortVideoId = Number(body?.short_video_id || 0);
+      const auth = extractBearer(req);
+      console.log(`[agent-render-daemon] upload-agent-video start short_video_id=${shortVideoId}`);
+      const result = await runUploadAgentVideo(body, auth);
+      console.log(`[agent-render-daemon] upload-agent-video ok short_video_id=${shortVideoId}`);
+      sendJson(res, 200, result, req);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[agent-render-daemon] upload-agent-video fail short_video_id=${shortVideoId}: ${message}`);
       sendJson(res, 400, { success: false, message }, req);
     }
     return;

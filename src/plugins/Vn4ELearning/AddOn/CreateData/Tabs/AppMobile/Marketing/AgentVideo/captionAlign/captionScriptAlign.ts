@@ -74,7 +74,7 @@ export function tokenizeScript(text) {
 
   const raw =
     cleaned.match(
-      /[\p{L}\p{N}]+(?:[.\-][\p{L}\p{N}]+)*(?:[.,!?;:…]+)?|[\p{L}\p{N}]+[.,!?;:…]+|[.,!?;:…]+/gu,
+      /[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)*(?:[.,!?;:…]+)?|[\p{L}\p{N}]+[.,!?;:…]+|[.,!?;:…]+/gu,
     ) ?? [];
   const words = [];
 
@@ -89,7 +89,7 @@ export function tokenizeScript(text) {
       continue;
     }
 
-    const m = trimmed.match(/^([\p{L}\p{N}]+(?:[.\-][\p{L}\p{N}]+)*)([.,!?;:…]+)?$/u);
+    const m = trimmed.match(/^([\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)*)([.,!?;:…]+)?$/u);
     if (m) {
       words.push(m[2] ? m[1] + m[2] : m[1]);
     } else {

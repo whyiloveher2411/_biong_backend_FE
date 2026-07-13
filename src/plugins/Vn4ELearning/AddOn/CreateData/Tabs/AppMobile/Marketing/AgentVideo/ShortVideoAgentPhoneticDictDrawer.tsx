@@ -2,9 +2,11 @@ import React from 'react';
 import {
     Alert,
     CircularProgress,
+    FormControlLabel,
     IconButton,
     InputAdornment,
     Stack,
+    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -20,6 +22,13 @@ import { openTtsPhoneticGeminiFillOnly } from 'helpers/marketingTtsPhoneticGemin
 import { extractPhoneticFromPastedText } from './agentVideoPhoneticClipboard';
 import type { TtsPhoneticDictEntry } from './agentVideoApi';
 
+/** Gợi ý bật khớp đúng hoa/thường cho acronym kiểu AI, API. */
+function suggestCaseSensitive(term: string): boolean {
+    const normalized = term.trim();
+    if (!normalized) return false;
+    return /^[A-Z0-9]+(?:\s+[A-Z0-9]+)*$/.test(normalized);
+}
+
 type Props = {
     open: boolean;
     onClose: () => void;
@@ -28,7 +37,12 @@ type Props = {
     initialPhonetic?: string;
     existingEntry?: TtsPhoneticDictEntry | null;
     saving?: boolean;
-    onSave: (payload: { sourceTerm: string; phonetic: string; id?: number }) => Promise<boolean>;
+    onSave: (payload: {
+        sourceTerm: string;
+        phonetic: string;
+        id?: number;
+        caseSensitive?: boolean;
+    }) => Promise<boolean>;
 };
 
 export default function ShortVideoAgentPhoneticDictDrawer({
@@ -44,6 +58,7 @@ export default function ShortVideoAgentPhoneticDictDrawer({
     const { showMessage } = useFloatingMessages();
     const [draftSourceTerm, setDraftSourceTerm] = React.useState(sourceTerm);
     const [phonetic, setPhonetic] = React.useState(initialPhonetic);
+    const [caseSensitive, setCaseSensitive] = React.useState(false);
     const [openingGemini, setOpeningGemini] = React.useState(false);
     const [pastingPhonetic, setPastingPhonetic] = React.useState(false);
     const isEdit = Boolean(existingEntry?.source_term);
@@ -54,7 +69,12 @@ export default function ShortVideoAgentPhoneticDictDrawer({
         }
         setDraftSourceTerm(sourceTerm);
         setPhonetic(initialPhonetic);
-    }, [initialPhonetic, open, sourceTerm]);
+        setCaseSensitive(
+            existingEntry?.case_sensitive != null
+                ? Boolean(existingEntry.case_sensitive)
+                : suggestCaseSensitive(sourceTerm),
+        );
+    }, [existingEntry, initialPhonetic, open, sourceTerm]);
 
     const handleSave = async () => {
         const trimmedSourceTerm = draftSourceTerm.trim();
@@ -67,6 +87,7 @@ export default function ShortVideoAgentPhoneticDictDrawer({
             sourceTerm: trimmedSourceTerm,
             phonetic: trimmedPhonetic,
             id: existingEntry?.id,
+            caseSensitive,
         });
         if (saved) {
             onClose();
@@ -214,6 +235,20 @@ export default function ShortVideoAgentPhoneticDictDrawer({
                         ),
                     }}
                 />
+
+                <FormControlLabel
+                    control={(
+                        <Switch
+                            checked={caseSensitive}
+                            onChange={(_, checked) => setCaseSensitive(checked)}
+                            size="small"
+                        />
+                    )}
+                    label="Tắt biến thể hoa/thường (AI ≠ ai)"
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, pl: 4.5 }}>
+                    Bật thì chỉ khớp đúng chữ hoa/thường như từ gốc — tránh nhầm «AI» với «ai».
+                </Typography>
 
                 {isEdit ? (
                     <Typography variant="caption" color="text.secondary">

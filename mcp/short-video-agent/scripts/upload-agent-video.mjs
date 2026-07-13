@@ -81,6 +81,19 @@ async function main() {
       metadata: args.metadata ?? undefined,
     });
 
+    if (
+      result &&
+      typeof result === 'object' &&
+      'success' in result &&
+      result.success === false
+    ) {
+      const message =
+        typeof result.message === 'object' && result.message && 'content' in result.message
+          ? String(result.message.content || 'Upload thất bại')
+          : String(result.message || 'Upload thất bại');
+      throw new Error(message);
+    }
+
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

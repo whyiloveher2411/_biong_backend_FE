@@ -1068,7 +1068,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                                 {uploading ? 'Đang upload...' : 'Chọn file hoặc dán ảnh'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
-                                JPG, PNG, WebP · tối đa 10MB · ⌘V / Ctrl+V khi drawer đang mở
+                                JPG, PNG, WebP, GIF · tối đa 20MB · ⌘V / Ctrl+V khi drawer đang mở
                             </Typography>
                         </Box>
                         <LoadingButton

@@ -9,6 +9,7 @@ import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentVideoPreview from './ShortVideoAgentVideoPreview';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
+import ShortVideoAgentBeatHtmlEditDrawer from './ShortVideoAgentBeatHtmlEditDrawer';
 import { useAgentVideoContent } from './useAgentVideoContent';
 import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
 import {
@@ -17,6 +18,7 @@ import {
     resolveDefaultPreviewSource,
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
+import { getBeatTimelineSegments } from './agentVideoBeatMap';
 
 type Props = {
     open: boolean;
@@ -47,6 +49,43 @@ export default function ShortVideoAgentVideoWorkspace({
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
     const videoRef = React.useRef<HTMLVideoElement>(null);
     const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('final');
+    const [editBeatHtmlId, setEditBeatHtmlId] = React.useState('');
+
+    const editBeatSegment = React.useMemo(() => {
+        if (!editBeatHtmlId) {
+            return null;
+        }
+        return getBeatTimelineSegments(state.beatMap).find((segment) => segment.beatId === editBeatHtmlId)
+            || null;
+    }, [editBeatHtmlId, state.beatMap]);
+
+    const editBeatSection = React.useMemo(() => {
+        if (!editBeatHtmlId || !state.beatMap?.sections?.length) {
+            return null;
+        }
+        return state.beatMap.sections.find((section) => section.id === editBeatHtmlId) || null;
+    }, [editBeatHtmlId, state.beatMap]);
+
+    const handleOpenEditBeatHtml = React.useCallback((beatId: string) => {
+        const nextId = String(beatId || '').trim();
+        if (!nextId) {
+            return;
+        }
+        setPreviewSource('html_beat');
+        state.focusBeatEditor(nextId);
+        setEditBeatHtmlId(nextId);
+    }, [state.focusBeatEditor]);
+
+    const handleCloseEditBeatHtml = React.useCallback(() => {
+        setEditBeatHtmlId('');
+    }, []);
+
+    const handleSaveEditBeatHtml = React.useCallback(async (html: string) => {
+        if (!editBeatHtmlId) {
+            return false;
+        }
+        return state.commitBeatHtmlChange(editBeatHtmlId, html, { immediate: true });
+    }, [editBeatHtmlId, state.commitBeatHtmlChange]);
 
     const previewInput = React.useMemo(() => ({
         renderMode: state.renderMode,
@@ -252,6 +291,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         setPreviewSource('html_beat');
                         void state.handlePasteBeatHtml(beatId);
                     }}
+                    onEditBeatHtml={handleOpenEditBeatHtml}
                     onDeleteBeatHtml={(beatId) => {
                         void state.handleDeleteBeatHtml(beatId);
                     }}
@@ -304,6 +344,16 @@ export default function ShortVideoAgentVideoWorkspace({
                     onLaunchImportAssemble={() => { void state.handleLaunchAgentImportAssemble(); }}
                 />
             </Box>
+            <ShortVideoAgentBeatHtmlEditDrawer
+                open={Boolean(editBeatHtmlId)}
+                onClose={handleCloseEditBeatHtml}
+                beatId={editBeatHtmlId}
+                beatIndex={editBeatSegment?.beatIndex ?? null}
+                durationSec={editBeatSection?.durationSec ?? null}
+                initialHtml={String(state.beatHtml[editBeatHtmlId]?.html || '')}
+                saving={state.savingImportHtml}
+                onSave={handleSaveEditBeatHtml}
+            />
         </DrawerCustom>
     );
 }

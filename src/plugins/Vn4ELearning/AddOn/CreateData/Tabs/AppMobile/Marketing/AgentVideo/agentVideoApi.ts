@@ -39,6 +39,17 @@ export type ImportHtmlVisualCatalogItem = {
     caption?: string;
     search_query?: string;
     source?: string;
+    /** URL gốc (GitHub raw) — dùng dedupe khi import README */
+    origin_url?: string;
+};
+
+export type GithubReadmeMediaItem = {
+    id: string;
+    media_type: 'image' | 'video';
+    resolved_url: string;
+    origin_path?: string;
+    alt?: string;
+    ext?: string;
 };
 
 export type ImportHtmlGithubImageShot = {
@@ -53,6 +64,22 @@ export type ImportHtmlAssets = {
     sfx_hook?: boolean;
     visual_catalog?: ImportHtmlVisualCatalogItem[];
     github_image_shots?: ImportHtmlGithubImageShot[];
+    readme_media?: GithubReadmeMediaItem[];
+    github_default_branch?: string;
+    github_top_repos?: {
+        period?: string;
+        limit?: number | string;
+        repos?: Array<{
+            full_name?: string;
+            cover_image_url?: string;
+            cover_visual_catalog_id?: string;
+            visual_catalog_ids?: string[];
+            status?: string;
+            fetch_ok?: boolean;
+            error?: string;
+            [key: string]: unknown;
+        }>;
+    };
     updated_at?: string;
 };
 
@@ -76,6 +103,8 @@ export type TtsPhoneticDictEntry = {
     source_term: string;
     phonetic: string;
     phonetic_tokens?: string[];
+    /** true → AI ≠ ai khi khớp phiên âm */
+    case_sensitive?: boolean;
 };
 
 export type CaptionAlignOverride = {
@@ -316,12 +345,85 @@ export type AgentVideoContentResponse = {
     agent_source_format?: string;
     agent_source_format_catalog?: AgentSourceFormatCatalogItem[];
     content_plain_text?: string;
+    readme_media?: GithubReadmeMediaItem[];
     post_eligible?: boolean;
     social_posted?: boolean;
     render_mode?: AgentRenderMode;
     import_html?: ImportHtmlSummary;
     hf_prompt_types_catalog?: string[];
     tts_phonetic_dict?: TtsPhoneticDictEntry[];
+    full_auto_pipeline?: FullAutoPipelineSummary;
+    github_top_enrich?: GithubTopEnrichSummary;
+};
+
+export type GithubTopEnrichSummary = {
+    status?: 'none' | 'preparing' | 'ready' | 'failed' | string;
+    period?: string;
+    limit?: number | string;
+    total?: number;
+    done?: number;
+    failed?: number;
+    queued?: number;
+    current_index?: number;
+    current_full_name?: string;
+    percent?: number;
+    error?: string;
+    started_at?: string;
+    updated_at?: string;
+};
+
+export type FullAutoPipelineStepStatus = 'pending' | 'running' | 'skipped' | 'done' | 'failed' | string;
+
+export type FullAutoPipelineStep = {
+    status?: FullAutoPipelineStepStatus;
+    at?: string;
+    error?: string | null;
+    job_id?: number | null;
+};
+
+export type FullAutoPipelineSummary = {
+    enabled?: boolean;
+    status?: 'idle' | 'running' | 'paused' | 'failed' | 'completed' | string;
+    current_step?: string;
+    ran_script_create?: boolean;
+    started_at?: string;
+    updated_at?: string;
+    steps?: Record<string, FullAutoPipelineStep>;
+    /** Các bước được phép chạy lại (đã từng tới). */
+    restartable_steps?: string[];
+    error_count?: number;
+    last_error?: {
+        step?: string;
+        message?: string;
+        at?: string;
+        detail?: Record<string, unknown>;
+    } | null;
+};
+
+export const FULL_AUTO_PIPELINE_STEP_ORDER = [
+    'script_create',
+    'script_improve',
+    'approve_tts',
+    'whisper',
+    'beat_division',
+    'beat_fill',
+    'bgm',
+    'render',
+    'upload',
+] as const;
+
+export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[number];
+
+export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
+    script_create: 'Tạo script',
+    script_improve: 'Cải thiện script',
+    approve_tts: 'Duyệt / TTS',
+    whisper: 'Whisper',
+    beat_division: 'Chia beat',
+    beat_fill: 'Fill HTML beat',
+    bgm: 'BGM',
+    render: 'Render',
+    upload: 'Upload store',
 };
 
 export type JsonResponse = {
@@ -643,6 +745,7 @@ export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_source_format?: string;
     agent_source_format_label?: string;
     content_plain_text?: string;
+    readme_media?: GithubReadmeMediaItem[];
 };
 
 export async function saveAgentSourceContent(
@@ -675,6 +778,8 @@ export type FetchGithubReadmeResponse = JsonResponse & {
     agent_github_repo?: string;
     readme?: string;
     source_url?: string;
+    default_branch?: string;
+    readme_media?: GithubReadmeMediaItem[];
     repo_stats?: {
         stars?: string;
         forks?: string;
@@ -700,6 +805,35 @@ export async function fetchGithubReadme(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/fetch-github-readme',
         shortVideoBody(shortVideoId, extra),
     ) as Promise<FetchGithubReadmeResponse>;
+}
+
+export type ImportGithubReadmeMediaResponse = JsonResponse & {
+    imported?: ImportHtmlVisualCatalogItem[];
+    skipped?: Array<{ resolved_url?: string; reason?: string }>;
+    errors?: Array<{ resolved_url?: string; message?: string }>;
+    visual_catalog?: ImportHtmlVisualCatalogItem[];
+    import_html?: {
+        assets?: ImportHtmlAssets;
+    };
+};
+
+export async function importGithubReadmeMedia(
+    shortVideoId: number,
+    items: GithubReadmeMediaItem[],
+): Promise<ImportGithubReadmeMediaResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-github-readme-media',
+        shortVideoBody(shortVideoId, {
+            items: items.map((item) => ({
+                id: item.id,
+                media_type: item.media_type,
+                resolved_url: item.resolved_url,
+                origin_path: item.origin_path || '',
+                alt: item.alt || '',
+                ext: item.ext || '',
+            })),
+        }),
+    ) as Promise<ImportGithubReadmeMediaResponse>;
 }
 
 export async function approveAudioScript(shortVideoId: number): Promise<ApproveAudioScriptResponse> {
@@ -752,6 +886,7 @@ export async function saveTtsPhoneticDict(payload: {
     phonetic: string;
     id?: number;
     enabled?: boolean;
+    case_sensitive?: boolean;
 }): Promise<JsonResponse & {
     entry?: TtsPhoneticDictEntry;
     entries?: TtsPhoneticDictEntry[];
@@ -783,6 +918,38 @@ export async function searchAgentBgm(query: string, limit = 8): Promise<{
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/search-agent-bgm',
         { query, limit },
     );
+}
+
+export async function startFullAutoPipeline(
+    shortVideoId: number,
+    mode: 'resume' | 'restart' = 'resume',
+    fromStep?: string,
+): Promise<JsonResponse & {
+    full_auto_pipeline?: FullAutoPipelineSummary;
+    mode?: string;
+    from_step?: string | null;
+}> {
+    const body: Record<string, unknown> = { mode };
+    if (mode === 'restart' && fromStep) {
+        body.from_step = fromStep;
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/start-full-auto-pipeline',
+        shortVideoBody(shortVideoId, body),
+    ) as Promise<JsonResponse & {
+        full_auto_pipeline?: FullAutoPipelineSummary;
+        mode?: string;
+        from_step?: string | null;
+    }>;
+}
+
+export async function cancelFullAutoPipeline(
+    shortVideoId: number,
+): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/cancel-full-auto-pipeline',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
 }
 
 export async function saveAgentImportHtml(

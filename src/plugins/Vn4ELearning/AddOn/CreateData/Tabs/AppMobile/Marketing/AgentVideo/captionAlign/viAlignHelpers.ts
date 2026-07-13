@@ -925,7 +925,6 @@ export function tryMotPhanBaCluster(scriptWords, i, transcriptWords, p, lookahea
 
 /** "ba trên một trăm" ↔ "3" "trên" "100" */
 export function tryFractionCluster(scriptWords, i, transcriptWords, p, lookahead = 15) {
-  const w0 = norm(stripPunct(scriptWords[i] ?? ""));
   const w1 = norm(stripPunct(scriptWords[i + 1] ?? ""));
   const hundred = parseViHundredPhrase(scriptWords, i + 2);
   if (w1 !== "tren" || !hundred) return null;

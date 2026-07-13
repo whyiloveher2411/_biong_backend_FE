@@ -174,22 +174,18 @@ function main() {
   for (let i = 0; i < htmlBeats.length; i++) {
     const beat = htmlBeats[i];
     const isLastBeat = i === lastBeatIndex;
+    if (beat.duration <= 0) {
+      errors.push(`${beat.id}: data-duration=${beat.duration.toFixed(2)}s — phải > 0`);
+      continue;
+    }
     if (beat.duration < MIN_BEAT_DURATION_SEC && !(isLastBeat && beat.duration > 0)) {
-      errors.push(
-        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s < 5s — gộp với beat liền kề (visual-shot-plan.md)`,
-      );
-    } else if (
-      beat.duration < MIN_BEAT_DURATION_SEC &&
-      isLastBeat &&
-      beat.duration > 0
-    ) {
       warnings.push(
-        `${beat.id}: beat cuối ${beat.duration.toFixed(2)}s < 5s — chấp nhận nếu dư audio sau khi chia`,
+        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s < 5s — khuyến nghị gộp khi chia beat (prompt AI)`,
       );
     }
     if (beat.duration > MAX_BEAT_DURATION_SEC) {
-      errors.push(
-        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s > 20s — tách thành ${Math.ceil(beat.duration / MAX_BEAT_DURATION_SEC)} beat (visual-shot-plan.md)`,
+      warnings.push(
+        `${beat.id}: data-duration=${beat.duration.toFixed(2)}s > 20s — khuyến nghị tách khi chia beat (prompt AI); code giữ nguyên`,
       );
     }
   }
@@ -198,18 +194,18 @@ function main() {
     const mapSec = mapSections[i];
     const dur = mapSec.durationSec ?? 0;
     const isLastBeat = i === mapLastIndex;
+    if (dur <= 0) {
+      errors.push(`${mapSec.id ?? "beat"}: beat-map duration ${dur} — phải > 0`);
+      continue;
+    }
     if (dur < MIN_BEAT_DURATION_SEC && !(isLastBeat && dur > 0)) {
-      errors.push(
-        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s < 5s — gộp shot-plan`,
-      );
-    } else if (dur < MIN_BEAT_DURATION_SEC && isLastBeat && dur > 0) {
       warnings.push(
-        `${mapSec.id ?? "beat"}: beat cuối ${dur.toFixed(2)}s < 5s — chấp nhận nếu dư audio`,
+        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s < 5s — khuyến nghị gộp (prompt AI)`,
       );
     }
     if (dur > MAX_BEAT_DURATION_SEC) {
-      errors.push(
-        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s > 20s — tách shot-plan`,
+      warnings.push(
+        `${mapSec.id ?? "beat"}: beat-map duration ${dur.toFixed(2)}s > 20s — khuyến nghị tách (prompt AI); code giữ nguyên`,
       );
     }
   }

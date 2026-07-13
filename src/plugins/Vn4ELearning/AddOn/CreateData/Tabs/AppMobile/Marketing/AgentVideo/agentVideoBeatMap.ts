@@ -192,9 +192,14 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
     };
 }
 
-export function validateBeatMap(map: BeatMap, audioDurationSec: number): BeatMapValidation {
+export function validateBeatMap(
+    map: BeatMap,
+    audioDurationSec: number,
+    options?: { relaxDurationBounds?: boolean },
+): BeatMapValidation {
     const errors: string[] = [];
     const audioDur = Number(audioDurationSec) || 0;
+    void options?.relaxDurationBounds;
 
     if (!map.sections.length) {
         return { valid: false, errors: ['sections rỗng'] };
@@ -213,6 +218,10 @@ export function validateBeatMap(map: BeatMap, audioDurationSec: number): BeatMap
         if (Math.abs(section.durationSec - (section.endSec - section.startSec)) > 0.25) {
             errors.push(`${label}: durationSec không khớp end-start`);
         }
+        if (section.durationSec <= 0) {
+            errors.push(`${label}: durationSec phải > 0`);
+        }
+        // 5–20s: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;
     });
 

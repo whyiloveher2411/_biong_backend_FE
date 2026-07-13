@@ -9,6 +9,8 @@ const HF_PROMPT_LIST = HF_PROMPT_CATALOG.map(
     (item) => `- \`${item.key}\` — ${item.label}: ${item.descriptionVi}`,
 ).join('\n');
 
+const GITHUB_TOP_FORMATS = new Set(['github_top_daily', 'github_top_weekly', 'github_top_monthly']);
+
 export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): string {
     const durationSec = Number(context.audio_file_duration_sec || 0);
     if (!Number.isFinite(durationSec) || durationSec <= 0) {
@@ -16,6 +18,70 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     }
 
     const total = formatDurationSec(durationSec);
+    const sourceFormat = String(context.source_format || '').trim();
+    const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
+
+    if (isGithubTop) {
+        const topRepos = context.github_top_repos?.repos;
+        const repos = Array.isArray(topRepos) ? topRepos : [];
+        const repoCount = repos.length;
+        const expectedBeats = repoCount + 2;
+        const repoLines = repos.map((repo, i) => {
+            const rank = i + 1;
+            const beatN = i + 2;
+            const name = String(repo.full_name || '').trim();
+            const cover = String(repo.cover_image_url || '').trim();
+            const coverId = String(repo.cover_visual_catalog_id || '').trim();
+            return `- Rank #${rank} → **beat_${beatN}**: \`${name}\`${
+                coverId ? ` | cover_id=${coverId}` : ''
+            }${cover ? ` | cover_url=${cover}` : ''}`;
+        });
+
+        return [
+            `# Chia beat — GitHub top repo (${sourceFormat})`,
+            '',
+            `CLIP_DURATION_SEC=${total}`,
+            '',
+            buildBeatDivisionLanguageBlock(context.language),
+            '## Nhiệm vụ',
+            `Chia voiceover **${total}s** thành đúng **${expectedBeats} beat** theo cấu trúc cố định top repo.`,
+            'Mỗi beat = một chapter visual riêng (HTML generate sau — **chỉ visual, không karaoke**).',
+            '',
+            '## CẤU TRÚC BEAT BẮT BUỘC',
+            '- **beat_1**: INTRO — giới thiệu danh sách; có thể liệt kê tên repo. Không gán image_url.',
+            `- **beat_2 → beat_${repoCount + 1}**: đúng 1 repo / beat theo rank.`,
+            `- **beat_${repoCount + 2}**: OUTRO / tổng kết. Không gán image_url.`,
+            `- Tổng sections = **${expectedBeats}**.`,
+            '',
+            buildHtmlChatbotNoKaraokeRulesBlock(),
+            buildBeatDivisionSingleOutputRulesBlock({ relaxDurationBounds: true }),
+            '## Danh sách repo (map beat)',
+            repoLines.length ? repoLines.join('\n') : '(chưa có github_top_repos)',
+            '',
+            '## hf_prompt_type catalog',
+            HF_PROMPT_LIST,
+            '',
+            '---',
+            '',
+            `# Short video (ID ${context.short_video_id ?? '?'})`,
+            `Tiêu đề: ${context.title || '—'}`,
+            `Ngôn ngữ: ${context.language || 'vi'}`,
+            `Thời lượng audio: ${total}s`,
+            `Source format: ${sourceFormat}`,
+            '',
+            '## Audio script',
+            String(context.audio_script || '').trim() || '(trống)',
+            '',
+            '## Whisper word timing (chỉ pacing — KHÔNG dùng text làm karaoke/subtitle trong HTML beat)',
+            '```text',
+            formatWhisperWordsForPrompt(context.whisper_words || []),
+            '```',
+            '',
+            '## Thumbnail',
+            context.thumbnail_url || '—',
+        ].join('\n');
+    }
+
     const beatTargetMin = 8;
     const beatTargetMax = 18;
     const estimatedBeats = Math.max(1, Math.ceil(durationSec / 12));

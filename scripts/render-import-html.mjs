@@ -92,12 +92,6 @@ async function main() {
     }
 
     const absMp4 = path.resolve(rendersDir, mp4);
-    const uploadScript = path.join(REPO_ROOT, "mcp/short-video-agent/scripts/upload-agent-video.mjs");
-    run(
-      "node",
-      [uploadScript, "--short-video-id", String(shortVideoId), "--file", absMp4],
-      { cwd: REPO_ROOT },
-    );
 
     await reportImportHtmlBeatErrors({
       shortVideoId,

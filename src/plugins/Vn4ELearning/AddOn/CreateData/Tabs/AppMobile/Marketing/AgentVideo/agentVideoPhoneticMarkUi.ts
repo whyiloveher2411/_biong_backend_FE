@@ -26,11 +26,13 @@ function isWordChar(ch: string): boolean {
 /**
  * Khớp term tại vị trí `start` — cho phép whitespace linh hoạt trong text.
  * Trả về index exclusive nếu khớp + word boundary; ngược lại null.
+ * caseSensitive=true → AI ≠ ai.
  */
 export function matchPhoneticTermAt(
     text: string,
     start: number,
     sourceTerm: string,
+    caseSensitive = false,
 ): number | null {
     const term = normalizePhoneticSourceTerm(sourceTerm);
     if (!term || start < 0 || start >= text.length) {
@@ -40,17 +42,17 @@ export function matchPhoneticTermAt(
         return null;
     }
 
-    const termLower = term.toLowerCase();
+    const termCompare = caseSensitive ? term : term.toLowerCase();
     let ti = 0;
     let j = start;
 
-    while (ti < termLower.length && j < text.length) {
-        const tc = termLower[ti];
+    while (ti < termCompare.length && j < text.length) {
+        const tc = termCompare[ti];
         if (/\s/u.test(tc)) {
             if (!/\s/u.test(text[j])) {
                 return null;
             }
-            while (ti < termLower.length && /\s/u.test(termLower[ti])) {
+            while (ti < termCompare.length && /\s/u.test(termCompare[ti])) {
                 ti += 1;
             }
             while (j < text.length && /\s/u.test(text[j])) {
@@ -59,7 +61,7 @@ export function matchPhoneticTermAt(
             continue;
         }
 
-        const xc = text[j].toLowerCase();
+        const xc = caseSensitive ? text[j] : text[j].toLowerCase();
         if (xc !== tc) {
             return null;
         }
@@ -67,7 +69,7 @@ export function matchPhoneticTermAt(
         j += 1;
     }
 
-    if (ti < termLower.length) {
+    if (ti < termCompare.length) {
         return null;
     }
     if (j < text.length && isWordChar(text[j])) {
@@ -121,7 +123,12 @@ export function buildPhoneticMarkedSegments(
         let matched: TtsPhoneticDictEntry | null = null;
         let matchEnd = -1;
         for (const entry of entries) {
-            const end = matchPhoneticTermAt(text, i, entry.source_term);
+            const end = matchPhoneticTermAt(
+                text,
+                i,
+                entry.source_term,
+                Boolean(entry.case_sensitive),
+            );
             if (end == null) continue;
             matched = entry;
             matchEnd = end;
@@ -148,18 +155,27 @@ function stripTrailingPunct(word: string): string {
     return String(word ?? '').replace(/[.,!?;:…]+$/u, '').trim();
 }
 
-function normTokenForPhrase(word: string): string {
-    return stripTrailingPunct(word)
+function normTokenForPhrase(word: string, caseSensitive = false): string {
+    const stripped = stripTrailingPunct(word);
+    if (caseSensitive) {
+        return stripped;
+    }
+    return stripped
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/\u0111/g, 'd');
 }
 
-function phraseTokensMatch(slice: string[], sourceTokens: string[]): boolean {
+function phraseTokensMatch(
+    slice: string[],
+    sourceTokens: string[],
+    caseSensitive = false,
+): boolean {
     if (slice.length !== sourceTokens.length) return false;
     return slice.every((token, index) => (
-        normTokenForPhrase(token) === normTokenForPhrase(sourceTokens[index])
+        normTokenForPhrase(token, caseSensitive)
+        === normTokenForPhrase(sourceTokens[index], caseSensitive)
     ));
 }
 
@@ -171,6 +187,7 @@ function matchPhraseEntryAt(
     words: string[],
     start: number,
     sourceTokens: string[],
+    caseSensitive = false,
 ): number | null {
     if (!sourceTokens.length || start < 0 || start >= words.length) {
         return null;
@@ -182,7 +199,8 @@ function matchPhraseEntryAt(
     if (
         sourceTokens.length > 1
         && collapsed
-        && normTokenForPhrase(collapsed) === normTokenForPhrase(sourceJoined)
+        && normTokenForPhrase(collapsed, caseSensitive)
+            === normTokenForPhrase(sourceJoined, caseSensitive)
     ) {
         return 1;
     }
@@ -190,7 +208,7 @@ function matchPhraseEntryAt(
     // 2) Cửa sổ token rời (AI + Agent)
     const slice = words.slice(start, start + sourceTokens.length).map(stripTrailingPunct);
     if (slice.length < sourceTokens.length) return null;
-    if (!phraseTokensMatch(slice, sourceTokens)) return null;
+    if (!phraseTokensMatch(slice, sourceTokens, caseSensitive)) return null;
     return sourceTokens.length;
 }
 
@@ -219,7 +237,12 @@ export function resolvePhoneticPhraseMarks(
                 .split(' ')
                 .filter(Boolean);
             if (!sourceTokens.length) continue;
-            const count = matchPhraseEntryAt(words, i, sourceTokens);
+            const count = matchPhraseEntryAt(
+                words,
+                i,
+                sourceTokens,
+                Boolean(entry.case_sensitive),
+            );
             if (count == null) continue;
             matched = entry;
             tokenCount = count;
