@@ -2,75 +2,79 @@
 
 Đọc khi `render_mode=import_html` (ghép beat HTML từ admin chatbot).
 
-**Khác creative pipeline:** beat chatbot dùng `hf-seek` trong iframe preview — **ổn**. HyperFrames render sub-composition cần `<template>` + `window.__timelines["beat_N"]`.
+**Khác creative pipeline:** beat chatbot dùng `hf-seek` trong iframe preview — **ổn**. Render final dùng pipeline **per-beat → concat → overlay → mux audio** (không mount 15 beat trong một document).
 
 ---
 
-## Vấn đề
+## Pipeline render (A1 + B1)
 
-| Môi trường | Cơ chế animation | HTML chatbot |
-|------------|------------------|--------------|
-| Admin preview (iframe) | `dispatchEvent('hf-seek')` | ✓ chạy |
-| HyperFrames render | `window.__timelines[id]` seek | ✗ crash `Illegal invocation` nếu không normalize |
+```text
+assemble
+  → normalize beat (scaffold <template> + __timelines; getAttribute src; localize images)
+  → mỗi beat: mini index (1 host) → hyperframes render silent MP4
+  → ffmpeg concat → visual-silent.mp4
+  → overlay index (video underlay + caption + brand + progress + ambient) → visual-with-overlay.mp4
+  → ffmpeg mix narration + BGM chain + SFX → renders/final.mp4
+```
 
-Triệu chứng render: beat tĩnh, log `Composition script failed beat_N`, `Sub-composition timelines not registered`.
+| Pass | DOM | Mục đích |
+|------|-----|----------|
+| Per-beat | 1 beat **inline standalone** (`main`, không `composition-src`) | Fidelity ≈ preview iframe |
+| Overlay | 1 `<video>` + overlay layers | Karaoke global, watermark, progress |
+| Audio mux | ffmpeg | Narration + BGM + sfx_hook + sfx beat-transition |
+
+Mini index thêm: `data-start="0"`, tắt CSS `transition`, hidden `<img>` cho mọi `assets/images/*` trong beat (compiler embed ảnh động).
+
+**Cấm** vá animation beat (rewrite `opacity`/`render()` phase) — không fix fidelity bằng sửa HTML chatbot.
+
+**Per-beat render: `--workers 1`** (capture tuần tự frame 0→N trên 1 Chrome ≈ preview). Overlay: `--workers auto`.
+
+Entry: `node scripts/render-import-html.mjs --short-video-id N`  
+Upload ưu tiên `renders/final.mp4`.
 
 ---
 
-## Giải pháp (bắt buộc sau khi ghi beat từ CMS)
+## Normalize (sau khi ghi beat từ CMS)
 
 ```bash
 PROJ=storage/agent-renders/{id}/my-video
 
-# Sau bước ghi compositions/beat_N.html từ import_html.beat_html CMS:
 node .cursor/skills/biong-short-video-preflight/scripts/normalize-import-html-beat-for-render.mjs $PROJ --localize-images
-
-# Preflight trước render:
-node .cursor/skills/biong-short-video-preflight/scripts/check-import-html-beat-render.mjs $PROJ
 ```
 
 Script **chỉ scaffolding** — giữ nguyên CSS, DOM, `render()`:
+
 - Bọc `<template>` (sub-composition HyperFrames)
 - Thay `addEventListener('hf-seek')` → GSAP `window.__timelines["beat_N"]` gọi `render(t)`
-- Gỡ `prefers-reduced-motion` (headless tắt animation)
-- Thêm `data-width`/`data-height` trên `#root` nếu thiếu
+- Gỡ `prefers-reduced-motion`
+- Fix `img.src` compare → `getAttribute('src')` + preload `IMAGES[]`
+- `:root` → `#root` (token CSS khi từng dùng overlay/host)
 - `--localize-images`: tải ảnh `https://` về `assets/images/`
 
-**CMS giữ HTML gốc** — normalize chỉ trên disk `compositions/`, không ghi đè CMS.
+**CMS giữ HTML gốc** — normalize chỉ trên disk `compositions/`.
+
+Full `index.html` từ assemble vẫn được sinh (wire BGM/SFX metadata, caption files) nhưng **không** còn là pass render visual chính.
 
 ---
 
 ## Preflight
 
 - `check-import-html-beat-render.mjs` — bắt buộc `import_html`
-- `check-hf-seek-beat.mjs` — **skip** `import_html` (dùng check trên)
+- `check-hf-seek-beat.mjs` — **skip** `import_html`
 
 ---
 
 ## Cấm / cho phép
 
-| | import_html assemble |
+| | import_html assemble / render |
 |--|---------------------|
-| Cấm | Sửa visual user; shot-plan; creative gen-beats; stock/giphy/SFX MCP; BGM **loop** |
-| Cho phép | normalize script; caption/ambient/watermark; wire index; **search_bgm** + **wire-bgm-chain.mjs**; `bgm-chain.json` |
-
----
-
-## Caption overlay — trong caption band (bắt buộc import_html)
-
-Beat HTML chatbot **đã** chừa caption band 360px (`padding-bottom` trên `#stage`). Agent ghép caption riêng:
-
-```bash
-node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
-```
-
-- Pill karaoke: **`bottom: ~9.4%` (~180px)** — sinh bởi `gen-captions-html.mjs`; **cấm** `bottom: 48px` (sát mép, bị platform description che).
-- Host `compositions/captions.html` z-index 9000 — xem [overlay-layer-stack.md](overlay-layer-stack.md).
+| Cấm | Sửa visual user; vá animation composite; shot-plan creative gen trên import path |
+| Cho phép | normalize scaffold; caption/ambient/watermark; BGM chain assets; per-beat render + concat + overlay + audio mix |
 
 ---
 
 ## Liên quan
 
-- [import-html-assemble-bgm.md](import-html-assemble-bgm.md) — BGM global cho assemble
-- [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md) — creative pipeline (hf-seek fragment)
+- [import-html-assemble-bgm.md](import-html-assemble-bgm.md) — BGM cho assemble
 - [overlay-layer-stack.md](overlay-layer-stack.md)
+- Scripts: `scripts/lib/build-per-beat-render-index.mjs`, `build-overlay-index.mjs`, `concat-silent-beat-clips.mjs`, `mix-import-html-audio.mjs`

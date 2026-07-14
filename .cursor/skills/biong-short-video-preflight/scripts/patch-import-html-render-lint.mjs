@@ -13,6 +13,7 @@ import {
   patchBeatFontsForRender,
   patchBeatCssForRender,
   patchBeatDeterminismForRender,
+  patchBeatDynamicImageSrcForRender,
   patchBeatVideosForRender,
   wireBeatStockVideosToIndex,
 } from "./lib/import-html-beat-render.mjs";
@@ -121,6 +122,7 @@ function main() {
   let transparencyPatched = 0;
   let cssPatched = 0;
   let determinismPatched = 0;
+  let imageSrcPatched = 0;
   for (const name of fs.readdirSync(compDir)) {
     if (!beatIdFromFilename(name)) continue;
     const file = path.join(compDir, name);
@@ -149,6 +151,13 @@ function main() {
       determinismPatched += 1;
     }
 
+    const imageSrcResult = patchBeatDynamicImageSrcForRender(next);
+    if (imageSrcResult.changed) {
+      next = imageSrcResult.html;
+      applied.push(...imageSrcResult.patches);
+      imageSrcPatched += 1;
+    }
+
     const videoResult = patchBeatVideosForRender(next, projectDir);
     if (videoResult.changed) {
       next = videoResult.html;
@@ -170,7 +179,7 @@ function main() {
   }
 
   console.log(
-    `[patch-render-lint] OK — fonts ${fontPatched} beat(s), css ${cssPatched} beat(s), determinism ${determinismPatched} beat(s), video ${videoPatched} beat(s), transparency ${transparencyPatched} beat(s)`,
+    `[patch-render-lint] OK — fonts ${fontPatched} beat(s), css ${cssPatched} beat(s), determinism ${determinismPatched} beat(s), image-src ${imageSrcPatched} beat(s), video ${videoPatched} beat(s), transparency ${transparencyPatched} beat(s)`,
   );
 }
 

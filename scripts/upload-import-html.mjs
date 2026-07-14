@@ -29,6 +29,10 @@ function findLatestMp4(rendersDir) {
   if (!fs.existsSync(rendersDir)) {
     return "";
   }
+  const preferred = path.join(rendersDir, "final.mp4");
+  if (fs.existsSync(preferred)) {
+    return path.resolve(preferred);
+  }
   const mp4s = fs
     .readdirSync(rendersDir)
     .filter((f) => f.endsWith(".mp4"))

@@ -389,6 +389,48 @@ export function patchBeatDeterminismForRender(html) {
   return { html: out, changed: true, patches };
 }
 
+/**
+ * img.src trả URL tuyệt đối; so sánh với path tương đối luôn fail → reset src mỗi frame.
+ */
+export function patchBeatDynamicImageSrcForRender(html) {
+  const patches = [];
+  let out = String(html || "");
+  const before = out;
+
+  out = out.replace(
+    /if\s*\(\s*([\w.]+)\.src\s*!==\s*([^)]+)\)\s*\1\.src\s*=\s*([^;]+);/g,
+    "if ($1.getAttribute('src') !== $2) $1.setAttribute('src', $3);",
+  );
+
+  if (/\.src\s*!==/.test(out)) {
+    out = out.replace(
+      /([\w.]+)\.src\s*!==\s*([^;\n]+)\)\s*\1\.src\s*=\s*([^;\n]+);/g,
+      "$1.getAttribute('src') !== $2) $1.setAttribute('src', $3);",
+    );
+  }
+
+  if (/const\s+IMAGES\s*=\s*\[/i.test(out) && !/\bhfPreloadBeatImages\b/.test(out)) {
+    out = out.replace(
+      /(const\s+IMAGES\s*=\s*\[[\s\S]*?\];)/,
+      `$1
+  (function hfPreloadBeatImages(urls) {
+    urls.forEach((url) => { const img = new Image(); img.src = url; });
+  })(IMAGES);`,
+    );
+    patches.push("preload IMAGES[] cho headless render");
+  }
+
+  if (out !== before) {
+    patches.push("fix img.src compare → getAttribute (render-safe)");
+  }
+
+  return { html: out, changed: out !== before, patches };
+}
+
+export function hasUnsafeDynamicImageSrcCompare(html) {
+  return /if\s*\(\s*[\w.]+\.src\s*!==/.test(String(html || ""));
+}
+
 const PEXELS_VIDEO_ID_RE = /video-files\/(\d+)\//i;
 
 function readVideoPosterMap(projectDir) {
@@ -626,6 +668,10 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
   html = fontPatch.html;
   const fontPatches = [...fontPatch.patches];
 
+  const imageSrcPatch = patchBeatDynamicImageSrcForRender(html);
+  html = imageSrcPatch.html;
+  fontPatches.push(...imageSrcPatch.patches);
+
   const rootCssPatch = patchCssRootCustomProperties(html);
   html = rootCssPatch.html;
   fontPatches.push(...rootCssPatch.patches);
@@ -641,6 +687,7 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
     html = bridgePatch.html;
     fontPatches.push(...bridgePatch.patches);
     const earlyChanged = fontPatch.changed
+      || imageSrcPatch.changed
       || rootCssPatch.changed
       || compPatch.changed
       || bridgePatch.changed;
@@ -944,6 +991,11 @@ export function checkImportHtmlBeatFile(name, content, options = {}) {
   if (collectExternalImageUrls(content).length > 0) {
     errors.push(
       `${name}: còn ảnh URL ngoài — chạy normalize-import-html-beat-for-render.mjs --localize-images`,
+    );
+  }
+  if (hasUnsafeDynamicImageSrcCompare(content)) {
+    errors.push(
+      `${name}: so sánh img.src với path tương đối — headless render mất ảnh; chạy normalize-import-html-beat-for-render.mjs`,
     );
   }
   if (collectExternalVideoUrls(content).length > 0) {
