@@ -1730,7 +1730,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         const parsed = parseBeatMapJson(value);
         if (parsed.map) {
-            const relaxDurationBounds = ['github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
+            const relaxDurationBounds = ['github_top', 'github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
                 String(agentSourceFormat || ''),
             );
             const validation = audioDurationSec != null && audioDurationSec > 0
@@ -1752,7 +1752,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
             if (audioDurationSec != null && audioDurationSec > 0) {
-                const relaxDurationBounds = ['github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
+                const relaxDurationBounds = ['github_top', 'github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
                     String(agentSourceFormat || ''),
                 );
                 const validation = validateBeatMap(map, audioDurationSec, { relaxDurationBounds });

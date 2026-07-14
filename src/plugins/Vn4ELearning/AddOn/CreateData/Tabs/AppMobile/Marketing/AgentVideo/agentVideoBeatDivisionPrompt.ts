@@ -9,7 +9,12 @@ const HF_PROMPT_LIST = HF_PROMPT_CATALOG.map(
     (item) => `- \`${item.key}\` — ${item.label}: ${item.descriptionVi}`,
 ).join('\n');
 
-const GITHUB_TOP_FORMATS = new Set(['github_top_daily', 'github_top_weekly', 'github_top_monthly']);
+const GITHUB_TOP_FORMATS = new Set([
+    'github_top',
+    'github_top_daily',
+    'github_top_weekly',
+    'github_top_monthly',
+]);
 
 export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): string {
     const durationSec = Number(context.audio_file_duration_sec || 0);

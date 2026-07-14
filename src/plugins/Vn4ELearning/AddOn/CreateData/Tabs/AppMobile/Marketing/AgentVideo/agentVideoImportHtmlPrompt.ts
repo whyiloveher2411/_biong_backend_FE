@@ -166,7 +166,12 @@ function filterWhisperForBeat(
     return words.filter((word) => word.end >= startSec && word.start <= endSec);
 }
 
-const GITHUB_TOP_FORMATS = new Set(['github_top_daily', 'github_top_weekly', 'github_top_monthly']);
+const GITHUB_TOP_FORMATS = new Set([
+    'github_top',
+    'github_top_daily',
+    'github_top_weekly',
+    'github_top_monthly',
+]);
 
 function resolveGithubTopBeatRole(
     context: ImportHtmlContextPayload,
