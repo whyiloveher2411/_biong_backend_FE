@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Render import_html — A1+B1:
- *   mỗi beat silent → concat → overlay (caption/brand/progress/ambient) → mux audio.
+ *   mỗi beat silent (--workers 1, parallel giữa các beat) → concat → overlay → mux audio.
  * Không dùng full composite index.html làm pass render chính.
  */
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { hydrateBiongEnv, resolveApiBaseUrl } from "./lib/biong-env.mjs";
 import { reportImportHtmlBeatErrors } from "./lib/fetch-short-video-context.mjs";
@@ -16,6 +16,7 @@ import { preparePerBeatClipDir } from "./lib/build-per-beat-render-index.mjs";
 import { buildOverlayIndexHtml } from "./lib/build-overlay-index.mjs";
 import { concatSilentBeatClips } from "./lib/concat-silent-beat-clips.mjs";
 import { mixImportHtmlAudio } from "./lib/mix-import-html-audio.mjs";
+import { mapPool, resolveConcurrency } from "./lib/map-pool.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HYPERFRAMES_PKG = "hyperframes@0.7.14";
@@ -43,12 +44,24 @@ function parseArgs(argv) {
   return out;
 }
 
-function run(cmd, args, opts = {}) {
+function runSync(cmd, args, opts = {}) {
   console.log(`\n▶ ${cmd} ${args.join(" ")}`);
   const result = spawnSync(cmd, args, { stdio: "inherit", ...opts });
   if (result.status !== 0) {
     throw new Error(`${cmd} exit ${result.status}`);
   }
+}
+
+function runAsync(cmd, args, opts = {}) {
+  console.log(`\n▶ ${cmd} ${args.join(" ")}`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: "inherit", ...opts });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${cmd} exit ${code}`));
+    });
+  });
 }
 
 function ensureSymlinkAbs(linkPath, targetAbs) {
@@ -82,10 +95,11 @@ function hasSfxHook(projectDir) {
  * @param {string} outputAbs
  * @param {{ workers?: number|string }} [opts]
  *   Beat: workers=1 (capture tuần tự ≈ preview). Overlay: auto.
+ *   Cấm tăng workers trong beat — multi-worker seek phá sticky opacity.
  */
-function renderHyperframes(cwd, outputAbs, opts = {}) {
+async function renderHyperframes(cwd, outputAbs, opts = {}) {
   const workers = opts.workers ?? 1;
-  run(
+  await runAsync(
     "npx",
     [
       "--yes",
@@ -132,9 +146,15 @@ async function main() {
     ".cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs",
   );
 
+  const beatConcurrency = resolveConcurrency(process.env.IMPORT_HTML_BEAT_CONCURRENCY, {
+    defaultValue: 3,
+    min: 1,
+    max: 4,
+  });
+
   try {
-    run("node", [patchScript, projectDir], { cwd: REPO_ROOT });
-    run("node", [syncBeatsScript, projectDir], { cwd: REPO_ROOT });
+    runSync("node", [patchScript, projectDir], { cwd: REPO_ROOT });
+    runSync("node", [syncBeatsScript, projectDir], { cwd: REPO_ROOT });
 
     const preRenderLint = collectImportHtmlBeatErrors(projectDir);
     if (preRenderLint.beatIds.length > 0) {
@@ -154,25 +174,40 @@ async function main() {
     const rendersDir = path.join(projectDir, "renders");
     fs.mkdirSync(rendersDir, { recursive: true });
 
-    // --- 1) Per-beat silent renders ---
-    const beatMp4s = [];
-    for (const sec of sections) {
+    // --- 1) Per-beat silent renders (parallel giữa beat, mỗi beat --workers 1) ---
+    console.log(
+      `\n[render-import-html] per-beat parallel concurrency=${beatConcurrency} (IMPORT_HTML_BEAT_CONCURRENCY), workers=1 each`,
+    );
+
+    const beatMp4s = await mapPool(sections, beatConcurrency, async (sec, index) => {
       const beatId = sec.id || sec.beat_id;
       const dur = Number(sec.durationSec);
       const beatFile = path.join(projectDir, "compositions", `${beatId}.html`);
       if (!fs.existsSync(beatFile)) {
         throw new Error(`Thiếu compositions/${beatId}.html`);
       }
-      console.log(`\n[render-import-html] beat ${beatId} (${dur.toFixed(3)}s)`);
-      const { clipDir, outputMp4 } = preparePerBeatClipDir(projectDir, beatId, dur);
-      renderHyperframes(clipDir, outputMp4, { workers: 1 });
-      beatMp4s.push(outputMp4);
-    }
+      const slot = `${index + 1}/${sections.length}`;
+      console.log(`\n[render-import-html] beat ${beatId} start (${dur.toFixed(3)}s) slot ${slot}`);
+      try {
+        const { clipDir, outputMp4 } = preparePerBeatClipDir(projectDir, beatId, dur);
+        await renderHyperframes(clipDir, outputMp4, { workers: 1 });
+        console.log(`[render-import-html] beat ${beatId} done slot ${slot}`);
+        return outputMp4;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`beat ${beatId}: ${msg}`);
+      }
+    });
 
     // --- 2) Concat silent ---
     const silentPath = path.join(rendersDir, "visual-silent.mp4");
     console.log("\n[render-import-html] concat silent visual…");
-    concatSilentBeatClips(beatMp4s, silentPath);
+    await concatSilentBeatClips(beatMp4s, silentPath, {
+      concurrency: resolveConcurrency(
+        process.env.IMPORT_HTML_FFMPEG_CONCURRENCY ?? process.env.IMPORT_HTML_BEAT_CONCURRENCY,
+        { defaultValue: 3, min: 1, max: 4 },
+      ),
+    });
 
     // --- 3) Overlay pass ---
     const overlayDir = path.join(rendersDir, "overlay");
@@ -192,7 +227,7 @@ async function main() {
     );
     const overlayMp4 = path.join(rendersDir, "visual-with-overlay.mp4");
     console.log("\n[render-import-html] overlay pass…");
-    renderHyperframes(overlayDir, overlayMp4, { workers: "auto" });
+    await renderHyperframes(overlayDir, overlayMp4, { workers: "auto" });
 
     // --- 4) Mux audio ---
     const finalMp4 = path.join(rendersDir, "final.mp4");
@@ -223,6 +258,7 @@ async function main() {
         mp4: path.resolve(finalMp4),
         pipeline: "per-beat-concat-overlay-audio",
         beat_count: sections.length,
+        beat_concurrency: beatConcurrency,
       }),
     );
   } catch (error) {

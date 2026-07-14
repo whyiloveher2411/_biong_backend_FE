@@ -3,9 +3,10 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { mapPool, resolveConcurrency } from "./map-pool.mjs";
 
-function runFfmpeg(args) {
+function runFfmpegSync(args) {
   console.log(`\n▶ ffmpeg ${args.join(" ")}`);
   const result = spawnSync("ffmpeg", args, { stdio: "inherit" });
   if (result.status !== 0) {
@@ -13,10 +14,27 @@ function runFfmpeg(args) {
   }
 }
 
+function runFfmpegAsync(args) {
+  console.log(`\n▶ ffmpeg ${args.join(" ")}`);
+  return new Promise((resolve, reject) => {
+    const child = spawn("ffmpeg", args, { stdio: "inherit" });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}`));
+    });
+  });
+}
+
 /**
  * Concat beat MP4s (hard cut), strip audio, unify 1080x1920@30.
+ * Normalize từng clip có thể chạy song song (vẫn re-encode thống nhất trước concat copy).
+ *
+ * @param {string[]} clipPaths
+ * @param {string} outputPath
+ * @param {{ concurrency?: number }} [opts]
  */
-export function concatSilentBeatClips(clipPaths, outputPath) {
+export async function concatSilentBeatClips(clipPaths, outputPath, opts = {}) {
   if (!clipPaths?.length) {
     throw new Error("concatSilentBeatClips: empty clip list");
   }
@@ -26,15 +44,22 @@ export function concatSilentBeatClips(clipPaths, outputPath) {
     }
   }
 
+  const concurrency = resolveConcurrency(opts.concurrency, {
+    defaultValue: 3,
+    min: 1,
+    max: 4,
+  });
+
   const outDir = path.dirname(outputPath);
   fs.mkdirSync(outDir, { recursive: true });
   const listPath = path.join(outDir, "concat-list.txt");
 
-  // Re-encode each clip to identical stream first (avoid concat demuxer codec mismatch)
-  const normalized = [];
-  for (let i = 0; i < clipPaths.length; i++) {
+  const indices = clipPaths.map((_, i) => i);
+  console.log(`[concat] normalize ${clipPaths.length} clips concurrency=${concurrency}`);
+
+  const normalized = await mapPool(indices, concurrency, async (i) => {
     const normPath = path.join(outDir, `_norm_${String(i).padStart(3, "0")}.mp4`);
-    runFfmpeg([
+    await runFfmpegAsync([
       "-y",
       "-i",
       clipPaths[i],
@@ -51,15 +76,15 @@ export function concatSilentBeatClips(clipPaths, outputPath) {
       "+faststart",
       normPath,
     ]);
-    normalized.push(normPath);
-  }
+    return normPath;
+  });
 
   const listBody = normalized
     .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
     .join("\n");
   fs.writeFileSync(listPath, listBody, "utf8");
 
-  runFfmpeg([
+  runFfmpegSync([
     "-y",
     "-f",
     "concat",

@@ -11,8 +11,8 @@
 ```text
 assemble
   → normalize beat (scaffold <template> + __timelines; getAttribute src; localize images)
-  → mỗi beat: mini index (1 host) → hyperframes render silent MP4
-  → ffmpeg concat → visual-silent.mp4
+  → parallel N beat (concurrency 3, mỗi beat `--workers 1`) → silent MP4
+  → ffmpeg concat (normalize song song) → visual-silent.mp4
   → overlay index (video underlay + caption + brand + progress + ambient) → visual-with-overlay.mp4
   → ffmpeg mix narration + BGM chain + SFX → renders/final.mp4
 ```
@@ -27,7 +27,14 @@ Mini index thêm: `data-start="0"`, tắt CSS `transition`, hidden `<img>` cho m
 
 **Cấm** vá animation beat (rewrite `opacity`/`render()` phase) — không fix fidelity bằng sửa HTML chatbot.
 
-**Per-beat render: `--workers 1`** (capture tuần tự frame 0→N trên 1 Chrome ≈ preview). Overlay: `--workers auto`.
+**Per-beat: `--workers 1` bắt buộc** (capture tuần tự trên 1 Chrome ≈ preview). Parallel chỉ **giữa các beat**, không tăng workers trong beat.
+
+| Env | Mặc định | Clamp | Ý nghĩa |
+|-----|----------|-------|---------|
+| `IMPORT_HTML_BEAT_CONCURRENCY` | 3 | 1–4 | Số beat render cùng lúc |
+| `IMPORT_HTML_FFMPEG_CONCURRENCY` | cùng beat concurrency nếu unset | 1–4 | Số clip ffmpeg normalize song song |
+
+Overlay: `--workers auto`.
 
 Entry: `node scripts/render-import-html.mjs --short-video-id N`  
 Upload ưu tiên `renders/final.mp4`.
@@ -68,8 +75,8 @@ Full `index.html` từ assemble vẫn được sinh (wire BGM/SFX metadata, capt
 
 | | import_html assemble / render |
 |--|---------------------|
-| Cấm | Sửa visual user; vá animation composite; shot-plan creative gen trên import path |
-| Cho phép | normalize scaffold; caption/ambient/watermark; BGM chain assets; per-beat render + concat + overlay + audio mix |
+| Cấm | Sửa visual user; vá animation composite; tăng `--workers` **trong** 1 beat; shot-plan creative gen trên import path |
+| Cho phép | normalize scaffold; caption/ambient/watermark; BGM chain; parallel nhiều beat (`IMPORT_HTML_BEAT_CONCURRENCY`) mỗi beat workers=1 |
 
 ---
 
@@ -77,4 +84,4 @@ Full `index.html` từ assemble vẫn được sinh (wire BGM/SFX metadata, capt
 
 - [import-html-assemble-bgm.md](import-html-assemble-bgm.md) — BGM cho assemble
 - [overlay-layer-stack.md](overlay-layer-stack.md)
-- Scripts: `scripts/lib/build-per-beat-render-index.mjs`, `build-overlay-index.mjs`, `concat-silent-beat-clips.mjs`, `mix-import-html-audio.mjs`
+- Scripts: `scripts/lib/build-per-beat-render-index.mjs`, `build-overlay-index.mjs`, `concat-silent-beat-clips.mjs`, `mix-import-html-audio.mjs`, `map-pool.mjs`
