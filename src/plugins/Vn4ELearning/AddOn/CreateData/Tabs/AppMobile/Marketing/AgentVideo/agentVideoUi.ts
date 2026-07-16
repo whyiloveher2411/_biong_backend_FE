@@ -3,6 +3,7 @@ import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { voiceAvatarColor, voiceInitials } from './ShortVideoAgentOmnivoiceVoicePicker';
 
 export const TTS_PLATFORM_OPTIONS = [
+    { key: 'chatgpt_web', label: 'ChatGPT (web)' },
     { key: 'omnivoice_local', label: 'OmniVoice (local)' },
     { key: 'vieneu', label: 'VieNeu (local)' },
     { key: 'saydi', label: 'Saydi (API)' },
@@ -12,8 +13,8 @@ export const TTS_PLATFORM_OPTIONS = [
 /** Thứ tự ưu tiên đầy đủ (dùng khi sắp xếp lựa chọn user). */
 export const TTS_PLATFORM_KEYS = TTS_PLATFORM_OPTIONS.map((item) => item.key);
 
-/** Mặc định khi tạo mới / chưa cấu hình: chỉ OmniVoice. */
-export const DEFAULT_TTS_PLATFORMS: string[] = ['omnivoice_local'];
+/** Mặc định khi tạo mới / chưa cấu hình: chỉ ChatGPT Web. */
+export const DEFAULT_TTS_PLATFORMS: string[] = ['chatgpt_web'];
 
 export type AgentWorkflowPhase =
     | 'pending'

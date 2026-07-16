@@ -224,6 +224,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
     const [requestingHeadlessNewChat, setRequestingHeadlessNewChat] = React.useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
+    const [chatgptWebAvailable, setChatgptWebAvailable] = React.useState(true);
     const [ttsPending, setTtsPending] = React.useState(false);
     const [ttsFailed, setTtsFailed] = React.useState(false);
     const [needsTtsEnqueue, setNeedsTtsEnqueue] = React.useState(false);
@@ -511,6 +512,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setNeedsTtsEnqueue(Boolean(res?.needs_tts_enqueue));
         setLastError(String(res?.last_error || '').trim());
         setSelectedPlatforms(normalizePlatforms(res?.agent_tts_platforms));
+        setChatgptWebAvailable(Boolean(res?.tts_providers?.chatgpt_web));
         const dur = Number(res?.audio_file_duration_sec || 0);
         setAudioDurationSec(dur > 0 ? dur : null);
         setAgentVideoStatus(String(res?.agent_video_status || 'none'));
@@ -3316,6 +3318,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         cancellingFullAuto,
         requestingHeadlessNewChat,
         selectedPlatforms,
+        chatgptWebAvailable,
         ttsPending,
         ttsFailed,
         needsTtsEnqueue,

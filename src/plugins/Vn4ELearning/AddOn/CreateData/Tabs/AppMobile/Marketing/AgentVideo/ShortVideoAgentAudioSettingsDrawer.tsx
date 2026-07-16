@@ -27,6 +27,7 @@ type Props = {
     savingTtsMode: boolean;
     selectedPlatforms: string[];
     chainLabel: string;
+    chatgptWebAvailable?: boolean;
     onTtsAutoChange: (enabled: boolean) => void | Promise<void>;
     onPlatformToggle: (platformKey: string) => void | Promise<void>;
     omnivoiceSpeed: number;
@@ -59,6 +60,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     savingTtsMode,
     selectedPlatforms,
     chainLabel,
+    chatgptWebAvailable = true,
     onTtsAutoChange,
     onPlatformToggle,
     omnivoiceSpeed,
@@ -79,6 +81,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
 }: Props) {
     const voiceSaving = savingVoice || regeneratingTts;
     const [draftSpeed, setDraftSpeed] = React.useState(omnivoiceSpeed);
+    const showChatgptCookieWarning = selectedPlatforms.includes('chatgpt_web') && !chatgptWebAvailable;
 
     React.useEffect(() => {
         if (open) {
@@ -138,7 +141,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
 
             <Box>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                    Thứ tự ưu tiên: OmniVoice → VieNeu → Saydi → Vbee
+                    Thứ tự ưu tiên: ChatGPT → OmniVoice → VieNeu → Saydi → Vbee
                 </Typography>
                 <FormGroup>
                     {TTS_PLATFORM_OPTIONS.map((option) => (
@@ -161,6 +164,15 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                         size="small"
                         variant="outlined"
                         sx={{ mt: 1 }}
+                    />
+                ) : null}
+                {showChatgptCookieWarning ? (
+                    <Chip
+                        label="Chưa cấu hình cookie ChatGPT — Settings → Cookie Account"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        sx={{ mt: 1, display: 'flex' }}
                     />
                 ) : null}
             </Box>

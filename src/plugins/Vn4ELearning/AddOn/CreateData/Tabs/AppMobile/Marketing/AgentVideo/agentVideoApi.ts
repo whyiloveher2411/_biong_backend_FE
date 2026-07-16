@@ -311,6 +311,15 @@ export type AgentVideoContentResponse = {
     tts_failed?: boolean;
     needs_tts_enqueue?: boolean;
     tts_chain?: string[];
+    tts_providers?: {
+        chatgpt_web?: boolean;
+        omnivoice?: boolean;
+        omnivoice_local?: boolean;
+        omnivoice_kaggle?: boolean;
+        vieneu?: boolean;
+        saydi?: boolean;
+        vbee?: boolean;
+    };
     visual_style?: string;
     visual_style_resolved?: string;
     visual_style_source?: string;
