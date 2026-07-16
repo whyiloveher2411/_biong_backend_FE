@@ -1,4 +1,4 @@
-import type { HfThemeCatalogItem } from './agentVideoApi';
+import type { VisualStyleCatalogItem } from './agentVideoApi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { voiceAvatarColor, voiceInitials } from './ShortVideoAgentOmnivoiceVoicePicker';
 
@@ -36,7 +36,7 @@ export type PreviewPlaceholder = {
     loading?: boolean;
 };
 
-export function hfThemeLabel(key: string, catalog?: HfThemeCatalogItem[]): string {
+export function visualStyleLabel(key: string, catalog?: VisualStyleCatalogItem[]): string {
     const fromCatalog = catalog?.find((item) => item.key === key)?.label;
     if (fromCatalog) {
         return fromCatalog;

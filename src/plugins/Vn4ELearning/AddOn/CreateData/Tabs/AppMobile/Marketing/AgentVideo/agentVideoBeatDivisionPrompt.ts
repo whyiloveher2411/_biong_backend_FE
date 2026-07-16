@@ -1,13 +1,11 @@
-import { HF_PROMPT_CATALOG } from './agentVideoHfPromptCatalog';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 import { buildBeatDivisionLanguageBlock } from './agentVideoContentLanguageBlock';
 import { buildHtmlChatbotNoKaraokeRulesBlock, buildBeatDivisionSingleOutputRulesBlock } from './agentVideoHtmlChatbotRules';
-import type { ImportHtmlContextPayload } from './agentVideoImportHtmlPrompt';
+import {
+    buildVisualLibraryForPrompt,
+    type ImportHtmlContextPayload,
+} from './agentVideoImportHtmlPrompt';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
-
-const HF_PROMPT_LIST = HF_PROMPT_CATALOG.map(
-    (item) => `- \`${item.key}\` — ${item.label}: ${item.descriptionVi}`,
-).join('\n');
 
 const GITHUB_TOP_FORMATS = new Set([
     'github_top',
@@ -25,6 +23,13 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const total = formatDurationSec(durationSec);
     const sourceFormat = String(context.source_format || '').trim();
     const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
+    const visualLibrary = buildVisualLibraryForPrompt(context);
+    const catalogIds = visualLibrary
+        .map((item) => String(item.id || '').trim())
+        .filter(Boolean);
+    const catalogRule = catalogIds.length
+        ? `- Catalog IDs được phép (ghi nguyên ID trong visual_description nếu dùng): ${catalogIds.map((id) => `\`${id}\``).join(', ')}`
+        : '- Không có catalog ID hợp lệ; không tham chiếu media catalog trong visual_description.';
 
     if (isGithubTop) {
         const topRepos = context.github_top_repos?.repos;
@@ -53,18 +58,22 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             'Mỗi beat = một chapter visual riêng (HTML generate sau — **chỉ visual, không karaoke**).',
             '',
             '## CẤU TRÚC BEAT BẮT BUỘC',
-            '- **beat_1**: INTRO — giới thiệu danh sách; có thể liệt kê tên repo. Không gán image_url.',
+            '- **beat_1**: INTRO — giới thiệu danh sách; có thể liệt kê tên repo. Ưu tiên visual dựng bằng HTML/CSS.',
             `- **beat_2 → beat_${repoCount + 1}**: đúng 1 repo / beat theo rank.`,
-            `- **beat_${repoCount + 2}**: OUTRO / tổng kết. Không gán image_url.`,
+            `- **beat_${repoCount + 2}**: OUTRO / tổng kết. Ưu tiên visual dựng bằng HTML/CSS.`,
             `- Tổng sections = **${expectedBeats}**.`,
             '',
             buildHtmlChatbotNoKaraokeRulesBlock(),
             buildBeatDivisionSingleOutputRulesBlock({ relaxDurationBounds: true }),
+            '## BeatMap schema v2',
+            '- Top-level bắt buộc `schema_version: 2`.',
+            '- Mỗi section bắt buộc `visual_description`: 8–80 từ, viết hoàn toàn bằng tiếng Anh, mô tả content, composition, hierarchy và motion progression.',
+            '- Cấm visual_description tự đặt palette, font, texture hoặc theme; toàn clip lấy từ visual_style.',
+            '- Không xuất `hf_prompt_type` hoặc `image_url`.',
+            '- Media catalog ID trong visual_description phải bọc bằng backtick; mỗi ID chỉ được xuất hiện trong tối đa 1 beat; không dùng ID ngoài danh sách.',
+            catalogRule,
             '## Danh sách repo (map beat)',
             repoLines.length ? repoLines.join('\n') : '(chưa có github_top_repos)',
-            '',
-            '## hf_prompt_type catalog',
-            HF_PROMPT_LIST,
             '',
             '---',
             '',
@@ -80,6 +89,11 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             '## Whisper word timing (chỉ pacing — KHÔNG dùng text làm karaoke/subtitle trong HTML beat)',
             '```text',
             formatWhisperWordsForPrompt(context.whisper_words || []),
+            '```',
+            '',
+            '## Visual catalog (chỉ tham chiếu bằng exact ID trong visual_description)',
+            '```json',
+            JSON.stringify(visualLibrary, null, 2),
             '```',
             '',
             '## Thumbnail',
@@ -108,6 +122,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- Schema:',
         '```json',
         JSON.stringify({
+            schema_version: 2,
             totalVideoSec: Number(total),
             source: 'chatbot',
             sections: [
@@ -118,8 +133,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
                     endSec: 12.4,
                     durationSec: 12.4,
                     phrase_anchor: 'đoạn script tại beat này',
-                    hf_prompt_type: 'universal-composer',
-                    image_url: 'https://… (tùy chọn, từ marketing_post_images)',
+                    visual_description: 'A bold editorial composition with one clear focal card, restrained depth, and deterministic motion timed to the spoken idea.',
                 },
             ],
         }, null, 2),
@@ -131,11 +145,12 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- `id` / `beat_id` = `beat_1`, `beat_2`, …',
         '- `durationSec` = endSec - startSec',
         '- `phrase_anchor` = metadata lập kế hoạch beat (không render lên màn hình, không dùng làm karaoke)',
-        '- `hf_prompt_type` chọn 1 trong catalog bên dưới theo nội dung beat',
-        '- `image_url` gán từ ảnh marketing khi phù hợp nội dung beat',
-        '',
-        '## hf_prompt_type catalog',
-        HF_PROMPT_LIST,
+        '- Top-level bắt buộc `schema_version: 2`',
+        '- `visual_description` bắt buộc, 8–80 từ, hoàn toàn bằng tiếng Anh; mô tả content, composition, hierarchy, graphic elements và motion progression',
+        '- Cấm visual_description tự đặt palette, font, texture hoặc theme; toàn clip lấy từ visual_style',
+        '- Không xuất `hf_prompt_type` hoặc `image_url`',
+        '- Chỉ dùng catalog ID nguyên văn và bọc bằng backtick trong visual_description; mỗi ID tối đa 1 beat; không có ID thì không tham chiếu catalog',
+        catalogRule,
         '',
         '---',
         '',
@@ -152,9 +167,9 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         formatWhisperWordsForPrompt(context.whisper_words || []),
         '```',
         '',
-        '## Ảnh marketing post (gán image_url khi phù hợp)',
+        '## Visual catalog (chỉ tham chiếu bằng exact ID trong visual_description)',
         '```json',
-        JSON.stringify(context.marketing_post_images || [], null, 2),
+        JSON.stringify(visualLibrary, null, 2),
         '```',
         '',
         '## Thumbnail',

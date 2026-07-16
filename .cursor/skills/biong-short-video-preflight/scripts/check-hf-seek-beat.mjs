@@ -10,18 +10,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { isImportHtmlProject } from "./lib/import-html-beat-render.mjs";
 
-const VALID_PROMPT_TYPES = new Set([
-  "cinematic-title",
-  "kinetic-type",
-  "social-reel",
-  "data-story",
-  "product-reveal",
-  "lower-third-overlay",
-  "sting-transition",
-  "premium-spot",
-  "universal-composer",
-]);
-
 export function checkHfSeekBeatFile(name, content, expectedDuration = null) {
   const errors = [];
 
@@ -39,7 +27,7 @@ export function checkHfSeekBeatFile(name, content, expectedDuration = null) {
     errors.push(`${name}: cấm gsap.timeline — dùng t-based render()`);
   }
   if (/data-registry-block/i.test(content)) {
-    errors.push(`${name}: cấm data-registry-block — dùng prompt type thay registry`);
+    errors.push(`${name}: cấm data-registry-block — dựng visual theo visual_description`);
   }
   if (/hook-title-plate|plate-rust|\.border-3d/i.test(content)) {
     errors.push(`${name}: cấm legacy hook-title/border-3d — dùng hyperframes prompt`);
@@ -116,19 +104,12 @@ function main() {
       const plan = Array.isArray(raw) ? raw : raw.visual_shot_plan ?? [];
       for (const shot of plan) {
         const id = shot.beat_id;
-        if (id && shot.hf_prompt_type) {
-          if (!VALID_PROMPT_TYPES.has(shot.hf_prompt_type)) {
-            errors.push(`${id}: hf_prompt_type không hợp lệ "${shot.hf_prompt_type}"`);
-          }
-        }
-      }
-      const types = plan.map((s) => s.hf_prompt_type).filter(Boolean);
-      for (let i = 1; i < types.length; i++) {
-        if (types[i] === types[i - 1]) {
+        const description = String(shot.visual_description ?? "").trim();
+        const words = description.split(/\s+/).filter(Boolean);
+        if (id && (words.length < 8 || words.length > 80 || /[À-ỹ]/.test(description))) {
           errors.push(
-            `visual_shot_plan: 2 beat liên tiếp cùng hf_prompt_type "${types[i]}"`,
+            `${id}: visual_description phải là tiếng Anh, dài 8–80 từ`,
           );
-          break;
         }
       }
     } catch {

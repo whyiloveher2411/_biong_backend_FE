@@ -1,4 +1,4 @@
-| beat | layout_archetype | hero_type | registry_block | z_role |
+| beat | visual_description | hero_type | registry_block | z_role |
 | beat_1 | kinetic_hook_slam | kinetic_type | caption-kinetic-slam | hero_type |
 | beat_2 | stat_punch_card | registry_block | stat-motion | hero_chart |
 | beat_3 | process_flow | diagram | flowchart | hero_chart |

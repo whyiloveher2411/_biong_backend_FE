@@ -20,7 +20,6 @@ import {
     timeSecToTimelineLeftPx,
 } from './agentVideoTimelineModel';
 import AgentVideoBeatBoundaryOverlay from './AgentVideoBeatBoundaryOverlay';
-import AgentVideoHfPromptTypeSelect from './AgentVideoHfPromptTypeSelect';
 import TimelineZoomControls, {
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
@@ -142,6 +141,7 @@ type Props = {
     onCopyBeatPrompt?: (beatId: string) => void;
     onPasteBeatHtml?: (beatId: string) => void;
     onEditBeatHtml?: (beatId: string) => void;
+    onOpenBeatInfo?: (beatId: string) => void;
     onDeleteBeatHtml?: (beatId: string) => void;
     onDeleteAllBeatHtml?: () => void;
     onOpenAllMissingBeatGemini?: () => void;
@@ -174,9 +174,6 @@ type Props = {
     openingBeatGeminiHeadlessBeatIds?: string[];
     savingImportHtml?: boolean;
     beatPlaybackSeekRequest?: { beatId: string; startSec: number; nonce: number } | null;
-    showHfPromptTypeSelect?: boolean;
-    hfPromptType?: string;
-    onHfPromptTypeChange?: (nextType: string) => void;
     agentVideoStatus?: string;
     showImportAssemble?: boolean;
     hasAgentVideo?: boolean;
@@ -199,6 +196,7 @@ export default function ShortVideoAgentVideoTimeline({
     onCopyBeatPrompt,
     onPasteBeatHtml,
     onEditBeatHtml,
+    onOpenBeatInfo,
     onDeleteBeatHtml,
     onDeleteAllBeatHtml,
     onOpenAllMissingBeatGemini,
@@ -220,9 +218,6 @@ export default function ShortVideoAgentVideoTimeline({
     openingBeatGeminiHeadlessBeatIds = [],
     savingImportHtml = false,
     beatPlaybackSeekRequest = null,
-    showHfPromptTypeSelect = false,
-    hfPromptType = '',
-    onHfPromptTypeChange,
     agentVideoStatus = 'none',
     showImportAssemble = false,
     hasAgentVideo = false,
@@ -253,8 +248,7 @@ export default function ShortVideoAgentVideoTimeline({
     const showFillAllMissingGeminiHeadless = (
         showOpenAllMissingGemini || geminiFillQueueActive
     ) && Boolean(onFillAllMissingBeatGeminiHeadless);
-    const showTimelineActions = showHfPromptTypeSelect
-        || showOpenAllMissingGemini
+    const showTimelineActions = showOpenAllMissingGemini
         || showFillAllMissingGeminiHeadless
         || showDeleteAllBeatHtml
         || showImportAssemble;
@@ -274,10 +268,6 @@ export default function ShortVideoAgentVideoTimeline({
     }), [timelineScaleWidth]);
 
     const hasVideo = customHtmlPreview || String(videoUrl || '').trim() !== '';
-    const hfPromptTypeSelectDisabled = !hasVideo
-        || timelineActionsBusy
-        || agentVideoStatus === 'processing';
-
     const contentDurationSec = React.useMemo(
         () => resolveAgentVideoDurationSec({
             mediaDurationSec,
@@ -627,15 +617,6 @@ export default function ShortVideoAgentVideoTimeline({
                 ) : null}
                 {(showTimelineActions) ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        {showHfPromptTypeSelect && onHfPromptTypeChange ? (
-                            <AgentVideoHfPromptTypeSelect
-                                compact
-                                value={hfPromptType}
-                                missingBeatCount={missingBeatHtmlCount}
-                                disabled={hfPromptTypeSelectDisabled}
-                                onChange={onHfPromptTypeChange}
-                            />
-                        ) : null}
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
                             <Tooltip
                                 title="Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab"
@@ -896,6 +877,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onCopyPrompt={onCopyBeatPrompt}
                                 onPasteHtml={onPasteBeatHtml}
                                 onEditHtml={onEditBeatHtml}
+                                onOpenInfo={onOpenBeatInfo}
                                 onDeleteBeatData={onDeleteBeatHtml}
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}

@@ -30,6 +30,8 @@ const shotPlan = [
     layout_archetype: "kinetic_hook_slam",
     render_stack: ["registry:caption-kinetic-slam", "gsap"],
     visual_story: "Slam hook",
+    visual_description:
+      "Open with one oversized focal statement, scatter supporting signals around it, and resolve into a sharp visual question.",
   },
   {
     beat_id: "beat_2",
@@ -37,6 +39,8 @@ const shotPlan = [
     layout_archetype: "stat_punch_card",
     render_stack: ["registry:stat-motion", "gsap"],
     visual_story: "Stat counter",
+    visual_description:
+      "Build a verified metric card, reveal supporting scale markers in sequence, and hold the dominant number for readability.",
   },
   {
     beat_id: "beat_3",
@@ -44,14 +48,20 @@ const shotPlan = [
     layout_archetype: "cta_orbit",
     render_stack: ["registry:caption-kinetic-slam", "lottie"],
     visual_story: "CTA orbit",
+    visual_description:
+      "Gather the established visual elements into one closing card, reveal the next action, and hold a clean final frame.",
   },
 ];
 
 const beatMap = buildBeatMapFromShotPlan(shotPlan, captionWords, 60);
 
 assert.strictEqual(beatMap.sections.length, 3);
+assert.strictEqual(beatMap.schema_version, 2);
 assert.strictEqual(beatMap.source, "visual-shot-plan");
-assert.strictEqual(beatMap.sections[0].source, "caption-word-match");
+assert.strictEqual(
+  beatMap.sections[0].visual_description,
+  shotPlan[0].visual_description,
+);
 assert.ok(beatMap.sections[0].startSec < beatMap.sections[1].startSec);
 assert.ok(beatMap.sections[1].startSec < beatMap.sections[2].startSec);
 assert.strictEqual(beatMap.sections[2].endSec, 60);

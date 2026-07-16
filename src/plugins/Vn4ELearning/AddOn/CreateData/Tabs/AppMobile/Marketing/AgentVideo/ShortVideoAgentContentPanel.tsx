@@ -4,22 +4,26 @@ import {
     Box,
     Chip,
     FormControl,
+    FormControlLabel,
     InputLabel,
     LinearProgress,
     Menu,
     MenuItem,
     Select,
     Stack,
+    Switch,
     TextField,
     Typography,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
+import StopIcon from '@mui/icons-material/Stop';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
+import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import TextareaForm from 'components/atoms/fields/textarea/Form';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -393,19 +397,18 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                     {!linked ? (
                         <Box sx={sectionCardSx}>
                             <Stack
-                                direction={{ xs: 'column', sm: 'row' }}
+                                direction="row"
                                 spacing={1}
-                                alignItems={{ xs: 'stretch', sm: 'center' }}
+                                alignItems="flex-start"
                                 justifyContent="space-between"
-                                sx={{ mb: 1 }}
+                                sx={{ mb: 1.25 }}
                             >
-                                <Box>
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
                                     <Typography variant="subtitle2" fontWeight={600}>
                                         Media từ README
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                        Ảnh/GIF/video quét từ từng repo — import vào tài nguyên video (ưu tiên như user upload).
-                                        Repo không có ảnh sẽ dùng screenshot trang GitHub làm cover.
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                                        Ảnh/GIF/video quét từ repo — import vào tài nguyên video (ưu tiên như user upload).
                                     </Typography>
                                 </Box>
                                 <LoadingButton
@@ -419,17 +422,83 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     }
                                     onClick={() => void state.handleImportAllReadmeMedia()}
                                     startIcon={<CloudDownloadIcon />}
-                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0, mt: 0.15 }}
                                 >
                                     Import tất cả
                                 </LoadingButton>
                             </Stack>
-                            {Array.isArray(state.githubTopRepos?.repos) && state.githubTopRepos.repos.length > 0 ? (
+
+                            {state.agentSourceFormat === 'github_repo_review' ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1.25,
+                                        mb: 1.25,
+                                        px: 1.25,
+                                        py: 1,
+                                        borderRadius: 1,
+                                        border: '1px solid',
+                                        borderColor: state.agentGithubScreenshotHomepage
+                                            ? 'primary.light'
+                                            : 'divider',
+                                        bgcolor: state.agentGithubScreenshotHomepage
+                                            ? 'action.selected'
+                                            : 'action.hover',
+                                        transition: 'border-color 0.15s ease, background-color 0.15s ease',
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: 1,
+                                            flexShrink: 0,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            bgcolor: 'background.paper',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            color: state.agentGithubScreenshotHomepage
+                                                ? 'primary.main'
+                                                : 'text.secondary',
+                                        }}
+                                    >
+                                        <DesktopWindowsOutlinedIcon sx={{ fontSize: 20 }} />
+                                    </Box>
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="body2" fontWeight={600} lineHeight={1.3}>
+                                            Chụp màn hình trang chủ
+                                        </Typography>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            display="block"
+                                            sx={{ mt: 0.15, lineHeight: 1.35 }}
+                                        >
+                                            Khi «Lấy thông tin», tự cover bằng screenshot nếu README chưa có ảnh.
+                                        </Typography>
+                                    </Box>
+                                    <Switch
+                                        size="small"
+                                        edge="end"
+                                        checked={state.agentGithubScreenshotHomepage}
+                                        disabled={state.savingGithubScreenshotHomepage}
+                                        onChange={(e) => {
+                                            void state.handleGithubScreenshotHomepageChange(e.target.checked);
+                                        }}
+                                        inputProps={{ 'aria-label': 'Chụp màn hình trang chủ' }}
+                                    />
+                                </Box>
+                            ) : null}
+
+                            {(state.githubTopRepos?.repos?.length || 0) > 0 ? (
                                 <Stack spacing={0.75} sx={{ mb: 1.5 }}>
                                     <Typography variant="caption" color="text.secondary" fontWeight={600}>
                                         Cover theo repo
                                     </Typography>
-                                    {state.githubTopRepos.repos.map((repo) => {
+                                    {state.githubTopRepos?.repos?.map((repo) => {
                                         const name = String(repo.full_name || '').trim() || '—';
                                         const cover = String(repo.cover_image_url || '').trim();
                                         const imgCount = Array.isArray(repo.visual_catalog_ids)
@@ -501,10 +570,34 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     })}
                                 </Stack>
                             ) : null}
+
                             {state.readmeMedia.length === 0 ? (
-                                <Typography variant="body2" color="text.secondary">
-                                    Chưa có media — bấm «Lấy thông tin» hoặc đợi enrich top repo xong (kèm screenshot nếu thiếu ảnh).
-                                </Typography>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        textAlign: 'center',
+                                        gap: 0.75,
+                                        px: 2,
+                                        py: 2.25,
+                                        borderRadius: 1,
+                                        border: '1px dashed',
+                                        borderColor: 'divider',
+                                        bgcolor: 'action.hover',
+                                    }}
+                                >
+                                    <CollectionsOutlinedIcon
+                                        sx={{ fontSize: 28, color: 'text.disabled' }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+                                        {state.agentSourceFormat === 'github_repo_review'
+                                            ? (state.agentGithubScreenshotHomepage
+                                                ? 'Chưa có media — bấm «Lấy thông tin» để quét README (sẽ screenshot nếu thiếu ảnh).'
+                                                : 'Chưa có media — bấm «Lấy thông tin» để quét README.')
+                                            : 'Chưa có media — bấm «Lấy thông tin» hoặc đợi enrich top repo xong.'}
+                                    </Typography>
+                                </Box>
                             ) : (
                                 <Stack spacing={1}>
                                     {state.readmeMedia.map((item) => {
@@ -698,13 +791,33 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     size="small"
                                     variant="outlined"
                                     color="inherit"
-                                    startIcon={<PauseIcon />}
+                                    startIcon={<StopIcon />}
                                     loading={state.cancellingFullAuto}
+                                    disabled={state.cancellingFullAuto}
                                     onClick={() => { void state.handleCancelFullAutoPipeline(); }}
                                 >
-                                    Tạm dừng
+                                    Dừng
                                 </LoadingButton>
                             ) : null}
+                            <FormControlLabel
+                                sx={{ ml: 0.5, mr: 0 }}
+                                control={(
+                                    <Switch
+                                        size="small"
+                                        checked={state.agentGeminiOpenBrowser}
+                                        disabled={state.savingGeminiOpenBrowser}
+                                        onChange={(e) => {
+                                            void state.handleGeminiOpenBrowserChange(e.target.checked);
+                                        }}
+                                        inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
+                                    />
+                                )}
+                                label={(
+                                    <Typography variant="caption" color="text.secondary">
+                                        Hiện browser
+                                    </Typography>
+                                )}
+                            />
                         </Stack>
                     </Box>
                 </Stack>

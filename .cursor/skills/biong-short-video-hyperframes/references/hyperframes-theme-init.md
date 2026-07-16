@@ -8,11 +8,11 @@
 
 ## Resolve theme (thứ tự ưu tiên)
 
-1. **CMS** `agent_video_json.hf_theme` — nếu ≠ `auto` → khóa theme admin chọn
-2. **`visual_shot_plan.hf_theme`** — agent ghi khi CMS = `auto`
+1. **CMS** `agent_video_json.visual_style` — nếu ≠ `auto` → khóa phong cách admin chọn
+2. **`visual_shot_plan.visual_style`** — agent ghi khi CMS = `auto`
 3. **Mặc định** `vignelli`
 
-Trả trong `short_video_get_context`: `hf_theme`, `hf_theme_source`, `hf_theme_catalog`.
+Trả trong `short_video_get_context`: `visual_style`, `visual_style_source`, `visual_style_catalog`.
 
 ---
 
@@ -40,7 +40,7 @@ Trả trong `short_video_get_context`: `hf_theme`, `hf_theme_source`, `hf_theme_
 | CTA app/sản phẩm | `product-promo` |
 | Còn lại | `vignelli` |
 
-Ghi `hf_theme` ở root `visual_shot_plan` object hoặc `assets/visual-shot-plan.json` top-level.
+Ghi `visual_style` ở root `visual_shot_plan` object hoặc `assets/visual-shot-plan.json` top-level.
 
 ---
 
@@ -82,4 +82,4 @@ npx hyperframes init storage/agent-renders/{id}/my-video \
 - [ ] `--resolution portrait` (1080×1920)
 - [ ] Be Vietnam Pro local, không Google Fonts CDN
 - [ ] Đã đọc CSS token theme trước khi viết beat
-- [ ] `hf_theme` ghi trong shot-plan hoặc CMS
+- [ ] `visual_style` ghi trong shot-plan hoặc CMS

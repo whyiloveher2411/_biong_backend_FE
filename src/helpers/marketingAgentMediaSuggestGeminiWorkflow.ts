@@ -36,7 +36,7 @@ function buildCompactContext(contextPayload: unknown): string {
         short_video_id: raw.short_video_id,
         title: raw.title,
         language: raw.language,
-        hf_prompt_type: raw.hf_prompt_type,
+        visual_style: raw.visual_style,
         audio_file_duration_sec: raw.audio_file_duration_sec,
         beat_map_ready: raw.beat_map_ready,
         beat_count: Array.isArray((raw.beat_map as { sections?: unknown[] } | undefined)?.sections)

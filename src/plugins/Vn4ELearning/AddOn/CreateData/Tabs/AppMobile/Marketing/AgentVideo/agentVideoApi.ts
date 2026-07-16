@@ -6,7 +6,7 @@ import { DEFAULT_TTS_PLATFORMS } from './agentVideoUi';
 
 export type ApiMessage = { content?: string } | string;
 
-export type HfThemeCatalogItem = {
+export type VisualStyleCatalogItem = {
     key: string;
     label: string;
     description?: string;
@@ -147,7 +147,6 @@ export function isKaraokeSyncPoor(captionSync?: CaptionSyncSummary | null): bool
 }
 
 export type ImportHtmlSummary = {
-    hf_prompt_type?: string;
     html_length?: number;
     html_updated_at?: string;
     has_html?: boolean;
@@ -280,12 +279,16 @@ export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
     audio_script?: string;
+    audio_script_updated_at?: string;
+    audio_script_generated_at?: string;
     audio_script_approved?: boolean;
     audio_script_approved_at?: string;
     audio_file?: string;
     audio_file_duration_sec?: number;
     agent_tts_auto?: boolean;
     agent_auto_fill_beat_html?: boolean;
+    agent_gemini_open_browser?: boolean;
+    agent_github_screenshot_homepage?: boolean;
     agent_tts_platforms?: string[];
     agent_omnivoice_voice?: string;
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
@@ -308,10 +311,18 @@ export type AgentVideoContentResponse = {
     tts_failed?: boolean;
     needs_tts_enqueue?: boolean;
     tts_chain?: string[];
+    visual_style?: string;
+    visual_style_resolved?: string;
+    visual_style_source?: string;
+    visual_style_catalog?: VisualStyleCatalogItem[];
+    /** @deprecated Transitional read fallback. */
     hf_theme?: string;
+    /** @deprecated Transitional read fallback. */
     hf_theme_resolved?: string;
+    /** @deprecated Transitional read fallback. */
     hf_theme_source?: string;
-    hf_theme_catalog?: HfThemeCatalogItem[];
+    /** @deprecated Transitional read fallback. */
+    hf_theme_catalog?: VisualStyleCatalogItem[];
     workflow_mode?: string;
     agent_workflow?: {
         ready_for_video?: boolean;
@@ -350,7 +361,6 @@ export type AgentVideoContentResponse = {
     social_posted?: boolean;
     render_mode?: AgentRenderMode;
     import_html?: ImportHtmlSummary;
-    hf_prompt_types_catalog?: string[];
     tts_phonetic_dict?: TtsPhoneticDictEntry[];
     full_auto_pipeline?: FullAutoPipelineSummary;
     github_top_enrich?: GithubTopEnrichSummary;
@@ -429,6 +439,17 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
 export type JsonResponse = {
     success?: boolean;
     message?: ApiMessage;
+};
+
+export type AgentHeadlessPreviewAccessResponse = JsonResponse & {
+    ws_url?: string;
+    websocket_url?: string;
+    viewer_url?: string;
+    token?: string;
+    access_token?: string;
+    expires_at?: string | number;
+    expires_in?: number;
+    short_video_id?: number;
 };
 
 export type SaveAdminAudioScriptResponse = JsonResponse & {
@@ -581,17 +602,20 @@ export async function savePublishFlags(
     );
 }
 
-export async function saveAgentHfTheme(
+export async function saveAgentVisualStyle(
     shortVideoId: number,
-    hfTheme: string,
+    visualStyle: string,
 ): Promise<JsonResponse & {
+    visual_style?: string;
+    visual_style_resolved?: string;
+    visual_style_source?: string;
     hf_theme?: string;
     hf_theme_resolved?: string;
     hf_theme_source?: string;
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-hf-theme',
-        shortVideoBody(shortVideoId, { hf_theme: hfTheme }),
+        shortVideoBody(shortVideoId, { visual_style: visualStyle }),
     );
 }
 
@@ -652,6 +676,30 @@ export async function saveAgentAutoFillBeatHtml(
             agent_auto_fill_beat_html: enabled ? '1' : '0',
         }),
     ) as Promise<JsonResponse & { agent_auto_fill_beat_html?: boolean }>;
+}
+
+export async function saveAgentGeminiOpenBrowser(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_gemini_open_browser?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-gemini-open-browser',
+        shortVideoBody(shortVideoId, {
+            agent_gemini_open_browser: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_gemini_open_browser?: boolean }>;
+}
+
+export async function saveAgentGithubScreenshotHomepage(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_github_screenshot_homepage?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-github-screenshot-homepage',
+        shortVideoBody(shortVideoId, {
+            agent_github_screenshot_homepage: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_github_screenshot_homepage?: boolean }>;
 }
 
 export async function enqueueGeminiWebBeatFill(
@@ -952,11 +1000,29 @@ export async function cancelFullAutoPipeline(
     ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
 }
 
+export async function requestAgentHeadlessNewChat(
+    shortVideoId: number,
+    sessionId?: string,
+): Promise<JsonResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/request-agent-headless-new-chat',
+        shortVideoBody(shortVideoId, sessionId ? { session_id: sessionId } : {}),
+    ) as Promise<JsonResponse>;
+}
+
+export async function getAgentHeadlessPreviewAccess(
+    shortVideoId: number,
+): Promise<AgentHeadlessPreviewAccessResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-headless-preview-access',
+        shortVideoBody(shortVideoId),
+    ) as Promise<AgentHeadlessPreviewAccessResponse>;
+}
+
 export async function saveAgentImportHtml(
     shortVideoId: number,
     payload: {
         renderMode?: AgentRenderMode;
-        hfPromptType?: string;
         html?: string;
         beatMap?: import('./agentVideoBeatMap').BeatMap;
         beatId?: string;
@@ -976,9 +1042,6 @@ export async function saveAgentImportHtml(
     const body: Record<string, unknown> = shortVideoBody(shortVideoId);
     if (payload.renderMode !== undefined) {
         body.render_mode = payload.renderMode;
-    }
-    if (payload.hfPromptType !== undefined) {
-        body.hf_prompt_type = payload.hfPromptType;
     }
     if (payload.html !== undefined) {
         body.html = payload.html;

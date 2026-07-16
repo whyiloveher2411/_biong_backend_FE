@@ -1,62 +1,37 @@
 {
+  "generatedAt": "2026-07-15T11:07:31.843Z",
   "schema_version": 2,
-  "generatedAt": "2026-07-15T11:07:31.899Z",
-  "source": "visual-shot-plan",
-  "totalVideoSec": 30,
-  "sections": [
+  "composer": "universal-composer",
+  "assignments": [
     {
-      "id": "beat_1",
       "beat_id": "beat_1",
       "visual_description": "Compose a layered editorial card system, reveal the primary idea first, then introduce two supporting elements before settling into a balanced final frame.",
-      "phrase_anchor": "Hook shock opener",
-      "startSec": 0,
-      "endSec": 5,
-      "durationSec": 5
+      "source": "generated"
     },
     {
-      "id": "beat_2",
       "beat_id": "beat_2",
       "visual_description": "Build a spatial diagram around one central object, animate related signals from the edges, and resolve the relationships with clear hierarchy.",
-      "phrase_anchor": "Ninety thousand jobs cut",
-      "startSec": 5,
-      "endSec": 10,
-      "durationSec": 5
+      "source": "generated"
     },
     {
-      "id": "beat_3",
       "beat_id": "beat_3",
       "visual_description": "Use a progressive stack of interface panels, shift focus between them with depth and scale, and end with the strongest result in front.",
-      "phrase_anchor": "AI investment flow steps",
-      "startSec": 10,
-      "endSec": 15,
-      "durationSec": 5
+      "source": "generated"
     },
     {
-      "id": "beat_4",
       "beat_id": "beat_4",
       "visual_description": "Create an abstract problem-to-solution sequence, compress scattered elements into an organized structure, and hold the resolved state for readability.",
-      "phrase_anchor": "Before after comparison chart",
-      "startSec": 15,
-      "endSec": 20,
-      "durationSec": 5
+      "source": "generated"
     },
     {
-      "id": "beat_5",
       "beat_id": "beat_5",
       "visual_description": "Compose a layered editorial card system, reveal the primary idea first, then introduce two supporting elements before settling into a balanced final frame.",
-      "phrase_anchor": "Three insight bento grid",
-      "startSec": 20,
-      "endSec": 25,
-      "durationSec": 5
+      "source": "generated"
     },
     {
-      "id": "beat_6",
       "beat_id": "beat_6",
       "visual_description": "Build a spatial diagram around one central object, animate related signals from the edges, and resolve the relationships with clear hierarchy.",
-      "phrase_anchor": "Follow now call to action",
-      "startSec": 25,
-      "endSec": 30,
-      "durationSec": 5
+      "source": "generated"
     }
   ]
 }

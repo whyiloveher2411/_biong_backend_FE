@@ -26,7 +26,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/check-visual-density.mjs
 
 ## Theme & canvas (bắt buộc)
 
-- Init `--example={hf_theme}` portrait — **cấm** `blank` production — [hyperframes-theme-init.md](./hyperframes-theme-init.md)
+- Init `--example={visual_style}` portrait — **cấm** `blank` production — [hyperframes-theme-init.md](./hyperframes-theme-init.md)
 - Mỗi beat: **3 lớp** background / UI cards / dynamic typography — [canvas-contract-3-layer.md](./canvas-contract-3-layer.md)
 - Support on-screen text ≥28px; card title ≥36px — [layout-9x16-zones.md](./layout-9x16-zones.md)
 

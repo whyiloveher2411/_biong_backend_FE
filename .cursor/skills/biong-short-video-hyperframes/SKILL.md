@@ -64,8 +64,8 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 1. `get_context` — script **đã duyệt**
 2. `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `totalVideoSec`
 3. Sinh `visual_shot_plan` (**N beats** bám audio) → `update_agent_status` + `assets/visual-shot-plan.json`
-4. `assign-beat-prompt-types.mjs` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
-5. **Mỗi beat:** đọc `@hyperframes/prompts/{hf_prompt_type}.md` → viết `compositions/beat_N.html` (hf-seek)
+4. `assign-beat-prompt-types.mjs` (bảo đảm `visual_description`) → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
+5. **Mỗi beat:** đọc `@hyperframes/prompts/universal-composer.md` + `visual_style` toàn clip + `visual_description` → viết `compositions/beat_N.html` (hf-seek)
 6. `search_meme_sound` (hook) + `search_bgm` (limit=8, BGM chain) + `search_giphy` / stock **bg only**
 7. `/continuous-motion` → `ambient-layer.html` + `window.__timelines["ambient"]`
 8. `wire-bgm-chain.mjs` + SFX track 12 (hook) + beat-move tracks 14–21 + BGM chain track 11/13/15…
@@ -77,7 +77,7 @@ Phase 1: ghi `[BGM]`, `[SFX]`, `timeline`, `markers` (HASCAS narrative only) —
 | `short_video_search_bgm` | Nhạc nền Pixabay — BGM chain (limit=8, cùng mood) + `wire-bgm-chain.mjs` |
 | `short_video_search_giphy` | accent_media sticker/gif từ shot-plan |
 
-Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global`/`bgm_2`… + `assets/bgm-chain.json` + mỗi beat (`hf_prompt_type`, `accent_media`, `bg_media`).
+Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global`/`bgm_2`… + `assets/bgm-chain.json` + mỗi beat (`visual_description`, `accent_media`, `bg_media`).
 
 **Tần suất:** hook SFX bắt buộc; ≥1 BGM; ambient layer bắt buộc; preflight `check-continuous-motion.mjs` + `check-visual-density.mjs` + `check-hf-seek-beat.mjs`
 
@@ -130,9 +130,9 @@ short_video_save_audio_script({
 
 ## Import HTML assemble (`render_mode=import_html`)
 
-Admin dán beat HTML từ chatbot ngoài — **không** creative shot-plan. Đọc [import-html-beat-render.md](references/import-html-beat-render.md) · [import-html-assemble-bgm.md](references/import-html-assemble-bgm.md) · [import-html-beat-originality.md](references/import-html-beat-originality.md).
+Admin dán beat HTML từ chatbot ngoài — **không** creative shot-plan. Mọi beat dùng `visual_style` chung và `visual_description` riêng. Đọc [import-html-beat-render.md](references/import-html-beat-render.md) · [import-html-assemble-bgm.md](references/import-html-assemble-bgm.md) · [import-html-beat-originality.md](references/import-html-beat-originality.md).
 
-**Phần A (`import_html_full`):** sinh beat qua MCP prompt — **cấm** copy HTML từ video cũ (`storage/agent-renders/*/compositions/`, `beats-draft/`). Mỗi beat = prompt server + `hf_prompt_type` + thiết kế mới.
+**Phần A (`import_html_full`):** sinh beat qua MCP prompt — **cấm** copy HTML từ video cũ (`storage/agent-renders/*/compositions/`, `beats-draft/`). Mỗi beat = prompt server + `visual_style` + `visual_description` + thiết kế mới.
 
 1. Ghi `compositions/beat_N.html` từ CMS (giữ visual user)
 2. **Bắt buộc:** `normalize-import-html-beat-for-render.mjs --localize-images` (scaffolding `<template>` + `window.__timelines`)
@@ -154,8 +154,8 @@ Preview admin dùng `hf-seek` trong iframe — **không** sửa HTML trên CMS; 
 **Cấm scaffold placeholder:** Không ship beat HTML có text `"Beat 1"`, `"Beat 2"`…, hoặc `#root` opaque che stock. **Cấm** `gen-beats-from-shot-plan.mjs`. Phase 2 **bắt buộc**:
 
 1. Transcribe → sinh `visual_shot_plan` (**N beats** content-driven) — [visual-shot-plan.md](references/visual-shot-plan.md)
-2. `assign-beat-prompt-types.mjs` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
-3. **Mỗi beat:** đọc `@hyperframes/prompts/{hf_prompt_type}.md` + `assets/beat-timing/beat_N.json` → viết `compositions/beat_N.html` (**hf-seek `t`-based**, không GSAP beat)
+2. `assign-beat-prompt-types.mjs` bảo đảm `visual_description` → `map-shot-plan-to-beat-map.mjs` → `build-beat-element-timing.mjs`
+3. **Mỗi beat:** đọc `@hyperframes/prompts/universal-composer.md` + `visual_style` + `visual_description` + `assets/beat-timing/beat_N.json` → viết `compositions/beat_N.html` (**hf-seek `t`-based**, không GSAP beat)
 
 **Beat contract:** [hf-prompt-beat-contract.md](references/hf-prompt-beat-contract.md) — transparent `#root`, Be Vietnam Pro, `render()` + `TIMINGS` từ Whisper.
 
@@ -193,7 +193,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-ma
 node .cursor/skills/biong-short-video-preflight/scripts/build-beat-element-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
-# Agent viết compositions/beat_N.html theo hf_prompt_type + beat-timing — CẤM gen-beats-from-shot-plan.mjs
+# Agent viết compositions/beat_N.html theo visual_style + visual_description + beat-timing — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
 node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs $PROJ --duration {totalVideoSec}
@@ -332,7 +332,7 @@ Không upload bản `--quality draft`. Trước render final: đọc [blank-fram
 - [ ] Caption karaoke wired — text audio_script, timing Whisper
 - [ ] Watermark Spacedev — logo + © Spacedev góc trên trái, suốt video
 - [ ] Kinetic typography — hero 3–5 từ stagger; body ≥28px; card title ≥36px; list → UI Card
-- [ ] Theme init `--example={hf_theme}` portrait — **cấm** blank production — [hyperframes-theme-init.md](references/hyperframes-theme-init.md)
+- [ ] Theme init `--example={visual_style}` portrait — **cấm** blank production — [hyperframes-theme-init.md](references/hyperframes-theme-init.md)
 - [ ] Canvas contract 3 lớp mỗi beat — [canvas-contract-3-layer.md](references/canvas-contract-3-layer.md)
 - [ ] `check-typography-spacing.mjs` exit 0
 - [ ] `/hyperframes-creative` + `/hyperframes-core` invoked trước beat HTML

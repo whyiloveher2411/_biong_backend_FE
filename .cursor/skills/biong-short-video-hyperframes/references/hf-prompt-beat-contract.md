@@ -1,6 +1,6 @@
 # HF Prompt Beat Contract — adapter playground → agent beat
 
-Đọc **trước** khi viết `compositions/beat_N.html`. Mỗi beat dùng 1 prompt type từ `hyperframes/prompts/{hf_prompt_type}.md` + contract này.
+Đọc **trước** khi viết `compositions/beat_N.html`. Mỗi beat dùng `hyperframes/prompts/universal-composer.md` + `visual_style` toàn clip + `visual_description` của beat + contract này.
 
 **Đọc kèm:** [hf-prompt-catalog.md](hf-prompt-catalog.md) · [hf-prompt-art-direction.md](hf-prompt-art-direction.md) · [overlay-layer-stack.md](overlay-layer-stack.md) · [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md)
 
@@ -24,7 +24,7 @@
 ```html
 <div id="root" data-composition-id="beat_3" data-duration="8.4">
   <div class="scene-root">
-    <div id="stage"><!-- layout theo prompt type --></div>
+    <div id="stage"><!-- layout theo visual_description --></div>
   </div>
 </div>
 <style>
@@ -120,7 +120,7 @@ Beat **không** embed BGM/narration — đã có trong `index.html`.
 
 - `npx hyperframes add` registry hero blocks
 - `.hook-title-plate`, `.plate-rust`, `.border-3d`, `.ui-card` catalog cũ
-- `.content-cluster` bắt buộc (layout tự do theo prompt type)
+- `.content-cluster` bắt buộc (layout tự do theo visual_description)
 - `window.__timelines["beat_N"]` GSAP beat timeline
 - `layout_archetype`, `render_stack`, `registry_block` trong shot-plan
 
@@ -128,13 +128,13 @@ Beat **không** embed BGM/narration — đã có trong `index.html`.
 
 ## Preflight
 
-`check-hf-seek-beat.mjs` validate mỗi beat. `check-visual-density.mjs` validate shot-plan `hf_prompt_type`.
+`check-hf-seek-beat.mjs` validate mỗi beat. `check-visual-density.mjs` validate shot-plan `visual_description`.
 
 ---
 
 ## Workflow mỗi beat
 
-1. Đọc `@hyperframes/prompts/{hf_prompt_type}.md`
-2. Đọc `assets/beat-timing/beat_N.json`
-3. Viết `compositions/beat_N.html` theo aesthetic prompt + contract này
+1. Đọc `@hyperframes/prompts/universal-composer.md`
+2. Đọc `visual_style`, `visual_description` và `assets/beat-timing/beat_N.json`
+3. Viết `compositions/beat_N.html` theo style chung + description riêng + contract này
 4. `data-duration` khớp beat-map ±0.1s

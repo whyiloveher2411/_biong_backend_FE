@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Preflight: visual density — shot-plan hf_prompt_type, t-based beats.
+ * Preflight: visual density — shot-plan visual_description, t-based beats.
  *
  * Usage: node check-visual-density.mjs <project-dir>
  * Exit 0 = pass, 1 = fail.
@@ -26,18 +26,6 @@ function exists(rel) {
 function read(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8");
 }
-
-const VALID_PROMPT_TYPES = new Set([
-  "cinematic-title",
-  "kinetic-type",
-  "social-reel",
-  "data-story",
-  "product-reveal",
-  "lower-third-overlay",
-  "sting-transition",
-  "premium-spot",
-  "universal-composer",
-]);
 
 const PLACEHOLDER_PATTERNS = [
   />\s*Beat\s+\d+\s*</i,
@@ -77,7 +65,7 @@ if (exists("assets/beat-map.json")) {
 for (const { name, content } of beatFiles) {
   for (const re of PLACEHOLDER_PATTERNS) {
     if (re.test(content)) {
-      errors.push(`${name}: placeholder scaffold — viết beat theo hf_prompt_type`);
+      errors.push(`${name}: placeholder scaffold — viết beat theo visual_description`);
       break;
     }
   }
@@ -124,36 +112,29 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
     if (!String(shot.phrase_anchor ?? shot.phrase_text ?? "").trim()) {
       errors.push(`${id}: thiếu phrase_anchor`);
     }
-    if (!String(shot.hf_prompt_type ?? "").trim()) {
-      errors.push(`${id}: thiếu hf_prompt_type — chạy assign-beat-prompt-types.mjs`);
-    } else if (!VALID_PROMPT_TYPES.has(shot.hf_prompt_type)) {
-      errors.push(`${id}: hf_prompt_type không hợp lệ "${shot.hf_prompt_type}"`);
+    const description = String(shot.visual_description ?? "").trim();
+    const descriptionWords = description.split(/\s+/).filter(Boolean);
+    if (
+      descriptionWords.length < 8 ||
+      descriptionWords.length > 80 ||
+      /[À-ỹ]/.test(description)
+    ) {
+      errors.push(
+        `${id}: visual_description phải là tiếng Anh, dài 8–80 từ — chạy assign-beat-prompt-types.mjs`,
+      );
     }
     if (!String(shot.visual_story ?? "").trim()) {
       errors.push(`${id}: thiếu visual_story`);
     }
   }
 
-  const types = shotPlan.map((s) => s.hf_prompt_type).filter(Boolean);
-  const uniqueTypes = new Set(types);
-  let totalVideoSec = 60;
-  if (exists("assets/beat-map.json")) {
-    try {
-      const bm = JSON.parse(read("assets/beat-map.json"));
-      if (bm.totalVideoSec > 0) totalVideoSec = bm.totalVideoSec;
-    } catch {
-      /* skip */
-    }
-  }
-  if (totalVideoSec >= 60 && uniqueTypes.size < 3 && shotPlan.length >= 4) {
-    warnings.push(
-      `visual_shot_plan: khuyến nghị ≥3 hf_prompt_type unique (video ≥60s) — hiện ${uniqueTypes.size}`,
-    );
-  }
-  for (let i = 1; i < types.length; i++) {
-    if (types[i] === types[i - 1]) {
+  const descriptions = shotPlan.map((s) =>
+    String(s.visual_description ?? "").trim().toLowerCase(),
+  );
+  for (let i = 1; i < descriptions.length; i++) {
+    if (descriptions[i] && descriptions[i] === descriptions[i - 1]) {
       errors.push(
-        `visual_shot_plan: 2 beat liên tiếp cùng hf_prompt_type "${types[i]}"`,
+        "visual_shot_plan: 2 beat liên tiếp có visual_description giống nhau",
       );
       break;
     }
@@ -194,11 +175,6 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
             `${shot.beat_id ?? sections[i].id}: beat ${dur.toFixed(1)}s >20s — khuyến nghị tách khi chia beat (prompt AI); code giữ nguyên`,
           );
         }
-        if (shot.hf_prompt_type === "sting-transition" && dur > 10) {
-          warnings.push(
-            `${shot.beat_id}: sting-transition trên beat ${dur.toFixed(1)}s — nên ≤8s`,
-          );
-        }
       }
     } catch {
       /* skip */
@@ -220,8 +196,8 @@ if (!fs.existsSync(timingDir)) {
 
 if (exists("media-plan.md")) {
   const plan = read("media-plan.md");
-  if (!/hf_prompt_type|accent_media|bg_media/i.test(plan)) {
-    errors.push("media-plan.md: thiếu cột hf_prompt_type / accent / bg");
+  if (!/visual_description|accent_media|bg_media/i.test(plan)) {
+    errors.push("media-plan.md: thiếu visual_description / accent / bg");
   }
 } else {
   errors.push("missing media-plan.md");

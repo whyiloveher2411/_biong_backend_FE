@@ -59,7 +59,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/map-shot-plan-to-beat-ma
 node .cursor/skills/biong-short-video-preflight/scripts/build-beat-element-timing.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/sync-index-beats-from-map.mjs $PROJ
 node .cursor/skills/biong-short-video-preflight/scripts/wire-beat-transition-sfx.mjs $PROJ
-# Agent viết compositions/beat_N.html theo hf_prompt_type + beat-timing — CẤM gen-beats-from-shot-plan.mjs
+# Agent viết compositions/beat_N.html theo visual_style + visual_description + beat-timing — CẤM gen-beats-from-shot-plan.mjs
 node .cursor/skills/biong-short-video-preflight/scripts/gen-captions-html.mjs $PROJ
 mkdir -p $PROJ/assets/images
 cp .cursor/skills/biong-short-video-hyperframes/assets/spacedev-logo.png $PROJ/assets/images/
@@ -70,7 +70,7 @@ node .cursor/skills/biong-short-video-preflight/scripts/gen-brand-watermark.mjs 
 
 ## Bước 1 — Visual + beat + overlay (bắt buộc)
 
-Sau `/continuous-motion` + agent viết beat HTML theo `hyperframes/prompts/{hf_prompt_type}.md`:
+Sau `/continuous-motion` + agent viết beat HTML theo `hyperframes/prompts/universal-composer.md`, `visual_style` và `visual_description`:
 
 ```bash
 node .cursor/skills/biong-short-video-preflight/scripts/check-continuous-motion.mjs $PROJ
@@ -107,7 +107,7 @@ node ../../../../.agents/skills/hyperframes-animation/scripts/animation-map.mjs 
 
 | # | Kiểm tra | Pass |
 |---|----------|------|
-| 1 | `visual_shot_plan` + `hf_prompt_type` mỗi beat | ✓ |
+| 1 | `visual_shot_plan` + `visual_description` mỗi beat | ✓ |
 | 2 | `assets/beat-timing/beat_N.json` mỗi beat | ✓ |
 | 3 | `compositions/ambient-layer.html` + `__timelines["ambient"]` | ✓ |
 | 4 | Beat HTML hf-seek `render()` — không GSAP beat timeline | ✓ |

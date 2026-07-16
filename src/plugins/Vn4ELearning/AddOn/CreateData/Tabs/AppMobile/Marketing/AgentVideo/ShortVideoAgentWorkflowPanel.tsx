@@ -26,7 +26,7 @@ import {
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
-import { formatTtsChain, hfThemeLabel, phaseLabel, platformLabel } from './agentVideoUi';
+import { formatTtsChain, phaseLabel, platformLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -169,6 +169,12 @@ function MetaRow({
     status?: string | null;
     statusTone?: StatusTone;
 }) {
+    const resolvedStatus = String(status || '').trim().toLowerCase() === 'paused'
+        ? 'Đã dừng'
+        : (status || '—');
+    const resolvedStatusTone = statusTone
+        ?? (status != null ? resolveStatusTone(status) : undefined);
+
     return (
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, py: 0.5 }}>
             <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
@@ -176,7 +182,7 @@ function MetaRow({
             </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', minWidth: 0 }}>
                 {status != null ? (
-                    <StatusChip label={status || '—'} tone={statusTone} />
+                    <StatusChip label={resolvedStatus} tone={resolvedStatusTone} />
                 ) : (
                     <Typography variant="caption" fontWeight={500} sx={{ textAlign: 'right' }}>
                         {value}
@@ -397,18 +403,18 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
 
                 <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Theme HyperFrames
+                        Phong cách visual
                     </Typography>
-                    <FormControl fullWidth size="small" disabled={state.savingHfTheme}>
-                        <InputLabel id="hf-theme-select-label">Theme</InputLabel>
+                    <FormControl fullWidth size="small" disabled={state.savingVisualStyle}>
+                        <InputLabel id="visual-style-select-label">Phong cách</InputLabel>
                         <Select
-                            labelId="hf-theme-select-label"
-                            label="Theme"
-                            value={state.hfTheme || 'auto'}
-                            onChange={(e) => { void state.handleHfThemeChange(String(e.target.value)); }}
+                            labelId="visual-style-select-label"
+                            label="Phong cách"
+                            value={state.visualStyle || 'auto'}
+                            onChange={(e) => { void state.handleVisualStyleChange(String(e.target.value)); }}
                         >
-                            {(state.hfThemeCatalog.length > 0
-                                ? state.hfThemeCatalog
+                            {(state.visualStyleCatalog.length > 0
+                                ? state.visualStyleCatalog
                                 : [{ key: 'auto', label: 'Tự động (agent)' }]
                             ).map((item) => (
                                 <MenuItem key={item.key} value={item.key}>
@@ -418,10 +424,10 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         </Select>
                     </FormControl>
                     <MetaRow
-                        label="Theme render"
+                        label="Phong cách render"
                         value={
-                            state.hfThemeResolved
-                                ? `${hfThemeLabel(state.hfThemeResolved, state.hfThemeCatalog)}${state.hfThemeSource ? ` (${state.hfThemeSource})` : ''}`
+                            state.visualStyleResolved
+                                ? `${visualStyleLabel(state.visualStyleResolved, state.visualStyleCatalog)}${state.visualStyleSource ? ` (${state.visualStyleSource})` : ''}`
                                 : '—'
                         }
                     />
@@ -561,92 +567,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 onClick={() => { void state.handleCopyPrompt('2'); }}
                             >
                                 Copy prompt bước 2
-                            </Button>
-                        </>
-                    )}
-
-                    {state.renderMode === 'import_html' && state.scriptApproved && state.hasAudio && (
-                        <>
-                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
-                                {state.beatsHtmlCompleted < state.beatsHtmlTotal
-                                    ? `Agent sẽ sinh ${state.beatsHtmlTotal - state.beatsHtmlCompleted} beat HTML thiếu, rồi ghép video`
-                                    : state.hasAgentVideo
-                                        ? 'Đủ HTML — dùng tab Render để render script, hoặc agent ghép lại'
-                                        : 'Đủ HTML — tab Render: ghép & render không cần agent'}
-                            </Typography>
-                            <LoadingButton
-                                size="small"
-                                variant="contained"
-                                color="secondary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={state.launchingImportHtmlFull}
-                                disabled={
-                                    !state.beatMapReady
-                                    || state.whisperStatus !== 'completed'
-                                    || state.whisperStale
-                                    || state.agentVideoStatus === 'processing'
-                                }
-                                startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentImportHtmlFull(); }}
-                            >
-                                Tự động HTML beat + ghép video
-                            </LoadingButton>
-                            {!state.beatMapReady ? (
-                                <Typography variant="caption" color="warning.main" display="block">
-                                    Cần beat-map hợp lệ — chia beat trong panel HTML trước
-                                </Typography>
-                            ) : null}
-                            {state.beatMapReady && (state.whisperStatus !== 'completed' || state.whisperStale) ? (
-                                <Typography variant="caption" color="warning.main" display="block">
-                                    Cần Whisper hoàn tất — chờ hoặc chạy lại trên tab Script & TTS (bước 4)
-                                </Typography>
-                            ) : null}
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                disabled={!state.importHtmlReady}
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyPrompt('import_assemble'); }}
-                            >
-                                Copy prompt ghép
-                            </Button>
-                        </>
-                    )}
-
-                    {state.hasAgentVideo && (
-                        <>
-                            {state.renderMode === 'import_html' ? (
-                                <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
-                                    Render creative mới (phase 2 — không dùng HTML chatbot)
-                                </Typography>
-                            ) : null}
-                            <LoadingButton
-                                size="small"
-                                variant="contained"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={state.launchingContinue}
-                                disabled={state.agentVideoStatus === 'processing'}
-                                startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentContinue(); }}
-                            >
-                                Chạy agent tiếp tục
-                            </LoadingButton>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyPrompt('continue'); }}
-                            >
-                                Copy prompt tiếp tục
                             </Button>
                         </>
                     )}

@@ -1,4 +1,7 @@
-import { loadHfPromptTemplate } from './agentVideoHfPromptCatalog';
+import {
+    DEFAULT_HF_PROMPT_TYPE,
+    loadHfPromptTemplate,
+} from './agentVideoHfPromptCatalog';
 import { applyVideoDurationToHfPromptTemplate, formatDurationSec } from './agentVideoHfPromptDuration';
 import {
     buildBeatScaffoldInstructionsBlock,
@@ -15,7 +18,9 @@ export type ImportHtmlContextPayload = {
     short_video_id?: number;
     title?: string;
     language?: string;
-    hf_prompt_type?: string;
+    visual_style?: string;
+    /** @deprecated Transitional read fallback only. */
+    hf_theme?: string;
     audio_script?: string;
     audio_file?: string;
     audio_file_duration_sec?: number;
@@ -47,6 +52,7 @@ export type ImportHtmlContextPayload = {
 };
 
 type VisualLibraryEntry = {
+    id?: string;
     media_type: 'image' | 'video';
     url: string;
     preview_url: string;
@@ -96,6 +102,7 @@ export function buildVisualLibraryForPrompt(context: ImportHtmlContextPayload): 
         const caption = resolveVisualCatalogCaption(item);
         const title = String(item.title || '').trim() || caption;
         const entry: VisualLibraryEntry = {
+            id: String(item.id || '').trim() || undefined,
             media_type: mediaType,
             url,
             preview_url: String(item.preview_url || url).trim() || url,
@@ -117,12 +124,13 @@ export function buildVisualLibraryForPrompt(context: ImportHtmlContextPayload): 
         }
     });
 
-    (context.marketing_post_images || []).forEach((item) => {
+    (context.marketing_post_images || []).forEach((item, index) => {
         const url = String(item.url || '').trim();
         if (!url) {
             return;
         }
         marketing.push({
+            id: String(item.id || '').trim() || `marketing-post-${index + 1}`,
             media_type: 'image',
             url,
             preview_url: url,
@@ -138,14 +146,65 @@ export function buildVisualLibraryForPrompt(context: ImportHtmlContextPayload): 
 function buildVisualLibraryRulesBlock(): string {
     return [
         '## Thư viện visual (user upload + marketing post + Pexels stock)',
-        '- Chọn **0–1** media hero phù hợp nội dung beat này; không bắt buộc dùng hết catalog',
-        '- **Ưu tiên 1 — `source: user_upload`**: đọc `caption` (mô tả user) so khớp `phrase_anchor` + nhịp whisper; dùng đúng `url` nếu phù hợp',
+        '- Danh sách này đã được lọc: chỉ entry có exact catalog ID xuất hiện trong visual_description mới được cấp cho beat.',
+        '- Chọn **0–1** media hero phù hợp; không tự tìm hoặc dùng entry ngoài JSON.',
+        '- **Ưu tiên 1 — `source: user_upload`**: đọc `caption` so khớp visual_description + nhịp whisper; dùng đúng `url` nếu phù hợp',
         '- **Ưu tiên 2 — `source: marketing_post`**: `.browser-mockup-card` + `data-marketing-post-image` + `data-marketing-post-image-url`',
         '- **Ưu tiên 3 — `source: stock` (Pexels)**: chỉ khi không có upload/marketing khớp beat',
         '- Ảnh (`media_type: image`): bọc trong `.browser-mockup-card` (traffic-light bar macOS, không padding quanh img)',
-        '- Video stock (`media_type: video`): **CẤM** thẻ `<video>` trong beat — dùng `preview_url` làm `<img>` nền (opacity 0.3–0.6) + GSAP parallax/zoom',
-        '- Dùng đúng `url` từ JSON — không bịa URL',
+        '- External image chỉ được dùng qua `<img src>` với đúng URL trong JSON; không tự fetch hoặc ghép URL khác',
+        '- Video stock (`media_type: video`): **CẤM** thẻ `<video>` trong beat — dùng `preview_url` làm `<img>` nền (opacity 0.3–0.6) + parallax/zoom bằng transform cập nhật trong `render()` theo `t`',
+        '- Tổng toàn beat tối đa **1 external media source**, tính chung `<img>` và CSS `url(...)`',
+        '- Cấm `fetch`/XHR/WebSocket/EventSource; chỉ `<img src>` với đúng URL trong JSON — không bịa URL',
     ].join('\n');
+}
+
+function buildCreativeTruthContractBlock(): string {
+    return [
+        '## CREATIVE TRUTH CONTRACT — ưu tiên cao hơn template style',
+        '- `phrase_anchor` và Whisper là nguồn hiểu ý/pacing, **không** được copy nguyên câu hoặc sync word-by-word lên màn hình.',
+        '- Cho phép tối đa **3 graphic phrase ngắn, mỗi phrase 1–5 từ**, viết bằng ngôn ngữ nội dung và diễn đạt lại đúng ý `phrase_anchor`; không biến chúng thành phụ đề.',
+        '- **CẤM bịa dữ kiện:** số liệu, phần trăm, ngày, phiên bản/build, rank, nguồn trích dẫn, tên người/chức danh, giải thưởng, URL, install command hoặc claim cụ thể.',
+        '- Chỉ hiển thị proper noun/fact nếu xuất hiện nguyên nghĩa trong metadata beat hoặc JSON visual; quy tắc cấm logo/tên thương hiệu vẫn ưu tiên cao hơn.',
+        '- Ví dụ copy, version, date, metric, URL và command trong template style chỉ là mô tả craft — **không phải dữ liệu được phép render**.',
+        '- **Tổng tối đa 1 external media source** cho cả beat, tính chung `<img>` và CSS `url(...)`; có thể dùng 0 media.',
+        '- **Cấm JavaScript networking:** `fetch`, XMLHttpRequest, WebSocket, EventSource; cấm `<audio>`, AudioContext và WebAudio.',
+        '- Chỉ `<img src>` được phép tải URL xuất hiện nguyên văn trong JSON visual library; cấm tự ghép hoặc suy đoán URL.',
+        '- Mọi pixel động phải là hàm xác định của local `t`; không dùng playback state, system time hoặc runtime randomness.',
+    ].join('\n');
+}
+
+const VISUAL_STYLE_ART_DIRECTION: Record<string, string> = {
+    vignelli: 'High-contrast editorial system, disciplined modular grid, bold scale changes, minimal ornament, and precise geometric spacing.',
+    'kinetic-type': 'Typography-led visual identity with decisive scale, rhythmic cropping, strong alignment, and energetic but controlled motion.',
+    'warm-grain': 'Warm educational storytelling with tactile grain, soft depth, calm spacing, rounded forms, and measured organic movement.',
+    'nyt-graph': 'Evidence-led editorial graphics with rigorous hierarchy, restrained chart language, legible annotation, and quiet analytical motion.',
+    'swiss-grid': 'Swiss modernist grid, asymmetric balance, strict alignment, neutral structure, and a small number of purposeful accents.',
+    'product-promo': 'Polished product presentation with confident depth, refined interface surfaces, focused highlights, and premium reveal timing.',
+};
+
+function buildStyleCompatibilityBlock(visualStyle: string): string {
+    const resolvedStyle = visualStyle === 'auto' ? 'vignelli' : visualStyle;
+    const artDirection = VISUAL_STYLE_ART_DIRECTION[resolvedStyle]
+        || VISUAL_STYLE_ART_DIRECTION.vignelli;
+    return [
+        '## VISUAL STYLE ART DIRECTION — bắt buộc',
+        `Clip-level visual_style: \`${resolvedStyle}\`.`,
+        `Art direction: ${artDirection}`,
+        '- Dùng visual_style như art direction nhất quán cho palette, typography, texture và shape language; không coi đây là template/layout.',
+        '- Universal composer quyết định composition riêng cho beat dựa trên visual_description.',
+        '- Nếu visual_description yêu cầu palette, font, texture hoặc theme khác, bỏ qua phần đó và giữ visual_style.',
+        '- Counters, timestamps và source labels chỉ được dùng khi có dữ kiện thật; cấm transcript-driven word-by-word text.',
+        'Nếu style direction phía trên trái với contract này, **contract này thắng**.',
+    ].join('\n');
+}
+
+function descriptionMentionsExactId(description: string, id: string): boolean {
+    if (!id) {
+        return false;
+    }
+    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}($|[^A-Za-z0-9_-])`).test(description);
 }
 
 function parseMessage(message: ImportHtmlContextPayload['message']): string {
@@ -163,7 +222,16 @@ function filterWhisperForBeat(
     startSec: number,
     endSec: number,
 ) {
-    return words.filter((word) => word.end >= startSec && word.start <= endSec);
+    return words
+        .filter((word) => {
+            const midpoint = (Number(word.start) + Number(word.end)) / 2;
+            return midpoint >= startSec && midpoint < endSec;
+        })
+        .map((word) => ({
+            ...word,
+            start: Math.max(startSec, Math.min(endSec, Number(word.start))),
+            end: Math.max(startSec, Math.min(endSec, Number(word.end))),
+        }));
 }
 
 const GITHUB_TOP_FORMATS = new Set([
@@ -180,7 +248,8 @@ function resolveGithubTopBeatRole(
     const sections = context.beat_map?.sections || [];
     const sectionIndex = Math.max(0, sections.findIndex((sec) => sec.id === beat.id));
     const sectionCount = sections.length;
-    const repos = Array.isArray(context.github_top_repos?.repos) ? context.github_top_repos.repos : [];
+    const repoItems = context.github_top_repos?.repos;
+    const repos = Array.isArray(repoItems) ? repoItems : [];
     const repoCount = repos.length;
 
     if (sectionCount >= 2) {
@@ -208,7 +277,8 @@ function resolveGithubTopBeatRole(
 }
 
 function buildGithubTopIntroRankRulesBlock(context: ImportHtmlContextPayload): string {
-    const repos = Array.isArray(context.github_top_repos?.repos) ? context.github_top_repos.repos : [];
+    const repoItems = context.github_top_repos?.repos;
+    const repos = Array.isArray(repoItems) ? repoItems : [];
     const rankLines = repos
         .map((repo, i) => {
             const name = String(repo.full_name || '').trim();
@@ -242,7 +312,7 @@ export async function buildBeatHtmlPrompt(
         throw new Error(`Beat ${beat.id}: thiếu durationSec hợp lệ`);
     }
 
-    const promptType = String(beat.hf_prompt_type || 'universal-composer').trim() || 'universal-composer';
+    const promptType = DEFAULT_HF_PROMPT_TYPE;
     const rawTemplate = await loadHfPromptTemplate(promptType);
     const template = applyVideoDurationToHfPromptTemplate(rawTemplate, durationSec);
     const durationLabel = `${formatDurationSec(durationSec)}s`;
@@ -254,9 +324,26 @@ export async function buildBeatHtmlPrompt(
     const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
     const githubRole = isGithubTop ? resolveGithubTopBeatRole(context, beat) : null;
     const isGithubIntro = githubRole?.role === 'intro';
-    const visualLibrary = isGithubIntro || githubRole?.role === 'outro'
+    let visualLibrary = isGithubIntro || githubRole?.role === 'outro'
         ? []
         : buildVisualLibraryForPrompt(context);
+    if (githubRole?.role === 'repo' && githubRole.repoIndex >= 0) {
+        const repo = context.github_top_repos?.repos?.[githubRole.repoIndex];
+        const allowedIds = new Set([
+            String(repo?.cover_visual_catalog_id || '').trim(),
+            ...(repo?.visual_catalog_ids || []).map((id) => String(id || '').trim()),
+        ].filter(Boolean));
+        const coverUrl = String(repo?.cover_image_url || '').trim();
+        visualLibrary = visualLibrary.filter((item) => (
+            (item.id && allowedIds.has(item.id))
+            || (coverUrl && (item.url === coverUrl || item.preview_url === coverUrl))
+        ));
+    }
+    const visualDescription = String(beat.visual_description || '').trim();
+    visualLibrary = visualLibrary.filter((item) => (
+        Boolean(item.id) && descriptionMentionsExactId(visualDescription, String(item.id))
+    ));
+    const visualStyle = String(context.visual_style || context.hf_theme || 'auto').trim() || 'auto';
     const githubIntroRules = isGithubIntro ? buildGithubTopIntroRankRulesBlock(context) : '';
 
     return [
@@ -265,6 +352,8 @@ export async function buildBeatHtmlPrompt(
         `BEAT_DURATION_SEC=${formatDurationSec(durationSec)}`,
         `BEAT_ID=${beat.id}`,
         `CLIP_TOTAL_SEC=${clipTotal}`,
+        'COMPOSER=universal-composer',
+        `VISUAL_STYLE=${visualStyle}`,
         '',
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
@@ -272,6 +361,7 @@ export async function buildBeatHtmlPrompt(
         buildHtmlChatbotNoLegacyBorrowRulesBlock(),
         buildHtmlChatbotSingleHtmlFileRulesBlock(beat.id),
         buildHtmlChatbotJsContractBlock(durationSec),
+        buildCreativeTruthContractBlock(),
         '## BẮT BUỘC',
         `- Đây là **một beat** trong clip dài ${clipTotal}s — DURATION = **${formatDurationSec(durationSec)}** giây.`,
         `- \`data-duration="${formatDurationSec(durationSec)}"\` và \`const DURATION = ${formatDurationSec(durationSec)}\` — không đổi.`,
@@ -279,16 +369,15 @@ export async function buildBeatHtmlPrompt(
         '',
         '## Phong cách visual',
         template,
+        buildStyleCompatibilityBlock(visualStyle),
         '',
         '---',
         '',
         `# Beat ${beat.id} — short video ID ${context.short_video_id ?? '?'}`,
         `Vị trí trong clip: ${formatDurationSec(beat.startSec)}s → ${formatDurationSec(beat.endSec)}s`,
         `phrase_anchor (metadata — KHÔNG render text này lên màn hình): ${beat.phrase_anchor}`,
+        `visual_description (creative source of truth): ${visualDescription}`,
         githubRole?.role ? `beat_role: ${githubRole.role}` : '',
-        beat.image_url && !isGithubIntro && githubRole?.role !== 'outro'
-            ? `image_url: ${beat.image_url}`
-            : 'image_url: —',
         '',
         '## Whisper trong beat — CHỈ pacing, CẤM karaoke',
         'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',

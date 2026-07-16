@@ -1,4 +1,3 @@
-import { isHfPromptTypeKey, type HfPromptTypeKey } from './agentVideoHfPromptCatalog';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 
 export type BeatMapSection = {
@@ -8,12 +7,11 @@ export type BeatMapSection = {
     endSec: number;
     durationSec: number;
     phrase_anchor: string;
-    hf_prompt_type: HfPromptTypeKey | string;
-    image_url?: string;
-    source?: string;
+    visual_description: string;
 };
 
 export type BeatMap = {
+    schema_version: 2;
     totalVideoSec: number;
     source?: string;
     updated_at?: string;
@@ -107,6 +105,19 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(num) ? num : null;
 }
 
+export function validateBeatVisualDescription(value: unknown): string | null {
+    const description = String(value ?? '').trim();
+    const wordCount = description.split(/\s+/).filter(Boolean).length;
+    if (!description || wordCount < 8 || wordCount > 80 || description.length > 600) {
+        return null;
+    }
+    // Visual descriptions are an English machine contract. Catalog IDs may contain "-" and "_".
+    if (!/[A-Za-z]/.test(description) || /[À-ỹ]/.test(description)) {
+        return null;
+    }
+    return description;
+}
+
 export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: string[] } {
     const errors: string[] = [];
     const raw = stripJsonFences(text);
@@ -126,6 +137,12 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
     }
 
     const obj = parsed as Record<string, unknown>;
+    if (Number(obj.schema_version) !== 2) {
+        return {
+            map: null,
+            errors: ['BeatMap schema v1 không còn được hỗ trợ — hãy chạy Chia beat lại để tạo schema_version=2'],
+        };
+    }
     const totalVideoSec = asNumber(obj.totalVideoSec);
     if (totalVideoSec == null || totalVideoSec <= 0) {
         errors.push('Thiếu totalVideoSec hợp lệ');
@@ -144,6 +161,21 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             return;
         }
         const row = item as Record<string, unknown>;
+        const allowedFields = new Set([
+            'id',
+            'beat_id',
+            'startSec',
+            'endSec',
+            'durationSec',
+            'phrase_anchor',
+            'visual_description',
+        ]);
+        const unexpectedFields = Object.keys(row).filter((key) => !allowedFields.has(key));
+        if (unexpectedFields.length > 0) {
+            errors.push(
+                `Section #${index + 1}: field không thuộc schema v2: ${unexpectedFields.join(', ')}`,
+            );
+        }
         const id = String(row.id ?? row.beat_id ?? '').trim();
         const startSec = asNumber(row.startSec);
         const endSec = asNumber(row.endSec);
@@ -151,8 +183,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             startSec != null && endSec != null ? endSec - startSec : null
         );
         const phraseAnchor = String(row.phrase_anchor ?? '').trim();
-        const hfPromptType = String(row.hf_prompt_type ?? '').trim();
-        const imageUrl = String(row.image_url ?? '').trim();
+        const visualDescription = validateBeatVisualDescription(row.visual_description);
 
         if (!/^beat_\d+$/.test(id)) {
             errors.push(`${id || `Section #${index + 1}`}: id phải dạng beat_N`);
@@ -166,8 +197,8 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
         if (!phraseAnchor) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu phrase_anchor`);
         }
-        if (!hfPromptType || !isHfPromptTypeKey(hfPromptType)) {
-            errors.push(`${id || `Section #${index + 1}`}: hf_prompt_type không hợp lệ`);
+        if (!visualDescription) {
+            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh, dài 8–80 từ`);
         }
 
         sections.push({
@@ -177,9 +208,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             endSec: endSec ?? 0,
             durationSec: durationSec ?? 0,
             phrase_anchor: phraseAnchor,
-            hf_prompt_type: hfPromptType,
-            image_url: imageUrl || undefined,
-            source: String(row.source ?? '').trim() || undefined,
+            visual_description: visualDescription ?? '',
         });
     });
 
@@ -189,6 +218,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
 
     return {
         map: {
+            schema_version: 2,
             totalVideoSec: totalVideoSec ?? 0,
             source: String(obj.source ?? 'chatbot').trim() || 'chatbot',
             updated_at: String(obj.updated_at ?? '').trim() || undefined,
@@ -207,6 +237,9 @@ export function validateBeatMap(
     const audioDur = Number(audioDurationSec) || 0;
     void options?.relaxDurationBounds;
 
+    if (map.schema_version !== 2) {
+        errors.push('BeatMap schema v1 không còn được hỗ trợ — hãy chạy Chia beat lại');
+    }
     if (!map.sections.length) {
         return { valid: false, errors: ['sections rỗng'] };
     }
@@ -226,6 +259,9 @@ export function validateBeatMap(
         }
         if (section.durationSec <= 0) {
             errors.push(`${label}: durationSec phải > 0`);
+        }
+        if (!validateBeatVisualDescription(section.visual_description)) {
+            errors.push(`${label}: visual_description phải là tiếng Anh, dài 8–80 từ`);
         }
         // 5–20s: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;
@@ -316,24 +352,4 @@ export function listBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): st
 
 export function countBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): number {
     return listBeatIdsWithHtml(beatHtml).length;
-}
-
-/** Gán hf_prompt_type cho mọi beat chưa có HTML (trước khi agent tự sinh). */
-export function applyHfPromptTypeToMissingBeats(
-    map: BeatMap,
-    beatHtml: Record<string, BeatHtmlEntry>,
-    hfPromptType: HfPromptTypeKey | string,
-): BeatMap {
-    const type = String(hfPromptType || '').trim();
-    if (!type) {
-        return map;
-    }
-    return {
-        ...map,
-        sections: map.sections.map((section) => (
-            isBeatHtmlMissing(beatHtml, section.id)
-                ? { ...section, hf_prompt_type: type }
-                : section
-        )),
-    };
 }

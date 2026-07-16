@@ -152,7 +152,9 @@ export function buildBeatElementTiming(shotPlan, beatMap, captionWords) {
 
     const timing = {
       beat_id: beatId,
-      hf_prompt_type: shot.hf_prompt_type ?? null,
+      visual_description: String(
+        section.visual_description ?? shot.visual_description ?? "",
+      ).trim(),
       startSec: +startSec.toFixed(3),
       durationSec: +durationSec.toFixed(3),
       phrase_anchor: phrase,

@@ -24,11 +24,16 @@ type Props = {
     beatId: string;
     beatIndex?: number | null;
     durationSec?: number | null;
+    initialVisualDescription: string;
     initialHtml: string;
     initialCreativePrompt?: string;
     saving?: boolean;
     refining?: boolean;
-    onSave: (payload: { html: string; creativePrompt: string }) => Promise<boolean>;
+    onSave: (payload: {
+        html: string;
+        creativePrompt: string;
+        visualDescription: string;
+    }) => Promise<boolean>;
     onAiRefine: (payload: { prompt: string; html: string }) => Promise<string | null>;
 };
 
@@ -38,6 +43,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     beatId,
     beatIndex = null,
     durationSec = null,
+    initialVisualDescription,
     initialHtml,
     initialCreativePrompt = '',
     saving = false,
@@ -48,6 +54,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     const { showMessage } = useFloatingMessages();
     const [draftHtml, setDraftHtml] = React.useState(initialHtml);
     const [creativePrompt, setCreativePrompt] = React.useState(initialCreativePrompt);
+    const [visualDescription, setVisualDescription] = React.useState(initialVisualDescription);
     const [aiLoading, setAiLoading] = React.useState(false);
     const syncedOpenKeyRef = React.useRef('');
 
@@ -64,15 +71,17 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
         syncedOpenKeyRef.current = openKey;
         setDraftHtml(initialHtml);
         setCreativePrompt(initialCreativePrompt);
+        setVisualDescription(initialVisualDescription);
         setAiLoading(false);
-    }, [beatId, initialCreativePrompt, initialHtml, open]);
+    }, [beatId, initialCreativePrompt, initialHtml, initialVisualDescription, open]);
 
     const titleLabel = beatIndex != null && beatIndex > 0
         ? `Sửa HTML · beat ${beatIndex}`
         : `Sửa HTML · ${beatId || 'beat'}`;
 
     const dirty = draftHtml !== initialHtml
-        || creativePrompt !== initialCreativePrompt;
+        || creativePrompt !== initialCreativePrompt
+        || visualDescription !== initialVisualDescription;
     const busy = saving || refining || aiLoading;
     const canSave = dirty && !busy;
     const canAi = Boolean(creativePrompt.trim()) && Boolean(draftHtml.trim()) && !busy;
@@ -84,6 +93,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
         const saved = await onSave({
             html: draftHtml,
             creativePrompt,
+            visualDescription,
         });
         if (saved) {
             onClose();
@@ -157,6 +167,19 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                 <Alert severity="info" sx={{ py: 0.5, flexShrink: 0 }}>
                     Nhập prompt sáng tạo → AI refine (Gemini Headless) đổ vào draft. Bấm Lưu mới ghi HTML lên CMS.
                 </Alert>
+
+                <TextField
+                    label="Visual description"
+                    value={visualDescription}
+                    onChange={(event) => setVisualDescription(event.target.value)}
+                    fullWidth
+                    size="small"
+                    multiline
+                    minRows={2}
+                    maxRows={5}
+                    helperText="Bắt buộc viết tiếng Anh, 8–80 từ; mô tả nội dung, bố cục và chuyển động của beat"
+                    disabled={busy}
+                />
 
                 <TextField
                     label="Prompt sáng tạo / refine"

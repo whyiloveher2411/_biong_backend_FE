@@ -5,6 +5,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ComputerIcon from '@mui/icons-material/Computer';
 import CodeIcon from '@mui/icons-material/Code';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
@@ -44,6 +45,7 @@ type Props = {
     onCopyPrompt?: (beatId: string) => void;
     onPasteHtml?: (beatId: string) => void;
     onEditHtml?: (beatId: string) => void;
+    onOpenInfo?: (beatId: string) => void;
     onDeleteBeatData?: (beatId: string) => void;
     onOpenGemini?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
@@ -70,6 +72,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     onCopyPrompt,
     onPasteHtml,
     onEditHtml,
+    onOpenInfo,
     onDeleteBeatData,
     onOpenGemini,
     onOpenGeminiHeadless,
@@ -296,6 +299,39 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         ) : (
                                             <MoreVertIcon sx={{ fontSize: 16 }} />
                                         )}
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Thông tin beat" placement="right">
+                                    <IconButton
+                                        size="small"
+                                        aria-label={`Thông tin ${segment.beatId}`}
+                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                            event.stopPropagation();
+                                            onBeatClick?.(segment.beatId);
+                                            onOpenInfo?.(segment.beatId);
+                                        }}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 25,
+                                            right: 1,
+                                            width: 22,
+                                            height: 22,
+                                            p: 0,
+                                            color: 'common.white',
+                                            bgcolor: 'rgba(0,0,0,0.22)',
+                                            border: '1px solid rgba(255,255,255,0.16)',
+                                            borderRadius: 0.75,
+                                            '&:hover': {
+                                                bgcolor: 'rgba(0,0,0,0.46)',
+                                                borderColor: 'rgba(255,255,255,0.38)',
+                                            },
+                                            '&:focus-visible': {
+                                                outline: '2px solid rgba(255,255,255,0.95)',
+                                                outlineOffset: -2,
+                                            },
+                                        }}
+                                    >
+                                        <InfoOutlinedIcon sx={{ fontSize: 15 }} />
                                     </IconButton>
                                 </Tooltip>
                             </Box>

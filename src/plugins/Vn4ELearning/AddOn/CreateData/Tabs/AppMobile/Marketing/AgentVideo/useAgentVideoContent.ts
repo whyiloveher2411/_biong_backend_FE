@@ -24,7 +24,7 @@ import {
     regenerateAgentNarrationTts,
     retryAgentNarrationTts,
     saveAdminAudioScript,
-    saveAgentHfTheme,
+    saveAgentVisualStyle,
     saveAgentImportHtml,
     saveAgentOmnivoiceVoice,
     saveAgentSourceContent,
@@ -35,11 +35,14 @@ import {
     searchAgentBgm,
     saveAgentTtsSettings,
     saveAgentAutoFillBeatHtml,
+    saveAgentGeminiOpenBrowser,
+    saveAgentGithubScreenshotHomepage,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
     enqueueGeminiWebAudioScript,
     startFullAutoPipeline,
     cancelFullAutoPipeline,
+    requestAgentHeadlessNewChat,
     FULL_AUTO_PIPELINE_STEP_LABELS,
     savePublishFlags,
     resolveOmnivoiceVoicePreviewUrl,
@@ -52,7 +55,7 @@ import {
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
     type GithubTopEnrichSummary,
-    type HfThemeCatalogItem,
+    type VisualStyleCatalogItem,
     type OmnivoiceVoiceCatalogItem,
     type OmnivoiceVoiceMode,
     type OmnivoiceVoiceDesignTokenGroup,
@@ -89,7 +92,6 @@ import {
 } from './agentVideoDraft';
 import { isCaptionSyncAssembleError } from './agentVideoImportHtmlBlockers';
 import {
-    applyHfPromptTypeToMissingBeats,
     beatMapToJson,
     countMissingBeatHtml,
     listBeatIdsWithHtml,
@@ -108,7 +110,6 @@ import {
     parseImportHtmlContextMessage,
     type ImportHtmlContextPayload,
 } from './agentVideoImportHtmlPrompt';
-import { DEFAULT_HF_PROMPT_TYPE, isHfPromptTypeKey } from './agentVideoHfPromptCatalog';
 import { extractBeatHtmlFromPastedText } from './agentVideoBeatHtmlClipboard';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
@@ -198,6 +199,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentTtsAuto, setAgentTtsAuto] = React.useState(true);
     const [agentAutoFillBeatHtml, setAgentAutoFillBeatHtml] = React.useState(false);
     const [savingAutoFillBeatHtml, setSavingAutoFillBeatHtml] = React.useState(false);
+    const [agentGeminiOpenBrowser, setAgentGeminiOpenBrowser] = React.useState(false);
+    const [savingGeminiOpenBrowser, setSavingGeminiOpenBrowser] = React.useState(false);
+    const [agentGithubScreenshotHomepage, setAgentGithubScreenshotHomepage] = React.useState(false);
+    const [savingGithubScreenshotHomepage, setSavingGithubScreenshotHomepage] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiFillProgress, setGeminiFillProgress] = React.useState<{
         current: number;
@@ -217,6 +222,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [githubTopRepos, setGithubTopRepos] = React.useState<NonNullable<ImportHtmlAssets['github_top_repos']> | null>(null);
     const [startingFullAuto, setStartingFullAuto] = React.useState(false);
     const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
+    const [requestingHeadlessNewChat, setRequestingHeadlessNewChat] = React.useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
     const [ttsPending, setTtsPending] = React.useState(false);
     const [ttsFailed, setTtsFailed] = React.useState(false);
@@ -233,10 +239,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [readyForPhase2, setReadyForPhase2] = React.useState(false);
     const [hasAgentVideo, setHasAgentVideo] = React.useState(false);
     const [agentVideoSummary, setAgentVideoSummary] = React.useState<AgentVideoContentResponse['agent_video_summary']>();
-    const [hfTheme, setHfTheme] = React.useState('auto');
-    const [hfThemeResolved, setHfThemeResolved] = React.useState('');
-    const [hfThemeSource, setHfThemeSource] = React.useState('');
-    const [hfThemeCatalog, setHfThemeCatalog] = React.useState<HfThemeCatalogItem[]>([]);
+    const [visualStyle, setVisualStyle] = React.useState('auto');
+    const [visualStyleResolved, setVisualStyleResolved] = React.useState('');
+    const [visualStyleSource, setVisualStyleSource] = React.useState('');
+    const [visualStyleCatalog, setVisualStyleCatalog] = React.useState<VisualStyleCatalogItem[]>([]);
     const [omnivoiceVoice, setOmnivoiceVoice] = React.useState('minh_quân');
     const [omnivoiceVoiceMode, setOmnivoiceVoiceMode] = React.useState<OmnivoiceVoiceMode>('clone');
     const [omnivoiceVoiceDesign, setOmnivoiceVoiceDesign] = React.useState('male, middle-aged, very low pitch');
@@ -282,7 +288,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         startSec: number;
         nonce: number;
     } | null>(null);
-    const [hfPromptType, setHfPromptType] = React.useState(DEFAULT_HF_PROMPT_TYPE);
     const [whisperStatus, setWhisperStatus] = React.useState('none');
     const [whisperStale, setWhisperStale] = React.useState(false);
     const [importHtmlReady, setImportHtmlReady] = React.useState(false);
@@ -322,7 +327,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const [uploading, setUploading] = React.useState(false);
     const [savingTtsMode, setSavingTtsMode] = React.useState(false);
-    const [savingHfTheme, setSavingHfTheme] = React.useState(false);
+    const [savingVisualStyle, setSavingVisualStyle] = React.useState(false);
     const [savingPublishFlags, setSavingPublishFlags] = React.useState(false);
     const [savingScript, setSavingScript] = React.useState(false);
     const [approvingScript, setApprovingScript] = React.useState(false);
@@ -478,6 +483,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAudioFileUrl(String(res?.audio_file || '').trim());
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
         setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
+        setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
+        setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
@@ -517,10 +524,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setReadyForPhase2(Boolean(res?.agent_workflow?.ready_for_phase_2));
         setHasAgentVideo(Boolean(res?.agent_workflow?.has_agent_video) || String(res?.agent_video_url || '').trim() !== '');
         setAgentVideoSummary(res?.agent_video_summary);
-        setHfTheme(String(res?.hf_theme || 'auto').trim() || 'auto');
-        setHfThemeResolved(String(res?.hf_theme_resolved || '').trim());
-        setHfThemeSource(String(res?.hf_theme_source || '').trim());
-        setHfThemeCatalog(Array.isArray(res?.hf_theme_catalog) ? res.hf_theme_catalog : []);
+        setVisualStyle(String(res?.visual_style || res?.hf_theme || 'auto').trim() || 'auto');
+        setVisualStyleResolved(String(res?.visual_style_resolved || res?.hf_theme_resolved || '').trim());
+        setVisualStyleSource(String(res?.visual_style_source || res?.hf_theme_source || '').trim());
+        setVisualStyleCatalog(
+            Array.isArray(res?.visual_style_catalog)
+                ? res.visual_style_catalog
+                : (Array.isArray(res?.hf_theme_catalog) ? res.hf_theme_catalog : []),
+        );
         setOmnivoiceVoice(String(res?.agent_omnivoice_voice || 'minh_quân').trim() || 'minh_quân');
         setOmnivoiceVoiceMode(res?.agent_omnivoice_voice_mode === 'design' ? 'design' : 'clone');
         setOmnivoiceVoiceDesign(
@@ -593,8 +604,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
         setBeatsHtmlCompleted(Number(importSummary?.beats_html_completed || 0));
         setActiveBeatId((prev) => prev || nextBeatMap?.sections?.[0]?.id || '');
-        const nextPromptType = String(importSummary?.hf_prompt_type || '').trim();
-        setHfPromptType(isHfPromptTypeKey(nextPromptType) ? nextPromptType : DEFAULT_HF_PROMPT_TYPE);
         setWhisperStatus(String(importSummary?.whisper_status || res?.agent_workflow?.whisper_status || 'none'));
         setWhisperStale(Boolean(importSummary?.whisper_stale));
         setWhisperError(String(importSummary?.whisper_error || '').trim());
@@ -1105,9 +1114,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     const applyImportHtmlSummary = React.useCallback((summary: ImportHtmlSummary) => {
-        if (summary.hf_prompt_type && isHfPromptTypeKey(summary.hf_prompt_type)) {
-            setHfPromptType(summary.hf_prompt_type);
-        }
         if (summary.whisper_status) {
             setWhisperStatus(summary.whisper_status);
         }
@@ -1167,7 +1173,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const persistImportHtml = React.useCallback(async (payload: {
         renderMode?: AgentRenderMode;
-        hfPromptType?: string;
         html?: string;
         beatMap?: BeatMap;
         beatId?: string;
@@ -1178,7 +1183,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const res = await saveAgentImportHtml(shortVideoId, {
                 renderMode: payload.renderMode,
-                hfPromptType: payload.hfPromptType,
                 html: payload.html,
                 beatMap: payload.beatMap,
                 beatId: payload.beatId,
@@ -1659,20 +1663,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleLaunchAgentImportHtmlFull = async () => {
         setLaunchingImportHtmlFull(true);
         try {
-            if (beatMap && isHfPromptTypeKey(hfPromptType)) {
-                const updatedMap = applyHfPromptTypeToMissingBeats(beatMap, beatHtml, hfPromptType);
-                const beatMapChanged = updatedMap.sections.some(
-                    (section, index) => section.hf_prompt_type !== beatMap.sections[index]?.hf_prompt_type,
-                );
-                if (beatMapChanged) {
-                    const ok = await persistImportHtml({ beatMap: updatedMap, hfPromptType });
-                    if (!ok) {
-                        return;
-                    }
-                } else {
-                    await persistImportHtml({ hfPromptType });
-                }
-            }
             const result = await launchShortVideoAgentImportHtmlFull(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
             if (result.ok) {
@@ -1702,24 +1692,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             );
             loadRow();
         }
-    };
-
-    const handleHfPromptTypeChange = async (nextType: string) => {
-        if (!isHfPromptTypeKey(nextType)) {
-            return;
-        }
-        setHfPromptType(nextType);
-        if (beatMap) {
-            const updatedMap = applyHfPromptTypeToMissingBeats(beatMap, beatHtml, nextType);
-            const beatMapChanged = updatedMap.sections.some(
-                (section, index) => section.hf_prompt_type !== beatMap.sections[index]?.hf_prompt_type,
-            );
-            if (beatMapChanged) {
-                await persistImportHtml({ beatMap: updatedMap, hfPromptType: nextType });
-                return;
-            }
-        }
-        await persistImportHtml({ hfPromptType: nextType });
     };
 
     const handleBeatMapJsonChange = (value: string) => {
@@ -1766,6 +1738,33 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             void persistImportHtml({ renderMode: 'import_html', beatMap: map });
         }, 1000);
     };
+
+    const handleBeatVisualDescriptionChange = React.useCallback(async (
+        beatId: string,
+        visualDescription: string,
+    ): Promise<boolean> => {
+        if (!beatMap) {
+            return false;
+        }
+        const nextMap: BeatMap = {
+            ...beatMap,
+            sections: beatMap.sections.map((section) => (
+                section.id === beatId
+                    ? { ...section, visual_description: visualDescription.trim() }
+                    : section
+            )),
+        };
+        const parsed = parseBeatMapJson(beatMapToJson(nextMap));
+        if (!parsed.map) {
+            showMessage(parsed.errors.join('; '), 'warning');
+            return false;
+        }
+        const saved = await persistImportHtml({ beatMap: parsed.map });
+        if (saved) {
+            applyBeatMapDraft(parsed.map);
+        }
+        return saved;
+    }, [applyBeatMapDraft, beatMap, persistImportHtml, showMessage]);
 
     const commitBeatHtmlChange = React.useCallback(async (
         beatId: string,
@@ -2344,6 +2343,64 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleGeminiOpenBrowserChange = async (checked: boolean) => {
+        if (savingGeminiOpenBrowser) {
+            return;
+        }
+        setSavingGeminiOpenBrowser(true);
+        try {
+            const res = await saveAgentGeminiOpenBrowser(shortVideoId, checked);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình hiện browser Gemini',
+                    'error',
+                );
+                return;
+            }
+            setAgentGeminiOpenBrowser(checked);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked
+                        ? 'Đã bật hiện browser Gemini cho short video này'
+                        : 'Đã tắt hiện browser Gemini'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingGeminiOpenBrowser(false);
+        }
+    };
+
+    const handleGithubScreenshotHomepageChange = async (checked: boolean) => {
+        if (savingGithubScreenshotHomepage) {
+            return;
+        }
+        setSavingGithubScreenshotHomepage(true);
+        try {
+            const res = await saveAgentGithubScreenshotHomepage(shortVideoId, checked);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình screenshot GitHub',
+                    'error',
+                );
+                return;
+            }
+            setAgentGithubScreenshotHomepage(checked);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked
+                        ? 'Đã bật chụp màn hình trang chủ khi «Lấy thông tin»'
+                        : 'Đã tắt chụp màn hình trang chủ'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingGithubScreenshotHomepage(false);
+        }
+    };
+
     const handleStartFullAutoPipeline = async (
         mode: 'resume' | 'restart' = 'resume',
         fromStep?: string,
@@ -2394,7 +2451,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const res = await cancelFullAutoPipeline(shortVideoId);
             if (!res?.success) {
                 showMessage(
-                    parseApiMessage(res?.message) || 'Không tạm dừng được pipeline',
+                    parseApiMessage(res?.message) || 'Không dừng được pipeline',
                     'error',
                 );
                 return;
@@ -2402,12 +2459,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.full_auto_pipeline) {
                 setFullAutoPipeline(res.full_auto_pipeline);
             }
-            showMessage(parseApiMessage(res?.message) || 'Đã tạm dừng pipeline A→Z', 'success');
+            showMessage(parseApiMessage(res?.message) || 'Đã dừng pipeline A→Z', 'success');
             await loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setCancellingFullAuto(false);
+        }
+    };
+
+    const handleHeadlessNewChat = async (sessionId?: string) => {
+        if (requestingHeadlessNewChat) {
+            return;
+        }
+        setRequestingHeadlessNewChat(true);
+        try {
+            const res = await requestAgentHeadlessNewChat(shortVideoId, sessionId);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không tạo được chat Gemini mới',
+                    'error',
+                );
+                return;
+            }
+            showMessage(
+                parseApiMessage(res?.message) || 'Đã bỏ lần hiện tại và chuyển sang New chat',
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setRequestingHeadlessNewChat(false);
         }
     };
 
@@ -2877,23 +2959,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleHfThemeChange = async (nextTheme: string) => {
-        setSavingHfTheme(true);
+    const handleVisualStyleChange = async (nextStyle: string) => {
+        setSavingVisualStyle(true);
         try {
-            const res = await saveAgentHfTheme(shortVideoId, nextTheme);
+            const res = await saveAgentVisualStyle(shortVideoId, nextStyle);
             if (!res?.success) {
-                showMessage(parseApiMessage(res?.message) || 'Không lưu được theme', 'error');
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được visual style', 'error');
                 return;
             }
-            setHfTheme(String(res?.hf_theme || nextTheme));
-            setHfThemeResolved(String(res?.hf_theme_resolved || '').trim());
-            setHfThemeSource(String(res?.hf_theme_source || '').trim());
-            showMessage(parseApiMessage(res?.message) || 'Đã lưu theme HyperFrames', 'success');
+            setVisualStyle(String(res?.visual_style || res?.hf_theme || nextStyle));
+            setVisualStyleResolved(String(res?.visual_style_resolved || res?.hf_theme_resolved || '').trim());
+            setVisualStyleSource(String(res?.visual_style_source || res?.hf_theme_source || '').trim());
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu visual style', 'success');
             loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
-            setSavingHfTheme(false);
+            setSavingVisualStyle(false);
         }
     };
 
@@ -3215,6 +3297,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         audioDurationSec,
         agentTtsAuto,
         agentAutoFillBeatHtml,
+        savingAutoFillBeatHtml,
+        agentGeminiOpenBrowser,
+        savingGeminiOpenBrowser,
+        agentGithubScreenshotHomepage,
+        savingGithubScreenshotHomepage,
         geminiFillStatus,
         geminiFillProgress,
         geminiDivisionStatus,
@@ -3227,6 +3314,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         githubTopRepos,
         startingFullAuto,
         cancellingFullAuto,
+        requestingHeadlessNewChat,
         selectedPlatforms,
         ttsPending,
         ttsFailed,
@@ -3243,10 +3331,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         readyForPhase2,
         hasAgentVideo,
         agentVideoSummary,
-        hfTheme,
-        hfThemeResolved,
-        hfThemeSource,
-        hfThemeCatalog,
+        visualStyle,
+        visualStyleResolved,
+        visualStyleSource,
+        visualStyleCatalog,
         omnivoiceVoice,
         omnivoiceVoiceMode,
         omnivoiceVoiceDesign,
@@ -3293,7 +3381,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatEditorFocusRequest,
         beatPlaybackSeekRequest,
         focusBeatEditor,
-        hfPromptType,
         whisperStatus,
         whisperStale,
         whisperError,
@@ -3370,8 +3457,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleLaunchImportHtmlRenderAllowMismatch,
         uploading,
         savingTtsMode,
-        savingAutoFillBeatHtml,
-        savingHfTheme,
+        savingVisualStyle,
         savingOmnivoiceVoice,
         savingPublishFlags,
         savingScript,
@@ -3410,10 +3496,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         loadRow,
         handleTtsAutoChange,
         handleAutoFillBeatHtmlChange,
+        handleGeminiOpenBrowserChange,
+        handleGithubScreenshotHomepageChange,
         handleStartFullAutoPipeline,
         handleCancelFullAutoPipeline,
+        handleHeadlessNewChat,
         handleOmnivoiceSpeedChange,
-        handleHfThemeChange,
+        handleVisualStyleChange,
         handleOmnivoiceVoiceChange,
         handleOmnivoiceVoicePreview,
         handleOmnivoiceVoiceDesignPreview,
@@ -3438,8 +3527,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleLaunchAgentImportAssemble,
         handleLaunchAgentImportHtmlFull,
         handleRenderModeChange,
-        handleHfPromptTypeChange,
         handleBeatMapJsonChange,
+        handleBeatVisualDescriptionChange,
         handleBeatHtmlChange,
         commitBeatHtmlChange,
         handleRefineBeatHtmlViaGemini,

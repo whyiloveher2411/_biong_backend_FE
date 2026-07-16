@@ -8,7 +8,7 @@ export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     return [
         '## CẤM — mượn visual beat video cũ',
         '- **TUYỆT ĐỐI KHÔNG** copy HTML/CSS/JS từ beat HTML video khác hoặc `storage/agent-renders/{id_khác}/`.',
-        '- **CẤM** đọc beat project cũ làm mẫu — chỉ dùng prompt server + `hf_prompt_type` + skill contract.',
+        '- **CẤM** đọc beat project cũ làm mẫu — chỉ dùng prompt server + `visual_style` + `visual_description` + skill contract.',
         '- **CẤM** reuse scaffold lặp mọi beat: `#joint-grid`, `.joint`, `#metric-block`, equalizer đỏ.',
         '- **CẤM** script bulk sinh nhiều beat từ một template — mỗi beat thiết kế riêng.',
         '',

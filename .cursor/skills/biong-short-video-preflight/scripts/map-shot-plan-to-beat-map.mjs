@@ -152,15 +152,11 @@ export function buildBeatMapFromShotPlan(shotPlan, captionWords, totalVideoSec) 
     const capIndex = findPhraseStart(captionWords, phraseTokens, searchFrom);
 
     let startSec;
-    let source;
-
     if (capIndex >= 0) {
       startSec = Number(captionWords[capIndex].start);
-      source = "caption-word-match";
       searchFrom = capIndex + 1;
     } else {
       startSec = interpolateStartSec(i, shotPlan.length, totalVideoSec);
-      source = "interpolated";
     }
 
     const nextShot = shotPlan[i + 1];
@@ -189,20 +185,20 @@ export function buildBeatMapFromShotPlan(shotPlan, captionWords, totalVideoSec) 
     sections.push({
       id: shot.beat_id ?? shot.section ?? `beat_${i + 1}`,
       beat_id: shot.beat_id ?? `beat_${i + 1}`,
-      hf_prompt_type: shot.hf_prompt_type ?? null,
-      layout_archetype: shot.layout_archetype ?? null,
-      narrative_role: shot.narrative_role ?? shot.section ?? null,
+      visual_description:
+        String(shot.visual_description ?? "").trim() ||
+        "Build a clear layered composition around the verified beat content, reveal supporting elements in sequence, and resolve into one readable final frame.",
       phrase_anchor: phraseText,
       startSec: +startSec.toFixed(3),
       endSec: +endSec.toFixed(3),
       durationSec: +(endSec - startSec).toFixed(3),
-      source,
     });
   }
 
   normalizeSequentialSections(sections, totalVideoSec);
 
   return {
+    schema_version: 2,
     generatedAt: new Date().toISOString(),
     source: "visual-shot-plan",
     totalVideoSec,

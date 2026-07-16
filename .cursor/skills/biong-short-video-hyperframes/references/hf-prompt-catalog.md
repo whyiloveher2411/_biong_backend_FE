@@ -1,69 +1,23 @@
-# HF Prompt Catalog — 9 type per beat
+# Universal Composer + visual description
 
-Catalog prompt type từ HyperFrames playground. Agent **sinh shot-plan content** trước; `hf_prompt_type` do script `assign-beat-prompt-types.mjs` gán — **không** tự chọn khi render.
+Pipeline schema v2 không chọn prompt type theo beat. Tất cả beat dùng một contract nền:
 
-**Đọc kèm:** [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md) · [visual-shot-plan.md](visual-shot-plan.md)
-
----
-
-## Catalog
-
-| `hf_prompt_type` | File prompt | Gợi ý nội dung (lúc sinh shot-plan) |
-|------------------|-------------|--------------------------------------|
-| `cinematic-title` | `hyperframes/prompts/cinematic-title.md` | Hook, title card, mood editorial |
-| `kinetic-type` | `hyperframes/prompts/kinetic-type.md` | Hook punch, headline lớn, word stagger |
-| `social-reel` | `hyperframes/prompts/social-reel.md` | Hook reel, claim ngắn, safe-area vertical |
-| `data-story` | `hyperframes/prompts/data-story.md` | Số liệu, counter, sparkline, delta |
-| `product-reveal` | `hyperframes/prompts/product-reveal.md` | Sản phẩm, feature, mockup |
-| `lower-third-overlay` | `hyperframes/prompts/lower-third-overlay.md` | Badge nguồn, credit, lower third |
-| `sting-transition` | `hyperframes/prompts/sting-transition.md` | Beat ngắn 5–8s, punch transition |
-| `premium-spot` | `hyperframes/prompts/premium-spot.md` | Climax, brand moment, CTA |
-| `universal-composer` | `hyperframes/prompts/universal-composer.md` | Fallback đa năng |
-
----
-
-## Rule gán random
-
-| Rule | Giá trị |
-|------|---------|
-| Beat 1 pool | `kinetic-type`, `cinematic-title`, `social-reel` (hook whitelist) |
-| Beat 2+ pool | Đủ 9 type |
-| Cấm trùng | 2 beat liên tiếp **không** cùng `hf_prompt_type` |
-| `sting-transition` | Chỉ gán beat có `durationSec ≤ 8` (sau beat-map) |
-
-Script: `node .cursor/skills/biong-short-video-preflight/scripts/assign-beat-prompt-types.mjs <project-dir>`
-
-Output: patch `assets/visual-shot-plan.json` + `assets/prompt-assignment.json`
-
----
-
-## Gợi ý content_intent → type (chỉ khi sinh shot-plan, script vẫn random)
-
-Agent có thể ghi `content_intent` để script ưu tiên nhẹ (không bắt buộc):
-
-| `content_intent` | Type ưu tiên |
-|------------------|--------------|
-| `hook_shock` | kinetic-type, cinematic-title, social-reel |
-| `stat`, `comparison` | data-story |
-| `process` | universal-composer, product-reveal |
-| `cta` | premium-spot, social-reel |
-| `transition` | sting-transition |
-
----
-
-## Đa dạng trong 1 video
-
-- Video ≥60s: khuyến nghị ≥3 `hf_prompt_type` unique (preflight warn nếu <3)
-- Mix type tạo nhịp visual — không cần map semantic 1:1 archetype cũ
-
----
-
-## Attach khi render
-
-Mỗi beat, agent đọc:
-
-```
-@hyperframes/prompts/{hf_prompt_type}.md
+```text
+@hyperframes/prompts/universal-composer.md
 @hf-prompt-beat-contract.md
+visual_style toàn clip
+visual_description của beat
 assets/beat-timing/beat_N.json
 ```
+
+`visual_style` quyết định palette, typography, spacing, texture và motion language chung. `visual_description` chỉ quyết định content, composition, hierarchy và motion progression của beat.
+
+## Contract visual_description
+
+- Bắt buộc tiếng Anh, 8–80 từ.
+- Không tự đặt palette, font, texture hoặc theme.
+- Không thêm fact, số liệu, command hoặc claim ngoài nguồn.
+- Có thể nhắc exact media catalog ID; một ID chỉ thuộc tối đa một beat.
+- Hai beat liền kề không được có description giống nhau.
+
+Script `assign-beat-prompt-types.mjs` giữ tên cũ để tương thích tooling, nhưng nhiệm vụ mới là bảo đảm `visual_description` hợp lệ. Các prompt markdown khác vẫn được giữ làm tài liệu legacy, không nằm trong đường chọn tự động.

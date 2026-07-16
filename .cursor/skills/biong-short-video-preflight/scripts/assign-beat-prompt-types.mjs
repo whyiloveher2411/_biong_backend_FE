@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 /**
- * Gán hf_prompt_type random cho mỗi beat trong visual_shot_plan.
- * - beat_1: pool hook (kinetic-type, cinematic-title, social-reel)
- * - beat_2+: pool đủ 9 type
- * - Cấm 2 beat liên tiếp cùng type
- * - sting-transition: chỉ beat có durationSec ≤ 8 (nếu đã có beat-map)
+ * Bảo đảm mỗi beat trong visual_shot_plan có visual_description tiếng Anh.
+ * Tên file được giữ để không phá các lệnh render/preflight hiện có.
  *
  * Usage: node assign-beat-prompt-types.mjs <project-dir> [--seed <n>]
  */
@@ -13,30 +10,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const SHOT_PLAN_REL = "assets/visual-shot-plan.json";
-const BEAT_MAP_REL = "assets/beat-map.json";
 const ASSIGNMENT_REL = "assets/prompt-assignment.json";
 
-const HOOK_POOL = ["kinetic-type", "cinematic-title", "social-reel"];
-
-const ALL_TYPES = [
-  "cinematic-title",
-  "kinetic-type",
-  "social-reel",
-  "data-story",
-  "product-reveal",
-  "lower-third-overlay",
-  "sting-transition",
-  "premium-spot",
-  "universal-composer",
-];
-
-const INTENT_WEIGHTS = {
-  hook_shock: ["kinetic-type", "cinematic-title", "social-reel"],
-  stat: ["data-story"],
-  comparison: ["data-story", "universal-composer"],
-  process: ["universal-composer", "product-reveal"],
-  cta: ["premium-spot", "social-reel"],
-  transition: ["sting-transition"],
+const DESCRIPTION_BY_INTENT = {
+  hook_shock: "Open with one oversized focal statement, then fracture the surrounding interface into layered signals before resolving into a sharp visual question.",
+  stat: "Build a verified metric card with a restrained count reveal, supporting scale markers, and a final comparison frame that keeps the number dominant.",
+  comparison: "Stage a clear before-and-after split, move the dividing boundary through the frame, and resolve both states into one concise takeaway.",
+  process: "Construct an input-to-output workflow with connected nodes, animate each handoff in sequence, and finish on the resulting system state.",
+  cta: "Gather the established visual elements into one confident closing card, reveal the next action, and hold a clean final frame.",
+  transition: "Transform the current visual motif into the next chapter through a short geometric wipe with continuous deterministic motion.",
 };
 
 function parseArgs(argv) {
@@ -51,17 +33,6 @@ function parseArgs(argv) {
   return out;
 }
 
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s += 0x6d2b79f5;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function loadShotPlan(projectDir) {
   const p = path.join(projectDir, SHOT_PLAN_REL);
   if (!fs.existsSync(p)) {
@@ -73,73 +44,48 @@ function loadShotPlan(projectDir) {
   return { raw, plan, isWrapped: !Array.isArray(raw) };
 }
 
-function loadBeatDurations(projectDir) {
-  const p = path.join(projectDir, BEAT_MAP_REL);
-  if (!fs.existsSync(p)) return new Map();
-  try {
-    const bm = JSON.parse(fs.readFileSync(p, "utf8"));
-    const map = new Map();
-    for (const s of bm.sections ?? []) {
-      const id = s.beat_id ?? s.id;
-      if (id) map.set(id, s.durationSec ?? 0);
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
+function validEnglishDescription(value) {
+  const text = String(value ?? "").trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length >= 8 && words.length <= 80 && !/[À-ỹ]/.test(text);
 }
 
-function pickRandom(pool, rng, exclude) {
-  const filtered = pool.filter((t) => t !== exclude);
-  const choices = filtered.length ? filtered : pool;
-  return choices[Math.floor(rng() * choices.length)];
+function fallbackDescription(shot, index) {
+  const intent = String(shot.content_intent ?? "").trim();
+  if (DESCRIPTION_BY_INTENT[intent]) return DESCRIPTION_BY_INTENT[intent];
+  const layouts = [
+    "Compose a layered editorial card system, reveal the primary idea first, then introduce two supporting elements before settling into a balanced final frame.",
+    "Build a spatial diagram around one central object, animate related signals from the edges, and resolve the relationships with clear hierarchy.",
+    "Use a progressive stack of interface panels, shift focus between them with depth and scale, and end with the strongest result in front.",
+    "Create an abstract problem-to-solution sequence, compress scattered elements into an organized structure, and hold the resolved state for readability.",
+  ];
+  return layouts[index % layouts.length];
 }
 
-function weightedPick(pool, intent, rng, exclude) {
-  const preferred = INTENT_WEIGHTS[intent] ?? [];
-  const weighted = pool.filter((t) => preferred.includes(t) && t !== exclude);
-  if (weighted.length && rng() < 0.6) {
-    return weighted[Math.floor(rng() * weighted.length)];
-  }
-  return pickRandom(pool, rng, exclude);
-}
-
-export function assignPromptTypes(shotPlan, options = {}) {
-  const { durations = new Map(), seed = Date.now() } = options;
-  const rng = mulberry32(seed);
+export function assignVisualDescriptions(shotPlan) {
   const assignments = [];
-  let prevType = null;
 
   for (let i = 0; i < shotPlan.length; i++) {
     const shot = shotPlan[i];
     const beatId = shot.beat_id ?? `beat_${i + 1}`;
-    const isBeat1 = i === 0 || beatId === "beat_1";
-    let pool = isBeat1 ? [...HOOK_POOL] : [...ALL_TYPES];
-
-    const dur = durations.get(beatId) ?? shot.max_duration_sec ?? 20;
-    if (dur > 8) {
-      pool = pool.filter((t) => t !== "sting-transition");
-    }
-
-    const intent = shot.content_intent ?? "";
-    let type = weightedPick(pool, intent, rng, prevType);
-
-    if (type === prevType) {
-      type = pickRandom(pool, rng, prevType);
-    }
-
-    shot.hf_prompt_type = type;
+    const existing = String(shot.visual_description ?? "").trim();
+    const description = validEnglishDescription(existing)
+      ? existing
+      : fallbackDescription(shot, i);
+    delete shot.hf_prompt_type;
+    shot.visual_description = description;
     assignments.push({
       beat_id: beatId,
-      hf_prompt_type: type,
-      pool: isBeat1 ? "hook" : "all",
-      durationSec: dur || null,
+      visual_description: description,
+      source: validEnglishDescription(existing) ? "preserved" : "generated",
     });
-    prevType = type;
   }
 
-  return { shotPlan, assignments, seed };
+  return { shotPlan, assignments };
 }
+
+/** @deprecated Tên export cũ được giữ cho tooling ngoài repo. */
+export const assignPromptTypes = assignVisualDescriptions;
 
 function main() {
   const { projectDir: rawDir, seed: cliSeed } = parseArgs(process.argv);
@@ -157,23 +103,8 @@ function main() {
     process.exit(1);
   }
 
-  const durations = loadBeatDurations(projectDir);
-  const metaPath = path.join(projectDir, "assets/agent-metadata.json");
-  let seed = cliSeed;
-  if (seed == null && fs.existsSync(metaPath)) {
-    try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      seed = Number(meta.short_video_id) || Date.now();
-    } catch {
-      seed = Date.now();
-    }
-  }
-  if (seed == null) seed = Date.now();
-
-  const { shotPlan, assignments } = assignPromptTypes(shotData.plan, {
-    durations,
-    seed,
-  });
+  void cliSeed;
+  const { shotPlan, assignments } = assignVisualDescriptions(shotData.plan);
 
   const outShot = shotData.isWrapped
     ? { ...shotData.raw, visual_shot_plan: shotPlan }
@@ -189,9 +120,8 @@ function main() {
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
-        seed,
-        hook_whitelist: HOOK_POOL,
-        no_consecutive_repeat: true,
+        schema_version: 2,
+        composer: "universal-composer",
         assignments,
       },
       null,
@@ -199,11 +129,11 @@ function main() {
     ),
   );
 
-  console.log(`[assign-prompt-types] ${assignments.length} beats assigned (seed=${seed})`);
+  console.log(`[assign-visual-descriptions] ${assignments.length} beats prepared`);
   for (const a of assignments) {
-    console.log(`  ${a.beat_id}: ${a.hf_prompt_type}`);
+    console.log(`  ${a.beat_id}: ${a.source}`);
   }
-  console.log(`[assign-prompt-types] wrote ${SHOT_PLAN_REL} + ${ASSIGNMENT_REL}`);
+  console.log(`[assign-visual-descriptions] wrote ${SHOT_PLAN_REL} + ${ASSIGNMENT_REL}`);
 }
 
 const isMain =

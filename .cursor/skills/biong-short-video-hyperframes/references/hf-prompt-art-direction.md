@@ -8,8 +8,8 @@ Thay thế `motion-complexity-activation.md` (legacy). Agent đóng vai **Senior
 
 ## Mindset
 
-- Mỗi beat = 1 art direction world từ `hyperframes/prompts/{hf_prompt_type}.md`
-- Text là hero hoặc số liệu là hero — tùy prompt type
+- Toàn clip = 1 art direction từ `visual_style`; mỗi beat có composition riêng từ `visual_description`
+- Text, số liệu, diagram hoặc media là hero theo nội dung description
 - Motion = pure function of `t` (Whisper-synced), không GSAP beat timeline
 - Layout editorial poster — pause bất kỳ frame `t` nào vẫn đọc được
 
@@ -17,7 +17,7 @@ Thay thế `motion-complexity-activation.md` (legacy). Agent đóng vai **Senior
 
 ## Vai trò bắt buộc
 
-1. Đọc prompt type được gán (`hf_prompt_type`) — **không** đổi type khi render
+1. Đọc `visual_style`, `visual_description` và `hyperframes/prompts/universal-composer.md`
 2. Đọc `assets/beat-timing/beat_N.json` — embed `TIMINGS` vào `render()`
 3. Viết beat HTML theo [hf-prompt-beat-contract.md](hf-prompt-beat-contract.md)
 4. Font: **Be Vietnam Pro** — [typography-be-vietnam-pro.md](typography-be-vietnam-pro.md)
@@ -62,7 +62,7 @@ Mỗi beat mở `<style>` với preamble:
 }
 ```
 
-Tint theo `hf_theme` project nếu cần — không phá hierarchy prompt.
+Tint theo `visual_style` project — description không được override palette/font/theme.
 
 ---
 
@@ -76,9 +76,9 @@ Mỗi beat `render()` phải drive **≥3 distinct elements** keyed off `t` (her
 
 ## Phase 2 pipeline (tóm tắt)
 
-1. Transcribe → caption sync → `visual_shot_plan` (content, chưa có type)
-2. `assign-beat-prompt-types.mjs`
+1. Transcribe → caption sync → `visual_shot_plan` (content + visual description)
+2. `assign-beat-prompt-types.mjs` kiểm tra/bổ sung description
 3. `map-shot-plan-to-beat-map.mjs`
 4. `build-beat-element-timing.mjs`
-5. MCP media + ambient + viết `beat_N.html` per prompt
+5. MCP media + ambient + viết `beat_N.html` bằng universal composer + style + description
 6. Preflight → evolution → render

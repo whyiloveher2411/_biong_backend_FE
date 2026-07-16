@@ -10,8 +10,8 @@ rules
 ## HyperFrames agent — media MCP (bắt buộc phase render)
 
 - Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md` + `visual-shot-plan.md`
-- Phase render: `search_bgm` + `search_giphy` + stock **bg only** theo shot-plan; mỗi beat = `hyperframes/prompts/{hf_prompt_type}.md` (hf-seek)
-- `media-plan.md`: sfx_hook + bgm_global + `hf_prompt_type`/accent/bg mỗi beat
+- Phase render: `search_bgm` + `search_giphy` + stock **bg only** theo shot-plan; mọi beat dùng `hyperframes/prompts/universal-composer.md` + `visual_style` toàn clip + `visual_description` riêng (hf-seek)
+- `media-plan.md`: sfx_hook + bgm_global + `visual_description`/accent/bg mỗi beat
 - `/continuous-motion` → ambient-layer + `window.__timelines["ambient"]`
 - Beat HTML: hf-seek `render()` pure function of `t` — đọc `hf-prompt-beat-contract.md`
 - Ambient only: GSAP `paused: true` + `window.__timelines["ambient"]`; cấm `tl.play()`; cấm GSAP beat timeline

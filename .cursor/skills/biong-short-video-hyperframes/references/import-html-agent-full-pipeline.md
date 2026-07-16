@@ -10,7 +10,7 @@
 
 ### Originality (bắt buộc)
 
-Đọc [import-html-beat-originality.md](import-html-beat-originality.md) — **cấm** mượn beat HTML / layout từ `storage/agent-renders/{id_khác}/`. Chỉ dùng prompt MCP + skill + `hf_prompt_type` template. Mỗi beat thiết kế riêng; **cấm** bulk template (`joint-grid`, `metric-block`, script sinh hàng loạt).
+Đọc [import-html-beat-originality.md](import-html-beat-originality.md) — **cấm** mượn beat HTML / layout từ `storage/agent-renders/{id_khác}/`. Chỉ dùng prompt MCP + skill + `visual_style` + `visual_description`. Mỗi beat thiết kế riêng; **cấm** bulk template (`joint-grid`, `metric-block`, script sinh hàng loạt).
 
 ### Nguồn truth
 
@@ -30,7 +30,7 @@
 - `data-duration` và `const DURATION` khớp `durationSec` của beat trong beat-map
 - `render(t)` pure function hf-seek — hoạt động mọi `t` từ 0 đến DURATION
 - **Cấm** karaoke, phụ đề, caption on-screen, text sync voiceover
-- Visual theo `hf_prompt_type` trong prompt server — đọc `hyperframes/prompts/{type}.md` nếu cần
+- Visual theo `visual_description`, tuân `visual_style` toàn clip và contract `hyperframes/prompts/universal-composer.md`
 
 ### Gate phần B
 

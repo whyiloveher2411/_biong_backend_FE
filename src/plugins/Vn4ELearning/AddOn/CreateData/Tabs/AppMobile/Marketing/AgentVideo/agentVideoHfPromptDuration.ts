@@ -10,10 +10,11 @@ export function formatDurationSec(value: number): string {
  * - `[pct_XX]` — mốc thời gian tại XX% tổng thời lượng (vd. [pct_20] = 20%)
  */
 export function applyVideoDurationToHfPromptTemplate(template: string, durationSec: number): string {
-    const totalSec = Math.max(0.1, Number(durationSec) || 0);
-    if (!Number.isFinite(totalSec) || totalSec <= 0) {
+    const rawDuration = Number(durationSec);
+    if (!Number.isFinite(rawDuration) || rawDuration <= 0) {
         throw new Error('Thiếu thời lượng audio hợp lệ để điền vào prompt');
     }
+    const totalSec = Math.max(0.1, rawDuration);
 
     let result = template;
 
@@ -27,8 +28,56 @@ export function applyVideoDurationToHfPromptTemplate(template: string, durationS
     result = result.replace(/\[second_(\d{1,3})\]/g, replacePct);
 
     result = result.replace(/\[second\]/g, formatDurationSec(totalSec));
+    result = result
+        .replace(/\{\{DURATION(?:_SEC)?\}\}/g, formatDurationSec(totalSec))
+        .replace(/\{\{CLIP_DURATION_SEC\}\}/g, formatDurationSec(totalSec))
+        .replace(/\{\{BEAT_DURATION_SEC\}\}/g, formatDurationSec(totalSec))
+        .replace(/\bDURATION\s*=\s*[\d.]+\b/g, `DURATION = ${formatDurationSec(totalSec)}`)
+        .replace(/data-duration=["'][\d.]+["']/g, `data-duration="${formatDurationSec(totalSec)}"`);
+    result = result.replace(
+        /no external fonts, no external images\./g,
+        'no external fonts. External images are allowed only when their exact URLs are supplied in the beat visual library.',
+    );
+    result = result.replace(
+        /\n## Assets & information\n[\s\S]*?(?=\n## What HyperFrames lets you build)/g,
+        '\n',
+    );
+    result = result.replace(
+        /^- \*\*No brand logos:\*\*.*$/gm,
+        '- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.',
+    );
+    const forbiddenBrandTerms: Array<[RegExp, string]> = [
+        [/logo \/ wordmark/g, 'abstract visual motif'],
+        [/logo ident/g, 'abstract motif'],
+        [/wordmark/g, 'visual motif'],
+        [/brand mark/g, 'visual motif'],
+        [/logo flash/g, 'graphic flash'],
+        [/A logo that/g, 'A motif that'],
+    ];
+    forbiddenBrandTerms.forEach(([pattern, replacement]) => {
+        result = result.replace(pattern, replacement);
+    });
+    result = result.replace(
+        /Keep the frame visually alive throughout the full duration\. When the main action pauses, maintain subtle motion through ambient layers, secondary elements, light, texture, depth, or micro-interactions\. Avoid any noticeably frozen moment\./g,
+        'Keep the frame visually alive during active phases. If this style calls for a held resolved frame, keep the primary foreground decisively still and allow at most imperceptible background texture drift; otherwise maintain subtle secondary or ambient motion.',
+    );
+    result = result.replace(
+        /Open with an immediate visual hook, evolve the composition through meaningful motion beats, and resolve into a strong final frame that remains subtly alive\./g,
+        'Open with an immediate visual hook, evolve through meaningful motion beats, and resolve into a strong final frame. Honor any style-specific hold rule for the primary foreground.',
+    );
+    result = result.replace(
+        /^- \*\*No brand logos:\*\*.*$/gm,
+        '- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.',
+    );
+    result = result.replace(
+        /^- \*\*Skip visual motif sections:\*\*.*$/gm,
+        '- **Skip brand-resolve sections:** Ignore craft notes about logos, wordmarks, brand marks, or “follow for more” end cards when building a beat sub-composition.',
+    );
+    // Import HTML đã có contract kỹ thuật/scaffold riêng ở outer prompt.
+    // Chỉ giữ art direction của style để tránh toolkit/output contract trùng và mâu thuẫn.
+    result = result.replace(/\n## What HyperFrames lets you build[\s\S]*$/g, '');
 
-    return result;
+    return result.trim();
 }
 
 export function buildDurationContractBlock(durationSec: number): string {

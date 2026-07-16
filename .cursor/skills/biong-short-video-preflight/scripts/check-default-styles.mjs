@@ -63,7 +63,7 @@ if (!hasBeVietnam) {
 
 for (const { name, content } of beatFiles) {
   if (/hook-title-plate|plate-rust|\.border-3d/i.test(content)) {
-    errors.push(`${name}: cấm legacy hook-title/border-3d — dùng hf_prompt_type`);
+    errors.push(`${name}: cấm legacy hook-title/border-3d — dùng visual_style + visual_description`);
   }
   if (/gsap\.timeline/i.test(content)) {
     errors.push(`${name}: cấm gsap.timeline beat — dùng hf-seek render()`);

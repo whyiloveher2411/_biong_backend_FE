@@ -53,7 +53,7 @@ window.__timelines["${compId}"]=tl;
 }
 
 const shotPlanPayload = {
-  hf_theme: "vignelli",
+  visual_style: "vignelli",
   visual_shot_plan: [
   {
     beat_id: "beat_1",
@@ -161,7 +161,7 @@ fs.rmSync(FIXTURE, { recursive: true, force: true });
 write("assets/visual-shot-plan.json", JSON.stringify(shotPlanPayload, null, 2));
 write(
   "assets/agent-metadata.json",
-  JSON.stringify({ language: "vi", visual_shot_plan: shotPlan, hf_theme: "vignelli" }),
+  JSON.stringify({ language: "vi", visual_shot_plan: shotPlan, visual_style: "vignelli" }),
 );
 write("assets/audio-script.txt", captionWords.map((w) => w.text).join(" "));
 write("assets/caption-words.json", JSON.stringify(captionWords));
@@ -305,7 +305,7 @@ window.__timelines["main"]=tl;
 
 write(
   "media-plan.md",
-  `| beat | layout_archetype | hero_type | registry_block | z_role |
+  `| beat | visual_description | hero_type | registry_block | z_role |
 | beat_1 | kinetic_hook_slam | kinetic_type | caption-kinetic-slam | hero_type |
 | beat_2 | stat_punch_card | registry_block | stat-motion | hero_chart |
 | beat_3 | process_flow | diagram | flowchart | hero_chart |
@@ -355,7 +355,14 @@ fs.copyFileSync(
   path.join(FIXTURE, "assets/images/spacedev-logo.png"),
 );
 
-let r = run("map-shot-plan-to-beat-map.mjs");
+let r = run("assign-beat-prompt-types.mjs", ["--seed", "1"]);
+if (r.code !== 0) {
+  console.error(`FAIL assign-beat-prompt-types.mjs:\n${r.out}`);
+  process.exit(1);
+}
+console.log("OK assign-beat-prompt-types.mjs");
+
+r = run("map-shot-plan-to-beat-map.mjs");
 if (r.code !== 0) {
   console.error(`FAIL map-shot-plan-to-beat-map.mjs:\n${r.out}`);
   process.exit(1);

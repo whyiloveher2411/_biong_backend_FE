@@ -1,5 +1,5 @@
 {
-  "hf_theme": "vignelli",
+  "visual_style": "vignelli",
   "visual_shot_plan": [
     {
       "beat_id": "beat_1",
@@ -22,7 +22,8 @@
           "action": "reveal_sticker"
         }
       ],
-      "z_role": "hero_type"
+      "z_role": "hero_type",
+      "visual_description": "Compose a layered editorial card system, reveal the primary idea first, then introduce two supporting elements before settling into a balanced final frame."
     },
     {
       "beat_id": "beat_2",
@@ -35,7 +36,8 @@
       "visual_story": "Counter punch stat card",
       "hero_mode": "registry_block",
       "registry_block": "stat-motion",
-      "z_role": "hero_chart"
+      "z_role": "hero_chart",
+      "visual_description": "Build a spatial diagram around one central object, animate related signals from the edges, and resolve the relationships with clear hierarchy."
     },
     {
       "beat_id": "beat_3",
@@ -49,7 +51,8 @@
       "visual_story": "Flowchart cascade nodes",
       "hero_mode": "diagram",
       "registry_block": "flowchart",
-      "z_role": "hero_chart"
+      "z_role": "hero_chart",
+      "visual_description": "Use a progressive stack of interface panels, shift focus between them with depth and scale, and end with the strongest result in front."
     },
     {
       "beat_id": "beat_4",
@@ -62,7 +65,8 @@
       "visual_story": "Split bar chart comparison",
       "hero_mode": "registry_block",
       "registry_block": "data-chart",
-      "z_role": "hero_chart"
+      "z_role": "hero_chart",
+      "visual_description": "Create an abstract problem-to-solution sequence, compress scattered elements into an organized structure, and hold the resolved state for readability."
     },
     {
       "beat_id": "beat_5",
@@ -92,7 +96,8 @@
           "action": "reveal_card_2"
         }
       ],
-      "z_role": "support"
+      "z_role": "support",
+      "visual_description": "Compose a layered editorial card system, reveal the primary idea first, then introduce two supporting elements before settling into a balanced final frame."
     },
     {
       "beat_id": "beat_6",
@@ -106,7 +111,8 @@
       "visual_story": "CTA orbit collapse finale",
       "hero_mode": "kinetic_type",
       "registry_block": "caption-kinetic-slam",
-      "z_role": "hero_type"
+      "z_role": "hero_type",
+      "visual_description": "Build a spatial diagram around one central object, animate related signals from the edges, and resolve the relationships with clear hierarchy."
     }
   ]
 }

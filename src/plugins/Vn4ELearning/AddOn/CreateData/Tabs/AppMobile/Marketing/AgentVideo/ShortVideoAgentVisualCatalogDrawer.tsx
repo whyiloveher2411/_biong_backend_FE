@@ -813,16 +813,50 @@ export default function ShortVideoAgentVisualCatalogDrawer({
             ModalProps={{ sx: { zIndex: 1400 } }}
             restDialogContent={{
                 sx: {
-                    height: 'calc(100vh - 64px)',
-                    display: 'flex',
-                    flexDirection: 'column',
+                    height: 'calc(100vh - 136px)',
+                    overflow: 'auto',
                     pt: 2,
                     px: 2,
                     pb: 2,
                 },
             }}
+            action={(
+                <Box
+                    sx={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 1,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    {dirty ? (
+                        <Typography variant="caption" color="warning.main" sx={{ mr: 'auto' }}>
+                            Có thay đổi chưa lưu
+                        </Typography>
+                    ) : (
+                        <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+                            Đã đồng bộ CMS
+                        </Typography>
+                    )}
+                    <LoadingButton
+                        type="button"
+                        variant="outlined"
+                        loading={saving}
+                        disabled={!dirty}
+                        onClick={() => { void onSave(); }}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Lưu
+                    </LoadingButton>
+                    <Button type="button" variant="contained" onClick={onClose} sx={{ textTransform: 'none' }}>
+                        Xong
+                    </Button>
+                </Box>
+            )}
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', minHeight: 0, mt: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
                 {githubImageShots.length > 0 ? (
                     <DrawerSection
                         title="Ảnh GitHub cần chuẩn bị"
@@ -1102,19 +1136,18 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                 <DrawerSection
                     title="Tìm stock Pexels"
                     subtitle="Bổ sung ảnh minh hoạ khi cần"
-                    sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
                 >
-                    <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
                         <TextField
                             size="small"
-                            fullWidth
                             value={query}
                             placeholder="technology abstract..."
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
+                            sx={{ flex: 1, minWidth: 0 }}
                             InputProps={{
                                 endAdornment: (
-                                    <InputAdornment position="end">
+                                    <InputAdornment position="end" sx={{ ml: 0.5 }}>
                                         <PexelsBadge />
                                     </InputAdornment>
                                 ),
@@ -1125,7 +1158,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                             loading={searching}
                             onClick={() => { void runSearch(); }}
                             startIcon={<SearchIcon />}
-                            sx={{ flexShrink: 0, textTransform: 'none' }}
+                            sx={{ flexShrink: 0, textTransform: 'none', whiteSpace: 'nowrap' }}
                         >
                             Tìm
                         </LoadingButton>
@@ -1135,7 +1168,7 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                             {searchError}
                         </Alert>
                     ) : null}
-                    <Box sx={{ flex: 1, minHeight: 120, overflow: 'auto' }}>
+                    <Box sx={{ minHeight: 120 }}>
                         {imageResults.length > 0 ? (
                             <ImageList variant="masonry" cols={2} gap={8}>
                                 {imageResults.map((item, index) => {
@@ -1166,44 +1199,6 @@ export default function ShortVideoAgentVisualCatalogDrawer({
                         )}
                     </Box>
                 </DrawerSection>
-
-                <Box
-                    sx={{
-                        flexShrink: 0,
-                        pt: 1,
-                        borderTop: 1,
-                        borderColor: 'divider',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-end',
-                        gap: 0.75,
-                    }}
-                >
-                    {dirty ? (
-                        <Typography variant="caption" color="warning.main">
-                            Có thay đổi chưa lưu
-                        </Typography>
-                    ) : (
-                        <Typography variant="caption" color="text.secondary">
-                            Đã đồng bộ CMS
-                        </Typography>
-                    )}
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <LoadingButton
-                            type="button"
-                            variant="outlined"
-                            loading={saving}
-                            disabled={!dirty}
-                            onClick={() => { void onSave(); }}
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Lưu
-                        </LoadingButton>
-                        <Button type="button" variant="contained" onClick={onClose} sx={{ textTransform: 'none' }}>
-                            Xong
-                        </Button>
-                    </Box>
-                </Box>
             </Box>
         </DrawerCustom>
     );

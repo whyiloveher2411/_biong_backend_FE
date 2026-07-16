@@ -75,13 +75,13 @@ GSAP bổ sung: `/gsap-core`, `/gsap-timeline`, `/gsap-performance`
 
 ## Init project render
 
-Resolve theme: CMS `hf_theme` → `visual_shot_plan.hf_theme` → `vignelli`. Xem [hyperframes-theme-init.md](hyperframes-theme-init.md).
+Resolve style: CMS `visual_style` → `visual_shot_plan.visual_style` → `vignelli`. Xem [hyperframes-theme-init.md](hyperframes-theme-init.md).
 
 ```bash
-# THEME từ short_video_get_context.hf_theme (không dùng blank production)
+# THEME từ short_video_get_context.visual_style (không dùng blank production)
 npx hyperframes init storage/agent-renders/{id}/my-video \
   --non-interactive --skip-skills \
-  --example={hf_theme} \
+  --example={visual_style} \
   --resolution portrait
 ```
 
