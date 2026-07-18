@@ -21,6 +21,7 @@ import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 import {
+    validateBeatBackground,
     validateBeatVisualDescription,
     type BeatHtmlEntry,
     type BeatMap,
@@ -37,7 +38,7 @@ type Props = {
     audioUrl?: string;
     beatIndex?: number | null;
     saving?: boolean;
-    onSaveVisualDescription: (visualDescription: string) => Promise<boolean>;
+    onSaveVisualDescription: (visualDescription: string, background: string) => Promise<boolean>;
 };
 
 function DetailSection({
@@ -123,6 +124,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
 }: Props) {
     const { showMessage } = useFloatingMessages();
     const [visualDescription, setVisualDescription] = React.useState('');
+    const [background, setBackground] = React.useState('');
     const syncedOpenBeatRef = React.useRef('');
 
     React.useEffect(() => {
@@ -136,18 +138,26 @@ export default function ShortVideoAgentBeatInfoDrawer({
         }
         syncedOpenBeatRef.current = beatId;
         setVisualDescription(String(beat?.visual_description || ''));
-    }, [beat?.id, beat?.visual_description, open]);
+        setBackground(String(beat?.background || ''));
+    }, [beat?.background, beat?.id, beat?.visual_description, open]);
 
     const initialVisualDescription = String(beat?.visual_description || '');
+    const initialBackground = String(beat?.background || '');
     const normalizedVisualDescription = visualDescription.trim();
+    const normalizedBackground = background.trim();
     const wordCount = normalizedVisualDescription
         ? normalizedVisualDescription.split(/\s+/).filter(Boolean).length
+        : 0;
+    const backgroundWordCount = normalizedBackground
+        ? normalizedBackground.split(/\s+/).filter(Boolean).length
         : 0;
     const visualDescriptionValid = Boolean(
         validateBeatVisualDescription(normalizedVisualDescription),
     );
-    const dirty = visualDescription !== initialVisualDescription;
-    const canSave = Boolean(beat) && dirty && visualDescriptionValid && !saving;
+    const backgroundValid = Boolean(validateBeatBackground(normalizedBackground));
+    const dirty = visualDescription !== initialVisualDescription
+        || background !== initialBackground;
+    const canSave = Boolean(beat) && dirty && visualDescriptionValid && backgroundValid && !saving;
 
     const rawJson = React.useMemo(() => JSON.stringify({
         beat_map: beatMap ? {
@@ -172,7 +182,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
         if (!canSave) {
             return;
         }
-        const saved = await onSaveVisualDescription(normalizedVisualDescription);
+        const saved = await onSaveVisualDescription(normalizedVisualDescription, normalizedBackground);
         if (saved) {
             onClose();
         }
@@ -296,35 +306,66 @@ export default function ShortVideoAgentBeatInfoDrawer({
                     </DetailSection>
 
                     <DetailSection eyebrow="Visual direction" title="Định hướng hình ảnh">
-                        <TextField
-                            label="Visual description"
-                            value={visualDescription}
-                            onChange={(event) => setVisualDescription(event.target.value)}
-                            fullWidth
-                            multiline
-                            minRows={5}
-                            maxRows={10}
-                            disabled={saving}
-                            error={dirty && !visualDescriptionValid}
-                            helperText={(
-                                <Box
-                                    component="span"
-                                    sx={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        gap: 1,
-                                    }}
-                                >
-                                    <span>
-                                        {dirty && !visualDescriptionValid
-                                            ? 'Cần viết tiếng Anh, dài 8–80 từ'
-                                            : 'Mô tả nội dung, bố cục, phân cấp và chuyển động bằng tiếng Anh'}
-                                    </span>
-                                    <span>{wordCount}/80 từ</span>
-                                </Box>
-                            )}
-                            inputProps={{ maxLength: 600 }}
-                        />
+                        <Stack spacing={1.5}>
+                            <TextField
+                                label="Visual description"
+                                value={visualDescription}
+                                onChange={(event) => setVisualDescription(event.target.value)}
+                                fullWidth
+                                multiline
+                                minRows={5}
+                                maxRows={12}
+                                disabled={saving}
+                                error={dirty && !visualDescriptionValid}
+                                helperText={(
+                                    <Box
+                                        component="span"
+                                        sx={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            gap: 1,
+                                        }}
+                                    >
+                                        <span>
+                                            {dirty && !visualDescriptionValid
+                                                ? 'Cần viết tiếng Anh, dài 5–150 từ'
+                                                : 'Sáng tạo bold (metaphor/shot language) bằng tiếng Anh; không đổi palette/font hệ thống'}
+                                        </span>
+                                        <span>{wordCount}/150 từ</span>
+                                    </Box>
+                                )}
+                                inputProps={{ maxLength: 1200 }}
+                            />
+                            <TextField
+                                label="Background"
+                                value={background}
+                                onChange={(event) => setBackground(event.target.value)}
+                                fullWidth
+                                multiline
+                                minRows={2}
+                                maxRows={5}
+                                disabled={saving}
+                                error={dirty && !backgroundValid}
+                                helperText={(
+                                    <Box
+                                        component="span"
+                                        sx={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            gap: 1,
+                                        }}
+                                    >
+                                        <span>
+                                            {dirty && !backgroundValid
+                                                ? 'Cần viết tiếng Anh, dài 3–60 từ'
+                                                : 'Mood + texture + ràng buộc ngắn (vd. no photo plates)'}
+                                        </span>
+                                        <span>{backgroundWordCount}/60 từ</span>
+                                    </Box>
+                                )}
+                                inputProps={{ maxLength: 400 }}
+                            />
+                        </Stack>
                     </DetailSection>
 
                     <DetailSection eyebrow="Live HTML" title="Preview visual">

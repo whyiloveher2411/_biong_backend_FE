@@ -55,7 +55,7 @@ Script **chỉ scaffolding** — giữ nguyên CSS, DOM, `render()`:
 - Thay `addEventListener('hf-seek')` → GSAP `window.__timelines["beat_N"]` gọi `render(t)`
 - Gỡ `prefers-reduced-motion`
 - Fix `img.src` compare → `getAttribute('src')` + preload `IMAGES[]`
-- `:root` → `#root` (token CSS khi từng dùng overlay/host)
+- **Giữ `:root { --token }`** (per-beat: 1 document / beat → không leak). Rewrite cũ `:root`→`#root` **đã bỏ** — phá `body { color: var() }` (chữ inherit thành đen khi render). Compositions đã normalize: reverse an toàn `#root { --* }` (chỉ token) → `:root`
 - `--localize-images`: tải ảnh `https://` về `assets/images/`
 
 **CMS giữ HTML gốc** — normalize chỉ trên disk `compositions/`.

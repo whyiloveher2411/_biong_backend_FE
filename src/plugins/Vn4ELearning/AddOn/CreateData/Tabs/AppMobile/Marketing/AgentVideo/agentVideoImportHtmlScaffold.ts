@@ -108,9 +108,9 @@ body { margin: 0; background: var(--ink); }
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
 }
 .content-area {
-  position: relative; z-index: 1; width: 100%; height: 100%;
-  padding: 80px 48px 360px; box-sizing: border-box;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  position: absolute; z-index: 1;
+  top: 80px; right: 48px; bottom: 360px; left: 48px;
+  box-sizing: border-box;
 }
 </style>
 </head>
@@ -130,21 +130,26 @@ body { margin: 0; background: var(--ink); }
   let t = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-  function progress(t0, t1) {
-    if (t <= t0) return 0;
-    if (t >= t1) return 1;
-    return (t - t0) / (t1 - t0);
+  function progress(time, t0, t1) {
+    if (time <= t0) return 0;
+    if (time >= t1) return 1;
+    return (time - t0) / Math.max(0.0001, t1 - t0);
   }
 
   function render() {
-    const time = clamp(t, 0, DURATION);
-    const p = progress(0, DURATION);
+    const rawTime = Number(t);
+    const time = clamp(Number.isFinite(rawTime) ? rawTime : 0, 0, DURATION);
+    const p = progress(time, 0, DURATION);
     // TODO: cập nhật DOM theo time, p — phải hoạt động 0..DURATION
     void time;
     void p;
   }
 
-  addEventListener('hf-seek', (e) => { t = e.detail.time; render(); });
+  addEventListener('hf-seek', (e) => {
+    const nextTime = Number(e.detail && e.detail.time);
+    t = Number.isFinite(nextTime) ? nextTime : 0;
+    render();
+  });
   render();
 </script>
 </body>
@@ -156,12 +161,13 @@ export function buildBeatScaffoldInstructionsBlock(durationSec: number, beatId: 
     return [
         '## CÁCH LÀM (bắt buộc)',
         `1. Bắt đầu từ scaffold — giữ \`const DURATION = ${total}\` và \`data-duration="${total}"\`.`,
-        '2. Chỉ sửa CSS, DOM trong `.bg-layer`, `.content-area`, và **thân** hàm `render()`.',
-        '3. **Giữ nguyên** `let t = 0`, `addEventListener(\'hf-seek\', ...)`, và `function render()` **không tham số**.',
+        '2. Sửa CSS, DOM trong `.bg-layer` / `.content-area`, thân `render()`, và **được phép** thêm pure helper / easing / DOM cache trong `<script>`.',
+        '3. **Không đổi:** `let t = 0`, tên/signature `function render()` (không tham số), event `hf-seek`, `const DURATION`.',
         `4. Đây là **một beat** (${beatId}) — animation chạy 0 → ${total}s, không rút ngắn.`,
         '5. **Cấm** karaoke, phụ đề, caption, subtitle, text sync whisper/voiceover trong HTML.',
         '6. **Cấm** copy layout từ beat video khác — thiết kế visual mới cho beat này.',
-        '7. Trả về **đúng 1 file HTML** (`<!doctype html>` … `</html>`) — không markdown, không nhiều file, không tách css/js.',
+        '7. Layout trong `.content-area` tự do (không bị ép flex-center) — asymmetric / diagonal OK trong safe zone.',
+        '8. Trả về **đúng 1 file HTML** (`<!doctype html>` … `</html>`) — không markdown, không nhiều file, không tách css/js.',
         '',
         '## Scaffold HTML',
         '```html',

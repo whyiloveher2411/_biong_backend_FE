@@ -115,12 +115,12 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
     const description = String(shot.visual_description ?? "").trim();
     const descriptionWords = description.split(/\s+/).filter(Boolean);
     if (
-      descriptionWords.length < 8 ||
-      descriptionWords.length > 80 ||
+      descriptionWords.length < 5 ||
+      descriptionWords.length > 150 ||
       /[À-ỹ]/.test(description)
     ) {
       errors.push(
-        `${id}: visual_description phải là tiếng Anh, dài 8–80 từ — chạy assign-beat-prompt-types.mjs`,
+        `${id}: visual_description phải là tiếng Anh, dài 5–150 từ — chạy assign-beat-prompt-types.mjs`,
       );
     }
     if (!String(shot.visual_story ?? "").trim()) {

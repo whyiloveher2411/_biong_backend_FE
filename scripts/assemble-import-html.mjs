@@ -505,14 +505,27 @@ async function main() {
       }
     }
 
+    const keepBeatIds = new Set();
     for (const sec of sections) {
       const beatId = sec.id || sec.beat_id;
       const html = beatHtmlById[String(beatId)];
       if (!html) {
         throw new Error(`Thiếu beat_html cho ${beatId}`);
       }
+      keepBeatIds.add(String(beatId));
       fs.writeFileSync(path.join(projectDir, "compositions", `${beatId}.html`), html, "utf8");
       log(`Wrote compositions/${beatId}.html`);
+    }
+
+    // Xóa beat_*.html thừa từ lần render trước (VD: CMS rút 21→16 beat).
+    const compositionsDir = path.join(projectDir, "compositions");
+    for (const name of fs.readdirSync(compositionsDir)) {
+      const m = /^beat_\d+(?:_part\d+)?\.html$/i.exec(name);
+      if (!m) continue;
+      const staleId = name.replace(/\.html$/i, "");
+      if (keepBeatIds.has(staleId)) continue;
+      fs.unlinkSync(path.join(compositionsDir, name));
+      log(`Removed stale compositions/${name}`);
     }
 
     const audioUrl = resolveAudioUrl(ctx);

@@ -1,8 +1,8 @@
 /**
  * Chuẩn hóa beat HTML từ chatbot (preview hf-seek) → format HyperFrames render
  * (<template> + window.__timelines).
- * Không restyle creative; chỉ patch CSS cấu trúc cần cho HyperFrames
- * (font, scoping token `:root` → `#root` khi composite).
+ * Không restyle creative; chỉ patch CSS cấu trúc cần cho HyperFrames (font, …).
+ * Per-beat render: giữ `:root` token — không rewrite sang `#root` (phá body color: var()).
  */
 import fs from "fs";
 import path from "path";
@@ -112,20 +112,66 @@ export function removePrefersReducedMotion(script) {
   return out;
 }
 
+/**
+ * Gỡ addEventListener('hf-seek', …) kể cả callback nhiều dòng / ngoặc lồng.
+ * Regex non-greedy cũ cắt sớm tại `)` của `(e)` → để lại `=> { … });` (SyntaxError).
+ */
 export function stripHfSeekBinding(script) {
-  let out = script;
-  out = out.replace(
-    /\/\/\s*Kết nối.*\n/gi,
-    "",
-  );
-  out = out.replace(
-    /\s*addEventListener\s*\(\s*['"]hf-seek['"][\s\S]*?\)\s*;?\s*/g,
-    "\n",
-  );
-  out = out.replace(
-    /^\s*=>\s*\{\s*t\s*=\s*e\.detail\.time;\s*render\(\);\s*\}\);\s*$/gm,
-    "",
-  );
+  let out = String(script || "");
+  out = out.replace(/\/\/\s*Kết nối.*\n/gi, "");
+
+  const startRe =
+    /\b(?:window\.)?addEventListener\s*\(\s*['"]hf-seek['"]/gi;
+  let guard = 0;
+  while (guard++ < 30) {
+    startRe.lastIndex = 0;
+    const m = startRe.exec(out);
+    if (!m) break;
+    const start = m.index;
+    const openIdx = out.indexOf("(", start);
+    if (openIdx < 0) break;
+
+    let i = openIdx + 1;
+    let depth = 1;
+    let inStr = null;
+    let escaped = false;
+    for (; i < out.length; i++) {
+      const c = out[i];
+      if (inStr) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (c === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (c === inStr) inStr = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === "`") {
+        inStr = c;
+        continue;
+      }
+      if (c === "(") depth += 1;
+      else if (c === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          i += 1;
+          while (i < out.length && /[\t\r\f\v ]/.test(out[i])) i += 1;
+          if (out[i] === ";") i += 1;
+          while (i < out.length && /[\t\r\f\v ]/.test(out[i])) i += 1;
+          if (out[i] === "\n") i += 1;
+          out = `${out.slice(0, start)}\n${out.slice(i)}`;
+          break;
+        }
+      }
+    }
+    if (depth !== 0) break;
+  }
+
+  // Dọn remnant từ strip lỗi cũ: `=> { … });`
+  out = out.replace(/^\s*=>\s*\{[\s\S]*?\}\)\s*;?\s*$/gm, "");
   out = out.replace(/\n\s*render\(\)\s*;\s*$/g, "");
   return out.trimEnd();
 }
@@ -342,40 +388,76 @@ export function patchBeatCssForRender(html) {
 }
 
 /**
- * HyperFrames scopes sub-comp CSS by data-composition-id, nhưng `:root { --token }`
- * vẫn gắn documentElement chung → beat sau ghi đè màu/panel của beat trước.
- * Gắn token lên `#root` (HF special-case) để mỗi beat giữ biến riêng.
+ * True nếu rule body chỉ gồm custom properties `--name: value` (và comment/whitespace).
  */
+function cssRuleBodyIsTokenOnly(body) {
+  const stripped = String(body || "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
+  if (!stripped) return false;
+  const decls = stripped
+    .split(";")
+    .map((d) => d.trim())
+    .filter(Boolean);
+  if (decls.length === 0) return false;
+  return decls.every((d) => /^--[a-zA-Z_][\w-]*\s*:/.test(d));
+}
+
+/**
+ * Per-beat render: mỗi beat một document → `:root { --token }` không leak giữa beat.
+ * Rewrite cũ `:root`→`#root` phá `body { color: var(--x) }` (token không inherit lên body).
+ * Repair compositions đã normalize: rule `#root` chỉ chứa `--*` → đổi lại `:root`.
+ * Không đụng `#root, .scene-root { … }` hay `#root` có layout props.
+ */
+export function reverseTokenOnlyHashRootToRoot(css) {
+  return String(css || "").replace(
+    /(^|[^#\w-])#root\s*\{([^{}]*)\}/gi,
+    (match, prefix, body) => {
+      if (!cssRuleBodyIsTokenOnly(body)) return match;
+      return `${prefix}:root {${body}}`;
+    },
+  );
+}
+
 export function patchCssRootCustomProperties(html) {
   const patches = [];
   let out = String(html || "");
-  if (!/<style[\s>]/i.test(out) || !/:root\b/.test(out)) {
+  if (!/<style[\s>]/i.test(out) || !/#root\s*\{/.test(out)) {
     return { html: out, changed: false, patches };
   }
 
   const before = out;
   out = out.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (full, attrs, css) => {
-    if (!/:root\b/.test(css)) return full;
-    const rewritten = css.replace(/(^|[^#\w-]):root\b/g, "$1#root");
-    return `<style${attrs}>${rewritten}</style>`;
+    if (!/#root\s*\{/.test(css)) return full;
+    const repaired = reverseTokenOnlyHashRootToRoot(css);
+    if (repaired === css) return full;
+    return `<style${attrs}>${repaired}</style>`;
   });
 
   if (out !== before) {
-    patches.push("css :root → #root (tránh leak biến khi composite)");
+    patches.push("css #root { --* } → :root (per-beat: body color: var() resolve được)");
   }
 
   return { html: out, changed: out !== before, patches };
 }
 
-/** True nếu <style> còn :root kèm custom property --* (nguy cơ leak khi composite). */
-export function styleHasRootCustomProperties(html) {
+/**
+ * True nếu còn rule `#root` chỉ chứa custom properties (cần reverse → `:root`).
+ * `:root { --* }` là đúng với pipeline per-beat — không coi là lỗi.
+ */
+export function styleHasTokenOnlyHashRootCustomProperties(html) {
   for (const match of String(html || "").matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
     const css = match[1] || "";
-    if (/:root\b/.test(css) && /--[a-zA-Z_][\w-]*\s*:/.test(css)) {
-      return true;
+    for (const rule of css.matchAll(/(?:^|[^#\w-])#root\s*\{([^{}]*)\}/gi)) {
+      if (cssRuleBodyIsTokenOnly(rule[1])) return true;
     }
   }
   return false;
+}
+
+/** @deprecated Dùng styleHasTokenOnlyHashRootCustomProperties — `:root` không còn là lỗi. */
+export function styleHasRootCustomProperties(html) {
+  return styleHasTokenOnlyHashRootCustomProperties(html);
 }
 
 export function patchBeatDeterminismForRender(html) {
@@ -683,6 +765,16 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
   }
 
   if (isBeatRenderReady(html, beatId)) {
+    // File cũ / normalize dở: còn hf-seek hoặc remnant `=> {` từ strip lỗi.
+    let cleanedReady = false;
+    if (
+      /addEventListener\s*\(\s*['"]hf-seek['"]/i.test(html)
+      || /^\s*=>\s*\{/m.test(html)
+    ) {
+      html = stripHfSeekBinding(html);
+      cleanedReady = true;
+      fontPatches.push("gỡ hf-seek/remnant thừa (đã có __timelines)");
+    }
     const bridgePatch = patchBeatSeekBridge(html, beatId, seekBridge);
     html = bridgePatch.html;
     fontPatches.push(...bridgePatch.patches);
@@ -690,7 +782,8 @@ export function normalizeBeatHtmlForRender(html, beatId, options = {}) {
       || imageSrcPatch.changed
       || rootCssPatch.changed
       || compPatch.changed
-      || bridgePatch.changed;
+      || bridgePatch.changed
+      || cleanedReady;
     return {
       html,
       changed: earlyChanged,
@@ -985,6 +1078,11 @@ export function checkImportHtmlBeatFile(name, content, options = {}) {
       `${name}: còn addEventListener('hf-seek') thuần — HyperFrames render sẽ mất animation`,
     );
   }
+  if (/^\s*=>\s*\{/m.test(content)) {
+    errors.push(
+      `${name}: script hỏng (orphan => {) — strip hf-seek cắt sớm, JS SyntaxError → UI đứng t=0`,
+    );
+  }
   if (/prefers-reduced-motion/i.test(content)) {
     errors.push(`${name}: còn prefers-reduced-motion — headless render tắt animation`);
   }
@@ -1003,9 +1101,9 @@ export function checkImportHtmlBeatFile(name, content, options = {}) {
       `${name}: còn video URL ngoài — chạy normalize-import-html-beat-for-render.mjs --localize-images`,
     );
   }
-  if (styleHasRootCustomProperties(content)) {
+  if (styleHasTokenOnlyHashRootCustomProperties(content)) {
     errors.push(
-      `${name}: còn :root { --* } trong <style> — sẽ leak màu khi composite; chạy normalize-import-html-beat-for-render.mjs`,
+      `${name}: token CSS còn trên #root { --* } (không inherit lên body) — chữ inherit có thể đen khi render; chạy normalize-import-html-beat-for-render.mjs`,
     );
   }
 

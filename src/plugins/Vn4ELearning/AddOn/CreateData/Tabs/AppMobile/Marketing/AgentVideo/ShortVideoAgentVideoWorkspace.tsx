@@ -121,28 +121,32 @@ export default function ShortVideoAgentVideoWorkspace({
 
     const handleSaveBeatInfoVisualDescription = React.useCallback(async (
         visualDescription: string,
+        background: string,
     ) => {
         if (!infoBeatId) {
             return false;
         }
-        return state.handleBeatVisualDescriptionChange(infoBeatId, visualDescription);
+        return state.handleBeatVisualDescriptionChange(infoBeatId, visualDescription, background);
     }, [infoBeatId, state.handleBeatVisualDescriptionChange]);
 
     const handleSaveEditBeatHtml = React.useCallback(async (payload: {
         html: string;
         creativePrompt: string;
         visualDescription: string;
+        background: string;
     }) => {
         if (!editBeatHtmlId) {
             return false;
         }
-        if (
-            payload.visualDescription.trim()
-            !== String(editBeatSection?.visual_description || '').trim()
-        ) {
+        const descriptionChanged = payload.visualDescription.trim()
+            !== String(editBeatSection?.visual_description || '').trim();
+        const backgroundChanged = payload.background.trim()
+            !== String(editBeatSection?.background || '').trim();
+        if (descriptionChanged || backgroundChanged) {
             const descriptionSaved = await state.handleBeatVisualDescriptionChange(
                 editBeatHtmlId,
                 payload.visualDescription,
+                payload.background,
             );
             if (!descriptionSaved) {
                 return false;
@@ -154,6 +158,7 @@ export default function ShortVideoAgentVideoWorkspace({
         });
     }, [
         editBeatHtmlId,
+        editBeatSection?.background,
         editBeatSection?.visual_description,
         state.commitBeatHtmlChange,
         state.handleBeatVisualDescriptionChange,
@@ -382,6 +387,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenAllMissingBeatGemini={() => {
                         state.handleOpenAllMissingBeatGemini();
                     }}
+                    onOpenAllMissingBeatAiStudio={() => {
+                        state.handleOpenAllMissingBeatAiStudio();
+                    }}
                     onFillAllMissingBeatGeminiHeadless={() => {
                         state.handleFillAllMissingBeatGeminiHeadless();
                     }}
@@ -397,6 +405,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     deletingAllBeatHtml={state.deletingAllBeatHtml}
                     missingBeatHtmlCount={state.missingBeatHtmlCount}
                     openingAllMissingBeatGemini={state.openingAllMissingBeatGemini}
+                    openingAllMissingBeatAiStudio={state.openingAllMissingBeatAiStudio}
                     fillingAllMissingBeatGeminiHeadless={state.fillingAllMissingBeatGeminiHeadless}
                     fillingAllMissingBeatGeminiHeadlessProgress={
                         state.fillingAllMissingBeatGeminiHeadlessProgress
@@ -425,6 +434,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 beatIndex={editBeatSegment?.beatIndex ?? null}
                 durationSec={editBeatSection?.durationSec ?? null}
                 initialVisualDescription={String(editBeatSection?.visual_description || '')}
+                initialBackground={String(editBeatSection?.background || '')}
                 initialHtml={String(state.beatHtml[editBeatHtmlId]?.html || '')}
                 initialCreativePrompt={String(state.beatHtml[editBeatHtmlId]?.creative_prompt || '')}
                 saving={state.savingImportHtml}
@@ -448,6 +458,13 @@ export default function ShortVideoAgentVideoWorkspace({
                 shortVideoId={shortVideoId}
                 pipeline={state.fullAutoPipeline}
                 geminiFillProgress={state.geminiFillProgress}
+                agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
+                geminiScriptStatus={state.geminiScriptStatus}
+                geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
+                geminiDivisionStatus={state.geminiDivisionStatus}
+                geminiFillStatus={state.geminiFillStatus}
+                ttsPending={state.ttsPending}
+                selectedTtsPlatforms={state.selectedPlatforms}
                 cancelling={state.cancellingFullAuto}
                 requestingNewChat={state.requestingHeadlessNewChat}
                 onStop={state.handleCancelFullAutoPipeline}

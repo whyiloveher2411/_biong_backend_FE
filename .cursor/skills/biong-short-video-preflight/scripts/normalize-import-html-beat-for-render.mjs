@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Chuẩn hóa beat HTML chatbot → format HyperFrames render.
- * Scaffolding + patch CSS cấu trúc (:root → #root) + seek bridge cho beat split.
+ * Scaffolding + repair token-only #root{--*} → :root + seek bridge cho beat split.
  *
  * Usage:
  *   node normalize-import-html-beat-for-render.mjs <project-dir> [--localize-images] [--force]

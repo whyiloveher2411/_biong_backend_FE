@@ -32,19 +32,13 @@ import {
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
+import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
 type Props = {
     state: AgentVideoState;
 };
-
-const sectionCardSx = {
-    border: '1px solid',
-    borderColor: 'divider',
-    borderRadius: 1,
-    p: 1.5,
-} as const;
 
 function ReadmeMediaThumb({
     mediaType,
@@ -209,28 +203,36 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                 overflow: 'hidden',
             }}
         >
-            <Box sx={{ flex: 1, overflow: 'auto', p: 2, pb: 1 }}>
-                <Stack spacing={2}>
-                    <Box sx={sectionCardSx}>
-                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                            Nguồn chính
-                        </Typography>
-
+            <Box
+                sx={{
+                    flex: 1,
+                    overflow: 'auto',
+                    p: 1.5,
+                    pb: 1,
+                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'background.default' : 'grey.50'),
+                }}
+            >
+                <Stack spacing={1.5}>
+                    <WorkflowSection
+                        title="Nguồn chính"
+                        tone="info"
+                        description={
+                            linked
+                                ? `Đang liên kết marketing post #${state.marketingPostId} — nội dung chỉ đọc.`
+                                : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
+                        }
+                    >
                         {linked ? (
                             <Stack spacing={1}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Đang liên kết marketing post #{state.marketingPostId}
-                                    {' — '}
-                                    nội dung chỉ đọc.
-                                </Typography>
                                 {state.contentPlainText.trim() ? (
                                     <Box
                                         component="pre"
                                         sx={{
                                             m: 0,
                                             p: 1.25,
-                                            bgcolor: 'action.hover',
-                                            borderRadius: 1,
+                                            ...workflowFieldSurfaceSx,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
                                             whiteSpace: 'pre-wrap',
                                             wordBreak: 'break-word',
                                             fontFamily: 'inherit',
@@ -317,10 +319,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         .
                                     </Alert>
                                 ) : null}
-                                <Typography variant="caption" color="text.secondary">
-                                    Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.
-                                </Typography>
-                                <FormControl fullWidth size="small">
+                                <FormControl fullWidth size="small" sx={workflowFieldSurfaceSx}>
                                     <InputLabel id="agent-source-format-label">Loại nội dung nguồn</InputLabel>
                                     <Select
                                         labelId="agent-source-format-label"
@@ -335,22 +334,32 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         ))}
                                     </Select>
                                 </FormControl>
-                                <TextareaForm
-                                    key={contentFieldKey}
-                                    component="textarea"
-                                    name="agent_source_content"
-                                    post={contentPostRef.current}
-                                    config={{
-                                        title: 'Nội dung nguồn',
-                                        rows: 12,
-                                        note: 'Dán hoặc viết nội dung nguồn cho short video',
+                                <Box
+                                    sx={{
+                                        ...workflowFieldSurfaceSx,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        p: 1,
+                                        '& .MuiFormControl-root': { m: 0 },
                                     }}
-                                    onReview={(value) => {
-                                        const nextValue = String(value ?? '');
-                                        contentPostRef.current.agent_source_content = nextValue;
-                                        state.setAgentSourceContent(nextValue);
-                                    }}
-                                />
+                                >
+                                    <TextareaForm
+                                        key={contentFieldKey}
+                                        component="textarea"
+                                        name="agent_source_content"
+                                        post={contentPostRef.current}
+                                        config={{
+                                            title: 'Nội dung nguồn',
+                                            rows: 12,
+                                            note: 'Dán hoặc viết nội dung nguồn cho short video',
+                                        }}
+                                        onReview={(value) => {
+                                            const nextValue = String(value ?? '');
+                                            contentPostRef.current.agent_source_content = nextValue;
+                                            state.setAgentSourceContent(nextValue);
+                                        }}
+                                    />
+                                </Box>
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
                                     <TextField
                                         label="GitHub repo"
@@ -359,6 +368,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         fullWidth
                                         size="small"
                                         placeholder="owner/repo hoặc https://github.com/owner/repo"
+                                        sx={workflowFieldSurfaceSx}
                                     />
                                     <LoadingButton
                                         variant="outlined"
@@ -366,22 +376,24 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         startIcon={<CloudDownloadIcon />}
                                         onClick={() => void state.handleFetchGithubReadme()}
                                         disabled={!state.agentGithubRepo.trim()}
-                                        sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                        sx={{
+                                            whiteSpace: 'nowrap',
+                                            flexShrink: 0,
+                                            bgcolor: 'background.paper',
+                                        }}
                                     >
                                         Lấy thông tin
                                     </LoadingButton>
                                 </Stack>
                             </Stack>
                         )}
-                    </Box>
+                    </WorkflowSection>
 
-                    <Box sx={sectionCardSx}>
-                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
-                            Thông tin thêm
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                            Tuỳ chọn — nếu có, prompt sinh script sẽ bắt buộc đưa vào lời thoại
-                        </Typography>
+                    <WorkflowSection
+                        title="Thông tin thêm"
+                        tone="meta"
+                        description="Tuỳ chọn — nếu có, prompt sinh script sẽ bắt buộc đưa vào lời thoại"
+                    >
                         <TextField
                             multiline
                             minRows={4}
@@ -391,26 +403,16 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             placeholder="42k stars GitHub, 500k downloads, featured Product Hunt..."
                             value={state.agentAdditionalInfo}
                             onChange={(e) => state.setAgentAdditionalInfo(e.target.value)}
+                            sx={workflowFieldSurfaceSx}
                         />
-                    </Box>
+                    </WorkflowSection>
 
                     {!linked ? (
-                        <Box sx={sectionCardSx}>
-                            <Stack
-                                direction="row"
-                                spacing={1}
-                                alignItems="flex-start"
-                                justifyContent="space-between"
-                                sx={{ mb: 1.25 }}
-                            >
-                                <Box sx={{ minWidth: 0, flex: 1 }}>
-                                    <Typography variant="subtitle2" fontWeight={600}>
-                                        Media từ README
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
-                                        Ảnh/GIF/video quét từ repo — import vào tài nguyên video (ưu tiên như user upload).
-                                    </Typography>
-                                </Box>
+                        <WorkflowSection
+                            title="Media từ README"
+                            tone="visual"
+                            description="Ảnh/GIF/video quét từ repo — import vào tài nguyên video (ưu tiên như user upload)."
+                            headerAction={(
                                 <LoadingButton
                                     size="small"
                                     variant="outlined"
@@ -422,11 +424,16 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     }
                                     onClick={() => void state.handleImportAllReadmeMedia()}
                                     startIcon={<CloudDownloadIcon />}
-                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0, mt: 0.15 }}
+                                    sx={{
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0,
+                                        bgcolor: 'background.paper',
+                                    }}
                                 >
                                     Import tất cả
                                 </LoadingButton>
-                            </Stack>
+                            )}
+                        >
 
                             {state.agentSourceFormat === 'github_repo_review' ? (
                                 <Box
@@ -442,9 +449,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         borderColor: state.agentGithubScreenshotHomepage
                                             ? 'primary.light'
                                             : 'divider',
-                                        bgcolor: state.agentGithubScreenshotHomepage
-                                            ? 'action.selected'
-                                            : 'action.hover',
+                                        bgcolor: 'background.paper',
                                         transition: 'border-color 0.15s ease, background-color 0.15s ease',
                                     }}
                                 >
@@ -457,7 +462,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            bgcolor: 'background.paper',
+                                            bgcolor: 'action.hover',
                                             border: '1px solid',
                                             borderColor: 'divider',
                                             color: state.agentGithubScreenshotHomepage
@@ -516,6 +521,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                     borderColor: 'divider',
                                                     borderRadius: 1,
                                                     p: 0.75,
+                                                    bgcolor: 'background.paper',
                                                 }}
                                             >
                                                 <Box
@@ -584,7 +590,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         borderRadius: 1,
                                         border: '1px dashed',
                                         borderColor: 'divider',
-                                        bgcolor: 'action.hover',
+                                        bgcolor: 'background.paper',
                                     }}
                                 >
                                     <CollectionsOutlinedIcon
@@ -618,6 +624,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                     borderColor: 'divider',
                                                     borderRadius: 1,
                                                     p: 1,
+                                                    bgcolor: 'background.paper',
                                                 }}
                                             >
                                                 <ReadmeMediaThumb
@@ -674,17 +681,14 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     })}
                                 </Stack>
                             )}
-                        </Box>
+                        </WorkflowSection>
                     ) : null}
 
-                    <Box sx={sectionCardSx}>
-                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                            Pipeline tự động A→Z
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                            Script → cải thiện (nếu mới sinh) → duyệt/TTS → Whisper → chia beat → fill HTML → BGM → render.
-                            Tiến trình lưu DB, refresh không mất.
-                        </Typography>
+                    <WorkflowSection
+                        title="Pipeline tự động A→Z"
+                        tone="pipeline"
+                        description="Script → cải thiện → chuẩn hóa giọng đọc → duyệt/TTS → Whisper → chia beat → fill HTML → BGM → render. Tiến trình lưu DB, refresh không mất."
+                    >
                         {state.fullAutoPipeline ? (
                             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
                                 <Chip
@@ -705,6 +709,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         size="small"
                                         variant="outlined"
                                         label={`Bước: ${state.fullAutoPipeline.current_step}`}
+                                        sx={{ bgcolor: 'background.paper' }}
                                     />
                                 ) : null}
                             </Stack>
@@ -716,7 +721,19 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 {state.fullAutoPipeline.last_error.message}
                             </Alert>
                         ) : null}
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            flexWrap="wrap"
+                            useFlexGap
+                            sx={{
+                                p: 1.25,
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                bgcolor: 'background.paper',
+                            }}
+                        >
                             <LoadingButton
                                 size="small"
                                 variant="contained"
@@ -800,6 +817,30 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 </LoadingButton>
                             ) : null}
                             <FormControlLabel
+                                sx={{ ml: 0.5, mr: 0, width: '100%' }}
+                                control={(
+                                    <Switch
+                                        size="small"
+                                        checked={state.agentIntroduceApp}
+                                        disabled={state.savingIntroduceApp}
+                                        onChange={(e) => {
+                                            void state.handleIntroduceAppChange(e.target.checked);
+                                        }}
+                                        inputProps={{ 'aria-label': 'Giới thiệu app trong video' }}
+                                    />
+                                )}
+                                label={(
+                                    <Box>
+                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                            Giới thiệu app trong video
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                            Bật: CTA cuối mời mở/tải app. Tắt: không nhắc app, chỉ CTA engagement.
+                                        </Typography>
+                                    </Box>
+                                )}
+                            />
+                            <FormControlLabel
                                 sx={{ ml: 0.5, mr: 0 }}
                                 control={(
                                     <Switch
@@ -819,7 +860,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 )}
                             />
                         </Stack>
-                    </Box>
+                    </WorkflowSection>
                 </Stack>
             </Box>
 

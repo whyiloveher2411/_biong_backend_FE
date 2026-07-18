@@ -4,7 +4,6 @@ import {
     Box,
     Chip,
     CircularProgress,
-    Divider,
     FormControl,
     FormControlLabel,
     InputLabel,
@@ -15,11 +14,9 @@ import {
     Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ErrorIcon from '@mui/icons-material/Error';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -29,6 +26,8 @@ import {
 import { formatTtsChain, phaseLabel, platformLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
+import ShortVideoAgentPromptLibrary from './ShortVideoAgentPromptLibrary';
+import { WorkflowSection } from './workflowPanelSection';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -237,6 +236,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 marketingPostId: state.marketingPostId,
                 sourceContent: state.contentPlainText || state.savedAgentSourceContent,
                 additionalInfo: state.savedAgentAdditionalInfo,
+                introduceApp: state.agentIntroduceApp,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -247,16 +247,22 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         ? formatTtsChain(state.ttsChain)
         : state.chainLabel;
 
+    const showPipeline = Boolean(
+        state.fullAutoPipeline
+        && (state.fullAutoPipeline.enabled || state.fullAutoPipeline.status !== 'idle'),
+    );
+
     return (
         <Box
             sx={{
                 height: '100%',
                 overflow: 'auto',
-                p: 2,
+                p: 1.5,
+                bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'background.default' : 'grey.50'),
             }}
         >
-            <Stack spacing={2}>
-                <Typography variant="subtitle2" fontWeight={600}>
+            <Stack spacing={1.5}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ px: 0.25 }}>
                     Workflow HyperFrames
                 </Typography>
 
@@ -266,10 +272,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </Alert>
                 ) : null}
 
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Thông tin chung
-                    </Typography>
+                <WorkflowSection title="Thông tin chung" tone="info">
                     <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                     <MetaRow
                         label="Workflow mode"
@@ -315,96 +318,83 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         label="Rendered at"
                         value={state.agentVideoRenderedAt || '—'}
                     />
-                </Box>
+                </WorkflowSection>
 
-                {state.fullAutoPipeline && (state.fullAutoPipeline.enabled || state.fullAutoPipeline.status !== 'idle') ? (
-                    <>
-                        <Divider />
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Pipeline A→Z
-                            </Typography>
-                            <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
-                            <MetaRow
-                                label="Bước hiện tại"
-                                status={
-                                    state.fullAutoPipeline.current_step
-                                        ? pipelineStepLabel(state.fullAutoPipeline.current_step)
-                                        : '—'
-                                }
-                                statusTone={
-                                    state.fullAutoPipeline.status === 'running'
-                                        ? 'info'
-                                        : state.fullAutoPipeline.status === 'failed'
-                                            ? 'error'
-                                            : state.fullAutoPipeline.status === 'completed'
-                                                ? 'success'
-                                                : 'default'
-                                }
-                            />
-                            {FULL_AUTO_PIPELINE_STEP_ORDER.map((step) => {
-                                const info = state.fullAutoPipeline?.steps?.[step];
-                                return (
+                {showPipeline && state.fullAutoPipeline ? (
+                    <WorkflowSection title="Pipeline A→Z" tone="pipeline">
+                        <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
+                        <MetaRow
+                            label="Bước hiện tại"
+                            status={
+                                state.fullAutoPipeline.current_step
+                                    ? pipelineStepLabel(state.fullAutoPipeline.current_step)
+                                    : '—'
+                            }
+                            statusTone={
+                                state.fullAutoPipeline.status === 'running'
+                                    ? 'info'
+                                    : state.fullAutoPipeline.status === 'failed'
+                                        ? 'error'
+                                        : state.fullAutoPipeline.status === 'completed'
+                                            ? 'success'
+                                            : 'default'
+                            }
+                        />
+                        {FULL_AUTO_PIPELINE_STEP_ORDER.map((step) => {
+                            const info = state.fullAutoPipeline?.steps?.[step];
+                            return (
+                                <MetaRow
+                                    key={step}
+                                    label={pipelineStepLabel(step)}
+                                    status={String(info?.status || 'pending')}
+                                />
+                            );
+                        })}
+                        {state.fullAutoPipeline.steps
+                            ? Object.entries(state.fullAutoPipeline.steps)
+                                .filter(([step]) => !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step))
+                                .map(([step, info]) => (
                                     <MetaRow
                                         key={step}
                                         label={pipelineStepLabel(step)}
                                         status={String(info?.status || 'pending')}
                                     />
-                                );
-                            })}
-                            {state.fullAutoPipeline.steps
-                                ? Object.entries(state.fullAutoPipeline.steps)
-                                    .filter(([step]) => !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step))
-                                    .map(([step, info]) => (
-                                        <MetaRow
-                                            key={step}
-                                            label={pipelineStepLabel(step)}
-                                            status={String(info?.status || 'pending')}
-                                        />
-                                    ))
-                                : null}
-                            {state.fullAutoPipeline.last_error?.message ? (
-                                <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
-                                    {state.fullAutoPipeline.last_error.message}
-                                </Alert>
-                            ) : null}
-                        </Box>
-                    </>
+                                ))
+                            : null}
+                        {state.fullAutoPipeline.last_error?.message ? (
+                            <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
+                                {state.fullAutoPipeline.last_error.message}
+                            </Alert>
+                        ) : null}
+                    </WorkflowSection>
                 ) : null}
+
+                <WorkflowSection title="Danh sách Prompt" tone="prompt">
+                    <ShortVideoAgentPromptLibrary state={state} />
+                </WorkflowSection>
 
                 {state.agentVideoSummary ? (
-                    <>
-                        <Divider />
-                        <Box>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                Metadata script
-                            </Typography>
-                            <MetaRow
-                                label="Ước tính"
-                                value={
-                                    state.agentVideoSummary.estimated_duration_sec != null
-                                        ? `${state.agentVideoSummary.estimated_duration_sec}s`
-                                        : '—'
-                                }
-                            />
-                            <MetaRow
-                                label="CTA mode"
-                                value={state.agentVideoSummary.cta_mode || '—'}
-                            />
-                            <MetaRow
-                                label="Markers"
-                                value={String(state.agentVideoSummary.marker_count ?? 0)}
-                            />
-                        </Box>
-                    </>
+                    <WorkflowSection title="Metadata script" tone="meta">
+                        <MetaRow
+                            label="Ước tính"
+                            value={
+                                state.agentVideoSummary.estimated_duration_sec != null
+                                    ? `${state.agentVideoSummary.estimated_duration_sec}s`
+                                    : '—'
+                            }
+                        />
+                        <MetaRow
+                            label="CTA mode"
+                            value={state.agentVideoSummary.cta_mode || '—'}
+                        />
+                        <MetaRow
+                            label="Markers"
+                            value={String(state.agentVideoSummary.marker_count ?? 0)}
+                        />
+                    </WorkflowSection>
                 ) : null}
 
-                <Divider />
-
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Phong cách visual
-                    </Typography>
+                <WorkflowSection title="Phong cách visual" tone="visual">
                     <FormControl fullWidth size="small" disabled={state.savingVisualStyle}>
                         <InputLabel id="visual-style-select-label">Phong cách</InputLabel>
                         <Select
@@ -431,119 +421,102 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 : '—'
                         }
                     />
-                </Box>
+                </WorkflowSection>
 
-                <Divider />
+                <WorkflowSection title="Hành động" tone="action">
+                    <Stack spacing={1}>
+                        {!state.hasScript && (
+                            <Stack spacing={1}>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    fullWidth
+                                    sx={workflowActionButtonSx}
+                                    loading={
+                                        state.openingCreateScriptGeminiHeadless
+                                        || geminiScriptQueueActive
+                                    }
+                                    disabled={geminiScriptQueueActive}
+                                    onClick={() => {
+                                        void state.handleEnqueueCreateScriptGeminiHeadless();
+                                    }}
+                                >
+                                    {geminiScriptQueueActive ? 'Đang queue…' : 'Queue sinh script'}
+                                </LoadingButton>
+                                <LoadingButton
+                                    size="small"
+                                    variant="contained"
+                                    color="primary"
+                                    fullWidth
+                                    sx={workflowActionButtonSx}
+                                    loading={openingCreateScriptGemini}
+                                    disabled={geminiScriptQueueActive}
+                                    startIcon={<OpenInNewIcon />}
+                                    onClick={() => { void handleOpenCreateScriptGemini(); }}
+                                >
+                                    Mở Gemini sinh script
+                                </LoadingButton>
+                            </Stack>
+                        )}
 
-                <Stack spacing={1}>
-                    <Typography variant="caption" color="text.secondary">
-                        Hành động
-                    </Typography>
+                        {state.hasScript && !state.scriptApproved && (
+                            <Stack spacing={1}>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    fullWidth
+                                    sx={workflowActionButtonSx}
+                                    loading={
+                                        state.openingImproveScriptGeminiHeadless
+                                        || geminiScriptQueueActive
+                                    }
+                                    disabled={geminiScriptQueueActive}
+                                    onClick={() => {
+                                        void state.handleEnqueueImproveScriptGeminiHeadless();
+                                    }}
+                                >
+                                    {geminiScriptQueueActive ? 'Đang queue…' : 'Queue cải thiện'}
+                                </LoadingButton>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    fullWidth
+                                    sx={workflowActionButtonSx}
+                                    loading={openingImproveScriptGemini}
+                                    disabled={geminiScriptQueueActive}
+                                    startIcon={<OpenInNewIcon />}
+                                    onClick={() => { void handleOpenImproveScriptGemini(); }}
+                                >
+                                    Mở Gemini cải thiện script
+                                </LoadingButton>
+                            </Stack>
+                        )}
 
-                    {!state.hasScript && (
-                        <Stack spacing={1}>
-                            <LoadingButton
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={
-                                    state.openingCreateScriptGeminiHeadless
-                                    || geminiScriptQueueActive
-                                }
-                                disabled={geminiScriptQueueActive}
-                                onClick={() => {
-                                    void state.handleEnqueueCreateScriptGeminiHeadless();
-                                }}
-                            >
-                                {geminiScriptQueueActive ? 'Đang queue…' : 'Queue sinh script'}
-                            </LoadingButton>
-                            <LoadingButton
-                                size="small"
-                                variant="contained"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={openingCreateScriptGemini}
-                                disabled={geminiScriptQueueActive}
-                                startIcon={<OpenInNewIcon />}
-                                onClick={() => { void handleOpenCreateScriptGemini(); }}
-                            >
-                                Mở Gemini sinh script
-                            </LoadingButton>
-                        </Stack>
-                    )}
+                        {!state.scriptApproved ? (
+                            <>
+                                <Typography variant="caption" color="text.secondary" sx={{ pt: 0.25 }}>
+                                    Nâng cao — agent local Cursor
+                                </Typography>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    color="inherit"
+                                    fullWidth
+                                    sx={workflowActionButtonSx}
+                                    loading={state.launchingScript}
+                                    disabled={state.hasScript}
+                                    startIcon={<PlayArrowIcon />}
+                                    onClick={() => { void state.handleLaunchAgentScript(); }}
+                                >
+                                    Chạy agent local bước 1
+                                </LoadingButton>
+                            </>
+                        ) : null}
 
-                    {state.hasScript && !state.scriptApproved && (
-                        <Stack spacing={1}>
-                            <LoadingButton
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={
-                                    state.openingImproveScriptGeminiHeadless
-                                    || geminiScriptQueueActive
-                                }
-                                disabled={geminiScriptQueueActive}
-                                onClick={() => {
-                                    void state.handleEnqueueImproveScriptGeminiHeadless();
-                                }}
-                            >
-                                {geminiScriptQueueActive ? 'Đang queue…' : 'Queue cải thiện'}
-                            </LoadingButton>
-                            <LoadingButton
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={openingImproveScriptGemini}
-                                disabled={geminiScriptQueueActive}
-                                startIcon={<OpenInNewIcon />}
-                                onClick={() => { void handleOpenImproveScriptGemini(); }}
-                            >
-                                Mở Gemini cải thiện script
-                            </LoadingButton>
-                        </Stack>
-                    )}
-
-                    {!state.scriptApproved ? (
-                        <>
-                            <Typography variant="caption" color="text.secondary" sx={{ pt: 0.5 }}>
-                                Nâng cao — agent local Cursor
-                            </Typography>
-                            <LoadingButton
-                                size="small"
-                                variant="outlined"
-                                color="inherit"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                loading={state.launchingScript}
-                                disabled={state.hasScript}
-                                startIcon={<PlayArrowIcon />}
-                                onClick={() => { void state.handleLaunchAgentScript(); }}
-                            >
-                                Chạy agent local bước 1
-                            </LoadingButton>
-                            <Button
-                                size="small"
-                                variant="text"
-                                color="inherit"
-                                fullWidth
-                                sx={workflowActionButtonSx}
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyPrompt('1'); }}
-                            >
-                                Copy prompt agent Cursor
-                            </Button>
-                        </>
-                    ) : null}
-
-                    {state.renderMode === 'creative' && state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
-                        <>
+                        {state.renderMode === 'creative' && state.readyForPhase2 && state.scriptApproved && !state.hasAgentVideo && (
                             <LoadingButton
                                 size="small"
                                 variant="contained"
@@ -557,55 +530,39 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             >
                                 Chạy render agent
                             </LoadingButton>
-                            <Button
+                        )}
+
+                        {state.ttsFailed && state.scriptApproved && !state.hasAudio && (
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                fullWidth
+                                sx={workflowActionButtonSx}
+                                loading={state.retryingTts}
+                                onClick={() => { void state.handleRetryTts(); }}
+                            >
+                                Thử lại TTS
+                            </LoadingButton>
+                        )}
+
+                        {state.needsTtsEnqueue && state.scriptApproved && !state.hasAudio && !state.ttsFailed && (
+                            <LoadingButton
                                 size="small"
                                 variant="outlined"
                                 color="primary"
                                 fullWidth
                                 sx={workflowActionButtonSx}
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => { void state.handleCopyPrompt('2'); }}
+                                loading={state.retryingTts}
+                                onClick={() => { void state.handleRetryTts('Đã queue TTS narration'); }}
                             >
-                                Copy prompt bước 2
-                            </Button>
-                        </>
-                    )}
+                                Sinh TTS (queue)
+                            </LoadingButton>
+                        )}
+                    </Stack>
+                </WorkflowSection>
 
-                    {state.ttsFailed && state.scriptApproved && !state.hasAudio && (
-                        <LoadingButton
-                            size="small"
-                            variant="outlined"
-                            color="warning"
-                            fullWidth
-                            sx={workflowActionButtonSx}
-                            loading={state.retryingTts}
-                            onClick={() => { void state.handleRetryTts(); }}
-                        >
-                            Thử lại TTS
-                        </LoadingButton>
-                    )}
-
-                    {state.needsTtsEnqueue && state.scriptApproved && !state.hasAudio && !state.ttsFailed && (
-                        <LoadingButton
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            fullWidth
-                            sx={workflowActionButtonSx}
-                            loading={state.retryingTts}
-                            onClick={() => { void state.handleRetryTts('Đã queue TTS narration'); }}
-                        >
-                            Sinh TTS (queue)
-                        </LoadingButton>
-                    )}
-                </Stack>
-
-                <Divider />
-
-                <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Đăng social
-                    </Typography>
+                <WorkflowSection title="Đăng social" tone="social">
                     <Stack spacing={0.5}>
                         <FormControlLabel
                             control={(
@@ -628,18 +585,17 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             label="Đã post lên social"
                         />
                     </Stack>
-                </Box>
-
-                {state.selectedPlatforms.length > 0 ? (
-                    <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                            Nền tảng đang chọn
-                        </Typography>
-                        <Typography variant="caption">
-                            {state.selectedPlatforms.map(platformLabel).join(', ')}
-                        </Typography>
-                    </Box>
-                ) : null}
+                    {state.selectedPlatforms.length > 0 ? (
+                        <Box sx={{ mt: 1 }}>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                Nền tảng đang chọn
+                            </Typography>
+                            <Typography variant="caption">
+                                {state.selectedPlatforms.map(platformLabel).join(', ')}
+                            </Typography>
+                        </Box>
+                    ) : null}
+                </WorkflowSection>
             </Stack>
         </Box>
     );

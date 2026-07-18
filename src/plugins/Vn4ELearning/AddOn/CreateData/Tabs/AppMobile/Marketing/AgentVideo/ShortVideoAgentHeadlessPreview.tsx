@@ -28,15 +28,34 @@ type Props = {
     geminiFillProgress?: {
         beatId?: string;
     } | null;
+    /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
+    agentGeminiOpenBrowser?: boolean;
+    geminiScriptStatus?: string;
+    geminiScriptPhoneticStatus?: string;
+    geminiDivisionStatus?: string;
+    geminiFillStatus?: string;
+    ttsPending?: boolean;
+    selectedTtsPlatforms?: string[];
     cancelling: boolean;
     requestingNewChat: boolean;
     onStop: () => void | Promise<void>;
     onNewChat: (sessionId?: string) => void | Promise<void>;
 };
 
-const GEMINI_BROWSER_STEPS = new Set<string>([
+/** Bước pipeline có thể mở Puppeteer / publish frame preview. */
+const HEADLESS_BROWSER_PIPELINE_STEPS = new Set<string>([
     'script_create',
     'script_improve',
+    'script_phonetic_normalize',
+    'beat_division',
+    'beat_fill',
+    'approve_tts',
+]);
+
+const GEMINI_NEW_CHAT_STEPS = new Set<string>([
+    'script_create',
+    'script_improve',
+    'script_phonetic_normalize',
     'beat_division',
     'beat_fill',
 ]);
@@ -89,6 +108,29 @@ function stepLabel(step: string): string {
     return step || 'Đang chuẩn bị pipeline';
 }
 
+const PIPELINE_STEP_STATUS_LABEL: Record<string, string> = {
+    done: 'Xong',
+    skipped: 'Bỏ qua',
+    running: 'Đang chạy',
+    failed: 'Lỗi',
+    pending: 'Chưa làm',
+};
+
+function pipelineStepStatusColor(status: string): string {
+    switch (status) {
+        case 'done':
+            return 'success.light';
+        case 'running':
+            return 'info.light';
+        case 'failed':
+            return 'error.light';
+        case 'skipped':
+            return 'rgba(255,255,255,0.45)';
+        default:
+            return 'rgba(255,255,255,0.35)';
+    }
+}
+
 function pipelineProgressLabel(step: string): string {
     const index = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(step as FullAutoPipelineStepKey);
     return index >= 0
@@ -106,16 +148,33 @@ function resultLabel(status: string): string {
     return 'Pipeline đã dừng';
 }
 
+function usesChatgptWebTts(platforms: string[] | undefined): boolean {
+    return Array.isArray(platforms) && platforms.includes('chatgpt_web');
+}
+
+function isActiveJobStatus(status: string): boolean {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'queued' || normalized === 'processing';
+}
+
 export default function ShortVideoAgentHeadlessPreview({
     open,
     shortVideoId,
     pipeline,
     geminiFillProgress,
+    agentGeminiOpenBrowser = false,
+    geminiScriptStatus = 'none',
+    geminiScriptPhoneticStatus = 'none',
+    geminiDivisionStatus = 'none',
+    geminiFillStatus = 'none',
+    ttsPending = false,
+    selectedTtsPlatforms = [],
     cancelling,
     requestingNewChat,
     onStop,
     onNewChat,
 }: Props) {
+    void agentGeminiOpenBrowser; // headed Chrome do backend xử lý; không chặn WS preview
     const [minimized, setMinimized] = React.useState(false);
     const [showResult, setShowResult] = React.useState(false);
     const [panelWidth, setPanelWidth] = React.useState(storedPreviewWidth);
@@ -124,8 +183,34 @@ export default function ShortVideoAgentHeadlessPreview({
     const resizeCleanupRef = React.useRef<(() => void) | null>(null);
     const status = String(pipeline?.status || 'idle').trim().toLowerCase();
     const currentStep = String(pipeline?.current_step || '').trim();
-    const running = open && status === 'running';
-    const browserStep = running && GEMINI_BROWSER_STEPS.has(currentStep);
+    const pipelineRunning = open && status === 'running';
+
+    const chatgptInChain = usesChatgptWebTts(selectedTtsPlatforms);
+    const chatgptTtsActive = chatgptInChain && (
+        ttsPending
+        || (pipelineRunning && currentStep === 'approve_tts')
+    );
+
+    const geminiJobActive = isActiveJobStatus(geminiScriptStatus)
+        || isActiveJobStatus(geminiScriptPhoneticStatus)
+        || isActiveJobStatus(geminiDivisionStatus)
+        || isActiveJobStatus(geminiFillStatus);
+
+    const pipelineHeadlessStep = pipelineRunning
+        && HEADLESS_BROWSER_PIPELINE_STEPS.has(currentStep)
+        && (currentStep !== 'approve_tts' || chatgptInChain);
+
+    // Mọi bước dùng Puppeteer đều bật preview realtime (không phụ thuộc «Hiện browser»).
+    const browserStep = open && (pipelineHeadlessStep || geminiJobActive || chatgptTtsActive);
+
+    const running = pipelineRunning || (open && (geminiJobActive || chatgptTtsActive));
+
+    const showNewChat = browserStep
+        && !chatgptTtsActive
+        && (
+            (pipelineRunning && GEMINI_NEW_CHAT_STEPS.has(currentStep))
+            || geminiJobActive
+        );
 
     React.useEffect(() => {
         if (!open) {
@@ -238,7 +323,13 @@ export default function ShortVideoAgentHeadlessPreview({
         return null;
     }
 
-    const title = running ? stepLabel(currentStep) : resultLabel(status);
+    const title = pipelineRunning
+        ? stepLabel(currentStep)
+        : (isActiveJobStatus(geminiScriptPhoneticStatus)
+            ? stepLabel('script_phonetic_normalize')
+            : (chatgptTtsActive
+                ? 'Duyệt / TTS (ChatGPT)'
+                : (geminiJobActive ? 'Gemini headless' : resultLabel(status))));
     const beatId = String(
         preview.metadata?.beat_id
         || geminiFillProgress?.beatId
@@ -340,7 +431,13 @@ export default function ShortVideoAgentHeadlessPreview({
                         noWrap
                         sx={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 10 }}
                     >
-                        {running ? pipelineProgressLabel(currentStep) : `Short video #${shortVideoId}`}
+                        {pipelineRunning ? pipelineProgressLabel(currentStep) : (
+                            isActiveJobStatus(geminiScriptPhoneticStatus)
+                                ? pipelineProgressLabel('script_phonetic_normalize')
+                                : (chatgptTtsActive
+                                    ? 'ChatGPT Web TTS'
+                                    : `Short video #${shortVideoId}`)
+                        )}
                         {beatId ? ` · ${beatId}` : ''}
                     </Typography>
                 </Box>
@@ -372,7 +469,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         />
                     </Tooltip>
                 ) : null}
-                {browserStep && !minimized ? (
+                {showNewChat && !minimized ? (
                     <LoadingButton
                         size="small"
                         variant="outlined"
@@ -426,6 +523,60 @@ export default function ShortVideoAgentHeadlessPreview({
                 </Tooltip>
             </Box>
 
+            {!minimized && running && pipeline?.steps && pipelineRunning ? (
+                <Box
+                    sx={{
+                        maxHeight: 168,
+                        overflowY: 'auto',
+                        px: 1.5,
+                        py: 1,
+                        borderTop: '1px solid rgba(255,255,255,0.08)',
+                        borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    }}
+                >
+                    {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
+                        const status = String(pipeline.steps?.[stepKey]?.status || 'pending');
+                        const isCurrent = stepKey === currentStep;
+                        return (
+                            <Box
+                                key={stepKey}
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 1,
+                                    py: 0.35,
+                                    opacity: status === 'pending' && !isCurrent ? 0.55 : 1,
+                                }}
+                            >
+                                <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{
+                                        flex: 1,
+                                        fontWeight: isCurrent || status === 'running' ? 700 : 400,
+                                        color: isCurrent ? 'common.white' : 'rgba(255,255,255,0.82)',
+                                    }}
+                                >
+                                    {index + 1}. {stepLabel(stepKey)}
+                                </Typography>
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        flexShrink: 0,
+                                        fontWeight: 600,
+                                        color: pipelineStepStatusColor(status),
+                                        fontSize: 10,
+                                    }}
+                                >
+                                    {PIPELINE_STEP_STATUS_LABEL[status] || status}
+                                </Typography>
+                            </Box>
+                        );
+                    })}
+                </Box>
+            ) : null}
+
             {!minimized ? (
                 <Box
                     sx={{
@@ -442,7 +593,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         <Box
                             component="img"
                             src={preview.frameUrl}
-                            alt="Preview realtime của Gemini headless"
+                            alt="Preview realtime headless browser"
                             sx={{
                                 width: '100%',
                                 height: '100%',
@@ -455,7 +606,7 @@ export default function ShortVideoAgentHeadlessPreview({
                             {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
                             <Typography variant="body2" fontWeight={600}>
                                 {browserStep
-                                    ? 'Đang khởi tạo preview Gemini'
+                                    ? 'Đang khởi tạo preview trực tiếp'
                                     : (running ? title : resultLabel(status))}
                             </Typography>
                             <Typography
@@ -465,7 +616,7 @@ export default function ShortVideoAgentHeadlessPreview({
                                 {browserStep
                                     ? (preview.error || 'Frame sẽ xuất hiện khi browser sẵn sàng')
                                     : (running
-                                        ? 'Bước hiện tại không sử dụng headless browser'
+                                        ? 'Đang chờ bước dùng headless browser'
                                         : 'Preview sẽ tự ẩn sau giây lát')}
                             </Typography>
                         </Box>

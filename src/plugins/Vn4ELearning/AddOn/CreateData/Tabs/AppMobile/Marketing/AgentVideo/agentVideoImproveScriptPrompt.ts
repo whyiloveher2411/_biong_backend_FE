@@ -7,7 +7,39 @@ export type ImproveAudioScriptPromptInput = {
     /** Thông tin thêm admin (số sao, milestone…) — bắt buộc weave khi có. */
     additionalInfo?: string;
     hasMarketingPost?: boolean;
+    /** Bật = CTA tải/mở app; tắt = engagement, cấm nhắc app. Mặc định tắt. */
+    introduceApp?: boolean;
 };
+
+function buildImproveCtaLines(introduceApp: boolean, appName: string): string[] {
+    if (!introduceApp) {
+        return [
+            '## CTA cuối script — engagement (bắt buộc)',
+            '- Đoạn CTA cuối: **1–2 câu** kêu gọi hành động trên nền tảng video (model tự chọn: lưu video, theo dõi kênh, thả tim, bình luận…).',
+            '- **Cấm** mời tải / mở / cài đặt app hoặc ứng dụng.',
+            '- **Cấm** nhắc tên app mobile, App Store, Google Play, URL store, placeholder [LINK].',
+            '',
+        ];
+    }
+
+    if (appName) {
+        return [
+            '## CTA cuối script — kéo user vào app (bắt buộc)',
+            '- Đoạn CTA cuối phải có **đúng 2 câu**:',
+            '  1. **Lợi ích cụ thể** gắn với nội dung bài.',
+            `  2. **Mời mở hoặc tải app** — bắt buộc nhắc đúng tên **${appName}**; cấm hardcode Spacedev, Biong, tên dự án khác.`,
+            '- Cấm URL store, cấm placeholder [LINK].',
+            '',
+        ];
+    }
+
+    return [
+        '## CTA cuối script — kéo user vào app (bắt buộc)',
+        '- Đoạn CTA cuối phải có **đúng 2 câu**: lợi ích cụ thể + mời mở/tải **ứng dụng**.',
+        '- Cấm URL store, cấm placeholder [LINK].',
+        '',
+    ];
+}
 
 export function buildImproveAudioScriptPrompt(
     titleOrInput: string | ImproveAudioScriptPromptInput,
@@ -32,21 +64,11 @@ export function buildImproveAudioScriptPrompt(
     const sourceContent = String(input.sourceContent || '').trim();
     const additionalInfo = String(input.additionalInfo || '').trim();
     const hasMarketingPost = Boolean(input.hasMarketingPost);
-    const appCtaLines = appName
-        ? [
-            '## CTA cuối script — kéo user vào app (bắt buộc)',
-            '- Đoạn CTA cuối phải có **đúng 2 câu**:',
-            '  1. **Lợi ích cụ thể** gắn với nội dung bài.',
-            `  2. **Mời mở hoặc tải app** — bắt buộc nhắc đúng tên **${appName}**; cấm hardcode Spacedev, Biong, tên dự án khác.`,
-            '- Cấm URL store, cấm placeholder [LINK].',
-            '',
-        ]
-        : [
-            '## CTA cuối script — kéo user vào app (bắt buộc)',
-            '- Đoạn CTA cuối phải có **đúng 2 câu**: lợi ích cụ thể + mời mở/tải **ứng dụng**.',
-            '- Cấm URL store, cấm placeholder [LINK].',
-            '',
-        ];
+    const introduceApp = Boolean(input.introduceApp);
+    const appCtaLines = buildImproveCtaLines(introduceApp, appName);
+    const outputCtaHint = introduceApp
+        ? 'CTA cuối đủ 2 câu'
+        : 'CTA cuối engagement (không nhắc app)';
 
     const sourceBlock = !hasMarketingPost && sourceContent
         ? [
@@ -116,5 +138,5 @@ ${script}
 \`\`\`
 
 ## Output
-Chỉ trả về audio script đã viết lại (plain text), **có dòng trống giữa các đoạn**, CTA cuối đủ 2 câu, không giải thích thêm.`;
+Chỉ trả về audio script đã viết lại (plain text), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.`;
 }

@@ -25,6 +25,7 @@ type Props = {
     beatIndex?: number | null;
     durationSec?: number | null;
     initialVisualDescription: string;
+    initialBackground?: string;
     initialHtml: string;
     initialCreativePrompt?: string;
     saving?: boolean;
@@ -33,6 +34,7 @@ type Props = {
         html: string;
         creativePrompt: string;
         visualDescription: string;
+        background: string;
     }) => Promise<boolean>;
     onAiRefine: (payload: { prompt: string; html: string }) => Promise<string | null>;
 };
@@ -44,6 +46,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     beatIndex = null,
     durationSec = null,
     initialVisualDescription,
+    initialBackground = '',
     initialHtml,
     initialCreativePrompt = '',
     saving = false,
@@ -55,6 +58,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
     const [draftHtml, setDraftHtml] = React.useState(initialHtml);
     const [creativePrompt, setCreativePrompt] = React.useState(initialCreativePrompt);
     const [visualDescription, setVisualDescription] = React.useState(initialVisualDescription);
+    const [background, setBackground] = React.useState(initialBackground);
     const [aiLoading, setAiLoading] = React.useState(false);
     const syncedOpenKeyRef = React.useRef('');
 
@@ -72,8 +76,9 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
         setDraftHtml(initialHtml);
         setCreativePrompt(initialCreativePrompt);
         setVisualDescription(initialVisualDescription);
+        setBackground(initialBackground);
         setAiLoading(false);
-    }, [beatId, initialCreativePrompt, initialHtml, initialVisualDescription, open]);
+    }, [beatId, initialBackground, initialCreativePrompt, initialHtml, initialVisualDescription, open]);
 
     const titleLabel = beatIndex != null && beatIndex > 0
         ? `Sửa HTML · beat ${beatIndex}`
@@ -81,7 +86,8 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
 
     const dirty = draftHtml !== initialHtml
         || creativePrompt !== initialCreativePrompt
-        || visualDescription !== initialVisualDescription;
+        || visualDescription !== initialVisualDescription
+        || background !== initialBackground;
     const busy = saving || refining || aiLoading;
     const canSave = dirty && !busy;
     const canAi = Boolean(creativePrompt.trim()) && Boolean(draftHtml.trim()) && !busy;
@@ -94,6 +100,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
             html: draftHtml,
             creativePrompt,
             visualDescription,
+            background,
         });
         if (saved) {
             onClose();
@@ -177,7 +184,20 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                     multiline
                     minRows={2}
                     maxRows={5}
-                    helperText="Bắt buộc viết tiếng Anh, 8–80 từ; mô tả nội dung, bố cục và chuyển động của beat"
+                    helperText="Tiếng Anh, 5–150 từ; sáng tạo bold — không đổi palette/font hệ thống"
+                    disabled={busy}
+                />
+
+                <TextField
+                    label="Background"
+                    value={background}
+                    onChange={(event) => setBackground(event.target.value)}
+                    fullWidth
+                    size="small"
+                    multiline
+                    minRows={2}
+                    maxRows={4}
+                    helperText="Tiếng Anh, 3–60 từ: mood + texture + ràng buộc ngắn"
                     disabled={busy}
                 />
 

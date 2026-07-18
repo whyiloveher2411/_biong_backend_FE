@@ -283,12 +283,15 @@ export type AgentVideoContentResponse = {
     audio_script_generated_at?: string;
     audio_script_approved?: boolean;
     audio_script_approved_at?: string;
+    audio_script_tts_reading?: string;
+    audio_script_tts_reading_updated_at?: string;
     audio_file?: string;
     audio_file_duration_sec?: number;
     agent_tts_auto?: boolean;
     agent_auto_fill_beat_html?: boolean;
     agent_gemini_open_browser?: boolean;
     agent_github_screenshot_homepage?: boolean;
+    agent_introduce_app?: boolean;
     agent_tts_platforms?: string[];
     agent_omnivoice_voice?: string;
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
@@ -354,6 +357,14 @@ export type AgentVideoContentResponse = {
         queued_at?: string;
         updated_at?: string;
         error?: string;
+    };
+    gemini_script_phonetic?: {
+        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+        job_ids?: number[];
+        queued_at?: string;
+        updated_at?: string;
+        error?: string;
+        source?: string;
     };
     marketing_post_id?: number;
     app_mobile_id?: number;
@@ -422,6 +433,7 @@ export type FullAutoPipelineSummary = {
 export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'script_create',
     'script_improve',
+    'script_phonetic_normalize',
     'approve_tts',
     'whisper',
     'beat_division',
@@ -436,6 +448,7 @@ export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[num
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
+    script_phonetic_normalize: 'Chuẩn hóa giọng đọc',
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
     beat_division: 'Chia beat',
@@ -463,6 +476,11 @@ export type AgentHeadlessPreviewAccessResponse = JsonResponse & {
 
 export type SaveAdminAudioScriptResponse = JsonResponse & {
     audio_script_approved?: boolean;
+    audio_reset?: boolean;
+};
+
+export type SaveAdminAudioScriptTtsReadingResponse = JsonResponse & {
+    reading_changed?: boolean;
     audio_reset?: boolean;
 };
 
@@ -711,6 +729,18 @@ export async function saveAgentGithubScreenshotHomepage(
     ) as Promise<JsonResponse & { agent_github_screenshot_homepage?: boolean }>;
 }
 
+export async function saveAgentIntroduceApp(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_introduce_app?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-introduce-app',
+        shortVideoBody(shortVideoId, {
+            agent_introduce_app: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_introduce_app?: boolean }>;
+}
+
 export async function enqueueGeminiWebBeatFill(
     shortVideoId: number,
     beatIds?: string[],
@@ -785,6 +815,28 @@ export async function enqueueGeminiWebAudioScript(
     }>;
 }
 
+export async function enqueueGeminiWebScriptPhonetic(
+    shortVideoId: number,
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    gemini_script_phonetic?: AgentVideoContentResponse['gemini_script_phonetic'];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/enqueue-gemini-web-script-phonetic',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        job_ids?: number[];
+        gemini_script_phonetic?: AgentVideoContentResponse['gemini_script_phonetic'];
+    }>;
+}
+
 export async function saveAdminAudioScript(
     shortVideoId: number,
     audioScript: string,
@@ -793,6 +845,16 @@ export async function saveAdminAudioScript(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-admin-audio-script',
         shortVideoBody(shortVideoId, { audio_script: audioScript }),
     ) as Promise<SaveAdminAudioScriptResponse>;
+}
+
+export async function saveAdminAudioScriptTtsReading(
+    shortVideoId: number,
+    audioScriptTtsReading: string,
+): Promise<SaveAdminAudioScriptTtsReadingResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-admin-audio-script-tts-reading',
+        shortVideoBody(shortVideoId, { audio_script_tts_reading: audioScriptTtsReading }),
+    ) as Promise<SaveAdminAudioScriptTtsReadingResponse>;
 }
 
 export type SaveAgentSourceContentResponse = JsonResponse & {

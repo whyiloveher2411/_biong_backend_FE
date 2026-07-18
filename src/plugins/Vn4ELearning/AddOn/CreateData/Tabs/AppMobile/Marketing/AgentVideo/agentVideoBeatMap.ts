@@ -8,6 +8,8 @@ export type BeatMapSection = {
     durationSec: number;
     phrase_anchor: string;
     visual_description: string;
+    /** Set dressing per beat (EN). Có thể rỗng trên map cũ trước khi chia lại. */
+    background: string;
 };
 
 export type BeatMap = {
@@ -108,7 +110,7 @@ function asNumber(value: unknown): number | null {
 export function validateBeatVisualDescription(value: unknown): string | null {
     const description = String(value ?? '').trim();
     const wordCount = description.split(/\s+/).filter(Boolean).length;
-    if (!description || wordCount < 8 || wordCount > 80 || description.length > 600) {
+    if (!description || wordCount < 5 || wordCount > 150 || description.length > 1200) {
         return null;
     }
     // Visual descriptions are an English machine contract. Catalog IDs may contain "-" and "_".
@@ -116,6 +118,18 @@ export function validateBeatVisualDescription(value: unknown): string | null {
         return null;
     }
     return description;
+}
+
+export function validateBeatBackground(value: unknown): string | null {
+    const background = String(value ?? '').trim();
+    const wordCount = background.split(/\s+/).filter(Boolean).length;
+    if (!background || wordCount < 3 || wordCount > 60 || background.length > 400) {
+        return null;
+    }
+    if (!/[A-Za-z]/.test(background) || /[À-ỹ]/.test(background)) {
+        return null;
+    }
+    return background;
 }
 
 export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: string[] } {
@@ -169,6 +183,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             'durationSec',
             'phrase_anchor',
             'visual_description',
+            'background',
         ]);
         const unexpectedFields = Object.keys(row).filter((key) => !allowedFields.has(key));
         if (unexpectedFields.length > 0) {
@@ -184,6 +199,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
         );
         const phraseAnchor = String(row.phrase_anchor ?? '').trim();
         const visualDescription = validateBeatVisualDescription(row.visual_description);
+        const background = validateBeatBackground(row.background);
 
         if (!/^beat_\d+$/.test(id)) {
             errors.push(`${id || `Section #${index + 1}`}: id phải dạng beat_N`);
@@ -198,7 +214,10 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             errors.push(`${id || `Section #${index + 1}`}: thiếu phrase_anchor`);
         }
         if (!visualDescription) {
-            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh, dài 8–80 từ`);
+            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh, dài 5–150 từ`);
+        }
+        if (!background) {
+            errors.push(`${id || `Section #${index + 1}`}: background phải là tiếng Anh, dài 3–60 từ`);
         }
 
         sections.push({
@@ -209,6 +228,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             durationSec: durationSec ?? 0,
             phrase_anchor: phraseAnchor,
             visual_description: visualDescription ?? '',
+            background: background ?? String(row.background ?? '').trim(),
         });
     });
 
@@ -261,7 +281,10 @@ export function validateBeatMap(
             errors.push(`${label}: durationSec phải > 0`);
         }
         if (!validateBeatVisualDescription(section.visual_description)) {
-            errors.push(`${label}: visual_description phải là tiếng Anh, dài 8–80 từ`);
+            errors.push(`${label}: visual_description phải là tiếng Anh, dài 5–150 từ`);
+        }
+        if (!validateBeatBackground(section.background)) {
+            errors.push(`${label}: background phải là tiếng Anh, dài 3–60 từ`);
         }
         // 5–20s: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;

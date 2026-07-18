@@ -52,10 +52,17 @@ function main() {
   }
 
   const sections = loadBeatMapSections(root);
+  const expectedIds = new Set(
+    sections
+      .map((s) => String(s.id || s.beat_id || "").trim())
+      .filter(Boolean),
+  );
   const errors = [];
   for (const name of fs.readdirSync(compDir)) {
     if (!beatIdFromFilename(name)) continue;
     const beatId = beatIdFromFilename(name);
+    // Chỉ check beat trong beat-map — bỏ qua file thừa từ lần render trước.
+    if (expectedIds.size > 0 && !expectedIds.has(beatId)) continue;
     const content = fs.readFileSync(path.join(compDir, name), "utf8");
     const seekBridge = resolveBeatSeekBridgeFromMap(sections, beatId);
     errors.push(...checkImportHtmlBeatFile(name, content, { seekBridge }));

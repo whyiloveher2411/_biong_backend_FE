@@ -44,7 +44,7 @@ export function applyVideoDurationToHfPromptTemplate(template: string, durationS
     );
     result = result.replace(
         /^- \*\*No brand logos:\*\*.*$/gm,
-        '- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.',
+        '- **No brand logos:** Do NOT place logo artwork, official wordmarks, or watermarks in beat HTML. Neutral typography for product/proper nouns is allowed only when they appear in beat metadata. Do not fake logos with fonts or shapes. Brand overlay is a separate render layer.',
     );
     const forbiddenBrandTerms: Array<[RegExp, string]> = [
         [/logo \/ wordmark/g, 'abstract visual motif'],
@@ -67,7 +67,7 @@ export function applyVideoDurationToHfPromptTemplate(template: string, durationS
     );
     result = result.replace(
         /^- \*\*No brand logos:\*\*.*$/gm,
-        '- **No brand logos:** Do NOT place logos, wordmarks, watermarks, or app/brand names anywhere in beat HTML — brand overlay is composed in a separate layer at render time.',
+        '- **No brand logos:** Do NOT place logo artwork, official wordmarks, or watermarks in beat HTML. Neutral typography for product/proper nouns is allowed only when they appear in beat metadata. Do not fake logos with fonts or shapes. Brand overlay is a separate render layer.',
     );
     result = result.replace(
         /^- \*\*Skip visual motif sections:\*\*.*$/gm,

@@ -139,6 +139,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const [phoneticDrawerOpen, setPhoneticDrawerOpen] = React.useState(false);
     const [phoneticDrawerTerm, setPhoneticDrawerTerm] = React.useState('');
     const [scriptEditMode, setScriptEditMode] = React.useState(false);
+    const [readingEditMode, setReadingEditMode] = React.useState(false);
     const lastPointerRef = React.useRef({ clientX: 0, clientY: 0 });
 
     const existingPhoneticEntry = React.useMemo(
@@ -342,6 +343,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 marketingPostId: state.marketingPostId,
                 sourceContent: state.contentPlainText || state.savedAgentSourceContent,
                 additionalInfo: state.savedAgentAdditionalInfo,
+                introduceApp: state.agentIntroduceApp,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -623,6 +625,87 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             >
                                 {scriptEditMode ? 'Xong' : 'Sửa kịch bản'}
                             </Button>
+                        </Stack>
+
+                        <Divider sx={{ my: 0.5 }} />
+
+                        <Stack spacing={1}>
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                flexWrap="wrap"
+                                useFlexGap
+                                spacing={1}
+                            >
+                                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                    Bản đọc TTS (phiên âm AI)
+                                </Typography>
+                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                    {state.geminiScriptPhoneticStatus === 'queued'
+                                        || state.geminiScriptPhoneticStatus === 'processing' ? (
+                                            <Chip
+                                                size="small"
+                                                label="Đang chuẩn hóa…"
+                                                color="info"
+                                                sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                            />
+                                        ) : null}
+                                    {state.geminiScriptPhoneticStatus === 'failed' && state.geminiScriptPhoneticError ? (
+                                        <Chip
+                                            size="small"
+                                            label="Lỗi phiên âm"
+                                            color="error"
+                                            sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                        />
+                                    ) : null}
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        disabled={!state.hasScript}
+                                        loading={
+                                            state.openingScriptPhoneticHeadless
+                                            || state.geminiScriptPhoneticStatus === 'queued'
+                                            || state.geminiScriptPhoneticStatus === 'processing'
+                                        }
+                                        onClick={() => { void state.handleEnqueueScriptPhoneticHeadless(); }}
+                                    >
+                                        Chuẩn hóa giọng đọc
+                                    </LoadingButton>
+                                </Stack>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                                Dict hệ thống highlight bên dưới — áp thêm lúc TTS. Script gốc ở trên không đổi.
+                            </Typography>
+                            <ShortVideoAgentPhoneticScriptField
+                                editMode={readingEditMode}
+                                minRows={5}
+                                maxRows={12}
+                                placeholder="Chạy chuẩn hóa giọng đọc hoặc dán bản đọc thủ công…"
+                                value={state.audioScriptTtsReading}
+                                onChange={state.setAudioScriptTtsReading}
+                                phoneticDict={state.ttsPhoneticDict}
+                            />
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                <LoadingButton
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<SaveIcon />}
+                                    loading={state.savingScriptTtsReading}
+                                    disabled={!state.ttsReadingDirty && state.audioScriptTtsReading.trim() === ''}
+                                    onClick={() => { void state.handleSaveScriptTtsReading(); }}
+                                >
+                                    Lưu bản đọc
+                                </LoadingButton>
+                                <Button
+                                    size="small"
+                                    variant={readingEditMode ? 'contained' : 'outlined'}
+                                    startIcon={readingEditMode ? <CheckIcon /> : <EditOutlinedIcon />}
+                                    onClick={() => setReadingEditMode((prev) => !prev)}
+                                >
+                                    {readingEditMode ? 'Xong' : 'Sửa bản đọc'}
+                                </Button>
+                            </Stack>
                         </Stack>
                     </Stack>
                 </SectionShell>

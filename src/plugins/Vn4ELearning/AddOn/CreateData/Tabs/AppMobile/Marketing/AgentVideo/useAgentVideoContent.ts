@@ -15,6 +15,7 @@ import {
     generateBeatHtmlViaGeminiWeb,
     openImportHtmlBeatGeminiFillOnly,
     openImportHtmlBeatGeminiForMissingBeats,
+    openImportHtmlBeatAiStudioForMissingBeats,
 } from 'helpers/marketingImportHtmlWorkflow';
 import {
     approveAudioScript,
@@ -37,9 +38,12 @@ import {
     saveAgentAutoFillBeatHtml,
     saveAgentGeminiOpenBrowser,
     saveAgentGithubScreenshotHomepage,
+    saveAgentIntroduceApp,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
     enqueueGeminiWebAudioScript,
+    enqueueGeminiWebScriptPhonetic,
+    saveAdminAudioScriptTtsReading,
     startFullAutoPipeline,
     cancelFullAutoPipeline,
     requestAgentHeadlessNewChat,
@@ -203,6 +207,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingGeminiOpenBrowser, setSavingGeminiOpenBrowser] = React.useState(false);
     const [agentGithubScreenshotHomepage, setAgentGithubScreenshotHomepage] = React.useState(false);
     const [savingGithubScreenshotHomepage, setSavingGithubScreenshotHomepage] = React.useState(false);
+    const [agentIntroduceApp, setAgentIntroduceApp] = React.useState(false);
+    const [savingIntroduceApp, setSavingIntroduceApp] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiFillProgress, setGeminiFillProgress] = React.useState<{
         current: number;
@@ -217,6 +223,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [geminiScriptStatus, setGeminiScriptStatus] = React.useState('none');
     const [geminiScriptMode, setGeminiScriptMode] = React.useState('');
     const [geminiScriptError, setGeminiScriptError] = React.useState('');
+    const [audioScriptTtsReading, setAudioScriptTtsReading] = React.useState('');
+    const [geminiScriptPhoneticStatus, setGeminiScriptPhoneticStatus] = React.useState('none');
+    const [geminiScriptPhoneticError, setGeminiScriptPhoneticError] = React.useState('');
+    const [openingScriptPhoneticHeadless, setOpeningScriptPhoneticHeadless] = React.useState(false);
+    const [savingScriptTtsReading, setSavingScriptTtsReading] = React.useState(false);
     const [fullAutoPipeline, setFullAutoPipeline] = React.useState<FullAutoPipelineSummary | null>(null);
     const [githubTopEnrich, setGithubTopEnrich] = React.useState<GithubTopEnrichSummary | null>(null);
     const [githubTopRepos, setGithubTopRepos] = React.useState<NonNullable<ImportHtmlAssets['github_top_repos']> | null>(null);
@@ -357,6 +368,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
+    const [openingAllMissingBeatAiStudio, setOpeningAllMissingBeatAiStudio] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadless, setFillingAllMissingBeatGeminiHeadless] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadlessProgress, setFillingAllMissingBeatGeminiHeadlessProgress] = React.useState<{
         current: number;
@@ -365,6 +377,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     } | null>(null);
 
     const savedScriptRef = React.useRef('');
+    const savedTtsReadingRef = React.useRef('');
     const savedImportHtmlRef = React.useRef('');
     const savedBeatMapJsonRef = React.useRef('');
     const importHtmlSaveTimerRef = React.useRef<number | null>(null);
@@ -486,6 +499,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
         setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
         setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
+        setAgentIntroduceApp(Boolean(res?.agent_introduce_app));
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
@@ -507,6 +521,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setGeminiScriptStatus(geminiScriptStatusNext);
         setGeminiScriptMode(String(geminiScript?.mode || '').trim());
         setGeminiScriptError(String(geminiScript?.error || '').trim());
+        const serverReading = String(res?.audio_script_tts_reading || '').trim();
+        savedTtsReadingRef.current = serverReading;
+        const geminiPhonetic = res?.gemini_script_phonetic;
+        const phoneticStatusNext = String(geminiPhonetic?.status || 'none');
+        setAudioScriptTtsReading(serverReading);
+        setGeminiScriptPhoneticStatus(phoneticStatusNext);
+        setGeminiScriptPhoneticError(String(geminiPhonetic?.error || '').trim());
         setTtsPending(Boolean(res?.tts_pending ?? res?.agent_workflow?.tts_pending));
         setTtsFailed(Boolean(res?.tts_failed ?? res?.agent_workflow?.tts_failed));
         setNeedsTtsEnqueue(Boolean(res?.needs_tts_enqueue));
@@ -709,6 +730,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || geminiDivisionStatus === 'processing'
         || geminiScriptStatus === 'queued'
         || geminiScriptStatus === 'processing'
+        || geminiScriptPhoneticStatus === 'queued'
+        || geminiScriptPhoneticStatus === 'processing'
         || fullAutoPipeline?.status === 'running'
         || githubTopEnrich?.status === 'preparing';
     React.useEffect(() => {
@@ -723,6 +746,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const hasScript = audioScript.length > 0;
     const scriptDirty = hasScript && audioScript !== savedScriptRef.current;
+    const ttsReadingDirty = audioScriptTtsReading !== savedTtsReadingRef.current;
     const hasAudio = audioFileUrl.length > 0;
     const statusChip = resolveWorkflowChip({
         hasScript,
@@ -771,20 +795,28 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     const applyBeatMapDraft = React.useCallback((nextBeatMap: BeatMap) => {
-        const json = beatMapToJson(nextBeatMap);
-        const validIds = new Set(nextBeatMap.sections.map((section) => section.id));
+        const normalized: BeatMap = {
+            ...nextBeatMap,
+            sections: nextBeatMap.sections.map((section) => ({
+                ...section,
+                background: String(section.background || '').trim(),
+                visual_description: String(section.visual_description || '').trim(),
+            })),
+        };
+        const json = beatMapToJson(normalized);
+        const validIds = new Set(normalized.sections.map((section) => section.id));
 
-        setBeatMap(nextBeatMap);
+        setBeatMap(normalized);
         setBeatMapJsonDraft(json);
-        setBeatMapReady(nextBeatMap.sections.length > 0);
-        setBeatsHtmlTotal(nextBeatMap.sections.length);
+        setBeatMapReady(normalized.sections.length > 0);
+        setBeatsHtmlTotal(normalized.sections.length);
         setBeatHtml((prev) => Object.fromEntries(
             Object.entries(prev).filter(([beatId]) => validIds.has(beatId)),
         ));
-        setBeatsHtmlCompleted(nextBeatMap.sections.filter(
+        setBeatsHtmlCompleted(normalized.sections.filter(
             (section) => String(beatHtml[section.id]?.html || '').trim() !== '',
         ).length);
-        setActiveBeatId((prev) => (prev && validIds.has(prev) ? prev : nextBeatMap.sections[0]?.id || ''));
+        setActiveBeatId((prev) => (prev && validIds.has(prev) ? prev : normalized.sections[0]?.id || ''));
     }, [beatHtml]);
 
     const handleTtsAutoChange = async (checked: boolean) => {
@@ -887,6 +919,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 marketingPostId,
                 sourceContent: contentPlainText || savedAgentSourceContent,
                 additionalInfo: savedAgentAdditionalInfo,
+                introduceApp: agentIntroduceApp,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -1004,6 +1037,77 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setOpeningImproveScriptGeminiHeadless(false);
+        }
+    };
+
+    const handleEnqueueScriptPhoneticHeadless = async () => {
+        if (!shortVideoId) {
+            showMessage('Thiếu short_video_id', 'error');
+            return;
+        }
+        if (!hasScript || !audioScript.trim()) {
+            showMessage('Chưa có audio script', 'warning');
+            return;
+        }
+        if (
+            openingScriptPhoneticHeadless
+            || geminiScriptPhoneticStatus === 'queued'
+            || geminiScriptPhoneticStatus === 'processing'
+        ) {
+            return;
+        }
+        setOpeningScriptPhoneticHeadless(true);
+        try {
+            const res = await enqueueGeminiWebScriptPhonetic(shortVideoId, true);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Enqueue chuẩn hóa giọng đọc thất bại',
+                    'error',
+                );
+                return;
+            }
+            if (res.gemini_script_phonetic) {
+                setGeminiScriptPhoneticStatus(String(res.gemini_script_phonetic.status || 'queued'));
+                setGeminiScriptPhoneticError(String(res.gemini_script_phonetic.error || '').trim());
+            } else {
+                setGeminiScriptPhoneticStatus('queued');
+                setGeminiScriptPhoneticError('');
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || 'Đã đưa chuẩn hóa giọng đọc vào queue Gemini',
+                'success',
+            );
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningScriptPhoneticHeadless(false);
+        }
+    };
+
+    const handleSaveScriptTtsReading = async () => {
+        setSavingScriptTtsReading(true);
+        try {
+            const json = await saveAdminAudioScriptTtsReading(shortVideoId, audioScriptTtsReading);
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không lưu được bản đọc TTS', 'error');
+                return;
+            }
+            savedTtsReadingRef.current = audioScriptTtsReading.trim();
+            if (json?.audio_reset) {
+                setAudioFileUrl('');
+                setAudioDurationSec(null);
+                setTtsPending(false);
+                setTtsFailed(false);
+                setScriptApproved(false);
+            }
+            showMessage(parseApiMessage(json?.message) || 'Đã lưu bản đọc TTS', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingScriptTtsReading(false);
         }
     };
 
@@ -1744,6 +1848,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleBeatVisualDescriptionChange = React.useCallback(async (
         beatId: string,
         visualDescription: string,
+        background?: string,
     ): Promise<boolean> => {
         if (!beatMap) {
             return false;
@@ -1752,7 +1857,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             ...beatMap,
             sections: beatMap.sections.map((section) => (
                 section.id === beatId
-                    ? { ...section, visual_description: visualDescription.trim() }
+                    ? {
+                        ...section,
+                        visual_description: visualDescription.trim(),
+                        background: background !== undefined
+                            ? background.trim()
+                            : String(section.background || '').trim(),
+                    }
                     : section
             )),
         };
@@ -2219,7 +2330,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Không có beat thiếu HTML', 'info');
             return;
         }
-        if (openingAllMissingBeatGemini || fillingAllMissingBeatGeminiHeadless) {
+        if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
             return;
         }
 
@@ -2248,6 +2359,49 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const handleOpenAllMissingBeatAiStudio = () => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
+        if (!missingBeatIds.length) {
+            showMessage('Không có beat thiếu HTML', 'info');
+            return;
+        }
+        if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
+            return;
+        }
+
+        setOpeningAllMissingBeatAiStudio(true);
+        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
+        void (async () => {
+            try {
+                const result = await openImportHtmlBeatAiStudioForMissingBeats({
+                    shortVideoId,
+                    beatIds: missingBeatIds,
+                    autoSubmit: true,
+                });
+                const failNote = result.failed.length
+                    ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
+                    : '';
+                showMessage(
+                    `Đã mở ${result.opened} tab AI Studio — chờ Run xong rồi bấm Lưu HTML vào CMS (extract từ response)${failNote}`,
+                    result.failed.length ? 'warning' : 'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningAllMissingBeatAiStudio(false);
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
+            }
+        })();
+    };
+
     const handleFillAllMissingBeatGeminiHeadless = () => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -2265,6 +2419,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (
             fillingAllMissingBeatGeminiHeadless
             || openingAllMissingBeatGemini
+            || openingAllMissingBeatAiStudio
             || geminiFillStatus === 'queued'
             || geminiFillStatus === 'processing'
         ) {
@@ -2400,6 +2555,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingGithubScreenshotHomepage(false);
+        }
+    };
+
+    const handleIntroduceAppChange = async (checked: boolean) => {
+        if (savingIntroduceApp) {
+            return;
+        }
+        setSavingIntroduceApp(true);
+        try {
+            const res = await saveAgentIntroduceApp(shortVideoId, checked);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình giới thiệu app',
+                    'error',
+                );
+                return;
+            }
+            setAgentIntroduceApp(checked);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked
+                        ? 'Đã bật giới thiệu app trong CTA cuối script'
+                        : 'Đã tắt giới thiệu app — CTA chỉ engagement'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingIntroduceApp(false);
         }
     };
 
@@ -3304,6 +3488,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingGeminiOpenBrowser,
         agentGithubScreenshotHomepage,
         savingGithubScreenshotHomepage,
+        agentIntroduceApp,
+        savingIntroduceApp,
         geminiFillStatus,
         geminiFillProgress,
         geminiDivisionStatus,
@@ -3311,6 +3497,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         geminiScriptStatus,
         geminiScriptMode,
         geminiScriptError,
+        audioScriptTtsReading,
+        setAudioScriptTtsReading,
+        ttsReadingDirty,
+        geminiScriptPhoneticStatus,
+        geminiScriptPhoneticError,
+        openingScriptPhoneticHeadless,
+        savingScriptTtsReading,
+        handleEnqueueScriptPhoneticHeadless,
+        handleSaveScriptTtsReading,
         fullAutoPipeline,
         githubTopEnrich,
         githubTopRepos,
@@ -3490,6 +3685,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         openingBeatGeminiHeadlessBeatIds,
         refiningBeatHtmlBeatId,
         openingAllMissingBeatGemini,
+        openingAllMissingBeatAiStudio,
         fillingAllMissingBeatGeminiHeadless,
         fillingAllMissingBeatGeminiHeadlessProgress,
         hasScript,
@@ -3501,6 +3697,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleAutoFillBeatHtmlChange,
         handleGeminiOpenBrowserChange,
         handleGithubScreenshotHomepageChange,
+        handleIntroduceAppChange,
         handleStartFullAutoPipeline,
         handleCancelFullAutoPipeline,
         handleHeadlessNewChat,
@@ -3546,6 +3743,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenBeatGemini,
         handleOpenBeatGeminiHeadless,
         handleOpenAllMissingBeatGemini,
+        handleOpenAllMissingBeatAiStudio,
         handleFillAllMissingBeatGeminiHeadless,
         handleImportHtmlChange,
         runWhisperTranscribe,

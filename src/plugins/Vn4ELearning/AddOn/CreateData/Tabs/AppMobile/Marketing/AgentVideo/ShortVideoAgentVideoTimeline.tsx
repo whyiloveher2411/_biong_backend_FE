@@ -145,6 +145,7 @@ type Props = {
     onDeleteBeatHtml?: (beatId: string) => void;
     onDeleteAllBeatHtml?: () => void;
     onOpenAllMissingBeatGemini?: () => void;
+    onOpenAllMissingBeatAiStudio?: () => void;
     onFillAllMissingBeatGeminiHeadless?: () => void;
     onOpenBeatGemini?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
@@ -154,6 +155,7 @@ type Props = {
     deletingAllBeatHtml?: boolean;
     missingBeatHtmlCount?: number;
     openingAllMissingBeatGemini?: boolean;
+    openingAllMissingBeatAiStudio?: boolean;
     fillingAllMissingBeatGeminiHeadless?: boolean;
     fillingAllMissingBeatGeminiHeadlessProgress?: {
         current: number;
@@ -200,6 +202,7 @@ export default function ShortVideoAgentVideoTimeline({
     onDeleteBeatHtml,
     onDeleteAllBeatHtml,
     onOpenAllMissingBeatGemini,
+    onOpenAllMissingBeatAiStudio,
     onFillAllMissingBeatGeminiHeadless,
     onOpenBeatGemini,
     onOpenBeatGeminiHeadless,
@@ -209,6 +212,7 @@ export default function ShortVideoAgentVideoTimeline({
     deletingAllBeatHtml = false,
     missingBeatHtmlCount = 0,
     openingAllMissingBeatGemini = false,
+    openingAllMissingBeatAiStudio = false,
     fillingAllMissingBeatGeminiHeadless = false,
     fillingAllMissingBeatGeminiHeadlessProgress = null,
     geminiFillStatus = 'none',
@@ -254,6 +258,7 @@ export default function ShortVideoAgentVideoTimeline({
         || showImportAssemble;
     const timelineActionsBusy = deletingAllBeatHtml
         || openingAllMissingBeatGemini
+        || openingAllMissingBeatAiStudio
         || fillingAllMissingBeatGeminiHeadless
         || geminiFillQueueActive
         || savingImportHtml
@@ -634,6 +639,27 @@ export default function ShortVideoAgentVideoTimeline({
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >
                                         {`Mở Gemini tất cả beat thiếu (${missingBeatHtmlCount})`}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                        {showOpenAllMissingGemini && onOpenAllMissingBeatAiStudio ? (
+                            <Tooltip
+                                title="Extension mở AI Studio (Gemini 3.5 Flash), điền prompt + Run — bấm Lưu HTML để extract từ response vào CMS"
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="contained"
+                                        color="info"
+                                        disabled={!hasVideo || timelineActionsBusy || whisperStatus !== 'completed'}
+                                        loading={openingAllMissingBeatAiStudio}
+                                        onClick={() => { onOpenAllMissingBeatAiStudio(); }}
+                                        startIcon={<AutoAwesomeIcon fontSize="small" />}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        {`Mở AI Studio tất cả beat thiếu (${missingBeatHtmlCount})`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>

@@ -77,6 +77,14 @@ export type CopyShortVideoAgentPromptOptions = {
     variant?: ShortVideoAgentPromptVariant;
 };
 
+export type ShortVideoPromptFetchResponse = {
+    success?: boolean;
+    prompt?: string;
+    stage?: string;
+    short_video_id?: number;
+    message?: { content?: string } | string;
+};
+
 export async function fetchShortVideoAgentPrompt(
     shortVideoId: number,
     phase: ShortVideoAgentPromptPhase,
@@ -106,7 +114,43 @@ export async function fetchShortVideoAgentPrompt(
     return res.json() as Promise<ShortVideoAgentPromptResponse>;
 }
 
-function parseMessage(message: ShortVideoAgentPromptResponse['message']): string {
+async function postShortVideoPrompt(
+    suffix: string,
+    shortVideoId: number,
+): Promise<ShortVideoPromptFetchResponse> {
+    const token = getAccessToken() ?? '';
+    const res = await fetch(pluginApiPath(suffix), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+            short_video_id: shortVideoId,
+            id: shortVideoId,
+            access_token: token,
+        }),
+    });
+    return res.json() as Promise<ShortVideoPromptFetchResponse>;
+}
+
+export async function fetchImproveScriptPrompt(
+    shortVideoId: number,
+): Promise<ShortVideoPromptFetchResponse> {
+    return postShortVideoPrompt('short-video/get-improve-script-prompt', shortVideoId);
+}
+
+export async function fetchScriptPhoneticPrompt(
+    shortVideoId: number,
+): Promise<ShortVideoPromptFetchResponse> {
+    return postShortVideoPrompt('short-video/get-script-phonetic-prompt', shortVideoId);
+}
+
+export function parseShortVideoPromptMessage(
+    message: ShortVideoPromptFetchResponse['message'] | ShortVideoAgentPromptResponse['message'],
+): string {
     if (typeof message === 'object' && message?.content) {
         return String(message.content);
     }
@@ -114,6 +158,34 @@ function parseMessage(message: ShortVideoAgentPromptResponse['message']): string
         return message;
     }
     return '';
+}
+
+function parseMessage(message: ShortVideoAgentPromptResponse['message']): string {
+    return parseShortVideoPromptMessage(message);
+}
+
+export async function writePromptTextToClipboard(text: string): Promise<boolean> {
+    const value = String(text || '').trim();
+    if (!value) {
+        return false;
+    }
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(value);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = value;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export async function copyShortVideoAgentPromptToClipboard(
@@ -129,30 +201,17 @@ export async function copyShortVideoAgentPromptToClipboard(
         };
     }
 
-    const text = res.prompt.trim();
-    try {
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-        } else {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-        }
-        return {
-            ok: true,
-            message: normalizedPhaseLabel(phase, options.variant),
-        };
-    } catch {
+    const ok = await writePromptTextToClipboard(res.prompt);
+    if (!ok) {
         return {
             ok: false,
             message: 'Không copy được — hãy chọn và copy thủ công',
         };
     }
+    return {
+        ok: true,
+        message: normalizedPhaseLabel(phase, options.variant),
+    };
 }
 
 function normalizedPhaseLabel(

@@ -9,6 +9,16 @@ import {
 } from './agentVideoImportHtmlScaffold';
 import { buildBeatHtmlContentLanguageBlock } from './agentVideoContentLanguageBlock';
 import { buildHtmlChatbotLayoutSafeZonesBlock, buildHtmlChatbotNoKaraokeRulesBlock, buildHtmlChatbotNoLegacyBorrowRulesBlock, buildHtmlChatbotJsContractBlock, buildHtmlChatbotSingleHtmlFileRulesBlock } from './agentVideoHtmlChatbotRules';
+import {
+    buildFillBackgroundUsageBlock,
+    buildFillCraftPrinciplesBlock,
+    buildFillDomScaleRulesBlock,
+    buildFillPriorityOrderBlock,
+    buildFillTextAndBrandingRulesBlock,
+    buildFillWhisperPacingRulesBlock,
+    buildVisualDescriptionInterpretationBlock,
+    sanitizeUniversalComposerForFill,
+} from './agentVideoImportHtmlFillPrompts';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 import type { BeatMapSection } from './agentVideoBeatMap';
 import type { ImportHtmlVisualCatalogItem } from './agentVideoApi';
@@ -165,7 +175,7 @@ function buildCreativeTruthContractBlock(): string {
         '- `phrase_anchor` và Whisper là nguồn hiểu ý/pacing, **không** được copy nguyên câu hoặc sync word-by-word lên màn hình.',
         '- Cho phép tối đa **3 graphic phrase ngắn, mỗi phrase 1–5 từ**, viết bằng ngôn ngữ nội dung và diễn đạt lại đúng ý `phrase_anchor`; không biến chúng thành phụ đề.',
         '- **CẤM bịa dữ kiện:** số liệu, phần trăm, ngày, phiên bản/build, rank, nguồn trích dẫn, tên người/chức danh, giải thưởng, URL, install command hoặc claim cụ thể.',
-        '- Chỉ hiển thị proper noun/fact nếu xuất hiện nguyên nghĩa trong metadata beat hoặc JSON visual; quy tắc cấm logo/tên thương hiệu vẫn ưu tiên cao hơn.',
+        '- Chỉ hiển thị proper noun/fact nếu xuất hiện nguyên nghĩa trong metadata beat hoặc JSON visual; cấm logo artwork/wordmark/watermark (proper noun text trung tính OK khi có trong metadata).',
         '- Ví dụ copy, version, date, metric, URL và command trong template style chỉ là mô tả craft — **không phải dữ liệu được phép render**.',
         '- **Tổng tối đa 1 external media source** cho cả beat, tính chung `<img>` và CSS `url(...)`; có thể dùng 0 media.',
         '- **Cấm JavaScript networking:** `fetch`, XMLHttpRequest, WebSocket, EventSource; cấm `<audio>`, AudioContext và WebAudio.',
@@ -314,8 +324,11 @@ export async function buildBeatHtmlPrompt(
 
     const promptType = DEFAULT_HF_PROMPT_TYPE;
     const rawTemplate = await loadHfPromptTemplate(promptType);
-    const template = applyVideoDurationToHfPromptTemplate(rawTemplate, durationSec);
-    const durationLabel = `${formatDurationSec(durationSec)}s`;
+    const template = sanitizeUniversalComposerForFill(
+        applyVideoDurationToHfPromptTemplate(rawTemplate, durationSec),
+    );
+    const durationFormatted = formatDurationSec(durationSec);
+    const durationLabel = `${durationFormatted}s`;
     const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id);
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
@@ -340,65 +353,87 @@ export async function buildBeatHtmlPrompt(
         ));
     }
     const visualDescription = String(beat.visual_description || '').trim();
+    const background = String(beat.background || '').trim();
     visualLibrary = visualLibrary.filter((item) => (
         Boolean(item.id) && descriptionMentionsExactId(visualDescription, String(item.id))
     ));
     const visualStyle = String(context.visual_style || context.hf_theme || 'auto').trim() || 'auto';
+    const resolvedStyle = visualStyle === 'auto' ? 'vignelli' : visualStyle;
+    const artDirection = VISUAL_STYLE_ART_DIRECTION[resolvedStyle]
+        || VISUAL_STYLE_ART_DIRECTION.vignelli;
     const githubIntroRules = isGithubIntro ? buildGithubTopIntroRankRulesBlock(context) : '';
+    const visualBlock = githubIntroRules
+        ? githubIntroRules
+        : [
+            buildVisualLibraryRulesBlock(),
+            '```json',
+            JSON.stringify(visualLibrary, null, 2),
+            '```',
+        ].join('\n');
 
     return [
         `# HyperFrames — HTML beat ${beat.id} (${durationLabel})`,
         '',
-        `BEAT_DURATION_SEC=${formatDurationSec(durationSec)}`,
+        `BEAT_DURATION_SEC=${durationFormatted}`,
         `BEAT_ID=${beat.id}`,
         `CLIP_TOTAL_SEC=${clipTotal}`,
         'COMPOSER=universal-composer',
         `VISUAL_STYLE=${visualStyle}`,
+        `RESOLVED_ART_DIRECTION=${artDirection}`,
+        `VISUAL_DESCRIPTION=${visualDescription}`,
+        `BACKGROUND=${background || '(thiếu — suy từ visual_description + VISUAL_STYLE, ưu tiên nền ổn định)'}`,
         '',
+        buildFillPriorityOrderBlock(),
+        buildVisualDescriptionInterpretationBlock(),
+        buildCreativeTruthContractBlock(),
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
+        buildFillTextAndBrandingRulesBlock(),
         buildHtmlChatbotLayoutSafeZonesBlock(),
+        visualBlock,
+        '',
+        buildHtmlChatbotJsContractBlock(durationSec),
+        buildFillDomScaleRulesBlock(),
         buildHtmlChatbotNoLegacyBorrowRulesBlock(),
         buildHtmlChatbotSingleHtmlFileRulesBlock(beat.id),
-        buildHtmlChatbotJsContractBlock(durationSec),
-        buildCreativeTruthContractBlock(),
-        '## BẮT BUỘC',
-        `- Đây là **một beat** trong clip dài ${clipTotal}s — DURATION = **${formatDurationSec(durationSec)}** giây.`,
-        `- \`data-duration="${formatDurationSec(durationSec)}"\` và \`const DURATION = ${formatDurationSec(durationSec)}\` — không đổi.`,
-        '- `render()` (đọc biến global `t` qua `hf-seek`) phải hoạt động với mọi time từ 0 đến DURATION.',
-        '',
-        '## Phong cách visual',
+        buildFillCraftPrinciplesBlock(),
+        '## Universal composer — technical/art contract (đã sanitize cho fill)',
         template,
         buildStyleCompatibilityBlock(visualStyle),
         '',
+        buildFillBackgroundUsageBlock(),
         '---',
         '',
         `# Beat ${beat.id} — short video ID ${context.short_video_id ?? '?'}`,
         `Vị trí trong clip: ${formatDurationSec(beat.startSec)}s → ${formatDurationSec(beat.endSec)}s`,
-        `phrase_anchor (metadata — KHÔNG render text này lên màn hình): ${beat.phrase_anchor}`,
-        `visual_description (creative source of truth): ${visualDescription}`,
+        `phrase_anchor (metadata — KHÔNG render như subtitle; proper noun literal OK khi cần): ${beat.phrase_anchor}`,
+        `visual_description (semantic brief — xem interpretation block): ${visualDescription}`,
+        `background (atmosphere — xem BACKGROUND usage): ${background || '(thiếu)'}`,
         githubRole?.role ? `beat_role: ${githubRole.role}` : '',
         '',
+        '## Tự test trước khi trả HTML (bắt buộc)',
+        '- Contrast chữ vs nền: không chữ chìm / low-contrast trên background đã chọn.',
+        '- Hierarchy cỡ chữ trên canvas **1080×1920**: headline / key claim đủ lớn; **cấm** micro-type cho nội dung chính.',
+        '- Focal action rõ; frame cuối có chủ đích.',
+        '',
         '## Whisper trong beat — CHỈ pacing, CẤM karaoke',
+        buildFillWhisperPacingRulesBlock(),
         'Dữ liệu dưới đây chỉ để căn nhịp animation. **Không** tạo element text từ các từ whisper.',
         '```text',
         beatWhisperPrompt,
         '```',
         '',
-        githubIntroRules,
-        githubIntroRules ? '' : buildVisualLibraryRulesBlock(),
-        githubIntroRules ? '' : '```json',
-        githubIntroRules ? '' : JSON.stringify(visualLibrary, null, 2),
-        githubIntroRules ? '' : '```',
-        '',
         buildBeatScaffoldInstructionsBlock(durationSec, beat.id, scaffold),
         '## Checklist',
-        `- [ ] data-duration="${formatDurationSec(durationSec)}"`,
-        `- [ ] const DURATION = ${formatDurationSec(durationSec)}`,
-        '- [ ] `addEventListener(\'hf-seek\', ...)` còn nguyên — không chỉ `window.render`',
-        '- [ ] `function render()` không tham số; dùng `const time = clamp(t, 0, DURATION)`',
-        `- [ ] render() tại t=0 và t=${formatDurationSec(durationSec)}`,
+        `- [ ] data-duration="${durationFormatted}"`,
+        `- [ ] const DURATION = ${durationFormatted}`,
+        "- [ ] `addEventListener('hf-seek', ...)` còn nguyên — không chỉ `window.render`",
+        '- [ ] `function render()` không tham số; dùng `const time = clamp(...)` với Number.isFinite',
+        `- [ ] render() tại t=0 và t=${durationFormatted}`,
         '- [ ] Không có karaoke, subtitle, caption, hay text sync voiceover trong HTML',
+        '- [ ] Contrast chữ vs nền OK — không chữ chìm',
+        '- [ ] Cỡ chữ nội dung chính đủ lớn trên 1080×1920 (không micro-type)',
+        '- [ ] Background khớp BACKGROUND / mood beat; không đổi VISUAL_STYLE hệ thống',
         '- [ ] Response là **1 file HTML duy nhất** — không nhiều file, không tách css/js',
         isGithubIntro
             ? '- [ ] (github top intro) Nếu chia nhiều list/panel: rank liên tục (#1→#5 rồi #6→#10) — **không** reset về #1'

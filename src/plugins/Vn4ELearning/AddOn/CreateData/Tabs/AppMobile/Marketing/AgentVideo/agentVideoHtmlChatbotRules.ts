@@ -17,17 +17,17 @@ export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
 
 export function buildHtmlChatbotLayoutSafeZonesBlock(): string {
     return [
-        '## BẮT BUỘC — Safe Zones (content keep-out) + Background full-bleed',
+        '## BẮT BUỘC — Safe Zones (semantic bounding box) + Background full-bleed',
         '- Kích thước canvas là **1080x1920** (tỉ lệ 9:16).',
-        '- **Caption band (content only):** bottom **360px** (y = 1560–1920) và top **80px** (y = 0–80) là vùng **cấm đặt foreground** — không headline, card, chart, ảnh hero, text đọc được. Karaoke/Logo do layer riêng khi render final.',
-        '- **Background full-bleed (bắt buộc):** gradient, mesh, grain, vignette, glow phải phủ **toàn canvas 1080×1920** kể cả caption band — vùng dưới **có nền**, chỉ không có content.',
+        '- **Critical foreground** (text đọc được, card, chart, ảnh hero mang thông tin) phải nằm **hoàn toàn** trong vùng `x = 48–1032`, `y = 80–1560`.',
+        '- **Caption / logo bands:** y = 0–80 và y = 1560–1920 — không đặt nội dung thiết yếu; karaoke/logo do layer riêng khi render final.',
+        '- **Background full-bleed (bắt buộc):** gradient, mesh, grain, vignette, glow phủ **toàn canvas** kể cả caption band — vùng dưới có nền, không có content.',
+        '- Ambient decoration / particle không mang thông tin có thể đi qua safe zone nếu không làm giảm khả năng đọc caption.',
+        '- Hero visual có thể chạm hoặc crop ở biên nếu phần mang thông tin vẫn trong safe zone.',
         '- **Cấu trúc scaffold (bắt buộc):**',
-        '  1. `.bg-layer` — con trực tiếp của `#stage`, `position:absolute; inset:0; z-index:0; pointer-events:none` — chứa toàn bộ nền trang trí.',
-        '  2. `.content-area` — con trực tiếp của `#stage`, `position:relative; z-index:1` — đã có `padding: 80px 48px 360px` để gom foreground vào safe zone giữa.',
-        '- **Cấm trên background:** `height: 1480px`, `top: 80px`, hoặc đặt nền bên trong `.content-area` / container có padding — sẽ để trống caption band.',
-        '- **Quy tắc định vị foreground (bắt buộc):**',
-        '  1. Mọi nội dung đọc được (text, card, chart, ảnh hero) đặt trong `.content-area` hoặc tuân padding keep-out.',
-        '  2. `position: absolute` cho **foreground** (không áp dụng `.bg-layer`): **CẤM** `top < 80px` hoặc `bottom < 360px` — tọa độ y phải trong 80px–1560px.',
+        '  1. `.bg-layer` — con trực tiếp của `#stage`, `position:absolute; inset:0; z-index:0; pointer-events:none`.',
+        '  2. `.content-area` — con trực tiếp của `#stage`, `position:absolute; top:80px; right:48px; bottom:360px; left:48px; z-index:1` — **không** flex-center mặc định; layout tự do trong vùng này.',
+        '- **Cấm** đặt nền trang trí chỉ trong `.content-area` (sẽ trống caption band) — nền thuộc `.bg-layer`.',
         '',
     ].join('\n');
 }
@@ -40,7 +40,7 @@ export function buildHtmlChatbotNoKaraokeRulesBlock(): string {
         '- **KHÔNG** dùng whisper_words để render chữ lên màn hình — whisper chỉ để tham khảo **pacing**, không phải nội dung hiển thị.',
         '- Voiceover đã có trong audio — caption/karaoke do **pipeline agent ghép layer riêng** (`compositions/captions.html`) khi render final.',
         '- HTML beat chỉ chứa **visual thuần**: layout, ảnh, shape, motion, graphic type — không lớp text đọc theo audio.',
-        '- **CẤM** logo, wordmark, watermark thương hiệu trong HTML beat — brand overlay do layer riêng khi render final.',
+        '- **CẤM** logo artwork, wordmark, watermark trong HTML beat — brand overlay do layer riêng khi render final. Proper noun dạng text trung tính chỉ khi có trong metadata (xem Text & branding).',
         '- Nếu template phong cách gợi ý caption on-screen → **bỏ qua** trong luồng HTML chatbot này.',
         '',
     ].join('\n');
@@ -78,16 +78,19 @@ export function buildHtmlChatbotSingleHtmlFileRulesBlock(beatId: string): string
 export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
     const total = formatDurationSec(durationSec);
     return [
-        '## JavaScript animation (bắt buộc — preview CMS)',
-        '- Preview timeline gọi `dispatchEvent(new CustomEvent(\'hf-seek\', { detail: { time } }))` — **phải giữ** listener scaffold:',
-        '  `addEventListener(\'hf-seek\', (e) => { t = e.detail.time; render(); });`',
+        '## JavaScript runtime contract (bắt buộc — preview CMS)',
+        '- Preview timeline gọi `dispatchEvent(new CustomEvent(\'hf-seek\', { detail: { time } }))` — **phải giữ** listener `hf-seek`.',
         '- **Cấm** chỉ gán `window.render = render` mà không có `hf-seek` — animation sẽ **đứng im**.',
-        '- Dùng `let t = 0` (global) + `function render()` **không tham số**. Trong `render()`: `const time = clamp(t, 0, DURATION)`.',
+        '- Dùng `let t = 0` (global) + `function render()` **không tham số**. Trong `render()`: `const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, DURATION)`.',
         '- **Cấm** `function render(t)` — khi gọi `render()` không đối số, `t` bên trong = `undefined` → animation hỏng.',
-        '- Mọi easing helper (`easeOutExpo`, `easeOutCubic`, …) phải **định nghĩa trong cùng `<script>`** trước khi dùng.',
+        '- **Được phép** thêm pure helper / easing / DOM reference cache trong cùng `<script>`.',
+        '- **Không được đổi:** `const DURATION`, global `let t`, tên/signature `function render()`, event name `hf-seek`.',
         '- Mọi `document.getElementById(...)` phải khớp `id` trong DOM; trước khi set `.style` kiểm tra `if (el) { ... }`.',
-        `- Timing animation dùng **local beat time** 0…${total} (biến \`t\` / \`time\`), không hard-code giây tuyệt đối clip dài.`,
-        '- **Cấm** `setInterval`, `setTimeout`, `requestAnimationFrame` loop, GSAP timeline, CSS `@keyframes` / `transition` cho motion chính.',
+        `- Timing dùng **local beat time** 0…${total} — không hard-code giây tuyệt đối của clip dài.`,
+        '- **Cấm** `setInterval`, `setTimeout`, `requestAnimationFrame` loop, GSAP timeline, CSS `@keyframes` / `transition` cho motion chính phụ thuộc thời gian.',
+        '- **Cấm** `Math.random()` — variation phải deterministic (index + time).',
+        '- `render()` phải cho cùng frame khi gọi nhiều lần với cùng `t`; không create/destroy hàng loạt DOM mỗi frame.',
+        '- Trong `render()`: cập nhật DOM cho **mọi** `time` từ 0 đến DURATION — không return sớm khiến frame đứng.',
         '- Đóng ngoặc `{}` cân bằng — syntax error trong `<script>` làm **toàn bộ** beat không chạy.',
         '',
     ].join('\n');
@@ -110,6 +113,7 @@ export function buildBeatDivisionSingleOutputRulesBlock(options?: {
         '- Trả về **một JSON object** beat-map duy nhất — không HTML, không nhiều file.',
         '- **Cấm** trả kèm file HTML, beat HTML mẫu, hoặc nhiều JSON riêng lẻ.',
         '- **Cấm** markdown fence trong response cuối — chỉ JSON thuần.',
+        "- Trong mọi field string (`visual_description`, `background`, `phrase_anchor`, …): **cấm nháy kép thô** `\"` — dùng nháy đơn `'` hoặc escape `\\\"`.",
         '',
         ...durationRules,
         '',
