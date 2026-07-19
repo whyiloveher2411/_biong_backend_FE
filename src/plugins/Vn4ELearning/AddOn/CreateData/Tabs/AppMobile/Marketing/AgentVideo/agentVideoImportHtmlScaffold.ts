@@ -81,18 +81,13 @@ export function buildLongFormPromptOverride(durationSec: number): string {
     ].join('\n');
 }
 
-export function buildSingleBeatHtmlScaffold(
-    durationSec: number,
-    beatId: string,
-    options?: { showKaraoke?: boolean },
-): string {
+export function buildSingleBeatHtmlScaffold(durationSec: number, beatId: string): string {
     const total = formatDurationSec(durationSec);
     const compositionId = beatId || 'beat_1';
-    const showKaraoke = options?.showKaraoke !== false;
-    const bottomPx = showKaraoke ? 360 : 80;
 
     // Scaffold cho chatbot preview (hf-seek trong iframe).
     // Khi assemble render: chạy normalize-import-html-beat-for-render.mjs trước hyperframes render.
+    // bottom:360px — chừa band dưới (UI channel FB/TikTok + karaoke overlay).
 
     return `<!doctype html>
 <html data-duration="${total}" data-aspect="9:16">
@@ -115,7 +110,7 @@ body { margin: 0; background: var(--ink); }
 }
 .content-area {
   position: absolute; z-index: 1;
-  top: 80px; right: 48px; bottom: ${bottomPx}px; left: 48px;
+  top: 80px; right: 48px; bottom: 360px; left: 48px;
   box-sizing: border-box;
 }
 </style>

@@ -103,15 +103,16 @@ async function prepareAvatarOverlay(projectDir, ctx, importHtml, log) {
   }
 
   let words = [];
+  // Lip-sync cần timing sát audio → ưu tiên whisper; caption có thể lệch sau align/repair
+  const whisper = importHtml?.whisper_words;
   const captionList = importHtml?.caption_words_list;
   const captionNested = importHtml?.caption_words?.words;
-  const whisper = importHtml?.whisper_words;
-  if (Array.isArray(captionList) && captionList.length) {
+  if (Array.isArray(whisper) && whisper.length) {
+    words = whisper;
+  } else if (Array.isArray(captionList) && captionList.length) {
     words = captionList;
   } else if (Array.isArray(captionNested) && captionNested.length) {
     words = captionNested;
-  } else if (Array.isArray(whisper) && whisper.length) {
-    words = whisper;
   }
 
   const cfg = {
@@ -121,6 +122,7 @@ async function prepareAvatarOverlay(projectDir, ctx, importHtml, log) {
     composite_hints: render.composite_hints || null,
     pip: render.pip || { anchor: "bottom_right", width_ratio: 0.2, margin_px: 28 },
     words,
+    words_source: Array.isArray(whisper) && whisper.length ? "whisper" : "caption",
   };
   fs.writeFileSync(
     path.join(projectDir, "assets/avatar-overlay.json"),
@@ -145,7 +147,23 @@ function prepareAvatarLipSyncTimeline(projectDir, totalSec, log) {
     return null;
   }
   if (!cfg?.enabled) return null;
-  const words = Array.isArray(cfg.words) ? cfg.words : [];
+
+  // Ưu tiên transcript.json (whisper) nếu có — sát audio hơn caption align
+  let words = Array.isArray(cfg.words) ? cfg.words : [];
+  try {
+    const trPath = path.join(projectDir, "transcript.json");
+    if (fs.existsSync(trPath)) {
+      const tr = JSON.parse(fs.readFileSync(trPath, "utf8"));
+      const list = Array.isArray(tr?.words) ? tr.words : Array.isArray(tr) ? tr : [];
+      if (list.length) {
+        words = list;
+        log(`Avatar lip-sync words ← whisper (${list.length})`);
+      }
+    }
+  } catch {
+    /* keep cfg.words */
+  }
+
   const duration = Math.max(0.1, Number(totalSec) || 0.1);
 
   let energyAt = null;
@@ -777,22 +795,23 @@ async function main() {
           options: { sfxHook, avatarOverlay: true, showCaptions },
         }),
       );
-      // Ưu tiên words đã sync karaoke
+      // Lip-sync giữ whisper timing — không ghi đè bằng caption-words (hay lệch sau align)
       try {
-        const cwPath = path.join(projectDir, "assets/caption-words.json");
-        if (fs.existsSync(cwPath)) {
-          const cw = JSON.parse(fs.readFileSync(cwPath, "utf8"));
-          const list = Array.isArray(cw?.words) ? cw.words : Array.isArray(cw) ? cw : [];
+        const trPath = path.join(projectDir, "transcript.json");
+        if (fs.existsSync(trPath)) {
+          const tr = JSON.parse(fs.readFileSync(trPath, "utf8"));
+          const list = Array.isArray(tr?.words) ? tr.words : Array.isArray(tr) ? tr : [];
           if (list.length) {
             const cfgPath = path.join(projectDir, "assets/avatar-overlay.json");
             const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
             cfg.words = list;
+            cfg.words_source = "whisper";
             fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-            log(`Avatar overlay words ← caption-words.json (${list.length})`);
+            log(`Avatar overlay words ← transcript.json / whisper (${list.length})`);
           }
         }
       } catch {
-        /* keep whisper/caption from context */
+        /* keep words from prepareAvatarOverlay */
       }
     }
 

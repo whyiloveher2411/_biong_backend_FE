@@ -5,7 +5,7 @@
 
 export const DEFAULT_LIP_SYNC_CONFIG = {
   fps: 30,
-  visualLeadMs: 35,
+  visualLeadMs: 25,
   releaseMs: 40,
   minimumCueMs: 66,
   /** Mỗi viseme token cần tối thiểu ~50ms — word quá ngắn sẽ expand/snap */
@@ -14,24 +14,33 @@ export const DEFAULT_LIP_SYNC_CONFIG = {
   shortWordExpandBelowMs: 180,
   /** Snap word ngắn vào cụm năng lượng gần nhất trong gap (khi caption lệch) */
   energySnapPeakThreshold: 0.18,
+  /** Không dịch caption start quá xa khi energy-snap (tránh nhảy cả giây) */
+  energySnapMaxShiftMs: 120,
+  /** Cửa sổ local quanh caption để tìm peak (không quét full gap) */
+  energySnapLocalMs: 280,
   ignoreSilenceBelowMs: 50,
   holdPreviousBelowMs: 120,
   restAboveMs: 120,
   longSilenceMs: 250,
-  wideOpenEnergyThreshold: 0.72,
+  /** Ép mouth_x khi RMS thấp liên tục ≥ ngưỡng này (kể cả type=speech) */
+  energyForceRestMs: 140,
+  /** Há miệng khi RMS cao liên tục nhưng timeline đang X (caption/whisper thiếu từ) */
+  energyFillSpeechMs: 90,
+  energyFillPeakThreshold: 0.22,
+  wideOpenEnergyThreshold: 0.65,
   maxWideOpenRatio: 0.15,
   /** Reset về X giữa 2 từ cùng mouth */
   sameMouthReset: true,
   closeStepMs: 33, // 1f @30fps — đóng nhanh
   openStepMs: 66, // 2f — mở chậm hơn đóng
   leadByMouthMs: {
-    mouth_a: 50,
-    mouth_f: 40,
-    mouth_b: 35,
-    mouth_c: 35,
-    mouth_d: 35,
-    mouth_e: 35,
-    mouth_g: 35,
+    mouth_a: 30,
+    mouth_f: 28,
+    mouth_b: 25,
+    mouth_c: 25,
+    mouth_d: 25,
+    mouth_e: 25,
+    mouth_g: 25,
     mouth_x: 0,
   },
   blinkIntervalMinSec: 2.5,
@@ -385,10 +394,14 @@ export function expandShortWords(words, cfg = DEFAULT_LIP_SYNC_CONFIG, energyAt 
   const minToken = (cfg.minMsPerToken ?? 50) / 1000;
   const shortBelow = (cfg.shortWordExpandBelowMs ?? 180) / 1000;
   const peakTh = cfg.energySnapPeakThreshold ?? 0.18;
+  const maxShift = (cfg.energySnapMaxShiftMs ?? 120) / 1000;
+  const localRad = (cfg.energySnapLocalMs ?? 280) / 1000;
   const total = totalSec > 0 ? totalSec : Math.max(...out.map((w) => w.end), 0.1);
 
   for (let i = 0; i < out.length; i += 1) {
     const w = out[i];
+    const origStart = w.start;
+    const origEnd = w.end;
     const tokens = tokenizeOrthoVisemes(w.text);
     const need = Math.max(
       shortBelow,
@@ -405,51 +418,35 @@ export function expandShortWords(words, cfg = DEFAULT_LIP_SYNC_CONFIG, energyAt 
     const target = Math.min(need, room * 0.95);
     const mid = (w.start + w.end) / 2;
 
-    // 1) Energy snap — peak sớm nhất trên ngưỡng trong gap (sau prevEnd)
+    // 1) Energy snap — chỉ trong cửa sổ local quanh caption (±localRad, clamp maxShift)
     let placed = false;
     if (typeof energyAt === "function") {
       const midE = energyAt(mid);
       if (midE < peakTh * 0.7 || dur < shortBelow) {
         const gapLo = prevEnd + 0.02;
         const gapHi = nextStart - 0.02;
-        if (gapHi > gapLo + 0.06) {
+        const snapLo = Math.max(gapLo, origStart - Math.min(localRad, maxShift));
+        const snapHi = Math.min(gapHi, origEnd + Math.min(localRad, maxShift));
+        if (snapHi > snapLo + 0.06) {
           const step = 0.02;
-          let peakT = null;
-          let peakE = 0;
-          // Ưu tiên local ±0.55s quanh caption; nếu không đủ peak thì full gap nhưng lấy peak SỚM nhất ≥ th
-          const localLo = Math.max(gapLo, mid - 0.55);
-          const localHi = Math.min(gapHi, mid + 0.55);
-          const scan = (lo, hi, requireEarliest) => {
-            let bestT = null;
-            let bestE = 0;
-            for (let t = lo; t <= hi; t += step) {
-              const e = energyAt(t);
-              if (e < peakTh) continue;
-              if (requireEarliest) {
-                return { t, e }; // first hit
-              }
-              if (e > bestE) {
-                bestE = e;
-                bestT = t;
-              }
+          let bestT = null;
+          let bestE = 0;
+          let bestDist = Infinity;
+          for (let t = snapLo; t <= snapHi; t += step) {
+            const e = energyAt(t);
+            if (e < peakTh) continue;
+            const dist = Math.abs(t - mid);
+            // Ưu tiên peak mạnh; tie-break gần caption mid
+            if (e > bestE + 0.04 || (Math.abs(e - bestE) <= 0.04 && dist < bestDist)) {
+              bestE = e;
+              bestT = t;
+              bestDist = dist;
             }
-            return bestT != null ? { t: bestT, e: bestE } : null;
-          };
-          let hit = scan(localLo, localHi, true);
-          if (!hit) hit = scan(gapLo, gapHi, true);
-          if (!hit) {
-            // fallback: strongest in local
-            hit = scan(localLo, localHi, false) || scan(gapLo, gapHi, false);
           }
-          if (hit) {
-            peakT = hit.t;
-            peakE = hit.e;
-          }
-          if (peakT != null && peakE >= peakTh) {
+          if (bestT != null && bestE >= peakTh) {
             const half = target / 2;
-            let start = peakT - half * 0.35;
+            let start = bestT - half * 0.35;
             let end = start + target;
-            // clamp vào gap
             if (start < gapLo) {
               start = gapLo;
               end = Math.min(gapHi, start + target);
@@ -458,29 +455,39 @@ export function expandShortWords(words, cfg = DEFAULT_LIP_SYNC_CONFIG, energyAt 
               end = gapHi;
               start = Math.max(gapLo, end - target);
             }
+            // Hard cap: không lệch origStart quá maxShift
+            if (Math.abs(start - origStart) > maxShift) {
+              start = origStart + Math.sign(start - origStart) * maxShift;
+              end = Math.min(gapHi, Math.max(start + target * 0.5, start + (origEnd - origStart)));
+              end = Math.min(gapHi, Math.max(end, start + Math.min(target, gapHi - start)));
+            }
             w.start = round3(start);
-            w.end = round3(end);
+            w.end = round3(Math.max(w.start + cfg.minimumCueMs / 1000, end));
             placed = true;
           }
         }
       }
     }
 
-    // 2) Expand đối xứng trong gap
+    // 2) Expand đối xứng trong gap (cũng không vượt maxShift khỏi orig)
     if (!placed) {
       const deficit = target - (w.end - w.start);
       if (deficit > 0.001) {
-        const leftRoom = Math.max(0, w.start - prevEnd);
+        const leftRoom = Math.max(0, Math.min(w.start - prevEnd, origStart + maxShift - (w.start - deficit)));
         const rightRoom = Math.max(0, nextStart - w.end);
-        let takeL = Math.min(leftRoom, deficit / 2);
+        let takeL = Math.min(Math.max(0, w.start - prevEnd), deficit / 2, maxShift);
         let takeR = Math.min(rightRoom, deficit - takeL);
         if (takeL + takeR < deficit - 0.001) {
           const rem = deficit - takeL - takeR;
-          takeL += Math.min(leftRoom - takeL, rem);
-          takeR += Math.min(rightRoom - takeR, rem - Math.min(leftRoom - takeL, rem));
+          takeL += Math.min(Math.max(0, w.start - prevEnd) - takeL, rem, maxShift - takeL);
+          takeR += Math.min(rightRoom - takeR, rem);
         }
-        w.start = round3(w.start - takeL);
-        w.end = round3(w.end + takeR);
+        w.start = round3(Math.max(prevEnd, w.start - takeL));
+        w.end = round3(Math.min(nextStart, w.end + takeR));
+        if (w.start < origStart - maxShift) w.start = round3(origStart - maxShift);
+        if (w.end < w.start + cfg.minimumCueMs / 1000) {
+          w.end = round3(Math.min(nextStart, w.start + Math.max(cfg.minimumCueMs / 1000, origEnd - origStart)));
+        }
       }
     }
   }
@@ -1054,6 +1061,143 @@ export function refineSilenceWithEnergy(cues, energyAt, isLowEnergy, cfg = DEFAU
 }
 
 /**
+ * Ép mouth_x trên mọi cửa sổ RMS thấp kéo dài — kể cả type=speech.
+ * Whisper/caption thường kéo end vào đoạn im → miệng há khi không có tiếng (lệch pha).
+ * Không đụng burst ngắn (< energyForceRestMs) để tránh flicker plosive.
+ *
+ * @param {object[]} cues
+ * @param {(t:number)=>boolean} [isLowEnergy]
+ * @param {(t:number)=>number} [energyAt]
+ * @param {object} [cfg]
+ */
+export function forceRestFromEnergy(cues, isLowEnergy, energyAt, cfg = DEFAULT_LIP_SYNC_CONFIG) {
+  if (!cues?.length) return [];
+  if (typeof isLowEnergy !== "function" && typeof energyAt !== "function") {
+    return cues.map((c) => ({ ...c }));
+  }
+  const lowFn = (t) => {
+    if (typeof isLowEnergy === "function") return isLowEnergy(t);
+    return energyAt(t) < 0.12;
+  };
+  const minRest = (cfg.energyForceRestMs ?? cfg.restAboveMs ?? 140) / 1000;
+  const step = 0.02;
+  const total = Math.max(...cues.map((c) => c.end), 0);
+  const windows = [];
+  let runStart = null;
+  for (let t = 0; t <= total + 1e-6; t += step) {
+    const low = t <= total ? lowFn(t) : false;
+    if (low) {
+      if (runStart == null) runStart = t;
+    } else if (runStart != null) {
+      const end = Math.min(total, t);
+      if (end - runStart >= minRest - 1e-6) {
+        windows.push([round3(runStart), round3(end)]);
+      }
+      runStart = null;
+    }
+  }
+  if (runStart != null && total - runStart >= minRest - 1e-6) {
+    windows.push([round3(runStart), round3(total)]);
+  }
+  if (!windows.length) return cues.map((c) => ({ ...c }));
+
+  let out = cues.map((c) => ({ ...c }));
+  for (const [lo, hi] of windows) {
+    // Chừa mép ~30ms — tránh cắt sát onset/offset âm thanh
+    const pad = 0.03;
+    const winStart = lo + pad;
+    const winEnd = hi - pad;
+    if (winEnd - winStart < minRest * 0.55) continue;
+    out = spliceCueWindow(out, winStart, winEnd, [
+      {
+        start: round3(winStart),
+        end: round3(winEnd),
+        mouth: "mouth_x",
+        type: winEnd - winStart >= (cfg.longSilenceMs ?? 250) / 1000
+          ? "long_silence"
+          : "silence",
+      },
+    ]);
+  }
+  return mergeAdjacentSameMouth(out);
+}
+
+/**
+ * Há miệng khi RMS cao kéo dài nhưng cue đang mouth_x (caption/whisper thiếu từ).
+ * Chèn mouth_b (nguyên âm trung tính) — không đoán ortho từ text.
+ *
+ * @param {object[]} cues
+ * @param {(t:number)=>number} energyAt
+ * @param {(t:number)=>boolean} [isLowEnergy]
+ * @param {object} [cfg]
+ */
+export function fillSpeechFromEnergy(cues, energyAt, isLowEnergy, cfg = DEFAULT_LIP_SYNC_CONFIG) {
+  if (!cues?.length || typeof energyAt !== "function") {
+    return cues.map((c) => ({ ...c }));
+  }
+  const minFill = (cfg.energyFillSpeechMs ?? 90) / 1000;
+  const peakTh = cfg.energyFillPeakThreshold ?? 0.22;
+  const step = 0.02;
+  const total = Math.max(...cues.map((c) => c.end), 0);
+  const isHigh = (t) => {
+    if (typeof isLowEnergy === "function" && isLowEnergy(t)) return false;
+    return energyAt(t) >= peakTh;
+  };
+
+  const windows = [];
+  let runStart = null;
+  for (let t = 0; t <= total + 1e-6; t += step) {
+    const high = t <= total ? isHigh(t) : false;
+    if (high) {
+      if (runStart == null) runStart = t;
+    } else if (runStart != null) {
+      const end = Math.min(total, t);
+      if (end - runStart >= minFill - 1e-6) {
+        windows.push([round3(runStart), round3(end)]);
+      }
+      runStart = null;
+    }
+  }
+  if (runStart != null && total - runStart >= minFill - 1e-6) {
+    windows.push([round3(runStart), round3(total)]);
+  }
+  if (!windows.length) return cues.map((c) => ({ ...c }));
+
+  let out = cues.map((c) => ({ ...c }));
+  for (const [lo, hi] of windows) {
+    // Chỉ fill đoạn đang X — không đè speech/ortho đã có
+    const xCoverage = out
+      .filter((c) => c.mouth === "mouth_x" && c.end > lo && c.start < hi)
+      .reduce((s, c) => {
+        const a = Math.max(c.start, lo);
+        const b = Math.min(c.end, hi);
+        return s + Math.max(0, b - a);
+      }, 0);
+    if (xCoverage < minFill * 0.7) continue;
+
+    // Cắt từng khoảng X giao với [lo,hi]
+    const xSpans = [];
+    for (const c of out) {
+      if (c.mouth !== "mouth_x") continue;
+      const a = Math.max(c.start, lo);
+      const b = Math.min(c.end, hi);
+      if (b - a >= minFill * 0.55) xSpans.push([round3(a), round3(b)]);
+    }
+    for (const [a, b] of xSpans) {
+      out = spliceCueWindow(out, a, b, [
+        {
+          start: a,
+          end: b,
+          mouth: "mouth_b",
+          type: "speech_energy",
+        },
+      ]);
+    }
+  }
+  return mergeAdjacentSameMouth(out);
+}
+
+/**
  * Upgrade B→G using energy callback; cap ratio.
  * @param {(t:number)=>number} energyAt — 0..1 peak-normalized, optional
  */
@@ -1296,6 +1440,10 @@ export function buildLipSyncTimeline({
   cues = enforceMinDuration(cues, cfg);
   cues = applyCoarticulation(cues, cfg);
   cues = applyRelease(cues, total, cfg);
+  cues = enforceMinDuration(cues, cfg);
+  // Cuối cùng: đóng miệng khi audio im; há miệng khi audio nói mà cue đang X
+  cues = forceRestFromEnergy(cues, isLowEnergy, energyAt, cfg);
+  cues = fillSpeechFromEnergy(cues, energyAt, isLowEnergy, cfg);
   cues = enforceMinDuration(cues, cfg);
   cues = quantizeCues(cues, total, cfg);
 

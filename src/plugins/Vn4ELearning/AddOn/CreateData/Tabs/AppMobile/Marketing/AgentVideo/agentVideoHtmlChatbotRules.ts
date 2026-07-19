@@ -15,25 +15,20 @@ export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     ].join('\n');
 }
 
-export function buildHtmlChatbotLayoutSafeZonesBlock(options?: { showKaraoke?: boolean }): string {
-    const showKaraoke = options?.showKaraoke !== false;
-    const yMax = showKaraoke ? 1560 : 1840;
-    const bottomPx = showKaraoke ? 360 : 80;
-    const bandNote = showKaraoke
-        ? '- **Caption / logo bands:** y = 0–80 và y = 1560–1920 — không đặt nội dung thiết yếu; karaoke/logo do layer riêng khi render final.'
-        : '- **Logo / watermark bands:** y = 0–80 (top) và y = 1840–1920 (đáy ~80px) — không đặt nội dung thiết yếu. Karaoke **đã tắt** — được dùng vùng dưới tới ~y 1840; logo/watermark vẫn do layer riêng.';
-
+export function buildHtmlChatbotLayoutSafeZonesBlock(): string {
     return [
         '## BẮT BUỘC — Safe Zones (semantic bounding box) + Background full-bleed',
         '- Kích thước canvas là **1080x1920** (tỉ lệ 9:16).',
-        `- **Critical foreground** (text đọc được, card, chart, ảnh hero mang thông tin) phải nằm **hoàn toàn** trong vùng \`x = 48–1032\`, \`y = 80–${yMax}\`.`,
-        bandNote,
+        '- **Critical foreground** (text đọc được, card, chart, ảnh hero mang thông tin) phải nằm **hoàn toàn** trong vùng `x = 48–1032`, `y = 80–1560`.',
+        '- **Bottom / top reserved bands:** y = 0–80 (logo) và y = 1560–1920 (band dưới ~360px) — **không** đặt nội dung thiết yếu.',
+        '- Band dưới **bắt buộc trống content** vì overlay khi đăng (tên channel, mô tả, progress, UI Facebook/TikTok/Reels) và karaoke layer (nếu bật) sẽ che vùng này.',
+        '- Karaoke/caption/logo do layer riêng khi render final — **không** dùng band dưới cho text graphic beat.',
         '- **Background full-bleed (bắt buộc):** gradient, mesh, grain, vignette, glow phủ **toàn canvas** kể cả band đáy — vùng dưới có nền, không có content sát mép.',
-        '- Ambient decoration / particle không mang thông tin có thể đi qua safe zone nếu không làm giảm khả năng đọc caption/logo.',
+        '- Ambient decoration / particle không mang thông tin có thể đi qua safe zone nếu không làm giảm khả năng đọc overlay nền tảng / karaoke.',
         '- Hero visual có thể chạm hoặc crop ở biên nếu phần mang thông tin vẫn trong safe zone.',
         '- **Cấu trúc scaffold (bắt buộc):**',
         '  1. `.bg-layer` — con trực tiếp của `#stage`, `position:absolute; inset:0; z-index:0; pointer-events:none`.',
-        `  2. \`.content-area\` — con trực tiếp của \`#stage\`, \`position:absolute; top:80px; right:48px; bottom:${bottomPx}px; left:48px; z-index:1\` — **không** flex-center mặc định; layout tự do trong vùng này.`,
+        '  2. `.content-area` — con trực tiếp của `#stage`, `position:absolute; top:80px; right:48px; bottom:360px; left:48px; z-index:1` — **không** flex-center mặc định; layout tự do trong vùng này.',
         '- **Cấm** đặt nền trang trí chỉ trong `.content-area` (sẽ trống band đáy) — nền thuộc `.bg-layer`.',
         '',
     ].join('\n');

@@ -13,6 +13,8 @@ import {
   eyesKeyFromBlinkEvents,
   applyWideOpenEmphasis,
   refineSilenceWithEnergy,
+  forceRestFromEnergy,
+  fillSpeechFromEnergy,
   expandShortWords,
   closePathToX,
   openPathFromX,
@@ -80,7 +82,7 @@ assert.ok(tokenizeOrthoVisemes("ph").some((t) => t.mouth === "mouth_f"));
   assert.ok(out.some((c) => c.mouth === "mouth_x" && c.start >= 0.49 && c.end <= 0.66));
 }
 
-// Visual lead: A starts ~50ms early
+// Visual lead: A starts ~30ms early
 {
   const cues = [
     { start: 0, end: 0.2, mouth: "mouth_x", type: "silence" },
@@ -89,8 +91,8 @@ assert.ok(tokenizeOrthoVisemes("ph").some((t) => t.mouth === "mouth_f"));
   const led = applyVisualLead(cues, DEFAULT_LIP_SYNC_CONFIG);
   const a = led.find((c) => c.mouth === "mouth_a");
   assert.ok(a);
-  assert.ok(a.start <= 0.96, `expected A lead ~50ms, got start=${a.start}`);
-  assert.ok(a.start >= 0.94);
+  assert.ok(a.start <= 0.98, `expected A lead ~30ms, got start=${a.start}`);
+  assert.ok(a.start >= 0.96);
 }
 
 // Min duration: 20ms cue merged
@@ -128,11 +130,14 @@ assert.ok(tokenizeOrthoVisemes("ph").some((t) => t.mouth === "mouth_f"));
     { word: "ăn", start: 1.0, end: 1.4 },
     { word: "ăn", start: 1.5, end: 1.9 },
   ]);
-  const energyAt = () => 0.95;
+  // Cao khi đang nói; thấp lúc nghỉ đầu/cuối — tránh fillSpeechFromEnergy há miệng lúc im
+  const energyAt = (t) => (t >= 0.18 && t <= 1.95 ? 0.95 : 0.02);
+  const isLowEnergy = (t) => energyAt(t) < 0.12;
   const tl = buildLipSyncTimeline({
     words,
     totalSec: 2.5,
     energyAt,
+    isLowEnergy,
   });
   assert.ok(tl.mouthCues.length > 0);
   assert.ok(tl.stats.gRatio <= 0.15 + 0.001, `gRatio=${tl.stats.gRatio}`);
@@ -200,32 +205,88 @@ assert.ok(tokenizeOrthoVisemes("ph").some((t) => t.mouth === "mouth_f"));
   assert.ok(refined.some((c) => c.mouth === "mouth_x" && c.type !== "speech"));
 }
 
-// Short word expand + energy snap (OpenCut 100ms → không bị nuốt)
+// forceRestFromEnergy: speech kéo vào đoạn im → ép X (video 58)
+{
+  const cues = [
+    { start: 0, end: 0.4, mouth: "mouth_b", type: "speech" },
+    { start: 0.4, end: 1.2, mouth: "mouth_d", type: "speech" }, // covers silence 0.5–1.0
+    { start: 1.2, end: 1.5, mouth: "mouth_c", type: "speech" },
+  ];
+  const isLow = (t) => t >= 0.5 && t < 1.0;
+  const forced = forceRestFromEnergy(cues, isLow, null, DEFAULT_LIP_SYNC_CONFIG);
+  assert.ok(
+    mouthKeyFromCues(0.7, forced) === "mouth_x",
+    `expected X during silence, got ${mouthKeyFromCues(0.7, forced)}`,
+  );
+  assert.notEqual(mouthKeyFromCues(0.2, forced), "mouth_x");
+  assert.notEqual(mouthKeyFromCues(1.3, forced), "mouth_x");
+}
+
+// fillSpeechFromEnergy: audio nói nhưng cue X (caption thiếu từ @ 1'33)
+{
+  const cues = [
+    { start: 0, end: 0.5, mouth: "mouth_b", type: "speech" },
+    { start: 0.5, end: 2.0, mouth: "mouth_x", type: "long_silence" },
+    { start: 2.0, end: 2.3, mouth: "mouth_c", type: "speech" },
+  ];
+  const energyAt = (t) => (t >= 1.0 && t < 1.4 ? 0.5 : 0.02);
+  const isLow = (t) => energyAt(t) < 0.12;
+  const filled = fillSpeechFromEnergy(cues, energyAt, isLow, DEFAULT_LIP_SYNC_CONFIG);
+  assert.notEqual(
+    mouthKeyFromCues(1.2, filled),
+    "mouth_x",
+    `expected open mouth during energy, got ${mouthKeyFromCues(1.2, filled)}`,
+  );
+  assert.equal(mouthKeyFromCues(0.7, filled), "mouth_x");
+}
+
+// Short word expand + energy snap — chỉ local, không nhảy cả giây
 {
   const words = normalizeTimedWords([
     { word: "thử", start: 10.89, end: 11.27 },
     { word: "OpenCut-app", start: 11.92, end: 12.02 },
     { word: "một", start: 13.05, end: 13.3 },
   ]);
-  // Fake energy: early peak 11.45 then stronger 12.4 — phải lấy peak sớm
+  // Peak gần caption (11.85) + peak xa (11.45) — phải ưu tiên gần / trong maxShift
   const energyAt = (t) => {
+    if (t >= 11.82 && t <= 11.95) return 0.55;
     if (t >= 11.4 && t <= 11.55) return 0.35;
-    if (t >= 12.3 && t <= 12.5) return 0.55;
+    if (t >= 12.3 && t <= 12.5) return 0.4;
     return 0.02;
   };
   const expanded = expandShortWords(words, DEFAULT_LIP_SYNC_CONFIG, energyAt, 20);
   const oc = expanded.find((w) => /opencut/i.test(w.text));
   assert.ok(oc);
   assert.ok(oc.end - oc.start >= 0.18, `OpenCut dur=${oc.end - oc.start}`);
-  assert.ok(oc.start < 11.7 && oc.end > 11.35, `OpenCut earliest peak, got ${oc.start}-${oc.end}`);
+  assert.ok(
+    Math.abs(oc.start - 11.92) <= 0.13,
+    `OpenCut must stay near caption (±120ms), got ${oc.start}`,
+  );
 
   const tl = buildLipSyncTimeline({
     words,
     totalSec: 20,
     energyAt,
   });
-  const mouthAt115 = mouthKeyFromCues(11.5, tl.mouthCues);
-  assert.notEqual(mouthAt115, "mouth_x", `expected open mouth at 11.5, got ${mouthAt115}`);
+  const mouthAt119 = mouthKeyFromCues(11.9, tl.mouthCues);
+  assert.notEqual(mouthAt119, "mouth_x", `expected open mouth at 11.9, got ${mouthAt119}`);
+}
+
+// expandShortWords: không snap 1.5s vào gap xa
+{
+  const words = normalizeTimedWords([
+    { word: "trước", start: 90.0, end: 90.4 },
+    { word: "và", start: 93.275, end: 93.375 },
+    { word: "sau", start: 95.12, end: 95.4 },
+  ]);
+  const energyAt = (t) => (t >= 91.6 && t <= 91.9 ? 0.5 : 0.02);
+  const expanded = expandShortWords(words, DEFAULT_LIP_SYNC_CONFIG, energyAt, 100);
+  const va = expanded.find((w) => w.text === "và");
+  assert.ok(va);
+  assert.ok(
+    Math.abs(va.start - 93.275) <= 0.13,
+    `và must not jump to distant peak, got ${va.start}`,
+  );
 }
 
 // Legacy pose API still works

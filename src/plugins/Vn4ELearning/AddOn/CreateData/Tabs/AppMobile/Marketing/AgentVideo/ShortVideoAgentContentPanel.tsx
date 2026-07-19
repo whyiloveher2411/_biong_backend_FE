@@ -4,6 +4,7 @@ import {
     Box,
     Button,
     Chip,
+    Divider,
     FormControl,
     FormControlLabel,
     InputLabel,
@@ -727,261 +728,337 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 {state.fullAutoPipeline.last_error.message}
                             </Alert>
                         ) : null}
-                        <Stack
-                            direction="row"
-                            spacing={1}
-                            flexWrap="wrap"
-                            useFlexGap
-                            sx={{
-                                p: 1.25,
-                                borderRadius: 1,
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                bgcolor: 'background.paper',
-                            }}
-                        >
-                            <LoadingButton
-                                size="small"
-                                variant="contained"
-                                startIcon={<PlayArrowIcon />}
-                                endIcon={<ArrowDropDownIcon />}
-                                loading={state.startingFullAuto}
-                                disabled={state.fullAutoPipeline?.status === 'running'}
-                                onClick={(event) => {
-                                    setRestartMenuAnchor(event.currentTarget);
+                        <Stack spacing={1.25}>
+                            <Box
+                                sx={{
+                                    p: 1.25,
+                                    borderRadius: 1,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.paper',
                                 }}
                             >
-                                Chạy từ bước…
-                            </LoadingButton>
-                            <Menu
-                                anchorEl={restartMenuAnchor}
-                                open={Boolean(restartMenuAnchor)}
-                                onClose={() => setRestartMenuAnchor(null)}
-                                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                            >
-                                {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
-                                    const enabled = restartableSet.has(stepKey);
-                                    const stepInfo = state.fullAutoPipeline?.steps?.[stepKey];
-                                    const status = String(stepInfo?.status || 'pending');
-                                    const statusLabel = PIPELINE_STEP_STATUS_LABEL[status]
-                                        || status;
-                                    return (
-                                        <MenuItem
-                                            key={stepKey}
-                                            disabled={!enabled || state.startingFullAuto}
-                                            onClick={() => {
-                                                setRestartMenuAnchor(null);
-                                                void state.handleStartFullAutoPipeline('restart', stepKey);
-                                            }}
-                                            sx={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                gap: 2,
-                                                minWidth: 300,
-                                                py: 1,
-                                            }}
-                                        >
-                                            <Typography
-                                                component="span"
-                                                variant="body2"
-                                                sx={{
-                                                    color: enabled ? 'text.primary' : 'text.disabled',
-                                                    fontWeight: status === 'running' ? 600 : 400,
-                                                }}
-                                            >
-                                                {index + 1}. {FULL_AUTO_PIPELINE_STEP_LABELS[stepKey]}
-                                            </Typography>
-                                            <Typography
-                                                component="span"
-                                                variant="caption"
-                                                sx={{
-                                                    color: enabled
-                                                        ? pipelineStepStatusColor(status)
-                                                        : 'text.disabled',
-                                                    fontWeight: 600,
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                {statusLabel}
-                                            </Typography>
-                                        </MenuItem>
-                                    );
-                                })}
-                            </Menu>
-                            {state.fullAutoPipeline?.status === 'running' ? (
-                                <LoadingButton
-                                    size="small"
-                                    variant="outlined"
-                                    color="inherit"
-                                    startIcon={<StopIcon />}
-                                    loading={state.cancellingFullAuto}
-                                    disabled={state.cancellingFullAuto}
-                                    onClick={() => { void state.handleCancelFullAutoPipeline(); }}
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                    sx={{ mb: 1, fontWeight: 600, letterSpacing: 0.2 }}
                                 >
-                                    Dừng
-                                </LoadingButton>
-                            ) : null}
-                            <FormControlLabel
-                                sx={{ ml: 0.5, mr: 0, width: '100%' }}
-                                control={(
-                                    <Switch
+                                    Chạy pipeline
+                                </Typography>
+                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                    <LoadingButton
                                         size="small"
-                                        checked={state.agentIntroduceApp}
-                                        disabled={state.savingIntroduceApp}
-                                        onChange={(e) => {
-                                            void state.handleIntroduceAppChange(e.target.checked);
-                                        }}
-                                        inputProps={{ 'aria-label': 'Giới thiệu app trong video' }}
-                                    />
-                                )}
-                                label={(
-                                    <Box>
-                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                            Giới thiệu app trong video
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                            Bật: CTA cuối mời mở/tải app. Tắt: không nhắc app, chỉ CTA engagement.
-                                        </Typography>
-                                    </Box>
-                                )}
-                            />
-                            <FormControlLabel
-                                sx={{ ml: 0.5, mr: 0, width: '100%' }}
-                                control={(
-                                    <Switch
-                                        size="small"
-                                        checked={state.agentShowKaraoke}
-                                        disabled={state.savingShowKaraoke}
-                                        onChange={(e) => {
-                                            void state.handleAgentShowKaraokeChange(e.target.checked);
-                                        }}
-                                        inputProps={{ 'aria-label': 'Hiện text karaoke' }}
-                                    />
-                                )}
-                                label={(
-                                    <Box>
-                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                            Hiện text karaoke
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                            Tắt: không ghép caption layer; beat được dùng vùng dưới (còn ~80px đáy).
-                                        </Typography>
-                                    </Box>
-                                )}
-                            />
-                            {(() => {
-                                const selected = state.verifiedAvatars.find(
-                                    (item) => item.id === state.agentAvatarId,
-                                );
-                                const masterRaw = String(
-                                    state.agentAvatarMasterUrl || selected?.master_url || '',
-                                ).trim();
-                                let thumbSrc = '';
-                                if (masterRaw) {
-                                    if (validURL(masterRaw) || masterRaw.startsWith('data:')) {
-                                        thumbSrc = masterRaw;
-                                    } else if (masterRaw.startsWith('//')) {
-                                        thumbSrc = `https:${masterRaw}`;
-                                    } else {
-                                        thumbSrc = convertToURL(
-                                            process.env.REACT_APP_BASE_URL,
-                                            masterRaw.replace(/^\//, ''),
-                                        );
-                                    }
-                                }
-                                const anchorLabel = AVATAR_PIP_ANCHORS.find(
-                                    (item) => item.id === state.agentAvatarAnchor,
-                                )?.label || 'Dưới phải';
-                                return (
-                                    <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        color="inherit"
-                                        disabled={state.savingAgentAvatar}
-                                        onClick={() => state.setAvatarDrawerOpen(true)}
-                                        endIcon={<ChevronRightIcon />}
-                                        sx={{
-                                            ...workflowFieldSurfaceSx,
-                                            ml: 0.5,
-                                            justifyContent: 'flex-start',
-                                            textTransform: 'none',
-                                            py: 1,
-                                            px: 1.25,
+                                        variant="contained"
+                                        startIcon={<PlayArrowIcon />}
+                                        endIcon={<ArrowDropDownIcon />}
+                                        loading={state.startingFullAuto}
+                                        disabled={state.fullAutoPipeline?.status === 'running'}
+                                        onClick={(event) => {
+                                            setRestartMenuAnchor(event.currentTarget);
                                         }}
                                     >
-                                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
-                                            <Box
-                                                sx={{
-                                                    width: 40,
-                                                    height: 40,
-                                                    borderRadius: '50%',
-                                                    overflow: 'hidden',
-                                                    bgcolor: '#fff',
-                                                    border: '1px solid',
-                                                    borderColor: 'divider',
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                {thumbSrc ? (
-                                                    <Box
-                                                        component="img"
-                                                        src={thumbSrc}
-                                                        alt=""
+                                        Chạy từ bước…
+                                    </LoadingButton>
+                                    <Menu
+                                        anchorEl={restartMenuAnchor}
+                                        open={Boolean(restartMenuAnchor)}
+                                        onClose={() => setRestartMenuAnchor(null)}
+                                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                                    >
+                                        {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
+                                            const enabled = restartableSet.has(stepKey);
+                                            const stepInfo = state.fullAutoPipeline?.steps?.[stepKey];
+                                            const status = String(stepInfo?.status || 'pending');
+                                            const statusLabel = PIPELINE_STEP_STATUS_LABEL[status]
+                                                || status;
+                                            return (
+                                                <MenuItem
+                                                    key={stepKey}
+                                                    disabled={!enabled || state.startingFullAuto}
+                                                    onClick={() => {
+                                                        setRestartMenuAnchor(null);
+                                                        void state.handleStartFullAutoPipeline('restart', stepKey);
+                                                    }}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        gap: 2,
+                                                        minWidth: 300,
+                                                        py: 1,
+                                                    }}
+                                                >
+                                                    <Typography
+                                                        component="span"
+                                                        variant="body2"
                                                         sx={{
-                                                            width: '100%',
-                                                            height: '100%',
-                                                            objectFit: 'cover',
-                                                            display: 'block',
+                                                            color: enabled ? 'text.primary' : 'text.disabled',
+                                                            fontWeight: status === 'running' ? 600 : 400,
                                                         }}
-                                                    />
-                                                ) : null}
-                                            </Box>
-                                            <Box sx={{ minWidth: 0, textAlign: 'left', flex: 1 }}>
-                                                <Typography variant="body2" fontWeight={600} noWrap>
-                                                    {selected?.title
-                                                        || (state.agentAvatarId > 0
-                                                            ? `Avatar #${state.agentAvatarId}`
-                                                            : 'Chọn avatar lip-sync')}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" noWrap display="block">
-                                                    {state.agentAvatarId > 0
-                                                        ? `PiP: ${anchorLabel}`
-                                                        : 'Verified · vị trí PiP trong drawer'}
-                                                </Typography>
-                                            </Box>
-                                        </Stack>
-                                    </Button>
-                                );
-                            })()}
-                            <ShortVideoAgentAvatarDrawer
-                                open={state.avatarDrawerOpen}
-                                onClose={() => state.setAvatarDrawerOpen(false)}
-                                avatars={state.verifiedAvatars}
-                                selectedId={state.agentAvatarId}
-                                selectedAnchor={state.agentAvatarAnchor}
-                                saving={state.savingAgentAvatar}
-                                onApply={state.handleAgentAvatarApply}
-                            />
-                            <FormControlLabel
-                                sx={{ ml: 0.5, mr: 0 }}
-                                control={(
-                                    <Switch
-                                        size="small"
-                                        checked={state.agentGeminiOpenBrowser}
-                                        disabled={state.savingGeminiOpenBrowser}
-                                        onChange={(e) => {
-                                            void state.handleGeminiOpenBrowserChange(e.target.checked);
-                                        }}
-                                        inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
-                                    />
-                                )}
-                                label={(
-                                    <Typography variant="caption" color="text.secondary">
-                                        Hiện browser
+                                                    >
+                                                        {index + 1}. {FULL_AUTO_PIPELINE_STEP_LABELS[stepKey]}
+                                                    </Typography>
+                                                    <Typography
+                                                        component="span"
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: enabled
+                                                                ? pipelineStepStatusColor(status)
+                                                                : 'text.disabled',
+                                                            fontWeight: 600,
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        {statusLabel}
+                                                    </Typography>
+                                                </MenuItem>
+                                            );
+                                        })}
+                                    </Menu>
+                                    {state.fullAutoPipeline?.status === 'running' ? (
+                                        <LoadingButton
+                                            size="small"
+                                            variant="outlined"
+                                            color="inherit"
+                                            startIcon={<StopIcon />}
+                                            loading={state.cancellingFullAuto}
+                                            disabled={state.cancellingFullAuto}
+                                            onClick={() => { void state.handleCancelFullAutoPipeline(); }}
+                                        >
+                                            Dừng
+                                        </LoadingButton>
+                                    ) : null}
+                                </Stack>
+                            </Box>
+
+                            <Box
+                                sx={{
+                                    borderRadius: 1,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.paper',
+                                    overflow: 'hidden',
+                                }}
+                            >
+                                <Box sx={{ px: 1.25, pt: 1.25, pb: 0.75 }}>
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        display="block"
+                                        sx={{ fontWeight: 600, letterSpacing: 0.2 }}
+                                    >
+                                        Tùy chọn clip
                                     </Typography>
-                                )}
-                            />
+                                </Box>
+                                <Stack divider={<Divider flexItem />}>
+                                    <FormControlLabel
+                                        sx={{
+                                            m: 0,
+                                            px: 1.25,
+                                            py: 1,
+                                            width: '100%',
+                                            alignItems: 'flex-start',
+                                            gap: 1,
+                                        }}
+                                        control={(
+                                            <Switch
+                                                size="small"
+                                                checked={state.agentIntroduceApp}
+                                                disabled={state.savingIntroduceApp}
+                                                onChange={(e) => {
+                                                    void state.handleIntroduceAppChange(e.target.checked);
+                                                }}
+                                                inputProps={{ 'aria-label': 'Giới thiệu app trong video' }}
+                                            />
+                                        )}
+                                        label={(
+                                            <Box sx={{ pt: 0.25 }}>
+                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                                    Giới thiệu app trong video
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                                    Bật: CTA cuối mời mở/tải app. Tắt: chỉ CTA engagement.
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    />
+                                    <FormControlLabel
+                                        sx={{
+                                            m: 0,
+                                            px: 1.25,
+                                            py: 1,
+                                            width: '100%',
+                                            alignItems: 'flex-start',
+                                            gap: 1,
+                                        }}
+                                        control={(
+                                            <Switch
+                                                size="small"
+                                                checked={state.agentShowKaraoke}
+                                                disabled={state.savingShowKaraoke}
+                                                onChange={(e) => {
+                                                    void state.handleAgentShowKaraokeChange(e.target.checked);
+                                                }}
+                                                inputProps={{ 'aria-label': 'Hiện text karaoke' }}
+                                            />
+                                        )}
+                                        label={(
+                                            <Box sx={{ pt: 0.25 }}>
+                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                                    Hiện text karaoke
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                                    Tắt: không ghép caption layer. Band dưới beat vẫn chừa ~360px (UI channel).
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    />
+                                    <FormControlLabel
+                                        sx={{
+                                            m: 0,
+                                            px: 1.25,
+                                            py: 1,
+                                            width: '100%',
+                                            alignItems: 'flex-start',
+                                            gap: 1,
+                                        }}
+                                        control={(
+                                            <Switch
+                                                size="small"
+                                                checked={state.agentGeminiOpenBrowser}
+                                                disabled={state.savingGeminiOpenBrowser}
+                                                onChange={(e) => {
+                                                    void state.handleGeminiOpenBrowserChange(e.target.checked);
+                                                }}
+                                                inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
+                                            />
+                                        )}
+                                        label={(
+                                            <Box sx={{ pt: 0.25 }}>
+                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                                    Hiện browser Gemini
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                                    Mở cửa sổ trình duyệt khi chạy fill/chia beat headless.
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    />
+                                </Stack>
+                            </Box>
+
+                            <Box
+                                sx={{
+                                    p: 1.25,
+                                    borderRadius: 1,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                    sx={{ mb: 1, fontWeight: 600, letterSpacing: 0.2 }}
+                                >
+                                    Avatar lip-sync
+                                </Typography>
+                                {(() => {
+                                    const selected = state.verifiedAvatars.find(
+                                        (item) => item.id === state.agentAvatarId,
+                                    );
+                                    const masterRaw = String(
+                                        state.agentAvatarMasterUrl || selected?.master_url || '',
+                                    ).trim();
+                                    let thumbSrc = '';
+                                    if (masterRaw) {
+                                        if (validURL(masterRaw) || masterRaw.startsWith('data:')) {
+                                            thumbSrc = masterRaw;
+                                        } else if (masterRaw.startsWith('//')) {
+                                            thumbSrc = `https:${masterRaw}`;
+                                        } else {
+                                            thumbSrc = convertToURL(
+                                                process.env.REACT_APP_BASE_URL,
+                                                masterRaw.replace(/^\//, ''),
+                                            );
+                                        }
+                                    }
+                                    const anchorLabel = AVATAR_PIP_ANCHORS.find(
+                                        (item) => item.id === state.agentAvatarAnchor,
+                                    )?.label || 'Dưới phải';
+                                    const hasAvatar = state.agentAvatarId > 0;
+                                    return (
+                                        <Button
+                                            fullWidth
+                                            variant="outlined"
+                                            color="inherit"
+                                            disabled={state.savingAgentAvatar}
+                                            onClick={() => state.setAvatarDrawerOpen(true)}
+                                            endIcon={<ChevronRightIcon />}
+                                            sx={{
+                                                ...workflowFieldSurfaceSx,
+                                                justifyContent: 'flex-start',
+                                                textTransform: 'none',
+                                                py: 1,
+                                                px: 1.25,
+                                            }}
+                                        >
+                                            <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+                                                <Box
+                                                    sx={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: '50%',
+                                                        overflow: 'hidden',
+                                                        bgcolor: '#fff',
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    {thumbSrc ? (
+                                                        <Box
+                                                            component="img"
+                                                            src={thumbSrc}
+                                                            alt=""
+                                                            sx={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover',
+                                                                display: 'block',
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                </Box>
+                                                <Box sx={{ minWidth: 0, textAlign: 'left', flex: 1 }}>
+                                                    <Typography variant="body2" fontWeight={600} noWrap>
+                                                        {selected?.title
+                                                            || (hasAvatar
+                                                                ? `Avatar #${state.agentAvatarId}`
+                                                                : 'Chọn avatar')}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                                        {hasAvatar
+                                                            ? `PiP · ${anchorLabel}`
+                                                            : 'Không dùng · mở drawer để chọn'}
+                                                    </Typography>
+                                                </Box>
+                                            </Stack>
+                                        </Button>
+                                    );
+                                })()}
+                                <ShortVideoAgentAvatarDrawer
+                                    open={state.avatarDrawerOpen}
+                                    onClose={() => state.setAvatarDrawerOpen(false)}
+                                    avatars={state.verifiedAvatars}
+                                    selectedId={state.agentAvatarId}
+                                    selectedAnchor={state.agentAvatarAnchor}
+                                    saving={state.savingAgentAvatar}
+                                    onApply={state.handleAgentAvatarApply}
+                                />
+                            </Box>
                         </Stack>
                     </WorkflowSection>
                 </Stack>

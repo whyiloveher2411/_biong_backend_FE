@@ -330,8 +330,7 @@ export async function buildBeatHtmlPrompt(
     );
     const durationFormatted = formatDurationSec(durationSec);
     const durationLabel = `${durationFormatted}s`;
-    const showKaraoke = context.agent_show_karaoke !== false;
-    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, { showKaraoke });
+    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id);
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
@@ -391,7 +390,7 @@ export async function buildBeatHtmlPrompt(
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
         buildFillTextAndBrandingRulesBlock(),
-        buildHtmlChatbotLayoutSafeZonesBlock({ showKaraoke }),
+        buildHtmlChatbotLayoutSafeZonesBlock(),
         visualBlock,
         '',
         buildHtmlChatbotJsContractBlock(durationSec),
