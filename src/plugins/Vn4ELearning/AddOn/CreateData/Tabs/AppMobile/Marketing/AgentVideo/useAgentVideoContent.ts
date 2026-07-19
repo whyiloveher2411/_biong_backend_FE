@@ -39,6 +39,10 @@ import {
     saveAgentGeminiOpenBrowser,
     saveAgentGithubScreenshotHomepage,
     saveAgentIntroduceApp,
+    saveAgentShowKaraoke,
+    listVerifiedAvatars,
+    saveAgentAvatar,
+    type AvatarPipAnchor,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
     enqueueGeminiWebAudioScript,
@@ -209,6 +213,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingGithubScreenshotHomepage, setSavingGithubScreenshotHomepage] = React.useState(false);
     const [agentIntroduceApp, setAgentIntroduceApp] = React.useState(false);
     const [savingIntroduceApp, setSavingIntroduceApp] = React.useState(false);
+    const [agentAvatarId, setAgentAvatarId] = React.useState(0);
+    const [agentShowAvatar, setAgentShowAvatar] = React.useState(false);
+    const [agentAvatarAnchor, setAgentAvatarAnchor] = React.useState<AvatarPipAnchor>('bottom_right');
+    const [agentAvatarMasterUrl, setAgentAvatarMasterUrl] = React.useState('');
+    const [verifiedAvatars, setVerifiedAvatars] = React.useState<Array<{ id: number; title: string; master_url: string }>>([]);
+    const [savingAgentAvatar, setSavingAgentAvatar] = React.useState(false);
+    const [agentShowKaraoke, setAgentShowKaraoke] = React.useState(true);
+    const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
+    const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiFillProgress, setGeminiFillProgress] = React.useState<{
         current: number;
@@ -500,6 +513,26 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
         setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
         setAgentIntroduceApp(Boolean(res?.agent_introduce_app));
+        const nextAvatarId = Number(res?.agent_avatar_id || res?.agent_avatar?.avatar_id || 0);
+        const resolvedId = Number.isFinite(nextAvatarId) && nextAvatarId > 0 ? nextAvatarId : 0;
+        const masterFromApi = String(res?.agent_avatar?.master_url || '').trim();
+        const nextAnchorRaw = String(
+            res?.agent_avatar_anchor || res?.agent_avatar?.anchor || 'bottom_right',
+        ).trim() as AvatarPipAnchor;
+        const nextAnchor: AvatarPipAnchor = (
+            ['top_left', 'top_right', 'bottom_left', 'bottom_right', 'center'] as AvatarPipAnchor[]
+        ).includes(nextAnchorRaw)
+            ? nextAnchorRaw
+            : 'bottom_right';
+        setAgentAvatarId(resolvedId);
+        setAgentShowAvatar(resolvedId > 0);
+        setAgentAvatarAnchor(nextAnchor);
+        setAgentShowKaraoke(res?.agent_show_karaoke !== false);
+        if (!(resolvedId > 0)) {
+            setAgentAvatarMasterUrl('');
+        } else {
+            setAgentAvatarMasterUrl((prev) => masterFromApi || prev);
+        }
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
@@ -673,6 +706,36 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         loadRow({ syncTtsQueue: true });
     }, [loadRow, open, shortVideoId]);
+
+    React.useEffect(() => {
+        if (!open) {
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await listVerifiedAvatars();
+                if (cancelled || !res?.success) {
+                    return;
+                }
+                const rows = Array.isArray(res.avatars) ? res.avatars : [];
+                setVerifiedAvatars(
+                    rows
+                        .map((row) => ({
+                            id: Number(row?.id || 0),
+                            title: String(row?.title || '').trim() || `Avatar #${row?.id || ''}`,
+                            master_url: String(row?.master_url || '').trim(),
+                        }))
+                        .filter((row) => row.id > 0),
+                );
+            } catch {
+                // ignore — select vẫn dùng được với id đã lưu
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
 
     React.useEffect(() => {
         if (!open || !shortVideoId) {
@@ -2587,6 +2650,107 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const applyAvatarSaveResult = (res: {
+        agent_avatar_id?: number;
+        agent_show_avatar?: boolean;
+        agent_avatar_anchor?: AvatarPipAnchor;
+        agent_avatar?: {
+            show?: boolean;
+            avatar_id?: number;
+            title?: string;
+            master_url?: string;
+            anchor?: AvatarPipAnchor;
+        };
+    }) => {
+        const nextId = Number(res?.agent_avatar_id ?? res?.agent_avatar?.avatar_id ?? 0);
+        const resolvedId = Number.isFinite(nextId) && nextId > 0 ? nextId : 0;
+        setAgentAvatarId(resolvedId);
+        setAgentShowAvatar(resolvedId > 0);
+        const nextAnchorRaw = String(
+            res?.agent_avatar_anchor || res?.agent_avatar?.anchor || agentAvatarAnchor,
+        ).trim() as AvatarPipAnchor;
+        if (
+            (['top_left', 'top_right', 'bottom_left', 'bottom_right', 'center'] as AvatarPipAnchor[])
+                .includes(nextAnchorRaw)
+        ) {
+            setAgentAvatarAnchor(nextAnchorRaw);
+        }
+        let master = String(res?.agent_avatar?.master_url || '').trim();
+        if (!master && resolvedId > 0) {
+            const found = verifiedAvatars.find((item) => item.id === resolvedId);
+            master = String(found?.master_url || '').trim();
+        }
+        setAgentAvatarMasterUrl(master);
+    };
+
+    const handleAgentAvatarApply = async (nextId: number, anchor: AvatarPipAnchor) => {
+        if (savingAgentAvatar) {
+            return;
+        }
+        setSavingAgentAvatar(true);
+        try {
+            const res = await saveAgentAvatar(shortVideoId, nextId, anchor);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được avatar',
+                    'error',
+                );
+                return;
+            }
+            applyAvatarSaveResult(res);
+            if (nextId > 0) {
+                const found = verifiedAvatars.find((item) => item.id === nextId);
+                const master = String(found?.master_url || res?.agent_avatar?.master_url || '').trim();
+                if (master) {
+                    setAgentAvatarMasterUrl(master);
+                }
+                setAgentShowAvatar(true);
+                setAgentAvatarId(nextId);
+                setAgentAvatarAnchor(anchor);
+            }
+            setAvatarDrawerOpen(false);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (nextId > 0 ? 'Đã chọn avatar lip-sync' : 'Đã bỏ avatar'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingAgentAvatar(false);
+        }
+    };
+
+    const handleAgentShowKaraokeChange = async (checked: boolean) => {
+        if (savingShowKaraoke) {
+            return;
+        }
+        setAgentShowKaraoke(checked);
+        setSavingShowKaraoke(true);
+        try {
+            const res = await saveAgentShowKaraoke(shortVideoId, checked);
+            if (!res?.success) {
+                setAgentShowKaraoke(!checked);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình karaoke',
+                    'error',
+                );
+                return;
+            }
+            setAgentShowKaraoke(res?.agent_show_karaoke !== false ? checked : false);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked ? 'Đã bật text karaoke' : 'Đã tắt text karaoke'),
+                'success',
+            );
+        } catch (e) {
+            setAgentShowKaraoke(!checked);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingShowKaraoke(false);
+        }
+    };
+
     const handleStartFullAutoPipeline = async (
         mode: 'resume' | 'restart' = 'resume',
         fromStep?: string,
@@ -3490,6 +3654,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingGithubScreenshotHomepage,
         agentIntroduceApp,
         savingIntroduceApp,
+        agentAvatarId,
+        agentShowAvatar,
+        agentAvatarAnchor,
+        agentAvatarMasterUrl,
+        verifiedAvatars,
+        savingAgentAvatar,
+        agentShowKaraoke,
+        savingShowKaraoke,
+        avatarDrawerOpen,
+        setAvatarDrawerOpen,
         geminiFillStatus,
         geminiFillProgress,
         geminiDivisionStatus,
@@ -3698,6 +3872,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleGeminiOpenBrowserChange,
         handleGithubScreenshotHomepageChange,
         handleIntroduceAppChange,
+        handleAgentAvatarApply,
+        handleAgentShowKaraokeChange,
         handleStartFullAutoPipeline,
         handleCancelFullAutoPipeline,
         handleHeadlessNewChat,

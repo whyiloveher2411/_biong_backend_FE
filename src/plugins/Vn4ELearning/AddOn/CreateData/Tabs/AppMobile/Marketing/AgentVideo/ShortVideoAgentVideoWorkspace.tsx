@@ -272,7 +272,21 @@ export default function ShortVideoAgentVideoWorkspace({
                     size="small"
                     variant="contained"
                     startIcon={<OpenInNewIcon />}
-                    onClick={() => window.open(state.agentVideoUrl, '_blank', 'noopener,noreferrer')}
+                    onClick={() => {
+                        const raw = String(state.agentVideoUrl || '').trim();
+                        if (!raw) return;
+                        // Cache-bust bằng timestamp client mỗi lần click — tránh mở file video cũ.
+                        let openUrl = raw;
+                        try {
+                            const u = new URL(raw, window.location.origin);
+                            u.searchParams.set('v', String(Date.now()));
+                            openUrl = u.toString();
+                        } catch {
+                            const sep = raw.includes('?') ? '&' : '?';
+                            openUrl = `${raw}${sep}v=${Date.now()}`;
+                        }
+                        window.open(openUrl, '_blank', 'noopener,noreferrer');
+                    }}
                     sx={{
                         color: 'grey.900',
                         bgcolor: 'warning.main',

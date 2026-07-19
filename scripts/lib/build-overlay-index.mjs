@@ -1,9 +1,27 @@
 /**
- * Overlay pass: video underlay (visual-silent) + caption + brand + progress + ambient.
+ * Overlay pass: video underlay (visual-silent) + caption + brand + progress + ambient (+ avatar optional).
  * Không gắn narration/BGM/SFX (mux riêng bằng ffmpeg).
  */
-export function buildOverlayIndexHtml({ shortVideoId, totalVideoSec, underlaySrc = "underlay.mp4" }) {
+export function buildOverlayIndexHtml({
+  shortVideoId,
+  totalVideoSec,
+  underlaySrc = "underlay.mp4",
+  avatarOverlay = false,
+  showCaptions = true,
+}) {
   const t = Number(totalVideoSec).toFixed(3);
+  const avatarCss = avatarOverlay
+    ? `    .hf-overlay-avatar { z-index:8800 !important; pointer-events:none; }\n`
+    : "";
+  const avatarHost = avatarOverlay
+    ? `    <div id="avatar-layer" class="clip hf-overlay-avatar" data-composition-id="avatar-overlay" data-composition-src="compositions/avatar-overlay.html" data-start="0" data-duration="${t}" data-track-index="19" style="position:absolute;inset:0;z-index:8800;"></div>\n`
+    : "";
+  const captionsCss = showCaptions
+    ? `    .hf-overlay-caption { z-index:9000 !important; pointer-events:none; }\n`
+    : "";
+  const captionsHost = showCaptions
+    ? `    <div id="captions-layer" class="clip hf-overlay-caption" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="${t}" data-track-index="20" style="position:absolute;inset:0;z-index:9000;"></div>\n`
+    : "";
   return `<!doctype html>
 <html lang="vi">
 <head>
@@ -22,8 +40,7 @@ export function buildOverlayIndexHtml({ shortVideoId, totalVideoSec, underlaySrc
     .beat-host { overflow:hidden; background:transparent; }
     .visual-underlay { width:1080px; height:1920px; object-fit:cover; }
     .beat-progress-host { z-index:8990 !important; pointer-events:none; }
-    .hf-overlay-caption { z-index:9000 !important; pointer-events:none; }
-    .hf-overlay-brand { z-index:9500 !important; pointer-events:none; }
+${captionsCss}${avatarCss}    .hf-overlay-brand { z-index:9500 !important; pointer-events:none; }
   </style>
 </head>
 <body>
@@ -31,8 +48,7 @@ export function buildOverlayIndexHtml({ shortVideoId, totalVideoSec, underlaySrc
     <video id="visual-underlay" class="clip visual-underlay" src="${underlaySrc}" data-start="0" data-duration="${t}" data-track-index="1" muted playsinline style="position:absolute;inset:0;z-index:1;width:1080px;height:1920px;object-fit:cover;"></video>
     <div id="ambient-layer" class="clip beat-host" data-composition-id="ambient" data-composition-src="compositions/ambient-layer.html" data-start="0" data-duration="${t}" data-track-index="30" style="position:absolute;inset:0;z-index:800;"></div>
     <div id="beat-progress-host" class="clip beat-progress-host" data-start="0" data-duration="${t}" data-track-index="31" style="position:absolute;top:0;left:0;width:1080px;height:4px;z-index:8990;pointer-events:none;"><div class="beat-progress-track" style="position:absolute;inset:0;background:transparent;overflow:hidden;"><div class="beat-progress-fill" style="width:100%;height:100%;background:linear-gradient(90deg,#37b8ff 0%,#5fd6ff 18%,#78f0d8 34%,#c0f36a 50%,#ffd86b 66%,#ff9b49 82%,#ff5a36 92%,#ff3b1f 100%);box-shadow:0 0 8px rgba(95,214,255,0.28),0 0 14px rgba(255,170,84,0.30),0 0 20px rgba(255,90,54,0.22);border-radius:0 2px 2px 0;clip-path:inset(0 100% 0 0);"></div></div></div>
-    <div id="captions-layer" class="clip hf-overlay-caption" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="${t}" data-track-index="20" style="position:absolute;inset:0;z-index:9000;"></div>
-    <div id="brand-layer" class="clip hf-overlay-brand" data-composition-id="brand-watermark" data-composition-src="compositions/brand-watermark.html" data-start="0" data-duration="${t}" data-track-index="21" style="position:absolute;inset:0;z-index:9500;"></div>
+${avatarHost}${captionsHost}    <div id="brand-layer" class="clip hf-overlay-brand" data-composition-id="brand-watermark" data-composition-src="compositions/brand-watermark.html" data-start="0" data-duration="${t}" data-track-index="21" style="position:absolute;inset:0;z-index:9500;"></div>
   </div>
   <script>
     window.__timelines = window.__timelines || {};

@@ -51,9 +51,12 @@ describe('beat map background + visual_description limits', () => {
         };
         const ok = parseBeatMapJson(JSON.stringify(withBg));
         expect(ok.map).toBeTruthy();
-        expect(ok.map?.sections[0].background).toContain('charcoal');
+        if (!ok.map) {
+            return;
+        }
+        expect(ok.map.sections[0].background).toContain('charcoal');
 
-        const validation = validateBeatMap(ok.map!, 10);
+        const validation = validateBeatMap(ok.map, 10);
         expect(validation.valid).toBe(true);
     });
 });

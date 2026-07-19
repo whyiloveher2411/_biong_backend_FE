@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Button,
     Chip,
     FormControl,
     FormControlLabel,
@@ -20,12 +21,14 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import TextareaForm from 'components/atoms/fields/textarea/Form';
+import { convertToURL, validURL } from 'helpers/url';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
     FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -33,6 +36,9 @@ import {
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
+import ShortVideoAgentAvatarDrawer, {
+    AVATAR_PIP_ANCHORS,
+} from './ShortVideoAgentAvatarDrawer';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -839,6 +845,123 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         </Typography>
                                     </Box>
                                 )}
+                            />
+                            <FormControlLabel
+                                sx={{ ml: 0.5, mr: 0, width: '100%' }}
+                                control={(
+                                    <Switch
+                                        size="small"
+                                        checked={state.agentShowKaraoke}
+                                        disabled={state.savingShowKaraoke}
+                                        onChange={(e) => {
+                                            void state.handleAgentShowKaraokeChange(e.target.checked);
+                                        }}
+                                        inputProps={{ 'aria-label': 'Hiện text karaoke' }}
+                                    />
+                                )}
+                                label={(
+                                    <Box>
+                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                            Hiện text karaoke
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                            Tắt: không ghép caption layer; beat được dùng vùng dưới (còn ~80px đáy).
+                                        </Typography>
+                                    </Box>
+                                )}
+                            />
+                            {(() => {
+                                const selected = state.verifiedAvatars.find(
+                                    (item) => item.id === state.agentAvatarId,
+                                );
+                                const masterRaw = String(
+                                    state.agentAvatarMasterUrl || selected?.master_url || '',
+                                ).trim();
+                                let thumbSrc = '';
+                                if (masterRaw) {
+                                    if (validURL(masterRaw) || masterRaw.startsWith('data:')) {
+                                        thumbSrc = masterRaw;
+                                    } else if (masterRaw.startsWith('//')) {
+                                        thumbSrc = `https:${masterRaw}`;
+                                    } else {
+                                        thumbSrc = convertToURL(
+                                            process.env.REACT_APP_BASE_URL,
+                                            masterRaw.replace(/^\//, ''),
+                                        );
+                                    }
+                                }
+                                const anchorLabel = AVATAR_PIP_ANCHORS.find(
+                                    (item) => item.id === state.agentAvatarAnchor,
+                                )?.label || 'Dưới phải';
+                                return (
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        color="inherit"
+                                        disabled={state.savingAgentAvatar}
+                                        onClick={() => state.setAvatarDrawerOpen(true)}
+                                        endIcon={<ChevronRightIcon />}
+                                        sx={{
+                                            ...workflowFieldSurfaceSx,
+                                            ml: 0.5,
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            py: 1,
+                                            px: 1.25,
+                                        }}
+                                    >
+                                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+                                            <Box
+                                                sx={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: '50%',
+                                                    overflow: 'hidden',
+                                                    bgcolor: '#fff',
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {thumbSrc ? (
+                                                    <Box
+                                                        component="img"
+                                                        src={thumbSrc}
+                                                        alt=""
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover',
+                                                            display: 'block',
+                                                        }}
+                                                    />
+                                                ) : null}
+                                            </Box>
+                                            <Box sx={{ minWidth: 0, textAlign: 'left', flex: 1 }}>
+                                                <Typography variant="body2" fontWeight={600} noWrap>
+                                                    {selected?.title
+                                                        || (state.agentAvatarId > 0
+                                                            ? `Avatar #${state.agentAvatarId}`
+                                                            : 'Chọn avatar lip-sync')}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                                    {state.agentAvatarId > 0
+                                                        ? `PiP: ${anchorLabel}`
+                                                        : 'Verified · vị trí PiP trong drawer'}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                    </Button>
+                                );
+                            })()}
+                            <ShortVideoAgentAvatarDrawer
+                                open={state.avatarDrawerOpen}
+                                onClose={() => state.setAvatarDrawerOpen(false)}
+                                avatars={state.verifiedAvatars}
+                                selectedId={state.agentAvatarId}
+                                selectedAnchor={state.agentAvatarAnchor}
+                                saving={state.savingAgentAvatar}
+                                onApply={state.handleAgentAvatarApply}
                             />
                             <FormControlLabel
                                 sx={{ ml: 0.5, mr: 0 }}

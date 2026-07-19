@@ -8,6 +8,8 @@ const EXTENSION_PING_EVENT = 'vn4-extension-ping';
 const EXTENSION_PONG_EVENT = 'vn4-extension-pong';
 const STORE_SCREENSHOT_GEMINI_QUERY_EVENT = 'vn4-query-store-screenshot-gemini';
 const STORE_SCREENSHOT_GEMINI_QUERY_RESULT_EVENT = 'vn4-query-store-screenshot-gemini-result';
+const AVATAR_ASSET_GEMINI_QUERY_EVENT = 'vn4-query-avatar-asset-gemini';
+const AVATAR_ASSET_GEMINI_QUERY_RESULT_EVENT = 'vn4-query-avatar-asset-gemini-result';
 
 /**
  * Mở tab ngoài (xAI, Gemini, …) qua Chrome extension khi có.
@@ -119,6 +121,35 @@ export function queryStoreScreenshotGeminiEnabled(timeoutMs = 4000): Promise<boo
         document.addEventListener(STORE_SCREENSHOT_GEMINI_QUERY_RESULT_EVENT, onResult);
         document.dispatchEvent(
             new CustomEvent(STORE_SCREENSHOT_GEMINI_QUERY_EVENT, {
+                bubbles: true,
+                composed: true,
+            }),
+        );
+    });
+}
+
+export function queryAvatarAssetGeminiEnabled(timeoutMs = 4000): Promise<boolean> {
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (value: boolean) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            window.clearTimeout(timer);
+            document.removeEventListener(AVATAR_ASSET_GEMINI_QUERY_RESULT_EVENT, onResult);
+            resolve(value);
+        };
+
+        const onResult = (event: Event) => {
+            const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+            finish(Boolean(detail?.enabled));
+        };
+
+        const timer = window.setTimeout(() => finish(false), timeoutMs);
+        document.addEventListener(AVATAR_ASSET_GEMINI_QUERY_RESULT_EVENT, onResult);
+        document.dispatchEvent(
+            new CustomEvent(AVATAR_ASSET_GEMINI_QUERY_EVENT, {
                 bubbles: true,
                 composed: true,
             }),

@@ -23,9 +23,160 @@ import {
   tokenizeScript,
   interpolateTiming,
 } from "../.cursor/skills/biong-short-video-preflight/scripts/lib/caption-script-align.mjs";
+import { buildLipSyncTimeline } from "../.cursor/skills/biong-short-video-preflight/scripts/lib/avatar-lip-sync.mjs";
+import { createAudioEnergy } from "../.cursor/skills/biong-short-video-preflight/scripts/lib/avatar-audio-energy.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HF_ASSETS = path.join(REPO_ROOT, ".cursor/skills/biong-short-video-hyperframes/assets");
+
+function extFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const base = path.basename(u.pathname);
+    const m = /\.(png|jpe?g|webp|gif)$/i.exec(base);
+    if (m) return m[0].toLowerCase().replace("jpeg", "jpg");
+  } catch {
+    /* ignore */
+  }
+  return ".png";
+}
+
+/**
+ * Tải avatar assets + ghi assets/avatar-overlay.json.
+ * @returns {Promise<boolean>} true nếu bật overlay
+ */
+async function prepareAvatarOverlay(projectDir, ctx, importHtml, log) {
+  const render = ctx?.agent_avatar_render;
+  const cfgPath = path.join(projectDir, "assets/avatar-overlay.json");
+  const compositionPath = path.join(projectDir, "compositions/avatar-overlay.html");
+  const avatarId = Number(ctx?.agent_avatar_id || ctx?.agent_avatar?.avatar_id || 0);
+  // Hiện avatar = có avatar_id (không còn toggle riêng)
+  const showAvatar = avatarId > 0;
+  if (!showAvatar || !render) {
+    try {
+      if (fs.existsSync(cfgPath)) fs.unlinkSync(cfgPath);
+      if (fs.existsSync(compositionPath)) fs.unlinkSync(compositionPath);
+    } catch {
+      /* ignore */
+    }
+    if (avatarId > 0 && !render) {
+      log(
+        "⚠️ Có avatar_id nhưng thiếu agent_avatar_render (avatar chưa verified / thiếu master) — bỏ overlay",
+      );
+    }
+    return false;
+  }
+  const remoteAssets = render.assets && typeof render.assets === "object" ? render.assets : {};
+  const masterUrl = String(remoteAssets.master || render.master_url || "").trim();
+  if (!masterUrl) {
+    log("⚠️ Avatar bật nhưng thiếu master_url — bỏ avatar overlay");
+    return false;
+  }
+
+  const avatarDir = path.join(projectDir, "assets/avatar");
+  fs.mkdirSync(avatarDir, { recursive: true });
+  const localAssets = {};
+
+  for (const [key, urlRaw] of Object.entries(remoteAssets)) {
+    const url = String(urlRaw || "").trim();
+    if (!url) continue;
+    const ext = extFromUrl(url);
+    const destRel = `assets/avatar/${key}${ext}`;
+    const destAbs = path.join(projectDir, destRel);
+    try {
+      await downloadToUrl(url, destAbs);
+      localAssets[key] = destRel;
+    } catch (err) {
+      log(`⚠️ Không tải được avatar asset ${key}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  if (!localAssets.master && masterUrl) {
+    const destRel = `assets/avatar/master${extFromUrl(masterUrl)}`;
+    try {
+      await downloadToUrl(masterUrl, path.join(projectDir, destRel));
+      localAssets.master = destRel;
+    } catch (err) {
+      log(`⚠️ Không tải master avatar: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
+  let words = [];
+  const captionList = importHtml?.caption_words_list;
+  const captionNested = importHtml?.caption_words?.words;
+  const whisper = importHtml?.whisper_words;
+  if (Array.isArray(captionList) && captionList.length) {
+    words = captionList;
+  } else if (Array.isArray(captionNested) && captionNested.length) {
+    words = captionNested;
+  } else if (Array.isArray(whisper) && whisper.length) {
+    words = whisper;
+  }
+
+  const cfg = {
+    enabled: true,
+    avatar_id: render.avatar_id || 0,
+    assets: localAssets,
+    composite_hints: render.composite_hints || null,
+    pip: render.pip || { anchor: "bottom_right", width_ratio: 0.2, margin_px: 28 },
+    words,
+  };
+  fs.writeFileSync(
+    path.join(projectDir, "assets/avatar-overlay.json"),
+    JSON.stringify(cfg, null, 2),
+  );
+  log(
+    `Avatar overlay: id=${cfg.avatar_id}, assets=${Object.keys(localAssets).length}, words=${words.length}`,
+  );
+  return true;
+}
+
+/**
+ * Preprocess lip-sync v2 → assets/avatar/mouth-timeline.json (trước gen-avatar-overlay).
+ */
+function prepareAvatarLipSyncTimeline(projectDir, totalSec, log) {
+  const cfgPath = path.join(projectDir, "assets/avatar-overlay.json");
+  if (!fs.existsSync(cfgPath)) return null;
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!cfg?.enabled) return null;
+  const words = Array.isArray(cfg.words) ? cfg.words : [];
+  const duration = Math.max(0.1, Number(totalSec) || 0.1);
+
+  let energyAt = null;
+  let isLowEnergy = null;
+  for (const rel of ["assets/narration.mp3", "assets/audio/narration.mp3", "narration.mp3"]) {
+    const abs = path.join(projectDir, rel);
+    if (!fs.existsSync(abs)) continue;
+    const energy = createAudioEnergy(abs);
+    if (energy.ok) {
+      energyAt = (t) => energy.peakNorm(t);
+      isLowEnergy = (t) => energy.isLowEnergy(t);
+      log(`Avatar lip-sync RMS: ${rel} (${energy.durationSec.toFixed(1)}s)`);
+    }
+    break;
+  }
+
+  const tl = buildLipSyncTimeline({
+    words,
+    totalSec: duration,
+    energyAt,
+    isLowEnergy,
+  });
+  const outPath = path.join(projectDir, "assets/avatar/mouth-timeline.json");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, JSON.stringify(tl, null, 2));
+  const st = tl.stats || {};
+  log(
+    `Avatar lip-sync v2: cues=${st.cueCount ?? 0} speaking=${st.speakingSec ?? 0}s silence=${st.silenceSec ?? 0}s gRatio=${st.gRatio ?? 0}`,
+  );
+  return tl;
+}
 
 function parseArgs(argv) {
   const out = {
@@ -555,6 +706,8 @@ async function main() {
 
     const sfxBeatTransition = assets.sfx_beat_transition !== false;
     const sfxHook = Boolean(assets.sfx_hook);
+    let avatarOverlay = false;
+    const showCaptions = ctx?.agent_show_karaoke !== false;
 
     fs.writeFileSync(
       path.join(projectDir, "index.html"),
@@ -562,10 +715,10 @@ async function main() {
         shortVideoId,
         totalVideoSec,
         sections,
-        options: { sfxHook },
+        options: { sfxHook, avatarOverlay, showCaptions },
       }),
     );
-    log("Wrote index.html skeleton");
+    log(`Wrote index.html skeleton (karaoke=${showCaptions ? "on" : "off"})`);
 
     runNodeScript("bootstrap-phase2-assets.mjs", projectDir, [], "bootstrap-phase2-assets");
 
@@ -581,22 +734,26 @@ async function main() {
     );
     runNodeScript("sync-caption-from-script.mjs", projectDir, [], "sync-caption-from-script");
 
-    if (args.allowCaptionMismatch) {
-      log("⚠️ allow-caption-mismatch — bỏ verify strict; karaoke text = script");
-      const forced = forceCaptionWordsTextFromScript(projectDir);
-      log(
-        `Ép caption text từ script: ${forced.scriptWordCount} từ (trước đó ${forced.previousWordCount})`,
-      );
-    } else {
-      try {
-        runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
-      } catch (verifyError) {
-        const detail = buildCaptionSyncFailureMessage(
-          projectDir,
-          verifyError instanceof Error ? verifyError.message : String(verifyError),
+    if (showCaptions) {
+      if (args.allowCaptionMismatch) {
+        log("⚠️ allow-caption-mismatch — bỏ verify strict; karaoke text = script");
+        const forced = forceCaptionWordsTextFromScript(projectDir);
+        log(
+          `Ép caption text từ script: ${forced.scriptWordCount} từ (trước đó ${forced.previousWordCount})`,
         );
-        throw new Error(detail);
+      } else {
+        try {
+          runNodeScript("verify-caption-sync.mjs", projectDir, ["--strict"], "verify-caption-sync");
+        } catch (verifyError) {
+          const detail = buildCaptionSyncFailureMessage(
+            projectDir,
+            verifyError instanceof Error ? verifyError.message : String(verifyError),
+          );
+          throw new Error(detail);
+        }
       }
+    } else {
+      log("Karaoke tắt — bỏ verify caption sync / không ghép captions-layer");
     }
 
     const timelineSec = patchTimelineDurationFromCaption({
@@ -604,9 +761,40 @@ async function main() {
       shortVideoId,
       beatMap,
       sections,
-      options: { sfxHook },
+      options: { sfxHook, avatarOverlay, showCaptions },
     });
     log(`Timeline duration patched to ${timelineSec}s from caption sync`);
+
+    avatarOverlay = await prepareAvatarOverlay(projectDir, ctx, importHtml, log);
+    if (avatarOverlay) {
+      // refresh index với avatar host sau khi đã có config
+      fs.writeFileSync(
+        path.join(projectDir, "index.html"),
+        buildImportHtmlIndexHtml({
+          shortVideoId,
+          totalVideoSec: timelineSec,
+          sections,
+          options: { sfxHook, avatarOverlay: true, showCaptions },
+        }),
+      );
+      // Ưu tiên words đã sync karaoke
+      try {
+        const cwPath = path.join(projectDir, "assets/caption-words.json");
+        if (fs.existsSync(cwPath)) {
+          const cw = JSON.parse(fs.readFileSync(cwPath, "utf8"));
+          const list = Array.isArray(cw?.words) ? cw.words : Array.isArray(cw) ? cw : [];
+          if (list.length) {
+            const cfgPath = path.join(projectDir, "assets/avatar-overlay.json");
+            const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+            cfg.words = list;
+            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            log(`Avatar overlay words ← caption-words.json (${list.length})`);
+          }
+        }
+      } catch {
+        /* keep whisper/caption from context */
+      }
+    }
 
     runNodeScript(
       "normalize-import-html-beat-for-render.mjs",
@@ -615,13 +803,32 @@ async function main() {
       "normalize-import-html-beat",
     );
     runNodeScript("sync-index-beats-from-map.mjs", projectDir, [], "sync-index-beats");
-    runNodeScript("gen-captions-html.mjs", projectDir, [], "gen-captions-html");
+    if (showCaptions) {
+      runNodeScript("gen-captions-html.mjs", projectDir, [], "gen-captions-html");
+    } else {
+      try {
+        const captionsPath = path.join(projectDir, "compositions/captions.html");
+        if (fs.existsSync(captionsPath)) fs.unlinkSync(captionsPath);
+      } catch {
+        /* ignore */
+      }
+      log("Bỏ gen-captions-html (karaoke tắt)");
+    }
     runNodeScript(
       "gen-brand-watermark.mjs",
       projectDir,
       ["--duration", String(timelineSec)],
       "gen-brand-watermark",
     );
+    if (avatarOverlay) {
+      prepareAvatarLipSyncTimeline(projectDir, timelineSec, log);
+      runNodeScript(
+        "gen-avatar-overlay.mjs",
+        projectDir,
+        ["--duration", String(timelineSec)],
+        "gen-avatar-overlay",
+      );
+    }
 
     if (bgmSegments.length > 0) {
       runNodeScript("wire-bgm-chain.mjs", projectDir, [], "wire-bgm-chain");
@@ -636,8 +843,8 @@ async function main() {
     if (!args.skipPreflight) {
       try {
         runImportHtmlPreflight(projectDir, {
-          strictCaption: !args.allowCaptionMismatch,
-          skipCaptionVerify: args.allowCaptionMismatch,
+          strictCaption: showCaptions && !args.allowCaptionMismatch,
+          skipCaptionVerify: !showCaptions || args.allowCaptionMismatch,
         });
       } catch (preflightError) {
         const raw = preflightError instanceof Error ? preflightError.message : String(preflightError);

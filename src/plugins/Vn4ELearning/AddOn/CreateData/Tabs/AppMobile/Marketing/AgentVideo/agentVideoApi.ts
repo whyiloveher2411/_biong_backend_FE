@@ -275,6 +275,13 @@ export type AgentSourceFormatCatalogItem = {
     description?: string;
 };
 
+export type AvatarPipAnchor =
+    | 'top_left'
+    | 'top_right'
+    | 'bottom_left'
+    | 'bottom_right'
+    | 'center';
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -292,6 +299,17 @@ export type AgentVideoContentResponse = {
     agent_gemini_open_browser?: boolean;
     agent_github_screenshot_homepage?: boolean;
     agent_introduce_app?: boolean;
+    agent_avatar_id?: number;
+    agent_show_avatar?: boolean;
+    agent_avatar_anchor?: AvatarPipAnchor;
+    agent_show_karaoke?: boolean;
+    agent_avatar?: {
+        show?: boolean;
+        avatar_id?: number;
+        title?: string;
+        master_url?: string;
+        anchor?: AvatarPipAnchor;
+    };
     agent_tts_platforms?: string[];
     agent_omnivoice_voice?: string;
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
@@ -739,6 +757,58 @@ export async function saveAgentIntroduceApp(
             agent_introduce_app: enabled ? '1' : '0',
         }),
     ) as Promise<JsonResponse & { agent_introduce_app?: boolean }>;
+}
+
+export async function saveAgentShowKaraoke(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_show_karaoke?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-show-karaoke',
+        shortVideoBody(shortVideoId, {
+            agent_show_karaoke: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_show_karaoke?: boolean }>;
+}
+
+export type VerifiedAvatarOption = {
+    id: number;
+    title: string;
+    master_url: string;
+};
+
+export async function listVerifiedAvatars(): Promise<JsonResponse & { avatars?: VerifiedAvatarOption[] }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/list-verified-avatars',
+        {},
+    ) as Promise<JsonResponse & { avatars?: VerifiedAvatarOption[] }>;
+}
+
+export async function saveAgentAvatar(
+    shortVideoId: number,
+    avatarId: number,
+    anchor?: AvatarPipAnchor | string | null,
+): Promise<JsonResponse & {
+    agent_avatar_id?: number;
+    agent_show_avatar?: boolean;
+    agent_avatar_anchor?: AvatarPipAnchor;
+    agent_avatar?: AgentVideoContentResponse['agent_avatar'];
+}> {
+    const body: Record<string, string> = {
+        agent_avatar_id: avatarId > 0 ? String(avatarId) : '0',
+    };
+    if (anchor != null && String(anchor).trim() !== '') {
+        body.agent_avatar_anchor = String(anchor).trim();
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-avatar',
+        shortVideoBody(shortVideoId, body),
+    ) as Promise<JsonResponse & {
+        agent_avatar_id?: number;
+        agent_show_avatar?: boolean;
+        agent_avatar_anchor?: AvatarPipAnchor;
+        agent_avatar?: AgentVideoContentResponse['agent_avatar'];
+    }>;
 }
 
 export async function enqueueGeminiWebBeatFill(

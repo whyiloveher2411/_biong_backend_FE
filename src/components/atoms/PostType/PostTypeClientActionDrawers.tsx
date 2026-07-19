@@ -10,6 +10,7 @@ import MarketingOmniVoiceSegmentsPreviewDrawer from 'components/atoms/PostType/M
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
+import ShortVideoAvatarAssetsDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoAvatarAssetsDrawer';
 import { parseShortVideoAgentTabFromSearch } from 'helpers/shortVideoAgentVideoDrawerUrl';
 
 export type PostTypeClientDrawerAction =
@@ -20,6 +21,7 @@ export type PostTypeClientDrawerAction =
     | 'drawer:MarketingManualAudio'
     | 'drawer:MarketingOmniVoiceSegmentsPreview'
     | 'drawer:ShortVideoEdit'
+    | 'drawer:ShortVideoAvatarAssets'
     | 'drawer:ObjectStoreMigrate'
     | string;
 
@@ -118,6 +120,17 @@ function PostTypeClientActionDrawers({
                     initialTab={parseShortVideoAgentTabFromSearch(searchParams.toString())}
                 />
             </>
+        );
+    }
+
+    if (postType === 'short_video_avatar') {
+        return (
+            <ShortVideoAvatarAssetsDrawer
+                open={activeDrawer === 'drawer:ShortVideoAvatarAssets'}
+                onClose={onClose}
+                data={data}
+                onRefreshPost={onRefreshPost}
+            />
         );
     }
 

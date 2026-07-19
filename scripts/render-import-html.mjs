@@ -216,12 +216,24 @@ async function main() {
     ensureSymlinkAbs(path.join(overlayDir, "assets"), path.join(projectDir, "assets"));
     const underlayInOverlay = path.join(overlayDir, "underlay.mp4");
     fs.copyFileSync(silentPath, underlayInOverlay);
+    const avatarOverlay =
+      fs.existsSync(path.join(projectDir, "compositions/avatar-overlay.html"))
+      && fs.existsSync(path.join(projectDir, "assets/avatar-overlay.json"));
+    const showCaptions = fs.existsSync(path.join(projectDir, "compositions/captions.html"));
+    if (avatarOverlay) {
+      console.log("[render-import-html] avatar overlay ON");
+    }
+    if (!showCaptions) {
+      console.log("[render-import-html] karaoke OFF — bỏ captions-layer");
+    }
     fs.writeFileSync(
       path.join(overlayDir, "index.html"),
       buildOverlayIndexHtml({
         shortVideoId,
         totalVideoSec,
         underlaySrc: "underlay.mp4",
+        avatarOverlay,
+        showCaptions,
       }),
       "utf8",
     );

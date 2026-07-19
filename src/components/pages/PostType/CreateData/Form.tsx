@@ -30,6 +30,7 @@ import NotificationAiDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/App
 import ObjectStoreMigrateDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/ObjectStoreMigrateDrawer';
 import ShortVideoEditDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoEditDrawer';
 import ShortVideoAgentAudioDrawer from 'components/atoms/PostType/ShortVideoAgentAudioDrawer';
+import ShortVideoAvatarAssetsDrawer from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/ShortVideoAvatarAssetsDrawer';
 import { getPostTypeActionButtonColorProps } from 'helpers/postTypeColor';
 import { openMarketingXaiTtsWorkflow } from 'helpers/marketingXaiTtsWorkflow';
 import { copyShortVideoAgentPromptToClipboard, resolveAgentPromptPhaseFromAction } from 'helpers/marketingShortVideoAgentPrompt';
@@ -143,6 +144,7 @@ function Form({
     const [objectStoreMigrateDrawerOpen, setObjectStoreMigrateDrawerOpen] = React.useState(false);
     const [shortVideoEditDrawerOpen, setShortVideoEditDrawerOpen] = React.useState(false);
     const [shortVideoAgentAudioDrawerOpen, setShortVideoAgentAudioDrawerOpen] = React.useState(false);
+    const [shortVideoAvatarAssetsDrawerOpen, setShortVideoAvatarAssetsDrawerOpen] = React.useState(false);
 
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -484,6 +486,9 @@ function Form({
                                     setSearchParams(next, { replace: true });
                                 }
                             }
+                            if (action === 'drawer:ShortVideoAvatarAssets') {
+                                setShortVideoAvatarAssetsDrawerOpen(true);
+                            }
                         }}
                     />
                 )
@@ -557,6 +562,14 @@ function Form({
                         initialTab={parseShortVideoAgentTabFromSearch(searchParams.toString())}
                     />
                 </>
+            )}
+            {postType === 'short_video_avatar' && (
+                <ShortVideoAvatarAssetsDrawer
+                    open={shortVideoAvatarAssetsDrawerOpen}
+                    onClose={() => setShortVideoAvatarAssetsDrawerOpen(false)}
+                    data={data}
+                    onRefreshPost={onRefreshPost}
+                />
             )}
             {postType === 'app_local_notification' && (
                 <NotificationAiDrawer

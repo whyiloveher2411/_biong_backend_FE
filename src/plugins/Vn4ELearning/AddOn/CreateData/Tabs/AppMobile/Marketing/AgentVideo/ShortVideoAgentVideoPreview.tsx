@@ -16,6 +16,7 @@ import {
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
+import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -98,6 +99,22 @@ export default function ShortVideoAgentVideoPreview({
         onPreviewSourceChange(value);
     };
 
+    const showAvatarPip = Boolean(state.agentAvatarId > 0);
+    const avatarMasterUrl = React.useMemo(() => {
+        const fromState = String(state.agentAvatarMasterUrl || '').trim();
+        if (fromState) {
+            return fromState;
+        }
+        const id = Number(state.agentAvatarId || 0);
+        if (!(id > 0)) {
+            return '';
+        }
+        const found = state.verifiedAvatars.find((item) => item.id === id);
+        return String(found?.master_url || '').trim();
+    }, [state.agentAvatarMasterUrl, state.agentAvatarId, state.verifiedAvatars]);
+    const avatarAnchor = state.agentAvatarAnchor || 'bottom_right';
+    const showKaraoke = state.agentShowKaraoke !== false;
+
     return (
         <Box
             sx={{
@@ -170,6 +187,10 @@ export default function ShortVideoAgentVideoPreview({
                         audioUrl={state.audioFileUrl}
                         audioDurationSec={state.audioDurationSec}
                         videoRef={videoRef}
+                        showAvatarPip={showAvatarPip}
+                        avatarMasterUrl={avatarMasterUrl}
+                        avatarAnchor={avatarAnchor}
+                        showKaraoke={showKaraoke}
                     />
                 ) : activeSource === 'html_beat' ? (
                     <HtmlBeatMissingPlaceholder />
@@ -190,6 +211,8 @@ export default function ShortVideoAgentVideoPreview({
                             bgcolor: 'background.paper',
                             p: 3,
                             textAlign: 'center',
+                            position: 'relative',
+                            overflow: 'hidden',
                         }}
                     >
                         {placeholder.loading ? (
@@ -203,6 +226,12 @@ export default function ShortVideoAgentVideoPreview({
                                 {placeholder.description}
                             </Typography>
                         ) : null}
+                        <ShortVideoAgentAvatarPipOverlay
+                            show={showAvatarPip && Boolean(avatarMasterUrl)}
+                            masterUrl={avatarMasterUrl}
+                            anchor={avatarAnchor}
+                            showKaraoke={showKaraoke}
+                        />
                     </Box>
                 ) : null}
             </Box>

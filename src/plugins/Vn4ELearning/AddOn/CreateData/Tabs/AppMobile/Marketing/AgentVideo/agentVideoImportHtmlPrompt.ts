@@ -29,6 +29,7 @@ export type ImportHtmlContextPayload = {
     title?: string;
     language?: string;
     visual_style?: string;
+    agent_show_karaoke?: boolean;
     /** @deprecated Transitional read fallback only. */
     hf_theme?: string;
     audio_script?: string;
@@ -329,7 +330,8 @@ export async function buildBeatHtmlPrompt(
     );
     const durationFormatted = formatDurationSec(durationSec);
     const durationLabel = `${durationFormatted}s`;
-    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id);
+    const showKaraoke = context.agent_show_karaoke !== false;
+    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, { showKaraoke });
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
@@ -389,7 +391,7 @@ export async function buildBeatHtmlPrompt(
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
         buildFillTextAndBrandingRulesBlock(),
-        buildHtmlChatbotLayoutSafeZonesBlock(),
+        buildHtmlChatbotLayoutSafeZonesBlock({ showKaraoke }),
         visualBlock,
         '',
         buildHtmlChatbotJsContractBlock(durationSec),

@@ -9,6 +9,8 @@ import {
     HF_STAGE_WIDTH,
 } from './agentVideoHtmlBeatPreviewScale';
 import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
+import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
+import type { AvatarPipAnchor } from './agentVideoApi';
 
 type Props = {
     beatMap: BeatMap | null;
@@ -16,6 +18,10 @@ type Props = {
     audioUrl: string;
     audioDurationSec: number | null;
     videoRef: React.Ref<HTMLVideoElement>;
+    showAvatarPip?: boolean;
+    avatarMasterUrl?: string;
+    avatarAnchor?: AvatarPipAnchor | string;
+    showKaraoke?: boolean;
 };
 
 const EMPTY_HTML = '<html><body style="margin:0;background:#111;color:#666;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">Chưa có HTML beat</body></html>';
@@ -26,6 +32,10 @@ export default function ShortVideoAgentCustomHtmlPreview({
     audioUrl,
     audioDurationSec,
     videoRef,
+    showAvatarPip = false,
+    avatarMasterUrl = '',
+    avatarAnchor = 'bottom_right',
+    showKaraoke = true,
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -158,6 +168,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
                             height: HF_STAGE_HEIGHT,
                             transform: `scale(${containScale})`,
                             transformOrigin: 'top left',
+                            position: 'relative',
                         }}
                     >
                         <Box
@@ -174,6 +185,13 @@ export default function ShortVideoAgentCustomHtmlPreview({
                                 display: 'block',
                                 bgcolor: 'common.black',
                             }}
+                        />
+                        <ShortVideoAgentAvatarPipOverlay
+                            show={Boolean(showAvatarPip)}
+                            masterUrl={avatarMasterUrl}
+                            anchor={avatarAnchor}
+                            showKaraoke={showKaraoke}
+                            stageMode
                         />
                     </Box>
                 </Box>

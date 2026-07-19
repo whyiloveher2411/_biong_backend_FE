@@ -94,14 +94,22 @@ function countDepthBands(zValues) {
 }
 
 // --- Required files ---
+const indexExists = exists("index.html");
+const indexHtmlProbe = indexExists ? read("index.html") : "";
+const karaokeOn =
+  /data-composition-src\s*=\s*["'][^"']*captions\.html["']/i.test(indexHtmlProbe)
+  || /hf-overlay-caption/i.test(indexHtmlProbe);
+
 const requiredFiles = [
   "index.html",
   "assets/audio-script.txt",
   "assets/caption-words.json",
-  "compositions/captions.html",
   "compositions/brand-watermark.html",
   "assets/images/spacedev-logo.png",
 ];
+if (karaokeOn) {
+  requiredFiles.splice(3, 0, "compositions/captions.html");
+}
 
 for (const f of requiredFiles) {
   if (!exists(f)) {
@@ -115,28 +123,34 @@ if (errors.length) {
 }
 
 const indexHtml = read("index.html");
-const captionsHtml = read("compositions/captions.html");
+const captionsHtml = karaokeOn ? read("compositions/captions.html") : "";
 const watermarkHtml = read("compositions/brand-watermark.html");
 
+if (!karaokeOn) {
+  console.log("ℹ Karaoke tắt — bỏ kiểm tra captions-layer / compositions/captions.html");
+}
+
 // --- Caption pill vertical position ---
-const captionBottomMatch = captionsHtml.match(
-  /\.caption-group-wrap\s*\{[^}]*\bbottom\s*:\s*(\d+(?:\.\d+)?)\s*px/i,
-);
-if (captionBottomMatch) {
-  const bottomPx = parseFloat(captionBottomMatch[1]);
-  if (bottomPx < 180) {
-    errors.push(
-      `compositions/captions.html: caption pill bottom=${bottomPx}px quá sát mép — bắt buộc ≥180px (chuẩn ~180px / ~9.4%)`,
-    );
-  } else if (bottomPx > 360) {
+if (karaokeOn) {
+  const captionBottomMatch = captionsHtml.match(
+    /\.caption-group-wrap\s*\{[^}]*\bbottom\s*:\s*(\d+(?:\.\d+)?)\s*px/i,
+  );
+  if (captionBottomMatch) {
+    const bottomPx = parseFloat(captionBottomMatch[1]);
+    if (bottomPx < 180) {
+      errors.push(
+        `compositions/captions.html: caption pill bottom=${bottomPx}px quá sát mép — bắt buộc ≥180px (chuẩn ~180px / ~9.4%)`,
+      );
+    } else if (bottomPx > 360) {
+      warnings.push(
+        `compositions/captions.html: caption pill bottom=${bottomPx}px > 360px — có thể tràn caption band`,
+      );
+    }
+  } else {
     warnings.push(
-      `compositions/captions.html: caption pill bottom=${bottomPx}px > 360px — có thể tràn caption band`,
+      "compositions/captions.html: không parse được .caption-group-wrap bottom — kiểm tra vị trí pill thủ công",
     );
   }
-} else {
-  warnings.push(
-    "compositions/captions.html: không parse được .caption-group-wrap bottom — kiểm tra vị trí pill thủ công",
-  );
 }
 
 // --- Caption host in index.html ---
@@ -144,7 +158,7 @@ const hasCaptionHost =
   /data-composition-src\s*=\s*["'][^"']*captions\.html["']/i.test(indexHtml) ||
   /hf-overlay-caption/i.test(indexHtml);
 
-if (!hasCaptionHost) {
+if (karaokeOn && !hasCaptionHost) {
   errors.push(
     "index.html: thiếu clip host caption (data-composition-src=\"compositions/captions.html\" hoặc class hf-overlay-caption)",
   );
@@ -162,24 +176,26 @@ if (!hasWatermarkHost) {
 }
 
 // --- z-index on hosts ---
-const captionZ = extractZIndex(indexHtml, "hf-overlay-caption");
-if (captionZ === null) {
-  const alt = indexHtml.match(
-    /captions\.html["'][^>]*style="[^"]*z-index\s*:\s*(\d+)/i,
-  );
-  if (alt) {
-    if (parseInt(alt[1], 10) < 9000) {
+if (karaokeOn) {
+  const captionZ = extractZIndex(indexHtml, "hf-overlay-caption");
+  if (captionZ === null) {
+    const alt = indexHtml.match(
+      /captions\.html["'][^>]*style="[^"]*z-index\s*:\s*(\d+)/i,
+    );
+    if (alt) {
+      if (parseInt(alt[1], 10) < 9000) {
+        errors.push(
+          `Caption host z-index=${alt[1]} — bắt buộc ≥9000 (track-index KHÔNG thay z-index)`,
+        );
+      }
+    } else {
       errors.push(
-        `Caption host z-index=${alt[1]} — bắt buộc ≥9000 (track-index KHÔNG thay z-index)`,
+        "index.html: caption host thiếu style z-index:9000 (hoặc class hf-overlay-caption với z-index inline)",
       );
     }
-  } else {
-    errors.push(
-      "index.html: caption host thiếu style z-index:9000 (hoặc class hf-overlay-caption với z-index inline)",
-    );
+  } else if (captionZ < 9000) {
+    errors.push(`Caption host z-index=${captionZ} — bắt buộc ≥9000`);
   }
-} else if (captionZ < 9000) {
-  errors.push(`Caption host z-index=${captionZ} — bắt buộc ≥9000`);
 }
 
 const watermarkZ = extractZIndex(indexHtml, "hf-overlay-brand");
@@ -272,14 +288,42 @@ if (captionIdx >= 0 && watermarkIdx >= 0 && watermarkIdx < captionIdx) {
 }
 
 // --- Beat z-index vs caption ---
+// Reserved overlay bands (không tính là content beat):
+//   8800 avatar PiP · 8990 beat-progress · 9000+ caption/watermark
 const allZ = collectZIndexValues(indexHtml);
-const overlayZ = new Set([8990]); // beat-progress global overlay
+const overlayZ = new Set([8800, 8990]);
 const contentZ = allZ.filter((z) => z < 9000 && !overlayZ.has(z));
 const tooHigh = contentZ.filter((z) => z > 850);
 if (tooHigh.length) {
   errors.push(
     `Content z-index > 850 (${tooHigh.join(", ")}) — max ~800 trước caption 9000`,
   );
+}
+
+const hasAvatarHost =
+  /data-composition-src\s*=\s*["'][^"']*avatar-overlay\.html["']/i.test(indexHtml)
+  || /id\s*=\s*["']avatar-layer["']/i.test(indexHtml);
+if (hasAvatarHost) {
+  const avatarZ = extractZIndex(indexHtml, "hf-overlay-avatar");
+  const avatarAlt = indexHtml.match(
+    /avatar-overlay\.html["'][^>]*style="[^"]*z-index\s*:\s*(\d+)/i,
+  );
+  const z = avatarZ ?? (avatarAlt ? parseInt(avatarAlt[1], 10) : null);
+  if (z !== null && (z < 8500 || z >= 9000)) {
+    errors.push(
+      `Avatar host z-index=${z} — bắt buộc 8500–8990 (dưới caption 9000, trên beat content)`,
+    );
+  }
+  if (!exists("compositions/avatar-overlay.html")) {
+    errors.push("Thiếu compositions/avatar-overlay.html (có host avatar trong index)");
+  } else {
+    const avatarHtml = read("compositions/avatar-overlay.html");
+    if (hasOpaqueBodyBackground(avatarHtml)) {
+      errors.push(
+        "compositions/avatar-overlay.html: body có nền opaque — phải background: transparent",
+      );
+    }
+  }
 }
 
 const depthBands = countDepthBands(contentZ);
@@ -308,14 +352,16 @@ for (const m of beatHighZ) {
 }
 
 // --- Sub-composition backgrounds ---
-if (hasOpaqueBodyBackground(captionsHtml)) {
-  errors.push(
-    "compositions/captions.html: body có nền opaque — phải background: transparent",
-  );
-} else if (!hasTransparentBackground(captionsHtml)) {
-  warnings.push(
-    "compositions/captions.html: nên khai báo background: transparent trên html/body",
-  );
+if (karaokeOn) {
+  if (hasOpaqueBodyBackground(captionsHtml)) {
+    errors.push(
+      "compositions/captions.html: body có nền opaque — phải background: transparent",
+    );
+  } else if (!hasTransparentBackground(captionsHtml)) {
+    warnings.push(
+      "compositions/captions.html: nên khai báo background: transparent trên html/body",
+    );
+  }
 }
 
 if (hasOpaqueBodyBackground(watermarkHtml)) {
@@ -370,8 +416,9 @@ if (!/#root\s*\{[^}]*width\s*:\s*1080px/i.test(watermarkHtml)) {
 
 // --- Caption registry / timeline ---
 if (
-  !/window\.__timelines/i.test(captionsHtml) &&
-  !/caption-pill-karaoke|caption-kinetic/i.test(captionsHtml)
+  karaokeOn
+  && !/window\.__timelines/i.test(captionsHtml)
+  && !/caption-pill-karaoke|caption-kinetic/i.test(captionsHtml)
 ) {
   warnings.push(
     "captions.html: chưa thấy window.__timelines hoặc registry caption block — kiểm tra wire GSAP",
