@@ -81,6 +81,7 @@ function ReadmeMediaThumb({
                     component="img"
                     src={url}
                     alt={label}
+                    referrerPolicy="no-referrer"
                     sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={() => setFailed(true)}
                 />
@@ -489,8 +490,17 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                             display="block"
                                             sx={{ mt: 0.15, lineHeight: 1.35 }}
                                         >
-                                            Khi «Lấy thông tin», tự cover bằng screenshot nếu README chưa có ảnh.
+                                            {state.savingGithubScreenshotHomepage
+                                                && state.agentGithubScreenshotHomepage
+                                                ? 'Đang chụp trang chủ GitHub… (có thể mất vài chục giây)'
+                                                : 'Khi bật: chụp cover trang chủ nếu chưa có screenshot (ảnh README thường không chặn).'}
                                         </Typography>
+                                        {state.savingGithubScreenshotHomepage
+                                            && state.agentGithubScreenshotHomepage ? (
+                                            <LinearProgress
+                                                sx={{ mt: 0.75, borderRadius: 1, height: 3 }}
+                                            />
+                                        ) : null}
                                     </Box>
                                     <Switch
                                         size="small"
@@ -606,8 +616,8 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
                                         {state.agentSourceFormat === 'github_repo_review'
                                             ? (state.agentGithubScreenshotHomepage
-                                                ? 'Chưa có media — bấm «Lấy thông tin» để quét README (sẽ screenshot nếu thiếu ảnh).'
-                                                : 'Chưa có media — bấm «Lấy thông tin» để quét README.')
+                                                ? 'Chưa có media — bật lại «Chụp màn hình trang chủ» hoặc «Lấy thông tin» để lấy ảnh.'
+                                                : 'Chưa có media — bật «Chụp màn hình trang chủ» hoặc «Lấy thông tin» để quét README.')
                                             : 'Chưa có media — bấm «Lấy thông tin» hoặc đợi enrich top repo xong.'}
                                     </Typography>
                                 </Box>

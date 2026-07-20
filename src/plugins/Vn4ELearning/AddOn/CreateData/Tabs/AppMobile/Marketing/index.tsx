@@ -40,6 +40,7 @@ import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsAc
 import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FaceRetouchingNaturalIcon from '@mui/icons-material/FaceRetouchingNatural';
+import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -50,6 +51,7 @@ import MarketingRelationshipDrawer from './MarketingRelationshipDrawer';
 import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
+import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -469,6 +471,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openNewsPushConfigDrawer, setOpenNewsPushConfigDrawer] = useState(false);
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
+    const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -774,6 +777,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 <Button
                                     size="small"
                                     variant="outlined"
+                                    startIcon={<SubtitlesOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenGetScriptDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Get script
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
                                     startIcon={<FaceRetouchingNaturalIcon fontSize="small" />}
                                     onClick={() => setOpenAvatarDrawer(true)}
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
@@ -1072,6 +1084,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingShortVideoAvatarDrawer
                 open={openAvatarDrawer}
                 onClose={() => setOpenAvatarDrawer(false)}
+            />
+
+            <MarketingGetScriptDrawer
+                open={openGetScriptDrawer}
+                onClose={() => setOpenGetScriptDrawer(false)}
             />
         </div >
     );

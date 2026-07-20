@@ -2596,25 +2596,42 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (savingGithubScreenshotHomepage) {
             return;
         }
+        const prev = agentGithubScreenshotHomepage;
+        setAgentGithubScreenshotHomepage(checked);
         setSavingGithubScreenshotHomepage(true);
         try {
             const res = await saveAgentGithubScreenshotHomepage(shortVideoId, checked);
             if (!res?.success) {
+                setAgentGithubScreenshotHomepage(prev);
                 showMessage(
                     parseApiMessage(res?.message) || 'Không lưu được cấu hình screenshot GitHub',
                     'error',
                 );
                 return;
             }
-            setAgentGithubScreenshotHomepage(checked);
+            setAgentGithubScreenshotHomepage(
+                res.agent_github_screenshot_homepage !== undefined
+                    ? Boolean(res.agent_github_screenshot_homepage)
+                    : checked,
+            );
+            if (checked && Array.isArray(res?.readme_media)) {
+                setReadmeMedia(normalizeGithubReadmeMediaList(res.readme_media));
+            }
+            const status = String(res?.screenshot_status || '');
+            const isWarning = status === 'failed' || status === 'skipped_no_repo';
+            const mediaCount = Array.isArray(res?.readme_media) ? res.readme_media.length : 0;
+            let fallbackMsg = checked
+                ? 'Đã bật — sẽ chụp trang chủ nếu chưa có screenshot'
+                : 'Đã tắt chụp màn hình trang chủ';
+            if (status === 'skipped_has_image' && mediaCount > 0) {
+                fallbackMsg = `Đã bật — đã có screenshot trang chủ (Media README: ${mediaCount} mục)`;
+            }
             showMessage(
-                parseApiMessage(res?.message)
-                    || (checked
-                        ? 'Đã bật chụp màn hình trang chủ khi «Lấy thông tin»'
-                        : 'Đã tắt chụp màn hình trang chủ'),
-                'success',
+                parseApiMessage(res?.message) || fallbackMsg,
+                isWarning ? 'warning' : 'success',
             );
         } catch (e) {
+            setAgentGithubScreenshotHomepage(prev);
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingGithubScreenshotHomepage(false);

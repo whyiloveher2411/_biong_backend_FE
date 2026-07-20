@@ -738,13 +738,21 @@ export async function saveAgentGeminiOpenBrowser(
 export async function saveAgentGithubScreenshotHomepage(
     shortVideoId: number,
     enabled: boolean,
-): Promise<JsonResponse & { agent_github_screenshot_homepage?: boolean }> {
+): Promise<JsonResponse & {
+    agent_github_screenshot_homepage?: boolean;
+    screenshot_status?: string;
+    readme_media?: GithubReadmeMediaItem[];
+}> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-github-screenshot-homepage',
         shortVideoBody(shortVideoId, {
             agent_github_screenshot_homepage: enabled ? '1' : '0',
         }),
-    ) as Promise<JsonResponse & { agent_github_screenshot_homepage?: boolean }>;
+    ) as Promise<JsonResponse & {
+        agent_github_screenshot_homepage?: boolean;
+        screenshot_status?: string;
+        readme_media?: GithubReadmeMediaItem[];
+    }>;
 }
 
 export async function saveAgentIntroduceApp(
