@@ -5,6 +5,7 @@ import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
 import ShortVideoAgentContentPanel from './ShortVideoAgentContentPanel';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
+import ShortVideoAgentThumbnailPanel from './ShortVideoAgentThumbnailPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -12,7 +13,8 @@ const TAB = {
     content: 0,
     script: 1,
     render: 2,
-    facebook: 3,
+    thumbnail: 3,
+    facebook: 4,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -71,6 +73,7 @@ export default function ShortVideoAgentLeftPanel({
                     { label: 'Content' },
                     { label: 'Script & TTS' },
                     { label: 'Render' },
+                    { label: 'Thumbnail' },
                     { label: 'Facebook' },
                 ]}
             />
@@ -83,6 +86,9 @@ export default function ShortVideoAgentLeftPanel({
                 ) : null}
                 {activeTab === TAB.render ? (
                     <ShortVideoAgentChatbotHtmlPanel state={state} active={activeTab === TAB.render} />
+                ) : null}
+                {activeTab === TAB.thumbnail ? (
+                    <ShortVideoAgentThumbnailPanel state={state} />
                 ) : null}
                 {activeTab === TAB.facebook ? (
                     state.marketingPostId > 0 ? (

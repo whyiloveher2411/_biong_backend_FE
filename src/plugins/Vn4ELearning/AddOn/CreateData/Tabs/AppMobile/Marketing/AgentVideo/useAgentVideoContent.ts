@@ -32,6 +32,8 @@ import {
     saveAgentCaptionAlignments,
     saveTtsPhoneticDict,
     fetchGithubReadme,
+    extractVideoScript,
+    isTikTokUrl,
     importGithubReadmeMedia,
     searchAgentBgm,
     saveAgentTtsSettings,
@@ -45,6 +47,9 @@ import {
     type AvatarPipAnchor,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
+    enqueueGeminiWebThumbnailFill,
+    enqueueGeminiWebThumbnailIdea,
+    captureAgentThumbnail,
     enqueueGeminiWebAudioScript,
     enqueueGeminiWebScriptPhonetic,
     saveAdminAudioScriptTtsReading,
@@ -69,6 +74,9 @@ import {
     type OmnivoiceVoiceDesignTokenGroup,
     type SaveOmnivoiceVoicePayload,
     type ImportHtmlSummary,
+    type ImportHtmlGeminiJobBlock,
+    type ImportHtmlThumbnailBlock,
+    type ThumbnailQaStatus,
     type ImportHtmlAssets,
     type ImportHtmlBgmSegment,
     type ImportHtmlVisualCatalogItem,
@@ -144,6 +152,45 @@ function normalizeGithubReadmeMediaList(raw: unknown): GithubReadmeMediaItem[] {
         }));
 }
 
+function syncReadmeAltToVisualCatalog(
+    readmeMediaItems: GithubReadmeMediaItem[],
+    catalog: ImportHtmlVisualCatalogItem[],
+    normalizeMediaUrlKey: (url: string) => string,
+): ImportHtmlVisualCatalogItem[] {
+    const altByUrl = new Map<string, string>();
+    readmeMediaItems.forEach((item) => {
+        const alt = String(item.alt || '').trim();
+        if (!alt) {
+            return;
+        }
+        const key = normalizeMediaUrlKey(item.resolved_url);
+        if (key) {
+            altByUrl.set(key, alt);
+        }
+    });
+    if (altByUrl.size === 0) {
+        return catalog;
+    }
+    return catalog.map((entry) => {
+        const keys = [
+            normalizeMediaUrlKey(String(entry.origin_url || '')),
+            normalizeMediaUrlKey(String(entry.url || '')),
+            normalizeMediaUrlKey(String(entry.preview_url || '')),
+        ];
+        for (const key of keys) {
+            if (key && altByUrl.has(key)) {
+                const alt = altByUrl.get(key) || '';
+                return { ...entry, title: alt, caption: alt };
+            }
+        }
+        return entry;
+    });
+}
+
+function normalizeMediaUrlKey(url: string): string {
+    return String(url || '').trim().toLowerCase().replace(/\?.*$/, '');
+}
+
 function toStringIdList(value: unknown): string[] {
     if (!Array.isArray(value)) {
         return [];
@@ -167,6 +214,10 @@ function mergeUniqueIds(prev: string[], ids: string[]): string[] {
 }
 
 import {
+    resolveHeadlessBrowserActive,
+    isActiveGeminiJobStatus,
+} from './agentVideoHeadlessPreview';
+import {
     applyTokenOverride,
     buildCaptionSyncPayload,
     hasCaptionOverrideChanges,
@@ -184,6 +235,52 @@ import {
     buildAgentGithubImageShotsPrompt,
     openAgentGithubImageShotsGemini,
 } from 'helpers/marketingAgentGithubImageShotsGeminiWorkflow';
+
+type GeminiBeatProgress = {
+    current: number;
+    total: number;
+    beatId: string;
+    succeeded: number;
+    failed: string[];
+    error: string;
+};
+
+function resolveGeminiBeatProgress(summary: ImportHtmlSummary | null | undefined): GeminiBeatProgress | null {
+    if (!summary) {
+        return null;
+    }
+    const activeBlocks: Array<ImportHtmlGeminiJobBlock | undefined> = [
+        summary.gemini_refine_html,
+        summary.gemini_refine_visual,
+        summary.gemini_fill,
+    ];
+    for (let i = 0; i < activeBlocks.length; i += 1) {
+        const block = activeBlocks[i];
+        if (!block || !isActiveGeminiJobStatus(block.status)) {
+            continue;
+        }
+        return {
+            current: Number(block.progress?.current || 0),
+            total: Number(block.progress?.total || 0),
+            beatId: String(block.progress?.beat_id || ''),
+            succeeded: Number(block.progress?.succeeded || 0),
+            failed: toStringIdList(block.progress?.failed),
+            error: String(block.error || '').trim(),
+        };
+    }
+    const fill = summary.gemini_fill;
+    if (fill?.progress || String(fill?.status || 'none') !== 'none') {
+        return {
+            current: Number(fill?.progress?.current || 0),
+            total: Number(fill?.progress?.total || 0),
+            beatId: String(fill?.progress?.beat_id || ''),
+            succeeded: Number(fill?.progress?.succeeded || 0),
+            failed: toStringIdList(fill?.progress?.failed),
+            error: String(fill?.error || '').trim(),
+        };
+    }
+    return null;
+}
 
 type UseAgentVideoContentArgs = {
     open: boolean;
@@ -223,6 +320,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
+    const [geminiThumbnailFillStatus, setGeminiThumbnailFillStatus] = React.useState('none');
+    const [geminiThumbnailIdeaStatus, setGeminiThumbnailIdeaStatus] = React.useState('none');
+    const [thumbnailGeminiIdeaError, setThumbnailGeminiIdeaError] = React.useState('');
+    const [thumbnailGeminiFillError, setThumbnailGeminiFillError] = React.useState('');
+    const [thumbnailBlock, setThumbnailBlock] = React.useState<ImportHtmlThumbnailBlock | null>(null);
+    const [thumbnailHtml, setThumbnailHtml] = React.useState('');
+    const [thumbnailImageUrl, setThumbnailImageUrl] = React.useState('');
+    const [enqueueingThumbnailIdea, setEnqueueingThumbnailIdea] = React.useState(false);
+    const [enqueueingThumbnailFill, setEnqueueingThumbnailFill] = React.useState(false);
+    const [capturingThumbnail, setCapturingThumbnail] = React.useState(false);
+    const [savingThumbnailQa, setSavingThumbnailQa] = React.useState(false);
     const [geminiFillProgress, setGeminiFillProgress] = React.useState<{
         current: number;
         total: number;
@@ -233,6 +341,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     } | null>(null);
     const [geminiDivisionStatus, setGeminiDivisionStatus] = React.useState('none');
     const [geminiDivisionError, setGeminiDivisionError] = React.useState('');
+    const [headlessBrowserActive, setHeadlessBrowserActive] = React.useState(false);
     const [geminiScriptStatus, setGeminiScriptStatus] = React.useState('none');
     const [geminiScriptMode, setGeminiScriptMode] = React.useState('');
     const [geminiScriptError, setGeminiScriptError] = React.useState('');
@@ -285,12 +394,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savedAgentAdditionalInfo, setSavedAgentAdditionalInfo] = React.useState('');
     const [agentGithubRepo, setAgentGithubRepo] = React.useState('');
     const [savedAgentGithubRepo, setSavedAgentGithubRepo] = React.useState('');
+    const [agentTiktokUrl, setAgentTiktokUrl] = React.useState('');
+    const [savedAgentTiktokUrl, setSavedAgentTiktokUrl] = React.useState('');
     const [agentSourceFormat, setAgentSourceFormat] = React.useState('github_repo_review');
     const [savedAgentSourceFormat, setSavedAgentSourceFormat] = React.useState('github_repo_review');
     const [agentSourceFormatCatalog, setAgentSourceFormatCatalog] = React.useState<AgentSourceFormatCatalogItem[]>([]);
     const [contentPlainText, setContentPlainText] = React.useState('');
     const [savingSourceContent, setSavingSourceContent] = React.useState(false);
     const [fetchingGithubReadme, setFetchingGithubReadme] = React.useState(false);
+    const [fetchingTiktokScript, setFetchingTiktokScript] = React.useState(false);
     const [appMobileTitle, setAppMobileTitle] = React.useState('');
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
@@ -398,6 +510,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const beatHtmlSaveTimerRef = React.useRef<Record<string, number>>({});
     const visualCatalogSavedRef = React.useRef<string>('[]');
     const githubImageShotsSavedRef = React.useRef<string>('[]');
+    const readmeMediaSavedRef = React.useRef<string>('[]');
     const autoWhisperStartedRef = React.useRef('');
 
     const resolveScriptFromResponse = React.useCallback((
@@ -464,7 +577,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         githubImageShotsSavedRef.current = JSON.stringify(loadedGithubShots);
         const readmeMediaRaw = summary.assets?.readme_media;
         if (Array.isArray(readmeMediaRaw) && readmeMediaRaw.length > 0) {
-            setReadmeMedia(normalizeGithubReadmeMediaList(readmeMediaRaw));
+            const loadedReadmeMedia = normalizeGithubReadmeMediaList(readmeMediaRaw);
+            setReadmeMedia(loadedReadmeMedia);
+            readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
         }
         const topReposRaw = summary.assets?.github_top_repos;
         if (topReposRaw && typeof topReposRaw === 'object') {
@@ -536,18 +651,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
-        if (geminiFill?.progress || nextGeminiStatus !== 'none') {
-            setGeminiFillProgress({
-                current: Number(geminiFill?.progress?.current || 0),
-                total: Number(geminiFill?.progress?.total || 0),
-                beatId: String(geminiFill?.progress?.beat_id || ''),
-                succeeded: Number(geminiFill?.progress?.succeeded || 0),
-                failed: toStringIdList(geminiFill?.progress?.failed),
-                error: String(geminiFill?.error || '').trim(),
-            });
-        } else {
-            setGeminiFillProgress(null);
-        }
+        const geminiThumbnailFill = res?.import_html?.gemini_thumbnail_fill
+            ?? res?.import_html?.thumbnail?.gemini_fill;
+        const nextThumbFillStatus = String(geminiThumbnailFill?.status || 'none');
+        setGeminiThumbnailFillStatus(nextThumbFillStatus);
+        setThumbnailGeminiFillError(String(geminiThumbnailFill?.error || '').trim());
+        const geminiThumbnailIdea = res?.import_html?.gemini_thumbnail_idea
+            ?? res?.import_html?.thumbnail?.gemini_idea;
+        const nextThumbIdeaStatus = String(geminiThumbnailIdea?.status || 'none');
+        setGeminiThumbnailIdeaStatus(nextThumbIdeaStatus);
+        setThumbnailGeminiIdeaError(String(geminiThumbnailIdea?.error || '').trim());
+        const nextThumbBlock = res?.import_html?.thumbnail ?? null;
+        setThumbnailBlock(nextThumbBlock);
+        setThumbnailHtml(String(nextThumbBlock?.html || ''));
+        setThumbnailImageUrl(String(nextThumbBlock?.image_url || ''));
+        const beatProgress = resolveGeminiBeatProgress(res?.import_html);
+        setGeminiFillProgress(beatProgress);
         const geminiDivision = res?.import_html?.gemini_division;
         setGeminiDivisionStatus(String(geminiDivision?.status || 'none'));
         setGeminiDivisionError(String(geminiDivision?.error || '').trim());
@@ -558,6 +677,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savedTtsReadingRef.current = serverReading;
         const geminiPhonetic = res?.gemini_script_phonetic;
         const phoneticStatusNext = String(geminiPhonetic?.status || 'none');
+        setHeadlessBrowserActive(resolveHeadlessBrowserActive(res?.import_html, {
+            geminiScriptStatus: geminiScriptStatusNext,
+            geminiScriptPhoneticStatus: phoneticStatusNext,
+            pipelineHeadlessActive: Boolean(res?.full_auto_pipeline?.headless_browser_active),
+        }));
         setAudioScriptTtsReading(serverReading);
         setGeminiScriptPhoneticStatus(phoneticStatusNext);
         setGeminiScriptPhoneticError(String(geminiPhonetic?.error || '').trim());
@@ -618,6 +742,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextGithub = String(res?.agent_github_repo || '').trim();
         setAgentGithubRepo(nextGithub);
         setSavedAgentGithubRepo(nextGithub);
+        const nextTiktok = String(res?.agent_tiktok_url || '').trim();
+        setAgentTiktokUrl(nextTiktok);
+        setSavedAgentTiktokUrl(nextTiktok);
         const nextFormat = String(res?.agent_source_format || 'github_repo_review').trim() || 'github_repo_review';
         setAgentSourceFormat(nextFormat);
         setSavedAgentSourceFormat(nextFormat);
@@ -670,7 +797,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         applyImportHtmlResources(importSummary);
         // readme_media top-level (quét từ content) ưu tiên hơn assets
         if (Array.isArray(res?.readme_media)) {
-            setReadmeMedia(normalizeGithubReadmeMediaList(res.readme_media));
+            const loadedReadmeMedia = normalizeGithubReadmeMediaList(res.readme_media);
+            setReadmeMedia(loadedReadmeMedia);
+            readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
         }
         setFullAutoPipeline(res?.full_auto_pipeline ?? null);
         setGithubTopEnrich(res?.github_top_enrich ?? null);
@@ -789,12 +918,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || whisperStatus === 'processing'
         || geminiFillStatus === 'queued'
         || geminiFillStatus === 'processing'
+        || geminiThumbnailFillStatus === 'queued'
+        || geminiThumbnailFillStatus === 'processing'
+        || geminiThumbnailIdeaStatus === 'queued'
+        || geminiThumbnailIdeaStatus === 'processing'
         || geminiDivisionStatus === 'queued'
         || geminiDivisionStatus === 'processing'
         || geminiScriptStatus === 'queued'
         || geminiScriptStatus === 'processing'
         || geminiScriptPhoneticStatus === 'queued'
         || geminiScriptPhoneticStatus === 'processing'
+        || headlessBrowserActive
         || fullAutoPipeline?.status === 'running'
         || githubTopEnrich?.status === 'preparing';
     React.useEffect(() => {
@@ -1293,19 +1427,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setImportHtmlReady(Boolean(summary.import_html_ready));
         setBeatMapReady(Boolean(summary.beat_map_ready));
+        setHeadlessBrowserActive(resolveHeadlessBrowserActive(summary, {
+            geminiScriptStatus: geminiScriptStatus,
+            geminiScriptPhoneticStatus: geminiScriptPhoneticStatus,
+        }));
         if (summary.gemini_fill) {
             const fill = summary.gemini_fill;
             const nextGeminiStatus = String(fill.status || 'none');
             setGeminiFillStatus(nextGeminiStatus);
-            setGeminiFillProgress({
-                current: Number(fill.progress?.current || 0),
-                total: Number(fill.progress?.total || 0),
-                beatId: String(fill.progress?.beat_id || ''),
-                succeeded: Number(fill.progress?.succeeded || 0),
-                failed: toStringIdList(fill.progress?.failed),
-                error: String(fill.error || '').trim(),
-            });
         }
+        const thumbFill = summary.gemini_thumbnail_fill ?? summary.thumbnail?.gemini_fill;
+        if (thumbFill) {
+            setGeminiThumbnailFillStatus(String(thumbFill.status || 'none'));
+            setThumbnailGeminiFillError(String(thumbFill.error || '').trim());
+        }
+        const thumbIdeaJob = summary.gemini_thumbnail_idea ?? summary.thumbnail?.gemini_idea;
+        if (thumbIdeaJob) {
+            setGeminiThumbnailIdeaStatus(String(thumbIdeaJob.status || 'none'));
+            setThumbnailGeminiIdeaError(String(thumbIdeaJob.error || '').trim());
+        }
+        if (summary.thumbnail) {
+            setThumbnailBlock(summary.thumbnail);
+            setThumbnailHtml(String(summary.thumbnail.html || ''));
+            setThumbnailImageUrl(String(summary.thumbnail.image_url || ''));
+        }
+        setGeminiFillProgress(resolveGeminiBeatProgress(summary));
         if (summary.gemini_division) {
             setGeminiDivisionStatus(String(summary.gemini_division.status || 'none'));
             setGeminiDivisionError(String(summary.gemini_division.error || '').trim());
@@ -1347,6 +1493,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatId?: string;
         beatHtml?: string;
         creativePrompt?: string;
+        qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
+        qaRefineNote?: string;
+        thumbnailHtml?: string;
+        thumbnailQaStatus?: ThumbnailQaStatus;
+        thumbnailQaNote?: string;
+        thumbnailApproved?: boolean;
     }) => {
         setSavingImportHtml(true);
         try {
@@ -1357,6 +1509,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatId: payload.beatId,
                 beatHtml: payload.beatHtml,
                 creativePrompt: payload.creativePrompt,
+                qaStatus: payload.qaStatus,
+                qaRefineNote: payload.qaRefineNote,
+                thumbnailHtml: payload.thumbnailHtml,
+                thumbnailQaStatus: payload.thumbnailQaStatus,
+                thumbnailQaNote: payload.thumbnailQaNote,
+                thumbnailApproved: payload.thumbnailApproved,
             });
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được HTML chatbot', 'error');
@@ -1396,6 +1554,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
         githubImageShots?: ImportHtmlGithubImageShot[];
+        readmeMedia?: GithubReadmeMediaItem[];
         silent?: boolean;
     }) => {
         const nextBgm = options?.bgmSegments ?? bgmSegments;
@@ -1403,6 +1562,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextSfxHook = options?.sfxHook ?? sfxHook;
         const nextVisual = options?.visualCatalog ?? visualCatalog;
         const nextGithubShots = options?.githubImageShots ?? githubImageShots;
+        const nextReadmeMedia = options?.readmeMedia ?? readmeMedia;
         const silent = Boolean(options?.silent);
 
         setSavingImportAssets(true);
@@ -1413,6 +1573,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 sfxHook: nextSfxHook,
                 visualCatalog: nextVisual,
                 githubImageShots: nextGithubShots,
+                readmeMedia: nextReadmeMedia,
             });
             if (!res?.success) {
                 showMessage(parseApiMessage(res?.message) || 'Không lưu được tài nguyên', 'error');
@@ -1436,6 +1597,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             visualCatalogSavedRef.current = JSON.stringify(savedVisualCatalog);
             const savedGithubRaw = res.import_html?.assets?.github_image_shots;
             githubImageShotsSavedRef.current = JSON.stringify(Array.isArray(savedGithubRaw) ? savedGithubRaw : []);
+            const savedReadmeRaw = res.import_html?.assets?.readme_media;
+            const savedReadmeMedia = Array.isArray(savedReadmeRaw)
+                ? normalizeGithubReadmeMediaList(savedReadmeRaw)
+                : nextReadmeMedia;
+            setReadmeMedia(savedReadmeMedia);
+            readmeMediaSavedRef.current = JSON.stringify(savedReadmeMedia);
             if (!silent) {
                 showMessage('Đã lưu tài nguyên ghép video', 'success');
             }
@@ -1446,7 +1613,43 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setSavingImportAssets(false);
         }
-    }, [applyImportHtmlSummary, bgmSegments, githubImageShots, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+    }, [applyImportHtmlSummary, bgmSegments, githubImageShots, readmeMedia, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+
+    const handleReadmeMediaAltChange = React.useCallback((itemId: string, alt: string) => {
+        setReadmeMedia((prev) => prev.map((item) => (
+            item.id === itemId ? { ...item, alt } : item
+        )));
+    }, []);
+
+    const handleReadmeMediaAltBlur = React.useCallback(async (itemId: string, alt: string) => {
+        const trimmedAlt = alt.trim();
+        const nextReadmeMedia = readmeMedia.map((entry) => (
+            entry.id === itemId ? { ...entry, alt: trimmedAlt } : entry
+        ));
+        setReadmeMedia(nextReadmeMedia);
+        const isReadmeMediaDirty = JSON.stringify(nextReadmeMedia) !== readmeMediaSavedRef.current;
+        const syncedCatalog = syncReadmeAltToVisualCatalog(
+            nextReadmeMedia,
+            visualCatalog,
+            normalizeMediaUrlKey,
+        );
+        const isCatalogDirtyFromAlt = JSON.stringify(syncedCatalog) !== JSON.stringify(visualCatalog);
+        if (!isReadmeMediaDirty && !isCatalogDirtyFromAlt) {
+            return;
+        }
+        if (isCatalogDirtyFromAlt) {
+            setVisualCatalog(syncedCatalog);
+        }
+        const ok = await persistImportHtmlAssets({
+            readmeMedia: nextReadmeMedia,
+            visualCatalog: syncedCatalog,
+            silent: true,
+        });
+        if (!ok) {
+            return;
+        }
+        setReadmeMedia(nextReadmeMedia);
+    }, [persistImportHtmlAssets, readmeMedia, visualCatalog]);
 
     const readClipboardImageFile = React.useCallback(async (): Promise<File | null> => {
         if (!navigator.clipboard?.read) {
@@ -1941,6 +2144,166 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return saved;
     }, [applyBeatMapDraft, beatMap, persistImportHtml, showMessage]);
+
+    const handleSaveBeatQa = React.useCallback(async (
+        beatId: string,
+        qaStatus: import('./agentVideoBeatMap').BeatQaStatus,
+        qaRefineNote?: string,
+    ): Promise<boolean> => {
+        const normalizedStatus = qaStatus || '';
+        const normalizedNote = String(qaRefineNote || '').trim();
+        if (
+            (normalizedStatus === 'needs_html_refill' || normalizedStatus === 'needs_visual_tweak')
+            && normalizedNote === ''
+        ) {
+            showMessage('Nên nhập ghi chú refine dưới clip preview', 'warning');
+        }
+        const saved = await persistImportHtml({
+            beatId,
+            qaStatus: normalizedStatus,
+            qaRefineNote: normalizedNote,
+        });
+        if (saved) {
+            setBeatHtml((prev) => ({
+                ...prev,
+                [beatId]: {
+                    ...prev[beatId],
+                    html: prev[beatId]?.html || '',
+                    qa_status: normalizedStatus || undefined,
+                    qa_refine_note: normalizedNote || undefined,
+                },
+            }));
+        }
+        return saved;
+    }, [persistImportHtml, showMessage]);
+
+    const handleSaveThumbnailQa = React.useCallback(async (
+        qaStatus: ThumbnailQaStatus,
+        qaNote: string,
+    ): Promise<boolean> => {
+        setSavingThumbnailQa(true);
+        try {
+            const approved = qaStatus === 'approved';
+            const saved = await persistImportHtml({
+                thumbnailQaStatus: qaStatus,
+                thumbnailQaNote: qaNote,
+                thumbnailApproved: approved,
+            });
+            if (saved) {
+                setThumbnailBlock((prev) => ({
+                    ...(prev || {}),
+                    qa_status: qaStatus || undefined,
+                    qa_note: qaNote || undefined,
+                    approved,
+                    approved_at: approved ? new Date().toISOString() : '',
+                }));
+            }
+            return saved;
+        } finally {
+            setSavingThumbnailQa(false);
+        }
+    }, [persistImportHtml]);
+
+    const handleEnqueueThumbnailIdea = React.useCallback(async (force = true): Promise<void> => {
+        setEnqueueingThumbnailIdea(true);
+        try {
+            const res = await enqueueGeminiWebThumbnailIdea(shortVideoId, force);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Enqueue sinh idea thumbnail thất bại', 'error');
+                return;
+            }
+            if (res.gemini_thumbnail_idea) {
+                setGeminiThumbnailIdeaStatus(String(res.gemini_thumbnail_idea.status || 'queued'));
+                setThumbnailGeminiIdeaError(String(res.gemini_thumbnail_idea.error || '').trim());
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã enqueue sinh idea thumbnail', 'success');
+            await loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setEnqueueingThumbnailIdea(false);
+        }
+    }, [loadRow, shortVideoId, showMessage]);
+
+    const handleEnqueueThumbnailFill = React.useCallback(async (
+        force = true,
+        options?: { mode?: 'create' | 'refine'; userPrompt?: string; silentSuccess?: boolean },
+    ) => {
+        setEnqueueingThumbnailFill(true);
+        try {
+            const res = await enqueueGeminiWebThumbnailFill(shortVideoId, force, {
+                mode: options?.mode,
+                userPrompt: options?.userPrompt,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Enqueue fill thumbnail thất bại', 'error');
+                return false;
+            }
+            if (res.gemini_thumbnail_fill) {
+                setGeminiThumbnailFillStatus(String(res.gemini_thumbnail_fill.status || 'queued'));
+                setThumbnailGeminiFillError(String(res.gemini_thumbnail_fill.error || '').trim());
+            }
+            if (!options?.silentSuccess) {
+                showMessage(parseApiMessage(res?.message) || 'Đã enqueue fill thumbnail', 'success');
+            }
+            await loadRow();
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setEnqueueingThumbnailFill(false);
+        }
+    }, [loadRow, shortVideoId, showMessage]);
+
+    const handleRegenerateThumbnailFromQa = React.useCallback(async (qaNote: string): Promise<boolean> => {
+        const note = String(qaNote || '').trim();
+        if (!note) {
+            showMessage('Thiếu ghi chú yêu cầu làm lại', 'warning');
+            return false;
+        }
+        if (!String(thumbnailHtml || '').trim()) {
+            showMessage('Cần có HTML thumbnail trước khi re-generate', 'warning');
+            return false;
+        }
+        return handleEnqueueThumbnailFill(true, {
+            mode: 'refine',
+            userPrompt: note,
+            silentSuccess: true,
+        });
+    }, [handleEnqueueThumbnailFill, showMessage, thumbnailHtml]);
+
+    const handleCaptureThumbnail = React.useCallback(async (force = false) => {
+        setCapturingThumbnail(true);
+        try {
+            const res = await captureAgentThumbnail(shortVideoId, force);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Chụp thumbnail thất bại', 'error');
+                return false;
+            }
+            if (res.thumbnail) {
+                setThumbnailBlock(res.thumbnail);
+                setThumbnailHtml(String(res.thumbnail.html || ''));
+                setThumbnailImageUrl(String(res.thumbnail.image_url || res.image_url || ''));
+            } else if (res.image_url) {
+                setThumbnailImageUrl(String(res.image_url));
+            }
+            // Cùng field gemini_fill với Fill HTML — hết loading orphan
+            setGeminiThumbnailFillStatus('completed');
+            setThumbnailGeminiFillError('');
+            if (res.import_html) {
+                applyImportHtmlSummary(res.import_html);
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã chụp thumbnail', 'success');
+            await loadRow();
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setCapturingThumbnail(false);
+        }
+    }, [applyImportHtmlSummary, loadRow, shortVideoId, showMessage]);
 
     const commitBeatHtmlChange = React.useCallback(async (
         beatId: string,
@@ -2615,7 +2978,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     : checked,
             );
             if (checked && Array.isArray(res?.readme_media)) {
-                setReadmeMedia(normalizeGithubReadmeMediaList(res.readme_media));
+                const loadedReadmeMedia = normalizeGithubReadmeMediaList(res.readme_media);
+                setReadmeMedia(loadedReadmeMedia);
+                readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
             }
             const status = String(res?.screenshot_status || '');
             const isWarning = status === 'failed' || status === 'skipped_no_repo';
@@ -3113,6 +3478,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } else if (
             contentToSave === savedAgentSourceContent
             && agentGithubRepo === savedAgentGithubRepo
+            && agentTiktokUrl === savedAgentTiktokUrl
             && agentSourceFormat === savedAgentSourceFormat
             && additionalToSave === savedAgentAdditionalInfo
         ) {
@@ -3127,6 +3493,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 linked ? undefined : agentGithubRepo.trim(),
                 linked ? undefined : agentSourceFormat,
                 additionalToSave,
+                linked ? undefined : agentTiktokUrl.trim(),
             );
             if (!json?.success) {
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được nội dung', 'error');
@@ -3139,16 +3506,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (!linked) {
                 const nextSource = String(json?.agent_source_content ?? contentToSave);
                 const nextGithub = String(json?.agent_github_repo ?? agentGithubRepo).trim();
+                const nextTiktok = String(json?.agent_tiktok_url ?? agentTiktokUrl).trim();
                 const nextFormat = String(json?.agent_source_format ?? agentSourceFormat).trim() || 'github_repo_review';
                 setAgentSourceContent(nextSource);
                 setSavedAgentSourceContent(nextSource);
                 setAgentGithubRepo(nextGithub);
                 setSavedAgentGithubRepo(nextGithub);
+                setAgentTiktokUrl(nextTiktok);
+                setSavedAgentTiktokUrl(nextTiktok);
                 setAgentSourceFormat(nextFormat);
                 setSavedAgentSourceFormat(nextFormat);
                 setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
                 if (Array.isArray(json?.readme_media)) {
-                    setReadmeMedia(normalizeGithubReadmeMediaList(json.readme_media));
+                    const loadedReadmeMedia = normalizeGithubReadmeMediaList(json.readme_media);
+                    setReadmeMedia(loadedReadmeMedia);
+                    readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
                 }
             }
 
@@ -3214,7 +3586,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
 
             const mediaRaw = Array.isArray(json?.readme_media) ? json.readme_media : [];
-            setReadmeMedia(normalizeGithubReadmeMediaList(mediaRaw));
+            const loadedReadmeMedia = normalizeGithubReadmeMediaList(mediaRaw);
+            setReadmeMedia(loadedReadmeMedia);
+            readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
 
             showMessage(parseApiMessage(json?.message) || 'Đã lấy thông tin repo', 'success');
         } catch (e) {
@@ -3224,9 +3598,70 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const normalizeMediaUrlKey = React.useCallback((url: string): string => {
-        return String(url || '').trim().toLowerCase().replace(/\?.*$/, '');
-    }, []);
+    const handleFetchTiktokScript = async () => {
+        if (marketingPostId > 0) {
+            showMessage('Đã liên kết marketing post — không lấy script TikTok', 'warning');
+            return;
+        }
+        const url = agentTiktokUrl.trim();
+        if (!url) {
+            showMessage('Nhập link TikTok trước', 'warning');
+            return;
+        }
+        if (!isTikTokUrl(url)) {
+            showMessage('URL không phải link TikTok hợp lệ', 'warning');
+            return;
+        }
+        setFetchingTiktokScript(true);
+        try {
+            const json = await extractVideoScript(url, 'tiktok');
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không lấy được script TikTok', 'error');
+                return;
+            }
+
+            const cleaned = String(json?.cleaned_script || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n')
+                .trim();
+            if (!cleaned) {
+                showMessage('Không lấy được caption / transcript từ video', 'warning');
+                return;
+            }
+
+            setAgentSourceContent(cleaned);
+
+            const title = String(json?.meta?.title || '').trim();
+            const uploader = String(json?.meta?.uploader || '').trim();
+            const metaLines: string[] = [];
+            if (uploader) {
+                metaLines.push(`TikTok @${uploader.replace(/^@/, '')}`);
+            }
+            if (title) {
+                metaLines.push(`Tiêu đề: ${title}`);
+            }
+            if (metaLines.length > 0) {
+                setAgentAdditionalInfo((prev) => {
+                    const base = prev.trim();
+                    const addition = metaLines.join('\n');
+                    if (!base) {
+                        return addition;
+                    }
+                    const missing = metaLines.filter((line) => !base.includes(line));
+                    if (missing.length === 0) {
+                        return base;
+                    }
+                    return `${base}\n${missing.join('\n')}`;
+                });
+            }
+
+            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript TikTok', 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setFetchingTiktokScript(false);
+        }
+    };
 
     const isReadmeMediaImported = React.useCallback((item: GithubReadmeMediaItem): boolean => {
         const key = normalizeMediaUrlKey(item.resolved_url);
@@ -3238,7 +3673,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const urlKey = normalizeMediaUrlKey(String(entry.url || ''));
             return originKey === key || urlKey === key;
         });
-    }, [normalizeMediaUrlKey, visualCatalog]);
+    }, [visualCatalog]);
 
     const handleImportReadmeMediaItems = React.useCallback(async (items: GithubReadmeMediaItem[]) => {
         const pending = items.filter((item) => !isReadmeMediaImported(item));
@@ -3683,8 +4118,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAvatarDrawerOpen,
         geminiFillStatus,
         geminiFillProgress,
+        geminiThumbnailFillStatus,
+        geminiThumbnailIdeaStatus,
+        thumbnailGeminiFillError,
+        thumbnailGeminiIdeaError,
+        thumbnailBlock,
+        thumbnailHtml,
+        thumbnailImageUrl,
+        enqueueingThumbnailIdea,
+        enqueueingThumbnailFill,
+        capturingThumbnail,
+        savingThumbnailQa,
+        handleSaveThumbnailQa,
+        handleEnqueueThumbnailIdea,
+        handleEnqueueThumbnailFill,
+        handleRegenerateThumbnailFromQa,
+        handleCaptureThumbnail,
         geminiDivisionStatus,
         geminiDivisionError,
+        headlessBrowserActive,
         geminiScriptStatus,
         geminiScriptMode,
         geminiScriptError,
@@ -3743,6 +4195,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentGithubRepo,
         setAgentGithubRepo,
         savedAgentGithubRepo,
+        agentTiktokUrl,
+        setAgentTiktokUrl,
+        savedAgentTiktokUrl,
         agentSourceFormat,
         setAgentSourceFormat,
         savedAgentSourceFormat,
@@ -3750,6 +4205,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         contentPlainText,
         savingSourceContent,
         fetchingGithubReadme,
+        fetchingTiktokScript,
         appMobileTitle,
         thumbnail,
         postEligible,
@@ -3821,6 +4277,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         importingReadmeMediaIds,
         importingAllReadmeMedia,
         isReadmeMediaImported,
+        handleReadmeMediaAltChange,
+        handleReadmeMediaAltBlur,
         handleImportReadmeMediaItem,
         handleImportAllReadmeMedia,
         githubImageShots,
@@ -3922,6 +4380,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRenderModeChange,
         handleBeatMapJsonChange,
         handleBeatVisualDescriptionChange,
+        handleSaveBeatQa,
         handleBeatHtmlChange,
         commitBeatHtmlChange,
         handleRefineBeatHtmlViaGemini,
@@ -3945,6 +4404,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSaveScript,
         handleSaveSourceContent,
         handleFetchGithubReadme,
+        handleFetchTiktokScript,
         handleApproveScript,
         handleRegenerateTts,
         handleRetryTts,

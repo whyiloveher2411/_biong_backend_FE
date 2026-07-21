@@ -23,8 +23,11 @@ import {
     getBeatHtmlVisualState,
     getBeatRenderErrorMessage,
     getBeatTimelineSegments,
+    normalizeBeatQaStatus,
+    BEAT_QA_STATUS_LABELS,
     type BeatHtmlEntry,
     type BeatMap,
+    type BeatQaStatus,
 } from './agentVideoBeatMap';
 import {
     timeSecToTimelineLeftPx,
@@ -49,6 +52,7 @@ type Props = {
     onDeleteBeatData?: (beatId: string) => void;
     onOpenGemini?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
+    onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     scrollLeft: number;
     contentWidthPx: number;
     layout: AgentVideoTimelineLayout;
@@ -76,6 +80,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     onDeleteBeatData,
     onOpenGemini,
     onOpenGeminiHeadless,
+    onSaveBeatQa,
     scrollLeft,
     contentWidthPx,
     layout,
@@ -168,6 +173,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const leftPx = toLeft(segment.startSec);
                     const widthPx = Math.max(2, toLeft(segment.endSec) - leftPx);
                     const visualState = getBeatHtmlVisualState(beatHtml, segment.beatId);
+                    const qaStatus = normalizeBeatQaStatus(beatHtml[segment.beatId]?.qa_status);
                     const segmentColor = visualState === 'error'
                         ? 'warning.main'
                         : (visualState === 'ok' ? 'success.main' : 'error.main');
@@ -259,6 +265,26 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         {visualState === 'error' ? (
                                             <Tooltip title={errorMessage} placement="top">
                                                 <WarningAmberIcon sx={{ fontSize: 12, color: 'common.white' }} />
+                                            </Tooltip>
+                                        ) : null}
+                                        {qaStatus ? (
+                                            <Tooltip
+                                                title={BEAT_QA_STATUS_LABELS[qaStatus] || qaStatus}
+                                                placement="top"
+                                            >
+                                                <Box
+                                                    component="span"
+                                                    sx={{
+                                                        width: 6,
+                                                        height: 6,
+                                                        borderRadius: '50%',
+                                                        bgcolor: qaStatus === 'approved'
+                                                            ? '#bbf7d0'
+                                                            : '#fde68a',
+                                                        boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                                                        flexShrink: 0,
+                                                    }}
+                                                />
                                             </Tooltip>
                                         ) : null}
                                         <span>{`beat ${segment.beatIndex}`}</span>

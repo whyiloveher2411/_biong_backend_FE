@@ -146,6 +146,61 @@ export function isKaraokeSyncPoor(captionSync?: CaptionSyncSummary | null): bool
     return false;
 }
 
+export type ImportHtmlGeminiJobBlock = {
+    status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+    job_ids?: number[];
+    queued_at?: string;
+    updated_at?: string;
+    error?: string;
+    progress?: {
+        current?: number;
+        total?: number;
+        beat_id?: string;
+        succeeded?: number;
+        failed?: string[];
+    };
+};
+
+export type ThumbnailQaStatus = '' | 'approved' | 'needs_regenerate';
+
+export type ImportHtmlThumbnailIdea = {
+    schema_version?: number;
+    concept_id?: string;
+    concept_label?: string;
+    visual_style?: string;
+    series_label?: string;
+    headline?: string;
+    subline?: string;
+    curiosity_element?: string;
+    subject?: string;
+    layout?: string;
+    visual_description?: string;
+    background?: string;
+    background_layers?: string;
+    support_visuals_below?: string;
+    content_signal?: string;
+    color_accent?: string;
+    avoid?: string[];
+    rationale?: string;
+    updated_at?: string;
+};
+
+export type ImportHtmlThumbnailBlock = {
+    idea?: ImportHtmlThumbnailIdea;
+    html?: string;
+    updated_at?: string;
+    creative_prompt?: string;
+    qa_status?: ThumbnailQaStatus;
+    qa_note?: string;
+    image_url?: string;
+    image_s3_key?: string;
+    image_generated_at?: string;
+    approved?: boolean;
+    approved_at?: string;
+    gemini_idea?: ImportHtmlGeminiJobBlock;
+    gemini_fill?: ImportHtmlGeminiJobBlock;
+};
+
 export type ImportHtmlSummary = {
     html_length?: number;
     html_updated_at?: string;
@@ -170,26 +225,26 @@ export type ImportHtmlSummary = {
     missing_beat_ids?: string[];
     beats_render_error_count?: number;
     beat_render_error_ids?: string[];
-    gemini_fill?: {
-        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
-        job_ids?: number[];
-        queued_at?: string;
-        updated_at?: string;
-        error?: string;
-        progress?: {
-            current?: number;
-            total?: number;
-            beat_id?: string;
-            succeeded?: number;
-            failed?: string[];
-        };
-    };
+    gemini_fill?: ImportHtmlGeminiJobBlock;
     gemini_division?: {
         status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
         job_ids?: number[];
         queued_at?: string;
         updated_at?: string;
         error?: string;
+    };
+    gemini_refine_visual?: ImportHtmlGeminiJobBlock;
+    gemini_refine_html?: ImportHtmlGeminiJobBlock;
+    thumbnail?: ImportHtmlThumbnailBlock;
+    gemini_thumbnail_idea?: ImportHtmlGeminiJobBlock;
+    gemini_thumbnail_fill?: ImportHtmlGeminiJobBlock;
+    /** Backend: true khi có job Puppeteer/headless đang chạy (một nguồn sự thật, không map theo pipeline step). */
+    headless_browser_active?: boolean;
+    beat_qa_counts?: {
+        approved?: number;
+        needs_html_refill?: number;
+        needs_visual_tweak?: number;
+        unreviewed?: number;
     };
     assets?: ImportHtmlAssets;
     composition?: ImportHtmlComposition;
@@ -391,6 +446,7 @@ export type AgentVideoContentResponse = {
     agent_source_content?: string;
     agent_additional_info?: string;
     agent_github_repo?: string;
+    agent_tiktok_url?: string;
     agent_source_format?: string;
     agent_source_format_catalog?: AgentSourceFormatCatalogItem[];
     content_plain_text?: string;
@@ -446,6 +502,7 @@ export type FullAutoPipelineSummary = {
         at?: string;
         detail?: Record<string, unknown>;
     } | null;
+    headless_browser_active?: boolean;
 };
 
 export const FULL_AUTO_PIPELINE_STEP_ORDER = [
@@ -456,9 +513,14 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'whisper',
     'beat_division',
     'beat_fill',
+    'beat_refine_visual',
+    'beat_refine_html',
     'bgm',
     'render',
     'upload',
+    'thumbnail_idea',
+    'thumbnail_fill',
+    'thumbnail_capture',
 ] as const;
 
 export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[number];
@@ -471,9 +533,14 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     whisper: 'Whisper',
     beat_division: 'Chia beat',
     beat_fill: 'Fill HTML beat',
+    beat_refine_visual: 'Refine visual',
+    beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
     render: 'Render',
     upload: 'Upload store',
+    thumbnail_idea: 'Thumbnail idea',
+    thumbnail_fill: 'Thumbnail HTML',
+    thumbnail_capture: 'Chụp thumbnail',
 };
 
 export type JsonResponse = {
@@ -828,7 +895,7 @@ export async function enqueueGeminiWebBeatFill(
     skipped_active?: number;
     beat_ids?: string[];
     job_ids?: number[];
-    gemini_fill?: ImportHtmlSummary['gemini_fill'];
+    gemini_fill?: ImportHtmlGeminiJobBlock;
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-fill',
@@ -841,7 +908,74 @@ export async function enqueueGeminiWebBeatFill(
         skipped_active?: number;
         beat_ids?: string[];
         job_ids?: number[];
-        gemini_fill?: ImportHtmlSummary['gemini_fill'];
+        gemini_fill?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
+export async function enqueueGeminiWebThumbnailIdea(
+    shortVideoId: number,
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_id?: number;
+    gemini_thumbnail_idea?: ImportHtmlGeminiJobBlock;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-thumbnail-idea',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        job_id?: number;
+        gemini_thumbnail_idea?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
+export async function enqueueGeminiWebThumbnailFill(
+    shortVideoId: number,
+    force = true,
+    options?: { mode?: 'create' | 'refine'; userPrompt?: string },
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_id?: number;
+    gemini_thumbnail_fill?: ImportHtmlGeminiJobBlock;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-thumbnail-fill',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+            ...(options?.mode ? { mode: options.mode } : {}),
+            ...(options?.userPrompt ? { user_prompt: options.userPrompt } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        job_id?: number;
+        gemini_thumbnail_fill?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
+export async function captureAgentThumbnail(
+    shortVideoId: number,
+    force = false,
+): Promise<JsonResponse & {
+    image_url?: string;
+    thumbnail?: ImportHtmlThumbnailBlock;
+    import_html?: ImportHtmlSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/capture-agent-thumbnail',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        image_url?: string;
+        thumbnail?: ImportHtmlThumbnailBlock;
+        import_html?: ImportHtmlSummary;
     }>;
 }
 
@@ -939,6 +1073,7 @@ export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_source_content?: string;
     agent_additional_info?: string;
     agent_github_repo?: string;
+    agent_tiktok_url?: string;
     agent_source_format?: string;
     agent_source_format_label?: string;
     content_plain_text?: string;
@@ -951,6 +1086,7 @@ export async function saveAgentSourceContent(
     githubRepo?: string,
     sourceFormat?: string,
     additionalInfo?: string,
+    tiktokUrl?: string,
 ): Promise<SaveAgentSourceContentResponse> {
     const extra: Record<string, unknown> = {
         agent_source_content: content,
@@ -963,6 +1099,9 @@ export async function saveAgentSourceContent(
     }
     if (additionalInfo !== undefined) {
         extra.agent_additional_info = additionalInfo;
+    }
+    if (tiktokUrl !== undefined) {
+        extra.agent_tiktok_url = tiktokUrl;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-source-content',
@@ -1002,6 +1141,51 @@ export async function fetchGithubReadme(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/fetch-github-readme',
         shortVideoBody(shortVideoId, extra),
     ) as Promise<FetchGithubReadmeResponse>;
+}
+
+export type ExtractVideoScriptMeta = {
+    title?: string;
+    uploader?: string;
+    duration_sec?: number | null;
+};
+
+export type ExtractVideoScriptResponse = JsonResponse & {
+    platform?: string;
+    language?: string;
+    meta?: ExtractVideoScriptMeta;
+    raw_transcript?: string;
+    cleaned_script?: string;
+    source?: string;
+};
+
+export function isTikTokUrl(raw: string): boolean {
+    const url = raw.trim();
+    if (!url) return false;
+    try {
+        const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        const host = new URL(withProtocol).hostname.replace(/^www\./i, '').toLowerCase();
+        return (
+            host === 'tiktok.com'
+            || host === 'vm.tiktok.com'
+            || host === 'vt.tiktok.com'
+            || host.endsWith('.tiktok.com')
+        );
+    } catch {
+        return /tiktok\.com/i.test(url);
+    }
+}
+
+export async function extractVideoScript(
+    url: string,
+    platform: 'tiktok' = 'tiktok',
+): Promise<ExtractVideoScriptResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/extract-video-script',
+        {
+            url: url.trim(),
+            platform,
+        },
+    ) as Promise<ExtractVideoScriptResponse>;
 }
 
 export type ImportGithubReadmeMediaResponse = JsonResponse & {
@@ -1177,12 +1361,20 @@ export async function saveAgentImportHtml(
         beatId?: string;
         beatHtml?: string;
         creativePrompt?: string;
+        qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
+        qaRefineNote?: string;
+        thumbnailHtml?: string;
+        thumbnailCreativePrompt?: string;
+        thumbnailQaStatus?: ThumbnailQaStatus;
+        thumbnailQaNote?: string;
+        thumbnailApproved?: boolean;
         bgmSegments?: ImportHtmlBgmSegment[];
         sfxBeatTransition?: boolean;
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
         visualSearchQueries?: string[];
         githubImageShots?: ImportHtmlGithubImageShot[];
+        readmeMedia?: GithubReadmeMediaItem[];
     },
 ): Promise<JsonResponse & {
     render_mode?: AgentRenderMode;
@@ -1201,6 +1393,8 @@ export async function saveAgentImportHtml(
     if (payload.beatId !== undefined && (
         payload.beatHtml !== undefined
         || payload.creativePrompt !== undefined
+        || payload.qaStatus !== undefined
+        || payload.qaRefineNote !== undefined
     )) {
         body.beat_id = payload.beatId;
         if (payload.beatHtml !== undefined) {
@@ -1209,6 +1403,27 @@ export async function saveAgentImportHtml(
         if (payload.creativePrompt !== undefined) {
             body.creative_prompt = payload.creativePrompt;
         }
+        if (payload.qaStatus !== undefined) {
+            body.qa_status = payload.qaStatus;
+        }
+        if (payload.qaRefineNote !== undefined) {
+            body.qa_refine_note = payload.qaRefineNote;
+        }
+    }
+    if (payload.thumbnailHtml !== undefined) {
+        body.thumbnail_html = payload.thumbnailHtml;
+    }
+    if (payload.thumbnailCreativePrompt !== undefined) {
+        body.thumbnail_creative_prompt = payload.thumbnailCreativePrompt;
+    }
+    if (payload.thumbnailQaStatus !== undefined) {
+        body.thumbnail_qa_status = payload.thumbnailQaStatus;
+    }
+    if (payload.thumbnailQaNote !== undefined) {
+        body.thumbnail_qa_note = payload.thumbnailQaNote;
+    }
+    if (payload.thumbnailApproved !== undefined) {
+        body.thumbnail_approved = payload.thumbnailApproved;
     }
     if (payload.bgmSegments !== undefined) {
         body.bgm_segments = payload.bgmSegments;
@@ -1227,6 +1442,9 @@ export async function saveAgentImportHtml(
     }
     if (payload.githubImageShots !== undefined) {
         body.github_image_shots = payload.githubImageShots;
+    }
+    if (payload.readmeMedia !== undefined) {
+        body.readme_media = payload.readmeMedia;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',

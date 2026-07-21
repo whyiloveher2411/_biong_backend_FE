@@ -201,6 +201,29 @@ export async function copyImageUrlToClipboard(url: string): Promise<void> {
     ]);
 }
 
+export async function downloadImageUrl(url: string, fileName = 'thumbnail.png'): Promise<void> {
+    const trimmedUrl = String(url || '').trim();
+    if (!trimmedUrl) {
+        throw new Error('Thiếu URL ảnh');
+    }
+
+    const safeName = String(fileName || 'thumbnail.png').trim() || 'thumbnail.png';
+    const blob = await resolveImagePngBlob(trimmedUrl);
+    const objectUrl = URL.createObjectURL(blob);
+
+    try {
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = safeName.endsWith('.png') ? safeName : `${safeName.replace(/\.[^.]+$/, '')}.png`;
+        anchor.rel = 'noopener';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
 export function openImagePopup(url: string) {
     const width = 900;
     const height = 700;

@@ -20,7 +20,7 @@ import {
     resolveDefaultPreviewSource,
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
-import { getBeatTimelineSegments } from './agentVideoBeatMap';
+import { getBeatTimelineSegments, resolveActiveBeatSection } from './agentVideoBeatMap';
 
 type Props = {
     open: boolean;
@@ -53,6 +53,15 @@ export default function ShortVideoAgentVideoWorkspace({
     const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('html_beat');
     const [editBeatHtmlId, setEditBeatHtmlId] = React.useState('');
     const [infoBeatId, setInfoBeatId] = React.useState('');
+    const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
+
+    const currentBeatId = React.useMemo(() => {
+        const beat = resolveActiveBeatSection(
+            state.beatMapReady ? state.beatMap : null,
+            currentTimeSec,
+        );
+        return beat?.id || '';
+    }, [currentTimeSec, state.beatMap, state.beatMapReady]);
 
     const editBeatSegment = React.useMemo(() => {
         if (!editBeatHtmlId) {
@@ -356,6 +365,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         videoRef={videoRef}
                         previewSource={activePreviewSource}
                         onPreviewSourceChange={setPreviewSource}
+                        currentBeatId={currentBeatId}
                     />
 
                     <Box
@@ -413,6 +423,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenBeatGeminiHeadless={(beatId) => {
                         void state.handleOpenBeatGeminiHeadless(beatId);
                     }}
+                    onSaveBeatQa={(beatId, qaStatus, qaRefineNote) => (
+                        state.handleSaveBeatQa(beatId, qaStatus, qaRefineNote)
+                    )}
                     copyingBeatHtmlPromptBeatId={state.copyingBeatHtmlPromptBeatId}
                     pastingBeatHtmlBeatId={state.pastingBeatHtmlBeatId}
                     deletingBeatHtmlBeatId={state.deletingBeatHtmlBeatId}
@@ -439,6 +452,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     hasAgentVideo={state.hasAgentVideo}
                     launchingImportAssemble={state.launchingImportAssemble}
                     onLaunchImportAssemble={() => { void state.handleLaunchAgentImportAssemble(); }}
+                    onTimeUpdate={setCurrentTimeSec}
                 />
             </Box>
             <ShortVideoAgentBeatHtmlEditDrawer
@@ -472,11 +486,14 @@ export default function ShortVideoAgentVideoWorkspace({
                 shortVideoId={shortVideoId}
                 pipeline={state.fullAutoPipeline}
                 geminiFillProgress={state.geminiFillProgress}
+                headlessBrowserActive={state.headlessBrowserActive}
                 agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
                 geminiScriptStatus={state.geminiScriptStatus}
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
                 geminiDivisionStatus={state.geminiDivisionStatus}
                 geminiFillStatus={state.geminiFillStatus}
+                geminiThumbnailFillStatus={state.geminiThumbnailFillStatus}
+                geminiThumbnailIdeaStatus={state.geminiThumbnailIdeaStatus}
                 ttsPending={state.ttsPending}
                 selectedTtsPlatforms={state.selectedPlatforms}
                 cancelling={state.cancellingFullAuto}

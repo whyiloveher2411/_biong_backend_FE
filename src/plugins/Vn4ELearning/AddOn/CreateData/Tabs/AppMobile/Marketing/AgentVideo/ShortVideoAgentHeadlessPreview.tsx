@@ -28,12 +28,16 @@ type Props = {
     geminiFillProgress?: {
         beatId?: string;
     } | null;
+    /** Backend: true khi có job Puppeteer/headless đang chạy — bật preview realtime tự động. */
+    headlessBrowserActive?: boolean;
     /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
     agentGeminiOpenBrowser?: boolean;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
     geminiDivisionStatus?: string;
     geminiFillStatus?: string;
+    geminiThumbnailFillStatus?: string;
+    geminiThumbnailIdeaStatus?: string;
     ttsPending?: boolean;
     selectedTtsPlatforms?: string[];
     cancelling: boolean;
@@ -41,24 +45,6 @@ type Props = {
     onStop: () => void | Promise<void>;
     onNewChat: (sessionId?: string) => void | Promise<void>;
 };
-
-/** Bước pipeline có thể mở Puppeteer / publish frame preview. */
-const HEADLESS_BROWSER_PIPELINE_STEPS = new Set<string>([
-    'script_create',
-    'script_improve',
-    'script_phonetic_normalize',
-    'beat_division',
-    'beat_fill',
-    'approve_tts',
-]);
-
-const GEMINI_NEW_CHAT_STEPS = new Set<string>([
-    'script_create',
-    'script_improve',
-    'script_phonetic_normalize',
-    'beat_division',
-    'beat_fill',
-]);
 
 const RESULT_VISIBLE_MS = 3500;
 const PREVIEW_WIDTH_STORAGE_KEY = 'short-video-agent-headless-preview-width';
@@ -162,11 +148,14 @@ export default function ShortVideoAgentHeadlessPreview({
     shortVideoId,
     pipeline,
     geminiFillProgress,
+    headlessBrowserActive = false,
     agentGeminiOpenBrowser = false,
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
     geminiDivisionStatus = 'none',
     geminiFillStatus = 'none',
+    geminiThumbnailFillStatus = 'none',
+    geminiThumbnailIdeaStatus = 'none',
     ttsPending = false,
     selectedTtsPlatforms = [],
     cancelling,
@@ -175,6 +164,8 @@ export default function ShortVideoAgentHeadlessPreview({
     onNewChat,
 }: Props) {
     void agentGeminiOpenBrowser; // headed Chrome do backend xử lý; không chặn WS preview
+    void geminiDivisionStatus;
+    void geminiFillStatus;
     const [minimized, setMinimized] = React.useState(false);
     const [showResult, setShowResult] = React.useState(false);
     const [panelWidth, setPanelWidth] = React.useState(storedPreviewWidth);
@@ -193,24 +184,18 @@ export default function ShortVideoAgentHeadlessPreview({
 
     const geminiJobActive = isActiveJobStatus(geminiScriptStatus)
         || isActiveJobStatus(geminiScriptPhoneticStatus)
-        || isActiveJobStatus(geminiDivisionStatus)
-        || isActiveJobStatus(geminiFillStatus);
+        || isActiveJobStatus(geminiThumbnailFillStatus);
 
-    const pipelineHeadlessStep = pipelineRunning
-        && HEADLESS_BROWSER_PIPELINE_STEPS.has(currentStep)
-        && (currentStep !== 'approve_tts' || chatgptInChain);
+    const effectiveHeadlessActive = headlessBrowserActive
+        || Boolean(pipeline?.headless_browser_active)
+        || geminiJobActive;
 
-    // Mọi bước dùng Puppeteer đều bật preview realtime (không phụ thuộc «Hiện browser»).
-    const browserStep = open && (pipelineHeadlessStep || geminiJobActive || chatgptTtsActive);
+    // Preview realtime: headless đang chạy (backend flag + mirror gemini block / pipeline).
+    const browserStep = open && (effectiveHeadlessActive || chatgptTtsActive);
 
-    const running = pipelineRunning || (open && (geminiJobActive || chatgptTtsActive));
+    const running = open && (pipelineRunning || effectiveHeadlessActive || chatgptTtsActive);
 
-    const showNewChat = browserStep
-        && !chatgptTtsActive
-        && (
-            (pipelineRunning && GEMINI_NEW_CHAT_STEPS.has(currentStep))
-            || geminiJobActive
-        );
+    const showNewChat = browserStep && !chatgptTtsActive && effectiveHeadlessActive;
 
     React.useEffect(() => {
         if (!open) {

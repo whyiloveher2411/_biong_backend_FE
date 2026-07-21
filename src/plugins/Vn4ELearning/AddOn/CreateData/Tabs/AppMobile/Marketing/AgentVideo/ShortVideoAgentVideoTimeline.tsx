@@ -24,7 +24,7 @@ import TimelineZoomControls, {
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
 } from '../TimelineZoomControls';
-import { countBeatIdsWithHtml, type BeatHtmlEntry, type BeatMap } from './agentVideoBeatMap';
+import { countBeatIdsWithHtml, countBeatQaByStatus, type BeatHtmlEntry, type BeatMap, type BeatQaStatus } from './agentVideoBeatMap';
 
 const TRACK_LABELS_WIDTH = 100;
 const TIMELINE_SCALE = 1;
@@ -149,6 +149,8 @@ type Props = {
     onFillAllMissingBeatGeminiHeadless?: () => void;
     onOpenBeatGemini?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
+    onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
+    onTimeUpdate?: (timeSec: number) => void;
     copyingBeatHtmlPromptBeatId?: string;
     pastingBeatHtmlBeatId?: string;
     deletingBeatHtmlBeatId?: string;
@@ -206,6 +208,8 @@ export default function ShortVideoAgentVideoTimeline({
     onFillAllMissingBeatGeminiHeadless,
     onOpenBeatGemini,
     onOpenBeatGeminiHeadless,
+    onSaveBeatQa,
+    onTimeUpdate,
     copyingBeatHtmlPromptBeatId = '',
     pastingBeatHtmlBeatId = '',
     deletingBeatHtmlBeatId = '',
@@ -240,10 +244,25 @@ export default function ShortVideoAgentVideoTimeline({
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
     const isPlayingRef = React.useRef(false);
+    const onTimeUpdateRef = React.useRef(onTimeUpdate);
+    onTimeUpdateRef.current = onTimeUpdate;
+
+    React.useEffect(() => {
+        onTimeUpdateRef.current?.(currentTimeSec);
+    }, [currentTimeSec]);
 
     const beatsWithHtmlCount = React.useMemo(
         () => countBeatIdsWithHtml(beatHtml),
         [beatHtml],
+    );
+    const beatQaCounts = React.useMemo(
+        () => countBeatQaByStatus(beatMap, beatHtml),
+        [beatMap, beatHtml],
+    );
+    const showBeatQaSummary = Boolean(beatMap?.sections?.length) && (
+        beatQaCounts.approved > 0
+        || beatQaCounts.needs_html_refill > 0
+        || beatQaCounts.needs_visual_tweak > 0
     );
     const geminiFillQueueActive = geminiFillStatus === 'queued'
         || geminiFillStatus === 'processing';
@@ -614,6 +633,11 @@ export default function ShortVideoAgentVideoTimeline({
                     {formatPlaybackClock(currentTimeSec)} / {formatPlaybackClock(contentDurationSec)}
                 </Typography>
                 <Box sx={{ flex: 1, minWidth: 8 }} />
+                {showBeatQaSummary ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                        {`Ổn: ${beatQaCounts.approved} · HTML: ${beatQaCounts.needs_html_refill} · Visual: ${beatQaCounts.needs_visual_tweak}`}
+                    </Typography>
+                ) : null}
                 {hasVideo ? (
                     <TimelineZoomControls
                         value={timelineScaleWidth}
@@ -907,6 +931,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onDeleteBeatData={onDeleteBeatHtml}
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
+                                onSaveBeatQa={onSaveBeatQa}
                                 scrollLeft={timelineScrollLeft}
                                 contentWidthPx={timelineContentWidthPx}
                                 layout={timelineLayout}

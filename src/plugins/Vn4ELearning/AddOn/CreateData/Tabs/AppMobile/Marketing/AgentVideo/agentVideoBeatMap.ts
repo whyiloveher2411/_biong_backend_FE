@@ -20,11 +20,17 @@ export type BeatMap = {
     sections: BeatMapSection[];
 };
 
+export type BeatQaActionStatus = 'approved' | 'needs_html_refill' | 'needs_visual_tweak';
+
+export type BeatQaStatus = BeatQaActionStatus | '';
+
 export type BeatHtmlEntry = {
     html: string;
     updated_at?: string;
     /** Prompt sáng tạo / refine — user hoặc pipeline AI ghi để dùng lại. */
     creative_prompt?: string;
+    qa_status?: BeatQaStatus;
+    qa_refine_note?: string;
     render_status?: 'error' | 'ok' | string;
     render_error?: string;
     render_error_code?: string;
@@ -34,6 +40,61 @@ export type BeatHtmlEntry = {
 
 export type BeatHtmlVisualState = 'missing' | 'ok' | 'error';
 
+export const BEAT_QA_STATUSES: BeatQaActionStatus[] = [
+    'approved',
+    'needs_html_refill',
+    'needs_visual_tweak',
+];
+
+export const BEAT_QA_STATUS_LABELS: Record<BeatQaActionStatus, string> = {
+    approved: 'Ổn',
+    needs_html_refill: 'Chưa ổn HTML',
+    needs_visual_tweak: 'Đổi visual',
+};
+
+export type BeatQaQuickNoteOption = {
+    label: string;
+    note: string;
+    qaStatus?: BeatQaActionStatus;
+};
+
+export const BEAT_QA_QUICK_NOTE_OPTIONS: BeatQaQuickNoteOption[] = [
+    {
+        label: 'Sử dụng hình ảnh trực quan, dễ hiểu',
+        note: 'Sử dụng hình ảnh trực quan, dễ hiểu',
+        qaStatus: 'needs_visual_tweak',
+    },
+];
+
+export function normalizeBeatQaStatus(raw: unknown): BeatQaStatus {
+    const status = String(raw || '').trim();
+    return BEAT_QA_STATUSES.includes(status as BeatQaActionStatus)
+        ? status as BeatQaActionStatus
+        : '';
+}
+
+export function countBeatQaByStatus(
+    beatMap: BeatMap | null,
+    beatHtml: Record<string, BeatHtmlEntry>,
+): Record<'approved' | 'needs_html_refill' | 'needs_visual_tweak' | 'unreviewed', number> {
+    const counts = {
+        approved: 0,
+        needs_html_refill: 0,
+        needs_visual_tweak: 0,
+        unreviewed: 0,
+    };
+    const sections = beatMap?.sections ?? [];
+    sections.forEach((section) => {
+        const status = normalizeBeatQaStatus(beatHtml[section.id]?.qa_status);
+        if (!status) {
+            counts.unreviewed += 1;
+            return;
+        }
+        counts[status] += 1;
+    });
+    return counts;
+}
+
 export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
     if (!entry || typeof entry !== 'object') {
         return null;
@@ -42,10 +103,18 @@ export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
     const creativePrompt = raw.creative_prompt != null
         ? String(raw.creative_prompt)
         : undefined;
+    const qaStatus = raw.qa_status != null
+        ? normalizeBeatQaStatus(raw.qa_status)
+        : undefined;
+    const qaRefineNote = raw.qa_refine_note != null
+        ? String(raw.qa_refine_note)
+        : undefined;
     return {
         html: String(raw.html || ''),
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: creativePrompt !== undefined ? creativePrompt : undefined,
+        qa_status: qaStatus !== undefined && qaStatus !== '' ? qaStatus : undefined,
+        qa_refine_note: qaRefineNote !== undefined ? qaRefineNote : undefined,
         render_status: raw.render_status ? String(raw.render_status) : undefined,
         render_error: raw.render_error ? String(raw.render_error) : undefined,
         render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,

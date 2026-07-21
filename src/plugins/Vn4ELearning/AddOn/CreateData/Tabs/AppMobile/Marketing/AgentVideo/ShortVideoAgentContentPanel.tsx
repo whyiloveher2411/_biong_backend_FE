@@ -30,6 +30,7 @@ import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import TextareaForm from 'components/atoms/fields/textarea/Form';
 import { convertToURL, validURL } from 'helpers/url';
+import { openImagePopup } from 'helpers/image';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
     FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -57,9 +58,27 @@ function ReadmeMediaThumb({
     label: string;
 }) {
     const [failed, setFailed] = React.useState(false);
+    const canPreviewImage = mediaType === 'image' && !failed && url.trim() !== '';
+
+    const handleClick = () => {
+        if (!canPreviewImage) {
+            return;
+        }
+        openImagePopup(url.trim());
+    };
 
     return (
         <Box
+            role={canPreviewImage ? 'button' : undefined}
+            tabIndex={canPreviewImage ? 0 : undefined}
+            aria-label={canPreviewImage ? `Xem ảnh: ${label}` : undefined}
+            onClick={canPreviewImage ? handleClick : undefined}
+            onKeyDown={canPreviewImage ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleClick();
+                }
+            } : undefined}
             sx={{
                 width: 56,
                 height: 56,
@@ -70,6 +89,17 @@ function ReadmeMediaThumb({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                cursor: canPreviewImage ? 'pointer' : 'default',
+                transition: 'box-shadow 0.15s ease, transform 0.15s ease',
+                '&:hover': canPreviewImage ? {
+                    boxShadow: 2,
+                    transform: 'scale(1.03)',
+                } : undefined,
+                '&:focus-visible': canPreviewImage ? {
+                    outline: '2px solid',
+                    outlineColor: 'primary.main',
+                    outlineOffset: 2,
+                } : undefined,
             }}
         >
             {mediaType === 'video' || failed ? (
@@ -82,11 +112,74 @@ function ReadmeMediaThumb({
                     src={url}
                     alt={label}
                     referrerPolicy="no-referrer"
-                    sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        pointerEvents: 'none',
+                    }}
                     onError={() => setFailed(true)}
                 />
             )}
         </Box>
+    );
+}
+
+function isGenericReadmeMediaAlt(alt: string): boolean {
+    const normalized = alt.trim().toLowerCase();
+    return normalized === '' || normalized === 'image';
+}
+
+function ReadmeMediaDescriptionField({
+    item,
+    onChange,
+    onBlur,
+}: {
+    item: { id: string; alt?: string; origin_path?: string };
+    onChange: (alt: string) => void;
+    onBlur: (alt: string) => void;
+}) {
+    const [draft, setDraft] = React.useState(String(item.alt || ''));
+
+    React.useEffect(() => {
+        setDraft(String(item.alt || ''));
+    }, [item.alt, item.id]);
+
+    const placeholder = item.origin_path?.trim()
+        || (isGenericReadmeMediaAlt(String(item.alt || '')) ? 'Thêm mô tả ảnh…' : '');
+
+    const commitAlt = () => {
+        onBlur(draft.trim());
+    };
+
+    return (
+        <TextField
+            size="small"
+            fullWidth
+            multiline
+            minRows={1}
+            maxRows={2}
+            value={draft}
+            placeholder={placeholder || 'Thêm mô tả ảnh…'}
+            onChange={(event) => {
+                setDraft(event.target.value);
+                onChange(event.target.value);
+            }}
+            onBlur={commitAlt}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    commitAlt();
+                    event.currentTarget.blur();
+                }
+            }}
+            sx={{
+                '& .MuiInputBase-input': {
+                    fontWeight: 500,
+                    py: 0.75,
+                },
+            }}
+        />
     );
 }
 
@@ -166,6 +259,8 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
     );
     const [contentFieldKey, setContentFieldKey] = React.useState(0);
     const prevFetchingReadmeRef = React.useRef(false);
+    const prevFetchingTiktokRef = React.useRef(false);
+    const isTiktokRemix = state.agentSourceFormat === 'tiktok_remix';
 
     React.useEffect(() => {
         contentPostRef.current.agent_source_content = state.savedAgentSourceContent;
@@ -180,9 +275,18 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
         prevFetchingReadmeRef.current = state.fetchingGithubReadme;
     }, [state.fetchingGithubReadme, state.agentSourceContent]);
 
+    React.useEffect(() => {
+        if (prevFetchingTiktokRef.current && !state.fetchingTiktokScript) {
+            contentPostRef.current.agent_source_content = state.agentSourceContent;
+            setContentFieldKey((prev) => prev + 1);
+        }
+        prevFetchingTiktokRef.current = state.fetchingTiktokScript;
+    }, [state.fetchingTiktokScript, state.agentSourceContent]);
+
     const sourceDirty = !linked && (
         String(contentPostRef.current.agent_source_content || '') !== state.savedAgentSourceContent
         || state.agentGithubRepo !== state.savedAgentGithubRepo
+        || state.agentTiktokUrl !== state.savedAgentTiktokUrl
         || state.agentSourceFormat !== state.savedAgentSourceFormat
     );
     const additionalDirty = state.agentAdditionalInfo !== state.savedAgentAdditionalInfo;
@@ -227,7 +331,9 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                         description={
                             linked
                                 ? `Đang liên kết marketing post #${state.marketingPostId} — nội dung chỉ đọc.`
-                                : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
+                                : isTiktokRemix
+                                    ? 'Chọn Remix TikTok, dán link rồi Lấy thông tin để điền transcript.'
+                                    : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
                         }
                     >
                         {linked ? (
@@ -369,29 +475,59 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     />
                                 </Box>
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
-                                    <TextField
-                                        label="GitHub repo"
-                                        value={state.agentGithubRepo}
-                                        onChange={(e) => state.setAgentGithubRepo(e.target.value)}
-                                        fullWidth
-                                        size="small"
-                                        placeholder="owner/repo hoặc https://github.com/owner/repo"
-                                        sx={workflowFieldSurfaceSx}
-                                    />
-                                    <LoadingButton
-                                        variant="outlined"
-                                        loading={state.fetchingGithubReadme}
-                                        startIcon={<CloudDownloadIcon />}
-                                        onClick={() => void state.handleFetchGithubReadme()}
-                                        disabled={!state.agentGithubRepo.trim()}
-                                        sx={{
-                                            whiteSpace: 'nowrap',
-                                            flexShrink: 0,
-                                            bgcolor: 'background.paper',
-                                        }}
-                                    >
-                                        Lấy thông tin
-                                    </LoadingButton>
+                                    {isTiktokRemix ? (
+                                        <>
+                                            <TextField
+                                                label="TikTok link"
+                                                value={state.agentTiktokUrl}
+                                                onChange={(e) => state.setAgentTiktokUrl(e.target.value)}
+                                                fullWidth
+                                                size="small"
+                                                placeholder="https://www.tiktok.com/@user/video/…"
+                                                sx={workflowFieldSurfaceSx}
+                                            />
+                                            <LoadingButton
+                                                variant="outlined"
+                                                loading={state.fetchingTiktokScript}
+                                                startIcon={<CloudDownloadIcon />}
+                                                onClick={() => void state.handleFetchTiktokScript()}
+                                                disabled={!state.agentTiktokUrl.trim()}
+                                                sx={{
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    bgcolor: 'background.paper',
+                                                }}
+                                            >
+                                                Lấy thông tin
+                                            </LoadingButton>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <TextField
+                                                label="GitHub repo"
+                                                value={state.agentGithubRepo}
+                                                onChange={(e) => state.setAgentGithubRepo(e.target.value)}
+                                                fullWidth
+                                                size="small"
+                                                placeholder="owner/repo hoặc https://github.com/owner/repo"
+                                                sx={workflowFieldSurfaceSx}
+                                            />
+                                            <LoadingButton
+                                                variant="outlined"
+                                                loading={state.fetchingGithubReadme}
+                                                startIcon={<CloudDownloadIcon />}
+                                                onClick={() => void state.handleFetchGithubReadme()}
+                                                disabled={!state.agentGithubRepo.trim()}
+                                                sx={{
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    bgcolor: 'background.paper',
+                                                }}
+                                            >
+                                                Lấy thông tin
+                                            </LoadingButton>
+                                        </>
+                                    )}
                                 </Stack>
                             </Stack>
                         )}
@@ -415,7 +551,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                         />
                     </WorkflowSection>
 
-                    {!linked ? (
+                    {!linked && !isTiktokRemix ? (
                         <WorkflowSection
                             title="Media từ README"
                             tone="visual"
@@ -627,9 +763,9 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         const imported = state.isReadmeMediaImported(item);
                                         const importing = state.importingAllReadmeMedia
                                             || state.importingReadmeMediaIds.includes(item.id);
-                                        const label = item.alt?.trim()
-                                            || item.origin_path?.trim()
-                                            || item.resolved_url;
+                                        const displayLabel = !isGenericReadmeMediaAlt(String(item.alt || ''))
+                                            ? String(item.alt || '').trim()
+                                            : (item.origin_path?.trim() || item.resolved_url);
                                         return (
                                             <Stack
                                                 key={item.id}
@@ -647,17 +783,14 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 <ReadmeMediaThumb
                                                     mediaType={item.media_type}
                                                     url={item.resolved_url}
-                                                    label={label}
+                                                    label={displayLabel}
                                                 />
                                                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                    <Typography
-                                                        variant="body2"
-                                                        noWrap
-                                                        title={label}
-                                                        sx={{ fontWeight: 500 }}
-                                                    >
-                                                        {label}
-                                                    </Typography>
+                                                    <ReadmeMediaDescriptionField
+                                                        item={item}
+                                                        onChange={(alt) => state.handleReadmeMediaAltChange(item.id, alt)}
+                                                        onBlur={(alt) => void state.handleReadmeMediaAltBlur(item.id, alt)}
+                                                    />
                                                     <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.25 }}>
                                                         <Chip
                                                             size="small"

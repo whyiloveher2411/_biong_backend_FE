@@ -519,13 +519,19 @@ function patchTimelineDurationFromCaption({
   }
 
   const beatSum = sections.reduce((sum, sec) => sum + Number(sec.durationSec || 0), 0);
-  if (captionTotal > beatSum + 0.01) {
-    const last = sections[sections.length - 1];
-    if (last) {
+  const last = sections[sections.length - 1];
+  if (last && Math.abs(captionTotal - beatSum) > 0.01) {
+    const start = Number(last.startSec || 0);
+    if (captionTotal > beatSum) {
       const delta = captionTotal - beatSum;
       last.durationSec = Number(last.durationSec || 0) + delta;
-      last.endSec = Number(last.endSec || last.startSec + last.durationSec);
+    } else {
+      // Caption/audio ngắn hơn beat-map — rút beat cuối cho khớp totalVideoSec
+      // (tránh HTML sync theo total=239.2 nhưng map.durationSec vẫn 13.7 → check-beat-timing fail)
+      last.durationSec = Math.max(0.001, captionTotal - start);
     }
+    last.durationSec = Math.round(Number(last.durationSec) * 1000) / 1000;
+    last.endSec = Math.round((start + Number(last.durationSec)) * 1000) / 1000;
   }
 
   beatMap.totalVideoSec = captionTotal;

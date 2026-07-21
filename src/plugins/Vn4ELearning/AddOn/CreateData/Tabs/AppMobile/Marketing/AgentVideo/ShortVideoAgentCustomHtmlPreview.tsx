@@ -4,7 +4,6 @@ import { resolveActiveBeatSection, type BeatMap } from './agentVideoBeatMap';
 import { createHtmlBeatMediaProxy, type HtmlBeatMediaProxy } from './agentVideoHtmlBeatMediaProxy';
 import {
     computeContainScale,
-    computeScaledStageHeight,
     HF_STAGE_HEIGHT,
     HF_STAGE_WIDTH,
 } from './agentVideoHtmlBeatPreviewScale';
@@ -45,6 +44,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
     const [activeBeatId, setActiveBeatId] = React.useState('');
     const [localTimeSec, setLocalTimeSec] = React.useState(0);
     const [containerWidth, setContainerWidth] = React.useState(0);
+    const [containerHeight, setContainerHeight] = React.useState(0);
 
     beatMapRef.current = beatMap;
     audioDurationSecRef.current = audioDurationSec;
@@ -68,8 +68,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
     const activeHtmlRevision = activeBeat
         ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`
         : 'empty';
-    const containScale = computeContainScale(containerWidth || 360);
-    const scaledStageHeight = computeScaledStageHeight(containScale);
 
     React.useImperativeHandle(videoRef, () => mediaProxyRef.current as HtmlBeatMediaProxy, []);
 
@@ -85,17 +83,23 @@ export default function ShortVideoAgentCustomHtmlPreview({
             return undefined;
         }
 
-        const updateWidth = () => {
+        const updateSize = () => {
             setContainerWidth(container.clientWidth);
+            setContainerHeight(container.clientHeight);
         };
 
-        updateWidth();
-        const observer = new ResizeObserver(updateWidth);
+        updateSize();
+        const observer = new ResizeObserver(updateSize);
         observer.observe(container);
         return () => {
             observer.disconnect();
         };
     }, []);
+
+    const containScale = computeContainScale(
+        containerWidth || 360,
+        containerHeight > 0 ? containerHeight : undefined,
+    );
 
     React.useEffect(() => {
         const audio = audioRef.current;
@@ -133,33 +137,56 @@ export default function ShortVideoAgentCustomHtmlPreview({
     }, [activeHtml, beatMap, localTimeSec]);
 
     return (
-        <Box sx={{ width: '100%', maxWidth: 360 }}>
-            {activeBeatId ? (
-                <Box sx={{ mb: 1, textAlign: 'center' }}>
-                    Preview:
-                    {' '}
-                    {activeBeatId}
-                    {activeBeat ? ` (${activeBeat.startSec.toFixed(1)}–${activeBeat.endSec.toFixed(1)}s)` : ''}
+        <Box
+            ref={containerRef}
+            sx={{
+                width: '100%',
+                height: '100%',
+                borderRadius: 2,
+                overflow: 'hidden',
+                boxShadow: 3,
+                position: 'relative',
+            }}
+        >
+            {activeBeatId && activeBeat ? (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 6,
+                        left: 6,
+                        zIndex: 2,
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: 0.75,
+                        bgcolor: 'rgba(0,0,0,0.55)',
+                        color: 'common.white',
+                        fontSize: 10,
+                        lineHeight: 1.3,
+                        maxWidth: 'calc(100% - 12px)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {`${activeBeatId} (${activeBeat.startSec.toFixed(1)}–${activeBeat.endSec.toFixed(1)}s)`}
                 </Box>
             ) : null}
             <Box
-                ref={containerRef}
                 sx={{
                     width: '100%',
-                    aspectRatio: '9 / 16',
-                    bgcolor: 'common.black',
-                    borderRadius: 2,
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     overflow: 'hidden',
-                    boxShadow: 3,
-                    position: 'relative',
                 }}
             >
                 <Box
                     sx={{
-                        width: '100%',
-                        height: scaledStageHeight > 0 ? scaledStageHeight : '100%',
-                        overflow: 'hidden',
+                        width: HF_STAGE_WIDTH * containScale,
+                        height: HF_STAGE_HEIGHT * containScale,
                         position: 'relative',
+                        flexShrink: 0,
                     }}
                 >
                     <Box
@@ -168,7 +195,9 @@ export default function ShortVideoAgentCustomHtmlPreview({
                             height: HF_STAGE_HEIGHT,
                             transform: `scale(${containScale})`,
                             transformOrigin: 'top left',
-                            position: 'relative',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
                         }}
                     >
                         <Box
@@ -183,7 +212,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
                                 height: HF_STAGE_HEIGHT,
                                 border: 0,
                                 display: 'block',
-                                bgcolor: 'common.black',
                             }}
                         />
                         <ShortVideoAgentAvatarPipOverlay
@@ -195,14 +223,14 @@ export default function ShortVideoAgentCustomHtmlPreview({
                         />
                     </Box>
                 </Box>
-                <Box
-                    component="audio"
-                    ref={audioRef}
-                    src={audioUrl}
-                    preload="auto"
-                    sx={{ display: 'none' }}
-                />
             </Box>
+            <Box
+                component="audio"
+                ref={audioRef}
+                src={audioUrl}
+                preload="auto"
+                sx={{ display: 'none' }}
+            />
         </Box>
     );
 }
