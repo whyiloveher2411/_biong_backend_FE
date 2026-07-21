@@ -810,7 +810,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         writeAgentVideoScriptDraft(shortVideoId, value);
     }, [shortVideoId]);
 
-    const loadRow = React.useCallback((options?: { syncTtsQueue?: boolean }) => {
+    const loadRow = React.useCallback((options?: {
+        syncTtsQueue?: boolean;
+        syncAggregate?: boolean;
+        includeCatalogs?: boolean;
+    }) => {
         if (!shortVideoId || !open) {
             return;
         }
@@ -821,6 +825,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 short_video_id: shortVideoId,
                 id: shortVideoId,
                 ...(options?.syncTtsQueue ? { sync_tts_queue: 1 } : {}),
+                ...(options?.syncAggregate ? { sync_aggregate: 1 } : {}),
+                ...(options?.includeCatalogs === false ? { include_catalogs: 0 } : {}),
             },
             loading: false,
             success: (res: AgentVideoContentResponse) => {
@@ -936,7 +942,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return undefined;
         }
         const timer = window.setInterval(() => {
-            loadRow();
+            loadRow({ syncAggregate: true, includeCatalogs: false });
         }, 5000);
         return () => window.clearInterval(timer);
     }, [loadRow, open, shortVideoId, shouldPoll]);
