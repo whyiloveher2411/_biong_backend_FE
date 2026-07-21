@@ -19,6 +19,7 @@ import {
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
+import { PipelineGroupedStepList } from './FullAutoPipelineGroupedSteps';
 import { useAgentHeadlessPreview } from './useAgentHeadlessPreview';
 
 type Props = {
@@ -92,29 +93,6 @@ function stepLabel(step: string): string {
         return FULL_AUTO_PIPELINE_STEP_LABELS[step as FullAutoPipelineStepKey];
     }
     return step || 'Đang chuẩn bị pipeline';
-}
-
-const PIPELINE_STEP_STATUS_LABEL: Record<string, string> = {
-    done: 'Xong',
-    skipped: 'Bỏ qua',
-    running: 'Đang chạy',
-    failed: 'Lỗi',
-    pending: 'Chưa làm',
-};
-
-function pipelineStepStatusColor(status: string): string {
-    switch (status) {
-        case 'done':
-            return 'success.light';
-        case 'running':
-            return 'info.light';
-        case 'failed':
-            return 'error.light';
-        case 'skipped':
-            return 'rgba(255,255,255,0.45)';
-        default:
-            return 'rgba(255,255,255,0.35)';
-    }
 }
 
 function pipelineProgressLabel(step: string): string {
@@ -511,7 +489,7 @@ export default function ShortVideoAgentHeadlessPreview({
             {!minimized && running && pipeline?.steps && pipelineRunning ? (
                 <Box
                     sx={{
-                        maxHeight: 168,
+                        maxHeight: 260,
                         overflowY: 'auto',
                         px: 1.5,
                         py: 1,
@@ -519,46 +497,12 @@ export default function ShortVideoAgentHeadlessPreview({
                         borderBottom: '1px solid rgba(255,255,255,0.08)',
                     }}
                 >
-                    {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
-                        const status = String(pipeline.steps?.[stepKey]?.status || 'pending');
-                        const isCurrent = stepKey === currentStep;
-                        return (
-                            <Box
-                                key={stepKey}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 1,
-                                    py: 0.35,
-                                    opacity: status === 'pending' && !isCurrent ? 0.55 : 1,
-                                }}
-                            >
-                                <Typography
-                                    variant="caption"
-                                    noWrap
-                                    sx={{
-                                        flex: 1,
-                                        fontWeight: isCurrent || status === 'running' ? 700 : 400,
-                                        color: isCurrent ? 'common.white' : 'rgba(255,255,255,0.82)',
-                                    }}
-                                >
-                                    {index + 1}. {stepLabel(stepKey)}
-                                </Typography>
-                                <Typography
-                                    variant="caption"
-                                    sx={{
-                                        flexShrink: 0,
-                                        fontWeight: 600,
-                                        color: pipelineStepStatusColor(status),
-                                        fontSize: 10,
-                                    }}
-                                >
-                                    {PIPELINE_STEP_STATUS_LABEL[status] || status}
-                                </Typography>
-                            </Box>
-                        );
-                    })}
+                    <PipelineGroupedStepList
+                        steps={pipeline.steps}
+                        headlessSteps={pipeline.headless_steps}
+                        aiSteps={pipeline.ai_steps}
+                        currentStep={currentStep}
+                    />
                 </Box>
             ) : null}
 

@@ -478,6 +478,71 @@ export type GithubTopEnrichSummary = {
 
 export type FullAutoPipelineStepStatus = 'pending' | 'running' | 'skipped' | 'done' | 'failed' | string;
 
+export const FULL_AUTO_PIPELINE_STEP_ORDER = [
+    'script_create',
+    'script_improve',
+    'script_phonetic_normalize',
+    'approve_tts',
+    'whisper',
+    'beat_division',
+    'beat_fill',
+    'beat_refine_visual',
+    'beat_refine_html',
+    'bgm',
+    'render',
+    'upload',
+    'thumbnail_idea',
+    'thumbnail_fill',
+    'thumbnail_capture',
+] as const;
+
+export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[number];
+
+/**
+ * Các bước pipeline dùng trình duyệt nền (Puppeteer / headless Chrome).
+ * Mirror backend `marketing_short_video_full_auto_headless_pipeline_steps()`.
+ */
+export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
+    'script_create',
+    'script_improve',
+    'script_phonetic_normalize',
+    'approve_tts',
+    'beat_division',
+    'beat_fill',
+    'beat_refine_visual',
+    'beat_refine_html',
+    'render',
+    'thumbnail_idea',
+    'thumbnail_fill',
+    'thumbnail_capture',
+] as const;
+
+export function isFullAutoPipelineHeadlessStep(step: string): step is FullAutoPipelineStepKey {
+    return (FULL_AUTO_PIPELINE_HEADLESS_STEPS as readonly string[]).includes(step);
+}
+
+/**
+ * Các bước pipeline dùng AI (Gemini, Whisper, TTS AI…).
+ * Mirror backend `marketing_short_video_full_auto_ai_pipeline_steps()`.
+ */
+export const FULL_AUTO_PIPELINE_AI_STEPS = [
+    'script_create',
+    'script_improve',
+    'script_phonetic_normalize',
+    'approve_tts',
+    'whisper',
+    'beat_division',
+    'beat_fill',
+    'beat_refine_visual',
+    'beat_refine_html',
+    'thumbnail_idea',
+    'thumbnail_fill',
+] as const;
+
+export function isFullAutoPipelineAiStep(step: string): step is FullAutoPipelineStepKey {
+    return (FULL_AUTO_PIPELINE_AI_STEPS as readonly string[]).includes(step);
+}
+
 export type FullAutoPipelineStep = {
     status?: FullAutoPipelineStepStatus;
     at?: string;
@@ -503,27 +568,11 @@ export type FullAutoPipelineSummary = {
         detail?: Record<string, unknown>;
     } | null;
     headless_browser_active?: boolean;
+    /** Danh sách step key dùng headless browser — mirror PHP. */
+    headless_steps?: FullAutoPipelineStepKey[];
+    /** Danh sách step key dùng AI — mirror PHP. */
+    ai_steps?: FullAutoPipelineStepKey[];
 };
-
-export const FULL_AUTO_PIPELINE_STEP_ORDER = [
-    'script_create',
-    'script_improve',
-    'script_phonetic_normalize',
-    'approve_tts',
-    'whisper',
-    'beat_division',
-    'beat_fill',
-    'beat_refine_visual',
-    'beat_refine_html',
-    'bgm',
-    'render',
-    'upload',
-    'thumbnail_idea',
-    'thumbnail_fill',
-    'thumbnail_capture',
-] as const;
-
-export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[number];
 
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
     script_create: 'Tạo script',
@@ -542,6 +591,71 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     thumbnail_fill: 'Thumbnail HTML',
     thumbnail_capture: 'Chụp thumbnail',
 };
+
+export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
+    {
+        key: 'script',
+        label: 'Script',
+        steps: [
+            'script_create',
+            'script_improve',
+            'script_phonetic_normalize',
+            'approve_tts',
+            'whisper',
+        ],
+    },
+    {
+        key: 'beat',
+        label: 'Beat',
+        steps: [
+            'beat_division',
+            'beat_fill',
+            'beat_refine_visual',
+            'beat_refine_html',
+        ],
+    },
+    {
+        key: 'audio_background',
+        label: 'Audio background',
+        steps: ['bgm'],
+    },
+    {
+        key: 'render',
+        label: 'Render',
+        steps: ['render', 'upload'],
+    },
+    {
+        key: 'thumbnail',
+        label: 'Thumbnail',
+        steps: ['thumbnail_idea', 'thumbnail_fill', 'thumbnail_capture'],
+    },
+] as const;
+
+export function getFullAutoPipelineStepIndex(step: FullAutoPipelineStepKey): number {
+    return FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(step) + 1;
+}
+
+const GROUPED_FULL_AUTO_PIPELINE_STEP_ORDER = FULL_AUTO_PIPELINE_STEP_GROUPS.flatMap((group) => group.steps);
+if (
+    GROUPED_FULL_AUTO_PIPELINE_STEP_ORDER.length !== FULL_AUTO_PIPELINE_STEP_ORDER.length
+    || GROUPED_FULL_AUTO_PIPELINE_STEP_ORDER.some((step, index) => step !== FULL_AUTO_PIPELINE_STEP_ORDER[index])
+) {
+    throw new Error('FULL_AUTO_PIPELINE_STEP_GROUPS phải khớp 1:1 với FULL_AUTO_PIPELINE_STEP_ORDER');
+}
+
+const HEADLESS_STEPS_IN_ORDER = FULL_AUTO_PIPELINE_HEADLESS_STEPS.filter(
+    (step) => (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step),
+);
+if (HEADLESS_STEPS_IN_ORDER.length !== FULL_AUTO_PIPELINE_HEADLESS_STEPS.length) {
+    throw new Error('FULL_AUTO_PIPELINE_HEADLESS_STEPS chứa step không hợp lệ');
+}
+
+const AI_STEPS_IN_ORDER = FULL_AUTO_PIPELINE_AI_STEPS.filter(
+    (step) => (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step),
+);
+if (AI_STEPS_IN_ORDER.length !== FULL_AUTO_PIPELINE_AI_STEPS.length) {
+    throw new Error('FULL_AUTO_PIPELINE_AI_STEPS chứa step không hợp lệ');
+}
 
 export type JsonResponse = {
     success?: boolean;

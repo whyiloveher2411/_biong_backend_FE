@@ -4415,5 +4415,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRegenerateTts,
         handleRetryTts,
         handleUploadMp3,
+        showMessage,
     };
 }

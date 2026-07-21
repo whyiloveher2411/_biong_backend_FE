@@ -370,7 +370,7 @@ export default function ShortVideoAgentVideoWorkspace({
 
                     <Box
                         sx={{
-                            width: 300,
+                            width: 380,
                             flexShrink: 0,
                             borderLeft: 1,
                             borderColor: 'divider',

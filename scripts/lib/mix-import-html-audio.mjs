@@ -22,6 +22,27 @@ function runFfmpeg(args) {
   }
 }
 
+function probeMediaDurationSec(filePath) {
+  const result = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    return 0;
+  }
+  const value = Number(String(result.stdout || "").trim());
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function loadBeatMap(projectDir) {
   const beatMapPath = path.join(projectDir, "assets/beat-map.json");
   if (!fs.existsSync(beatMapPath)) {
@@ -133,25 +154,35 @@ export function mixImportHtmlAudio({
     `${mixLabels.join("")}amix=inputs=${n}:duration=longest:dropout_transition=0:normalize=0[aout]`,
   );
 
+  const videoDur = probeMediaDurationSec(videoPath);
+  const narrDur = probeMediaDurationSec(narration);
+  const outputDur = Math.max(videoDur, narrDur, totalVideoSec);
+  const padSec = Math.max(0, outputDur - videoDur);
+  const videoMap = padSec > 0.01 ? "[vout]" : "0:v:0";
+  if (padSec > 0.01) {
+    filterParts.unshift(
+      `[0:v]tpad=stop_mode=clone:stop_duration=${padSec.toFixed(3)}[vout]`,
+    );
+  }
+
   const filterComplex = filterParts.join(";");
 
-  runFfmpeg([
+  const ffmpegArgs = [
     ...inputs,
     "-filter_complex",
     filterComplex,
     "-map",
-    "0:v:0",
+    videoMap,
     "-map",
     "[aout]",
-    "-c:v",
-    "copy",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "192k",
-    "-shortest",
-    outputPath,
-  ]);
+  ];
+  if (padSec > 0.01) {
+    ffmpegArgs.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "18");
+  } else {
+    ffmpegArgs.push("-c:v", "copy");
+  }
+  ffmpegArgs.push("-c:a", "aac", "-b:a", "192k", "-t", outputDur.toFixed(3), outputPath);
+  runFfmpeg(ffmpegArgs);
 
   return { finalMp4: outputPath };
 }

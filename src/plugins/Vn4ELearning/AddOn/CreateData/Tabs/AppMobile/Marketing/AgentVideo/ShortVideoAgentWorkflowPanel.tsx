@@ -20,9 +20,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     FULL_AUTO_PIPELINE_STEP_LABELS,
-    FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
+import { PipelineGroupedWorkflowList } from './FullAutoPipelineGroupedSteps';
 import { formatTtsChain, phaseLabel, platformLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
@@ -38,7 +38,7 @@ type Props = {
 
 type StatusTone = 'default' | 'success' | 'info' | 'warning' | 'error';
 
-/** Sidebar 300px — theme Button có whiteSpace: nowrap nên cần cho phép wrap. */
+/** Sidebar workflow — Button có whiteSpace: nowrap nên cần cho phép wrap. */
 const workflowActionButtonSx = {
     whiteSpace: 'normal',
     lineHeight: 1.35,
@@ -340,27 +340,13 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             : 'default'
                             }
                         />
-                        {FULL_AUTO_PIPELINE_STEP_ORDER.map((step) => {
-                            const info = state.fullAutoPipeline?.steps?.[step];
-                            return (
-                                <MetaRow
-                                    key={step}
-                                    label={pipelineStepLabel(step)}
-                                    status={String(info?.status || 'pending')}
-                                />
-                            );
-                        })}
-                        {state.fullAutoPipeline.steps
-                            ? Object.entries(state.fullAutoPipeline.steps)
-                                .filter(([step]) => !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step))
-                                .map(([step, info]) => (
-                                    <MetaRow
-                                        key={step}
-                                        label={pipelineStepLabel(step)}
-                                        status={String(info?.status || 'pending')}
-                                    />
-                                ))
-                            : null}
+                        <PipelineGroupedWorkflowList
+                            steps={state.fullAutoPipeline.steps}
+                            headlessSteps={state.fullAutoPipeline.headless_steps}
+                            aiSteps={state.fullAutoPipeline.ai_steps}
+                            currentStep={state.fullAutoPipeline.current_step || ''}
+                            pipelineStatus={state.fullAutoPipeline.status || 'idle'}
+                        />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
                                 {state.fullAutoPipeline.last_error.message}

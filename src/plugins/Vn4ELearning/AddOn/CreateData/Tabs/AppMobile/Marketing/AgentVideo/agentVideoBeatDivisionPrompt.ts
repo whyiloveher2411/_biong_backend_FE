@@ -142,7 +142,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
                     endSec: 12.4,
                     durationSec: 12.4,
                     phrase_anchor: 'đoạn script tại beat này',
-                    visual_description: 'Cut in on one decisive idea: a sharp focal graphic punches forward, layers bloom around it, then the frame resolves clean — bold metaphor and shot language welcome.',
+                    visual_description: 'A single lightbulb flickers on above a messy desk, then papers snap into neat stacks — one clear before-and-after that shows turning chaos into order, easy to read at a glance.',
                     background: 'Deep charcoal void, soft grain, cool cyan haze; no photo plates, no hard cut between beats',
                 },
             ],

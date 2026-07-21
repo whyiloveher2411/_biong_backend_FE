@@ -33,10 +33,10 @@ import { convertToURL, validURL } from 'helpers/url';
 import { openImagePopup } from 'helpers/image';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
-    FULL_AUTO_PIPELINE_STEP_LABELS,
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
+import { PipelineGroupedMenuItems } from './FullAutoPipelineGroupedSteps';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import ShortVideoAgentAvatarDrawer, {
     AVATAR_PIP_ANCHORS,
@@ -187,9 +187,13 @@ function resolveRestartableSet(
     restartable?: string[] | null,
     steps?: Record<string, { status?: string }> | null,
     currentStep?: string,
-): Set<string> {
+): Set<FullAutoPipelineStepKey> {
     if (Array.isArray(restartable) && restartable.length > 0) {
-        return new Set(restartable);
+        return new Set(
+            restartable.filter((step): step is FullAutoPipelineStepKey => (
+                (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step)
+            )),
+        );
     }
     // Fallback FE nếu API cũ chưa trả restartable_steps
     let maxIdx = 0;
@@ -214,29 +218,6 @@ function resolveRestartableSet(
         }
     }
     return new Set(FULL_AUTO_PIPELINE_STEP_ORDER.slice(0, maxIdx + 1));
-}
-
-const PIPELINE_STEP_STATUS_LABEL: Record<string, string> = {
-    done: 'Xong',
-    skipped: 'Bỏ qua',
-    running: 'Đang chạy',
-    failed: 'Lỗi',
-    pending: 'Chưa làm',
-};
-
-function pipelineStepStatusColor(status: string): string {
-    switch (status) {
-        case 'done':
-            return 'success.main';
-        case 'skipped':
-            return 'text.secondary';
-        case 'running':
-            return 'info.main';
-        case 'failed':
-            return 'error.main';
-        default:
-            return 'text.disabled';
-    }
 }
 
 export default function ShortVideoAgentContentPanel({ state }: Props) {
@@ -909,55 +890,17 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         onClose={() => setRestartMenuAnchor(null)}
                                         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                                     >
-                                        {FULL_AUTO_PIPELINE_STEP_ORDER.map((stepKey, index) => {
-                                            const enabled = restartableSet.has(stepKey);
-                                            const stepInfo = state.fullAutoPipeline?.steps?.[stepKey];
-                                            const status = String(stepInfo?.status || 'pending');
-                                            const statusLabel = PIPELINE_STEP_STATUS_LABEL[status]
-                                                || status;
-                                            return (
-                                                <MenuItem
-                                                    key={stepKey}
-                                                    disabled={!enabled || state.startingFullAuto}
-                                                    onClick={() => {
-                                                        setRestartMenuAnchor(null);
-                                                        void state.handleStartFullAutoPipeline('restart', stepKey);
-                                                    }}
-                                                    sx={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        gap: 2,
-                                                        minWidth: 300,
-                                                        py: 1,
-                                                    }}
-                                                >
-                                                    <Typography
-                                                        component="span"
-                                                        variant="body2"
-                                                        sx={{
-                                                            color: enabled ? 'text.primary' : 'text.disabled',
-                                                            fontWeight: status === 'running' ? 600 : 400,
-                                                        }}
-                                                    >
-                                                        {index + 1}. {FULL_AUTO_PIPELINE_STEP_LABELS[stepKey]}
-                                                    </Typography>
-                                                    <Typography
-                                                        component="span"
-                                                        variant="caption"
-                                                        sx={{
-                                                            color: enabled
-                                                                ? pipelineStepStatusColor(status)
-                                                                : 'text.disabled',
-                                                            fontWeight: 600,
-                                                            flexShrink: 0,
-                                                        }}
-                                                    >
-                                                        {statusLabel}
-                                                    </Typography>
-                                                </MenuItem>
-                                            );
-                                        })}
+                                        <PipelineGroupedMenuItems
+                                            steps={state.fullAutoPipeline?.steps}
+                                            headlessSteps={state.fullAutoPipeline?.headless_steps}
+                                            aiSteps={state.fullAutoPipeline?.ai_steps}
+                                            restartableSet={restartableSet}
+                                            disabled={state.startingFullAuto}
+                                            onSelectStep={(stepKey) => {
+                                                setRestartMenuAnchor(null);
+                                                void state.handleStartFullAutoPipeline('restart', stepKey);
+                                            }}
+                                        />
                                     </Menu>
                                     {state.fullAutoPipeline?.status === 'running' ? (
                                         <LoadingButton

@@ -11,6 +11,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveApiBaseUrl, resolveMcpToken } from "./lib/biong-env.mjs";
 import { fetchShortVideoContext, reportImportHtmlAssemble } from "./lib/fetch-short-video-context.mjs";
@@ -28,6 +29,27 @@ import { createAudioEnergy } from "../.cursor/skills/biong-short-video-preflight
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HF_ASSETS = path.join(REPO_ROOT, ".cursor/skills/biong-short-video-hyperframes/assets");
+
+function probeAudioDurationSec(filePath) {
+  const result = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    return 0;
+  }
+  const value = Number(String(result.stdout || "").trim());
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 
 function extFromUrl(url) {
   try {
@@ -506,56 +528,57 @@ function patchTimelineDurationFromCaption({
   beatMap,
   sections,
   options = {},
+  audioDurationSec = 0,
 }) {
   const reportPath = path.join(projectDir, "assets/caption-sync-report.json");
   if (!fs.existsSync(reportPath)) {
-    return Number(beatMap.totalVideoSec || 0);
+    return Math.max(Number(beatMap.totalVideoSec || 0), Number(audioDurationSec || 0));
   }
 
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
   const captionTotal = Number(report.totalVideoSec || 0);
-  if (!(captionTotal > 0)) {
+  const audioDur = Number(audioDurationSec || 0);
+  const timelineSec = Math.max(captionTotal, audioDur, Number(beatMap.totalVideoSec || 0));
+  if (!(timelineSec > 0)) {
     return Number(beatMap.totalVideoSec || 0);
   }
 
   const beatSum = sections.reduce((sum, sec) => sum + Number(sec.durationSec || 0), 0);
   const last = sections[sections.length - 1];
-  if (last && Math.abs(captionTotal - beatSum) > 0.01) {
+  if (last && Math.abs(timelineSec - beatSum) > 0.01) {
     const start = Number(last.startSec || 0);
-    if (captionTotal > beatSum) {
-      const delta = captionTotal - beatSum;
+    if (timelineSec > beatSum) {
+      const delta = timelineSec - beatSum;
       last.durationSec = Number(last.durationSec || 0) + delta;
     } else {
-      // Caption/audio ngắn hơn beat-map — rút beat cuối cho khớp totalVideoSec
-      // (tránh HTML sync theo total=239.2 nhưng map.durationSec vẫn 13.7 → check-beat-timing fail)
-      last.durationSec = Math.max(0.001, captionTotal - start);
+      last.durationSec = Math.max(0.001, timelineSec - start);
     }
     last.durationSec = Math.round(Number(last.durationSec) * 1000) / 1000;
     last.endSec = Math.round((start + Number(last.durationSec)) * 1000) / 1000;
   }
 
-  beatMap.totalVideoSec = captionTotal;
+  beatMap.totalVideoSec = timelineSec;
   beatMap.sections = sections;
   fs.writeFileSync(path.join(projectDir, "assets/beat-map.json"), JSON.stringify(beatMap, null, 2));
   fs.writeFileSync(
     path.join(projectDir, "index.html"),
     buildImportHtmlIndexHtml({
       shortVideoId,
-      totalVideoSec: captionTotal,
+      totalVideoSec: timelineSec,
       sections,
       options,
     }),
   );
   fs.writeFileSync(
     path.join(projectDir, "compositions/ambient-layer.html"),
-    buildAmbientLayerHtml(captionTotal),
+    buildAmbientLayerHtml(timelineSec),
   );
   fs.writeFileSync(
     path.join(projectDir, "meta.json"),
     JSON.stringify(
       {
         title: beatMap.title || `Short Video #${shortVideoId}`,
-        duration: captionTotal,
+        duration: timelineSec,
         fps: 30,
         width: 1080,
         height: 1920,
@@ -565,7 +588,7 @@ function patchTimelineDurationFromCaption({
     ),
   );
 
-  return captionTotal;
+  return timelineSec;
 }
 
 async function main() {
@@ -709,6 +732,10 @@ async function main() {
     }
     await downloadToUrl(audioUrl, path.join(projectDir, "assets/audio/narration.mp3"));
     log("Downloaded narration.mp3");
+    const narrationDurationSec = probeAudioDurationSec(path.join(projectDir, "assets/audio/narration.mp3"));
+    if (narrationDurationSec > 0) {
+      log(`Narration duration: ${narrationDurationSec.toFixed(3)}s`);
+    }
 
     const assets = importHtml.assets || {};
     const bgmSegments = Array.isArray(assets.bgm_segments) ? assets.bgm_segments : [];
@@ -786,6 +813,7 @@ async function main() {
       beatMap,
       sections,
       options: { sfxHook, avatarOverlay, showCaptions },
+      audioDurationSec: narrationDurationSec || Number(ctx.audio_file_duration_sec || 0),
     });
     log(`Timeline duration patched to ${timelineSec}s from caption sync`);
 
