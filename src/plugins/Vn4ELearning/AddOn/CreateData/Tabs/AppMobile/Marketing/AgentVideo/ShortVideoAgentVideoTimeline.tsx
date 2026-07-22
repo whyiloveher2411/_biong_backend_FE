@@ -669,7 +669,7 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                         {showOpenAllMissingGemini && onOpenAllMissingBeatAiStudio ? (
                             <Tooltip
-                                title="Extension mở AI Studio (Gemini 3.5 Flash), điền prompt + Run — bấm Lưu HTML để extract từ response vào CMS"
+                                title="Extension mở AI Studio (Gemini 3.6 Flash), điền prompt + Run — bấm Lưu HTML để extract từ response vào CMS"
                                 placement="top"
                             >
                                 <span>

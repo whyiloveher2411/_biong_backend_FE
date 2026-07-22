@@ -11,6 +11,7 @@ import {
     getFullAutoPipelineStepIndex,
     isFullAutoPipelineAiStep,
     isFullAutoPipelineHeadlessStep,
+    type FullAutoPipelineStep,
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
@@ -22,6 +23,16 @@ import {
     pipelineHeadlessLegendSx,
     pipelineStepStatusColor,
 } from './agentVideoPipelineUi';
+import {
+    isScriptImproveQaLoopStep,
+    scriptQaLoopStepStatusLabel,
+    splitScriptGroupSteps,
+    useScriptImproveQaLoopView,
+    type ScriptImproveQaLoopView,
+} from './agentVideoPipelineQaLoopUi';
+import {
+    PipelineScriptQaLoopSection,
+} from './PipelineScriptQaLoopUi';
 
 const PIPELINE_HEADLESS_TOOLTIP = 'Bước này dùng trình duyệt nền (Puppeteer / headless Chrome)';
 const PIPELINE_AI_TOOLTIP = 'Bước này dùng AI (Gemini, Whisper, ChatGPT TTS…)';
@@ -235,10 +246,27 @@ function PipelineStepStatusChip({ status, compact = false }: { status: string; c
     );
 }
 
-type PipelineGroupedMenuItemsProps = {
+function resolveStepStatusLabel(
+    stepKey: FullAutoPipelineStepKey,
+    status: string,
+    loopView: ScriptImproveQaLoopView,
+): string {
+    if (isScriptImproveQaLoopStep(stepKey)) {
+        return scriptQaLoopStepStatusLabel(stepKey, status, loopView);
+    }
+    return PIPELINE_STEP_STATUS_LABEL[status] || status;
+}
+
+type PipelineGroupedCommonProps = {
     steps?: FullAutoPipelineSummary['steps'];
     headlessSteps?: FullAutoPipelineSummary['headless_steps'];
     aiSteps?: FullAutoPipelineSummary['ai_steps'];
+    qaLoops?: FullAutoPipelineSummary['qa_loops'];
+    pipelineStatus?: string;
+    currentStep?: string;
+};
+
+type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     restartableSet: Set<FullAutoPipelineStepKey>;
     disabled?: boolean;
     onSelectStep: (stepKey: FullAutoPipelineStepKey) => void;
@@ -248,6 +276,9 @@ export function PipelineGroupedMenuItems({
     steps,
     headlessSteps,
     aiSteps,
+    qaLoops,
+    pipelineStatus,
+    currentStep = '',
     restartableSet,
     disabled = false,
     onSelectStep,
@@ -260,6 +291,74 @@ export function PipelineGroupedMenuItems({
         () => resolveAiStepSet(aiSteps),
         [aiSteps],
     );
+    const loopView = useScriptImproveQaLoopView({
+        steps,
+        qa_loops: qaLoops,
+        current_step: currentStep,
+        status: pipelineStatus,
+    } as FullAutoPipelineSummary);
+
+    const renderMenuStep = (stepKey: FullAutoPipelineStepKey, inLoop = false) => {
+        const enabled = restartableSet.has(stepKey);
+        const stepInfo = steps?.[stepKey];
+        const status = String(stepInfo?.status || 'pending');
+        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+        const isCurrent = stepKey === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
+
+        return (
+            <MenuItem
+                key={stepKey}
+                disabled={!enabled || disabled}
+                onClick={() => onSelectStep(stepKey)}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    minWidth: 300,
+                    py: inLoop ? 0.65 : 0.85,
+                    pl: inLoop ? 1.5 : 3.25,
+                    pr: inLoop ? 1.25 : 1.75,
+                    bgcolor: isCurrent ? 'rgba(2, 136, 209, 0.08)' : 'transparent',
+                    borderTop: inLoop ? 'none' : '1px solid',
+                    borderColor: 'rgba(25, 118, 210, 0.12)',
+                    '&:hover': {
+                        bgcolor: 'rgba(255,255,255,0.55)',
+                    },
+                    '&.Mui-disabled': {
+                        opacity: 0.72,
+                    },
+                }}
+            >
+                <PipelineStepTitle
+                    stepKey={stepKey}
+                    variant="light"
+                    typographyVariant="body2"
+                    headlessStepSet={headlessStepSet}
+                    aiStepSet={aiStepSet}
+                    typographySx={{
+                        color: enabled ? 'text.primary' : 'text.disabled',
+                        fontWeight: isCurrent || status === 'running' ? 700 : 400,
+                    }}
+                />
+                <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{
+                        color: enabled
+                            ? pipelineStepStatusColor(status, 'dark')
+                            : 'text.disabled',
+                        fontWeight: 600,
+                        flexShrink: 0,
+                        textAlign: 'right',
+                        maxWidth: 140,
+                    }}
+                >
+                    {statusLabel}
+                </Typography>
+            </MenuItem>
+        );
+    };
 
     return (
         <>
@@ -298,63 +397,24 @@ export function PipelineGroupedMenuItems({
                         >
                             {group.label}
                         </ListSubheader>
-                        {group.steps.map((stepKey) => {
-                            const enabled = restartableSet.has(stepKey);
-                            const stepInfo = steps?.[stepKey];
-                            const status = String(stepInfo?.status || 'pending');
-                            const statusLabel = PIPELINE_STEP_STATUS_LABEL[status] || status;
+                        {group.key === 'script' ? (() => {
+                            const split = splitScriptGroupSteps(group.steps);
                             return (
-                                <MenuItem
-                                    key={stepKey}
-                                    disabled={!enabled || disabled}
-                                    onClick={() => onSelectStep(stepKey)}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 2,
-                                        minWidth: 300,
-                                        py: 0.85,
-                                        pl: 3.25,
-                                        pr: 1.75,
-                                        bgcolor: 'transparent',
-                                        borderTop: '1px solid',
-                                        borderColor: surface.borderColor,
-                                        '&:hover': {
-                                            bgcolor: 'rgba(255,255,255,0.55)',
-                                        },
-                                        '&.Mui-disabled': {
-                                            opacity: 0.72,
-                                        },
-                                    }}
-                                >
-                                    <PipelineStepTitle
-                                        stepKey={stepKey}
-                                        variant="light"
-                                        typographyVariant="body2"
-                                        headlessStepSet={headlessStepSet}
-                                        aiStepSet={aiStepSet}
-                                        typographySx={{
-                                            color: enabled ? 'text.primary' : 'text.disabled',
-                                            fontWeight: status === 'running' ? 600 : 400,
-                                        }}
-                                    />
-                                    <Typography
-                                        component="span"
-                                        variant="caption"
-                                        sx={{
-                                            color: enabled
-                                                ? pipelineStepStatusColor(status, 'dark')
-                                                : 'text.disabled',
-                                            fontWeight: 600,
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        {statusLabel}
-                                    </Typography>
-                                </MenuItem>
+                                <>
+                                    {split.before.map((stepKey) => renderMenuStep(stepKey))}
+                                    <Box sx={{ borderTop: '1px solid', borderColor: surface.borderColor }}>
+                                        <PipelineScriptQaLoopSection
+                                            view={loopView}
+                                            variant="light"
+                                            compact
+                                            improveNode={renderMenuStep('script_improve', true)}
+                                            qaNode={renderMenuStep('script_improve_qa', true)}
+                                        />
+                                    </Box>
+                                    {split.after.map((stepKey) => renderMenuStep(stepKey))}
+                                </>
                             );
-                        })}
+                        })() : group.steps.map((stepKey) => renderMenuStep(stepKey))}
                     </Box>
                 );
             })}
@@ -362,17 +422,14 @@ export function PipelineGroupedMenuItems({
     );
 }
 
-type PipelineGroupedStepListProps = {
-    steps?: FullAutoPipelineSummary['steps'];
-    headlessSteps?: FullAutoPipelineSummary['headless_steps'];
-    aiSteps?: FullAutoPipelineSummary['ai_steps'];
-    currentStep?: string;
-};
+type PipelineGroupedStepListProps = PipelineGroupedCommonProps;
 
 export function PipelineGroupedStepList({
     steps,
     headlessSteps,
     aiSteps,
+    qaLoops,
+    pipelineStatus,
     currentStep = '',
 }: PipelineGroupedStepListProps) {
     const headlessStepSet = React.useMemo(
@@ -383,6 +440,62 @@ export function PipelineGroupedStepList({
         () => resolveAiStepSet(aiSteps),
         [aiSteps],
     );
+    const loopView = useScriptImproveQaLoopView({
+        steps,
+        qa_loops: qaLoops,
+        current_step: currentStep,
+        status: pipelineStatus,
+    } as FullAutoPipelineSummary);
+
+    const renderDarkStep = (stepKey: FullAutoPipelineStepKey, inLoop = false) => {
+        const status = String(steps?.[stepKey]?.status || 'pending');
+        const isCurrent = stepKey === currentStep;
+        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+
+        return (
+            <Box
+                key={stepKey}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    py: inLoop ? 0.3 : 0.35,
+                    pl: inLoop ? 0.65 : 1.75,
+                    pr: inLoop ? 0.35 : 0.5,
+                    opacity: status === 'pending' && !isCurrent ? 0.55 : 1,
+                    bgcolor: isCurrent && loopView.isLoopActive ? 'rgba(129, 212, 250, 0.12)' : 'transparent',
+                    borderRadius: 0.75,
+                }}
+            >
+                <PipelineStepTitle
+                    stepKey={stepKey}
+                    variant="dark"
+                    headlessStepSet={headlessStepSet}
+                    aiStepSet={aiStepSet}
+                    typographySx={{
+                        flex: 1,
+                        fontWeight: isCurrent || status === 'running' ? 700 : 400,
+                        color: isCurrent ? 'common.white' : 'rgba(255,255,255,0.82)',
+                        fontSize: 'inherit',
+                    }}
+                />
+                <Typography
+                    variant="caption"
+                    sx={{
+                        flexShrink: 0,
+                        fontWeight: 600,
+                        color: pipelineStepStatusColor(status, 'light'),
+                        fontSize: 10,
+                        textAlign: 'right',
+                        maxWidth: 130,
+                    }}
+                >
+                    {statusLabel}
+                </Typography>
+            </Box>
+        );
+    };
 
     return (
         <>
@@ -416,49 +529,22 @@ export function PipelineGroupedStepList({
                         >
                             {group.label}
                         </Typography>
-                        {group.steps.map((stepKey) => {
-                            const status = String(steps?.[stepKey]?.status || 'pending');
-                            const isCurrent = stepKey === currentStep;
+                        {group.key === 'script' ? (() => {
+                            const split = splitScriptGroupSteps(group.steps);
                             return (
-                                <Box
-                                    key={stepKey}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 1,
-                                        py: 0.35,
-                                        pl: 1.75,
-                                        pr: 0.5,
-                                        opacity: status === 'pending' && !isCurrent ? 0.55 : 1,
-                                    }}
-                                >
-                                    <PipelineStepTitle
-                                        stepKey={stepKey}
+                                <>
+                                    {split.before.map((stepKey) => renderDarkStep(stepKey))}
+                                    <PipelineScriptQaLoopSection
+                                        view={loopView}
                                         variant="dark"
-                                        headlessStepSet={headlessStepSet}
-                                        aiStepSet={aiStepSet}
-                                        typographySx={{
-                                            flex: 1,
-                                            fontWeight: isCurrent || status === 'running' ? 700 : 400,
-                                            color: isCurrent ? 'common.white' : 'rgba(255,255,255,0.82)',
-                                            fontSize: 'inherit',
-                                        }}
+                                        compact
+                                        improveNode={renderDarkStep('script_improve', true)}
+                                        qaNode={renderDarkStep('script_improve_qa', true)}
                                     />
-                                    <Typography
-                                        variant="caption"
-                                        sx={{
-                                            flexShrink: 0,
-                                            fontWeight: 600,
-                                            color: pipelineStepStatusColor(status, 'light'),
-                                            fontSize: 10,
-                                        }}
-                                    >
-                                        {PIPELINE_STEP_STATUS_LABEL[status] || status}
-                                    </Typography>
-                                </Box>
+                                    {split.after.map((stepKey) => renderDarkStep(stepKey))}
+                                </>
                             );
-                        })}
+                        })() : group.steps.map((stepKey) => renderDarkStep(stepKey))}
                     </Box>
                 );
             })}
@@ -466,18 +552,13 @@ export function PipelineGroupedStepList({
     );
 }
 
-type PipelineGroupedWorkflowListProps = {
-    steps?: FullAutoPipelineSummary['steps'];
-    headlessSteps?: FullAutoPipelineSummary['headless_steps'];
-    aiSteps?: FullAutoPipelineSummary['ai_steps'];
-    currentStep?: string;
-    pipelineStatus?: string;
-};
+type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps;
 
 export function PipelineGroupedWorkflowList({
     steps,
     headlessSteps,
     aiSteps,
+    qaLoops,
     currentStep = '',
     pipelineStatus = '',
 }: PipelineGroupedWorkflowListProps) {
@@ -489,6 +570,70 @@ export function PipelineGroupedWorkflowList({
         () => resolveAiStepSet(aiSteps),
         [aiSteps],
     );
+    const loopView = useScriptImproveQaLoopView({
+        steps,
+        qa_loops: qaLoops,
+        current_step: currentStep,
+        status: pipelineStatus,
+    } as FullAutoPipelineSummary);
+
+    const renderWorkflowStep = (
+        stepKey: FullAutoPipelineStepKey,
+        borderColor: string,
+        inLoop = false,
+    ) => {
+        const status = String(steps?.[stepKey]?.status || 'pending');
+        const isCurrent = stepKey === currentStep
+            && String(pipelineStatus || '').trim().toLowerCase() === 'running';
+        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+
+        return (
+            <Box
+                key={stepKey}
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    alignItems: 'start',
+                    columnGap: 0.5,
+                    py: inLoop ? 0.25 : 0.4,
+                    pl: inLoop ? 0.35 : 1.35,
+                    pr: inLoop ? 0.35 : 0.85,
+                    borderTop: inLoop ? 'none' : '1px solid',
+                    borderColor: inLoop ? 'rgba(2, 136, 209, 0.14)' : borderColor,
+                    bgcolor: isCurrent ? 'rgba(2, 136, 209, 0.1)' : 'transparent',
+                }}
+            >
+                <PipelineStepTitle
+                    stepKey={stepKey}
+                    variant="light"
+                    headlessStepSet={headlessStepSet}
+                    aiStepSet={aiStepSet}
+                    compact
+                    typographySx={{
+                        fontWeight: isCurrent || status === 'running' ? 700 : 500,
+                    }}
+                />
+                {isScriptImproveQaLoopStep(stepKey) && loopView.isLoopActive ? (
+                    <Chip
+                        size="small"
+                        color="info"
+                        label={statusLabel}
+                        sx={{
+                            height: 18,
+                            maxWidth: '100%',
+                            '& .MuiChip-label': {
+                                px: 0.55,
+                                fontSize: 10,
+                                fontWeight: 700,
+                            },
+                        }}
+                    />
+                ) : (
+                    <PipelineStepStatusChip status={status} compact />
+                )}
+            </Box>
+        );
+    };
 
     const extraSteps = steps
         ? Object.entries(steps).filter(
@@ -528,40 +673,22 @@ export function PipelineGroupedWorkflowList({
                         >
                             {group.label}
                         </Typography>
-                        {group.steps.map((stepKey) => {
-                            const status = String(steps?.[stepKey]?.status || 'pending');
-                            const isCurrent = stepKey === currentStep
-                                && String(pipelineStatus || '').trim().toLowerCase() === 'running';
+                        {group.key === 'script' ? (() => {
+                            const split = splitScriptGroupSteps(group.steps);
                             return (
-                                <Box
-                                    key={stepKey}
-                                    sx={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'minmax(0, 1fr) auto',
-                                        alignItems: 'start',
-                                        columnGap: 0.5,
-                                        py: 0.4,
-                                        pl: 1.35,
-                                        pr: 0.85,
-                                        borderTop: '1px solid',
-                                        borderColor: surface.borderColor,
-                                        bgcolor: isCurrent ? 'rgba(255,255,255,0.45)' : 'transparent',
-                                    }}
-                                >
-                                    <PipelineStepTitle
-                                        stepKey={stepKey}
+                                <>
+                                    {split.before.map((stepKey) => renderWorkflowStep(stepKey, surface.borderColor))}
+                                    <PipelineScriptQaLoopSection
+                                        view={loopView}
                                         variant="light"
-                                        headlessStepSet={headlessStepSet}
-                                        aiStepSet={aiStepSet}
                                         compact
-                                        typographySx={{
-                                            fontWeight: isCurrent || status === 'running' ? 700 : 500,
-                                        }}
+                                        improveNode={renderWorkflowStep('script_improve', surface.borderColor, true)}
+                                        qaNode={renderWorkflowStep('script_improve_qa', surface.borderColor, true)}
                                     />
-                                    <PipelineStepStatusChip status={status} compact />
-                                </Box>
+                                    {split.after.map((stepKey) => renderWorkflowStep(stepKey, surface.borderColor))}
+                                </>
                             );
-                        })}
+                        })() : group.steps.map((stepKey) => renderWorkflowStep(stepKey, surface.borderColor))}
                     </Box>
                 );
             })}
@@ -588,7 +715,7 @@ export function PipelineGroupedWorkflowList({
                     >
                         Khác
                     </Typography>
-                    {extraSteps.map(([stepKey, info]) => (
+                    {extraSteps.map(([stepKey, info]: [string, FullAutoPipelineStep | undefined]) => (
                         <Box
                             key={stepKey}
                             sx={{

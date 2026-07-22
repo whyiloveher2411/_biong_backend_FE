@@ -481,6 +481,7 @@ export type FullAutoPipelineStepStatus = 'pending' | 'running' | 'skipped' | 'do
 export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'script_create',
     'script_improve',
+    'script_improve_qa',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -505,6 +506,7 @@ export type FullAutoPipelineStepKey = (typeof FULL_AUTO_PIPELINE_STEP_ORDER)[num
 export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'script_create',
     'script_improve',
+    'script_improve_qa',
     'script_phonetic_normalize',
     'approve_tts',
     'beat_division',
@@ -528,6 +530,7 @@ export function isFullAutoPipelineHeadlessStep(step: string): step is FullAutoPi
 export const FULL_AUTO_PIPELINE_AI_STEPS = [
     'script_create',
     'script_improve',
+    'script_improve_qa',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -548,6 +551,23 @@ export type FullAutoPipelineStep = {
     at?: string;
     error?: string | null;
     job_id?: number | null;
+};
+
+export type FullAutoPipelineScriptQaLoop = {
+    attempt?: number;
+    max_attempts?: number;
+    last_diagnosis?: {
+        pass?: boolean;
+        summary?: string;
+        issues?: Array<{
+            code?: string;
+            severity?: string;
+            message?: string;
+            fix_hint?: string;
+        }>;
+    } | null;
+    previous_script?: string;
+    history?: Array<Record<string, unknown>>;
 };
 
 export type FullAutoPipelineSummary = {
@@ -572,11 +592,14 @@ export type FullAutoPipelineSummary = {
     headless_steps?: FullAutoPipelineStepKey[];
     /** Danh sách step key dùng AI — mirror PHP. */
     ai_steps?: FullAutoPipelineStepKey[];
+    /** Vòng lặp QA (mirror full_auto_pipeline.qa_loops). */
+    qa_loops?: Record<string, FullAutoPipelineScriptQaLoop>;
 };
 
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
+    script_improve_qa: 'Đánh giá script',
     script_phonetic_normalize: 'Chuẩn hóa giọng đọc',
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
@@ -599,6 +622,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
         steps: [
             'script_create',
             'script_improve',
+            'script_improve_qa',
             'script_phonetic_normalize',
             'approve_tts',
             'whisper',

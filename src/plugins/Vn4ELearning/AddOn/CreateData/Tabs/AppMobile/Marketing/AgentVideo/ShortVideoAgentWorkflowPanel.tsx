@@ -18,11 +18,10 @@ import ErrorIcon from '@mui/icons-material/Error';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LoadingButton from 'components/atoms/LoadingButton';
-import {
-    FULL_AUTO_PIPELINE_STEP_LABELS,
-    type FullAutoPipelineStepKey,
-} from './agentVideoApi';
+import { FULL_AUTO_PIPELINE_STEP_LABELS, type FullAutoPipelineSummary } from './agentVideoApi';
 import { PipelineGroupedWorkflowList } from './FullAutoPipelineGroupedSteps';
+import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
+import { resolveScriptImproveQaLoopView, scriptQaLoopCurrentStepLabel } from './agentVideoPipelineQaLoopUi';
 import { formatTtsChain, phaseLabel, platformLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
@@ -192,9 +191,10 @@ function MetaRow({
     );
 }
 
-function pipelineStepLabel(step: string): string {
+function pipelineStepLabel(step: string, pipeline?: FullAutoPipelineSummary | null): string {
+    const loopView = resolveScriptImproveQaLoopView(pipeline);
     if (step in FULL_AUTO_PIPELINE_STEP_LABELS) {
-        return FULL_AUTO_PIPELINE_STEP_LABELS[step as FullAutoPipelineStepKey];
+        return scriptQaLoopCurrentStepLabel(step, loopView);
     }
     return step;
 }
@@ -327,7 +327,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             label="Bước hiện tại"
                             status={
                                 state.fullAutoPipeline.current_step
-                                    ? pipelineStepLabel(state.fullAutoPipeline.current_step)
+                                    ? pipelineStepLabel(state.fullAutoPipeline.current_step, state.fullAutoPipeline)
                                     : '—'
                             }
                             statusTone={
@@ -340,16 +340,29 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             : 'default'
                             }
                         />
+                        <PipelineScriptQaLoopMeta pipeline={state.fullAutoPipeline} />
                         <PipelineGroupedWorkflowList
                             steps={state.fullAutoPipeline.steps}
                             headlessSteps={state.fullAutoPipeline.headless_steps}
                             aiSteps={state.fullAutoPipeline.ai_steps}
+                            qaLoops={state.fullAutoPipeline.qa_loops}
                             currentStep={state.fullAutoPipeline.current_step || ''}
                             pipelineStatus={state.fullAutoPipeline.status || 'idle'}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
                                 {state.fullAutoPipeline.last_error.message}
+                                {Array.isArray(
+                                    (state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: unknown[] } } | undefined)?.diagnosis?.issues,
+                                ) && ((state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues?.length ?? 0) > 0 ? (
+                                    <Box component="ul" sx={{ mt: 0.75, mb: 0, pl: 2 }}>
+                                        {((state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues ?? []).slice(0, 6).map((issue, idx) => (
+                                            <Typography component="li" variant="caption" key={`${issue.code || 'issue'}-${idx}`}>
+                                                [{issue.code || '?'}] {issue.message || ''}
+                                            </Typography>
+                                        ))}
+                                    </Box>
+                                ) : null}
                             </Alert>
                         ) : null}
                     </WorkflowSection>

@@ -501,6 +501,8 @@ export default function ShortVideoAgentHeadlessPreview({
                         steps={pipeline.steps}
                         headlessSteps={pipeline.headless_steps}
                         aiSteps={pipeline.ai_steps}
+                        qaLoops={pipeline.qa_loops}
+                        pipelineStatus={pipeline.status}
                         currentStep={currentStep}
                     />
                 </Box>

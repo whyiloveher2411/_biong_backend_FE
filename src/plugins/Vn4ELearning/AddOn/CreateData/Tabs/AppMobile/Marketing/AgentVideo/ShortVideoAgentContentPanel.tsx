@@ -37,6 +37,8 @@ import {
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
 import { PipelineGroupedMenuItems } from './FullAutoPipelineGroupedSteps';
+import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
+import { scriptQaLoopCurrentStepLabel, useScriptImproveQaLoopView } from './agentVideoPipelineQaLoopUi';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import ShortVideoAgentAvatarDrawer, {
     AVATAR_PIP_ANCHORS,
@@ -238,6 +240,14 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
             state.fullAutoPipeline?.current_step,
         ],
     );
+    const scriptQaLoopView = useScriptImproveQaLoopView(state.fullAutoPipeline);
+    const currentPipelineStepLabel = React.useMemo(() => {
+        const step = String(state.fullAutoPipeline?.current_step || '').trim();
+        if (!step) {
+            return '';
+        }
+        return scriptQaLoopCurrentStepLabel(step, scriptQaLoopView);
+    }, [state.fullAutoPipeline?.current_step, scriptQaLoopView]);
     const [contentFieldKey, setContentFieldKey] = React.useState(0);
     const prevFetchingReadmeRef = React.useRef(false);
     const prevFetchingTiktokRef = React.useRef(false);
@@ -821,28 +831,32 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                         description="Script → cải thiện → chuẩn hóa giọng đọc → duyệt/TTS → Whisper → chia beat → fill HTML → BGM → render. Tiến trình lưu DB, refresh không mất."
                     >
                         {state.fullAutoPipeline ? (
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
-                                <Chip
-                                    size="small"
-                                    label={`Status: ${state.fullAutoPipeline.status || 'idle'}`}
-                                    color={
-                                        state.fullAutoPipeline.status === 'completed'
-                                            ? 'success'
-                                            : state.fullAutoPipeline.status === 'failed'
-                                                ? 'error'
-                                                : state.fullAutoPipeline.status === 'running'
-                                                    ? 'primary'
-                                                    : 'default'
-                                    }
-                                />
-                                {state.fullAutoPipeline.current_step ? (
+                            <Stack spacing={1} sx={{ mb: 1.5 }}>
+                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                                     <Chip
                                         size="small"
-                                        variant="outlined"
-                                        label={`Bước: ${state.fullAutoPipeline.current_step}`}
-                                        sx={{ bgcolor: 'background.paper' }}
+                                        label={`Status: ${state.fullAutoPipeline.status || 'idle'}`}
+                                        color={
+                                            state.fullAutoPipeline.status === 'completed'
+                                                ? 'success'
+                                                : state.fullAutoPipeline.status === 'failed'
+                                                    ? 'error'
+                                                    : state.fullAutoPipeline.status === 'running'
+                                                        ? 'primary'
+                                                        : 'default'
+                                        }
                                     />
-                                ) : null}
+                                    {currentPipelineStepLabel ? (
+                                        <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            color={scriptQaLoopView.isLoopActive ? 'info' : 'default'}
+                                            label={`Bước: ${currentPipelineStepLabel}`}
+                                            sx={{ bgcolor: 'background.paper' }}
+                                        />
+                                    ) : null}
+                                </Stack>
+                                <PipelineScriptQaLoopMeta pipeline={state.fullAutoPipeline} />
                             </Stack>
                         ) : null}
                         {state.fullAutoPipeline?.last_error?.message ? (
@@ -894,9 +908,12 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                             steps={state.fullAutoPipeline?.steps}
                                             headlessSteps={state.fullAutoPipeline?.headless_steps}
                                             aiSteps={state.fullAutoPipeline?.ai_steps}
+                                            qaLoops={state.fullAutoPipeline?.qa_loops}
+                                            pipelineStatus={state.fullAutoPipeline?.status}
+                                            currentStep={state.fullAutoPipeline?.current_step}
                                             restartableSet={restartableSet}
                                             disabled={state.startingFullAuto}
-                                            onSelectStep={(stepKey) => {
+                                            onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
                                                 setRestartMenuAnchor(null);
                                                 void state.handleStartFullAutoPipeline('restart', stepKey);
                                             }}
