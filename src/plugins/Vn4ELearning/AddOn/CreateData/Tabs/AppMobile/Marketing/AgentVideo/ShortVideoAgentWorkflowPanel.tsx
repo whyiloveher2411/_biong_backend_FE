@@ -22,7 +22,7 @@ import { FULL_AUTO_PIPELINE_STEP_LABELS, type FullAutoPipelineSummary } from './
 import { PipelineGroupedWorkflowList } from './FullAutoPipelineGroupedSteps';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
 import { resolveScriptImproveQaLoopView, scriptQaLoopCurrentStepLabel } from './agentVideoPipelineQaLoopUi';
-import { formatTtsChain, phaseLabel, platformLabel, visualStyleLabel } from './agentVideoUi';
+import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import ShortVideoAgentPromptLibrary from './ShortVideoAgentPromptLibrary';
@@ -584,16 +584,111 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             label="Đã post lên social"
                         />
                     </Stack>
-                    {state.selectedPlatforms.length > 0 ? (
-                        <Box sx={{ mt: 1 }}>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                Nền tảng đang chọn
+                    <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                            Tài khoản social
+                        </Typography>
+                        {state.socialAccounts.length === 0 ? (
+                            <Typography variant="caption" color="text.secondary">
+                                Chưa có tài khoản trong App Mobile → Social
                             </Typography>
-                            <Typography variant="caption">
-                                {state.selectedPlatforms.map(platformLabel).join(', ')}
-                            </Typography>
-                        </Box>
-                    ) : null}
+                        ) : (
+                            <Stack spacing={0.75}>
+                                {state.socialAccounts.map((account) => {
+                                    const socialType = String(account.social_type || '').toLowerCase() || 'social';
+                                    const platformLabel = socialType === 'facebook'
+                                        ? 'Facebook'
+                                        : socialType === 'tiktok'
+                                            ? 'TikTok'
+                                            : socialType.charAt(0).toUpperCase() + socialType.slice(1);
+                                    const title = account.title?.trim() || `${platformLabel} #${account.index}`;
+                                    const isFacebook = socialType === 'facebook';
+                                    const isTikTok = socialType === 'tiktok';
+                                    const sessionOk = isFacebook
+                                        ? Boolean(account.has_facebook_session)
+                                        : isTikTok
+                                            ? Boolean(account.has_tiktok_session)
+                                            : Boolean(account.has_cookie);
+                                    const isPosting = state.postingSocialIndex === account.index;
+                                    const canPost = (isFacebook || isTikTok)
+                                        && sessionOk
+                                        && state.postEligible
+                                        && Boolean(state.agentVideoUrl)
+                                        && state.postingSocialIndex === null;
+
+                                    return (
+                                        <Box
+                                            key={`${socialType}-${account.index}`}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                                py: 0.75,
+                                                px: 1,
+                                                borderRadius: 1,
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                bgcolor: 'background.paper',
+                                            }}
+                                        >
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{ fontWeight: 600, lineHeight: 1.3 }}
+                                                    noWrap
+                                                    title={title}
+                                                >
+                                                    {platformLabel}
+                                                    {' · '}
+                                                    {title}
+                                                </Typography>
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={0.5}
+                                                    flexWrap="wrap"
+                                                    useFlexGap
+                                                    sx={{ mt: 0.5 }}
+                                                >
+                                                    <Chip
+                                                        size="small"
+                                                        label={sessionOk ? 'Cookie OK' : 'Thiếu cookie'}
+                                                        color={sessionOk ? 'success' : 'warning'}
+                                                        variant="outlined"
+                                                    />
+                                                    {account.url ? (
+                                                        <Chip size="small" label="Có URL" variant="outlined" />
+                                                    ) : (
+                                                        <Chip size="small" label="Thiếu URL" variant="outlined" />
+                                                    )}
+                                                    {!isFacebook && !isTikTok ? (
+                                                        <Chip size="small" label="Sắp hỗ trợ" variant="outlined" />
+                                                    ) : null}
+                                                </Stack>
+                                            </Box>
+                                            <LoadingButton
+                                                size="small"
+                                                variant="contained"
+                                                color="primary"
+                                                loading={isPosting}
+                                                disabled={!canPost && !isPosting}
+                                                onClick={() => {
+                                                    void state.handlePostSocial(account.index);
+                                                }}
+                                                sx={{
+                                                    ...workflowActionButtonSx,
+                                                    flexShrink: 0,
+                                                    minWidth: 88,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                {isFacebook ? 'Đăng Reels' : 'Đăng'}
+                                            </LoadingButton>
+                                        </Box>
+                                    );
+                                })}
+                            </Stack>
+                        )}
+                    </Box>
                 </WorkflowSection>
             </Stack>
         </Box>

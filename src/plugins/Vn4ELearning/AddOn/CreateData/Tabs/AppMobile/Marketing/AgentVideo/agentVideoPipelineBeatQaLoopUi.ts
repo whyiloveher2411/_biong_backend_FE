@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import {
     FULL_AUTO_PIPELINE_STEP_LABELS,
     type FullAutoPipelineScriptQaLoop,
-    type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
 import { PIPELINE_STEP_STATUS_LABEL } from './agentVideoPipelineUi';
@@ -149,13 +148,13 @@ export function beatQaLoopCurrentStepLabel(
     view: BeatDivisionQaLoopView,
 ): string {
     if (!isBeatDivisionQaLoopStep(currentStep)) {
-        if (currentStep in FULL_AUTO_PIPELINE_STEP_LABELS) {
-            return FULL_AUTO_PIPELINE_STEP_LABELS[currentStep as FullAutoPipelineStepKey];
-        }
-        return currentStep;
+        const known = (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[currentStep];
+        return known || currentStep;
     }
 
-    const stepLabel = FULL_AUTO_PIPELINE_STEP_LABELS[currentStep];
+    const stepLabel = currentStep === 'beat_division_qa'
+        ? FULL_AUTO_PIPELINE_STEP_LABELS.beat_division_qa
+        : FULL_AUTO_PIPELINE_STEP_LABELS.beat_division;
     if (!view.isLoopActive) {
         return stepLabel;
     }

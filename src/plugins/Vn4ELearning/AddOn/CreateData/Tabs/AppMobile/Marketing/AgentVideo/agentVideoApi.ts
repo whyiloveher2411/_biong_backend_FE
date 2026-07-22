@@ -14,6 +14,16 @@ export type VisualStyleCatalogItem = {
 
 export type AgentRenderMode = 'creative' | 'import_html';
 
+export type SocialAccountItem = {
+    index: number;
+    title: string;
+    social_type: string;
+    url?: string;
+    has_cookie?: boolean;
+    has_facebook_session?: boolean;
+    has_tiktok_session?: boolean;
+};
+
 export type ImportHtmlBgmSegment = {
     id: string;
     title?: string;
@@ -442,7 +452,11 @@ export type AgentVideoContentResponse = {
     marketing_post_id?: number;
     app_mobile_id?: number;
     app_mobile_title?: string;
+    social_accounts?: SocialAccountItem[];
+    social_description?: string;
+    social_hashtags?: string;
     thumbnail?: unknown;
+    thumbnail_url?: string;
     agent_source_content?: string;
     agent_additional_info?: string;
     agent_github_repo?: string;
@@ -486,6 +500,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'approve_tts',
     'whisper',
     'beat_division',
+    'beat_division_qa',
     'beat_fill',
     'beat_refine_visual',
     'beat_refine_html',
@@ -510,6 +525,7 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'script_phonetic_normalize',
     'approve_tts',
     'beat_division',
+    'beat_division_qa',
     'beat_fill',
     'beat_refine_visual',
     'beat_refine_html',
@@ -535,6 +551,7 @@ export const FULL_AUTO_PIPELINE_AI_STEPS = [
     'approve_tts',
     'whisper',
     'beat_division',
+    'beat_division_qa',
     'beat_fill',
     'beat_refine_visual',
     'beat_refine_html',
@@ -604,6 +621,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
     beat_division: 'Chia beat',
+    beat_division_qa: 'Đánh giá beat',
     beat_fill: 'Fill HTML beat',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
@@ -633,6 +651,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
         label: 'Beat',
         steps: [
             'beat_division',
+            'beat_division_qa',
             'beat_fill',
             'beat_refine_visual',
             'beat_refine_html',
@@ -848,6 +867,89 @@ export async function savePublishFlags(
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-publish-flags',
+        body,
+    );
+}
+
+export async function postFacebookReels(
+    shortVideoId: number,
+    options: {
+        socialIndex: number;
+        accountTitle?: string;
+        autoPublish?: boolean;
+        openBrowser?: boolean;
+        caption?: string;
+        hashtags?: string;
+    },
+): Promise<JsonResponse & {
+    social_posted?: boolean;
+    matched_account?: string;
+    reel_url?: string;
+    ready_to_publish?: boolean;
+    published?: boolean;
+    error_code?: string;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/post-facebook-reels',
+        shortVideoBody(shortVideoId, {
+            social_index: options.socialIndex,
+            account_title: options.accountTitle || '',
+            auto_publish: options.autoPublish ? '1' : '0',
+            open_browser: options.openBrowser === false ? '0' : '1',
+            caption: options.caption || '',
+            hashtags: options.hashtags || '',
+        }),
+    );
+}
+
+export async function postTikTok(
+    shortVideoId: number,
+    options: {
+        socialIndex: number;
+        accountTitle?: string;
+        autoPublish?: boolean;
+        openBrowser?: boolean;
+        caption?: string;
+        hashtags?: string;
+    },
+): Promise<JsonResponse & {
+    social_posted?: boolean;
+    matched_account?: string;
+    post_url?: string;
+    ready_to_publish?: boolean;
+    published?: boolean;
+    thumbnail_uploaded?: boolean;
+    error_code?: string;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/post-tiktok',
+        shortVideoBody(shortVideoId, {
+            social_index: options.socialIndex,
+            account_title: options.accountTitle || '',
+            auto_publish: options.autoPublish ? '1' : '0',
+            open_browser: options.openBrowser === false ? '0' : '1',
+            caption: options.caption || '',
+            hashtags: options.hashtags || '',
+        }),
+    );
+}
+
+export async function saveSocialCopy(
+    shortVideoId: number,
+    payload: { socialDescription?: string; socialHashtags?: string },
+): Promise<JsonResponse & {
+    social_description?: string;
+    social_hashtags?: string;
+}> {
+    const body: Record<string, unknown> = shortVideoBody(shortVideoId);
+    if (payload.socialDescription !== undefined) {
+        body.social_description = payload.socialDescription;
+    }
+    if (payload.socialHashtags !== undefined) {
+        body.social_hashtags = payload.socialHashtags;
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-social-copy',
         body,
     );
 }

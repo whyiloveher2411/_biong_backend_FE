@@ -1,11 +1,12 @@
 import React from 'react';
-import { Alert, Box } from '@mui/material';
+import { Box } from '@mui/material';
 import type { ShortVideoAgentLeftTab } from 'helpers/shortVideoAgentVideoDrawerUrl';
 import { InspectorPanelTabs } from '../ShortVideoInspectorFields';
 import ShortVideoAgentContentPanel from './ShortVideoAgentContentPanel';
 import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
 import ShortVideoAgentThumbnailPanel from './ShortVideoAgentThumbnailPanel';
+import ShortVideoAgentFacebookSocialCopyPanel from './ShortVideoAgentFacebookSocialCopyPanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -100,11 +101,7 @@ export default function ShortVideoAgentLeftPanel({
                             compact
                         />
                     ) : (
-                        <Box sx={{ p: 2 }}>
-                            <Alert severity="info">
-                                Chưa liên kết marketing post — thêm trong Relationship để xem preview Facebook.
-                            </Alert>
-                        </Box>
+                        <ShortVideoAgentFacebookSocialCopyPanel state={state} />
                     )
                 ) : null}
             </Box>

@@ -58,6 +58,9 @@ import {
     requestAgentHeadlessNewChat,
     FULL_AUTO_PIPELINE_STEP_LABELS,
     savePublishFlags,
+    saveSocialCopy,
+    postFacebookReels,
+    postTikTok,
     resolveOmnivoiceVoicePreviewUrl,
     resolveOmnivoiceVoiceDesignPreviewUrl,
     transcribeAgentAudio,
@@ -88,6 +91,7 @@ import {
     type WhisperWord,
     type CaptionAlignOverride,
     type TtsPhoneticDictEntry,
+    type SocialAccountItem,
 } from './agentVideoApi';
 import {
     bgmPreviewUrl,
@@ -407,6 +411,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
     const [socialPosted, setSocialPosted] = React.useState(false);
+    const [socialAccounts, setSocialAccounts] = React.useState<SocialAccountItem[]>([]);
+    const [postingSocialIndex, setPostingSocialIndex] = React.useState<number | null>(null);
+    const [socialDescription, setSocialDescription] = React.useState('');
+    const [savedSocialDescription, setSavedSocialDescription] = React.useState('');
+    const [socialHashtags, setSocialHashtags] = React.useState('');
+    const [savedSocialHashtags, setSavedSocialHashtags] = React.useState('');
+    const [thumbnailUrl, setThumbnailUrl] = React.useState('');
+    const [savingSocialCopy, setSavingSocialCopy] = React.useState(false);
     const [renderMode, setRenderMode] = React.useState<AgentRenderMode>('import_html');
     const [importHtml, setImportHtml] = React.useState('');
     const [beatMap, setBeatMap] = React.useState<BeatMap | null>(null);
@@ -756,6 +768,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setThumbnail(res?.thumbnail ?? null);
         setPostEligible(Boolean(res?.post_eligible));
         setSocialPosted(Boolean(res?.social_posted));
+        const nextSocialDescription = String(res?.social_description || '');
+        setSocialDescription(nextSocialDescription);
+        setSavedSocialDescription(nextSocialDescription);
+        const nextSocialHashtags = String(res?.social_hashtags || '');
+        setSocialHashtags(nextSocialHashtags);
+        setSavedSocialHashtags(nextSocialHashtags);
+        setThumbnailUrl(String(res?.thumbnail_url || '').trim());
+        const nextSocialAccounts = Array.isArray(res?.social_accounts)
+            ? res.social_accounts.filter((item): item is SocialAccountItem => (
+                item != null
+                && typeof item === 'object'
+                && typeof (item as SocialAccountItem).index === 'number'
+            ))
+            : [];
+        setSocialAccounts(nextSocialAccounts);
         const nextRenderMode = res?.render_mode === 'import_html' ? 'import_html' : 'creative';
         setRenderMode(nextRenderMode);
         const importSummary = res?.import_html;
@@ -4018,6 +4045,121 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleSaveSocialCopy = async () => {
+        if (!shortVideoId) {
+            showMessage('Thiếu short_video_id', 'error');
+            return;
+        }
+        setSavingSocialCopy(true);
+        try {
+            const res = await saveSocialCopy(shortVideoId, {
+                socialDescription,
+                socialHashtags,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được description/hashtags', 'error');
+                return;
+            }
+            const nextDesc = String(res.social_description ?? socialDescription);
+            const nextTags = String(res.social_hashtags ?? socialHashtags);
+            setSocialDescription(nextDesc);
+            setSavedSocialDescription(nextDesc);
+            setSocialHashtags(nextTags);
+            setSavedSocialHashtags(nextTags);
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu description / hashtags', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingSocialCopy(false);
+        }
+    };
+
+    const handlePostSocial = async (socialIndex: number) => {
+        const account = socialAccounts.find((item) => item.index === socialIndex);
+        if (!account) {
+            showMessage('Không tìm thấy tài khoản social', 'error');
+            return;
+        }
+        const socialType = String(account.social_type || '').toLowerCase();
+        const isFacebook = socialType === 'facebook';
+        const isTikTok = socialType === 'tiktok';
+        if (!isFacebook && !isTikTok) {
+            showMessage(`Chưa hỗ trợ đăng ${socialType || 'social'}`, 'warning');
+            return;
+        }
+        if (isFacebook && !account.has_facebook_session) {
+            showMessage('Tài khoản chưa có cookie Facebook hợp lệ (c_user + xs)', 'warning');
+            return;
+        }
+        if (isTikTok && !account.has_tiktok_session) {
+            showMessage('Tài khoản chưa có cookie TikTok hợp lệ (sessionid)', 'warning');
+            return;
+        }
+        if (!postEligible) {
+            showMessage('Bật "Đủ điều kiện post" trước khi đăng social', 'warning');
+            return;
+        }
+        if (!agentVideoUrl) {
+            showMessage('Chưa có agent_video_url — render video trước', 'warning');
+            return;
+        }
+        const confirmLabel = isFacebook
+            ? `Đăng Reels lên Facebook "${account.title || `#${account.index}`}"?`
+            : `Đăng lên TikTok "${account.title || `#${account.index}`}"?`;
+        if (!window.confirm(
+            `${confirmLabel}\n`
+            + 'Trình duyệt sẽ mở (headed). Kiểm tra tài khoản rồi xác nhận Publish nếu cần.',
+        )) {
+            return;
+        }
+        setPostingSocialIndex(account.index);
+        try {
+            const res = isFacebook
+                ? await postFacebookReels(shortVideoId, {
+                    socialIndex: account.index,
+                    accountTitle: account.title,
+                    autoPublish: false,
+                    openBrowser: true,
+                    caption: socialDescription.trim(),
+                    hashtags: socialHashtags.trim(),
+                })
+                : await postTikTok(shortVideoId, {
+                    socialIndex: account.index,
+                    accountTitle: account.title,
+                    autoPublish: false,
+                    openBrowser: true,
+                    caption: socialDescription.trim(),
+                    hashtags: socialHashtags.trim(),
+                });
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message)
+                        || (isFacebook ? 'Đăng Reels thất bại' : 'Đăng TikTok thất bại'),
+                    'error',
+                );
+                return;
+            }
+            if (typeof res.social_posted === 'boolean') {
+                setSocialPosted(res.social_posted);
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (isFacebook ? 'Đã xử lý đăng Reels' : 'Đã xử lý đăng TikTok'),
+                'success',
+            );
+            loadRow();
+            onUploaded?.();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setPostingSocialIndex(null);
+        }
+    };
+
+    /** @deprecated dùng handlePostSocial */
+    const handlePostFacebookReels = handlePostSocial;
+
     const handleRegenerateTts = async () => {
         if (!window.confirm('Tạo lại audio TTS? MP3 hiện tại sẽ bị thay thế sau khi queue hoàn tất.')) {
             return;
@@ -4216,6 +4358,18 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         thumbnail,
         postEligible,
         socialPosted,
+        socialAccounts,
+        postingSocialIndex,
+        postingFacebookReelsIndex: postingSocialIndex,
+        socialDescription,
+        setSocialDescription,
+        savedSocialDescription,
+        socialHashtags,
+        setSocialHashtags,
+        savedSocialHashtags,
+        thumbnailUrl,
+        savingSocialCopy,
+        handleSaveSocialCopy,
         renderMode,
         importHtml,
         beatMap,
@@ -4365,6 +4519,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOmnivoiceVoiceDesignPreview,
         handlePostEligibleChange,
         handleSocialPostedChange,
+        handlePostSocial,
+        handlePostFacebookReels,
         handlePlatformToggle,
         handleCopyScript,
         handleOpenCreateScriptGemini,
