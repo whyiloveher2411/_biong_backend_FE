@@ -9,11 +9,12 @@ import {
 import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
-    BEAT_QA_QUICK_NOTE_OPTIONS,
+    BEAT_QA_QUICK_NOTE_GROUPS,
     BEAT_QA_STATUSES,
     BEAT_QA_STATUS_LABELS,
     normalizeBeatQaStatus,
     type BeatHtmlEntry,
+    type BeatQaQuickNoteGroup,
     type BeatQaQuickNoteOption,
     type BeatQaStatus,
 } from './agentVideoBeatMap';
@@ -82,11 +83,11 @@ export default function ShortVideoAgentBeatQaPanel({
         }
     };
 
-    const handleQuickNote = async (option: BeatQaQuickNoteOption) => {
+    const handleQuickNote = async (group: BeatQaQuickNoteGroup, option: BeatQaQuickNoteOption) => {
         if (!beatId || saving) {
             return;
         }
-        const nextStatus = option.qaStatus ?? 'needs_visual_tweak';
+        const nextStatus = group.qaStatus;
         const nextNote = option.note;
         setQaStatus(nextStatus);
         setQaRefineNote(nextNote);
@@ -153,25 +154,36 @@ export default function ShortVideoAgentBeatQaPanel({
                         sx={{ cursor: 'pointer' }}
                     />
                 </Stack>
-                {BEAT_QA_QUICK_NOTE_OPTIONS.length > 0 ? (
-                    <Stack spacing={0.75}>
+                {BEAT_QA_QUICK_NOTE_GROUPS.length > 0 ? (
+                    <Stack spacing={1.25}>
                         <Typography variant="caption" color="text.secondary">
                             Ghi chú nhanh
                         </Typography>
-                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                            {BEAT_QA_QUICK_NOTE_OPTIONS.map((option) => (
-                                <Chip
-                                    key={option.note}
-                                    label={option.label}
-                                    variant="outlined"
-                                    color="info"
-                                    size="small"
-                                    disabled={saving}
-                                    onClick={() => { void handleQuickNote(option); }}
-                                    sx={{ cursor: saving ? 'default' : 'pointer' }}
-                                />
-                            ))}
-                        </Stack>
+                        {BEAT_QA_QUICK_NOTE_GROUPS.map((group) => (
+                            <Stack key={group.id} spacing={0.75}>
+                                <Typography
+                                    variant="caption"
+                                    color={group.id === 'visual_tweak' ? 'warning.main' : 'info.main'}
+                                    sx={{ fontWeight: 600 }}
+                                >
+                                    {group.label}
+                                </Typography>
+                                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                    {group.options.map((option) => (
+                                        <Chip
+                                            key={`${group.id}:${option.note}`}
+                                            label={option.label}
+                                            variant="outlined"
+                                            color={group.id === 'visual_tweak' ? 'warning' : 'info'}
+                                            size="small"
+                                            disabled={saving}
+                                            onClick={() => { void handleQuickNote(group, option); }}
+                                            sx={{ cursor: saving ? 'default' : 'pointer' }}
+                                        />
+                                    ))}
+                                </Stack>
+                            </Stack>
+                        ))}
                     </Stack>
                 ) : null}
                 <TextField

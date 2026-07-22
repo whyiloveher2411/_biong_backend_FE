@@ -55,14 +55,69 @@ export const BEAT_QA_STATUS_LABELS: Record<BeatQaActionStatus, string> = {
 export type BeatQaQuickNoteOption = {
     label: string;
     note: string;
-    qaStatus?: BeatQaActionStatus;
 };
 
-export const BEAT_QA_QUICK_NOTE_OPTIONS: BeatQaQuickNoteOption[] = [
+export type BeatQaQuickNoteGroup = {
+    id: 'visual_tweak' | 'html_refill';
+    label: string;
+    qaStatus: BeatQaActionStatus;
+    options: BeatQaQuickNoteOption[];
+};
+
+export const BEAT_QA_QUICK_NOTE_GROUPS: BeatQaQuickNoteGroup[] = [
     {
-        label: 'Sử dụng hình ảnh trực quan, dễ hiểu',
-        note: 'Sử dụng hình ảnh trực quan, dễ hiểu',
+        id: 'visual_tweak',
+        label: BEAT_QA_STATUS_LABELS.needs_visual_tweak,
         qaStatus: 'needs_visual_tweak',
+        options: [
+            {
+                label: 'Dùng ảnh/metaphor dễ hiểu',
+                note: 'Ưu tiên metaphor hoặc minh họa trực quan — người xem hiểu trong 1–2 giây.',
+            },
+            {
+                label: 'Không khớp nội dung thoại',
+                note: 'Visual không phản ánh đúng phrase_anchor. Thiết kế lại scene theo ý chính đoạn thoại.',
+            },
+            {
+                label: 'Quá trống, cần dày hơn',
+                note: 'Beat quá sparse — thêm layer visual (badge, stat, chips, deco) nhưng giữ safe zone.',
+            },
+            {
+                label: 'Hook chưa đủ mạnh',
+                note: 'Beat hook cần impact cao: headline lớn, focal rõ, entrance mạnh trong 1–2 giây đầu.',
+            },
+            {
+                label: 'Concept quá rối',
+                note: 'Đơn giản hóa — một focal duy nhất, bỏ layer không phục vụ phrase_anchor.',
+            },
+        ],
+    },
+    {
+        id: 'html_refill',
+        label: BEAT_QA_STATUS_LABELS.needs_html_refill,
+        qaStatus: 'needs_html_refill',
+        options: [
+            {
+                label: 'Chữ khó đọc',
+                note: 'Tăng contrast chữ vs nền — text-shadow hoặc plate nền mờ sau text chính.',
+            },
+            {
+                label: 'Chữ quá nhỏ',
+                note: 'Tăng cỡ headline/key claim trên 1080×1920, giữ hierarchy rõ.',
+            },
+            {
+                label: 'Tràn khung / bị cắt',
+                note: 'Element bị cắt — căn lại trong safe zone 9:16, padding 28–48px mép.',
+            },
+            {
+                label: 'Frame trống',
+                note: 'Có khoảng trống đầu/cuối — element visible từ t=0 đến hết DURATION.',
+            },
+            {
+                label: 'Lệch nhịp thoại',
+                note: 'Animation lệch Whisper — căn lại timing theo beat-timing JSON.',
+            },
+        ],
     },
 ];
 
