@@ -328,7 +328,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
                                     >
                                         <span>
                                             {dirty && !visualDescriptionValid
-                                                ? 'Cần viết tiếng Anh, dài 5–150 từ'
+                                                ? 'Cần viết tiếng Anh và mô tả semantic concept rõ ràng'
                                                 : 'Sáng tạo bold (metaphor/shot language) bằng tiếng Anh; không đổi palette/font hệ thống'}
                                         </span>
                                         <span>{wordCount}/150 từ</span>

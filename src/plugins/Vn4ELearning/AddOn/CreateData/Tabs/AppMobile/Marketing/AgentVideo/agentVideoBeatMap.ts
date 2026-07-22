@@ -117,6 +117,10 @@ export const BEAT_QA_QUICK_NOTE_GROUPS: BeatQaQuickNoteGroup[] = [
                 label: 'Lệch nhịp thoại',
                 note: 'Animation lệch Whisper — căn lại timing theo beat-timing JSON.',
             },
+            {
+                label: 'Hình ảnh bị lệch không ăn khớp',
+                note: 'Hình ảnh bị lệch không ăn khớp — cần kiểm tra đúng vị trí của các chi tiết ăn khớp với nhau',
+            },
         ],
     },
 ];
@@ -233,8 +237,7 @@ function asNumber(value: unknown): number | null {
 
 export function validateBeatVisualDescription(value: unknown): string | null {
     const description = String(value ?? '').trim();
-    const wordCount = description.split(/\s+/).filter(Boolean).length;
-    if (!description || wordCount < 5 || wordCount > 150 || description.length > 1200) {
+    if (!description || description.length > 1200) {
         return null;
     }
     // Visual descriptions are an English machine contract. Catalog IDs may contain "-" and "_".
@@ -338,7 +341,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             errors.push(`${id || `Section #${index + 1}`}: thiếu phrase_anchor`);
         }
         if (!visualDescription) {
-            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh, dài 5–150 từ`);
+            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh và không được để trống`);
         }
         if (!background) {
             errors.push(`${id || `Section #${index + 1}`}: background phải là tiếng Anh, dài 3–60 từ`);
@@ -405,7 +408,7 @@ export function validateBeatMap(
             errors.push(`${label}: durationSec phải > 0`);
         }
         if (!validateBeatVisualDescription(section.visual_description)) {
-            errors.push(`${label}: visual_description phải là tiếng Anh, dài 5–150 từ`);
+            errors.push(`${label}: visual_description phải là tiếng Anh và không được để trống`);
         }
         if (!validateBeatBackground(section.background)) {
             errors.push(`${label}: background phải là tiếng Anh, dài 3–60 từ`);

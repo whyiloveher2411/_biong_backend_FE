@@ -113,14 +113,13 @@ if (!Array.isArray(shotPlan) || shotPlan.length === 0) {
       errors.push(`${id}: thiếu phrase_anchor`);
     }
     const description = String(shot.visual_description ?? "").trim();
-    const descriptionWords = description.split(/\s+/).filter(Boolean);
     if (
-      descriptionWords.length < 5 ||
-      descriptionWords.length > 150 ||
-      /[À-ỹ]/.test(description)
+      !description ||
+      /[À-ỹ]/.test(description) ||
+      !/[A-Za-z]/.test(description)
     ) {
       errors.push(
-        `${id}: visual_description phải là tiếng Anh, dài 5–150 từ — chạy assign-beat-prompt-types.mjs`,
+        `${id}: visual_description phải là tiếng Anh và không được để trống — chạy assign-beat-prompt-types.mjs`,
       );
     }
     if (!String(shot.visual_story ?? "").trim()) {

@@ -105,10 +105,9 @@ function main() {
       for (const shot of plan) {
         const id = shot.beat_id;
         const description = String(shot.visual_description ?? "").trim();
-        const words = description.split(/\s+/).filter(Boolean);
-        if (id && (words.length < 5 || words.length > 150 || /[À-ỹ]/.test(description))) {
+        if (id && (!description || /[À-ỹ]/.test(description) || !/[A-Za-z]/.test(description))) {
           errors.push(
-            `${id}: visual_description phải là tiếng Anh, dài 5–150 từ`,
+            `${id}: visual_description phải là tiếng Anh và không được để trống`,
           );
         }
       }

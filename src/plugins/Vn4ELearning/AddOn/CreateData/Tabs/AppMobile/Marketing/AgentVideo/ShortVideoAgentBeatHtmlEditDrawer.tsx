@@ -184,7 +184,7 @@ export default function ShortVideoAgentBeatHtmlEditDrawer({
                     multiline
                     minRows={2}
                     maxRows={5}
-                    helperText="Tiếng Anh, 5–150 từ; sáng tạo bold — không đổi palette/font hệ thống"
+                    helperText="Tiếng Anh, semantic concept rõ chủ thể-hành động-hệ quả; không đổi palette/font hệ thống"
                     disabled={busy}
                 />
 

@@ -10,11 +10,11 @@ function words(count: number): string {
 }
 
 describe('beat map background + visual_description limits', () => {
-    it('validateBeatVisualDescription accepts 5–150 words', () => {
-        expect(validateBeatVisualDescription(words(5))).toBeTruthy();
+    it('validateBeatVisualDescription requires non-empty English text', () => {
+        expect(validateBeatVisualDescription(words(1))).toBeTruthy();
         expect(validateBeatVisualDescription(words(100))).toBeTruthy();
-        expect(validateBeatVisualDescription(words(4))).toBeNull();
-        expect(validateBeatVisualDescription(words(151))).toBeNull();
+        expect(validateBeatVisualDescription('')).toBeNull();
+        expect(validateBeatVisualDescription('nền tối')).toBeNull();
     });
 
     it('validateBeatBackground requires English 3–60 words', () => {
