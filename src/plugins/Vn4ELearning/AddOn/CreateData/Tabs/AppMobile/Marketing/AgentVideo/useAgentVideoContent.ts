@@ -47,6 +47,7 @@ import {
     type AvatarPipAnchor,
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
+    enqueueGeminiWebBeatQuickIterate,
     enqueueGeminiWebThumbnailFill,
     enqueueGeminiWebThumbnailIdea,
     captureAgentThumbnail,
@@ -117,11 +118,14 @@ import {
     listBeatIdsWithHtml,
     listMissingBeatIds,
     listBeatRenderErrorIds,
+    isWorkingBeatDirtyVsActive,
     parseBeatHtmlEntry,
     parseBeatMapJson,
+    parseBeatVersionsBlock,
     validateBeatMap,
     type BeatMap,
     type BeatHtmlEntry,
+    type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
@@ -324,6 +328,19 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
+    const [geminiRefineVisualStatus, setGeminiRefineVisualStatus] = React.useState('none');
+    const [geminiRefineVisualError, setGeminiRefineVisualError] = React.useState('');
+    const [geminiRefineHtmlStatus, setGeminiRefineHtmlStatus] = React.useState('none');
+    const [geminiRefineHtmlError, setGeminiRefineHtmlError] = React.useState('');
+    const [quickIterateQueue, setQuickIterateQueue] = React.useState<Array<{ beatId: string; note: string }>>([]);
+    const [quickIterateActiveBeatId, setQuickIterateActiveBeatId] = React.useState<string | null>(null);
+    const quickIterateQueueRef = React.useRef<Array<{ beatId: string; note: string }>>([]);
+    const quickIterateActiveBeatIdRef = React.useRef<string | null>(null);
+    const quickIteratePumpingRef = React.useRef(false);
+    /** Label version snapshot trước iterate (nếu đã lưu) — dùng toast khi fail. */
+    const quickIteratePreSnapshotLabelRef = React.useRef<Record<string, string>>({});
+    /** Tránh double-fire khi completion effect chạy post-snapshot async. */
+    const quickIterateFinishingRef = React.useRef(false);
     const [geminiThumbnailFillStatus, setGeminiThumbnailFillStatus] = React.useState('none');
     const [geminiThumbnailIdeaStatus, setGeminiThumbnailIdeaStatus] = React.useState('none');
     const [thumbnailGeminiIdeaError, setThumbnailGeminiIdeaError] = React.useState('');
@@ -424,6 +441,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatMap, setBeatMap] = React.useState<BeatMap | null>(null);
     const [beatMapJsonDraft, setBeatMapJsonDraft] = React.useState('');
     const [beatHtml, setBeatHtml] = React.useState<Record<string, BeatHtmlEntry>>({});
+    const [beatVersions, setBeatVersions] = React.useState<BeatVersionsByBeatId>({});
+    const [beatActiveVersionId, setBeatActiveVersionId] = React.useState<Record<string, string>>({});
     const [beatMapReady, setBeatMapReady] = React.useState(false);
     const [beatsHtmlTotal, setBeatsHtmlTotal] = React.useState(0);
     const [beatsHtmlCompleted, setBeatsHtmlCompleted] = React.useState(0);
@@ -663,6 +682,28 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
+        const geminiRefineVisual = res?.import_html?.gemini_refine_visual;
+        setGeminiRefineVisualStatus(String(geminiRefineVisual?.status || 'none'));
+        setGeminiRefineVisualError(String(geminiRefineVisual?.error || '').trim());
+        const geminiRefineHtml = res?.import_html?.gemini_refine_html;
+        setGeminiRefineHtmlStatus(String(geminiRefineHtml?.status || 'none'));
+        setGeminiRefineHtmlError(String(geminiRefineHtml?.error || '').trim());
+        // Reload: khôi phục active beat nếu worker còn job refine (không khôi phục queue chờ FE).
+        if (!quickIterateActiveBeatIdRef.current) {
+            const visualStatus = String(geminiRefineVisual?.status || 'none');
+            const htmlStatus = String(geminiRefineHtml?.status || 'none');
+            const visualBusy = visualStatus === 'queued' || visualStatus === 'processing';
+            const htmlBusy = htmlStatus === 'queued' || htmlStatus === 'processing';
+            const progressBeatId = String(
+                (htmlBusy ? geminiRefineHtml?.progress?.beat_id : '')
+                || (visualBusy ? geminiRefineVisual?.progress?.beat_id : '')
+                || '',
+            ).trim();
+            if ((visualBusy || htmlBusy) && progressBeatId) {
+                quickIterateActiveBeatIdRef.current = progressBeatId;
+                setQuickIterateActiveBeatId(progressBeatId);
+            }
+        }
         const geminiThumbnailFill = res?.import_html?.gemini_thumbnail_fill
             ?? res?.import_html?.thumbnail?.gemini_fill;
         const nextThumbFillStatus = String(geminiThumbnailFill?.status || 'none');
@@ -810,6 +851,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             });
             return nextBeatHtml;
         });
+        setBeatVersions(parseBeatVersionsBlock(importSummary?.beat_versions));
+        setBeatActiveVersionId(
+            importSummary?.beat_active_version_id
+            && typeof importSummary.beat_active_version_id === 'object'
+                ? Object.fromEntries(
+                    Object.entries(importSummary.beat_active_version_id)
+                        .map(([beatId, versionId]) => [beatId, String(versionId || '').trim()])
+                        .filter(([beatId, versionId]) => Boolean(beatId) && Boolean(versionId)),
+                )
+                : {},
+        );
         setBeatMapReady(Boolean(importSummary?.beat_map_ready));
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
         setBeatsHtmlCompleted(Number(importSummary?.beats_html_completed || 0));
@@ -951,6 +1003,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || whisperStatus === 'processing'
         || geminiFillStatus === 'queued'
         || geminiFillStatus === 'processing'
+        || geminiRefineVisualStatus === 'queued'
+        || geminiRefineVisualStatus === 'processing'
+        || geminiRefineHtmlStatus === 'queued'
+        || geminiRefineHtmlStatus === 'processing'
         || geminiThumbnailFillStatus === 'queued'
         || geminiThumbnailFillStatus === 'processing'
         || geminiThumbnailIdeaStatus === 'queued'
@@ -973,6 +1029,30 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }, 5000);
         return () => window.clearInterval(timer);
     }, [loadRow, open, shortVideoId, shouldPoll]);
+
+    const quickIterateBeatStages = React.useMemo(() => {
+        const stages: Record<string, 'queued' | 'visual' | 'html'> = {};
+        quickIterateQueue.forEach((item) => {
+            if (item.beatId) {
+                stages[item.beatId] = 'queued';
+            }
+        });
+        if (quickIterateActiveBeatId) {
+            if (
+                geminiRefineHtmlStatus === 'queued'
+                || geminiRefineHtmlStatus === 'processing'
+            ) {
+                stages[quickIterateActiveBeatId] = 'html';
+            } else {
+                stages[quickIterateActiveBeatId] = 'visual';
+            }
+        }
+        return stages;
+    }, [
+        geminiRefineHtmlStatus,
+        quickIterateActiveBeatId,
+        quickIterateQueue,
+    ]);
 
     const hasScript = audioScript.length > 0;
     const scriptDirty = hasScript && audioScript !== savedScriptRef.current;
@@ -1469,6 +1549,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const nextGeminiStatus = String(fill.status || 'none');
             setGeminiFillStatus(nextGeminiStatus);
         }
+        if (summary.gemini_refine_visual) {
+            setGeminiRefineVisualStatus(String(summary.gemini_refine_visual.status || 'none'));
+            setGeminiRefineVisualError(String(summary.gemini_refine_visual.error || '').trim());
+        }
+        if (summary.gemini_refine_html) {
+            setGeminiRefineHtmlStatus(String(summary.gemini_refine_html.status || 'none'));
+            setGeminiRefineHtmlError(String(summary.gemini_refine_html.error || '').trim());
+        }
         const thumbFill = summary.gemini_thumbnail_fill ?? summary.thumbnail?.gemini_fill;
         if (thumbFill) {
             setGeminiThumbnailFillStatus(String(thumbFill.status || 'none'));
@@ -1513,6 +1601,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 });
                 return nextBeatHtml;
             });
+        }
+        if (summary.beat_versions !== undefined) {
+            setBeatVersions(parseBeatVersionsBlock(summary.beat_versions));
+        }
+        if (summary.beat_active_version_id !== undefined) {
+            setBeatActiveVersionId(
+                summary.beat_active_version_id
+                && typeof summary.beat_active_version_id === 'object'
+                    ? Object.fromEntries(
+                        Object.entries(summary.beat_active_version_id)
+                            .map(([beatId, versionId]) => [beatId, String(versionId || '').trim()])
+                            .filter(([beatId, versionId]) => Boolean(beatId) && Boolean(versionId)),
+                    )
+                    : {},
+            );
         }
         setBeatsHtmlTotal(Number(summary.beats_html_total || summary.beat_map?.sections?.length || 0));
         setBeatsHtmlCompleted(Number(summary.beats_html_completed || 0));
@@ -2209,6 +2312,353 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return saved;
     }, [persistImportHtml, showMessage]);
+
+    const handleSaveBeatVersion = React.useCallback(async (
+        beatId: string,
+        draft?: {
+            qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
+            qaRefineNote?: string;
+        },
+        options?: { quiet?: boolean },
+    ): Promise<string | null> => {
+        const normalizedId = String(beatId || '').trim();
+        if (!normalizedId) {
+            return null;
+        }
+        if (!String(beatHtml[normalizedId]?.html || '').trim()) {
+            if (!options?.quiet) {
+                showMessage('Chỉ lưu version khi beat đã có HTML', 'warning');
+            }
+            return null;
+        }
+        setSavingImportHtml(true);
+        try {
+            const res = await saveAgentImportHtml(shortVideoId, {
+                beatId: normalizedId,
+                saveBeatVersion: true,
+                qaStatus: draft?.qaStatus ?? '',
+                qaRefineNote: String(draft?.qaRefineNote || '').trim(),
+            });
+            if (!res?.success) {
+                if (!options?.quiet) {
+                    showMessage(parseApiMessage(res?.message) || 'Không lưu được version beat', 'error');
+                }
+                return null;
+            }
+            if (res.import_html) {
+                applyImportHtmlSummary(res.import_html);
+            }
+            const label = String(res.beat_version?.version_label || '').trim();
+            return label || null;
+        } catch (e) {
+            if (!options?.quiet) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            }
+            return null;
+        } finally {
+            setSavingImportHtml(false);
+        }
+    }, [applyImportHtmlSummary, beatHtml, shortVideoId, showMessage]);
+
+    const pumpQuickIterateQueue = React.useCallback(async () => {
+        if (quickIteratePumpingRef.current) {
+            return;
+        }
+        if (quickIterateActiveBeatIdRef.current) {
+            return;
+        }
+        const next = quickIterateQueueRef.current[0];
+        if (!next) {
+            return;
+        }
+
+        quickIteratePumpingRef.current = true;
+        quickIterateQueueRef.current = quickIterateQueueRef.current.slice(1);
+        setQuickIterateQueue(quickIterateQueueRef.current);
+
+        const workingSection = beatMap?.sections.find(
+            (s) => String(s.beat_id || s.id || '').trim() === next.beatId,
+        );
+        const workingVisual = String(workingSection?.visual_description || '');
+        const workingHtml = String(beatHtml[next.beatId]?.html || '');
+        const activeVersionId = String(beatActiveVersionId[next.beatId] || '').trim();
+        const versions = beatVersions[next.beatId] || [];
+        const activeVersion = activeVersionId
+            ? (versions.find((v) => v.version_id === activeVersionId) || null)
+            : null;
+
+        if (isWorkingBeatDirtyVsActive(workingVisual, workingHtml, activeVersion)) {
+            const preLabel = await handleSaveBeatVersion(next.beatId, {
+                qaStatus: beatHtml[next.beatId]?.qa_status || '',
+                qaRefineNote: beatHtml[next.beatId]?.qa_refine_note || next.note,
+            });
+            if (!preLabel) {
+                showMessage(
+                    `Không lưu được version trước khi iterate ${next.beatId} — đã bỏ qua beat này`,
+                    'error',
+                );
+                delete quickIteratePreSnapshotLabelRef.current[next.beatId];
+                quickIteratePumpingRef.current = false;
+                void pumpQuickIterateQueue();
+                return;
+            }
+            quickIteratePreSnapshotLabelRef.current[next.beatId] = preLabel;
+        } else {
+            delete quickIteratePreSnapshotLabelRef.current[next.beatId];
+        }
+
+        quickIterateActiveBeatIdRef.current = next.beatId;
+        setQuickIterateActiveBeatId(next.beatId);
+        setGeminiRefineVisualStatus('queued');
+        setGeminiRefineVisualError('');
+        setGeminiRefineHtmlError('');
+        setBeatHtml((prev) => ({
+            ...prev,
+            [next.beatId]: {
+                ...prev[next.beatId],
+                html: prev[next.beatId]?.html || '',
+                qa_status: 'needs_visual_tweak',
+                qa_refine_note: next.note || undefined,
+            },
+        }));
+
+        try {
+            const res = await enqueueGeminiWebBeatQuickIterate(
+                shortVideoId,
+                next.beatId,
+                next.note,
+            );
+            if (!res?.success) {
+                const preLabel = quickIteratePreSnapshotLabelRef.current[next.beatId];
+                const base = parseApiMessage(res?.message)
+                    || `Enqueue tạo visual + fill thất bại (${next.beatId})`;
+                showMessage(
+                    preLabel
+                        ? `${base}. Bản trước đã được lưu ${preLabel}`
+                        : `${base}. Working có thể đã lệch — kiểm tra tab Version`,
+                    'error',
+                );
+                delete quickIteratePreSnapshotLabelRef.current[next.beatId];
+                quickIterateActiveBeatIdRef.current = null;
+                setQuickIterateActiveBeatId(null);
+                setGeminiRefineVisualStatus('failed');
+                quickIteratePumpingRef.current = false;
+                void pumpQuickIterateQueue();
+                return;
+            }
+            if (res.gemini_refine_visual) {
+                setGeminiRefineVisualStatus(String(res.gemini_refine_visual.status || 'queued'));
+                setGeminiRefineVisualError(String(res.gemini_refine_visual.error || '').trim());
+            }
+            showMessage(
+                parseApiMessage(res?.message) || `Đã bắt đầu tạo visual + fill ${next.beatId}`,
+                'success',
+            );
+            await loadRow({ syncAggregate: true, includeCatalogs: false });
+        } catch (e) {
+            const preLabel = quickIteratePreSnapshotLabelRef.current[next.beatId];
+            const base = e instanceof Error ? e.message : String(e);
+            showMessage(
+                preLabel
+                    ? `${base}. Bản trước đã được lưu ${preLabel}`
+                    : `${base}. Working có thể đã lệch — kiểm tra tab Version`,
+                'error',
+            );
+            delete quickIteratePreSnapshotLabelRef.current[next.beatId];
+            quickIterateActiveBeatIdRef.current = null;
+            setQuickIterateActiveBeatId(null);
+            setGeminiRefineVisualStatus('failed');
+            quickIteratePumpingRef.current = false;
+            void pumpQuickIterateQueue();
+            return;
+        } finally {
+            quickIteratePumpingRef.current = false;
+        }
+    }, [
+        beatActiveVersionId,
+        beatHtml,
+        beatMap,
+        beatVersions,
+        handleSaveBeatVersion,
+        loadRow,
+        shortVideoId,
+        showMessage,
+    ]);
+
+    const handleQuickIterateBeatFromQa = React.useCallback(async (
+        beatId: string,
+        qaRefineNote: string,
+    ): Promise<boolean> => {
+        const normalizedId = String(beatId || '').trim();
+        const note = String(qaRefineNote || '').trim();
+        if (!normalizedId) {
+            return false;
+        }
+        if (!String(beatHtml[normalizedId]?.html || '').trim()) {
+            showMessage('Cần có HTML beat trước khi tạo visual + fill', 'warning');
+            return false;
+        }
+        if (
+            quickIterateActiveBeatIdRef.current === normalizedId
+            || quickIterateQueueRef.current.some((item) => item.beatId === normalizedId)
+        ) {
+            showMessage(`${normalizedId} đã có trong hàng đợi tạo visual + fill`, 'info');
+            return false;
+        }
+
+        setBeatHtml((prev) => ({
+            ...prev,
+            [normalizedId]: {
+                ...prev[normalizedId],
+                html: prev[normalizedId]?.html || '',
+                qa_status: 'needs_visual_tweak',
+                qa_refine_note: note || undefined,
+            },
+        }));
+
+        quickIterateQueueRef.current = [
+            ...quickIterateQueueRef.current,
+            { beatId: normalizedId, note },
+        ];
+        setQuickIterateQueue(quickIterateQueueRef.current);
+
+        if (quickIterateActiveBeatIdRef.current) {
+            showMessage(`Đã thêm ${normalizedId} vào hàng đợi`, 'success');
+        }
+
+        await pumpQuickIterateQueue();
+        return true;
+    }, [beatHtml, pumpQuickIterateQueue, showMessage]);
+
+    // Khi active xong (success/fail) → bơm beat tiếp theo trong hàng đợi.
+    React.useEffect(() => {
+        if (quickIterateActiveBeatId) {
+            return;
+        }
+        if (quickIterateQueue.length === 0) {
+            return;
+        }
+        void pumpQuickIterateQueue();
+    }, [pumpQuickIterateQueue, quickIterateActiveBeatId, quickIterateQueue.length]);
+
+    // Hoàn tất / fail quick iterate: post-snapshot khi success; toast kèm pre-label khi fail.
+    React.useEffect(() => {
+        if (!quickIterateActiveBeatId) {
+            return;
+        }
+        const visualActive = geminiRefineVisualStatus === 'queued'
+            || geminiRefineVisualStatus === 'processing';
+        const htmlActive = geminiRefineHtmlStatus === 'queued'
+            || geminiRefineHtmlStatus === 'processing';
+        if (visualActive || htmlActive) {
+            return;
+        }
+
+        const beatId = quickIterateActiveBeatId;
+        const preLabel = quickIteratePreSnapshotLabelRef.current[beatId];
+        const visualFailed = geminiRefineVisualStatus === 'failed';
+        const htmlFailed = geminiRefineHtmlStatus === 'failed';
+        if (visualFailed || htmlFailed) {
+            if (quickIterateFinishingRef.current) {
+                return;
+            }
+            quickIterateFinishingRef.current = true;
+            const err = (visualFailed ? geminiRefineVisualError : '')
+                || (htmlFailed ? geminiRefineHtmlError : '')
+                || 'Tạo visual + fill thất bại';
+            showMessage(
+                preLabel
+                    ? `${err}. Bản trước đã được lưu ${preLabel}`
+                    : `${err}. Working có thể đã lệch — kiểm tra tab Version`,
+                'error',
+            );
+            delete quickIteratePreSnapshotLabelRef.current[beatId];
+            quickIterateActiveBeatIdRef.current = null;
+            setQuickIterateActiveBeatId(null);
+            quickIterateFinishingRef.current = false;
+            return;
+        }
+
+        if (
+            (geminiRefineVisualStatus === 'completed' || geminiRefineVisualStatus === 'none')
+            && (geminiRefineHtmlStatus === 'completed' || geminiRefineHtmlStatus === 'none')
+        ) {
+            // Chờ visual xong rồi mới có html job — nếu visual completed nhưng html chưa enqueue
+            // (status none) thì chưa kết thúc quick iterate.
+            if (geminiRefineVisualStatus === 'completed' && geminiRefineHtmlStatus === 'none') {
+                return;
+            }
+            if (geminiRefineHtmlStatus === 'completed') {
+                if (quickIterateFinishingRef.current) {
+                    return;
+                }
+                quickIterateFinishingRef.current = true;
+                void (async () => {
+                    const postLabel = await handleSaveBeatVersion(beatId, {
+                        qaStatus: beatHtml[beatId]?.qa_status || '',
+                        qaRefineNote: beatHtml[beatId]?.qa_refine_note || '',
+                    }, { quiet: true });
+                    delete quickIteratePreSnapshotLabelRef.current[beatId];
+                    if (postLabel) {
+                        showMessage(
+                            `Đã tạo visual + fill xong ${beatId} · đã lưu ${postLabel}`,
+                            'success',
+                        );
+                    } else {
+                        showMessage(
+                            `Đã tạo visual + fill xong ${beatId} nhưng chưa lưu được version mới — bấm Lưu version tay`,
+                            'warning',
+                        );
+                    }
+                    quickIterateActiveBeatIdRef.current = null;
+                    setQuickIterateActiveBeatId(null);
+                    quickIterateFinishingRef.current = false;
+                })();
+            }
+        }
+    }, [
+        beatHtml,
+        geminiRefineHtmlError,
+        geminiRefineHtmlStatus,
+        geminiRefineVisualError,
+        geminiRefineVisualStatus,
+        handleSaveBeatVersion,
+        quickIterateActiveBeatId,
+        showMessage,
+    ]);
+
+    const handleRestoreBeatVersion = React.useCallback(async (
+        beatId: string,
+        versionId: string,
+    ): Promise<string | null> => {
+        const normalizedId = String(beatId || '').trim();
+        const normalizedVersionId = String(versionId || '').trim();
+        if (!normalizedId || !normalizedVersionId) {
+            return null;
+        }
+        setSavingImportHtml(true);
+        try {
+            const res = await saveAgentImportHtml(shortVideoId, {
+                beatId: normalizedId,
+                restoreBeatVersion: true,
+                versionId: normalizedVersionId,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không restore được version', 'error');
+                return null;
+            }
+            if (res.import_html) {
+                applyImportHtmlSummary(res.import_html);
+            }
+            const label = String(res.beat_version?.version_label || '').trim();
+            return label || null;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return null;
+        } finally {
+            setSavingImportHtml(false);
+        }
+    }, [applyImportHtmlSummary, shortVideoId, showMessage]);
 
     const handleSaveThumbnailQa = React.useCallback(async (
         qaStatus: ThumbnailQaStatus,
@@ -3169,13 +3619,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleStartFullAutoPipeline = async (
         mode: 'resume' | 'restart' = 'resume',
         fromStep?: string,
+        untilStep?: string,
     ) => {
         if (startingFullAuto) {
             return;
         }
         setStartingFullAuto(true);
         try {
-            const res = await startFullAutoPipeline(shortVideoId, mode, fromStep);
+            const res = await startFullAutoPipeline(shortVideoId, mode, fromStep, untilStep);
             if (!res?.success) {
                 showMessage(
                     parseApiMessage(res?.message) || 'Không khởi chạy được pipeline A→Z',
@@ -3190,12 +3641,18 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 && (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[fromStep]
                 ? (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[fromStep]
                 : fromStep;
+            const untilLabel = untilStep
+                && (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[untilStep]
+                ? (FULL_AUTO_PIPELINE_STEP_LABELS as Record<string, string>)[untilStep]
+                : untilStep;
             showMessage(
                 parseApiMessage(res?.message)
                     || (mode === 'restart'
-                        ? (fromStep && fromStep !== 'script_create'
-                            ? `Đã chạy lại từ bước «${stepLabel}»`
-                            : 'Đã chạy lại pipeline A→Z từ đầu')
+                        ? (untilStep
+                            ? `Đã chạy lại từ «${stepLabel}» đến «${untilLabel}»`
+                            : (fromStep && fromStep !== 'script_create'
+                                ? `Đã chạy lại từ bước «${stepLabel}»`
+                                : 'Đã chạy lại pipeline A→Z từ đầu'))
                         : 'Đã bật / tiếp tục pipeline A→Z'),
                 'success',
             );
@@ -3205,6 +3662,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setStartingFullAuto(false);
         }
+    };
+
+    const handleRerunRenderUpload = async () => {
+        if (
+            startingFullAuto
+            || String(fullAutoPipeline?.status || '').trim().toLowerCase() === 'running'
+        ) {
+            return;
+        }
+        await handleStartFullAutoPipeline('restart', 'render', 'upload');
     };
 
     const handleCancelFullAutoPipeline = async () => {
@@ -4266,6 +4733,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAvatarDrawerOpen,
         geminiFillStatus,
         geminiFillProgress,
+        geminiRefineVisualStatus,
+        geminiRefineVisualError,
+        geminiRefineHtmlStatus,
+        geminiRefineHtmlError,
+        quickIterateQueue,
+        quickIterateActiveBeatId,
+        quickIterateBeatStages,
         geminiThumbnailFillStatus,
         geminiThumbnailIdeaStatus,
         thumbnailGeminiFillError,
@@ -4375,6 +4849,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap,
         beatMapJsonDraft,
         beatHtml,
+        beatVersions,
+        beatActiveVersionId,
         missingBeatHtmlCount,
         beatsRenderErrorCount,
         beatRenderErrorIds,
@@ -4510,6 +4986,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleAgentAvatarApply,
         handleAgentShowKaraokeChange,
         handleStartFullAutoPipeline,
+        handleRerunRenderUpload,
         handleCancelFullAutoPipeline,
         handleHeadlessNewChat,
         handleOmnivoiceSpeedChange,
@@ -4543,6 +5020,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatMapJsonChange,
         handleBeatVisualDescriptionChange,
         handleSaveBeatQa,
+        handleQuickIterateBeatFromQa,
+        handleSaveBeatVersion,
+        handleRestoreBeatVersion,
         handleBeatHtmlChange,
         commitBeatHtmlChange,
         handleRefineBeatHtmlViaGemini,

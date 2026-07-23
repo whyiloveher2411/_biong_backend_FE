@@ -142,8 +142,8 @@ export default function ShortVideoAgentHeadlessPreview({
     onNewChat,
 }: Props) {
     void agentGeminiOpenBrowser; // headed Chrome do backend xử lý; không chặn WS preview
-    void geminiDivisionStatus;
     void geminiFillStatus;
+    void geminiThumbnailIdeaStatus;
     const [minimized, setMinimized] = React.useState(false);
     const [showResult, setShowResult] = React.useState(false);
     const [panelWidth, setPanelWidth] = React.useState(storedPreviewWidth);
@@ -161,8 +161,15 @@ export default function ShortVideoAgentHeadlessPreview({
     );
 
     const geminiJobActive = isActiveJobStatus(geminiScriptStatus)
-        || isActiveJobStatus(geminiScriptPhoneticStatus)
-        || isActiveJobStatus(geminiThumbnailFillStatus);
+        || isActiveJobStatus(geminiDivisionStatus)
+        || (
+            // Phonetic / thumbnail chỉ mirror khi backend đã báo headless (có browser thật).
+            headlessBrowserActive
+            && (
+                isActiveJobStatus(geminiScriptPhoneticStatus)
+                || isActiveJobStatus(geminiThumbnailFillStatus)
+            )
+        );
 
     const effectiveHeadlessActive = headlessBrowserActive
         || Boolean(pipeline?.headless_browser_active)
@@ -304,15 +311,30 @@ export default function ShortVideoAgentHeadlessPreview({
         || '',
     ).trim();
     const previewDisconnected = preview.connectionStatus !== 'connected';
-    const previewWarning = preview.stale || previewDisconnected;
-    const liveLabel = preview.stale
-        ? 'Frame cũ'
-        : (
-            preview.connectionStatus === 'connecting'
-                ? 'Đang nối'
-                : preview.connectionStatus === 'reconnecting'
-                    ? 'Kết nối lại'
-                    : (previewDisconnected ? 'Mất kết nối' : 'TRỰC TIẾP')
+    const hasLiveFrame = Boolean(preview.frameUrl) && !preview.stale;
+    const previewWarning = preview.stale
+        || previewDisconnected
+        || (preview.connectionStatus === 'connected' && !hasLiveFrame);
+    const liveLabel = preview.connectionStatus === 'connecting'
+        ? 'Đang nối'
+        : preview.connectionStatus === 'reconnecting'
+            ? 'Kết nối lại'
+            : preview.connectionStatus === 'error'
+                ? 'Lỗi nối'
+                : previewDisconnected
+                    ? 'Mất kết nối'
+                    : preview.stale
+                        ? 'Frame cũ'
+                        : hasLiveFrame
+                            ? 'TRỰC TIẾP'
+                            : (preview.sessionActive ? 'Chờ frame' : 'Chờ Gemini');
+    const emptyPreviewHint = preview.error
+        || (
+            previewDisconnected
+                ? 'Đang nối lại WebSocket preview…'
+                : preview.sessionActive
+                    ? 'Publisher đã nối — đang chờ JPEG screencast'
+                    : 'Relay đã nối nhưng chưa có session Gemini publish frame. Kiểm tra worker có HEADLESS_PREVIEW_INGEST_URL và job đang chạy thật.'
         );
 
     return (
@@ -424,7 +446,11 @@ export default function ShortVideoAgentHeadlessPreview({
                             )}
                             sx={{
                                 height: 22,
-                                bgcolor: previewWarning ? 'warning.dark' : '#f00',
+                                bgcolor: hasLiveFrame && !previewWarning
+                                    ? '#f00'
+                                    : (previewDisconnected || preview.connectionStatus === 'error'
+                                        ? 'error.dark'
+                                        : 'warning.dark'),
                                 color: 'common.white',
                                 fontWeight: 800,
                                 '& .MuiChip-label': { px: 0.8, fontSize: 10 },
@@ -537,7 +563,9 @@ export default function ShortVideoAgentHeadlessPreview({
                             {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
                             <Typography variant="body2" fontWeight={600}>
                                 {browserStep
-                                    ? 'Đang khởi tạo preview trực tiếp'
+                                    ? (preview.sessionActive
+                                        ? 'Đang chờ frame từ browser'
+                                        : 'Đã nối relay — chờ Gemini publish')
                                     : (running ? title : resultLabel(status))}
                             </Typography>
                             <Typography
@@ -545,7 +573,7 @@ export default function ShortVideoAgentHeadlessPreview({
                                 sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.62)' }}
                             >
                                 {browserStep
-                                    ? (preview.error || 'Frame sẽ xuất hiện khi browser sẵn sàng')
+                                    ? emptyPreviewHint
                                     : (running
                                         ? 'Đang chờ bước dùng headless browser'
                                         : 'Preview sẽ tự ẩn sau giây lát')}

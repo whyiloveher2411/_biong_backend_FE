@@ -18,8 +18,12 @@ import ErrorIcon from '@mui/icons-material/Error';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { FULL_AUTO_PIPELINE_STEP_LABELS, type FullAutoPipelineSummary } from './agentVideoApi';
-import { PipelineGroupedWorkflowList } from './FullAutoPipelineGroupedSteps';
+import { FULL_AUTO_PIPELINE_STEP_LABELS, type FullAutoPipelineStepKey, type FullAutoPipelineSummary } from './agentVideoApi';
+import {
+    PipelineGroupedWorkflowListV2 as PipelineGroupedWorkflowList,
+    resolveRestartableSet,
+} from './FullAutoPipelineGroupedSteps';
+import { PipelineRenderRunButton } from './PipelineRenderRunButton';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
 import { resolveScriptImproveQaLoopView, scriptQaLoopCurrentStepLabel } from './agentVideoPipelineQaLoopUi';
 import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
@@ -252,6 +256,22 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         && (state.fullAutoPipeline.enabled || state.fullAutoPipeline.status !== 'idle'),
     );
 
+    const restartableSet = React.useMemo(
+        () => resolveRestartableSet(
+            state.fullAutoPipeline?.restartable_steps,
+            state.fullAutoPipeline?.steps,
+            state.fullAutoPipeline?.current_step,
+        ),
+        [
+            state.fullAutoPipeline?.restartable_steps,
+            state.fullAutoPipeline?.steps,
+            state.fullAutoPipeline?.current_step,
+        ],
+    );
+
+    const pipelineBusy = state.startingFullAuto
+        || String(state.fullAutoPipeline?.status || '').trim().toLowerCase() === 'running';
+
     return (
         <Box
             sx={{
@@ -321,7 +341,25 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 </WorkflowSection>
 
                 {showPipeline && state.fullAutoPipeline ? (
-                    <WorkflowSection title="Pipeline A→Z" tone="pipeline">
+                    <WorkflowSection
+                        title="Pipeline A→Z"
+                        tone="pipeline"
+                        headerAction={(
+                            <PipelineRenderRunButton
+                                label="Run"
+                                testId="pipeline-section-rerun-render-upload"
+                                disabled={pipelineBusy}
+                                loading={state.startingFullAuto}
+                                onClick={() => {
+                                    if (typeof state.handleRerunRenderUpload === 'function') {
+                                        void state.handleRerunRenderUpload();
+                                        return;
+                                    }
+                                    void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
+                                }}
+                            />
+                        )}
+                    >
                         <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
                         <MetaRow
                             label="Bước hiện tại"
@@ -348,6 +386,20 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             qaLoops={state.fullAutoPipeline.qa_loops}
                             currentStep={state.fullAutoPipeline.current_step || ''}
                             pipelineStatus={state.fullAutoPipeline.status || 'idle'}
+                            restartableSet={restartableSet}
+                            selectStepDisabled={pipelineBusy}
+                            onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
+                                void state.handleStartFullAutoPipeline('restart', stepKey);
+                            }}
+                            onRerunRenderUpload={() => {
+                                if (typeof state.handleRerunRenderUpload === 'function') {
+                                    void state.handleRerunRenderUpload();
+                                    return;
+                                }
+                                void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
+                            }}
+                            rerunningRenderUpload={state.startingFullAuto}
+                            rerunRenderUploadDisabled={pipelineBusy}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>

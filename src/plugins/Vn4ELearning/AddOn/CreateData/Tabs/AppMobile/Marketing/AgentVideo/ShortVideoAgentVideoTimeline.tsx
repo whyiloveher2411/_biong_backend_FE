@@ -24,7 +24,14 @@ import TimelineZoomControls, {
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
 } from '../TimelineZoomControls';
-import { countBeatIdsWithHtml, countBeatQaByStatus, type BeatHtmlEntry, type BeatMap, type BeatQaStatus } from './agentVideoBeatMap';
+import {
+    countBeatIdsWithHtml,
+    countBeatQaByStatus,
+    type BeatHtmlEntry,
+    type BeatMap,
+    type BeatQaStatus,
+    type BeatVersion,
+} from './agentVideoBeatMap';
 
 const TRACK_LABELS_WIDTH = 100;
 const TIMELINE_SCALE = 1;
@@ -150,6 +157,9 @@ type Props = {
     onOpenBeatGemini?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
+    beatVersions?: Record<string, BeatVersion[]>;
+    beatActiveVersionId?: Record<string, string>;
+    onRestoreBeatVersion?: (beatId: string, versionId: string, label: string) => Promise<string | null>;
     onTimeUpdate?: (timeSec: number) => void;
     copyingBeatHtmlPromptBeatId?: string;
     pastingBeatHtmlBeatId?: string;
@@ -176,6 +186,7 @@ type Props = {
     whisperStatus?: string;
     openingBeatGeminiBeatIds?: string[];
     openingBeatGeminiHeadlessBeatIds?: string[];
+    quickIterateBeatStages?: Record<string, 'queued' | 'visual' | 'html'>;
     savingImportHtml?: boolean;
     beatPlaybackSeekRequest?: { beatId: string; startSec: number; nonce: number } | null;
     agentVideoStatus?: string;
@@ -209,6 +220,9 @@ export default function ShortVideoAgentVideoTimeline({
     onOpenBeatGemini,
     onOpenBeatGeminiHeadless,
     onSaveBeatQa,
+    beatVersions = {},
+    beatActiveVersionId = {},
+    onRestoreBeatVersion,
     onTimeUpdate,
     copyingBeatHtmlPromptBeatId = '',
     pastingBeatHtmlBeatId = '',
@@ -224,6 +238,7 @@ export default function ShortVideoAgentVideoTimeline({
     whisperStatus = 'none',
     openingBeatGeminiBeatIds = [],
     openingBeatGeminiHeadlessBeatIds = [],
+    quickIterateBeatStages = {},
     savingImportHtml = false,
     beatPlaybackSeekRequest = null,
     agentVideoStatus = 'none',
@@ -922,6 +937,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 deletingBeatHtmlBeatId={deletingBeatHtmlBeatId}
                                 openingBeatGeminiBeatIds={openingBeatGeminiBeatIds}
                                 openingBeatGeminiHeadlessBeatIds={openingBeatGeminiHeadlessBeatIds}
+                                quickIterateBeatStages={quickIterateBeatStages}
                                 savingImportHtml={savingImportHtml}
                                 onBeatClick={onBeatClick}
                                 onCopyPrompt={onCopyBeatPrompt}
@@ -932,6 +948,9 @@ export default function ShortVideoAgentVideoTimeline({
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
                                 onSaveBeatQa={onSaveBeatQa}
+                                beatVersions={beatVersions}
+                                beatActiveVersionId={beatActiveVersionId}
+                                onRestoreBeatVersion={onRestoreBeatVersion}
                                 scrollLeft={timelineScrollLeft}
                                 contentWidthPx={timelineContentWidthPx}
                                 layout={timelineLayout}

@@ -41,7 +41,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
     const beatMapRef = React.useRef(beatMap);
     const audioDurationSecRef = React.useRef(audioDurationSec);
-    const [activeBeatId, setActiveBeatId] = React.useState('');
     const [localTimeSec, setLocalTimeSec] = React.useState(0);
     const [containerWidth, setContainerWidth] = React.useState(0);
     const [containerHeight, setContainerHeight] = React.useState(0);
@@ -70,12 +69,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
         : 'empty';
 
     React.useImperativeHandle(videoRef, () => mediaProxyRef.current as HtmlBeatMediaProxy, []);
-
-    React.useEffect(() => {
-        if (activeBeat?.id) {
-            setActiveBeatId(activeBeat.id);
-        }
-    }, [activeBeat?.id]);
 
     React.useEffect(() => {
         const container = containerRef.current;
@@ -148,29 +141,6 @@ export default function ShortVideoAgentCustomHtmlPreview({
                 position: 'relative',
             }}
         >
-            {activeBeatId && activeBeat ? (
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: 6,
-                        left: 6,
-                        zIndex: 2,
-                        px: 0.75,
-                        py: 0.25,
-                        borderRadius: 0.75,
-                        bgcolor: 'rgba(0,0,0,0.55)',
-                        color: 'common.white',
-                        fontSize: 10,
-                        lineHeight: 1.3,
-                        maxWidth: 'calc(100% - 12px)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {`${activeBeatId} (${activeBeat.startSec.toFixed(1)}–${activeBeat.endSec.toFixed(1)}s)`}
-                </Box>
-            ) : null}
             <Box
                 sx={{
                     width: '100%',

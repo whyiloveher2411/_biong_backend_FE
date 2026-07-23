@@ -38,6 +38,49 @@ export type BeatHtmlEntry = {
     render_error_at?: string;
 };
 
+/** Snapshot archive 1 beat — không thay working beat_map / beat_html. */
+export type BeatVersion = {
+    version_id: string;
+    label: string;
+    saved_at: string;
+    id: string;
+    beat_id: string;
+    startSec: number;
+    endSec: number;
+    durationSec: number;
+    phrase_anchor: string;
+    visual_description: string;
+    background: string;
+    html: string;
+    creative_prompt?: string;
+    qa_status?: BeatQaStatus;
+    qa_refine_note?: string;
+    updated_at?: string;
+    render_status?: string;
+    render_error?: string;
+    render_error_code?: string;
+    render_error_stage?: string;
+    render_error_at?: string;
+};
+
+export type BeatVersionsByBeatId = Record<string, BeatVersion[]>;
+
+/**
+ * Working lệch version active (hoặc chưa có active) → cần snapshot trước quick iterate.
+ * Chỉ so visual_description + html (không so QA note/status).
+ */
+export function isWorkingBeatDirtyVsActive(
+    workingVisual: string,
+    workingHtml: string,
+    activeVersion: BeatVersion | null | undefined,
+): boolean {
+    if (!activeVersion) {
+        return true;
+    }
+    return String(workingVisual || '').trim() !== String(activeVersion.visual_description || '').trim()
+        || String(workingHtml || '').trim() !== String(activeVersion.html || '').trim();
+}
+
 export type BeatHtmlVisualState = 'missing' | 'ok' | 'error';
 
 export const BEAT_QA_STATUSES: BeatQaActionStatus[] = [
@@ -180,6 +223,68 @@ export function parseBeatHtmlEntry(entry: unknown): BeatHtmlEntry | null {
         render_error_stage: raw.render_error_stage ? String(raw.render_error_stage) : undefined,
         render_error_at: raw.render_error_at ? String(raw.render_error_at) : undefined,
     };
+}
+
+export function parseBeatVersion(entry: unknown): BeatVersion | null {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const raw = entry as Record<string, unknown>;
+    const versionId = String(raw.version_id || '').trim();
+    const label = String(raw.label || '').trim();
+    const beatId = String(raw.beat_id || raw.id || '').trim();
+    const html = String(raw.html || '');
+    if (!versionId || !label || !beatId || !html.trim()) {
+        return null;
+    }
+    const startSec = Number(raw.startSec);
+    const endSec = Number(raw.endSec);
+    const durationSec = Number(raw.durationSec);
+    const qaStatus = raw.qa_status != null
+        ? normalizeBeatQaStatus(raw.qa_status)
+        : undefined;
+    return {
+        version_id: versionId,
+        label,
+        saved_at: String(raw.saved_at || ''),
+        id: String(raw.id || beatId),
+        beat_id: beatId,
+        startSec: Number.isFinite(startSec) ? startSec : 0,
+        endSec: Number.isFinite(endSec) ? endSec : 0,
+        durationSec: Number.isFinite(durationSec) ? durationSec : 0,
+        phrase_anchor: String(raw.phrase_anchor || ''),
+        visual_description: String(raw.visual_description || ''),
+        background: String(raw.background || ''),
+        html,
+        creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
+        qa_status: qaStatus || undefined,
+        qa_refine_note: raw.qa_refine_note != null ? String(raw.qa_refine_note) : undefined,
+        updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+        render_status: raw.render_status ? String(raw.render_status) : undefined,
+        render_error: raw.render_error ? String(raw.render_error) : undefined,
+        render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,
+        render_error_stage: raw.render_error_stage ? String(raw.render_error_stage) : undefined,
+        render_error_at: raw.render_error_at ? String(raw.render_error_at) : undefined,
+    };
+}
+
+export function parseBeatVersionsBlock(raw: unknown): BeatVersionsByBeatId {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+    const next: BeatVersionsByBeatId = {};
+    Object.entries(raw as Record<string, unknown>).forEach(([beatId, list]) => {
+        if (!/^beat_\d+$/.test(beatId) || !Array.isArray(list)) {
+            return;
+        }
+        const versions = list
+            .map((item) => parseBeatVersion(item))
+            .filter((item): item is BeatVersion => item != null);
+        if (versions.length > 0) {
+            next[beatId] = versions;
+        }
+    });
+    return next;
 }
 
 export function isBeatHtmlRenderError(beatHtml: Record<string, BeatHtmlEntry>, beatId: string): boolean {

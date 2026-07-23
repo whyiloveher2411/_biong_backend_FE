@@ -263,6 +263,8 @@ export type ImportHtmlSummary = {
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
     beat_html?: Record<string, import('./agentVideoBeatMap').BeatHtmlEntry>;
+    beat_versions?: import('./agentVideoBeatMap').BeatVersionsByBeatId;
+    beat_active_version_id?: Record<string, string>;
     marketing_post_images?: ImportHtmlMarketingPostImage[];
 };
 
@@ -1152,6 +1154,38 @@ export async function enqueueGeminiWebBeatFill(
     }>;
 }
 
+export async function enqueueGeminiWebBeatQuickIterate(
+    shortVideoId: number,
+    beatId: string,
+    qaRefineNote: string,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    beat_id?: string;
+    beat_ids?: string[];
+    job_ids?: number[];
+    qa_status?: string;
+    qa_refine_note?: string;
+    gemini_refine_visual?: ImportHtmlGeminiJobBlock;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-quick-iterate',
+        shortVideoBody(shortVideoId, {
+            beat_id: beatId,
+            qa_refine_note: qaRefineNote,
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        beat_id?: string;
+        beat_ids?: string[];
+        job_ids?: number[];
+        qa_status?: string;
+        qa_refine_note?: string;
+        gemini_refine_visual?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
 export async function enqueueGeminiWebThumbnailIdea(
     shortVideoId: number,
     force = true,
@@ -1545,14 +1579,19 @@ export async function startFullAutoPipeline(
     shortVideoId: number,
     mode: 'resume' | 'restart' = 'resume',
     fromStep?: string,
+    untilStep?: string,
 ): Promise<JsonResponse & {
     full_auto_pipeline?: FullAutoPipelineSummary;
     mode?: string;
     from_step?: string | null;
+    until_step?: string | null;
 }> {
     const body: Record<string, unknown> = { mode };
     if (mode === 'restart' && fromStep) {
         body.from_step = fromStep;
+    }
+    if (mode === 'restart' && untilStep) {
+        body.until_step = untilStep;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/start-full-auto-pipeline',
@@ -1561,6 +1600,7 @@ export async function startFullAutoPipeline(
         full_auto_pipeline?: FullAutoPipelineSummary;
         mode?: string;
         from_step?: string | null;
+        until_step?: string | null;
     }>;
 }
 
@@ -1603,6 +1643,9 @@ export async function saveAgentImportHtml(
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
+        saveBeatVersion?: boolean;
+        restoreBeatVersion?: boolean;
+        versionId?: string;
         thumbnailHtml?: string;
         thumbnailCreativePrompt?: string;
         thumbnailQaStatus?: ThumbnailQaStatus;
@@ -1619,6 +1662,12 @@ export async function saveAgentImportHtml(
 ): Promise<JsonResponse & {
     render_mode?: AgentRenderMode;
     import_html?: ImportHtmlSummary;
+    beat_version?: {
+        beat_id?: string;
+        version_id?: string;
+        version_label?: string;
+        restored?: boolean;
+    } | null;
 }> {
     const body: Record<string, unknown> = shortVideoBody(shortVideoId);
     if (payload.renderMode !== undefined) {
@@ -1635,6 +1684,8 @@ export async function saveAgentImportHtml(
         || payload.creativePrompt !== undefined
         || payload.qaStatus !== undefined
         || payload.qaRefineNote !== undefined
+        || payload.saveBeatVersion === true
+        || payload.restoreBeatVersion === true
     )) {
         body.beat_id = payload.beatId;
         if (payload.beatHtml !== undefined) {
@@ -1648,6 +1699,15 @@ export async function saveAgentImportHtml(
         }
         if (payload.qaRefineNote !== undefined) {
             body.qa_refine_note = payload.qaRefineNote;
+        }
+        if (payload.saveBeatVersion === true) {
+            body.save_beat_version = true;
+        }
+        if (payload.restoreBeatVersion === true) {
+            body.restore_beat_version = true;
+            if (payload.versionId !== undefined) {
+                body.version_id = payload.versionId;
+            }
         }
     }
     if (payload.thumbnailHtml !== undefined) {

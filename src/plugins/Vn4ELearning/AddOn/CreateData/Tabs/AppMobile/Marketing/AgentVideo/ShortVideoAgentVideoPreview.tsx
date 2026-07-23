@@ -185,6 +185,20 @@ export default function ShortVideoAgentVideoPreview({
         return index >= 0 ? index + 1 : null;
     }, [currentBeatId, state.beatMap?.sections]);
 
+    const currentBeatSection = React.useMemo(() => {
+        if (!currentBeatId || !state.beatMap?.sections?.length) {
+            return null;
+        }
+        return state.beatMap.sections.find((section) => section.id === currentBeatId) || null;
+    }, [currentBeatId, state.beatMap?.sections]);
+
+    const currentBeatVersions = React.useMemo(() => {
+        if (!currentBeatId) {
+            return [];
+        }
+        return state.beatVersions?.[currentBeatId] || [];
+    }, [currentBeatId, state.beatVersions]);
+
     const showBeatQaPanel = Boolean(state.beatMapReady && state.beatMap?.sections?.length);
 
     const handleSaveCurrentBeatQa = React.useCallback(async (
@@ -196,6 +210,48 @@ export default function ShortVideoAgentVideoPreview({
         }
         return state.handleSaveBeatQa(currentBeatId, qaStatus, qaRefineNote);
     }, [currentBeatId, state.handleSaveBeatQa]);
+
+    const handleQuickIterateCurrentBeat = React.useCallback(async (qaRefineNote: string) => {
+        if (!currentBeatId) {
+            return false;
+        }
+        return state.handleQuickIterateBeatFromQa(currentBeatId, qaRefineNote);
+    }, [currentBeatId, state.handleQuickIterateBeatFromQa]);
+
+    const currentBeatQuickIterating = Boolean(
+        currentBeatId
+        && (
+            state.quickIterateActiveBeatId === currentBeatId
+            || Boolean(state.quickIterateBeatStages?.[currentBeatId])
+        ),
+    );
+
+    const currentBeatIterateStage = React.useMemo((): 'idle' | 'queued' | 'visual' | 'html' => {
+        if (!currentBeatId) {
+            return 'idle';
+        }
+        return state.quickIterateBeatStages?.[currentBeatId] || 'idle';
+    }, [currentBeatId, state.quickIterateBeatStages]);
+
+    const handleSaveCurrentBeatVersion = React.useCallback(async (draft: {
+        qaStatus: import('./agentVideoBeatMap').BeatQaStatus;
+        qaRefineNote: string;
+    }) => {
+        if (!currentBeatId) {
+            return null;
+        }
+        return state.handleSaveBeatVersion(currentBeatId, draft);
+    }, [currentBeatId, state.handleSaveBeatVersion]);
+
+    const handleRestoreCurrentBeatVersion = React.useCallback(async (
+        versionId: string,
+        _label: string,
+    ) => {
+        if (!currentBeatId) {
+            return null;
+        }
+        return state.handleRestoreBeatVersion(currentBeatId, versionId);
+    }, [currentBeatId, state.handleRestoreBeatVersion]);
 
     return (
         <Box
@@ -346,15 +402,19 @@ export default function ShortVideoAgentVideoPreview({
                     ) : null}
                 </Box>
 
-                {/* Cột phải: QA panel */}
+                {/* Cột phải: QA / Version — nền đen để tách khỏi preview */}
                 {showBeatQaPanel ? (
                     <Box
                         sx={{
-                            width: 320,
+                            width: 340,
                             flexShrink: 0,
-                            overflowY: 'auto',
+                            minHeight: 0,
+                            height: '100%',
                             display: 'flex',
                             flexDirection: 'column',
+                            bgcolor: '#0b0b0c',
+                            borderRadius: 2,
+                            overflow: 'hidden',
                         }}
                     >
                         {currentBeatId ? (
@@ -362,16 +422,30 @@ export default function ShortVideoAgentVideoPreview({
                                 beatId={currentBeatId}
                                 beatIndex={activeBeatIndex}
                                 beatHtml={state.beatHtml[currentBeatId] || null}
+                                versions={currentBeatVersions}
+                                activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
+                                visualDescription={String(currentBeatSection?.visual_description || '')}
+                                background={String(currentBeatSection?.background || '')}
+                                phraseAnchor={String(currentBeatSection?.phrase_anchor || '')}
                                 saving={state.savingImportHtml}
+                                quickIterating={currentBeatQuickIterating}
+                                iterateStage={currentBeatIterateStage}
                                 onSaveBeatQa={handleSaveCurrentBeatQa}
+                                onQuickIterateBeat={handleQuickIterateCurrentBeat}
+                                onSaveBeatVersion={handleSaveCurrentBeatVersion}
+                                onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
                             />
                         ) : (
                             <Typography
                                 variant="body2"
-                                color="text.secondary"
-                                sx={{ textAlign: 'center', mt: 4 }}
+                                sx={{
+                                    textAlign: 'center',
+                                    mt: 6,
+                                    px: 2,
+                                    color: 'rgba(255,255,255,0.45)',
+                                }}
                             >
-                                Di chuyển con trỏ trên timeline để xem QA beat
+                                Di chuyển con trỏ trên timeline để chọn beat
                             </Typography>
                         )}
                     </Box>

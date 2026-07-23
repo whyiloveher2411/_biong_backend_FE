@@ -33,10 +33,9 @@ import { convertToURL, validURL } from 'helpers/url';
 import { openImagePopup } from 'helpers/image';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
-    FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
-import { PipelineGroupedMenuItems } from './FullAutoPipelineGroupedSteps';
+import { PipelineGroupedMenuItems, resolveRestartableSet } from './FullAutoPipelineGroupedSteps';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
 import { scriptQaLoopCurrentStepLabel, useScriptImproveQaLoopView } from './agentVideoPipelineQaLoopUi';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
@@ -183,43 +182,6 @@ function ReadmeMediaDescriptionField({
             }}
         />
     );
-}
-
-function resolveRestartableSet(
-    restartable?: string[] | null,
-    steps?: Record<string, { status?: string }> | null,
-    currentStep?: string,
-): Set<FullAutoPipelineStepKey> {
-    if (Array.isArray(restartable) && restartable.length > 0) {
-        return new Set(
-            restartable.filter((step): step is FullAutoPipelineStepKey => (
-                (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step)
-            )),
-        );
-    }
-    // Fallback FE nếu API cũ chưa trả restartable_steps
-    let maxIdx = 0;
-    FULL_AUTO_PIPELINE_STEP_ORDER.forEach((key, idx) => {
-        const status = String(steps?.[key]?.status || 'pending');
-        if (['done', 'skipped', 'running', 'failed'].includes(status)) {
-            maxIdx = idx;
-        }
-    });
-    if (currentStep) {
-        const cur = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
-            currentStep as FullAutoPipelineStepKey,
-        );
-        if (cur > maxIdx) maxIdx = cur;
-    }
-    const lastIdx = FULL_AUTO_PIPELINE_STEP_ORDER.length - 1;
-    if (maxIdx < lastIdx) {
-        const topKey = FULL_AUTO_PIPELINE_STEP_ORDER[maxIdx];
-        const topStatus = String(steps?.[topKey]?.status || 'pending');
-        if (topStatus === 'done' || topStatus === 'skipped') {
-            maxIdx += 1;
-        }
-    }
-    return new Set(FULL_AUTO_PIPELINE_STEP_ORDER.slice(0, maxIdx + 1));
 }
 
 export default function ShortVideoAgentContentPanel({ state }: Props) {
@@ -917,6 +879,19 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 setRestartMenuAnchor(null);
                                                 void state.handleStartFullAutoPipeline('restart', stepKey);
                                             }}
+                                            onRerunRenderUpload={() => {
+                                                setRestartMenuAnchor(null);
+                                                if (typeof state.handleRerunRenderUpload === 'function') {
+                                                    void state.handleRerunRenderUpload();
+                                                    return;
+                                                }
+                                                void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
+                                            }}
+                                            rerunningRenderUpload={state.startingFullAuto}
+                                            rerunRenderUploadDisabled={
+                                                state.startingFullAuto
+                                                || String(state.fullAutoPipeline?.status || '').trim().toLowerCase() === 'running'
+                                            }
                                         />
                                     </Menu>
                                     {state.fullAutoPipeline?.status === 'running' ? (

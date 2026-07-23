@@ -426,6 +426,11 @@ export default function ShortVideoAgentVideoWorkspace({
                     onSaveBeatQa={(beatId, qaStatus, qaRefineNote) => (
                         state.handleSaveBeatQa(beatId, qaStatus, qaRefineNote)
                     )}
+                    beatVersions={state.beatVersions}
+                    beatActiveVersionId={state.beatActiveVersionId}
+                    onRestoreBeatVersion={(beatId, versionId) => (
+                        state.handleRestoreBeatVersion(beatId, versionId)
+                    )}
                     copyingBeatHtmlPromptBeatId={state.copyingBeatHtmlPromptBeatId}
                     pastingBeatHtmlBeatId={state.pastingBeatHtmlBeatId}
                     deletingBeatHtmlBeatId={state.deletingBeatHtmlBeatId}
@@ -442,6 +447,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     whisperStatus={state.whisperStatus}
                     openingBeatGeminiBeatIds={state.openingBeatGeminiBeatIds}
                     openingBeatGeminiHeadlessBeatIds={state.openingBeatGeminiHeadlessBeatIds}
+                    quickIterateBeatStages={state.quickIterateBeatStages}
                     savingImportHtml={state.savingImportHtml}
                     beatPlaybackSeekRequest={state.beatPlaybackSeekRequest}
                     agentVideoStatus={state.agentVideoStatus}

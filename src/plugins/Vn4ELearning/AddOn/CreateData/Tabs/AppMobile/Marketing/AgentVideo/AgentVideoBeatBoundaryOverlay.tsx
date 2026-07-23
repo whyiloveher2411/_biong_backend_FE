@@ -7,6 +7,8 @@ import ComputerIcon from '@mui/icons-material/Computer';
 import CodeIcon from '@mui/icons-material/Code';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
     Box,
@@ -28,6 +30,7 @@ import {
     type BeatHtmlEntry,
     type BeatMap,
     type BeatQaStatus,
+    type BeatVersion,
 } from './agentVideoBeatMap';
 import {
     timeSecToTimelineLeftPx,
@@ -43,6 +46,7 @@ type Props = {
     deletingBeatHtmlBeatId?: string;
     openingBeatGeminiBeatIds?: string[];
     openingBeatGeminiHeadlessBeatIds?: string[];
+    quickIterateBeatStages?: Record<string, 'queued' | 'visual' | 'html'>;
     savingImportHtml?: boolean;
     onBeatClick?: (beatId: string) => void;
     onCopyPrompt?: (beatId: string) => void;
@@ -53,6 +57,9 @@ type Props = {
     onOpenGemini?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
+    beatVersions?: Record<string, BeatVersion[]>;
+    beatActiveVersionId?: Record<string, string>;
+    onRestoreBeatVersion?: (beatId: string, versionId: string, label: string) => Promise<string | null>;
     scrollLeft: number;
     contentWidthPx: number;
     layout: AgentVideoTimelineLayout;
@@ -60,6 +67,23 @@ type Props = {
     trackTopGap: number;
     trackHeight: number;
     totalHeight: number;
+};
+
+const VERSION_DOT_COLORS = [
+    '#60a5fa',
+    '#f472b6',
+    '#34d399',
+    '#f59e0b',
+    '#a78bfa',
+    '#fb7185',
+    '#22d3ee',
+    '#facc15',
+];
+
+const QUICK_ITERATE_STAGE_TOOLTIP: Record<'queued' | 'visual' | 'html', string> = {
+    queued: 'Chờ trong hàng đợi…',
+    visual: 'Đang tạo visual mới…',
+    html: 'Đang fill HTML…',
 };
 
 export default function AgentVideoBeatBoundaryOverlay({
@@ -71,6 +95,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     deletingBeatHtmlBeatId = '',
     openingBeatGeminiBeatIds = [],
     openingBeatGeminiHeadlessBeatIds = [],
+    quickIterateBeatStages = {},
     savingImportHtml = false,
     onBeatClick,
     onCopyPrompt,
@@ -81,6 +106,9 @@ export default function AgentVideoBeatBoundaryOverlay({
     onOpenGemini,
     onOpenGeminiHeadless,
     onSaveBeatQa,
+    beatVersions = {},
+    beatActiveVersionId = {},
+    onRestoreBeatVersion,
     scrollLeft,
     contentWidthPx,
     layout,
@@ -91,6 +119,7 @@ export default function AgentVideoBeatBoundaryOverlay({
 }: Props) {
     const [menuBeatId, setMenuBeatId] = React.useState('');
     const [menuAnchorEl, setMenuAnchorEl] = React.useState<HTMLElement | null>(null);
+    const [savingQaBeatId, setSavingQaBeatId] = React.useState('');
 
     const boundaries = React.useMemo(
         () => getBeatBoundaryMarkers(beatMap),
@@ -111,6 +140,22 @@ export default function AgentVideoBeatBoundaryOverlay({
         action?.();
     }, [closeMenu]);
 
+    const handleToggleApproved = React.useCallback(async (beatId: string) => {
+        if (!onSaveBeatQa || !beatId || savingQaBeatId) {
+            return;
+        }
+        const entry = beatHtml[beatId];
+        const current = normalizeBeatQaStatus(entry?.qa_status);
+        const nextStatus: BeatQaStatus = current === 'approved' ? '' : 'approved';
+        const note = String(entry?.qa_refine_note || '');
+        setSavingQaBeatId(beatId);
+        try {
+            await onSaveBeatQa(beatId, nextStatus, note);
+        } finally {
+            setSavingQaBeatId('');
+        }
+    }, [beatHtml, onSaveBeatQa, savingQaBeatId]);
+
     if (!beatMap?.sections?.length) {
         return null;
     }
@@ -127,11 +172,14 @@ export default function AgentVideoBeatBoundaryOverlay({
     const menuIsOpeningGemini = menuBeatId !== '' && openingBeatGeminiBeatIds.includes(menuBeatId);
     const menuIsOpeningGeminiHeadless = menuBeatId !== ''
         && openingBeatGeminiHeadlessBeatIds.includes(menuBeatId);
+    const menuIsQuickIterating = menuBeatId !== ''
+        && Boolean(quickIterateBeatStages[menuBeatId]);
     const menuIsBusy = menuIsCopying
         || menuIsPasting
         || menuIsDeleting
         || menuIsOpeningGemini
-        || menuIsOpeningGeminiHeadless;
+        || menuIsOpeningGeminiHeadless
+        || menuIsQuickIterating;
 
     return (
         <Box
@@ -184,12 +232,26 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const isDeleting = deletingBeatHtmlBeatId === segment.beatId;
                     const isOpeningGemini = openingBeatGeminiBeatIds.includes(segment.beatId);
                     const isOpeningGeminiHeadless = openingBeatGeminiHeadlessBeatIds.includes(segment.beatId);
+                    const quickIterateStage = quickIterateBeatStages[segment.beatId];
+                    const isQuickIterating = Boolean(quickIterateStage);
+                    const isQuickIterateActive = quickIterateStage === 'visual'
+                        || quickIterateStage === 'html';
+                    const isQuickIterateQueued = quickIterateStage === 'queued';
                     const isBusy = isCopying
                         || isPasting
                         || isDeleting
                         || isOpeningGemini
-                        || isOpeningGeminiHeadless;
+                        || isOpeningGeminiHeadless
+                        || isQuickIterating;
                     const isMenuOpen = menuBeatId === segment.beatId;
+                    const versions = beatVersions?.[segment.beatId] || [];
+                    const activeVersionId = String(beatActiveVersionId?.[segment.beatId] || '');
+                    const isApproved = qaStatus === 'approved';
+                    const isSavingQa = savingQaBeatId === segment.beatId;
+                    const showApprovedBorder = isApproved && !isQuickIterating;
+                    const quickIterateTooltip = quickIterateStage
+                        ? QUICK_ITERATE_STAGE_TOOLTIP[quickIterateStage]
+                        : '';
 
                     return (
                         <Box
@@ -206,12 +268,99 @@ export default function AgentVideoBeatBoundaryOverlay({
                                 overflow: 'hidden',
                                 bgcolor: segmentColor,
                                 color: 'common.white',
-                                opacity: isActive ? 1 : 0.9,
-                                outline: isActive ? '2px solid rgba(255,255,255,0.9)' : 'none',
+                                opacity: isActive ? 1 : (isQuickIterateQueued ? 0.95 : 0.9),
+                                outline: isActive && !isQuickIterating && !isApproved
+                                    ? '2px solid rgba(255,255,255,0.9)'
+                                    : 'none',
                                 outlineOffset: -2,
-                                boxShadow: isActive ? 'inset 0 0 0 1px rgba(0,0,0,0.25)' : 'none',
+                                boxShadow: isQuickIterateActive
+                                    ? '0 0 0 1px rgba(251,191,36,0.85), 0 0 10px rgba(251,191,36,0.45)'
+                                    : (showApprovedBorder
+                                        ? '0 0 0 2px rgba(244,114,182,0.95), 0 0 14px rgba(236,72,153,0.75), inset 0 0 0 1px rgba(255,255,255,0.25)'
+                                        : (isActive
+                                            ? 'inset 0 0 0 1px rgba(0,0,0,0.25)'
+                                            : 'none')),
+                                border: isQuickIterateQueued
+                                    ? '2px dashed rgba(251,191,36,0.95)'
+                                    : 'none',
+                                animation: isQuickIterateQueued
+                                    ? 'quickIterateQueuedPulse 1.4s ease-in-out infinite'
+                                    : 'none',
+                                '@keyframes quickIterateQueuedPulse': {
+                                    '0%, 100%': { opacity: 0.88 },
+                                    '50%': { opacity: 1 },
+                                },
                             }}
                         >
+                            {isQuickIterateActive ? (
+                                <Box
+                                    component="svg"
+                                    viewBox={`0 0 ${Math.max(widthPx, 2)} ${Math.max(trackHeight, 2)}`}
+                                    preserveAspectRatio="none"
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        zIndex: 3,
+                                        overflow: 'visible',
+                                        '& rect': {
+                                            animation: 'quickIterateDash 0.9s linear infinite',
+                                        },
+                                        '@keyframes quickIterateDash': {
+                                            to: { strokeDashoffset: -40 },
+                                        },
+                                    }}
+                                >
+                                    <rect
+                                        x="1.5"
+                                        y="1.5"
+                                        width={Math.max(widthPx - 3, 1)}
+                                        height={Math.max(trackHeight - 3, 1)}
+                                        fill="none"
+                                        stroke="#fbbf24"
+                                        strokeWidth="2.5"
+                                        strokeDasharray="10 7"
+                                        rx="1"
+                                    />
+                                </Box>
+                            ) : null}
+                            {showApprovedBorder ? (
+                                <Box
+                                    component="svg"
+                                    viewBox={`0 0 ${Math.max(widthPx, 2)} ${Math.max(trackHeight, 2)}`}
+                                    preserveAspectRatio="none"
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        zIndex: 3,
+                                        overflow: 'visible',
+                                        '& rect': {
+                                            animation: 'beatApprovedDash 0.85s linear infinite',
+                                        },
+                                        '@keyframes beatApprovedDash': {
+                                            to: { strokeDashoffset: -48 },
+                                        },
+                                    }}
+                                >
+                                    <rect
+                                        x="1.5"
+                                        y="1.5"
+                                        width={Math.max(widthPx - 3, 1)}
+                                        height={Math.max(trackHeight - 3, 1)}
+                                        fill="none"
+                                        stroke="#f472b6"
+                                        strokeWidth="3.5"
+                                        strokeDasharray="12 6"
+                                        strokeLinecap="round"
+                                        rx="1"
+                                    />
+                                </Box>
+                            ) : null}
                             <Box
                                 sx={{
                                     position: 'relative',
@@ -220,6 +369,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    gap: 0.5,
                                     px: widthPx < 36 ? 0.25 : 2.5,
                                 }}
                             >
@@ -262,6 +412,24 @@ export default function AgentVideoBeatBoundaryOverlay({
                                             maxWidth: '100%',
                                         }}
                                     >
+                                        {isQuickIterating ? (
+                                            <Tooltip title={quickIterateTooltip} placement="top">
+                                                <Box
+                                                    component="span"
+                                                    sx={{
+                                                        display: 'inline-flex',
+                                                        flexShrink: 0,
+                                                        lineHeight: 0,
+                                                    }}
+                                                >
+                                                    <CircularProgress
+                                                        size={11}
+                                                        thickness={5}
+                                                        sx={{ color: '#fde68a' }}
+                                                    />
+                                                </Box>
+                                            </Tooltip>
+                                        ) : null}
                                         {visualState === 'error' ? (
                                             <Tooltip title={errorMessage} placement="top">
                                                 <WarningAmberIcon sx={{ fontSize: 12, color: 'common.white' }} />
@@ -287,9 +455,73 @@ export default function AgentVideoBeatBoundaryOverlay({
                                                 />
                                             </Tooltip>
                                         ) : null}
-                                        <span>{`beat ${segment.beatIndex}`}</span>
+                                        <Tooltip
+                                            title={isQuickIterating ? quickIterateTooltip : ''}
+                                            placement="top"
+                                            disableHoverListener={!isQuickIterating}
+                                        >
+                                            <span>{`beat ${segment.beatIndex}`}</span>
+                                        </Tooltip>
                                     </Box>
                                 </Box>
+                                <Tooltip
+                                    title={isApproved ? 'Bỏ đánh dấu đã ổn' : 'Đánh dấu đã ổn'}
+                                    placement="top"
+                                >
+                                    <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                                        <IconButton
+                                            size="small"
+                                            aria-label={isApproved
+                                                ? `Bỏ đánh dấu đã ổn ${segment.beatId}`
+                                                : `Đánh dấu đã ổn ${segment.beatId}`}
+                                            disabled={
+                                                !onSaveBeatQa
+                                                || isBusy
+                                                || isSavingQa
+                                                || savingImportHtml
+                                            }
+                                            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                event.stopPropagation();
+                                                onBeatClick?.(segment.beatId);
+                                                void handleToggleApproved(segment.beatId);
+                                            }}
+                                            sx={{
+                                                width: 28,
+                                                height: 28,
+                                                p: 0,
+                                                ml: 0.25,
+                                                color: isApproved ? '#fbcfe8' : 'common.white',
+                                                bgcolor: isApproved
+                                                    ? 'rgba(236,72,153,0.55)'
+                                                    : 'rgba(0,0,0,0.28)',
+                                                border: isApproved
+                                                    ? '1px solid rgba(244,114,182,0.95)'
+                                                    : '1px solid rgba(255,255,255,0.22)',
+                                                borderRadius: 0.75,
+                                                '&:hover': {
+                                                    bgcolor: isApproved
+                                                        ? 'rgba(236,72,153,0.72)'
+                                                        : 'rgba(0,0,0,0.5)',
+                                                    borderColor: isApproved
+                                                        ? 'rgba(251,207,232,0.98)'
+                                                        : 'rgba(255,255,255,0.45)',
+                                                },
+                                                '&.Mui-disabled': {
+                                                    color: 'rgba(255,255,255,0.45)',
+                                                    bgcolor: 'rgba(0,0,0,0.14)',
+                                                },
+                                            }}
+                                        >
+                                            {isSavingQa ? (
+                                                <CircularProgress size={14} sx={{ color: 'inherit' }} />
+                                            ) : isApproved ? (
+                                                <CheckBoxIcon sx={{ fontSize: 20 }} />
+                                            ) : (
+                                                <CheckBoxOutlineBlankIcon sx={{ fontSize: 20 }} />
+                                            )}
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
 
                                 <Tooltip title="Thao tác beat" placement="top">
                                     <IconButton
@@ -360,6 +592,77 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         <InfoOutlinedIcon sx={{ fontSize: 15 }} />
                                     </IconButton>
                                 </Tooltip>
+                                {versions.length > 0 ? (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            left: 4,
+                                            bottom: 3,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0,
+                                            maxWidth: '58%',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        {versions.map((version, idx) => {
+                                            const isVersionActive = activeVersionId === version.version_id;
+                                            return (
+                                                <Tooltip
+                                                    key={`beat-version-dot-${segment.beatId}-${version.version_id}`}
+                                                    title={`${version.label}${isVersionActive ? ' · Đang dùng' : ''}`}
+                                                    placement="top"
+                                                >
+                                                    <Box
+                                                        component="button"
+                                                        type="button"
+                                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                            event.stopPropagation();
+                                                            onBeatClick?.(segment.beatId);
+                                                            if (!onRestoreBeatVersion || isVersionActive || savingImportHtml) {
+                                                                return;
+                                                            }
+                                                            void onRestoreBeatVersion(
+                                                                segment.beatId,
+                                                                version.version_id,
+                                                                version.label,
+                                                            );
+                                                        }}
+                                                        sx={{
+                                                            m: 0,
+                                                            p: 0,
+                                                            width: 18,
+                                                            height: 18,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            border: 'none',
+                                                            bgcolor: 'transparent',
+                                                            cursor: (isVersionActive || savingImportHtml || !onRestoreBeatVersion)
+                                                                ? 'default'
+                                                                : 'pointer',
+                                                            opacity: (savingImportHtml && !isVersionActive) ? 0.55 : 1,
+                                                            flexShrink: 0,
+                                                            '&::after': {
+                                                                content: '""',
+                                                                width: 16,
+                                                                height: 16,
+                                                                borderRadius: '50%',
+                                                                border: isVersionActive
+                                                                    ? '2px solid rgba(255,255,255,0.95)'
+                                                                    : '1px solid rgba(255,255,255,0.62)',
+                                                                bgcolor: VERSION_DOT_COLORS[idx % VERSION_DOT_COLORS.length],
+                                                                boxShadow: isVersionActive
+                                                                    ? '0 0 0 1px rgba(0,0,0,0.32)'
+                                                                    : 'none',
+                                                            },
+                                                        }}
+                                                    />
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </Box>
+                                ) : null}
                             </Box>
                         </Box>
                     );

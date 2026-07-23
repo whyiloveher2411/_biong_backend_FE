@@ -36,6 +36,8 @@ type Result = {
     frameUrl: string;
     connectionStatus: HeadlessPreviewConnectionStatus;
     metadata: HeadlessPreviewMetadata | null;
+    /** Relay đã có session publisher cho short_video này. */
+    sessionActive: boolean;
     stale: boolean;
     error: string;
 };
@@ -143,6 +145,7 @@ export function useAgentHeadlessPreview({
     const [connectionStatus, setConnectionStatus] =
         React.useState<HeadlessPreviewConnectionStatus>('idle');
     const [metadata, setMetadata] = React.useState<HeadlessPreviewMetadata | null>(null);
+    const [sessionActive, setSessionActive] = React.useState(false);
     const [stale, setStale] = React.useState(false);
     const [error, setError] = React.useState('');
     const frameUrlRef = React.useRef('');
@@ -175,6 +178,7 @@ export function useAgentHeadlessPreview({
         if (!enabled || shortVideoId <= 0) {
             clearFrame();
             setMetadata(null);
+            setSessionActive(false);
             setConnectionStatus('idle');
             setError('');
             return undefined;
@@ -212,6 +216,16 @@ export function useAgentHeadlessPreview({
             }
 
             const type = String(nextMetadata.type || '').toLowerCase();
+            if (type === 'session') {
+                const active = nextMetadata.active === true
+                    || nextMetadata.active === 1
+                    || nextMetadata.active === '1'
+                    || nextMetadata.active === 'true';
+                setSessionActive(active);
+                if (!active) {
+                    clearFrame();
+                }
+            }
             const base64Frame = typeof nextMetadata.data === 'string'
                 ? nextMetadata.data
                 : (typeof nextMetadata.frame === 'string' ? nextMetadata.frame : '');
@@ -219,11 +233,13 @@ export function useAgentHeadlessPreview({
                 const blob = base64JpegToBlob(base64Frame);
                 if (blob) {
                     showFrame(blob);
+                    setSessionActive(true);
                 }
             }
             setMetadata(nextMetadata);
             if (isEndLifecycle(nextMetadata)) {
                 clearFrame();
+                setSessionActive(false);
             }
         };
 
@@ -266,8 +282,10 @@ export function useAgentHeadlessPreview({
                     }
                     if (event.data instanceof Blob) {
                         showFrame(event.data);
+                        setSessionActive(true);
                     } else if (event.data instanceof ArrayBuffer) {
                         showFrame(new Blob([event.data], { type: 'image/jpeg' }));
+                        setSessionActive(true);
                     } else if (typeof event.data === 'string') {
                         handleJsonMessage(event.data);
                     }
@@ -330,6 +348,7 @@ export function useAgentHeadlessPreview({
         frameUrl,
         connectionStatus,
         metadata,
+        sessionActive,
         stale,
         error,
     };

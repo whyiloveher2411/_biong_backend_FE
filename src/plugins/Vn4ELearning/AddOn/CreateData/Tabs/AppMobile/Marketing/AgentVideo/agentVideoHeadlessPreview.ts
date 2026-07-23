@@ -6,8 +6,9 @@ export function isActiveGeminiJobStatus(status: string | undefined): boolean {
 }
 
 /**
- * Mirror backend `marketing_short_video_agent_headless_browser_active` —
- * dựa trên block gemini / queue job state, không map cứng pipeline step.
+ * Mirror backend `marketing_short_video_agent_headless_browser_active`.
+ * Ưu tiên flag server (đã phân biệt API-first vs Puppeteer thật).
+ * Fallback FE chỉ cho bước chắc chắn mở browser (script / division).
  */
 export function resolveHeadlessBrowserActive(
     summary: ImportHtmlSummary | null | undefined,
@@ -23,25 +24,19 @@ export function resolveHeadlessBrowserActive(
     if (extras?.pipelineHeadlessActive === true) {
         return true;
     }
+    // Script create/improve vẫn qua Gemini Web — phonetic có thể API-only.
     if (isActiveGeminiJobStatus(extras?.geminiScriptStatus)) {
         return true;
     }
-    if (isActiveGeminiJobStatus(extras?.geminiScriptPhoneticStatus)) {
-        return true;
-    }
+    void extras?.geminiScriptPhoneticStatus;
     if (!summary) {
         return false;
     }
-    const blocks: Array<ImportHtmlGeminiJobBlock | undefined> = [
-        summary.gemini_fill,
+    const browserRequiredBlocks: Array<ImportHtmlGeminiJobBlock | undefined> = [
         summary.gemini_division,
-        summary.gemini_refine_visual,
-        summary.gemini_refine_html,
-        summary.gemini_thumbnail_fill,
-        summary.thumbnail?.gemini_fill,
     ];
-    for (let i = 0; i < blocks.length; i += 1) {
-        if (isActiveGeminiJobStatus(blocks[i]?.status)) {
+    for (let i = 0; i < browserRequiredBlocks.length; i += 1) {
+        if (isActiveGeminiJobStatus(browserRequiredBlocks[i]?.status)) {
             return true;
         }
     }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Chip, CircularProgress, ListSubheader, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, CircularProgress, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import {
@@ -15,6 +15,7 @@ import {
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
+import { PipelineRenderRunButton } from './PipelineRenderRunButton';
 import {
     getPipelineGroupSurface,
     PIPELINE_STEP_STATUS_LABEL,
@@ -49,6 +50,43 @@ function resolveAiStepSet(aiSteps?: FullAutoPipelineStepKey[]): Set<string> {
         ? aiSteps
         : FULL_AUTO_PIPELINE_AI_STEPS;
     return new Set(source);
+}
+
+/** Các bước được phép restart (API restartable_steps hoặc fallback theo tiến độ). */
+export function resolveRestartableSet(
+    restartable?: string[] | null,
+    steps?: Record<string, { status?: string }> | null,
+    currentStep?: string,
+): Set<FullAutoPipelineStepKey> {
+    if (Array.isArray(restartable) && restartable.length > 0) {
+        return new Set(
+            restartable.filter((step): step is FullAutoPipelineStepKey => (
+                (FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(step)
+            )),
+        );
+    }
+    let maxIdx = 0;
+    FULL_AUTO_PIPELINE_STEP_ORDER.forEach((key, idx) => {
+        const status = String(steps?.[key]?.status || 'pending');
+        if (['done', 'skipped', 'running', 'failed'].includes(status)) {
+            maxIdx = idx;
+        }
+    });
+    if (currentStep) {
+        const cur = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
+            currentStep as FullAutoPipelineStepKey,
+        );
+        if (cur > maxIdx) maxIdx = cur;
+    }
+    const lastIdx = FULL_AUTO_PIPELINE_STEP_ORDER.length - 1;
+    if (maxIdx < lastIdx) {
+        const topKey = FULL_AUTO_PIPELINE_STEP_ORDER[maxIdx];
+        const topStatus = String(steps?.[topKey]?.status || 'pending');
+        if (topStatus === 'done' || topStatus === 'skipped') {
+            maxIdx += 1;
+        }
+    }
+    return new Set(FULL_AUTO_PIPELINE_STEP_ORDER.slice(0, maxIdx + 1));
 }
 
 function PipelineStepLegend({ variant = 'dark' }: { variant?: 'light' | 'dark' }) {
@@ -270,6 +308,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     restartableSet: Set<FullAutoPipelineStepKey>;
     disabled?: boolean;
     onSelectStep: (stepKey: FullAutoPipelineStepKey) => void;
+    onRerunRenderUpload?: () => void;
+    rerunRenderUploadDisabled?: boolean;
+    rerunningRenderUpload?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -282,6 +323,9 @@ export function PipelineGroupedMenuItems({
     restartableSet,
     disabled = false,
     onSelectStep,
+    onRerunRenderUpload,
+    rerunRenderUploadDisabled = false,
+    rerunningRenderUpload = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -367,6 +411,7 @@ export function PipelineGroupedMenuItems({
             </Box>
             {FULL_AUTO_PIPELINE_STEP_GROUPS.map((group, groupIndex) => {
                 const surface = getPipelineGroupSurface(group.key, 'light');
+                const isRenderGroup = group.key === 'render';
                 return (
                     <Box
                         key={group.key}
@@ -378,25 +423,42 @@ export function PipelineGroupedMenuItems({
                             border: '1px solid',
                             borderColor: surface.borderColor,
                             bgcolor: surface.bgcolor,
-                            overflow: 'hidden',
                         }}
                     >
-                        <ListSubheader
-                            disableSticky
-                            component="div"
+                        <Box
                             sx={{
-                                bgcolor: 'transparent',
-                                color: surface.headerColor,
-                                fontSize: 13,
-                                fontWeight: 800,
-                                lineHeight: 1.6,
-                                letterSpacing: 0.2,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1,
                                 px: 2,
-                                py: 0.9,
+                                py: 0.75,
+                                minHeight: 36,
                             }}
                         >
-                            {group.label}
-                        </ListSubheader>
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    color: surface.headerColor,
+                                    fontSize: 13,
+                                    fontWeight: 800,
+                                    lineHeight: 1.4,
+                                    letterSpacing: 0.2,
+                                }}
+                            >
+                                {group.label}
+                            </Typography>
+                            {isRenderGroup ? (
+                                <PipelineRenderRunButton
+                                    onClick={onRerunRenderUpload}
+                                    disabled={disabled || rerunRenderUploadDisabled}
+                                    loading={rerunningRenderUpload}
+                                    testId="pipeline-menu-rerun-render-upload"
+                                />
+                            ) : null}
+                        </Box>
                         {group.key === 'script' ? (() => {
                             const split = splitScriptGroupSteps(group.steps);
                             return (
@@ -552,15 +614,30 @@ export function PipelineGroupedStepList({
     );
 }
 
-type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps;
+type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
+    onRerunRenderUpload?: () => void;
+    rerunRenderUploadDisabled?: boolean;
+    rerunningRenderUpload?: boolean;
+    /** Bước được phép click để restart pipeline từ bước đó. */
+    restartableSet?: Set<FullAutoPipelineStepKey>;
+    onSelectStep?: (stepKey: FullAutoPipelineStepKey) => void;
+    selectStepDisabled?: boolean;
+};
 
-export function PipelineGroupedWorkflowList({
+/** V2: đổi tên export để Fast Refresh remount — tránh giữ UI list cũ không có nút Run. */
+export function PipelineGroupedWorkflowListV2({
     steps,
     headlessSteps,
     aiSteps,
     qaLoops,
     currentStep = '',
     pipelineStatus = '',
+    onRerunRenderUpload,
+    rerunRenderUploadDisabled = false,
+    rerunningRenderUpload = false,
+    restartableSet,
+    onSelectStep,
+    selectStepDisabled = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -586,10 +663,26 @@ export function PipelineGroupedWorkflowList({
         const isCurrent = stepKey === currentStep
             && String(pipelineStatus || '').trim().toLowerCase() === 'running';
         const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+        const canRestart = Boolean(
+            onSelectStep
+            && restartableSet?.has(stepKey)
+            && !selectStepDisabled,
+        );
+        const stepLabel = FULL_AUTO_PIPELINE_STEP_LABELS[stepKey] || stepKey;
 
         return (
             <Box
                 key={stepKey}
+                role={canRestart ? 'button' : undefined}
+                tabIndex={canRestart ? 0 : undefined}
+                onClick={canRestart ? () => onSelectStep?.(stepKey) : undefined}
+                onKeyDown={canRestart ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onSelectStep?.(stepKey);
+                    }
+                } : undefined}
+                title={canRestart ? `Chạy pipeline từ bước: ${stepLabel}` : undefined}
                 sx={{
                     display: 'grid',
                     gridTemplateColumns: 'minmax(0, 1fr) auto',
@@ -601,6 +694,15 @@ export function PipelineGroupedWorkflowList({
                     borderTop: inLoop ? 'none' : '1px solid',
                     borderColor: inLoop ? 'rgba(2, 136, 209, 0.14)' : borderColor,
                     bgcolor: isCurrent ? 'rgba(2, 136, 209, 0.1)' : 'transparent',
+                    cursor: canRestart ? 'pointer' : 'default',
+                    transition: 'background-color 0.12s ease',
+                    ...(canRestart ? {
+                        '&:hover': {
+                            bgcolor: isCurrent
+                                ? 'rgba(2, 136, 209, 0.16)'
+                                : 'rgba(15, 23, 42, 0.04)',
+                        },
+                    } : {}),
                 }}
             >
                 <PipelineStepTitle
@@ -613,24 +715,26 @@ export function PipelineGroupedWorkflowList({
                         fontWeight: isCurrent || status === 'running' ? 700 : 500,
                     }}
                 />
-                {isScriptImproveQaLoopStep(stepKey) && loopView.isLoopActive ? (
-                    <Chip
-                        size="small"
-                        color="info"
-                        label={statusLabel}
-                        sx={{
-                            height: 18,
-                            maxWidth: '100%',
-                            '& .MuiChip-label': {
-                                px: 0.55,
-                                fontSize: 10,
-                                fontWeight: 700,
-                            },
-                        }}
-                    />
-                ) : (
-                    <PipelineStepStatusChip status={status} compact />
-                )}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifySelf: 'start' }}>
+                    {isScriptImproveQaLoopStep(stepKey) && loopView.isLoopActive ? (
+                        <Chip
+                            size="small"
+                            color="info"
+                            label={statusLabel}
+                            sx={{
+                                height: 18,
+                                maxWidth: '100%',
+                                '& .MuiChip-label': {
+                                    px: 0.55,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                },
+                            }}
+                        />
+                    ) : (
+                        <PipelineStepStatusChip status={status} compact />
+                    )}
+                </Box>
             </Box>
         );
     };
@@ -648,6 +752,7 @@ export function PipelineGroupedWorkflowList({
             </Typography>
             {FULL_AUTO_PIPELINE_STEP_GROUPS.map((group) => {
                 const surface = getPipelineGroupSurface(group.key, 'light');
+                const isRenderGroup = group.key === 'render';
                 return (
                     <Box
                         key={group.key}
@@ -656,23 +761,41 @@ export function PipelineGroupedWorkflowList({
                             border: '1px solid',
                             borderColor: surface.borderColor,
                             bgcolor: surface.bgcolor,
-                            overflow: 'hidden',
                         }}
                     >
-                        <Typography
-                            variant="subtitle2"
+                        <Box
                             sx={{
-                                display: 'block',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 0.75,
                                 px: 1.15,
-                                py: 0.55,
-                                fontSize: 11,
-                                fontWeight: 800,
-                                color: surface.headerColor,
-                                letterSpacing: 0.15,
+                                py: 0.45,
+                                minHeight: 28,
                             }}
                         >
-                            {group.label}
-                        </Typography>
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    color: surface.headerColor,
+                                    letterSpacing: 0.15,
+                                }}
+                            >
+                                {group.label}
+                            </Typography>
+                            {isRenderGroup ? (
+                                <PipelineRenderRunButton
+                                    onClick={onRerunRenderUpload}
+                                    disabled={rerunRenderUploadDisabled}
+                                    loading={rerunningRenderUpload}
+                                    testId="pipeline-group-rerun-render-upload"
+                                />
+                            ) : null}
+                        </Box>
                         {group.key === 'script' ? (() => {
                             const split = splitScriptGroupSteps(group.steps);
                             return (
@@ -743,3 +866,5 @@ export function PipelineGroupedWorkflowList({
         </Stack>
     );
 }
+
+export { PipelineGroupedWorkflowListV2 as PipelineGroupedWorkflowList };

@@ -16,18 +16,25 @@ export function canShowFinalPreview(input: AgentPreviewSourceInput): boolean {
     return String(input.agentVideoUrl || '').trim() !== '';
 }
 
-export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean {
-    if (input.renderMode !== 'import_html' || !input.hasAudio) {
-        return false;
-    }
-    if (input.beatMapReady) {
+/** Có beat HTML để preview — không phụ thuộc audio / renderMode. */
+export function hasBeatHtmlForPreview(input: AgentPreviewSourceInput): boolean {
+    if (Number(input.beatsHtmlCompleted || 0) > 0) {
         return true;
     }
-    return input.importHtml.trim().length > 0;
+    const beatHtml = input.beatHtml || {};
+    if (Object.values(beatHtml).some((entry) => String(entry?.html || '').trim() !== '')) {
+        return true;
+    }
+    return String(input.importHtml || '').trim().length > 0;
+}
+
+export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean {
+    return hasBeatHtmlForPreview(input);
 }
 
 export function canShowPreviewSourceTabs(input: AgentPreviewSourceInput): boolean {
-    return canShowFinalPreview(input) && canShowHtmlBeatPreview(input);
+    // Hiện tab khi có ít nhất một nguồn — không ẩn HTML beat chỉ vì chưa có video final (hoặc ngược lại).
+    return canShowFinalPreview(input) || canShowHtmlBeatPreview(input);
 }
 
 export function resolveDefaultPreviewSource(input: AgentPreviewSourceInput): AgentPreviewSource {
@@ -70,5 +77,6 @@ export function canPlaybackPreviewSource(
     if (source === 'final') {
         return canShowFinalPreview(input);
     }
+    // Cho phép focus preview HTML beat dù chưa có audio (spacebar no-op nếu không có media).
     return canShowHtmlBeatPreview(input);
 }
