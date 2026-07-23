@@ -101,14 +101,24 @@ export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
 export function buildBeatDivisionSingleOutputRulesBlock(options?: {
     relaxDurationBounds?: boolean;
 }): string {
-    void options;
-    const durationRules = [
-        '## Beat duration (khuyến nghị phân bố nội dung — không validate cứng)',
-        '- **Khuyến nghị** mỗi beat khoảng **5–20s** để AI phân bố ý/visual hợp lý khi chia beat.',
-        '- Beat ngắn hơn/dài hơn vẫn **được chấp nhận** nếu khớp đoạn audio và phủ liên tục 0 → totalVideoSec.',
-        '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
-        '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
-    ];
+    const relax = Boolean(options?.relaxDurationBounds);
+    const durationRules = relax
+        ? [
+            '## Beat duration (khuyến nghị phân bố nội dung — không validate cứng)',
+            '- **Khuyến nghị** mỗi beat khoảng **5–20s** khi phù hợp; intro/outro có thể ngắn, beat repo có thể dài.',
+            '- Beat ngắn hơn/dài hơn vẫn **được chấp nhận** nếu khớp đoạn audio và phủ liên tục 0 → totalVideoSec.',
+            '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+            '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
+        ]
+        : [
+            '## Beat duration & cắt theo nội dung (không validate cứng)',
+            '- **Ưu tiên cấu trúc nội dung** — không target số beat theo công thức giây cố định.',
+            '- Soft hint: tránh beat **< ~3s** hoặc **> ~30s** khi vẫn giữ nguyên câu; nếu ý quá dài, tách ở **cuối câu** gần biên hợp lý — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+            '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **không bao giờ** đặt `endSec` giữa cụm từ đang nói dở.',
+            '- Neo `startSec`/`endSec` theo Whisper tại biên câu đó (cuối từ cuối câu / trước từ đầu câu sau).',
+            '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+            '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
+        ];
 
     return [
         '## OUTPUT — đúng 1 artifact duy nhất (bắt buộc)',

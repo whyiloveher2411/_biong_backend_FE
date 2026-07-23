@@ -109,10 +109,6 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         ].join('\n');
     }
 
-    const beatTargetMin = 8;
-    const beatTargetMax = 18;
-    const estimatedBeats = Math.max(1, Math.ceil(durationSec / 12));
-
     return [
         '# Chia beat cho short video marketing',
         '',
@@ -120,8 +116,21 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '',
         buildBeatDivisionLanguageBlock(context.language),
         '## Nhiệm vụ',
-        `Chia voiceover **${total}s** thành **${estimatedBeats}±** beat liên tục, mỗi beat khoảng **${beatTargetMin}–${beatTargetMax}s**.`,
+        `Chia voiceover **${total}s** thành các beat liên tục **theo cấu trúc nội dung** (không theo công thức giây cố định).`,
         'Mỗi beat = một chapter visual riêng (HTML sẽ generate sau — **chỉ visual, không karaoke**).',
+        '',
+        '## Cách chia (bắt buộc — ưu tiên nội dung)',
+        '- Đọc `audio_script`: ưu tiên **1 beat ≈ 1 đoạn** (cách nhau dòng trống) khi đoạn đó là một ý visual đủ rõ.',
+        '- Trong một đoạn nhiều câu: được **gộp** nhiều câu cùng ý; nếu tách thì **chỉ cắt sau dấu kết câu** (`.?!…`) hoặc sau **xuống dòng**.',
+        '- **Cấm** đặt `endSec` giữa cụm từ đang nói dở — không bao giờ cắt giữa câu.',
+        '- Dùng Whisper word timing để neo `startSec`/`endSec` sát biên câu đó (cuối từ cuối của câu / trước từ đầu câu sau).',
+        '- Số beat = theo số ý/đoạn phù hợp — **không** target `ceil(duration/12)` hay khoảng 8–18s/beat.',
+        '',
+        '## Beat duration — soft hint (không validate cứng trong code)',
+        '- Soft: tránh beat **< ~3s** hoặc **> ~30s** khi vẫn giữ nguyên câu.',
+        '- Nếu một ý quá dài: tách ở **cuối câu** gần biên hợp lý — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+        '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+        '- Chỉ bắt buộc: durationSec > 0, sections phủ liên tục 0 → totalVideoSec.',
         '',
         buildHtmlChatbotNoKaraokeRulesBlock(),
         buildBeatDivisionVisualCreativeDirectionBlock(),
@@ -153,7 +162,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         `- \`totalVideoSec\` = **${total}** (không đổi)`,
         '- `sections` phủ liên tục từ 0 → totalVideoSec, không overlap, không gap',
         '- `id` / `beat_id` = `beat_1`, `beat_2`, …',
-        '- `durationSec` = endSec - startSec',
+        '- `durationSec` = endSec - startSec; soft hint ~3–30s (không bắt buộc); cắt chỉ ở cuối câu/xuống dòng',
         '- `phrase_anchor` = metadata lập kế hoạch beat (không render lên màn hình, không dùng làm karaoke)',
         '- Top-level bắt buộc `schema_version: 2`',
         '- `visual_description`: follow **Visual description — creative direction** above; English; approximately **40–100 words**; semantic and style-neutral',
