@@ -219,7 +219,7 @@ function main() {
   const pip = cfg.pip && typeof cfg.pip === "object" ? cfg.pip : {};
   const widthRatio = Number(pip.width_ratio) > 0 ? Number(pip.width_ratio) : 0.2;
   const marginPx = Number.isFinite(Number(pip.margin_px)) ? Number(pip.margin_px) : 28;
-  const bottomPx = Number.isFinite(Number(pip.bottom_px)) ? Number(pip.bottom_px) : Math.max(marginPx, 200);
+  const bottomPx = Number.isFinite(Number(pip.bottom_px)) ? Number(pip.bottom_px) : Math.max(marginPx, 118);
   const topPx = Number.isFinite(Number(pip.top_px)) ? Number(pip.top_px) : marginPx;
   const leftPx = Number.isFinite(Number(pip.left_px)) ? Number(pip.left_px) : marginPx;
   const rightPx = Number.isFinite(Number(pip.right_px)) ? Number(pip.right_px) : marginPx;

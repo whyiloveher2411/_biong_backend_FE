@@ -159,6 +159,8 @@ export function isKaraokeSyncPoor(captionSync?: CaptionSyncSummary | null): bool
 export type ImportHtmlGeminiJobBlock = {
     status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
     job_ids?: number[];
+    /** Beat đang có job pending/processing trên queue (khôi phục UI sau refresh). */
+    active_beat_ids?: string[];
     queued_at?: string;
     updated_at?: string;
     error?: string;

@@ -7,7 +7,7 @@ type Props = {
     show: boolean;
     masterUrl: string;
     anchor?: AvatarPipAnchor | string;
-    /** Karaoke ON → bottom PiP cao hơn để tránh caption. */
+    /** Karaoke ON → bottom PiP ngang tâm với caption pill (không cao hơn karaoke). */
     showKaraoke?: boolean;
     /** Gắn trong stage 1080×1920 (scale cùng iframe). */
     stageMode?: boolean;
@@ -46,9 +46,11 @@ function resolvePipPosition(
 ): Record<string, string | number> {
     const margin = stageMode ? 28 : '5%';
     const topClear = stageMode ? 80 : '6%';
+    // Khớp gen-captions-html (bottom 180px) + tâm pill ~1 dòng — PiP 216px.
+    // bottom = 180 + 46 - 108 = 118px (~6.15% trên canvas 1920).
     const bottomClear = stageMode
-        ? (showKaraoke ? 200 : 48)
-        : (showKaraoke ? '12%' : '4%');
+        ? (showKaraoke ? 118 : 48)
+        : (showKaraoke ? '6.15%' : '4%');
 
     switch (anchor) {
         case 'top_left':

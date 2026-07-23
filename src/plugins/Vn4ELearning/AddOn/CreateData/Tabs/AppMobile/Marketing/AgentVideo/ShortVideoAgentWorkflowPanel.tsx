@@ -661,12 +661,10 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                         : isTikTok
                                             ? Boolean(account.has_tiktok_session)
                                             : Boolean(account.has_cookie);
-                                    const isPosting = state.postingSocialIndex === account.index;
                                     const canPost = (isFacebook || isTikTok)
                                         && sessionOk
                                         && state.postEligible
-                                        && Boolean(state.agentVideoUrl)
-                                        && state.postingSocialIndex === null;
+                                        && Boolean(state.agentVideoUrl);
 
                                     return (
                                         <Box
@@ -721,8 +719,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                                 size="small"
                                                 variant="contained"
                                                 color="primary"
-                                                loading={isPosting}
-                                                disabled={!canPost && !isPosting}
+                                                disabled={!canPost}
                                                 onClick={() => {
                                                     void state.handlePostSocial(account.index);
                                                 }}
