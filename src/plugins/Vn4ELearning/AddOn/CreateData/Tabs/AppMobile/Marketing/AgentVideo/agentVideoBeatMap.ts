@@ -518,7 +518,7 @@ export function validateBeatMap(
         if (!validateBeatBackground(section.background)) {
             errors.push(`${label}: background phải là tiếng Anh, dài 3–60 từ`);
         }
-        // Soft 3–30s / cắt cuối câu: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
+        // Soft 8–30s / cắt hết ý: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;
     });
 

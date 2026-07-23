@@ -72,6 +72,9 @@ import {
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
     type GithubTopEnrichSummary,
+    type TopicResearchBlock,
+    enqueueTopicResearchFetch,
+    enqueueTopicResearchSynthesize,
     type VisualStyleCatalogItem,
     type OmnivoiceVoiceCatalogItem,
     type OmnivoiceVoiceMode,
@@ -375,6 +378,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingScriptTtsReading, setSavingScriptTtsReading] = React.useState(false);
     const [fullAutoPipeline, setFullAutoPipeline] = React.useState<FullAutoPipelineSummary | null>(null);
     const [githubTopEnrich, setGithubTopEnrich] = React.useState<GithubTopEnrichSummary | null>(null);
+    const [topicResearch, setTopicResearch] = React.useState<TopicResearchBlock | null>(null);
+    const [topicResearchTopic, setTopicResearchTopic] = React.useState('');
+    const [topicResearchUrlsText, setTopicResearchUrlsText] = React.useState('');
+    const [savedTopicResearchTopic, setSavedTopicResearchTopic] = React.useState('');
+    const [savedTopicResearchUrlsText, setSavedTopicResearchUrlsText] = React.useState('');
+    const [fetchingTopicResearch, setFetchingTopicResearch] = React.useState(false);
+    const [synthesizingTopicResearch, setSynthesizingTopicResearch] = React.useState(false);
     const [githubTopRepos, setGithubTopRepos] = React.useState<NonNullable<ImportHtmlAssets['github_top_repos']> | null>(null);
     const [startingFullAuto, setStartingFullAuto] = React.useState(false);
     const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
@@ -853,9 +863,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextFormat = String(res?.agent_source_format || 'github_repo_review').trim() || 'github_repo_review';
         setAgentSourceFormat(nextFormat);
         setSavedAgentSourceFormat(nextFormat);
-        setAgentSourceFormatCatalog(
-            Array.isArray(res?.agent_source_format_catalog) ? res.agent_source_format_catalog : [],
-        );
+        // Poll include_catalogs=0 không trả catalog — giữ state cũ, không ghi []
+        if (Array.isArray(res?.agent_source_format_catalog) && res.agent_source_format_catalog.length > 0) {
+            setAgentSourceFormatCatalog(res.agent_source_format_catalog);
+        }
         setContentPlainText(String(res?.content_plain_text || '').trim());
         setAppMobileTitle(String(res?.app_mobile_title || '').trim());
         setThumbnail(res?.thumbnail ?? null);
@@ -944,6 +955,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setFullAutoPipeline(res?.full_auto_pipeline ?? null);
         setGithubTopEnrich(res?.github_top_enrich ?? null);
+        const nextTopicResearch = res?.topic_research ?? null;
+        setTopicResearch(nextTopicResearch);
+        const nextTopic = String(nextTopicResearch?.topic || '').trim();
+        const nextUrlsText = Array.isArray(nextTopicResearch?.urls)
+            ? nextTopicResearch.urls.map((u) => String(u || '').trim()).filter(Boolean).join('\n')
+            : '';
+        setTopicResearchTopic(nextTopic);
+        setTopicResearchUrlsText(nextUrlsText);
+        setSavedTopicResearchTopic(nextTopic);
+        setSavedTopicResearchUrlsText(nextUrlsText);
     }, [applyImportHtmlResources, resolveScriptFromResponse]);
 
     const handleAudioScriptChange = React.useCallback((value: string) => {
@@ -1081,7 +1102,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || geminiScriptPhoneticStatus === 'processing'
         || headlessBrowserActive
         || fullAutoPipeline?.status === 'running'
-        || githubTopEnrich?.status === 'preparing';
+        || githubTopEnrich?.status === 'preparing'
+        || topicResearch?.fetch?.status === 'preparing'
+        || topicResearch?.synthesize?.status === 'preparing';
     React.useEffect(() => {
         if (!open || !shortVideoId || !shouldPoll) {
             return undefined;
@@ -1294,6 +1317,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 sourceContent: contentPlainText || savedAgentSourceContent,
                 additionalInfo: savedAgentAdditionalInfo,
                 introduceApp: agentIntroduceApp,
+                sourceFormat: agentSourceFormat,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -4016,12 +4040,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             && agentTiktokUrl === savedAgentTiktokUrl
             && agentSourceFormat === savedAgentSourceFormat
             && additionalToSave === savedAgentAdditionalInfo
+            && (
+                agentSourceFormat !== 'topic_research'
+                || (
+                    topicResearchTopic === savedTopicResearchTopic
+                    && topicResearchUrlsText === savedTopicResearchUrlsText
+                )
+            )
         ) {
             return;
         }
 
         setSavingSourceContent(true);
         try {
+            const topicMeta = !linked && agentSourceFormat === 'topic_research'
+                ? {
+                    topic: topicResearchTopic.trim(),
+                    urls: topicResearchUrlsText,
+                }
+                : undefined;
             const json = await saveAgentSourceContent(
                 shortVideoId,
                 linked ? '' : contentToSave,
@@ -4029,6 +4066,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 linked ? undefined : agentSourceFormat,
                 additionalToSave,
                 linked ? undefined : agentTiktokUrl.trim(),
+                topicMeta,
             );
             if (!json?.success) {
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được nội dung', 'error');
@@ -4057,6 +4095,20 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     setReadmeMedia(loadedReadmeMedia);
                     readmeMediaSavedRef.current = JSON.stringify(loadedReadmeMedia);
                 }
+                if (json?.topic_research) {
+                    setTopicResearch(json.topic_research);
+                    const nextTopic = String(json.topic_research.topic || '').trim();
+                    const nextUrlsText = Array.isArray(json.topic_research.urls)
+                        ? json.topic_research.urls.map((u) => String(u || '').trim()).filter(Boolean).join('\n')
+                        : topicResearchUrlsText;
+                    setTopicResearchTopic(nextTopic);
+                    setTopicResearchUrlsText(nextUrlsText);
+                    setSavedTopicResearchTopic(nextTopic);
+                    setSavedTopicResearchUrlsText(nextUrlsText);
+                } else if (agentSourceFormat === 'topic_research') {
+                    setSavedTopicResearchTopic(topicResearchTopic.trim());
+                    setSavedTopicResearchUrlsText(topicResearchUrlsText);
+                }
             }
 
             showMessage(parseApiMessage(json?.message) || (linked ? 'Đã lưu thông tin thêm' : 'Đã lưu nội dung nguồn'), 'success');
@@ -4064,6 +4116,70 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingSourceContent(false);
+        }
+    };
+
+    const handleFetchTopicResearch = async () => {
+        if (marketingPostId > 0) {
+            showMessage('Đã liên kết marketing post — không dùng nghiên cứu chủ đề', 'warning');
+            return;
+        }
+        const urls = topicResearchUrlsText.trim();
+        if (!urls) {
+            showMessage('Nhập ít nhất 1 URL nguồn', 'warning');
+            return;
+        }
+        setFetchingTopicResearch(true);
+        try {
+            if (agentSourceFormat !== 'topic_research') {
+                setAgentSourceFormat('topic_research');
+            }
+            const json = await enqueueTopicResearchFetch(shortVideoId, {
+                topic: topicResearchTopic.trim(),
+                urls: topicResearchUrlsText,
+            });
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không xếp hàng lấy nội dung', 'error');
+                return;
+            }
+            if (json.topic_research) {
+                setTopicResearch(json.topic_research);
+            }
+            showMessage(parseApiMessage(json?.message) || 'Đã xếp hàng lấy nội dung', 'success');
+            loadRow({ syncAggregate: true, includeCatalogs: false });
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setFetchingTopicResearch(false);
+        }
+    };
+
+    const handleSynthesizeTopicResearch = async () => {
+        if (marketingPostId > 0) {
+            showMessage('Đã liên kết marketing post — không dùng nghiên cứu chủ đề', 'warning');
+            return;
+        }
+        const readyCount = (topicResearch?.sources || []).filter((s) => s.status === 'ready').length;
+        if (readyCount <= 0) {
+            showMessage('Chưa có nguồn ready — chạy Lấy nội dung trước', 'warning');
+            return;
+        }
+        setSynthesizingTopicResearch(true);
+        try {
+            const json = await enqueueTopicResearchSynthesize(shortVideoId);
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không xếp hàng tổng hợp', 'error');
+                return;
+            }
+            if (json.topic_research) {
+                setTopicResearch(json.topic_research);
+            }
+            showMessage(parseApiMessage(json?.message) || 'Đã xếp hàng tổng hợp nội dung', 'success');
+            loadRow({ syncAggregate: true, includeCatalogs: false });
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSynthesizingTopicResearch(false);
         }
     };
 
@@ -4807,6 +4923,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSaveScriptTtsReading,
         fullAutoPipeline,
         githubTopEnrich,
+        topicResearch,
+        topicResearchTopic,
+        setTopicResearchTopic,
+        topicResearchUrlsText,
+        setTopicResearchUrlsText,
+        savedTopicResearchTopic,
+        savedTopicResearchUrlsText,
+        fetchingTopicResearch,
+        synthesizingTopicResearch,
+        handleFetchTopicResearch,
+        handleSynthesizeTopicResearch,
         githubTopRepos,
         startingFullAuto,
         cancellingFullAuto,

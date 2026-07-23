@@ -214,6 +214,10 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
     const prevFetchingReadmeRef = React.useRef(false);
     const prevFetchingTiktokRef = React.useRef(false);
     const isTiktokRemix = state.agentSourceFormat === 'tiktok_remix';
+    const isTopicResearch = state.agentSourceFormat === 'topic_research';
+    const topicReadySourceCount = (state.topicResearch?.sources || []).filter(
+        (s) => s.status === 'ready',
+    ).length;
 
     React.useEffect(() => {
         contentPostRef.current.agent_source_content = state.savedAgentSourceContent;
@@ -241,6 +245,13 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
         || state.agentGithubRepo !== state.savedAgentGithubRepo
         || state.agentTiktokUrl !== state.savedAgentTiktokUrl
         || state.agentSourceFormat !== state.savedAgentSourceFormat
+        || (
+            isTopicResearch
+            && (
+                state.topicResearchTopic !== state.savedTopicResearchTopic
+                || state.topicResearchUrlsText !== state.savedTopicResearchUrlsText
+            )
+        )
     );
     const additionalDirty = state.agentAdditionalInfo !== state.savedAgentAdditionalInfo;
     const isDirty = sourceDirty || additionalDirty;
@@ -286,7 +297,9 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 ? `Đang liên kết marketing post #${state.marketingPostId} — nội dung chỉ đọc.`
                                 : isTiktokRemix
                                     ? 'Chọn Remix TikTok, dán link rồi Lấy thông tin để điền transcript.'
-                                    : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
+                                    : isTopicResearch
+                                        ? 'Nhập chủ đề + danh sách URL → Lấy nội dung (MarkItDown) → Tổng hợp (Gemini) → content cho script.'
+                                        : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
                         }
                     >
                         {linked ? (
@@ -386,6 +399,75 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         .
                                     </Alert>
                                 ) : null}
+                                {state.topicResearch?.fetch?.status === 'preparing' ? (
+                                    <Box
+                                        sx={{
+                                            border: '1px solid',
+                                            borderColor: 'info.light',
+                                            borderRadius: 1,
+                                            bgcolor: 'rgba(2, 136, 209, 0.06)',
+                                            p: 1.25,
+                                        }}
+                                    >
+                                        <Stack spacing={0.75}>
+                                            <Typography variant="body2" fontWeight={600}>
+                                                Đang lấy nội dung URL
+                                                {typeof state.topicResearch.fetch.percent === 'number'
+                                                    ? ` — ${state.topicResearch.fetch.percent}%`
+                                                    : ''}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {typeof state.topicResearch.fetch.done === 'number'
+                                                && typeof state.topicResearch.fetch.total === 'number'
+                                                    ? `Hoàn tất ${state.topicResearch.fetch.done}/${state.topicResearch.fetch.total}`
+                                                    : 'Đang xếp hàng / xử lý MarkItDown'}
+                                                {state.topicResearch.fetch.current_url
+                                                    ? ` · ${state.topicResearch.fetch.current_url}`
+                                                    : ''}
+                                                {typeof state.topicResearch.fetch.failed === 'number'
+                                                && state.topicResearch.fetch.failed > 0
+                                                    ? ` · Lỗi ${state.topicResearch.fetch.failed}`
+                                                    : ''}
+                                            </Typography>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={Math.max(
+                                                    0,
+                                                    Math.min(100, Number(state.topicResearch.fetch.percent || 0)),
+                                                )}
+                                                sx={{ height: 8, borderRadius: 4 }}
+                                            />
+                                        </Stack>
+                                    </Box>
+                                ) : null}
+                                {state.topicResearch?.fetch?.status === 'failed' ? (
+                                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                                        Lấy nội dung thất bại
+                                        {state.topicResearch.fetch.error
+                                            ? `: ${state.topicResearch.fetch.error}`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
+                                {state.topicResearch?.synthesize?.status === 'preparing' ? (
+                                    <Alert severity="info" sx={{ py: 0.5 }}>
+                                        Đang tổng hợp content bằng Gemini…
+                                    </Alert>
+                                ) : null}
+                                {state.topicResearch?.synthesize?.status === 'failed' ? (
+                                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                                        Tổng hợp thất bại
+                                        {state.topicResearch.synthesize.error
+                                            ? `: ${state.topicResearch.synthesize.error}`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
+                                {state.topicResearch?.synthesize?.status === 'ready' ? (
+                                    <Alert severity="success" sx={{ py: 0.5 }}>
+                                        Đã tổng hợp content — có thể tạo audio script.
+                                    </Alert>
+                                ) : null}
                                 <FormControl fullWidth size="small" sx={workflowFieldSurfaceSx}>
                                     <InputLabel id="agent-source-format-label">Loại nội dung nguồn</InputLabel>
                                     <Select
@@ -454,6 +536,111 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 Lấy thông tin
                                             </LoadingButton>
                                         </>
+                                    ) : isTopicResearch ? (
+                                        <Stack spacing={1} sx={{ width: '100%' }}>
+                                            <TextField
+                                                label="Chủ đề"
+                                                value={state.topicResearchTopic}
+                                                onChange={(e) => state.setTopicResearchTopic(e.target.value)}
+                                                fullWidth
+                                                size="small"
+                                                placeholder="How Does The Internet Work"
+                                                sx={workflowFieldSurfaceSx}
+                                            />
+                                            <TextField
+                                                label="Danh sách URL (1 URL / dòng)"
+                                                value={state.topicResearchUrlsText}
+                                                onChange={(e) => state.setTopicResearchUrlsText(e.target.value)}
+                                                fullWidth
+                                                size="small"
+                                                multiline
+                                                minRows={4}
+                                                maxRows={10}
+                                                placeholder={'https://roadmap.sh/guides/what-is-internet\nhttps://cs.fyi/guide/how-does-internet-work'}
+                                                sx={workflowFieldSurfaceSx}
+                                            />
+                                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                                                <LoadingButton
+                                                    variant="outlined"
+                                                    loading={state.fetchingTopicResearch
+                                                        || state.topicResearch?.fetch?.status === 'preparing'}
+                                                    startIcon={<CloudDownloadIcon />}
+                                                    onClick={() => void state.handleFetchTopicResearch()}
+                                                    disabled={!state.topicResearchUrlsText.trim()}
+                                                    sx={{
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0,
+                                                        bgcolor: 'background.paper',
+                                                    }}
+                                                >
+                                                    Lấy nội dung
+                                                </LoadingButton>
+                                                <LoadingButton
+                                                    variant="contained"
+                                                    loading={state.synthesizingTopicResearch
+                                                        || state.topicResearch?.synthesize?.status === 'preparing'}
+                                                    onClick={() => void state.handleSynthesizeTopicResearch()}
+                                                    disabled={topicReadySourceCount <= 0}
+                                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                                >
+                                                    Tổng hợp nội dung
+                                                    {topicReadySourceCount > 0 ? ` (${topicReadySourceCount})` : ''}
+                                                </LoadingButton>
+                                            </Stack>
+                                            {(state.topicResearch?.sources || []).length > 0 ? (
+                                                <Stack spacing={0.5}>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                                        Nguồn đã crawl
+                                                    </Typography>
+                                                    {(state.topicResearch?.sources || []).map((src) => (
+                                                        <Box
+                                                            key={src.url || src.title}
+                                                            sx={{
+                                                                ...workflowFieldSurfaceSx,
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                px: 1,
+                                                                py: 0.75,
+                                                            }}
+                                                        >
+                                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                                <Chip
+                                                                    size="small"
+                                                                    label={src.status || 'pending'}
+                                                                    color={
+                                                                        src.status === 'ready'
+                                                                            ? 'success'
+                                                                            : src.status === 'failed'
+                                                                                ? 'error'
+                                                                                : src.status === 'skipped'
+                                                                                    ? 'warning'
+                                                                                    : 'default'
+                                                                    }
+                                                                    variant="outlined"
+                                                                />
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    sx={{
+                                                                        flex: 1,
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis',
+                                                                        whiteSpace: 'nowrap',
+                                                                    }}
+                                                                    title={src.url}
+                                                                >
+                                                                    {src.title || src.url}
+                                                                </Typography>
+                                                            </Stack>
+                                                            {src.error ? (
+                                                                <Typography variant="caption" color="error">
+                                                                    {src.error}
+                                                                </Typography>
+                                                            ) : null}
+                                                        </Box>
+                                                    ))}
+                                                </Stack>
+                                            ) : null}
+                                        </Stack>
                                     ) : (
                                         <>
                                             <TextField
@@ -504,7 +691,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                         />
                     </WorkflowSection>
 
-                    {!linked && !isTiktokRemix ? (
+                    {!linked && !isTiktokRemix && !isTopicResearch ? (
                         <WorkflowSection
                             title="Media từ README"
                             tone="visual"

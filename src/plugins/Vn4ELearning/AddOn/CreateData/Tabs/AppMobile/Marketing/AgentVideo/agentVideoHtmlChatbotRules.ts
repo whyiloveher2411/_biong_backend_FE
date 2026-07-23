@@ -111,10 +111,13 @@ export function buildBeatDivisionSingleOutputRulesBlock(options?: {
             '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
         ]
         : [
-            '## Beat duration & cắt theo nội dung (không validate cứng)',
-            '- **Ưu tiên cấu trúc nội dung** — không target số beat theo công thức giây cố định.',
-            '- Soft hint: tránh beat **< ~3s** hoặc **> ~30s** khi vẫn giữ nguyên câu; nếu ý quá dài, tách ở **cuối câu** gần biên hợp lý — **cấm** cắt giữa câu chỉ để “vừa giây”.',
-            '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **không bao giờ** đặt `endSec` giữa cụm từ đang nói dở.',
+            '## Beat duration & cắt hết ý (không validate cứng)',
+            '- Target mỗi beat **8–30s**; ưu tiên **hết câu / hết ý** trước khi ép giây.',
+            '- Beat **< ~8s**: gộp với câu/ý kế tiếp; beat **> ~30s**: tách chỉ tại **cuối câu** gần biên — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+            '- Nếu một câu Whisper >30s → giữ nguyên câu (được phép >30s) hơn là cắt giữa câu.',
+            '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **cấm** cắt sau `,` `;` `:` hoặc giữa mệnh đề.',
+            '- `phrase_anchor` hết ý; `endSec` = Whisper end của từ cuối `phrase_anchor`.',
+            '- Ví dụ BAD: kết thúc `…nguyên khối đâu,` — GOOD: giữ tới `…gọi là packets.`',
             '- Neo `startSec`/`endSec` theo Whisper tại biên câu đó (cuối từ cuối câu / trước từ đầu câu sau).',
             '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
             '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',

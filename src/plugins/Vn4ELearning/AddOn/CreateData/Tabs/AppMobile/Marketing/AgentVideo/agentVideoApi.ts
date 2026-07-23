@@ -476,6 +476,7 @@ export type AgentVideoContentResponse = {
     tts_phonetic_dict?: TtsPhoneticDictEntry[];
     full_auto_pipeline?: FullAutoPipelineSummary;
     github_top_enrich?: GithubTopEnrichSummary;
+    topic_research?: TopicResearchBlock;
 };
 
 export type GithubTopEnrichSummary = {
@@ -492,6 +493,39 @@ export type GithubTopEnrichSummary = {
     error?: string;
     started_at?: string;
     updated_at?: string;
+};
+
+export type TopicResearchSourceItem = {
+    url?: string;
+    kind?: 'html' | 'youtube' | string;
+    status?: 'pending' | 'ready' | 'failed' | 'skipped' | string;
+    title?: string;
+    markdown?: string;
+    error?: string;
+    fetched_at?: string;
+};
+
+export type TopicResearchBlock = {
+    topic?: string;
+    urls?: string[];
+    sources?: TopicResearchSourceItem[];
+    fetch?: {
+        status?: 'idle' | 'preparing' | 'ready' | 'failed' | string;
+        percent?: number;
+        done?: number;
+        total?: number;
+        failed?: number;
+        current_url?: string;
+        error?: string;
+        started_at?: string;
+        updated_at?: string;
+    };
+    synthesize?: {
+        status?: 'idle' | 'preparing' | 'ready' | 'failed' | string;
+        error?: string;
+        at?: string;
+        job_id?: number | null;
+    };
 };
 
 export type FullAutoPipelineStepStatus = 'pending' | 'running' | 'skipped' | 'done' | 'failed' | string;
@@ -1354,6 +1388,7 @@ export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_source_format_label?: string;
     content_plain_text?: string;
     readme_media?: GithubReadmeMediaItem[];
+    topic_research?: TopicResearchBlock;
 };
 
 export async function saveAgentSourceContent(
@@ -1363,6 +1398,7 @@ export async function saveAgentSourceContent(
     sourceFormat?: string,
     additionalInfo?: string,
     tiktokUrl?: string,
+    topicResearch?: { topic?: string; urls?: string | string[] },
 ): Promise<SaveAgentSourceContentResponse> {
     const extra: Record<string, unknown> = {
         agent_source_content: content,
@@ -1378,6 +1414,12 @@ export async function saveAgentSourceContent(
     }
     if (tiktokUrl !== undefined) {
         extra.agent_tiktok_url = tiktokUrl;
+    }
+    if (topicResearch?.topic !== undefined) {
+        extra.topic = topicResearch.topic;
+    }
+    if (topicResearch?.urls !== undefined) {
+        extra.urls = topicResearch.urls;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-source-content',
@@ -1462,6 +1504,47 @@ export async function extractVideoScript(
             platform,
         },
     ) as Promise<ExtractVideoScriptResponse>;
+}
+
+export type TopicResearchFetchResponse = JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    topic_research?: TopicResearchBlock;
+};
+
+export async function enqueueTopicResearchFetch(
+    shortVideoId: number,
+    options?: { topic?: string; urls?: string | string[] },
+): Promise<TopicResearchFetchResponse> {
+    const extra: Record<string, unknown> = {};
+    if (options?.topic !== undefined) {
+        extra.topic = options.topic;
+    }
+    if (options?.urls !== undefined) {
+        extra.urls = options.urls;
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/topic-research-fetch',
+        shortVideoBody(shortVideoId, extra),
+    ) as Promise<TopicResearchFetchResponse>;
+}
+
+export type TopicResearchSynthesizeResponse = JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    topic_research?: TopicResearchBlock;
+    agent_source_content?: string;
+};
+
+export async function enqueueTopicResearchSynthesize(
+    shortVideoId: number,
+): Promise<TopicResearchSynthesizeResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/topic-research-synthesize',
+        shortVideoBody(shortVideoId),
+    ) as Promise<TopicResearchSynthesizeResponse>;
 }
 
 export type ImportGithubReadmeMediaResponse = JsonResponse & {

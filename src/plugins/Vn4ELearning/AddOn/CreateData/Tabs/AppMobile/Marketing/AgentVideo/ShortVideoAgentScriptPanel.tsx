@@ -344,6 +344,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 sourceContent: state.contentPlainText || state.savedAgentSourceContent,
                 additionalInfo: state.savedAgentAdditionalInfo,
                 introduceApp: state.agentIntroduceApp,
+                sourceFormat: state.agentSourceFormat,
             });
         } finally {
             setOpeningImproveScriptGemini(false);

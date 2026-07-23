@@ -15,6 +15,8 @@ type OpenGeminiScriptInput = {
     additionalInfo?: string;
     /** Bật CTA tải/mở app; mặc định tắt. */
     introduceApp?: boolean;
+    /** agent_source_format — nhánh topic_research. */
+    sourceFormat?: string;
 };
 
 function resolveSourceContent(input: OpenGeminiScriptInput): string {
@@ -79,6 +81,7 @@ export function useAgentVideoOpenGeminiScriptActions() {
             additionalInfo: String(input.additionalInfo || '').trim(),
             hasMarketingPost: marketingPostId > 0,
             introduceApp: Boolean(input.introduceApp),
+            sourceFormat: String(input.sourceFormat || '').trim(),
         });
         if (!improvePrompt) {
             showMessage('Chưa có audio script', 'warning');
