@@ -426,6 +426,12 @@ export default function ShortVideoAgentVideoWorkspace({
                     onSaveBeatQa={(beatId, qaStatus, qaRefineNote) => (
                         state.handleSaveBeatQa(beatId, qaStatus, qaRefineNote)
                     )}
+                    onQuickIterateBeat={(beatId, qaRefineNote) => (
+                        state.handleQuickIterateBeatFromQa(
+                            beatId,
+                            String(qaRefineNote || state.beatHtml[beatId]?.qa_refine_note || '').trim(),
+                        )
+                    )}
                     beatVersions={state.beatVersions}
                     beatActiveVersionId={state.beatActiveVersionId}
                     onRestoreBeatVersion={(beatId, versionId) => (

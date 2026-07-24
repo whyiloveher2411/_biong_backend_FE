@@ -81,6 +81,32 @@ export function isWorkingBeatDirtyVsActive(
         || String(workingHtml || '').trim() !== String(activeVersion.html || '').trim();
 }
 
+/** Tìm version đã lưu khớp working (ưu tiên bản mới nhất). */
+export function findBeatVersionMatchingWorking(
+    versions: BeatVersion[] | null | undefined,
+    workingVisual: string,
+    workingHtml: string,
+): BeatVersion | null {
+    if (!Array.isArray(versions) || versions.length === 0) {
+        return null;
+    }
+    const visual = String(workingVisual || '').trim();
+    const html = String(workingHtml || '').trim();
+    for (let i = versions.length - 1; i >= 0; i -= 1) {
+        const version = versions[i];
+        if (!version) {
+            continue;
+        }
+        if (
+            String(version.visual_description || '').trim() === visual
+            && String(version.html || '').trim() === html
+        ) {
+            return version;
+        }
+    }
+    return null;
+}
+
 export type BeatHtmlVisualState = 'missing' | 'ok' | 'error';
 
 export const BEAT_QA_STATUSES: BeatQaActionStatus[] = [

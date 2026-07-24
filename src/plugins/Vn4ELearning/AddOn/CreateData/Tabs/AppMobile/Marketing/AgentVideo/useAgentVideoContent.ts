@@ -48,6 +48,7 @@ import {
     enqueueGeminiWebBeatFill,
     enqueueGeminiWebBeatDivision,
     enqueueGeminiWebBeatQuickIterate,
+    enqueueGeminiWebBeatRefineHtml,
     enqueueGeminiWebThumbnailFill,
     enqueueGeminiWebThumbnailIdea,
     captureAgentThumbnail,
@@ -122,6 +123,7 @@ import {
     listMissingBeatIds,
     listBeatRenderErrorIds,
     isWorkingBeatDirtyVsActive,
+    findBeatVersionMatchingWorking,
     parseBeatHtmlEntry,
     parseBeatMapJson,
     parseBeatVersionsBlock,
@@ -222,6 +224,110 @@ function mergeUniqueIds(prev: string[], ids: string[]): string[] {
         }
     }
     return merged;
+}
+
+type BeatIterateSession = {
+    beatId: string;
+    note: string;
+    kind: 'quick_iterate' | 'edit_html';
+    /** HTML lúc bắt đầu iterate — dùng để biết HTML mới đã về chưa. */
+    baselineHtml: string;
+    baselineVisual: string;
+    baselineUpdatedAt: string;
+    /** Đã thấy job refine HTML của đúng beat này trong session (tránh tin status completed cũ). */
+    seenHtmlJobForBeat: boolean;
+};
+
+type BeatIteratePollContext = {
+    visualStatusRaw: string;
+    htmlStatusRaw: string;
+    visualActiveIds: string[];
+    htmlActiveIds: string[];
+    htmlProgressBeatId: string;
+};
+
+/** Pipeline refine xong khi status terminal hoặc stale processing nhưng queue đã hết job. */
+function isGeminiRefinePipelineDone(statusRaw: string, activeIds: string[]): boolean {
+    if (statusRaw === 'completed' || statusRaw === 'failed') {
+        return true;
+    }
+    return (statusRaw === 'queued' || statusRaw === 'processing') && activeIds.length === 0;
+}
+
+function canFinalizeBeatIterateSession(
+    session: BeatIterateSession,
+    ctx: BeatIteratePollContext,
+    currentHtml: string,
+    currentVisual: string,
+    currentUpdatedAt: string,
+): boolean {
+    const { visualStatusRaw, htmlStatusRaw, visualActiveIds, htmlActiveIds } = ctx;
+    if (visualActiveIds.length > 0 || htmlActiveIds.length > 0) {
+        return false;
+    }
+    // Bắt buộc đã thấy HTML job của session này — không finalize vì gemini_refine_html
+    // còn status=completed từ lần chạy trước (race visual xong → html chain chưa enqueue).
+    if (!session.seenHtmlJobForBeat) {
+        return false;
+    }
+    if (htmlStatusRaw === 'none') {
+        return false;
+    }
+    const htmlDone = isGeminiRefinePipelineDone(htmlStatusRaw, htmlActiveIds);
+    if (!htmlDone) {
+        return false;
+    }
+    if (session.kind === 'quick_iterate') {
+        const visualDone = isGeminiRefinePipelineDone(visualStatusRaw, visualActiveIds);
+        if (!visualDone) {
+            return false;
+        }
+        // Quick iterate luôn fill HTML mới — chưa đổi HTML so baseline → chưa snapshot
+        // (tránh lưu version với visual mới + HTML cũ giữa chain).
+        if (String(currentHtml || '').trim() === String(session.baselineHtml || '').trim()) {
+            return false;
+        }
+        return true;
+    }
+    // edit_html: đợi HTML đổi hoặc updated_at mới (refine có thể giữ nội dung gần giống).
+    const htmlChanged = String(currentHtml || '').trim() !== String(session.baselineHtml || '').trim();
+    const updatedAt = String(currentUpdatedAt || '').trim();
+    const baselineUpdatedAt = String(session.baselineUpdatedAt || '').trim();
+    if (htmlChanged) {
+        return true;
+    }
+    if (updatedAt !== '' && baselineUpdatedAt !== '' && updatedAt > baselineUpdatedAt) {
+        return true;
+    }
+    if (updatedAt !== '' && baselineUpdatedAt === '') {
+        return true;
+    }
+    return false;
+}
+
+function markBeatIterateHtmlJobSeen(
+    sessions: Record<string, BeatIterateSession>,
+    htmlActiveIds: string[],
+    htmlProgressBeatId: string,
+    htmlStatusRaw: string,
+): boolean {
+    let changed = false;
+    const progressId = String(htmlProgressBeatId || '').trim();
+    const htmlBusy = htmlStatusRaw === 'queued' || htmlStatusRaw === 'processing';
+    Object.keys(sessions).forEach((beatId) => {
+        const session = sessions[beatId];
+        if (!session || session.seenHtmlJobForBeat) {
+            return;
+        }
+        if (
+            htmlActiveIds.includes(beatId)
+            || (htmlBusy && progressId === beatId)
+        ) {
+            session.seenHtmlJobForBeat = true;
+            changed = true;
+        }
+    });
+    return changed;
 }
 
 import {
@@ -335,17 +441,29 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [geminiRefineVisualError, setGeminiRefineVisualError] = React.useState('');
     const [geminiRefineHtmlStatus, setGeminiRefineHtmlStatus] = React.useState('none');
     const [geminiRefineHtmlError, setGeminiRefineHtmlError] = React.useState('');
-    const [quickIterateQueue, setQuickIterateQueue] = React.useState<Array<{ beatId: string; note: string }>>([]);
+    type QaIterateQueueItem = {
+        beatId: string;
+        note: string;
+        kind: 'quick_iterate' | 'edit_html';
+    };
+    const [quickIterateQueue, setQuickIterateQueue] = React.useState<QaIterateQueueItem[]>([]);
     const [quickIterateActiveBeatId, setQuickIterateActiveBeatId] = React.useState<string | null>(null);
     /** Beat đã gọi API enqueue thành công — sống sót qua refresh nhờ job queue backend. */
-    const quickIterateQueueRef = React.useRef<Array<{ beatId: string; note: string }>>([]);
+    const quickIterateQueueRef = React.useRef<QaIterateQueueItem[]>([]);
     const quickIterateActiveBeatIdRef = React.useRef<string | null>(null);
     /** Beat đang gọi API enqueue (tránh double-click trước khi response về). */
     const quickIterateEnqueueingRef = React.useRef<Set<string>>(new Set());
     /** Label version snapshot trước iterate (nếu đã lưu) — dùng toast khi fail. */
     const quickIteratePreSnapshotLabelRef = React.useRef<Record<string, string>>({});
-    /** Tránh double-fire khi completion effect chạy post-snapshot async. */
+    /** Tránh double-fire khi completion effect xử lý fail. */
     const quickIterateFinishingRef = React.useRef(false);
+    /** Session iterate đang chờ lưu version sau khi fill/refine HTML thật sự xong. */
+    const beatIterateSessionRef = React.useRef<Record<string, BeatIterateSession>>({});
+    /** Context poll mới nhất — finalize đọc sau khi beatHtml đã sync. */
+    const beatIteratePollContextRef = React.useRef<BeatIteratePollContext | null>(null);
+    const [beatIteratePollTick, setBeatIteratePollTick] = React.useState(0);
+    /** Tránh lưu version trùng cho cùng một beat trong cùng session. */
+    const postSnapshotInFlightRef = React.useRef<Set<string>>(new Set());
     const [geminiThumbnailFillStatus, setGeminiThumbnailFillStatus] = React.useState('none');
     const [geminiThumbnailIdeaStatus, setGeminiThumbnailIdeaStatus] = React.useState('none');
     const [thumbnailGeminiIdeaError, setThumbnailGeminiIdeaError] = React.useState('');
@@ -454,6 +572,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatHtml, setBeatHtml] = React.useState<Record<string, BeatHtmlEntry>>({});
     const [beatVersions, setBeatVersions] = React.useState<BeatVersionsByBeatId>({});
     const [beatActiveVersionId, setBeatActiveVersionId] = React.useState<Record<string, string>>({});
+    const beatVersionsRef = React.useRef<BeatVersionsByBeatId>({});
+    const beatActiveVersionIdRef = React.useRef<Record<string, string>>({});
+    beatVersionsRef.current = beatVersions;
+    beatActiveVersionIdRef.current = beatActiveVersionId;
     const [beatMapReady, setBeatMapReady] = React.useState(false);
     const [beatsHtmlTotal, setBeatsHtmlTotal] = React.useState(0);
     const [beatsHtmlCompleted, setBeatsHtmlCompleted] = React.useState(0);
@@ -697,30 +819,49 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
         const geminiRefineVisual = res?.import_html?.gemini_refine_visual;
-        setGeminiRefineVisualStatus(String(geminiRefineVisual?.status || 'none'));
-        setGeminiRefineVisualError(String(geminiRefineVisual?.error || '').trim());
         const geminiRefineHtml = res?.import_html?.gemini_refine_html;
-        setGeminiRefineHtmlStatus(String(geminiRefineHtml?.status || 'none'));
+        const visualStatusRaw = String(geminiRefineVisual?.status || 'none');
+        const htmlStatusRaw = String(geminiRefineHtml?.status || 'none');
+        const visualActiveIds = Array.isArray(geminiRefineVisual?.active_beat_ids)
+            ? geminiRefineVisual.active_beat_ids
+                .map((id: unknown) => String(id || '').trim())
+                .filter(Boolean)
+            : [];
+        const htmlActiveIds = Array.isArray(geminiRefineHtml?.active_beat_ids)
+            ? geminiRefineHtml.active_beat_ids
+                .map((id: unknown) => String(id || '').trim())
+                .filter(Boolean)
+            : [];
+        // Aggregate status có thể stale processing sau khi job đã completed trên queue.
+        // Tin active_beat_ids (job thật) hơn status để tránh kẹt border vàng.
+        const visualStatus = (
+            (visualStatusRaw === 'queued' || visualStatusRaw === 'processing')
+            && visualActiveIds.length === 0
+        ) ? 'completed' : visualStatusRaw;
+        const htmlStatus = (
+            (htmlStatusRaw === 'queued' || htmlStatusRaw === 'processing')
+            && htmlActiveIds.length === 0
+        ) ? 'completed' : htmlStatusRaw;
+        setGeminiRefineVisualStatus(visualStatus);
+        setGeminiRefineVisualError(String(geminiRefineVisual?.error || '').trim());
+        setGeminiRefineHtmlStatus(htmlStatus);
         setGeminiRefineHtmlError(String(geminiRefineHtml?.error || '').trim());
-        // Reload: sync UI quick-iterate theo job thật trên queue (active_beat_ids).
-        const visualStatus = String(geminiRefineVisual?.status || 'none');
-        const htmlStatus = String(geminiRefineHtml?.status || 'none');
+
         const visualBusy = visualStatus === 'queued' || visualStatus === 'processing';
         const htmlBusy = htmlStatus === 'queued' || htmlStatus === 'processing';
+        const serverActiveBeatIds = Array.from(new Set([
+            ...visualActiveIds,
+            ...htmlActiveIds,
+        ]));
         const progressBeatId = String(
             (htmlBusy ? geminiRefineHtml?.progress?.beat_id : '')
             || (visualBusy ? geminiRefineVisual?.progress?.beat_id : '')
             || '',
         ).trim();
-        const serverActiveBeatIds = Array.from(new Set([
-            ...(Array.isArray(geminiRefineVisual?.active_beat_ids)
-                ? geminiRefineVisual.active_beat_ids
-                : []),
-            ...(Array.isArray(geminiRefineHtml?.active_beat_ids)
-                ? geminiRefineHtml.active_beat_ids
-                : []),
-            ...(progressBeatId && (visualBusy || htmlBusy) ? [progressBeatId] : []),
-        ].map((id) => String(id || '').trim()).filter(Boolean)));
+        const activeProgressBeatId = (
+            progressBeatId
+            && serverActiveBeatIds.includes(progressBeatId)
+        ) ? progressBeatId : '';
 
         const enqueueingIds = Array.from(quickIterateEnqueueingRef.current);
         const displayIds = Array.from(new Set([
@@ -730,23 +871,34 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         if (displayIds.length > 0) {
             const noteById: Record<string, string> = {};
+            const kindById: Record<string, QaIterateQueueItem['kind']> = {};
             quickIterateQueueRef.current.forEach((item) => {
                 if (item.beatId) {
                     noteById[item.beatId] = item.note || '';
+                    kindById[item.beatId] = item.kind || 'quick_iterate';
                 }
             });
+            // Beat mới từ server: chỉ HTML busy (không visual) → edit_html; còn lại quick_iterate.
+            const defaultKind: QaIterateQueueItem['kind'] = (htmlBusy && !visualBusy)
+                ? 'edit_html'
+                : 'quick_iterate';
             const nextQueue = displayIds.map((beatId) => ({
                 beatId,
                 note: noteById[beatId] || '',
+                kind: kindById[beatId] || defaultKind,
             }));
-            const prevKey = quickIterateQueueRef.current.map((item) => item.beatId).join('|');
-            const nextKey = nextQueue.map((item) => item.beatId).join('|');
+            const prevKey = quickIterateQueueRef.current
+                .map((item) => `${item.beatId}:${item.kind}`)
+                .join('|');
+            const nextKey = nextQueue
+                .map((item) => `${item.beatId}:${item.kind}`)
+                .join('|');
             if (prevKey !== nextKey) {
                 quickIterateQueueRef.current = nextQueue;
                 setQuickIterateQueue(nextQueue);
             }
-            const nextActive = (progressBeatId && displayIds.includes(progressBeatId)
-                ? progressBeatId
+            const nextActive = (activeProgressBeatId && displayIds.includes(activeProgressBeatId)
+                ? activeProgressBeatId
                 : '')
                 || serverActiveBeatIds[0]
                 || enqueueingIds[0]
@@ -759,8 +911,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             !quickIterateFinishingRef.current
             && (quickIterateQueueRef.current.length > 0 || quickIterateActiveBeatIdRef.current)
         ) {
-            // Không còn job pending/processing trên queue → tắt UI đang chạy
-            // (kể cả khi aggregate status còn stale queued/processing).
+            // Job xong trên server — tắt UI busy; post-snapshot chạy qua beatIterateSessionRef.
             quickIterateQueueRef.current = [];
             setQuickIterateQueue([]);
             quickIterateActiveBeatIdRef.current = null;
@@ -918,6 +1069,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 }
             });
             Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
+                // Giữ local chỉ khi debounce save; không ghi đè HTML server khi đang iterate.
+                if (beatIterateSessionRef.current[beatId]) {
+                    return;
+                }
                 if (prev[beatId]?.html?.trim()) {
                     nextBeatHtml[beatId] = prev[beatId];
                 }
@@ -934,6 +1089,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         .filter(([beatId, versionId]) => Boolean(beatId) && Boolean(versionId)),
                 )
                 : {},
+        );
+        beatVersionsRef.current = parseBeatVersionsBlock(importSummary?.beat_versions);
+        beatActiveVersionIdRef.current = (
+            importSummary?.beat_active_version_id
+            && typeof importSummary.beat_active_version_id === 'object'
+                ? Object.fromEntries(
+                    Object.entries(importSummary.beat_active_version_id)
+                        .map(([beatId, versionId]) => [beatId, String(versionId || '').trim()])
+                        .filter(([beatId, versionId]) => Boolean(beatId) && Boolean(versionId)),
+                )
+                : {}
         );
         setBeatMapReady(Boolean(importSummary?.beat_map_ready));
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
@@ -965,6 +1131,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setTopicResearchUrlsText(nextUrlsText);
         setSavedTopicResearchTopic(nextTopic);
         setSavedTopicResearchUrlsText(nextUrlsText);
+
+        if (Object.keys(beatIterateSessionRef.current).length > 0) {
+            const htmlProgressBeatId = String(geminiRefineHtml?.progress?.beat_id || '').trim();
+            markBeatIterateHtmlJobSeen(
+                beatIterateSessionRef.current,
+                htmlActiveIds,
+                htmlProgressBeatId,
+                htmlStatusRaw,
+            );
+            beatIteratePollContextRef.current = {
+                visualStatusRaw,
+                htmlStatusRaw,
+                visualActiveIds,
+                htmlActiveIds,
+                htmlProgressBeatId,
+            };
+            setBeatIteratePollTick((tick) => tick + 1);
+        }
     }, [applyImportHtmlResources, resolveScriptFromResponse]);
 
     const handleAudioScriptChange = React.useCallback((value: string) => {
@@ -1638,12 +1822,28 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setGeminiFillStatus(nextGeminiStatus);
         }
         if (summary.gemini_refine_visual) {
-            setGeminiRefineVisualStatus(String(summary.gemini_refine_visual.status || 'none'));
-            setGeminiRefineVisualError(String(summary.gemini_refine_visual.error || '').trim());
+            const block = summary.gemini_refine_visual;
+            const raw = String(block.status || 'none');
+            const activeIds = Array.isArray(block.active_beat_ids)
+                ? block.active_beat_ids.map((id) => String(id || '').trim()).filter(Boolean)
+                : [];
+            const next = (
+                (raw === 'queued' || raw === 'processing') && activeIds.length === 0
+            ) ? 'completed' : raw;
+            setGeminiRefineVisualStatus(next);
+            setGeminiRefineVisualError(String(block.error || '').trim());
         }
         if (summary.gemini_refine_html) {
-            setGeminiRefineHtmlStatus(String(summary.gemini_refine_html.status || 'none'));
-            setGeminiRefineHtmlError(String(summary.gemini_refine_html.error || '').trim());
+            const block = summary.gemini_refine_html;
+            const raw = String(block.status || 'none');
+            const activeIds = Array.isArray(block.active_beat_ids)
+                ? block.active_beat_ids.map((id) => String(id || '').trim()).filter(Boolean)
+                : [];
+            const next = (
+                (raw === 'queued' || raw === 'processing') && activeIds.length === 0
+            ) ? 'completed' : raw;
+            setGeminiRefineHtmlStatus(next);
+            setGeminiRefineHtmlError(String(block.error || '').trim());
         }
         const thumbFill = summary.gemini_thumbnail_fill ?? summary.thumbnail?.gemini_fill;
         if (thumbFill) {
@@ -1683,6 +1883,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     }
                 });
                 Object.keys(beatHtmlSaveTimerRef.current).forEach((beatId) => {
+                    // Giữ local chỉ khi debounce save; không ghi đè HTML server khi đang iterate.
+                    if (beatIterateSessionRef.current[beatId]) {
+                        return;
+                    }
                     if (prev[beatId]?.html?.trim()) {
                         nextBeatHtml[beatId] = prev[beatId];
                     }
@@ -2407,13 +2611,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
             qaRefineNote?: string;
         },
-        options?: { quiet?: boolean },
+        options?: { quiet?: boolean; trustServer?: boolean },
     ): Promise<string | null> => {
         const normalizedId = String(beatId || '').trim();
         if (!normalizedId) {
             return null;
         }
-        if (!String(beatHtml[normalizedId]?.html || '').trim()) {
+        if (
+            !options?.trustServer
+            && !String(beatHtml[normalizedId]?.html || '').trim()
+        ) {
             if (!options?.quiet) {
                 showMessage('Chỉ lưu version khi beat đã có HTML', 'warning');
             }
@@ -2435,6 +2642,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             if (res.import_html) {
                 applyImportHtmlSummary(res.import_html);
+                if (res.import_html.beat_versions !== undefined) {
+                    const nextVersions = parseBeatVersionsBlock(res.import_html.beat_versions);
+                    beatVersionsRef.current = nextVersions;
+                }
+                if (res.import_html.beat_active_version_id !== undefined) {
+                    const rawActive = res.import_html.beat_active_version_id;
+                    beatActiveVersionIdRef.current = (
+                        rawActive && typeof rawActive === 'object'
+                            ? Object.fromEntries(
+                                Object.entries(rawActive)
+                                    .map(([id, versionId]) => [id, String(versionId || '').trim()])
+                                    .filter(([id, versionId]) => Boolean(id) && Boolean(versionId)),
+                            )
+                            : {}
+                    );
+                }
             }
             const label = String(res.beat_version?.version_label || '').trim();
             return label || null;
@@ -2485,13 +2708,33 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         );
         const workingVisual = String(workingSection?.visual_description || '');
         const workingHtml = String(beatHtml[normalizedId]?.html || '');
-        const activeVersionId = String(beatActiveVersionId[normalizedId] || '').trim();
-        const versions = beatVersions[normalizedId] || [];
+        const versions = beatVersionsRef.current[normalizedId] || beatVersions[normalizedId] || [];
+        const activeVersionId = String(
+            beatActiveVersionIdRef.current[normalizedId]
+            || beatActiveVersionId[normalizedId]
+            || '',
+        ).trim();
         const activeVersion = activeVersionId
             ? (versions.find((v) => v.version_id === activeVersionId) || null)
             : null;
+        // Ưu tiên khớp bất kỳ version đã lưu (thường là latest) — tránh pre-snapshot trùng
+        // khi active FE còn trỏ version cũ nhưng working đã = Vn mới.
+        const matchingVersion = findBeatVersionMatchingWorking(
+            versions,
+            workingVisual,
+            workingHtml,
+        );
 
-        if (isWorkingBeatDirtyVsActive(workingVisual, workingHtml, activeVersion)) {
+        if (matchingVersion) {
+            delete quickIteratePreSnapshotLabelRef.current[normalizedId];
+            if (matchingVersion.version_id !== activeVersionId) {
+                // Sync active về bản đã khớp (backend dedupe, không tạo version mới).
+                await handleSaveBeatVersion(normalizedId, {
+                    qaStatus: beatHtml[normalizedId]?.qa_status || '',
+                    qaRefineNote: beatHtml[normalizedId]?.qa_refine_note || note,
+                }, { quiet: true, trustServer: true });
+            }
+        } else if (isWorkingBeatDirtyVsActive(workingVisual, workingHtml, activeVersion)) {
             const preLabel = await handleSaveBeatVersion(normalizedId, {
                 qaStatus: beatHtml[normalizedId]?.qa_status || '',
                 qaRefineNote: beatHtml[normalizedId]?.qa_refine_note || note,
@@ -2534,9 +2777,19 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
             quickIterateQueueRef.current = [
                 ...quickIterateQueueRef.current.filter((item) => item.beatId !== normalizedId),
-                { beatId: normalizedId, note },
+                { beatId: normalizedId, note, kind: 'quick_iterate' },
             ];
             setQuickIterateQueue(quickIterateQueueRef.current);
+            beatIterateSessionRef.current[normalizedId] = {
+                beatId: normalizedId,
+                note,
+                kind: 'quick_iterate',
+                baselineHtml: workingHtml,
+                baselineVisual: workingVisual,
+                baselineUpdatedAt: String(beatHtml[normalizedId]?.updated_at || ''),
+                seenHtmlJobForBeat: false,
+            };
+            postSnapshotInFlightRef.current.delete(normalizedId);
             quickIterateActiveBeatIdRef.current = normalizedId;
             setQuickIterateActiveBeatId(normalizedId);
             if (res.gemini_refine_visual) {
@@ -2546,6 +2799,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setGeminiRefineVisualStatus('queued');
                 setGeminiRefineVisualError('');
             }
+            // Chờ HTML chain — đừng giữ status completed từ lần trước.
+            setGeminiRefineHtmlStatus('none');
             setGeminiRefineHtmlError('');
             showMessage(
                 parseApiMessage(res?.message) || `Đã đưa ${normalizedId} vào queue tạo visual + fill`,
@@ -2578,7 +2833,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         showMessage,
     ]);
 
-    // Hoàn tất / fail quick iterate: post-snapshot khi success; toast kèm pre-label khi fail.
+    // Fail quick iterate / edit HTML — dọn session + toast.
     React.useEffect(() => {
         if (quickIterateQueue.length === 0) {
             return;
@@ -2593,96 +2848,238 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
         const visualFailed = geminiRefineVisualStatus === 'failed';
         const htmlFailed = geminiRefineHtmlStatus === 'failed';
-        if (visualFailed || htmlFailed) {
-            if (quickIterateFinishingRef.current) {
-                return;
-            }
-            quickIterateFinishingRef.current = true;
-            const beatId = quickIterateActiveBeatId
-                || quickIterateQueue[quickIterateQueue.length - 1]?.beatId
-                || '';
-            const preLabel = beatId ? quickIteratePreSnapshotLabelRef.current[beatId] : undefined;
-            const err = (visualFailed ? geminiRefineVisualError : '')
-                || (htmlFailed ? geminiRefineHtmlError : '')
-                || 'Tạo visual + fill thất bại';
+        if (!visualFailed && !htmlFailed) {
+            return;
+        }
+        if (quickIterateFinishingRef.current) {
+            return;
+        }
+        quickIterateFinishingRef.current = true;
+        const beatId = quickIterateActiveBeatId
+            || quickIterateQueue[quickIterateQueue.length - 1]?.beatId
+            || '';
+        const failedItem = quickIterateQueue.find((item) => item.beatId === beatId)
+            || quickIterateQueue[quickIterateQueue.length - 1];
+        const preLabel = beatId ? quickIteratePreSnapshotLabelRef.current[beatId] : undefined;
+        const defaultErr = failedItem?.kind === 'edit_html'
+            ? 'Sửa HTML thất bại'
+            : 'Tạo visual + fill thất bại';
+        const err = (visualFailed ? geminiRefineVisualError : '')
+            || (htmlFailed ? geminiRefineHtmlError : '')
+            || defaultErr;
+        if (failedItem?.kind === 'edit_html') {
+            showMessage(err, 'error');
+        } else {
             showMessage(
                 preLabel
                     ? `${err}. Bản trước đã được lưu ${preLabel}`
                     : `${err}. Working có thể đã lệch — kiểm tra tab Version`,
                 'error',
             );
-            quickIterateQueue.forEach((item) => {
-                delete quickIteratePreSnapshotLabelRef.current[item.beatId];
-            });
-            quickIterateQueueRef.current = [];
-            setQuickIterateQueue([]);
-            quickIterateActiveBeatIdRef.current = null;
-            setQuickIterateActiveBeatId(null);
-            quickIterateFinishingRef.current = false;
-            return;
         }
-
-        if (
-            (geminiRefineVisualStatus === 'completed' || geminiRefineVisualStatus === 'none')
-            && (geminiRefineHtmlStatus === 'completed' || geminiRefineHtmlStatus === 'none')
-        ) {
-            // Visual vừa xong, html chain chưa kịp lên status — chỉ chờ nếu vẫn còn job active
-            // (queue FE còn / active id còn). Không thì coi như xong để tránh kẹt UI.
-            if (
-                geminiRefineVisualStatus === 'completed'
-                && geminiRefineHtmlStatus === 'none'
-                && quickIterateQueue.length > 0
-            ) {
-                // Cho poll tiếp; loadRow sẽ clear nếu active_beat_ids rỗng.
-                return;
-            }
-            if (
-                geminiRefineHtmlStatus === 'completed'
-                || geminiRefineVisualStatus === 'completed'
-                || geminiRefineVisualStatus === 'none'
-            ) {
-                if (quickIterateFinishingRef.current) {
-                    return;
-                }
-                quickIterateFinishingRef.current = true;
-                const finishedBeats = [...quickIterateQueue];
-                void (async () => {
-                    for (const item of finishedBeats) {
-                        const beatId = item.beatId;
-                        const postLabel = await handleSaveBeatVersion(beatId, {
-                            qaStatus: beatHtml[beatId]?.qa_status || '',
-                            qaRefineNote: beatHtml[beatId]?.qa_refine_note || item.note || '',
-                        }, { quiet: true });
-                        delete quickIteratePreSnapshotLabelRef.current[beatId];
-                        if (postLabel) {
-                            showMessage(
-                                `Đã tạo visual + fill xong ${beatId} · đã lưu ${postLabel}`,
-                                'success',
-                            );
-                        } else {
-                            showMessage(
-                                `Đã tạo visual + fill xong ${beatId} nhưng chưa lưu được version mới — bấm Lưu version tay`,
-                                'warning',
-                            );
-                        }
-                    }
-                    quickIterateQueueRef.current = [];
-                    setQuickIterateQueue([]);
-                    quickIterateActiveBeatIdRef.current = null;
-                    setQuickIterateActiveBeatId(null);
-                    quickIterateFinishingRef.current = false;
-                })();
-            }
-        }
+        quickIterateQueue.forEach((item) => {
+            delete quickIteratePreSnapshotLabelRef.current[item.beatId];
+            delete beatIterateSessionRef.current[item.beatId];
+            postSnapshotInFlightRef.current.delete(item.beatId);
+        });
+        quickIterateQueueRef.current = [];
+        setQuickIterateQueue([]);
+        quickIterateActiveBeatIdRef.current = null;
+        setQuickIterateActiveBeatId(null);
+        quickIterateFinishingRef.current = false;
     }, [
-        beatHtml,
         geminiRefineHtmlError,
         geminiRefineHtmlStatus,
         geminiRefineVisualError,
         geminiRefineVisualStatus,
-        handleSaveBeatVersion,
         quickIterateActiveBeatId,
         quickIterateQueue,
+        showMessage,
+    ]);
+
+    // Post-snapshot: chỉ khi pipeline HTML thật sự xong (tránh snapshot sớm giữa visual→html chain).
+    React.useEffect(() => {
+        const ctx = beatIteratePollContextRef.current;
+        const sessions = Object.values(beatIterateSessionRef.current);
+        if (!ctx || sessions.length === 0) {
+            return;
+        }
+
+        void (async () => {
+            for (const session of sessions) {
+                const beatId = session.beatId;
+                if (postSnapshotInFlightRef.current.has(beatId)) {
+                    continue;
+                }
+                const currentHtml = String(beatHtml[beatId]?.html || '');
+                const currentVisual = String(
+                    beatMap?.sections.find(
+                        (s) => String(s.beat_id || s.id || '').trim() === beatId,
+                    )?.visual_description || '',
+                );
+                const currentUpdatedAt = String(beatHtml[beatId]?.updated_at || '');
+                if (!canFinalizeBeatIterateSession(
+                    session,
+                    ctx,
+                    currentHtml,
+                    currentVisual,
+                    currentUpdatedAt,
+                )) {
+                    continue;
+                }
+
+                postSnapshotInFlightRef.current.add(beatId);
+                // Backend dedupe nếu html+visual trùng latest — luôn gọi để sync active + lấy label.
+                const postLabel = await handleSaveBeatVersion(beatId, {
+                    qaStatus: beatHtml[beatId]?.qa_status || '',
+                    qaRefineNote: beatHtml[beatId]?.qa_refine_note || session.note || '',
+                }, { quiet: true, trustServer: true });
+                delete quickIteratePreSnapshotLabelRef.current[beatId];
+                postSnapshotInFlightRef.current.delete(beatId);
+
+                if (!postLabel) {
+                    continue;
+                }
+
+                // Nếu vẫn trùng baseline (dedupe / race) thì giữ session để poll lại.
+                // trustServer đã sync beatVersionsRef — version mới nhất phải khác baseline HTML.
+                const latestVersion = (beatVersionsRef.current[beatId] || []).slice(-1)[0];
+                const latestHtml = String(latestVersion?.html || '').trim();
+                const baselineHtml = String(session.baselineHtml || '').trim();
+                if (
+                    session.kind === 'quick_iterate'
+                    && latestHtml !== ''
+                    && latestHtml === baselineHtml
+                ) {
+                    continue;
+                }
+
+                delete beatIterateSessionRef.current[beatId];
+
+                if (session.kind === 'edit_html') {
+                    showMessage(`Đã sửa HTML xong ${beatId} · đã lưu ${postLabel}`, 'success');
+                    continue;
+                }
+                showMessage(
+                    `Đã tạo visual + fill xong ${beatId} · đã lưu ${postLabel}`,
+                    'success',
+                );
+            }
+        })();
+    }, [
+        beatHtml,
+        beatMap,
+        beatIteratePollTick,
+        handleSaveBeatVersion,
+        showMessage,
+    ]);
+
+    const handleEditHtmlBeatFromQa = React.useCallback(async (
+        beatId: string,
+        qaRefineNote: string,
+    ): Promise<boolean> => {
+        const normalizedId = String(beatId || '').trim();
+        const note = String(qaRefineNote || '').trim();
+        if (!normalizedId) {
+            return false;
+        }
+        if (!note) {
+            showMessage('Cần nhập ghi chú refine trước khi sửa HTML', 'warning');
+            return false;
+        }
+        if (!String(beatHtml[normalizedId]?.html || '').trim()) {
+            showMessage('Cần có HTML beat trước khi sửa HTML', 'warning');
+            return false;
+        }
+        if (
+            quickIterateEnqueueingRef.current.has(normalizedId)
+            || quickIterateQueueRef.current.some((item) => item.beatId === normalizedId)
+        ) {
+            showMessage(`${normalizedId} đang trong hàng đợi sửa HTML / visual + fill`, 'info');
+            return false;
+        }
+
+        quickIterateEnqueueingRef.current.add(normalizedId);
+        setBeatHtml((prev) => ({
+            ...prev,
+            [normalizedId]: {
+                ...prev[normalizedId],
+                html: prev[normalizedId]?.html || '',
+                qa_status: 'needs_html_refill',
+                qa_refine_note: note || undefined,
+            },
+        }));
+
+        try {
+            const saved = await persistImportHtml({
+                beatId: normalizedId,
+                qaStatus: 'needs_html_refill',
+                qaRefineNote: note,
+            });
+            if (!saved) {
+                showMessage(`Không lưu được QA trước khi sửa HTML (${normalizedId})`, 'error');
+                return false;
+            }
+
+            const res = await enqueueGeminiWebBeatRefineHtml(shortVideoId, [normalizedId]);
+            const queuedCount = Number(res?.queued || 0);
+            const skippedActive = Number(res?.skipped_active || 0);
+            if (!res?.success || (queuedCount <= 0 && skippedActive <= 0)) {
+                showMessage(
+                    parseApiMessage(res?.message)
+                        || `Enqueue sửa HTML thất bại (${normalizedId})`,
+                    'error',
+                );
+                return false;
+            }
+
+            quickIterateQueueRef.current = [
+                ...quickIterateQueueRef.current.filter((item) => item.beatId !== normalizedId),
+                { beatId: normalizedId, note, kind: 'edit_html' },
+            ];
+            setQuickIterateQueue(quickIterateQueueRef.current);
+            beatIterateSessionRef.current[normalizedId] = {
+                beatId: normalizedId,
+                note,
+                kind: 'edit_html',
+                baselineHtml: String(beatHtml[normalizedId]?.html || ''),
+                baselineVisual: String(
+                    beatMap?.sections.find(
+                        (s) => String(s.beat_id || s.id || '').trim() === normalizedId,
+                    )?.visual_description || '',
+                ),
+                baselineUpdatedAt: String(beatHtml[normalizedId]?.updated_at || ''),
+                // Chỉ coi là đã thấy job nếu server báo beat đang active (tránh tin completed cũ).
+                seenHtmlJobForBeat: skippedActive > 0,
+            };
+            postSnapshotInFlightRef.current.delete(normalizedId);
+            quickIterateActiveBeatIdRef.current = normalizedId;
+            setQuickIterateActiveBeatId(normalizedId);
+            if (res.gemini_refine_html) {
+                setGeminiRefineHtmlStatus(String(res.gemini_refine_html.status || 'queued'));
+                setGeminiRefineHtmlError(String(res.gemini_refine_html.error || '').trim());
+            } else {
+                setGeminiRefineHtmlStatus('queued');
+                setGeminiRefineHtmlError('');
+            }
+            showMessage(
+                parseApiMessage(res?.message) || `Đã đưa ${normalizedId} vào queue sửa HTML`,
+                'success',
+            );
+            await loadRow({ syncAggregate: true, includeCatalogs: false });
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            quickIterateEnqueueingRef.current.delete(normalizedId);
+        }
+    }, [
+        beatHtml,
+        beatMap,
+        loadRow,
+        persistImportHtml,
+        shortVideoId,
         showMessage,
     ]);
 
@@ -5180,6 +5577,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatVisualDescriptionChange,
         handleSaveBeatQa,
         handleQuickIterateBeatFromQa,
+        handleEditHtmlBeatFromQa,
         handleSaveBeatVersion,
         handleRestoreBeatVersion,
         handleBeatHtmlChange,

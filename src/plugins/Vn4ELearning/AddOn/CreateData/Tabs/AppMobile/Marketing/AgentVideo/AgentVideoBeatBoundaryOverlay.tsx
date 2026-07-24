@@ -9,6 +9,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
     Box,
@@ -57,6 +58,7 @@ type Props = {
     onOpenGemini?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
+    onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
     beatVersions?: Record<string, BeatVersion[]>;
     beatActiveVersionId?: Record<string, string>;
     onRestoreBeatVersion?: (beatId: string, versionId: string, label: string) => Promise<string | null>;
@@ -106,6 +108,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     onOpenGemini,
     onOpenGeminiHeadless,
     onSaveBeatQa,
+    onQuickIterateBeat,
     beatVersions = {},
     beatActiveVersionId = {},
     onRestoreBeatVersion,
@@ -248,6 +251,13 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const activeVersionId = String(beatActiveVersionId?.[segment.beatId] || '');
                     const isApproved = qaStatus === 'approved';
                     const isSavingQa = savingQaBeatId === segment.beatId;
+                    const hasBeatHtml = Boolean(String(beatHtml[segment.beatId]?.html || '').trim());
+                    const canQuickIterateFromTimeline = Boolean(
+                        onQuickIterateBeat
+                        && hasBeatHtml
+                        && !isBusy
+                        && !savingImportHtml,
+                    );
                     const showApprovedBorder = isApproved && !isQuickIterating;
                     const quickIterateTooltip = quickIterateStage
                         ? QUICK_ITERATE_STAGE_TOOLTIP[quickIterateStage]
@@ -592,77 +602,141 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         <InfoOutlinedIcon sx={{ fontSize: 15 }} />
                                     </IconButton>
                                 </Tooltip>
-                                {versions.length > 0 ? (
-                                    <Box
-                                        sx={{
-                                            position: 'absolute',
-                                            left: 4,
-                                            bottom: 3,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 0,
-                                            maxWidth: '58%',
-                                            overflow: 'hidden',
-                                        }}
-                                    >
-                                        {versions.map((version, idx) => {
-                                            const isVersionActive = activeVersionId === version.version_id;
-                                            return (
-                                                <Tooltip
-                                                    key={`beat-version-dot-${segment.beatId}-${version.version_id}`}
-                                                    title={`${version.label}${isVersionActive ? ' · Đang dùng' : ''}`}
-                                                    placement="top"
-                                                >
-                                                    <Box
-                                                        component="button"
-                                                        type="button"
-                                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                                                            event.stopPropagation();
-                                                            onBeatClick?.(segment.beatId);
-                                                            if (!onRestoreBeatVersion || isVersionActive || savingImportHtml) {
-                                                                return;
-                                                            }
-                                                            void onRestoreBeatVersion(
-                                                                segment.beatId,
-                                                                version.version_id,
-                                                                version.label,
-                                                            );
-                                                        }}
-                                                        sx={{
-                                                            m: 0,
-                                                            p: 0,
-                                                            width: 18,
-                                                            height: 18,
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            border: 'none',
-                                                            bgcolor: 'transparent',
-                                                            cursor: (isVersionActive || savingImportHtml || !onRestoreBeatVersion)
-                                                                ? 'default'
-                                                                : 'pointer',
-                                                            opacity: (savingImportHtml && !isVersionActive) ? 0.55 : 1,
-                                                            flexShrink: 0,
-                                                            '&::after': {
-                                                                content: '""',
-                                                                width: 16,
-                                                                height: 16,
-                                                                borderRadius: '50%',
-                                                                border: isVersionActive
-                                                                    ? '2px solid rgba(255,255,255,0.95)'
-                                                                    : '1px solid rgba(255,255,255,0.62)',
-                                                                bgcolor: VERSION_DOT_COLORS[idx % VERSION_DOT_COLORS.length],
-                                                                boxShadow: isVersionActive
-                                                                    ? '0 0 0 1px rgba(0,0,0,0.32)'
-                                                                    : 'none',
-                                                            },
-                                                        }}
-                                                    />
-                                                </Tooltip>
-                                            );
-                                        })}
-                                    </Box>
-                                ) : null}
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        left: 4,
+                                        bottom: 3,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0,
+                                        maxWidth: '62%',
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {versions.map((version, idx) => {
+                                        const isVersionActive = activeVersionId === version.version_id;
+                                        return (
+                                            <Tooltip
+                                                key={`beat-version-dot-${segment.beatId}-${version.version_id}`}
+                                                title={`${version.label}${isVersionActive ? ' · Đang dùng' : ''}`}
+                                                placement="top"
+                                            >
+                                                <Box
+                                                    component="button"
+                                                    type="button"
+                                                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                        event.stopPropagation();
+                                                        onBeatClick?.(segment.beatId);
+                                                        if (!onRestoreBeatVersion || isVersionActive || savingImportHtml) {
+                                                            return;
+                                                        }
+                                                        void onRestoreBeatVersion(
+                                                            segment.beatId,
+                                                            version.version_id,
+                                                            version.label,
+                                                        );
+                                                    }}
+                                                    sx={{
+                                                        m: 0,
+                                                        p: 0,
+                                                        width: 18,
+                                                        height: 18,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        border: 'none',
+                                                        bgcolor: 'transparent',
+                                                        cursor: (isVersionActive || savingImportHtml || !onRestoreBeatVersion)
+                                                            ? 'default'
+                                                            : 'pointer',
+                                                        opacity: (savingImportHtml && !isVersionActive) ? 0.55 : 1,
+                                                        flexShrink: 0,
+                                                        '&::after': {
+                                                            content: '""',
+                                                            width: 16,
+                                                            height: 16,
+                                                            borderRadius: '50%',
+                                                            border: isVersionActive
+                                                                ? '2px solid rgba(255,255,255,0.95)'
+                                                                : '1px solid rgba(255,255,255,0.62)',
+                                                            bgcolor: VERSION_DOT_COLORS[idx % VERSION_DOT_COLORS.length],
+                                                            boxShadow: isVersionActive
+                                                                ? '0 0 0 1px rgba(0,0,0,0.32)'
+                                                                : 'none',
+                                                        },
+                                                    }}
+                                                />
+                                            </Tooltip>
+                                        );
+                                    })}
+                                    {onQuickIterateBeat ? (
+                                        <Tooltip
+                                            title={
+                                                !hasBeatHtml
+                                                    ? 'Cần có HTML beat trước khi tạo visual + fill'
+                                                    : isQuickIterating
+                                                        ? quickIterateTooltip
+                                                        : 'Tạo visual + fill'
+                                            }
+                                            placement="top"
+                                        >
+                                            <Box
+                                                component="button"
+                                                type="button"
+                                                disabled={!canQuickIterateFromTimeline && !isQuickIterating}
+                                                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                                    event.stopPropagation();
+                                                    onBeatClick?.(segment.beatId);
+                                                    if (!canQuickIterateFromTimeline) {
+                                                        return;
+                                                    }
+                                                    const note = String(
+                                                        beatHtml[segment.beatId]?.qa_refine_note || '',
+                                                    ).trim();
+                                                    void onQuickIterateBeat(segment.beatId, note);
+                                                }}
+                                                sx={{
+                                                    m: 0,
+                                                    p: 0,
+                                                    ml: versions.length > 0 ? 0.25 : 0,
+                                                    width: 18,
+                                                    height: 18,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: '50%',
+                                                    border: canQuickIterateFromTimeline || isQuickIterating
+                                                        ? '1.5px solid rgba(251,191,36,0.85)'
+                                                        : '1px solid rgba(255,255,255,0.35)',
+                                                    bgcolor: isQuickIterating
+                                                        ? 'rgba(251,191,36,0.28)'
+                                                        : 'rgba(0,0,0,0.28)',
+                                                    flexShrink: 0,
+                                                    cursor: canQuickIterateFromTimeline || isQuickIterating
+                                                        ? 'pointer'
+                                                        : 'default',
+                                                    opacity: canQuickIterateFromTimeline || isQuickIterating ? 1 : 0.45,
+                                                    boxShadow: isQuickIterating
+                                                        ? '0 0 6px rgba(251,191,36,0.45)'
+                                                        : 'none',
+                                                    '&:disabled': {
+                                                        cursor: 'default',
+                                                    },
+                                                }}
+                                            >
+                                                <AddIcon
+                                                    sx={{
+                                                        fontSize: 12,
+                                                        color: canQuickIterateFromTimeline || isQuickIterating
+                                                            ? '#fcd34d'
+                                                            : 'rgba(255,255,255,0.55)',
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Tooltip>
+                                    ) : null}
+                                </Box>
                             </Box>
                         </Box>
                     );

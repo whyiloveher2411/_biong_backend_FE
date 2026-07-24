@@ -218,6 +218,13 @@ export default function ShortVideoAgentVideoPreview({
         return state.handleQuickIterateBeatFromQa(currentBeatId, qaRefineNote);
     }, [currentBeatId, state.handleQuickIterateBeatFromQa]);
 
+    const handleEditHtmlCurrentBeat = React.useCallback(async (qaRefineNote: string) => {
+        if (!currentBeatId) {
+            return false;
+        }
+        return state.handleEditHtmlBeatFromQa(currentBeatId, qaRefineNote);
+    }, [currentBeatId, state.handleEditHtmlBeatFromQa]);
+
     const currentBeatQuickIterating = Boolean(
         currentBeatId
         && (
@@ -232,6 +239,19 @@ export default function ShortVideoAgentVideoPreview({
         }
         return state.quickIterateBeatStages?.[currentBeatId] || 'idle';
     }, [currentBeatId, state.quickIterateBeatStages]);
+
+    const currentBeatIterateKind = React.useMemo((): 'quick_iterate' | 'edit_html' | null => {
+        if (!currentBeatId || !Array.isArray(state.quickIterateQueue)) {
+            return null;
+        }
+        const item = state.quickIterateQueue.find(
+            (entry: { beatId?: string; kind?: string }) => entry.beatId === currentBeatId,
+        );
+        if (item?.kind === 'edit_html' || item?.kind === 'quick_iterate') {
+            return item.kind;
+        }
+        return null;
+    }, [currentBeatId, state.quickIterateQueue]);
 
     const handleSaveCurrentBeatVersion = React.useCallback(async (draft: {
         qaStatus: import('./agentVideoBeatMap').BeatQaStatus;
@@ -430,8 +450,10 @@ export default function ShortVideoAgentVideoPreview({
                                 saving={state.savingImportHtml}
                                 quickIterating={currentBeatQuickIterating}
                                 iterateStage={currentBeatIterateStage}
+                                iterateKind={currentBeatIterateKind}
                                 onSaveBeatQa={handleSaveCurrentBeatQa}
                                 onQuickIterateBeat={handleQuickIterateCurrentBeat}
+                                onEditHtmlBeat={handleEditHtmlCurrentBeat}
                                 onSaveBeatVersion={handleSaveCurrentBeatVersion}
                                 onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
                             />

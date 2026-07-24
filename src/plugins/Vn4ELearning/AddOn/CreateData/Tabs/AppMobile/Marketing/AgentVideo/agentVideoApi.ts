@@ -445,6 +445,14 @@ export type AgentVideoContentResponse = {
         updated_at?: string;
         error?: string;
     };
+    gemini_script_hook?: {
+        status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+        job_ids?: number[];
+        queued_at?: string;
+        updated_at?: string;
+        error?: string;
+        source?: string;
+    };
     gemini_script_phonetic?: {
         status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
         job_ids?: number[];
@@ -534,6 +542,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'script_create',
     'script_improve',
     'script_improve_qa',
+    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -560,6 +569,7 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'script_create',
     'script_improve',
     'script_improve_qa',
+    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'beat_division',
@@ -585,6 +595,7 @@ export const FULL_AUTO_PIPELINE_AI_STEPS = [
     'script_create',
     'script_improve',
     'script_improve_qa',
+    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -655,6 +666,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
     script_improve_qa: 'Đánh giá script',
+    script_hook_enhance: 'Hook viral 3s',
     script_phonetic_normalize: 'Chuẩn hóa giọng đọc',
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
@@ -679,6 +691,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
             'script_create',
             'script_improve',
             'script_improve_qa',
+            'script_hook_enhance',
             'script_phonetic_normalize',
             'approve_tts',
             'whisper',
@@ -1222,6 +1235,30 @@ export async function enqueueGeminiWebBeatQuickIterate(
     }>;
 }
 
+export async function enqueueGeminiWebBeatRefineHtml(
+    shortVideoId: number,
+    beatIds?: string[],
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    beat_ids?: string[];
+    job_ids?: number[];
+    gemini_refine_html?: ImportHtmlGeminiJobBlock;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-refine-html',
+        shortVideoBody(shortVideoId, {
+            ...(beatIds ? { beat_ids: beatIds } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        beat_ids?: string[];
+        job_ids?: number[];
+        gemini_refine_html?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
 export async function enqueueGeminiWebThumbnailIdea(
     shortVideoId: number,
     force = true,
@@ -1334,6 +1371,28 @@ export async function enqueueGeminiWebAudioScript(
         mode?: string;
         job_ids?: number[];
         gemini_script?: AgentVideoContentResponse['gemini_script'];
+    }>;
+}
+
+export async function enqueueGeminiWebScriptHook(
+    shortVideoId: number,
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    gemini_script_hook?: AgentVideoContentResponse['gemini_script_hook'];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/enqueue-gemini-web-script-hook',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        job_ids?: number[];
+        gemini_script_hook?: AgentVideoContentResponse['gemini_script_hook'];
     }>;
 }
 

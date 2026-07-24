@@ -41,8 +41,11 @@ type Props = {
     saving?: boolean;
     quickIterating?: boolean;
     iterateStage?: BeatQuickIterateStage;
+    /** Phân biệt visual+fill vs edit HTML để label busy đúng. */
+    iterateKind?: 'quick_iterate' | 'edit_html' | null;
     onSaveBeatQa: (qaStatus: BeatQaStatus, qaRefineNote: string) => Promise<boolean>;
     onQuickIterateBeat?: (qaRefineNote: string) => Promise<boolean>;
+    onEditHtmlBeat?: (qaRefineNote: string) => Promise<boolean>;
     onSaveBeatVersion: (draft: {
         qaStatus: BeatQaStatus;
         qaRefineNote: string;
@@ -312,8 +315,10 @@ export default function ShortVideoAgentBeatQaPanel({
     saving = false,
     quickIterating = false,
     iterateStage = 'idle',
+    iterateKind = null,
     onSaveBeatQa,
     onQuickIterateBeat,
+    onEditHtmlBeat,
     onSaveBeatVersion,
     onRestoreBeatVersion,
 }: Props) {
@@ -362,13 +367,20 @@ export default function ShortVideoAgentBeatQaPanel({
         && !busy
         && typeof onQuickIterateBeat === 'function'
     );
+    const canEditHtml = Boolean(
+        beatId
+        && hasBeatHtml
+        && qaRefineNote.trim()
+        && !busy
+        && typeof onEditHtmlBeat === 'function'
+    );
 
     const iterateStageLabel = iterateStage === 'queued'
         ? 'Chờ trong hàng đợi…'
         : iterateStage === 'visual'
             ? 'Đang tạo visual mới…'
             : iterateStage === 'html'
-                ? 'Đang fill HTML…'
+                ? (iterateKind === 'edit_html' ? 'Đang sửa HTML…' : 'Đang fill HTML…')
                 : '';
 
     const sortedVersions = React.useMemo(
@@ -405,6 +417,23 @@ export default function ShortVideoAgentBeatQaPanel({
         }
         setQaStatus('needs_visual_tweak');
         await onQuickIterateBeat(note);
+    };
+
+    const handleEditHtml = async () => {
+        if (!onEditHtmlBeat) {
+            return;
+        }
+        const note = qaRefineNote.trim();
+        if (!canEditHtml) {
+            if (!note) {
+                showMessage('Cần nhập ghi chú refine trước khi sửa HTML', 'warning');
+            } else if (!hasBeatHtml) {
+                showMessage('Cần có HTML beat trước khi sửa HTML', 'warning');
+            }
+            return;
+        }
+        setQaStatus('needs_html_refill');
+        await onEditHtmlBeat(note);
     };
 
     const handleSaveVersion = async () => {
@@ -671,16 +700,44 @@ export default function ShortVideoAgentBeatQaPanel({
                                 size="small"
                                 variant="outlined"
                                 startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
-                                loading={quickIterating}
+                                loading={quickIterating && iterateKind === 'edit_html'}
+                                disabled={!canEditHtml && !quickIterating}
+                                onClick={() => { void handleEditHtml(); }}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 650,
+                                    borderColor: canEditHtml || (quickIterating && iterateKind === 'edit_html')
+                                        ? 'rgba(239,68,68,0.55)'
+                                        : BORDER,
+                                    color: canEditHtml || (quickIterating && iterateKind === 'edit_html')
+                                        ? '#f87171'
+                                        : TEXT_MUTED,
+                                    '&:hover': {
+                                        borderColor: 'rgba(239,68,68,0.75)',
+                                        bgcolor: 'rgba(239,68,68,0.12)',
+                                    },
+                                    '&.Mui-disabled': {
+                                        borderColor: BORDER,
+                                        color: TEXT_MUTED,
+                                    },
+                                }}
+                            >
+                                Edit HTML
+                            </LoadingButton>
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
+                                loading={quickIterating && iterateKind !== 'edit_html'}
                                 disabled={!canQuickIterate && !quickIterating}
                                 onClick={() => { void handleQuickIterate(); }}
                                 sx={{
                                     textTransform: 'none',
                                     fontWeight: 650,
-                                    borderColor: canQuickIterate || quickIterating
+                                    borderColor: canQuickIterate || (quickIterating && iterateKind !== 'edit_html')
                                         ? 'rgba(251,191,36,0.45)'
                                         : BORDER,
-                                    color: canQuickIterate || quickIterating
+                                    color: canQuickIterate || (quickIterating && iterateKind !== 'edit_html')
                                         ? '#fcd34d'
                                         : TEXT_MUTED,
                                     '&:hover': {

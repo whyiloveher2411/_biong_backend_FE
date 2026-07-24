@@ -157,6 +157,7 @@ type Props = {
     onOpenBeatGemini?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
+    onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
     beatVersions?: Record<string, BeatVersion[]>;
     beatActiveVersionId?: Record<string, string>;
     onRestoreBeatVersion?: (beatId: string, versionId: string, label: string) => Promise<string | null>;
@@ -220,6 +221,7 @@ export default function ShortVideoAgentVideoTimeline({
     onOpenBeatGemini,
     onOpenBeatGeminiHeadless,
     onSaveBeatQa,
+    onQuickIterateBeat,
     beatVersions = {},
     beatActiveVersionId = {},
     onRestoreBeatVersion,
@@ -948,6 +950,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
                                 onSaveBeatQa={onSaveBeatQa}
+                                onQuickIterateBeat={onQuickIterateBeat}
                                 beatVersions={beatVersions}
                                 beatActiveVersionId={beatActiveVersionId}
                                 onRestoreBeatVersion={onRestoreBeatVersion}
