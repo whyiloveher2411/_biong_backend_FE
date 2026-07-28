@@ -473,6 +473,7 @@ export type AgentVideoContentResponse = {
     agent_additional_info?: string;
     agent_github_repo?: string;
     agent_tiktok_url?: string;
+    agent_youtube_url?: string;
     agent_source_format?: string;
     agent_source_format_catalog?: AgentSourceFormatCatalogItem[];
     content_plain_text?: string;
@@ -1443,6 +1444,7 @@ export type SaveAgentSourceContentResponse = JsonResponse & {
     agent_additional_info?: string;
     agent_github_repo?: string;
     agent_tiktok_url?: string;
+    agent_youtube_url?: string;
     agent_source_format?: string;
     agent_source_format_label?: string;
     content_plain_text?: string;
@@ -1458,6 +1460,7 @@ export async function saveAgentSourceContent(
     additionalInfo?: string,
     tiktokUrl?: string,
     topicResearch?: { topic?: string; urls?: string | string[] },
+    youtubeUrl?: string,
 ): Promise<SaveAgentSourceContentResponse> {
     const extra: Record<string, unknown> = {
         agent_source_content: content,
@@ -1473,6 +1476,9 @@ export async function saveAgentSourceContent(
     }
     if (tiktokUrl !== undefined) {
         extra.agent_tiktok_url = tiktokUrl;
+    }
+    if (youtubeUrl !== undefined) {
+        extra.agent_youtube_url = youtubeUrl;
     }
     if (topicResearch?.topic !== undefined) {
         extra.topic = topicResearch.topic;
@@ -1552,9 +1558,26 @@ export function isTikTokUrl(raw: string): boolean {
     }
 }
 
+export function isYouTubeUrl(raw: string): boolean {
+    const url = raw.trim();
+    if (!url) return false;
+    try {
+        const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        const host = new URL(withProtocol).hostname.replace(/^www\./i, '').toLowerCase();
+        return (
+            host === 'youtube.com'
+            || host === 'm.youtube.com'
+            || host === 'youtu.be'
+            || host.endsWith('.youtube.com')
+        );
+    } catch {
+        return /youtube\.com|youtu\.be/i.test(url);
+    }
+}
+
 export async function extractVideoScript(
     url: string,
-    platform: 'tiktok' = 'tiktok',
+    platform: 'tiktok' | 'youtube' = 'tiktok',
 ): Promise<ExtractVideoScriptResponse> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/extract-video-script',

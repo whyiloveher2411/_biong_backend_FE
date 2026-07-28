@@ -213,7 +213,9 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
     const [contentFieldKey, setContentFieldKey] = React.useState(0);
     const prevFetchingReadmeRef = React.useRef(false);
     const prevFetchingTiktokRef = React.useRef(false);
+    const prevFetchingYoutubeRef = React.useRef(false);
     const isTiktokRemix = state.agentSourceFormat === 'tiktok_remix';
+    const isYoutubeRemix = state.agentSourceFormat === 'youtube_remix';
     const isTopicResearch = state.agentSourceFormat === 'topic_research';
     const topicReadySourceCount = (state.topicResearch?.sources || []).filter(
         (s) => s.status === 'ready',
@@ -240,10 +242,19 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
         prevFetchingTiktokRef.current = state.fetchingTiktokScript;
     }, [state.fetchingTiktokScript, state.agentSourceContent]);
 
+    React.useEffect(() => {
+        if (prevFetchingYoutubeRef.current && !state.fetchingYoutubeScript) {
+            contentPostRef.current.agent_source_content = state.agentSourceContent;
+            setContentFieldKey((prev) => prev + 1);
+        }
+        prevFetchingYoutubeRef.current = state.fetchingYoutubeScript;
+    }, [state.fetchingYoutubeScript, state.agentSourceContent]);
+
     const sourceDirty = !linked && (
         String(contentPostRef.current.agent_source_content || '') !== state.savedAgentSourceContent
         || state.agentGithubRepo !== state.savedAgentGithubRepo
         || state.agentTiktokUrl !== state.savedAgentTiktokUrl
+        || state.agentYoutubeUrl !== state.savedAgentYoutubeUrl
         || state.agentSourceFormat !== state.savedAgentSourceFormat
         || (
             isTopicResearch
@@ -297,9 +308,11 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                 ? `Đang liên kết marketing post #${state.marketingPostId} — nội dung chỉ đọc.`
                                 : isTiktokRemix
                                     ? 'Chọn Remix TikTok, dán link rồi Lấy thông tin để điền transcript.'
-                                    : isTopicResearch
-                                        ? 'Nhập chủ đề + danh sách URL → Lấy nội dung (MarkItDown) → Tổng hợp (Gemini) → content cho script.'
-                                        : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
+                                    : isYoutubeRemix
+                                        ? 'Chọn Remix YouTube, dán link rồi Lấy thông tin để điền transcript.'
+                                        : isTopicResearch
+                                            ? 'Nhập chủ đề + danh sách URL → Lấy nội dung (MarkItDown) → Tổng hợp (Gemini) → content cho script.'
+                                            : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
                         }
                     >
                         {linked ? (
@@ -536,6 +549,32 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 Lấy thông tin
                                             </LoadingButton>
                                         </>
+                                    ) : isYoutubeRemix ? (
+                                        <>
+                                            <TextField
+                                                label="YouTube link"
+                                                value={state.agentYoutubeUrl}
+                                                onChange={(e) => state.setAgentYoutubeUrl(e.target.value)}
+                                                fullWidth
+                                                size="small"
+                                                placeholder="https://www.youtube.com/watch?v=…"
+                                                sx={workflowFieldSurfaceSx}
+                                            />
+                                            <LoadingButton
+                                                variant="outlined"
+                                                loading={state.fetchingYoutubeScript}
+                                                startIcon={<CloudDownloadIcon />}
+                                                onClick={() => void state.handleFetchYoutubeScript()}
+                                                disabled={!state.agentYoutubeUrl.trim()}
+                                                sx={{
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    bgcolor: 'background.paper',
+                                                }}
+                                            >
+                                                Lấy thông tin
+                                            </LoadingButton>
+                                        </>
                                     ) : isTopicResearch ? (
                                         <Stack spacing={1} sx={{ width: '100%' }}>
                                             <TextField
@@ -691,7 +730,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                         />
                     </WorkflowSection>
 
-                    {!linked && !isTiktokRemix && !isTopicResearch ? (
+                    {!linked && !isTiktokRemix && !isYoutubeRemix && !isTopicResearch ? (
                         <WorkflowSection
                             title="Media từ README"
                             tone="visual"

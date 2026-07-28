@@ -34,6 +34,7 @@ import {
     fetchGithubReadme,
     extractVideoScript,
     isTikTokUrl,
+    isYouTubeUrl,
     importGithubReadmeMedia,
     searchAgentBgm,
     saveAgentTtsSettings,
@@ -547,6 +548,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savedAgentGithubRepo, setSavedAgentGithubRepo] = React.useState('');
     const [agentTiktokUrl, setAgentTiktokUrl] = React.useState('');
     const [savedAgentTiktokUrl, setSavedAgentTiktokUrl] = React.useState('');
+    const [agentYoutubeUrl, setAgentYoutubeUrl] = React.useState('');
+    const [savedAgentYoutubeUrl, setSavedAgentYoutubeUrl] = React.useState('');
     const [agentSourceFormat, setAgentSourceFormat] = React.useState('github_repo_review');
     const [savedAgentSourceFormat, setSavedAgentSourceFormat] = React.useState('github_repo_review');
     const [agentSourceFormatCatalog, setAgentSourceFormatCatalog] = React.useState<AgentSourceFormatCatalogItem[]>([]);
@@ -554,6 +557,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingSourceContent, setSavingSourceContent] = React.useState(false);
     const [fetchingGithubReadme, setFetchingGithubReadme] = React.useState(false);
     const [fetchingTiktokScript, setFetchingTiktokScript] = React.useState(false);
+    const [fetchingYoutubeScript, setFetchingYoutubeScript] = React.useState(false);
     const [appMobileTitle, setAppMobileTitle] = React.useState('');
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
@@ -1013,6 +1017,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextTiktok = String(res?.agent_tiktok_url || '').trim();
         setAgentTiktokUrl(nextTiktok);
         setSavedAgentTiktokUrl(nextTiktok);
+        const nextYoutube = String(res?.agent_youtube_url || '').trim();
+        setAgentYoutubeUrl(nextYoutube);
+        setSavedAgentYoutubeUrl(nextYoutube);
         const nextFormat = String(res?.agent_source_format || 'github_repo_review').trim() || 'github_repo_review';
         setAgentSourceFormat(nextFormat);
         setSavedAgentSourceFormat(nextFormat);
@@ -4438,6 +4445,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             contentToSave === savedAgentSourceContent
             && agentGithubRepo === savedAgentGithubRepo
             && agentTiktokUrl === savedAgentTiktokUrl
+            && agentYoutubeUrl === savedAgentYoutubeUrl
             && agentSourceFormat === savedAgentSourceFormat
             && additionalToSave === savedAgentAdditionalInfo
             && (
@@ -4467,6 +4475,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 additionalToSave,
                 linked ? undefined : agentTiktokUrl.trim(),
                 topicMeta,
+                linked ? undefined : agentYoutubeUrl.trim(),
             );
             if (!json?.success) {
                 showMessage(parseApiMessage(json?.message) || 'Không lưu được nội dung', 'error');
@@ -4480,6 +4489,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 const nextSource = String(json?.agent_source_content ?? contentToSave);
                 const nextGithub = String(json?.agent_github_repo ?? agentGithubRepo).trim();
                 const nextTiktok = String(json?.agent_tiktok_url ?? agentTiktokUrl).trim();
+                const nextYoutube = String(json?.agent_youtube_url ?? agentYoutubeUrl).trim();
                 const nextFormat = String(json?.agent_source_format ?? agentSourceFormat).trim() || 'github_repo_review';
                 setAgentSourceContent(nextSource);
                 setSavedAgentSourceContent(nextSource);
@@ -4487,6 +4497,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 setSavedAgentGithubRepo(nextGithub);
                 setAgentTiktokUrl(nextTiktok);
                 setSavedAgentTiktokUrl(nextTiktok);
+                setAgentYoutubeUrl(nextYoutube);
+                setSavedAgentYoutubeUrl(nextYoutube);
                 setAgentSourceFormat(nextFormat);
                 setSavedAgentSourceFormat(nextFormat);
                 setContentPlainText(String(json?.content_plain_text ?? nextSource).trim());
@@ -4711,6 +4723,71 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setFetchingTiktokScript(false);
+        }
+    };
+
+    const handleFetchYoutubeScript = async () => {
+        if (marketingPostId > 0) {
+            showMessage('Đã liên kết marketing post — không lấy script YouTube', 'warning');
+            return;
+        }
+        const url = agentYoutubeUrl.trim();
+        if (!url) {
+            showMessage('Nhập link YouTube trước', 'warning');
+            return;
+        }
+        if (!isYouTubeUrl(url)) {
+            showMessage('URL không phải link YouTube hợp lệ', 'warning');
+            return;
+        }
+        setFetchingYoutubeScript(true);
+        try {
+            const json = await extractVideoScript(url, 'youtube');
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không lấy được script YouTube', 'error');
+                return;
+            }
+
+            const cleaned = String(json?.cleaned_script || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n')
+                .trim();
+            if (!cleaned) {
+                showMessage('Không thấy script', 'warning');
+                return;
+            }
+
+            setAgentSourceContent(cleaned);
+
+            const title = String(json?.meta?.title || '').trim();
+            const uploader = String(json?.meta?.uploader || '').trim();
+            const metaLines: string[] = [];
+            if (uploader) {
+                metaLines.push(`YouTube ${uploader}`);
+            }
+            if (title) {
+                metaLines.push(`Tiêu đề: ${title}`);
+            }
+            if (metaLines.length > 0) {
+                setAgentAdditionalInfo((prev) => {
+                    const base = prev.trim();
+                    const addition = metaLines.join('\n');
+                    if (!base) {
+                        return addition;
+                    }
+                    const missing = metaLines.filter((line) => !base.includes(line));
+                    if (missing.length === 0) {
+                        return base;
+                    }
+                    return `${base}\n${missing.join('\n')}`;
+                });
+            }
+
+            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript YouTube', 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setFetchingYoutubeScript(false);
         }
     };
 
@@ -5381,6 +5458,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentTiktokUrl,
         setAgentTiktokUrl,
         savedAgentTiktokUrl,
+        agentYoutubeUrl,
+        setAgentYoutubeUrl,
+        savedAgentYoutubeUrl,
         agentSourceFormat,
         setAgentSourceFormat,
         savedAgentSourceFormat,
@@ -5389,6 +5469,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingSourceContent,
         fetchingGithubReadme,
         fetchingTiktokScript,
+        fetchingYoutubeScript,
         appMobileTitle,
         thumbnail,
         postEligible,
@@ -5607,6 +5688,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSaveSourceContent,
         handleFetchGithubReadme,
         handleFetchTiktokScript,
+        handleFetchYoutubeScript,
         handleApproveScript,
         handleRegenerateTts,
         handleRetryTts,
