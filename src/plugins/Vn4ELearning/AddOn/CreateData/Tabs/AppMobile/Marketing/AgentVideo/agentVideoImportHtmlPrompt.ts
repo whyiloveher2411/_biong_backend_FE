@@ -22,6 +22,7 @@ import {
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
 import type { BeatMapSection } from './agentVideoBeatMap';
 import type { ImportHtmlVisualCatalogItem } from './agentVideoApi';
+import { getClipRenderSpec, normalizeClipAspect, type ClipAspect, type ClipRenderSpec } from './agentVideoClipAspect';
 
 export type ImportHtmlContextPayload = {
     success?: boolean;
@@ -30,6 +31,8 @@ export type ImportHtmlContextPayload = {
     language?: string;
     visual_style?: string;
     agent_show_karaoke?: boolean;
+    agent_clip_aspect?: ClipAspect | string;
+    clip_render_spec?: ClipRenderSpec;
     /** @deprecated Transitional read fallback only. */
     hf_theme?: string;
     audio_script?: string;
@@ -330,7 +333,9 @@ export async function buildBeatHtmlPrompt(
     );
     const durationFormatted = formatDurationSec(durationSec);
     const durationLabel = `${durationFormatted}s`;
-    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id);
+    const clipAspect = normalizeClipAspect(context.agent_clip_aspect);
+    const clipSpec = context.clip_render_spec || getClipRenderSpec(clipAspect);
+    const scaffold = buildSingleBeatHtmlScaffold(durationSec, beat.id, clipAspect);
     const beatWhisper = filterWhisperForBeat(context.whisper_words || [], beat.startSec, beat.endSec);
     const beatWhisperPrompt = formatWhisperWordsForPrompt(beatWhisper, { timeOffsetSec: beat.startSec });
     const clipTotal = formatDurationSec(Number(context.audio_file_duration_sec || 0));
@@ -384,13 +389,16 @@ export async function buildBeatHtmlPrompt(
         `VISUAL_DESCRIPTION=${visualDescription}`,
         `BACKGROUND=${background || '(thiếu — suy từ visual_description + VISUAL_STYLE, ưu tiên nền ổn định)'}`,
         '',
+        `CLIP_ASPECT=${clipAspect}`,
+        `CANVAS=${clipSpec.width}x${clipSpec.height}`,
+        '',
         buildFillPriorityOrderBlock(),
         buildVisualDescriptionInterpretationBlock(),
         buildCreativeTruthContractBlock(),
         buildBeatHtmlContentLanguageBlock(context.language),
         buildHtmlChatbotNoKaraokeRulesBlock(),
         buildFillTextAndBrandingRulesBlock(),
-        buildHtmlChatbotLayoutSafeZonesBlock(),
+        buildHtmlChatbotLayoutSafeZonesBlock(clipAspect),
         visualBlock,
         '',
         buildHtmlChatbotJsContractBlock(durationSec),

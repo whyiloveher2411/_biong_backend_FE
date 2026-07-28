@@ -37,6 +37,7 @@ type Props = {
     beatHtml?: BeatHtmlEntry | null;
     audioUrl?: string;
     beatIndex?: number | null;
+    clipAspect?: import('./agentVideoClipAspect').ClipAspect;
     saving?: boolean;
     onSaveVisualDescription: (visualDescription: string, background: string) => Promise<boolean>;
 };
@@ -119,6 +120,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
     beatHtml = null,
     audioUrl = '',
     beatIndex = null,
+    clipAspect = '9:16',
     saving = false,
     onSaveVisualDescription,
 }: Props) {
@@ -376,6 +378,7 @@ export default function ShortVideoAgentBeatInfoDrawer({
                             audioUrl={audioUrl}
                             startSec={beat.startSec}
                             durationSec={beat.durationSec}
+                            clipAspect={clipAspect}
                         />
                     </DetailSection>
 

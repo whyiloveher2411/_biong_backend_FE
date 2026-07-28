@@ -3,6 +3,7 @@
  * Caption/karaoke do agent ghép layer riêng — không nằm trong HTML user.
  */
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import { getClipRenderSpec, type ClipAspect } from './agentVideoClipAspect';
 
 export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     return [
@@ -15,21 +16,30 @@ export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     ].join('\n');
 }
 
-export function buildHtmlChatbotLayoutSafeZonesBlock(): string {
+export function buildHtmlChatbotLayoutSafeZonesBlock(aspect: ClipAspect = '9:16'): string {
+    const spec = getClipRenderSpec(aspect);
+    const { width, height, aspect_ratio: aspectRatio, caption_band_px: captionBand, content_area: area } = spec;
+    const safeRight = width - area.right;
+    const safeBottom = height - area.bottom;
+    const layoutRef = aspectRatio === '16:9'
+        ? '.cursor/skills/biong-short-video-hyperframes/references/layout-16x9-zones.md'
+        : '.cursor/skills/biong-short-video-hyperframes/references/layout-9x16-zones.md';
+
     return [
         '## BẮT BUỘC — Safe Zones (semantic bounding box) + Background full-bleed',
-        '- Kích thước canvas là **1080x1920** (tỉ lệ 9:16).',
-        '- **Critical foreground** (text đọc được, card, chart, ảnh hero mang thông tin) phải nằm **hoàn toàn** trong vùng `x = 48–1032`, `y = 80–1560`.',
-        '- **Bottom / top reserved bands:** y = 0–80 (logo) và y = 1560–1920 (band dưới ~360px) — **không** đặt nội dung thiết yếu.',
-        '- Band dưới **bắt buộc trống content** vì overlay khi đăng (tên channel, mô tả, progress, UI Facebook/TikTok/Reels) và karaoke layer (nếu bật) sẽ che vùng này.',
+        `- Kích thước canvas là **${width}x${height}** (tỉ lệ ${aspectRatio}).`,
+        `- **Critical foreground** (text đọc được, card, chart, ảnh hero mang thông tin) phải nằm **hoàn toàn** trong vùng \`x = ${area.left}–${safeRight}\`, \`y = ${area.top}–${safeBottom}\`.`,
+        `- **Bottom / top reserved bands:** y = 0–${area.top} (logo) và y = ${safeBottom}–${height} (band dưới ~${captionBand}px) — **không** đặt nội dung thiết yếu.`,
+        '- Band dưới **bắt buộc trống content** vì overlay khi đăng (tên channel, mô tả, progress, UI Facebook/TikTok/Reels/YouTube) và karaoke layer (nếu bật) sẽ che vùng này.',
         '- Karaoke/caption/logo do layer riêng khi render final — **không** dùng band dưới cho text graphic beat.',
         '- **Background full-bleed (bắt buộc):** gradient, mesh, grain, vignette, glow phủ **toàn canvas** kể cả band đáy — vùng dưới có nền, không có content sát mép.',
         '- Ambient decoration / particle không mang thông tin có thể đi qua safe zone nếu không làm giảm khả năng đọc overlay nền tảng / karaoke.',
         '- Hero visual có thể chạm hoặc crop ở biên nếu phần mang thông tin vẫn trong safe zone.',
         '- **Cấu trúc scaffold (bắt buộc):**',
         '  1. `.bg-layer` — con trực tiếp của `#stage`, `position:absolute; inset:0; z-index:0; pointer-events:none`.',
-        '  2. `.content-area` — con trực tiếp của `#stage`, `position:absolute; top:80px; right:48px; bottom:360px; left:48px; z-index:1` — **không** flex-center mặc định; layout tự do trong vùng này.',
+        `  2. \`.content-area\` — con trực tiếp của \`#stage\`, \`position:absolute; top:${area.top}px; right:${area.right}px; bottom:${area.bottom}px; left:${area.left}px; z-index:1\` — **không** flex-center mặc định; layout tự do trong vùng này.`,
         '- **Cấm** đặt nền trang trí chỉ trong `.content-area` (sẽ trống band đáy) — nền thuộc `.bg-layer`.',
+        `- Layout reference: \`${layoutRef}\`.`,
         '',
     ].join('\n');
 }

@@ -1,4 +1,5 @@
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import { getClipRenderSpec, type ClipAspect } from './agentVideoClipAspect';
 
 export type WhisperSceneOutline = {
     index: number;
@@ -81,16 +82,21 @@ export function buildLongFormPromptOverride(durationSec: number): string {
     ].join('\n');
 }
 
-export function buildSingleBeatHtmlScaffold(durationSec: number, beatId: string): string {
+export function buildSingleBeatHtmlScaffold(
+    durationSec: number,
+    beatId: string,
+    aspect: ClipAspect = '9:16',
+): string {
     const total = formatDurationSec(durationSec);
     const compositionId = beatId || 'beat_1';
+    const spec = getClipRenderSpec(aspect);
+    const { width, height, aspect_ratio: aspectRatio, content_area: area } = spec;
 
     // Scaffold cho chatbot preview (hf-seek trong iframe).
     // Khi assemble render: chạy normalize-import-html-beat-for-render.mjs trước hyperframes render.
-    // bottom:360px — chừa band dưới (UI channel FB/TikTok + karaoke overlay).
 
     return `<!doctype html>
-<html data-duration="${total}" data-aspect="9:16">
+<html data-duration="${total}" data-aspect="${aspectRatio}">
 <head>
 <meta charset="utf-8" />
 <style>
@@ -103,14 +109,14 @@ export function buildSingleBeatHtmlScaffold(durationSec: number, beatId: string)
 body { margin: 0; background: var(--ink); }
 #root, .scene-root { background: transparent !important; }
 #stage {
-  width: 1080px; height: 1920px; position: relative; overflow: hidden;
+  width: ${width}px; height: ${height}px; position: relative; overflow: hidden;
 }
 .bg-layer {
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
 }
 .content-area {
   position: absolute; z-index: 1;
-  top: 80px; right: 48px; bottom: 360px; left: 48px;
+  top: ${area.top}px; right: ${area.right}px; bottom: ${area.bottom}px; left: ${area.left}px;
   box-sizing: border-box;
 }
 </style>
@@ -119,7 +125,7 @@ body { margin: 0; background: var(--ink); }
 <div id="root" data-composition-id="${compositionId}" data-duration="${total}">
   <div class="scene-root">
     <div id="stage">
-      <div class="bg-layer" aria-hidden="true"><!-- gradient/mesh/grain — full canvas 1080x1920 --></div>
+      <div class="bg-layer" aria-hidden="true"><!-- gradient/mesh/grain — full canvas ${width}x${height} --></div>
       <div class="content-area">
         <!-- TODO: foreground visual — CẤM karaoke/caption/subtitle/voiceover text -->
       </div>
@@ -178,12 +184,18 @@ export function buildBeatScaffoldInstructionsBlock(durationSec: number, beatId: 
     ].join('\n');
 }
 
-export function buildImportHtmlScaffold(durationSec: number, scenes: WhisperSceneOutline[]): string {
+export function buildImportHtmlScaffold(
+    durationSec: number,
+    scenes: WhisperSceneOutline[],
+    aspect: ClipAspect = '9:16',
+): string {
     const total = formatDurationSec(durationSec);
     const scenesJson = JSON.stringify(scenes, null, 2);
+    const spec = getClipRenderSpec(aspect);
+    const { width, height, aspect_ratio: aspectRatio } = spec;
 
     return `<!doctype html>
-<html data-duration="${total}" data-aspect="9:16">
+<html data-duration="${total}" data-aspect="${aspectRatio}">
 <head>
 <meta charset="utf-8" />
 <style>
@@ -195,7 +207,7 @@ export function buildImportHtmlScaffold(durationSec: number, scenes: WhisperScen
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--ink); }
 #stage {
-  width: 1080px; height: 1920px; position: relative; overflow: hidden;
+  width: ${width}px; height: ${height}px; position: relative; overflow: hidden;
   transform-origin: top left;
 }
 </style>

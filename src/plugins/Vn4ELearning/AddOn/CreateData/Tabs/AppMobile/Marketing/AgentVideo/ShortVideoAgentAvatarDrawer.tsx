@@ -12,6 +12,8 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { convertToURL, validURL } from 'helpers/url';
 import type { AvatarPipAnchor, VerifiedAvatarOption } from './agentVideoApi';
+import type { ClipAspect } from './agentVideoClipAspect';
+import { getClipStageDimensions } from './agentVideoHtmlBeatPreviewScale';
 
 export const AVATAR_PIP_ANCHORS: Array<{
     id: AvatarPipAnchor;
@@ -54,10 +56,12 @@ function AnchorPreviewTile({
     anchor,
     selected,
     onSelect,
+    clipAspect = '9:16',
 }: {
     anchor: AvatarPipAnchor;
     selected: boolean;
     onSelect: () => void;
+    clipAspect?: ClipAspect;
 }) {
     const spot = (() => {
         switch (anchor) {
@@ -74,6 +78,8 @@ function AnchorPreviewTile({
                 return { bottom: 10, right: 6 };
         }
     })();
+
+    const stage = getClipStageDimensions(clipAspect);
 
     return (
         <Button
@@ -94,7 +100,7 @@ function AnchorPreviewTile({
                 sx={{
                     position: 'relative',
                     width: '100%',
-                    aspectRatio: '9 / 16',
+                    aspectRatio: stage.aspectRatioCss,
                     borderRadius: 0.75,
                     bgcolor: selected ? 'rgba(255,255,255,0.18)' : 'action.hover',
                     border: '1px solid',
@@ -125,6 +131,7 @@ type Props = {
     avatars: VerifiedAvatarOption[];
     selectedId: number;
     selectedAnchor: AvatarPipAnchor;
+    clipAspect?: ClipAspect;
     saving?: boolean;
     onApply: (avatarId: number, anchor: AvatarPipAnchor) => void | Promise<void>;
 };
@@ -135,6 +142,7 @@ export default function ShortVideoAgentAvatarDrawer({
     avatars,
     selectedId,
     selectedAnchor,
+    clipAspect = '9:16',
     saving = false,
     onApply,
 }: Props) {
@@ -271,7 +279,7 @@ export default function ShortVideoAgentAvatarDrawer({
                         Vị trí PiP
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        Chọn góc hoặc giữa khung 9:16.
+                        Chọn góc hoặc giữa khung {clipAspect === '16:9' ? '16:9' : '9:16'}.
                     </Typography>
                     <Stack direction="row" flexWrap="wrap" gap={1}>
                         {AVATAR_PIP_ANCHORS.map((item) => (
@@ -280,6 +288,7 @@ export default function ShortVideoAgentAvatarDrawer({
                                 anchor={item.id}
                                 selected={draftAnchor === item.id}
                                 onSelect={() => setDraftAnchor(item.id)}
+                                clipAspect={clipAspect}
                             />
                         ))}
                     </Stack>

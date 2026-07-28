@@ -43,6 +43,7 @@ import {
     saveAgentGithubScreenshotHomepage,
     saveAgentIntroduceApp,
     saveAgentShowKaraoke,
+    saveAgentClipAspect,
     listVerifiedAvatars,
     saveAgentAvatar,
     type AvatarPipAnchor,
@@ -136,6 +137,7 @@ import {
     type BeatHtmlEntry,
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
+import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 import {
@@ -439,6 +441,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingAgentAvatar, setSavingAgentAvatar] = React.useState(false);
     const [agentShowKaraoke, setAgentShowKaraoke] = React.useState(true);
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
+    const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
+    const [savingClipAspect, setSavingClipAspect] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiRefineVisualStatus, setGeminiRefineVisualStatus] = React.useState('none');
@@ -819,6 +823,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentShowAvatar(resolvedId > 0);
         setAgentAvatarAnchor(nextAnchor);
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
+        setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         if (!(resolvedId > 0)) {
             setAgentAvatarMasterUrl('');
         } else {
@@ -4089,6 +4094,45 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleAgentClipAspectChange = async (nextAspect: ClipAspect) => {
+        if (savingClipAspect || nextAspect === agentClipAspect) {
+            return;
+        }
+        const hasBeatHtml = beatsHtmlCompleted > 0
+            || Object.values(beatHtml).some((entry) => Boolean(String(entry?.html || '').trim()));
+        const hasThumbnailHtml = Boolean(String(thumbnailHtml || '').trim());
+        if (hasBeatHtml || hasThumbnailHtml) {
+            const confirmed = window.confirm(
+                'Đã có HTML beat hoặc thumbnail theo tỉ lệ hiện tại. '
+                + 'Đổi tỉ lệ clip không tự xóa HTML cũ — bạn cần fill/render lại sau khi lưu. Tiếp tục?',
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+        const previousAspect = agentClipAspect;
+        setAgentClipAspect(nextAspect);
+        setSavingClipAspect(true);
+        try {
+            const res = await saveAgentClipAspect(shortVideoId, nextAspect);
+            if (!res?.success) {
+                setAgentClipAspect(previousAspect);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được tỉ lệ clip',
+                    'error',
+                );
+                return;
+            }
+            setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect || nextAspect));
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu tỉ lệ clip', 'success');
+        } catch (e) {
+            setAgentClipAspect(previousAspect);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingClipAspect(false);
+        }
+    };
+
     const handleStartFullAutoPipeline = async (
         mode: 'resume' | 'restart' = 'resume',
         fromStep?: string,
@@ -5426,6 +5470,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingAgentAvatar,
         agentShowKaraoke,
         savingShowKaraoke,
+        handleAgentShowKaraokeChange,
+        agentClipAspect,
+        savingClipAspect,
+        handleAgentClipAspectChange,
         avatarDrawerOpen,
         setAvatarDrawerOpen,
         geminiFillStatus,
@@ -5698,6 +5746,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleIntroduceAppChange,
         handleAgentAvatarApply,
         handleAgentShowKaraokeChange,
+        handleAgentClipAspectChange,
         handleStartFullAutoPipeline,
         handleRerunRenderUpload,
         handleCancelFullAutoPipeline,

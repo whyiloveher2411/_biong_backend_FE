@@ -15,6 +15,8 @@ import {
     Stack,
     Switch,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
@@ -1259,11 +1261,41 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                     Hiện text karaoke
                                                 </Typography>
                                                 <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                                    Tắt: không ghép caption layer. Band dưới beat vẫn chừa ~360px (UI channel).
+                                                    Tắt: không ghép caption layer. Band dưới beat vẫn chừa theo tỉ lệ clip (9:16 ~360px, 16:9 ~120px).
                                                 </Typography>
                                             </Box>
                                         )}
                                     />
+                                    <Box sx={{ px: 1.25, py: 1 }}>
+                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                            Tỉ lệ clip
+                                        </Typography>
+                                        <ToggleButtonGroup
+                                            exclusive
+                                            fullWidth
+                                            size="small"
+                                            value={state.agentClipAspect}
+                                            disabled={state.savingClipAspect}
+                                            onChange={(_event, value: '9:16' | '16:9' | null) => {
+                                                if (value) {
+                                                    void state.handleAgentClipAspectChange(value);
+                                                }
+                                            }}
+                                            aria-label="Tỉ lệ clip"
+                                        >
+                                            <ToggleButton value="9:16" aria-label="9:16 dọc">
+                                                9:16 dọc
+                                            </ToggleButton>
+                                            <ToggleButton value="16:9" aria-label="16:9 ngang">
+                                                16:9 ngang
+                                            </ToggleButton>
+                                        </ToggleButtonGroup>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                            {state.agentClipAspect === '16:9'
+                                                ? 'Canvas 1920×1080 — band caption ~120px.'
+                                                : 'Canvas 1080×1920 — band caption ~360px (mặc định).'}
+                                        </Typography>
+                                    </Box>
                                     <FormControlLabel
                                         sx={{
                                             m: 0,
@@ -1405,6 +1437,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                     avatars={state.verifiedAvatars}
                                     selectedId={state.agentAvatarId}
                                     selectedAnchor={state.agentAvatarAnchor}
+                                    clipAspect={state.agentClipAspect}
                                     saving={state.savingAgentAvatar}
                                     onApply={state.handleAgentAvatarApply}
                                 />

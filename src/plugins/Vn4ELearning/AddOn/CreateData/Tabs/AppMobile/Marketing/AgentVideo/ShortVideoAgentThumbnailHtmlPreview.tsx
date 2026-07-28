@@ -3,27 +3,30 @@ import { Box, Typography } from '@mui/material';
 import {
     computeContainScale,
     computeScaledStageHeight,
-    HF_STAGE_HEIGHT,
-    HF_STAGE_WIDTH,
+    getClipStageDimensions,
+    type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
 import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 
 type Props = {
     html: string;
     revision?: string;
+    clipAspect?: ClipAspect;
 };
 
 export default function ShortVideoAgentThumbnailHtmlPreview({
     html,
     revision = '',
+    clipAspect = '9:16',
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const [containerWidth, setContainerWidth] = React.useState(0);
 
     const hasHtml = Boolean(html.trim());
-    const containScale = computeContainScale(containerWidth || 360);
-    const scaledStageHeight = computeScaledStageHeight(containScale);
+    const stage = getClipStageDimensions(clipAspect);
+    const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
+    const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);
     const iframeKey = `thumbnail:${revision}:${html.length}`;
 
     React.useEffect(() => {
@@ -88,8 +91,8 @@ export default function ShortVideoAgentThumbnailHtmlPreview({
                         position: 'absolute',
                         top: '50%',
                         left: '50%',
-                        width: HF_STAGE_WIDTH * containScale,
-                        height: HF_STAGE_HEIGHT * containScale,
+                        width: stage.width * containScale,
+                        height: stage.height * containScale,
                         transform: 'translate(-50%, -50%)',
                     }}
                 >
@@ -100,8 +103,8 @@ export default function ShortVideoAgentThumbnailHtmlPreview({
                         srcDoc={html}
                         sandbox="allow-scripts allow-same-origin"
                         style={{
-                            width: HF_STAGE_WIDTH,
-                            height: HF_STAGE_HEIGHT,
+                            width: stage.width,
+                            height: stage.height,
                             border: 0,
                             transform: `scale(${containScale})`,
                             transformOrigin: 'top left',

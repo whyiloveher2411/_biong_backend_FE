@@ -48,10 +48,14 @@ Ghi `visual_style` ở root `visual_shot_plan` object hoặc `assets/visual-shot
 
 ```bash
 THEME=vignelli   # resolve từ CMS / shot-plan
+# Đọc render_spec từ short_video_get_context (MCP):
+#   agent_clip_aspect = 9:16 → --resolution portrait
+#   agent_clip_aspect = 16:9 → --resolution landscape
+RESOLUTION=portrait   # hoặc landscape
 npx hyperframes init storage/agent-renders/{id}/my-video \
   --non-interactive --skip-skills \
   --example=${THEME} \
-  --resolution portrait
+  --resolution ${RESOLUTION}
 ```
 
 ---
@@ -79,7 +83,8 @@ npx hyperframes init storage/agent-renders/{id}/my-video \
 ## Checklist
 
 - [ ] Theme ≠ `blank` (trừ spike debug local)
-- [ ] `--resolution portrait` (1080×1920)
+- [ ] `--resolution portrait|landscape` khớp `render_spec.resolution` / `agent_clip_aspect` từ MCP context
+- [ ] Canvas khớp `render_spec.width`×`render_spec.height` (9:16 → 1080×1920, 16:9 → 1920×1080)
 - [ ] Be Vietnam Pro local, không Google Fonts CDN
 - [ ] Đã đọc CSS token theme trước khi viết beat
 - [ ] `visual_style` ghi trong shot-plan hoặc CMS

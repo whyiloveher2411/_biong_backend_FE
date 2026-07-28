@@ -1161,6 +1161,24 @@ export async function saveAgentShowKaraoke(
     ) as Promise<JsonResponse & { agent_show_karaoke?: boolean }>;
 }
 
+export async function saveAgentClipAspect(
+    shortVideoId: number,
+    aspect: '9:16' | '16:9',
+): Promise<JsonResponse & {
+    agent_clip_aspect?: '9:16' | '16:9';
+    clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-clip-aspect',
+        shortVideoBody(shortVideoId, {
+            agent_clip_aspect: aspect,
+        }),
+    ) as Promise<JsonResponse & {
+        agent_clip_aspect?: '9:16' | '16:9';
+        clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
+    }>;
+}
+
 export type VerifiedAvatarOption = {
     id: number;
     title: string;

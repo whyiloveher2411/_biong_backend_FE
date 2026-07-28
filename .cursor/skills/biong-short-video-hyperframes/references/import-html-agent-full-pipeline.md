@@ -43,7 +43,9 @@
 
 Sau gate phần A — làm giống `import_assemble`:
 
-1. `hyperframes init` → `storage/agent-renders/{id}/my-video`
+**Canvas:** đọc `render_spec` / `agent_clip_aspect` từ `short_video_get_context` — scripts assemble/render ghi `assets/clip-render-spec.json` + `meta.json` width/height (9:16 → 1080×1920, 16:9 → 1920×1080).
+
+1. `hyperframes init` → `storage/agent-renders/{id}/my-video` (`--resolution` theo `render_spec.resolution`)
 2. Ghi `compositions/beat_N.html` từ CMS `beat_html`
 3. `normalize-import-html-beat-for-render.mjs --localize-images`
 4. `bootstrap-phase2-assets.mjs` → caption từ `audio_script` + timing `whisper_words` CMS

@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { mapPool, resolveConcurrency } from "./map-pool.mjs";
+import { getClipRenderSpec } from "./clip-render-spec.mjs";
 
 function runFfmpegSync(args) {
   console.log(`\n▶ ffmpeg ${args.join(" ")}`);
@@ -27,7 +28,7 @@ function runFfmpegAsync(args) {
 }
 
 /**
- * Concat beat MP4s (hard cut), strip audio, unify 1080x1920@30.
+ * Concat beat MP4s (hard cut), strip audio, unify canvas @30.
  * Normalize từng clip có thể chạy song song (vẫn re-encode thống nhất trước concat copy).
  *
  * @param {string[]} clipPaths
@@ -38,6 +39,9 @@ export async function concatSilentBeatClips(clipPaths, outputPath, opts = {}) {
   if (!clipPaths?.length) {
     throw new Error("concatSilentBeatClips: empty clip list");
   }
+  const spec = opts.renderSpec || getClipRenderSpec("9:16");
+  const targetW = spec.width;
+  const targetH = spec.height;
   for (const p of clipPaths) {
     if (!fs.existsSync(p)) {
       throw new Error(`Missing beat clip: ${p}`);
@@ -64,8 +68,8 @@ export async function concatSilentBeatClips(clipPaths, outputPath, opts = {}) {
       "-i",
       clipPaths[i],
       "-an",
-      "-vf",
-      "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
+      `-vf`,
+      `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p`,
       "-c:v",
       "libx264",
       "-preset",

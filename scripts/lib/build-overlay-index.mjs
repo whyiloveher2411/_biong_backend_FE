@@ -2,13 +2,19 @@
  * Overlay pass: video underlay (visual-silent) + caption + brand + progress + ambient (+ avatar optional).
  * Không gắn narration/BGM/SFX (mux riêng bằng ffmpeg).
  */
+import { getClipRenderSpec } from "./clip-render-spec.mjs";
+
 export function buildOverlayIndexHtml({
   shortVideoId,
   totalVideoSec,
   underlaySrc = "underlay.mp4",
   avatarOverlay = false,
   showCaptions = true,
+  renderSpec = null,
 }) {
+  const spec = renderSpec || getClipRenderSpec("9:16");
+  const w = spec.width;
+  const h = spec.height;
   const t = Number(totalVideoSec).toFixed(3);
   const avatarCss = avatarOverlay
     ? `    .hf-overlay-avatar { z-index:8800 !important; pointer-events:none; }\n`
@@ -26,7 +32,7 @@ export function buildOverlayIndexHtml({
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${w}, height=${h}" />
   <title>Short Video #${shortVideoId} overlay</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <style>
@@ -34,20 +40,20 @@ export function buildOverlayIndexHtml({
     @font-face { font-family:"Be Vietnam Pro"; font-style:normal; font-weight:600; font-display:swap; src:url("assets/fonts/BeVietnamPro-SemiBold.ttf") format("truetype"); }
     @font-face { font-family:"Be Vietnam Pro"; font-style:normal; font-weight:700; font-display:swap; src:url("assets/fonts/BeVietnamPro-Bold.ttf") format("truetype"); }
     @font-face { font-family:"Be Vietnam Pro"; font-style:normal; font-weight:800; font-display:swap; src:url("assets/fonts/BeVietnamPro-ExtraBold.ttf") format("truetype"); }
-    html, body { width:1080px; height:1920px; margin:0; overflow:hidden; background:#050505; }
-    #root { position:relative; width:1080px; height:1920px; overflow:hidden; background:#050505; font-family:"Be Vietnam Pro", system-ui, sans-serif; }
+    html, body { width:${w}px; height:${h}px; margin:0; overflow:hidden; background:#050505; }
+    #root { position:relative; width:${w}px; height:${h}px; overflow:hidden; background:#050505; font-family:"Be Vietnam Pro", system-ui, sans-serif; }
     .clip { position:absolute; inset:0; }
     .beat-host { overflow:hidden; background:transparent; }
-    .visual-underlay { width:1080px; height:1920px; object-fit:cover; }
+    .visual-underlay { width:${w}px; height:${h}px; object-fit:cover; }
     .beat-progress-host { z-index:8990 !important; pointer-events:none; }
 ${captionsCss}${avatarCss}    .hf-overlay-brand { z-index:9500 !important; pointer-events:none; }
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="main" data-start="0" data-duration="${t}" data-width="1080" data-height="1920">
-    <video id="visual-underlay" class="clip visual-underlay" src="${underlaySrc}" data-start="0" data-duration="${t}" data-track-index="1" muted playsinline style="position:absolute;inset:0;z-index:1;width:1080px;height:1920px;object-fit:cover;"></video>
+  <div id="root" data-composition-id="main" data-start="0" data-duration="${t}" data-width="${w}" data-height="${h}">
+    <video id="visual-underlay" class="clip visual-underlay" src="${underlaySrc}" data-start="0" data-duration="${t}" data-track-index="1" muted playsinline style="position:absolute;inset:0;z-index:1;width:${w}px;height:${h}px;object-fit:cover;"></video>
     <div id="ambient-layer" class="clip beat-host" data-composition-id="ambient" data-composition-src="compositions/ambient-layer.html" data-start="0" data-duration="${t}" data-track-index="30" style="position:absolute;inset:0;z-index:800;"></div>
-    <div id="beat-progress-host" class="clip beat-progress-host" data-start="0" data-duration="${t}" data-track-index="31" style="position:absolute;top:0;left:0;width:1080px;height:4px;z-index:8990;pointer-events:none;"><div class="beat-progress-track" style="position:absolute;inset:0;background:transparent;overflow:hidden;"><div class="beat-progress-fill" style="width:100%;height:100%;background:linear-gradient(90deg,#37b8ff 0%,#5fd6ff 18%,#78f0d8 34%,#c0f36a 50%,#ffd86b 66%,#ff9b49 82%,#ff5a36 92%,#ff3b1f 100%);box-shadow:0 0 8px rgba(95,214,255,0.28),0 0 14px rgba(255,170,84,0.30),0 0 20px rgba(255,90,54,0.22);border-radius:0 2px 2px 0;clip-path:inset(0 100% 0 0);"></div></div></div>
+    <div id="beat-progress-host" class="clip beat-progress-host" data-start="0" data-duration="${t}" data-track-index="31" style="position:absolute;top:0;left:0;width:${w}px;height:4px;z-index:8990;pointer-events:none;"><div class="beat-progress-track" style="position:absolute;inset:0;background:transparent;overflow:hidden;"><div class="beat-progress-fill" style="width:100%;height:100%;background:linear-gradient(90deg,#37b8ff 0%,#5fd6ff 18%,#78f0d8 34%,#c0f36a 50%,#ffd86b 66%,#ff9b49 82%,#ff5a36 92%,#ff3b1f 100%);box-shadow:0 0 8px rgba(95,214,255,0.28),0 0 14px rgba(255,170,84,0.30),0 0 20px rgba(255,90,54,0.22);border-radius:0 2px 2px 0;clip-path:inset(0 100% 0 0);"></div></div></div>
 ${avatarHost}${captionsHost}    <div id="brand-layer" class="clip hf-overlay-brand" data-composition-id="brand-watermark" data-composition-src="compositions/brand-watermark.html" data-start="0" data-duration="${t}" data-track-index="21" style="position:absolute;inset:0;z-index:9500;"></div>
   </div>
   <script>

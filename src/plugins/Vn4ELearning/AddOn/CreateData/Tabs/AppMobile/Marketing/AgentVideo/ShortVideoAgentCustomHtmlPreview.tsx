@@ -4,8 +4,8 @@ import { resolveActiveBeatSection, type BeatMap } from './agentVideoBeatMap';
 import { createHtmlBeatMediaProxy, type HtmlBeatMediaProxy } from './agentVideoHtmlBeatMediaProxy';
 import {
     computeContainScale,
-    HF_STAGE_HEIGHT,
-    HF_STAGE_WIDTH,
+    getClipStageDimensions,
+    type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
 import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
@@ -21,6 +21,7 @@ type Props = {
     avatarMasterUrl?: string;
     avatarAnchor?: AvatarPipAnchor | string;
     showKaraoke?: boolean;
+    clipAspect?: ClipAspect;
 };
 
 const EMPTY_HTML = '<html><body style="margin:0;background:#111;color:#666;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">Chưa có HTML beat</body></html>';
@@ -35,6 +36,7 @@ export default function ShortVideoAgentCustomHtmlPreview({
     avatarMasterUrl = '',
     avatarAnchor = 'bottom_right',
     showKaraoke = true,
+    clipAspect = '9:16',
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -89,9 +91,11 @@ export default function ShortVideoAgentCustomHtmlPreview({
         };
     }, []);
 
+    const stage = getClipStageDimensions(clipAspect);
     const containScale = computeContainScale(
         containerWidth || 360,
         containerHeight > 0 ? containerHeight : undefined,
+        clipAspect,
     );
 
     React.useEffect(() => {
@@ -153,16 +157,16 @@ export default function ShortVideoAgentCustomHtmlPreview({
             >
                 <Box
                     sx={{
-                        width: HF_STAGE_WIDTH * containScale,
-                        height: HF_STAGE_HEIGHT * containScale,
+                        width: stage.width * containScale,
+                        height: stage.height * containScale,
                         position: 'relative',
                         flexShrink: 0,
                     }}
                 >
                     <Box
                         sx={{
-                            width: HF_STAGE_WIDTH,
-                            height: HF_STAGE_HEIGHT,
+                            width: stage.width,
+                            height: stage.height,
                             transform: `scale(${containScale})`,
                             transformOrigin: 'top left',
                             position: 'absolute',
@@ -178,8 +182,8 @@ export default function ShortVideoAgentCustomHtmlPreview({
                             sandbox="allow-scripts allow-same-origin"
                             srcDoc={activeHtml || EMPTY_HTML}
                             sx={{
-                                width: HF_STAGE_WIDTH,
-                                height: HF_STAGE_HEIGHT,
+                                width: stage.width,
+                                height: stage.height,
                                 border: 0,
                                 display: 'block',
                             }}

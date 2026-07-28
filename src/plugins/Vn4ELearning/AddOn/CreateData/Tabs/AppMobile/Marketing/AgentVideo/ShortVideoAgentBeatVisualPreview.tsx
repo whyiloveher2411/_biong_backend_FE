@@ -3,8 +3,8 @@ import { Box, Typography } from '@mui/material';
 import {
     computeContainScale,
     computeScaledStageHeight,
-    HF_STAGE_HEIGHT,
-    HF_STAGE_WIDTH,
+    getClipStageDimensions,
+    type ClipAspect,
 } from './agentVideoHtmlBeatPreviewScale';
 import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 
@@ -15,6 +15,7 @@ type Props = {
     audioUrl?: string;
     startSec: number;
     durationSec: number;
+    clipAspect?: ClipAspect;
 };
 
 function muteIframeMedia(iframe: HTMLIFrameElement | null): void {
@@ -35,6 +36,7 @@ export default function ShortVideoAgentBeatVisualPreview({
     audioUrl = '',
     startSec,
     durationSec,
+    clipAspect = '9:16',
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
@@ -47,8 +49,9 @@ export default function ShortVideoAgentBeatVisualPreview({
 
     const safeDurationSec = Math.max(0.1, Number(durationSec) || 0.1);
     const hasHtml = Boolean(html.trim());
-    const containScale = computeContainScale(containerWidth || 360);
-    const scaledStageHeight = computeScaledStageHeight(containScale);
+    const stage = getClipStageDimensions(clipAspect);
+    const containScale = computeContainScale(containerWidth || 360, undefined, clipAspect);
+    const scaledStageHeight = computeScaledStageHeight(containScale, clipAspect);
 
     React.useEffect(() => {
         elapsedBeforePlayRef.current = 0;
@@ -205,7 +208,7 @@ export default function ShortVideoAgentBeatVisualPreview({
             <Box
                 sx={{
                     width: '100%',
-                    maxWidth: 360,
+                    maxWidth: clipAspect === '16:9' ? 480 : 360,
                     minHeight: 220,
                     mx: 'auto',
                     display: 'flex',
@@ -254,8 +257,8 @@ export default function ShortVideoAgentBeatVisualPreview({
                 }}
                 sx={{
                     width: '100%',
-                    maxWidth: 360,
-                    aspectRatio: '9 / 16',
+                    maxWidth: clipAspect === '16:9' ? 480 : 360,
+                    aspectRatio: stage.aspectRatioCss,
                     bgcolor: 'common.black',
                     borderRadius: 2,
                     overflow: 'hidden',
@@ -279,8 +282,8 @@ export default function ShortVideoAgentBeatVisualPreview({
                 >
                     <Box
                         sx={{
-                            width: HF_STAGE_WIDTH,
-                            height: HF_STAGE_HEIGHT,
+                            width: stage.width,
+                            height: stage.height,
                             transform: `scale(${containScale})`,
                             transformOrigin: 'top left',
                         }}
@@ -294,8 +297,8 @@ export default function ShortVideoAgentBeatVisualPreview({
                             srcDoc={html}
                             onLoad={handleIframeLoad}
                             sx={{
-                                width: HF_STAGE_WIDTH,
-                                height: HF_STAGE_HEIGHT,
+                                width: stage.width,
+                                height: stage.height,
                                 border: 0,
                                 display: 'block',
                                 bgcolor: 'common.black',

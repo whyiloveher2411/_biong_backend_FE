@@ -1,4 +1,9 @@
-export function buildAmbientLayerHtml(totalVideoSec) {
+import { getClipRenderSpec } from "./clip-render-spec.mjs";
+
+export function buildAmbientLayerHtml(totalVideoSec, renderSpec = null) {
+  const spec = renderSpec || getClipRenderSpec("9:16");
+  const w = spec.width;
+  const h = spec.height;
   const total = Number(totalVideoSec);
   const t = total.toFixed(3);
   const loopSec = 8;
@@ -9,12 +14,12 @@ export function buildAmbientLayerHtml(totalVideoSec) {
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${w}, height=${h}" />
   <title>Ambient Layer</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <style>
-    html, body { width:1080px; height:1920px; margin:0; overflow:hidden; background:transparent !important; }
-    #root { position:relative; width:1080px; height:1920px; overflow:hidden; background:transparent; pointer-events:none; }
+    html, body { width:${w}px; height:${h}px; margin:0; overflow:hidden; background:transparent !important; }
+    #root { position:relative; width:${w}px; height:${h}px; overflow:hidden; background:transparent; pointer-events:none; }
     .ambient-parallax { position:absolute; inset:-40px; background: radial-gradient(ellipse 60% 40% at 30% 20%, rgba(120,180,255,0.06), transparent 70%); }
     .grain { position:absolute; inset:-20px; opacity:.08; background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,.9) 0 1px, transparent 1px), radial-gradient(circle at 80% 70%, rgba(255,255,255,.65) 0 1px, transparent 1px); background-size: 38px 38px, 53px 53px; mix-blend-mode: overlay; }
     .orb { position:absolute; width:280px; height:280px; left:72%; top:18%; border-radius:50%; background:radial-gradient(circle, rgba(255,120,80,0.12), transparent 70%); filter:blur(2px); }
@@ -22,7 +27,7 @@ export function buildAmbientLayerHtml(totalVideoSec) {
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="ambient" data-start="0" data-duration="${t}" data-width="1080" data-height="1920">
+  <div id="root" data-composition-id="ambient" data-start="0" data-duration="${t}" data-width="${w}" data-height="${h}">
     <div class="ambient-parallax"></div>
     <div class="grain"></div>
     <div class="orb"></div>

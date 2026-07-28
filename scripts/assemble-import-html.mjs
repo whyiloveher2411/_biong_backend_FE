@@ -19,6 +19,11 @@ import { collectImportHtmlBeatErrors } from "./lib/collect-import-html-beat-erro
 import { downloadToUrl, copyIfExists } from "./lib/download-asset.mjs";
 import { buildAmbientLayerHtml } from "./lib/build-ambient-layer.mjs";
 import { buildImportHtmlIndexHtml } from "./lib/build-import-html-index.mjs";
+import {
+  buildMetaJson,
+  resolveRenderSpecFromContext,
+  writeClipRenderSpecAsset,
+} from "./lib/clip-render-spec.mjs";
 import { runNodeScript, runImportHtmlPreflight, PREFLIGHT } from "./lib/run-import-html-preflight.mjs";
 import {
   tokenizeScript,
@@ -409,7 +414,7 @@ function buildBeatTimingFailureMessage(projectDir, fallback = "") {
   return fallback || "check-beat-timing thất bại — timing beat không hợp lệ (liên tục / khớp audio)";
 }
 
-function ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec) {
+function ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec, renderSpec) {
   fs.mkdirSync(path.join(projectDir, "assets/audio"), { recursive: true });
   fs.mkdirSync(path.join(projectDir, "assets/fonts"), { recursive: true });
   fs.mkdirSync(path.join(projectDir, "assets/images"), { recursive: true });
@@ -442,13 +447,7 @@ function ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec) {
     fs.writeFileSync(
       metaPath,
       JSON.stringify(
-        {
-          title: `Short Video #${shortVideoId}`,
-          duration: totalVideoSec,
-          fps: 30,
-          width: 1080,
-          height: 1920,
-        },
+        buildMetaJson(renderSpec, `Short Video #${shortVideoId}`, totalVideoSec),
         null,
         2,
       ),
@@ -529,6 +528,7 @@ function patchTimelineDurationFromCaption({
   sections,
   options = {},
   audioDurationSec = 0,
+  renderSpec = null,
 }) {
   const reportPath = path.join(projectDir, "assets/caption-sync-report.json");
   if (!fs.existsSync(reportPath)) {
@@ -571,18 +571,16 @@ function patchTimelineDurationFromCaption({
   );
   fs.writeFileSync(
     path.join(projectDir, "compositions/ambient-layer.html"),
-    buildAmbientLayerHtml(timelineSec),
+    buildAmbientLayerHtml(timelineSec, renderSpec),
   );
   fs.writeFileSync(
     path.join(projectDir, "meta.json"),
     JSON.stringify(
-      {
-        title: beatMap.title || `Short Video #${shortVideoId}`,
-        duration: timelineSec,
-        fps: 30,
-        width: 1080,
-        height: 1920,
-      },
+      buildMetaJson(
+        renderSpec || resolveRenderSpecFromContext(null),
+        beatMap.title || `Short Video #${shortVideoId}`,
+        timelineSec,
+      ),
       null,
       2,
     ),
@@ -656,6 +654,8 @@ async function main() {
     if (ctx.render_mode !== "import_html") {
       throw new Error("render_mode phải là import_html");
     }
+    const renderSpec = resolveRenderSpecFromContext(ctx);
+    log(`Clip aspect ${renderSpec.aspect_ratio} (${renderSpec.width}x${renderSpec.height})`);
     const importHtml = ctx.import_html || {};
     if (!importHtml.import_html_ready) {
       throw new Error("import_html chưa sẵn sàng — cần đủ beat HTML + whisper");
@@ -681,8 +681,13 @@ async function main() {
       return;
     }
 
-    ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec);
+    ensureProjectScaffold(projectDir, shortVideoId, totalVideoSec, renderSpec);
     fs.mkdirSync(assetsDir, { recursive: true });
+    writeClipRenderSpecAsset(projectDir, renderSpec);
+    fs.writeFileSync(
+      path.join(projectDir, "assets/clip-aspect.json"),
+      JSON.stringify({ clip_aspect: renderSpec.aspect_ratio }, null, 2),
+    );
     fs.writeFileSync(path.join(assetsDir, "get-context-snapshot.json"), JSON.stringify(ctx, null, 2));
     fs.writeFileSync(path.join(projectDir, "assets/get-context-snapshot.json"), JSON.stringify(ctx, null, 2));
     fs.writeFileSync(path.join(projectDir, "assets/beat-map.json"), JSON.stringify(beatMap, null, 2));
@@ -752,7 +757,7 @@ async function main() {
 
     fs.writeFileSync(
       path.join(projectDir, "compositions/ambient-layer.html"),
-      buildAmbientLayerHtml(totalVideoSec),
+      buildAmbientLayerHtml(totalVideoSec, renderSpec),
     );
 
     const sfxBeatTransition = assets.sfx_beat_transition !== false;
@@ -766,7 +771,7 @@ async function main() {
         shortVideoId,
         totalVideoSec,
         sections,
-        options: { sfxHook, avatarOverlay, showCaptions },
+        options: { sfxHook, avatarOverlay, showCaptions, renderSpec },
       }),
     );
     log(`Wrote index.html skeleton (karaoke=${showCaptions ? "on" : "off"})`);
@@ -812,8 +817,9 @@ async function main() {
       shortVideoId,
       beatMap,
       sections,
-      options: { sfxHook, avatarOverlay, showCaptions },
+      options: { sfxHook, avatarOverlay, showCaptions, renderSpec },
       audioDurationSec: narrationDurationSec || Number(ctx.audio_file_duration_sec || 0),
+      renderSpec,
     });
     log(`Timeline duration patched to ${timelineSec}s from caption sync`);
 
@@ -826,7 +832,7 @@ async function main() {
           shortVideoId,
           totalVideoSec: timelineSec,
           sections,
-          options: { sfxHook, avatarOverlay: true, showCaptions },
+          options: { sfxHook, avatarOverlay: true, showCaptions, renderSpec },
         }),
       );
       // Lip-sync giữ whisper timing — không ghi đè bằng caption-words (hay lệch sau align)

@@ -9,6 +9,10 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  resolveRenderSpecFromContext,
+  writeClipRenderSpecAsset,
+} from "../../../scripts/lib/clip-render-spec.mjs";
 
 const DEFAULT_CONTEXT_REL = "assets/get-context-snapshot.json";
 const AUDIO_SCRIPT_REL = "assets/audio-script.txt";
@@ -130,6 +134,15 @@ function main() {
     null;
 
   fs.mkdirSync(path.join(projectDir, "assets"), { recursive: true });
+  const renderSpec = resolveRenderSpecFromContext(ctx);
+  writeClipRenderSpecAsset(projectDir, renderSpec);
+  fs.writeFileSync(
+    path.join(projectDir, "assets/clip-aspect.json"),
+    JSON.stringify({ clip_aspect: renderSpec.aspect_ratio }, null, 2),
+  );
+  console.log(
+    `[bootstrap] wrote assets/clip-render-spec.json (${renderSpec.aspect_ratio} ${renderSpec.width}x${renderSpec.height})`,
+  );
   fs.writeFileSync(path.join(projectDir, AUDIO_SCRIPT_REL), audioScript);
   fs.writeFileSync(
     path.join(projectDir, AGENT_METADATA_REL),

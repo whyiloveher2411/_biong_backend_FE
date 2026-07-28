@@ -45,7 +45,7 @@ export default function ShortVideoAgentThumbnailPanel({ state }: Props) {
                         Thumbnail
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        HTML cover 1080×1920 → chụp ảnh cho short video.
+                        HTML cover theo tỉ lệ clip ({state.agentClipAspect === '16:9' ? '1920×1080' : '1080×1920'}) → chụp ảnh cho short video.
                     </Typography>
                 </Box>
 
@@ -94,6 +94,7 @@ export default function ShortVideoAgentThumbnailPanel({ state }: Props) {
                     <ShortVideoAgentThumbnailHtmlPreview
                         html={state.thumbnailHtml}
                         revision={state.thumbnailBlock?.updated_at || ''}
+                        clipAspect={state.agentClipAspect}
                     />
                 </WorkflowSection>
 

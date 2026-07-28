@@ -4,6 +4,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { getClipRenderSpec } from "./clip-render-spec.mjs";
 
 /** Xóa path mà không follow symlink (tránh xóa nhầm target). */
 function rmPathNoFollow(linkPath) {
@@ -46,7 +47,7 @@ function collectLocalImageSrcs(html) {
 /**
  * Đưa beat sub-comp (template + beat_N timeline) thành standalone index main.
  */
-export function buildStandaloneBeatIndexHtml(beatHtml, beatId, durationSec) {
+export function buildStandaloneBeatIndexHtml(beatHtml, beatId, durationSec, renderSpec = null) {
   let inner = extractBeatTemplateInner(beatHtml);
   const t = Number(durationSec);
   const idEsc = beatId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -105,11 +106,15 @@ export function buildStandaloneBeatIndexHtml(beatHtml, beatId, durationSec) {
   // Seek-safe: CSS transition trên transform/opacity phá headless multi-worker seek
   const seekSafeCss = `<style id="hf-seek-safe">*,*::before,*::after{transition:none!important}</style>\n`;
 
+  const spec = renderSpec || getClipRenderSpec("9:16");
+  const w = spec.width;
+  const h = spec.height;
+
   return `<!doctype html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${w}, height=${h}" />
   <title>${beatId}</title>
 ${gsapTag}${seekSafeCss}</head>
 <body>
@@ -123,7 +128,7 @@ ${hiddenImgs}${inner}
  * Tạo thư mục renders/beat-clips/{beatId}/ với index standalone + symlink assets.
  * @returns {{ clipDir: string, indexPath: string, outputMp4: string }}
  */
-export function preparePerBeatClipDir(projectDir, beatId, durationSec) {
+export function preparePerBeatClipDir(projectDir, beatId, durationSec, renderSpec = null) {
   const projectAbs = path.resolve(projectDir);
   const clipsRoot = path.join(projectAbs, "renders", "beat-clips");
   const clipDir = path.join(clipsRoot, beatId);
@@ -137,7 +142,7 @@ export function preparePerBeatClipDir(projectDir, beatId, durationSec) {
   }
 
   const beatHtml = fs.readFileSync(sourceBeat, "utf8");
-  const indexHtml = buildStandaloneBeatIndexHtml(beatHtml, beatId, durationSec);
+  const indexHtml = buildStandaloneBeatIndexHtml(beatHtml, beatId, durationSec, renderSpec);
   const indexPath = path.join(clipDir, "index.html");
   fs.writeFileSync(indexPath, indexHtml, "utf8");
 

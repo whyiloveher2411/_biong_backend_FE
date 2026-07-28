@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { buildLipSyncTimeline } from "./lib/avatar-lip-sync.mjs";
 import { createAudioEnergy } from "./lib/avatar-audio-energy.mjs";
+import { loadRenderSpecFromProject } from "../../../scripts/lib/clip-render-spec.mjs";
 
 function defaultHints() {
   return {
@@ -208,6 +209,10 @@ function main() {
     process.exit(1);
   }
 
+  const renderSpec = loadRenderSpecFromProject(projectDir);
+  const canvasW = renderSpec.width;
+  const canvasH = renderSpec.height;
+
   const assets = cfg.assets && typeof cfg.assets === "object" ? cfg.assets : {};
   const master = String(assets.master || "").trim();
   const baseFace = String(assets.base_face || "").trim();
@@ -224,7 +229,7 @@ function main() {
   const leftPx = Number.isFinite(Number(pip.left_px)) ? Number(pip.left_px) : marginPx;
   const rightPx = Number.isFinite(Number(pip.right_px)) ? Number(pip.right_px) : marginPx;
   const anchor = String(pip.anchor || "bottom_right").toLowerCase();
-  const pipW = Math.round(1080 * widthRatio);
+  const pipW = Math.round(canvasW * widthRatio);
 
   let pipPosCss;
   switch (anchor) {
@@ -307,21 +312,21 @@ function main() {
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${canvasW}, height=${canvasH}" />
   <title>Avatar overlay</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 1080px;
-      height: 1920px;
+      width: ${canvasW}px;
+      height: ${canvasH}px;
       overflow: hidden;
       background: transparent !important;
     }
     #root {
       position: relative;
-      width: 1080px;
-      height: 1920px;
+      width: ${canvasW}px;
+      height: ${canvasH}px;
       pointer-events: none;
     }
     .avatar-pip {
@@ -364,7 +369,7 @@ function main() {
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="avatar-overlay" data-start="0" data-duration="${duration}" data-width="1080" data-height="1920">
+  <div id="root" data-composition-id="avatar-overlay" data-start="0" data-duration="${duration}" data-width="${canvasW}" data-height="${canvasH}">
 ${bodyInner}
   </div>
   <script>

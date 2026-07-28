@@ -15,6 +15,7 @@ import { snapBeatSectionsForIndex } from "./lib/build-import-html-index.mjs";
 import { preparePerBeatClipDir } from "./lib/build-per-beat-render-index.mjs";
 import { buildOverlayIndexHtml } from "./lib/build-overlay-index.mjs";
 import { concatSilentBeatClips } from "./lib/concat-silent-beat-clips.mjs";
+import { loadRenderSpecFromProject } from "./lib/clip-render-spec.mjs";
 import { mixImportHtmlAudio } from "./lib/mix-import-html-audio.mjs";
 import { mapPool, resolveConcurrency } from "./lib/map-pool.mjs";
 
@@ -179,6 +180,11 @@ async function main() {
       `\n[render-import-html] per-beat parallel concurrency=${beatConcurrency} (IMPORT_HTML_BEAT_CONCURRENCY), workers=1 each`,
     );
 
+    const renderSpec = loadRenderSpecFromProject(projectDir);
+    console.log(
+      `[render-import-html] canvas ${renderSpec.width}x${renderSpec.height} (${renderSpec.aspect_ratio})`,
+    );
+
     const beatMp4s = await mapPool(sections, beatConcurrency, async (sec, index) => {
       const beatId = sec.id || sec.beat_id;
       const dur = Number(sec.durationSec);
@@ -189,7 +195,7 @@ async function main() {
       const slot = `${index + 1}/${sections.length}`;
       console.log(`\n[render-import-html] beat ${beatId} start (${dur.toFixed(3)}s) slot ${slot}`);
       try {
-        const { clipDir, outputMp4 } = preparePerBeatClipDir(projectDir, beatId, dur);
+        const { clipDir, outputMp4 } = preparePerBeatClipDir(projectDir, beatId, dur, renderSpec);
         await renderHyperframes(clipDir, outputMp4, { workers: 1 });
         console.log(`[render-import-html] beat ${beatId} done slot ${slot}`);
         return outputMp4;
@@ -207,6 +213,7 @@ async function main() {
         process.env.IMPORT_HTML_FFMPEG_CONCURRENCY ?? process.env.IMPORT_HTML_BEAT_CONCURRENCY,
         { defaultValue: 3, min: 1, max: 4 },
       ),
+      renderSpec,
     });
 
     // --- 3) Overlay pass ---
@@ -234,6 +241,7 @@ async function main() {
         underlaySrc: "underlay.mp4",
         avatarOverlay,
         showCaptions,
+        renderSpec,
       }),
       "utf8",
     );

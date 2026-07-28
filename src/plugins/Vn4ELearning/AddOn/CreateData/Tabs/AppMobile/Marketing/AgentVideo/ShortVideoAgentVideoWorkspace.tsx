@@ -490,6 +490,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 beatHtml={infoBeatId ? state.beatHtml[infoBeatId] || null : null}
                 audioUrl={state.audioFileUrl || state.agentVideoUrl}
                 beatIndex={infoBeatIndex}
+                clipAspect={state.agentClipAspect}
                 saving={state.savingImportHtml}
                 onSaveVisualDescription={handleSaveBeatInfoVisualDescription}
             />

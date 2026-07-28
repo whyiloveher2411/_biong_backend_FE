@@ -365,6 +365,7 @@ export default function ShortVideoAgentVideoPreview({
                                 avatarMasterUrl={avatarMasterUrl}
                                 avatarAnchor={avatarAnchor}
                                 showKaraoke={showKaraoke}
+                                clipAspect={state.agentClipAspect}
                             />
                         ) : activeSource === 'html_beat' ? (
                             <HtmlBeatMissingPlaceholder />

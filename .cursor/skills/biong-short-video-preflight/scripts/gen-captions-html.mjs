@@ -7,13 +7,10 @@
 import fs from "fs";
 import path from "path";
 import { tokenizeScript } from "./lib/caption-script-align.mjs";
-
-/** Caption pill trong caption band — beat đã chừa bottom 360px; tránh platform description overlay */
-const CANVAS_HEIGHT = 1920;
-const CAPTION_BOTTOM_PCT = 180 / CANVAS_HEIGHT; // ~9.4% — thấp hơn 12% để tận dụng caption band
-const CAPTION_BOTTOM_PX = Math.round(CANVAS_HEIGHT * CAPTION_BOTTOM_PCT);
-const CAPTION_HORIZONTAL_PX = 60;
-const CAPTION_MAX_WIDTH_PX = 1080 - CAPTION_HORIZONTAL_PX * 2;
+import {
+  loadRenderSpecFromProject,
+  resolveCaptionLayout,
+} from "../../../scripts/lib/clip-render-spec.mjs";
 
 function assertCaptionMatchesScript(projectDir, captionWords) {
   const scriptPath = path.join(projectDir, "assets/audio-script.txt");
@@ -83,6 +80,14 @@ function main() {
   }
   duration = +Number(duration).toFixed(2);
 
+  const renderSpec = loadRenderSpecFromProject(projectDir);
+  const captionLayout = resolveCaptionLayout(renderSpec);
+  const CANVAS_WIDTH = captionLayout.width;
+  const CANVAS_HEIGHT = captionLayout.height;
+  const CAPTION_BOTTOM_PX = captionLayout.bottomPx;
+  const CAPTION_HORIZONTAL_PX = captionLayout.horizontalPx;
+  const CAPTION_MAX_WIDTH_PX = captionLayout.maxWidthPx;
+
   const transcriptJson = JSON.stringify(words);
   const outPath = path.join(projectDir, "compositions/captions.html");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -91,7 +96,7 @@ function main() {
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${CANVAS_WIDTH}, height=${CANVAS_HEIGHT}" />
   <title>Captions — Karaoke</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <style>
@@ -104,8 +109,8 @@ function main() {
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
-      width: 1080px;
-      height: 1920px;
+      width: ${CANVAS_WIDTH}px;
+      height: ${CANVAS_HEIGHT}px;
       margin: 0;
       overflow: hidden;
       background: transparent !important;
@@ -114,8 +119,8 @@ function main() {
     #pill-karaoke {
       pointer-events: none;
       position: relative;
-      width: 1080px;
-      height: 1920px;
+      width: ${CANVAS_WIDTH}px;
+      height: ${CANVAS_HEIGHT}px;
       overflow: hidden;
       background: transparent;
     }
@@ -179,7 +184,7 @@ function main() {
   </style>
 </head>
 <body>
-  <div id="pill-karaoke" data-composition-id="captions" data-timeline-locked data-start="0" data-duration="${duration}" data-fps="30" data-width="1080" data-height="1920">
+  <div id="pill-karaoke" data-composition-id="captions" data-timeline-locked data-start="0" data-duration="${duration}" data-fps="30" data-width="${CANVAS_WIDTH}" data-height="${CANVAS_HEIGHT}">
     <div class="caption-root" aria-hidden="true">
       <div id="caption-stage" class="caption-group-wrap"></div>
     </div>
