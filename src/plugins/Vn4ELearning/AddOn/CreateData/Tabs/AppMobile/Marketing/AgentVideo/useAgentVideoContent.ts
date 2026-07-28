@@ -75,8 +75,11 @@ import {
     type FullAutoPipelineSummary,
     type GithubTopEnrichSummary,
     type TopicResearchBlock,
+    type RemixBlock,
     enqueueTopicResearchFetch,
     enqueueTopicResearchSynthesize,
+    saveRemixTranscript,
+    enqueueRemixSynthesize,
     type VisualStyleCatalogItem,
     type OmnivoiceVoiceCatalogItem,
     type OmnivoiceVoiceMode,
@@ -504,6 +507,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savedTopicResearchUrlsText, setSavedTopicResearchUrlsText] = React.useState('');
     const [fetchingTopicResearch, setFetchingTopicResearch] = React.useState(false);
     const [synthesizingTopicResearch, setSynthesizingTopicResearch] = React.useState(false);
+    const [remix, setRemix] = React.useState<RemixBlock | null>(null);
+    const [synthesizingRemix, setSynthesizingRemix] = React.useState(false);
     const [githubTopRepos, setGithubTopRepos] = React.useState<NonNullable<ImportHtmlAssets['github_top_repos']> | null>(null);
     const [startingFullAuto, setStartingFullAuto] = React.useState(false);
     const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
@@ -1141,6 +1146,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setTopicResearchUrlsText(nextUrlsText);
         setSavedTopicResearchTopic(nextTopic);
         setSavedTopicResearchUrlsText(nextUrlsText);
+        setRemix(res?.remix ?? null);
 
         if (Object.keys(beatIterateSessionRef.current).length > 0) {
             const htmlProgressBeatId = String(geminiRefineHtml?.progress?.beat_id || '').trim();
@@ -1298,7 +1304,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || fullAutoPipeline?.status === 'running'
         || githubTopEnrich?.status === 'preparing'
         || topicResearch?.fetch?.status === 'preparing'
-        || topicResearch?.synthesize?.status === 'preparing';
+        || topicResearch?.synthesize?.status === 'preparing'
+        || remix?.synthesize?.status === 'preparing';
     React.useEffect(() => {
         if (!open || !shortVideoId || !shouldPoll) {
             return undefined;
@@ -4595,6 +4602,35 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleSynthesizeRemix = async () => {
+        if (marketingPostId > 0) {
+            showMessage('Đã liên kết marketing post — không dùng remix', 'warning');
+            return;
+        }
+        const raw = String(remix?.raw_transcript || '').trim();
+        if (!raw) {
+            showMessage('Chưa có transcript gốc — chạy Lấy thông tin trước', 'warning');
+            return;
+        }
+        setSynthesizingRemix(true);
+        try {
+            const json = await enqueueRemixSynthesize(shortVideoId);
+            if (!json?.success) {
+                showMessage(parseApiMessage(json?.message) || 'Không xếp hàng tổng hợp', 'error');
+                return;
+            }
+            if (json.remix) {
+                setRemix(json.remix);
+            }
+            showMessage(parseApiMessage(json?.message) || 'Đã xếp hàng tổng hợp nội dung', 'success');
+            loadRow({ syncAggregate: true, includeCatalogs: false });
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSynthesizingRemix(false);
+        }
+    };
+
     const handleFetchGithubReadme = async () => {
         if (marketingPostId > 0) {
             showMessage('Đã liên kết marketing post — không lấy thông tin GitHub', 'warning');
@@ -4692,10 +4728,26 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
 
-            setAgentSourceContent(cleaned);
-
             const title = String(json?.meta?.title || '').trim();
             const uploader = String(json?.meta?.uploader || '').trim();
+            const durationSec = json?.meta?.duration_sec;
+            const saveRes = await saveRemixTranscript(shortVideoId, {
+                platform: 'tiktok',
+                rawTranscript: cleaned,
+                meta: {
+                    title,
+                    uploader,
+                    duration_sec: typeof durationSec === 'number' ? durationSec : null,
+                },
+            });
+            if (!saveRes?.success) {
+                showMessage(parseApiMessage(saveRes?.message) || 'Không lưu được transcript gốc', 'error');
+                return;
+            }
+            if (saveRes.remix) {
+                setRemix(saveRes.remix);
+            }
+
             const metaLines: string[] = [];
             if (uploader) {
                 metaLines.push(`TikTok @${uploader.replace(/^@/, '')}`);
@@ -4718,7 +4770,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 });
             }
 
-            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript TikTok', 'success');
+            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript TikTok — bấm Tổng hợp nội dung', 'success');
+            loadRow({ syncAggregate: true, includeCatalogs: false });
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -4757,10 +4810,26 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return;
             }
 
-            setAgentSourceContent(cleaned);
-
             const title = String(json?.meta?.title || '').trim();
             const uploader = String(json?.meta?.uploader || '').trim();
+            const durationSec = json?.meta?.duration_sec;
+            const saveRes = await saveRemixTranscript(shortVideoId, {
+                platform: 'youtube',
+                rawTranscript: cleaned,
+                meta: {
+                    title,
+                    uploader,
+                    duration_sec: typeof durationSec === 'number' ? durationSec : null,
+                },
+            });
+            if (!saveRes?.success) {
+                showMessage(parseApiMessage(saveRes?.message) || 'Không lưu được transcript gốc', 'error');
+                return;
+            }
+            if (saveRes.remix) {
+                setRemix(saveRes.remix);
+            }
+
             const metaLines: string[] = [];
             if (uploader) {
                 metaLines.push(`YouTube ${uploader}`);
@@ -4783,7 +4852,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 });
             }
 
-            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript YouTube', 'success');
+            showMessage(parseApiMessage(json?.message) || 'Đã lấy transcript YouTube — bấm Tổng hợp nội dung', 'success');
+            loadRow({ syncAggregate: true, includeCatalogs: false });
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
@@ -5411,6 +5481,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         synthesizingTopicResearch,
         handleFetchTopicResearch,
         handleSynthesizeTopicResearch,
+        remix,
+        synthesizingRemix,
+        handleSynthesizeRemix,
         githubTopRepos,
         startingFullAuto,
         cancellingFullAuto,

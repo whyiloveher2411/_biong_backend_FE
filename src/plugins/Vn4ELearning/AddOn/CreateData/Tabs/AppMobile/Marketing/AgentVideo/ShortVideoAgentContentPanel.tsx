@@ -212,8 +212,6 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
     }, [state.fullAutoPipeline?.current_step, scriptQaLoopView]);
     const [contentFieldKey, setContentFieldKey] = React.useState(0);
     const prevFetchingReadmeRef = React.useRef(false);
-    const prevFetchingTiktokRef = React.useRef(false);
-    const prevFetchingYoutubeRef = React.useRef(false);
     const isTiktokRemix = state.agentSourceFormat === 'tiktok_remix';
     const isYoutubeRemix = state.agentSourceFormat === 'youtube_remix';
     const isTopicResearch = state.agentSourceFormat === 'topic_research';
@@ -234,22 +232,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
         prevFetchingReadmeRef.current = state.fetchingGithubReadme;
     }, [state.fetchingGithubReadme, state.agentSourceContent]);
 
-    React.useEffect(() => {
-        if (prevFetchingTiktokRef.current && !state.fetchingTiktokScript) {
-            contentPostRef.current.agent_source_content = state.agentSourceContent;
-            setContentFieldKey((prev) => prev + 1);
-        }
-        prevFetchingTiktokRef.current = state.fetchingTiktokScript;
-    }, [state.fetchingTiktokScript, state.agentSourceContent]);
-
-    React.useEffect(() => {
-        if (prevFetchingYoutubeRef.current && !state.fetchingYoutubeScript) {
-            contentPostRef.current.agent_source_content = state.agentSourceContent;
-            setContentFieldKey((prev) => prev + 1);
-        }
-        prevFetchingYoutubeRef.current = state.fetchingYoutubeScript;
-    }, [state.fetchingYoutubeScript, state.agentSourceContent]);
-
+    const remixHasRawTranscript = Boolean(String(state.remix?.raw_transcript || '').trim());
     const sourceDirty = !linked && (
         String(contentPostRef.current.agent_source_content || '') !== state.savedAgentSourceContent
         || state.agentGithubRepo !== state.savedAgentGithubRepo
@@ -307,9 +290,9 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             linked
                                 ? `Đang liên kết marketing post #${state.marketingPostId} — nội dung chỉ đọc.`
                                 : isTiktokRemix
-                                    ? 'Chọn Remix TikTok, dán link rồi Lấy thông tin để điền transcript.'
+                                    ? 'Dán link TikTok → Lấy transcript → Tổng hợp (Gemini) → content cho script.'
                                     : isYoutubeRemix
-                                        ? 'Chọn Remix YouTube, dán link rồi Lấy thông tin để điền transcript.'
+                                        ? 'Dán link YouTube → Lấy transcript → Tổng hợp (Gemini) → content cho script.'
                                         : isTopicResearch
                                             ? 'Nhập chủ đề + danh sách URL → Lấy nội dung (MarkItDown) → Tổng hợp (Gemini) → content cho script.'
                                             : 'Chọn loại nội dung, nhập nguồn hoặc fetch README từ GitHub.'
@@ -481,6 +464,39 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         Đã tổng hợp content — có thể tạo audio script.
                                     </Alert>
                                 ) : null}
+                                {(isTiktokRemix || isYoutubeRemix) && state.remix?.extract?.status === 'ready' && !remixHasRawTranscript ? (
+                                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                                        Chưa có transcript gốc — chạy Lấy thông tin.
+                                    </Alert>
+                                ) : null}
+                                {(isTiktokRemix || isYoutubeRemix) && remixHasRawTranscript ? (
+                                    <Alert severity="info" sx={{ py: 0.5 }}>
+                                        Đã lưu transcript gốc
+                                        {state.remix?.meta?.title
+                                            ? ` — ${state.remix.meta.title}`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
+                                {(isTiktokRemix || isYoutubeRemix) && state.remix?.synthesize?.status === 'preparing' ? (
+                                    <Alert severity="info" sx={{ py: 0.5 }}>
+                                        Đang tổng hợp content bằng Gemini…
+                                    </Alert>
+                                ) : null}
+                                {(isTiktokRemix || isYoutubeRemix) && state.remix?.synthesize?.status === 'failed' ? (
+                                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                                        Tổng hợp thất bại
+                                        {state.remix?.synthesize?.error
+                                            ? `: ${state.remix.synthesize.error}`
+                                            : ''}
+                                        .
+                                    </Alert>
+                                ) : null}
+                                {(isTiktokRemix || isYoutubeRemix) && state.remix?.synthesize?.status === 'ready' ? (
+                                    <Alert severity="success" sx={{ py: 0.5 }}>
+                                        Đã tổng hợp content — có thể tạo audio script.
+                                    </Alert>
+                                ) : null}
                                 <FormControl fullWidth size="small" sx={workflowFieldSurfaceSx}>
                                     <InputLabel id="agent-source-format-label">Loại nội dung nguồn</InputLabel>
                                     <Select
@@ -511,9 +527,15 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                         name="agent_source_content"
                                         post={contentPostRef.current}
                                         config={{
-                                            title: 'Nội dung nguồn',
+                                            title: (isTiktokRemix || isYoutubeRemix || isTopicResearch)
+                                                ? 'Content tổng hợp'
+                                                : 'Nội dung nguồn',
                                             rows: 12,
-                                            note: 'Dán hoặc viết nội dung nguồn cho short video',
+                                            note: (isTiktokRemix || isYoutubeRemix)
+                                                ? 'Content sau bước Tổng hợp — dùng làm nguồn sinh audio script'
+                                                : isTopicResearch
+                                                    ? 'Content sau bước Tổng hợp — dùng làm nguồn sinh audio script'
+                                                    : 'Dán hoặc viết nội dung nguồn cho short video',
                                         }}
                                         onReview={(value) => {
                                             const nextValue = String(value ?? '');
@@ -534,20 +556,32 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 placeholder="https://www.tiktok.com/@user/video/…"
                                                 sx={workflowFieldSurfaceSx}
                                             />
-                                            <LoadingButton
-                                                variant="outlined"
-                                                loading={state.fetchingTiktokScript}
-                                                startIcon={<CloudDownloadIcon />}
-                                                onClick={() => void state.handleFetchTiktokScript()}
-                                                disabled={!state.agentTiktokUrl.trim()}
-                                                sx={{
-                                                    whiteSpace: 'nowrap',
-                                                    flexShrink: 0,
-                                                    bgcolor: 'background.paper',
-                                                }}
-                                            >
-                                                Lấy thông tin
-                                            </LoadingButton>
+                                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                                                <LoadingButton
+                                                    variant="outlined"
+                                                    loading={state.fetchingTiktokScript}
+                                                    startIcon={<CloudDownloadIcon />}
+                                                    onClick={() => void state.handleFetchTiktokScript()}
+                                                    disabled={!state.agentTiktokUrl.trim()}
+                                                    sx={{
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0,
+                                                        bgcolor: 'background.paper',
+                                                    }}
+                                                >
+                                                    Lấy thông tin
+                                                </LoadingButton>
+                                                <LoadingButton
+                                                    variant="contained"
+                                                    loading={state.synthesizingRemix
+                                                        || state.remix?.synthesize?.status === 'preparing'}
+                                                    onClick={() => void state.handleSynthesizeRemix()}
+                                                    disabled={!remixHasRawTranscript}
+                                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                                >
+                                                    Tổng hợp nội dung
+                                                </LoadingButton>
+                                            </Stack>
                                         </>
                                     ) : isYoutubeRemix ? (
                                         <>
@@ -560,20 +594,32 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                                 placeholder="https://www.youtube.com/watch?v=…"
                                                 sx={workflowFieldSurfaceSx}
                                             />
-                                            <LoadingButton
-                                                variant="outlined"
-                                                loading={state.fetchingYoutubeScript}
-                                                startIcon={<CloudDownloadIcon />}
-                                                onClick={() => void state.handleFetchYoutubeScript()}
-                                                disabled={!state.agentYoutubeUrl.trim()}
-                                                sx={{
-                                                    whiteSpace: 'nowrap',
-                                                    flexShrink: 0,
-                                                    bgcolor: 'background.paper',
-                                                }}
-                                            >
-                                                Lấy thông tin
-                                            </LoadingButton>
+                                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                                                <LoadingButton
+                                                    variant="outlined"
+                                                    loading={state.fetchingYoutubeScript}
+                                                    startIcon={<CloudDownloadIcon />}
+                                                    onClick={() => void state.handleFetchYoutubeScript()}
+                                                    disabled={!state.agentYoutubeUrl.trim()}
+                                                    sx={{
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0,
+                                                        bgcolor: 'background.paper',
+                                                    }}
+                                                >
+                                                    Lấy thông tin
+                                                </LoadingButton>
+                                                <LoadingButton
+                                                    variant="contained"
+                                                    loading={state.synthesizingRemix
+                                                        || state.remix?.synthesize?.status === 'preparing'}
+                                                    onClick={() => void state.handleSynthesizeRemix()}
+                                                    disabled={!remixHasRawTranscript}
+                                                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                                >
+                                                    Tổng hợp nội dung
+                                                </LoadingButton>
+                                            </Stack>
                                         </>
                                     ) : isTopicResearch ? (
                                         <Stack spacing={1} sx={{ width: '100%' }}>

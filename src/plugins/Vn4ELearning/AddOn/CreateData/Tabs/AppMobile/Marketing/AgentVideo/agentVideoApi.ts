@@ -486,6 +486,7 @@ export type AgentVideoContentResponse = {
     full_auto_pipeline?: FullAutoPipelineSummary;
     github_top_enrich?: GithubTopEnrichSummary;
     topic_research?: TopicResearchBlock;
+    remix?: RemixBlock;
 };
 
 export type GithubTopEnrichSummary = {
@@ -535,6 +536,28 @@ export type TopicResearchBlock = {
         at?: string;
         job_id?: number | null;
     };
+};
+
+export type RemixBlock = {
+    platform?: 'tiktok' | 'youtube' | string;
+    raw_transcript?: string;
+    meta?: {
+        title?: string;
+        uploader?: string;
+        duration_sec?: number | null;
+    };
+    extract?: {
+        status?: 'idle' | 'preparing' | 'ready' | 'failed' | string;
+        error?: string;
+        at?: string;
+    };
+    synthesize?: {
+        status?: 'idle' | 'preparing' | 'ready' | 'failed' | string;
+        error?: string;
+        at?: string;
+        job_id?: number | null;
+    };
+    backfill_at?: string;
 };
 
 export type FullAutoPipelineStepStatus = 'pending' | 'running' | 'skipped' | 'done' | 'failed' | string;
@@ -1627,6 +1650,49 @@ export async function enqueueTopicResearchSynthesize(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/topic-research-synthesize',
         shortVideoBody(shortVideoId),
     ) as Promise<TopicResearchSynthesizeResponse>;
+}
+
+export type RemixSaveTranscriptResponse = JsonResponse & {
+    remix?: RemixBlock;
+};
+
+export async function saveRemixTranscript(
+    shortVideoId: number,
+    options: {
+        platform: 'tiktok' | 'youtube';
+        rawTranscript: string;
+        meta?: {
+            title?: string;
+            uploader?: string;
+            duration_sec?: number | null;
+        };
+    },
+): Promise<RemixSaveTranscriptResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/remix-save-transcript',
+        shortVideoBody(shortVideoId, {
+            platform: options.platform,
+            raw_transcript: options.rawTranscript,
+            meta: options.meta,
+        }),
+    ) as Promise<RemixSaveTranscriptResponse>;
+}
+
+export type RemixSynthesizeResponse = JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    job_ids?: number[];
+    remix?: RemixBlock;
+    agent_source_content?: string;
+};
+
+export async function enqueueRemixSynthesize(
+    shortVideoId: number,
+): Promise<RemixSynthesizeResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/remix-synthesize',
+        shortVideoBody(shortVideoId),
+    ) as Promise<RemixSynthesizeResponse>;
 }
 
 export type ImportGithubReadmeMediaResponse = JsonResponse & {
