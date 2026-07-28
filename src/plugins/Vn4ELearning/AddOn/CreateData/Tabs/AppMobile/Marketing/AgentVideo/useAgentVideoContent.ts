@@ -822,13 +822,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const geminiRefineHtml = res?.import_html?.gemini_refine_html;
         const visualStatusRaw = String(geminiRefineVisual?.status || 'none');
         const htmlStatusRaw = String(geminiRefineHtml?.status || 'none');
-        const visualActiveIds = Array.isArray(geminiRefineVisual?.active_beat_ids)
-            ? geminiRefineVisual.active_beat_ids
+        const visualActiveRaw = geminiRefineVisual?.active_beat_ids;
+        const visualActiveIds = Array.isArray(visualActiveRaw)
+            ? visualActiveRaw
                 .map((id: unknown) => String(id || '').trim())
                 .filter(Boolean)
             : [];
-        const htmlActiveIds = Array.isArray(geminiRefineHtml?.active_beat_ids)
-            ? geminiRefineHtml.active_beat_ids
+        const htmlActiveRaw = geminiRefineHtml?.active_beat_ids;
+        const htmlActiveIds = Array.isArray(htmlActiveRaw)
+            ? htmlActiveRaw
                 .map((id: unknown) => String(id || '').trim())
                 .filter(Boolean)
             : [];
@@ -1124,8 +1126,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const nextTopicResearch = res?.topic_research ?? null;
         setTopicResearch(nextTopicResearch);
         const nextTopic = String(nextTopicResearch?.topic || '').trim();
-        const nextUrlsText = Array.isArray(nextTopicResearch?.urls)
-            ? nextTopicResearch.urls.map((u) => String(u || '').trim()).filter(Boolean).join('\n')
+        const nextUrlsRaw = nextTopicResearch?.urls;
+        const nextUrlsText = Array.isArray(nextUrlsRaw)
+            ? nextUrlsRaw.map((u) => String(u || '').trim()).filter(Boolean).join('\n')
             : '';
         setTopicResearchTopic(nextTopic);
         setTopicResearchUrlsText(nextUrlsText);

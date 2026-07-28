@@ -41,6 +41,7 @@ import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FaceRetouchingNaturalIcon from '@mui/icons-material/FaceRetouchingNatural';
 import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
+import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -52,6 +53,7 @@ import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
+import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -472,6 +474,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
+    const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -786,6 +789,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 <Button
                                     size="small"
                                     variant="outlined"
+                                    startIcon={<BrushOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenWhiteboardDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Whiteboard
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
                                     startIcon={<FaceRetouchingNaturalIcon fontSize="small" />}
                                     onClick={() => setOpenAvatarDrawer(true)}
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
@@ -1089,6 +1101,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingGetScriptDrawer
                 open={openGetScriptDrawer}
                 onClose={() => setOpenGetScriptDrawer(false)}
+            />
+
+            <MarketingImageToWhiteboardDrawer
+                open={openWhiteboardDrawer}
+                onClose={() => setOpenWhiteboardDrawer(false)}
             />
         </div >
     );

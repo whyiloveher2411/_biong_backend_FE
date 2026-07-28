@@ -22,7 +22,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 
-type PlatformId = 'tiktok';
+type PlatformId = 'tiktok' | 'youtube';
 
 type ExtractMeta = {
     title?: string;
@@ -46,13 +46,24 @@ type Props = {
 
 const PLATFORMS: Array<{ id: PlatformId; label: string; enabled: boolean }> = [
     { id: 'tiktok', label: 'TikTok', enabled: true },
+    { id: 'youtube', label: 'YouTube', enabled: true },
 ];
 
-const PROGRESS_STEPS = [
-    { key: 'open', label: 'Mở trang TikTok' },
-    { key: 'caption', label: 'Bật / lấy caption' },
-    { key: 'webvtt', label: 'Ghép WebVTT' },
-] as const;
+const PROGRESS_STEPS_BY_PLATFORM: Record<
+    PlatformId,
+    Array<{ key: string; label: string }>
+> = {
+    tiktok: [
+        { key: 'open', label: 'Mở trang TikTok' },
+        { key: 'caption', label: 'Bật / lấy caption' },
+        { key: 'webvtt', label: 'Ghép WebVTT' },
+    ],
+    youtube: [
+        { key: 'open', label: 'Mở trang YouTube' },
+        { key: 'transcript', label: 'Mở transcript' },
+        { key: 'segments', label: 'Ghép segment' },
+    ],
+};
 
 function parseApiMessage(res: unknown): string {
     if (!res || typeof res !== 'object') return 'Yêu cầu thất bại';
@@ -78,6 +89,23 @@ function isTikTokUrl(raw: string): boolean {
         );
     } catch {
         return /tiktok\.com/i.test(url);
+    }
+}
+
+function isYouTubeUrl(raw: string): boolean {
+    const url = raw.trim();
+    if (!url) return false;
+    try {
+        const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        const host = new URL(withProtocol).hostname.replace(/^www\./i, '').toLowerCase();
+        return (
+            host === 'youtube.com'
+            || host === 'm.youtube.com'
+            || host === 'youtu.be'
+            || host.endsWith('.youtube.com')
+        );
+    } catch {
+        return /youtube\.com|youtu\.be/i.test(url);
     }
 }
 
@@ -126,6 +154,8 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
         return () => timers.forEach((t) => window.clearTimeout(t));
     }, [loading]);
 
+    const progressSteps = PROGRESS_STEPS_BY_PLATFORM[platform];
+
     const canSubmit = url.trim() !== '' && !loading;
 
     const handleExtract = () => {
@@ -136,6 +166,10 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
         }
         if (platform === 'tiktok' && !isTikTokUrl(trimmed)) {
             setError('URL không phải link TikTok hợp lệ');
+            return;
+        }
+        if (platform === 'youtube' && !isYouTubeUrl(trimmed)) {
+            setError('URL không phải link YouTube hợp lệ');
             return;
         }
 
@@ -155,7 +189,7 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
             loading: false,
             success: (res) => {
                 setLoading(false);
-                setProgressStep(PROGRESS_STEPS.length);
+                setProgressStep(progressSteps.length);
                 const data = res as ExtractResponse;
                 if (!data?.success) {
                     setError(parseApiMessage(data));
@@ -223,24 +257,21 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                                 size="small"
                                 color={platform === p.id ? 'primary' : 'default'}
                                 variant={platform === p.id ? 'filled' : 'outlined'}
-                                disabled={!p.enabled}
+                                disabled={!p.enabled || loading}
                                 onClick={() => p.enabled && setPlatform(p.id)}
                                 sx={{ textTransform: 'none' }}
                             />
                         ))}
-                        <Chip
-                            label="YouTube (sắp có)"
-                            size="small"
-                            variant="outlined"
-                            disabled
-                            sx={{ textTransform: 'none' }}
-                        />
                     </Stack>
                     <TextField
                         fullWidth
                         size="small"
                         label="Link video"
-                        placeholder="https://www.tiktok.com/@user/video/..."
+                        placeholder={
+                            platform === 'youtube'
+                                ? 'https://www.youtube.com/watch?v=...'
+                                : 'https://www.tiktok.com/@user/video/...'
+                        }
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
                         disabled={loading}
@@ -275,7 +306,7 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                         </Typography>
                         <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />
                         <Stack spacing={0.75}>
-                            {PROGRESS_STEPS.map((step, idx) => {
+                            {progressSteps.map((step, idx) => {
                                 const done = progressStep > idx;
                                 const active = progressStep === idx;
                                 return (
@@ -374,7 +405,11 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                             justifyContent="space-between"
                             sx={{ mb: 0.75 }}
                         >
-                            <Typography variant="subtitle2">Caption (WebVTT)</Typography>
+                            <Typography variant="subtitle2">
+                                {(result.platform || platform) === 'youtube'
+                                    ? 'Transcript'
+                                    : 'Caption (WebVTT)'}
+                            </Typography>
                             <Tooltip title={copied ? 'Đã copy' : 'Copy'}>
                                 <span>
                                     <IconButton
@@ -420,7 +455,9 @@ export default function MarketingGetScriptDrawer({ open, onClose }: Props) {
                             >
                                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                                     <Typography variant="body2" color="text.secondary">
-                                        Caption gốc (WebVTT)
+                                        {(result.platform || platform) === 'youtube'
+                                            ? 'Transcript gốc'
+                                            : 'Caption gốc (WebVTT)'}
                                     </Typography>
                                 </AccordionSummary>
                                 <AccordionDetails>
