@@ -6,7 +6,6 @@ import {
     FULL_AUTO_PIPELINE_AI_STEPS,
     FULL_AUTO_PIPELINE_HEADLESS_STEPS,
     FULL_AUTO_PIPELINE_STEP_GROUPS,
-    FULL_AUTO_PIPELINE_STEP_LABELS,
     FULL_AUTO_PIPELINE_STEP_ORDER,
     getFullAutoPipelineStepIndex,
     isFullAutoPipelineAiStep,
@@ -34,6 +33,7 @@ import {
 import {
     PipelineScriptQaLoopSection,
 } from './PipelineScriptQaLoopUi';
+import { resolveFullAutoPipelineStepLabel } from './agentVideoPipelineStepLabels';
 
 const PIPELINE_HEADLESS_TOOLTIP = 'Bước này dùng trình duyệt nền (Puppeteer / headless Chrome)';
 const PIPELINE_AI_TOOLTIP = 'Bước này dùng AI (Gemini, Whisper, ChatGPT TTS…)';
@@ -149,6 +149,7 @@ function PipelineAiBadge({ variant = 'dark', compact = false }: { variant?: 'lig
 
 type PipelineStepTitleProps = {
     stepKey: FullAutoPipelineStepKey;
+    agentVisualMode?: string;
     variant?: 'light' | 'dark';
     headlessStepSet: Set<string>;
     aiStepSet: Set<string>;
@@ -159,6 +160,7 @@ type PipelineStepTitleProps = {
 
 function PipelineStepTitle({
     stepKey,
+    agentVisualMode,
     variant = 'dark',
     headlessStepSet,
     aiStepSet,
@@ -168,7 +170,7 @@ function PipelineStepTitle({
 }: PipelineStepTitleProps) {
     const showHeadless = headlessStepSet.has(stepKey) || isFullAutoPipelineHeadlessStep(stepKey);
     const showAi = aiStepSet.has(stepKey) || isFullAutoPipelineAiStep(stepKey);
-    const label = `${getFullAutoPipelineStepIndex(stepKey)}. ${FULL_AUTO_PIPELINE_STEP_LABELS[stepKey]}`;
+    const label = `${getFullAutoPipelineStepIndex(stepKey)}. ${resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}`;
 
     if (compact) {
         return (
@@ -300,6 +302,7 @@ type PipelineGroupedCommonProps = {
     headlessSteps?: FullAutoPipelineSummary['headless_steps'];
     aiSteps?: FullAutoPipelineSummary['ai_steps'];
     qaLoops?: FullAutoPipelineSummary['qa_loops'];
+    agentVisualMode?: string;
     pipelineStatus?: string;
     currentStep?: string;
 };
@@ -318,6 +321,7 @@ export function PipelineGroupedMenuItems({
     headlessSteps,
     aiSteps,
     qaLoops,
+    agentVisualMode,
     pipelineStatus,
     currentStep = '',
     restartableSet,
@@ -376,6 +380,7 @@ export function PipelineGroupedMenuItems({
             >
                 <PipelineStepTitle
                     stepKey={stepKey}
+                    agentVisualMode={agentVisualMode}
                     variant="light"
                     typographyVariant="body2"
                     headlessStepSet={headlessStepSet}
@@ -491,6 +496,7 @@ export function PipelineGroupedStepList({
     headlessSteps,
     aiSteps,
     qaLoops,
+    agentVisualMode,
     pipelineStatus,
     currentStep = '',
 }: PipelineGroupedStepListProps) {
@@ -532,6 +538,7 @@ export function PipelineGroupedStepList({
             >
                 <PipelineStepTitle
                     stepKey={stepKey}
+                    agentVisualMode={agentVisualMode}
                     variant="dark"
                     headlessStepSet={headlessStepSet}
                     aiStepSet={aiStepSet}
@@ -630,6 +637,7 @@ export function PipelineGroupedWorkflowListV2({
     headlessSteps,
     aiSteps,
     qaLoops,
+    agentVisualMode,
     currentStep = '',
     pipelineStatus = '',
     onRerunRenderUpload,
@@ -668,7 +676,7 @@ export function PipelineGroupedWorkflowListV2({
             && restartableSet?.has(stepKey)
             && !selectStepDisabled,
         );
-        const stepLabel = FULL_AUTO_PIPELINE_STEP_LABELS[stepKey] || stepKey;
+        const stepLabel = resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode);
 
         return (
             <Box
@@ -707,6 +715,7 @@ export function PipelineGroupedWorkflowListV2({
             >
                 <PipelineStepTitle
                     stepKey={stepKey}
+                    agentVisualMode={agentVisualMode}
                     variant="light"
                     headlessStepSet={headlessStepSet}
                     aiStepSet={aiStepSet}
@@ -854,9 +863,7 @@ export function PipelineGroupedWorkflowListV2({
                             }}
                         >
                             <Typography variant="caption" sx={{ flex: 1, minWidth: 0, fontWeight: 500 }}>
-                                {stepKey in FULL_AUTO_PIPELINE_STEP_LABELS
-                                    ? FULL_AUTO_PIPELINE_STEP_LABELS[stepKey as FullAutoPipelineStepKey]
-                                    : stepKey}
+                                {resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}
                             </Typography>
                             <PipelineStepStatusChip status={String(info?.status || 'pending')} />
                         </Box>

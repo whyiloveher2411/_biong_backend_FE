@@ -14,6 +14,19 @@ export type VisualStyleCatalogItem = {
 
 export type AgentRenderMode = 'creative' | 'import_html';
 
+export type AgentVisualMode = 'hyperframes' | 'whiteboard';
+
+export type AgentWhiteboardConfig = {
+    resolution?: '720p' | '1080p' | string;
+    board_theme?: string;
+    transition?: string;
+    hand?: string;
+    gen_style?: string;
+    hold_ratio?: number;
+    color_ratio?: number;
+    transition_duration_sec?: number;
+};
+
 export type SocialAccountItem = {
     index: number;
     title: string;
@@ -233,6 +246,11 @@ export type ImportHtmlSummary = {
     beats_html_total?: number;
     beats_html_completed?: number;
     beats_html_ready?: boolean;
+    beats_image_total?: number;
+    beats_image_completed?: number;
+    beats_image_ready?: boolean;
+    missing_beat_image_ids?: string[];
+    gemini_image_fill?: ImportHtmlGeminiJobBlock;
     import_html_ready?: boolean;
     missing_beat_ids?: string[];
     beats_render_error_count?: number;
@@ -265,6 +283,7 @@ export type ImportHtmlSummary = {
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
     beat_html?: Record<string, import('./agentVideoBeatMap').BeatHtmlEntry>;
+    beat_image?: Record<string, import('./agentVideoBeatMap').BeatImageEntry>;
     beat_versions?: import('./agentVideoBeatMap').BeatVersionsByBeatId;
     beat_active_version_id?: Record<string, string>;
     marketing_post_images?: ImportHtmlMarketingPostImage[];
@@ -372,6 +391,10 @@ export type AgentVideoContentResponse = {
     agent_show_avatar?: boolean;
     agent_avatar_anchor?: AvatarPipAnchor;
     agent_show_karaoke?: boolean;
+    agent_clip_aspect?: '9:16' | '16:9';
+    clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
+    agent_visual_mode?: AgentVisualMode | string;
+    agent_whiteboard_config?: AgentWhiteboardConfig;
     agent_avatar?: {
         show?: boolean;
         avatar_id?: number;
@@ -573,6 +596,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'beat_division',
     'beat_division_qa',
     'beat_fill',
+    'beat_image_fill',
     'beat_refine_visual',
     'beat_refine_html',
     'bgm',
@@ -697,6 +721,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     beat_division: 'Chia beat',
     beat_division_qa: 'Đánh giá beat',
     beat_fill: 'Fill HTML beat',
+    beat_image_fill: 'Ảnh beat thủ công (Duck.ai)',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
@@ -728,6 +753,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
             'beat_division',
             'beat_division_qa',
             'beat_fill',
+            'beat_image_fill',
             'beat_refine_visual',
             'beat_refine_html',
         ],
@@ -1167,6 +1193,8 @@ export async function saveAgentClipAspect(
 ): Promise<JsonResponse & {
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
+    agent_visual_mode?: AgentVisualMode | string;
+    agent_whiteboard_config?: AgentWhiteboardConfig;
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-clip-aspect',
@@ -1176,6 +1204,76 @@ export async function saveAgentClipAspect(
     ) as Promise<JsonResponse & {
         agent_clip_aspect?: '9:16' | '16:9';
         clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
+    }>;
+}
+
+export async function saveAgentVisualMode(
+    shortVideoId: number,
+    mode: AgentVisualMode,
+): Promise<JsonResponse & { agent_visual_mode?: AgentVisualMode }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-visual-mode',
+        shortVideoBody(shortVideoId, { agent_visual_mode: mode }),
+    ) as Promise<JsonResponse & { agent_visual_mode?: AgentVisualMode }>;
+}
+
+export async function saveAgentWhiteboardConfig(
+    shortVideoId: number,
+    config: Partial<AgentWhiteboardConfig>,
+): Promise<JsonResponse & { agent_whiteboard_config?: AgentWhiteboardConfig }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-whiteboard-config',
+        shortVideoBody(shortVideoId, { agent_whiteboard_config: config }),
+    ) as Promise<JsonResponse & { agent_whiteboard_config?: AgentWhiteboardConfig }>;
+}
+
+export async function enqueueGeminiWebBeatImageFill(
+    shortVideoId: number,
+    beatIds?: string[],
+    force = true,
+): Promise<JsonResponse & {
+    queued?: number;
+    skipped_active?: number;
+    beat_ids?: string[];
+    job_ids?: number[];
+    gemini_image_fill?: ImportHtmlGeminiJobBlock;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-image-fill',
+        shortVideoBody(shortVideoId, {
+            force: force ? '1' : '0',
+            ...(beatIds ? { beat_ids: beatIds } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: number;
+        skipped_active?: number;
+        beat_ids?: string[];
+        job_ids?: number[];
+        gemini_image_fill?: ImportHtmlGeminiJobBlock;
+    }>;
+}
+
+export async function regenerateAgentBeatImageZImage(
+    shortVideoId: number,
+    beatId: string,
+    imagePrompt?: string,
+): Promise<JsonResponse & {
+    beat_id?: string;
+    public_url?: string;
+    image_prompt?: string;
+    import_html?: ImportHtmlSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/regenerate-agent-beat-image-zimage',
+        shortVideoBody(shortVideoId, {
+            beat_id: beatId,
+            ...(imagePrompt !== undefined ? { image_prompt: imagePrompt } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        beat_id?: string;
+        public_url?: string;
+        image_prompt?: string;
+        import_html?: ImportHtmlSummary;
     }>;
 }
 
@@ -1891,6 +1989,8 @@ export async function saveAgentImportHtml(
         beatMap?: import('./agentVideoBeatMap').BeatMap;
         beatId?: string;
         beatHtml?: string;
+        beatImageUrl?: string;
+        beatImagePrompt?: string;
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
@@ -1932,6 +2032,8 @@ export async function saveAgentImportHtml(
     }
     if (payload.beatId !== undefined && (
         payload.beatHtml !== undefined
+        || payload.beatImageUrl !== undefined
+        || payload.beatImagePrompt !== undefined
         || payload.creativePrompt !== undefined
         || payload.qaStatus !== undefined
         || payload.qaRefineNote !== undefined
@@ -1941,6 +2043,12 @@ export async function saveAgentImportHtml(
         body.beat_id = payload.beatId;
         if (payload.beatHtml !== undefined) {
             body.beat_html = payload.beatHtml;
+        }
+        if (payload.beatImageUrl !== undefined) {
+            body.beat_image_url = payload.beatImageUrl;
+        }
+        if (payload.beatImagePrompt !== undefined) {
+            body.beat_image_prompt = payload.beatImagePrompt;
         }
         if (payload.creativePrompt !== undefined) {
             body.creative_prompt = payload.creativePrompt;

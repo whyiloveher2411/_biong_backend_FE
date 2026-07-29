@@ -37,12 +37,15 @@ function buildPreviewSourceInput(state: AgentVideoState) {
         agentVideoUrl: state.agentVideoUrl,
         beatMapReady: state.beatMapReady,
         beatsHtmlCompleted: state.beatsHtmlCompleted,
+        beatsImageCompleted: state.beatsImageCompleted,
+        agentVisualMode: state.agentVisualMode,
         beatHtml: state.beatHtml,
+        beatImage: state.beatImage,
         importHtml: state.importHtml,
     };
 }
 
-function HtmlBeatMissingPlaceholder() {
+function HtmlBeatMissingPlaceholder({ isWhiteboardMode = false }: { isWhiteboardMode?: boolean }) {
     return (
         <Box
             sx={{
@@ -62,10 +65,12 @@ function HtmlBeatMissingPlaceholder() {
             }}
         >
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-                Chưa có HTML beat
+                {isWhiteboardMode ? 'Chưa có ảnh beat' : 'Chưa có HTML beat'}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-                Dùng timeline hoặc tab Render bên trái để sinh HTML từng beat.
+                {isWhiteboardMode
+                    ? 'Dùng timeline để mở Duck.ai thủ công và upload ảnh cho từng beat.'
+                    : 'Dùng timeline hoặc tab Render bên trái để sinh HTML từng beat.'}
             </Typography>
         </Box>
     );
@@ -142,6 +147,8 @@ export default function ShortVideoAgentVideoPreview({
     const activeSource = resolveActivePreviewSource(previewSource, previewInput);
     const showTabs = canShowPreviewSourceTabs(previewInput);
     const showHtmlBeat = activeSource === 'html_beat' && canShowHtmlBeatPreview(previewInput);
+    const isWhiteboardMode = state.isWhiteboardMode;
+    const beatPreviewTabLabel = isWhiteboardMode ? 'Ảnh beat' : 'HTML beat';
 
     const placeholder = resolvePreviewPlaceholder({
         agentVideoUrl: showHtmlBeat ? '' : state.agentVideoUrl,
@@ -295,11 +302,11 @@ export default function ShortVideoAgentVideoPreview({
                         sx={{ mb: 2, minHeight: 40 }}
                     >
                         <Tab label="Video final" value="final" />
-                        <Tab label="HTML beat" value="html_beat" />
+                        <Tab label={beatPreviewTabLabel} value="html_beat" />
                     </Tabs>
                 ) : (
                     <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                        {resolvePreviewSourceTitle(activeSource)}
+                        {resolvePreviewSourceTitle(activeSource, state.agentVisualMode)}
                     </Typography>
                 )}
             </Box>
@@ -358,6 +365,8 @@ export default function ShortVideoAgentVideoPreview({
                             <ShortVideoAgentCustomHtmlPreview
                                 beatMap={state.beatMap}
                                 beatHtml={state.beatHtml}
+                                beatImage={state.beatImage}
+                                isWhiteboardMode={isWhiteboardMode}
                                 audioUrl={state.audioFileUrl}
                                 audioDurationSec={state.audioDurationSec}
                                 videoRef={videoRef}
@@ -368,7 +377,7 @@ export default function ShortVideoAgentVideoPreview({
                                 clipAspect={state.agentClipAspect}
                             />
                         ) : activeSource === 'html_beat' ? (
-                            <HtmlBeatMissingPlaceholder />
+                            <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode} />
                         ) : placeholder ? (
                             <Box
                                 sx={{
@@ -443,6 +452,8 @@ export default function ShortVideoAgentVideoPreview({
                                 beatId={currentBeatId}
                                 beatIndex={activeBeatIndex}
                                 beatHtml={state.beatHtml[currentBeatId] || null}
+                                beatImage={state.beatImage[currentBeatId] || null}
+                                isWhiteboardMode={isWhiteboardMode}
                                 versions={currentBeatVersions}
                                 activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
                                 visualDescription={String(currentBeatSection?.visual_description || '')}

@@ -10,6 +10,11 @@ import {
     type ImportHtmlContextPayload,
 } from './agentVideoImportHtmlPrompt';
 import { formatWhisperWordsForPrompt } from './agentVideoWhisperPromptFormat';
+import {
+    buildBeatDivisionWhiteboardImagePromptBlock,
+    buildBeatDivisionWhiteboardOutputRules,
+    buildBeatDivisionWhiteboardSchemaExtra,
+} from './agentVideoBeatDivisionWhiteboard';
 
 const GITHUB_TOP_FORMATS = new Set([
     'github_top',
@@ -27,6 +32,13 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const total = formatDurationSec(durationSec);
     const sourceFormat = String(context.source_format || '').trim();
     const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
+    const isWhiteboard = String(context.agent_visual_mode || 'hyperframes').trim() === 'whiteboard';
+    const whiteboardBlock = isWhiteboard ? buildBeatDivisionWhiteboardImagePromptBlock() : '';
+    const whiteboardRules = isWhiteboard ? buildBeatDivisionWhiteboardOutputRules() : [];
+    const whiteboardSchemaExtra = buildBeatDivisionWhiteboardSchemaExtra(isWhiteboard);
+    const visualSuffix = isWhiteboard
+        ? ' (ảnh whiteboard làm thủ công qua Duck.ai sau — **chỉ visual, không karaoke**).'
+        : ' (HTML generate sau — **chỉ visual, không karaoke**).';
     const visualLibrary = buildVisualLibraryForPrompt(context);
     const catalogIds = visualLibrary
         .map((item) => String(item.id || '').trim())
@@ -59,8 +71,10 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             buildBeatDivisionLanguageBlock(context.language),
             '## Nhiệm vụ',
             `Chia voiceover **${total}s** thành đúng **${expectedBeats} beat** theo cấu trúc cố định top repo.`,
-            'Mỗi beat = một chapter visual riêng (HTML generate sau — **chỉ visual, không karaoke**).',
+            'Mỗi beat = một chapter visual riêng' + visualSuffix,
             '',
+            whiteboardBlock,
+            whiteboardBlock ? '' : '',
             '## CẤU TRÚC BEAT BẮT BUỘC',
             '- **beat_1**: INTRO — giới thiệu danh sách; có thể liệt kê tên repo. Ưu tiên visual dựng bằng HTML/CSS.',
             `- **beat_2 → beat_${repoCount + 1}**: đúng 1 repo / beat theo rank.`,
@@ -78,6 +92,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`.',
             '- Cấm visual_description tự đặt palette, font hoặc theme hệ thống; toàn clip lấy từ visual_style.',
             '- Không xuất `hf_prompt_type` hoặc `image_url`.',
+            ...whiteboardRules,
             '- Media catalog ID trong visual_description phải bọc bằng backtick; mỗi ID chỉ được xuất hiện trong tối đa 1 beat; không dùng ID ngoài danh sách.',
             catalogRule,
             '## Danh sách repo (map beat)',
@@ -117,8 +132,10 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         buildBeatDivisionLanguageBlock(context.language),
         '## Nhiệm vụ',
         `Chia voiceover **${total}s** thành các beat liên tục **theo cấu trúc nội dung** (không theo công thức giây cố định).`,
-        'Mỗi beat = một chapter visual riêng (HTML sẽ generate sau — **chỉ visual, không karaoke**).',
+        'Mỗi beat = một chapter visual riêng' + visualSuffix,
         '',
+        whiteboardBlock,
+        whiteboardBlock ? '' : '',
         '## Cách chia (bắt buộc — ưu tiên hết ý, rồi mới 8–30s)',
         '- Đọc `audio_script`: ưu tiên **1 beat ≈ 1 đoạn** (cách nhau dòng trống) khi đoạn đó là một ý visual đủ rõ và nằm trong **8–30s**.',
         '- Trong một đoạn nhiều câu: được **gộp** nhiều câu cùng ý; nếu tách thì **chỉ cắt sau dấu kết câu** (`.?!…`) hoặc sau **xuống dòng**.',
@@ -159,6 +176,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
                     phrase_anchor: 'đoạn script tại beat này',
                     visual_description: 'A single content channel tries to grab four incompatible trend objects arriving from different directions: a comedy mask, a football, a news microphone, and a film clapper. Each object pulls the channel toward a different path, stretching and fragmenting its structure. As it reaches for the final trend, the channel breaks apart and becomes inactive while all four trends continue moving past, making the consequence visible without warning symbols.',
                     background: 'Deep charcoal void, soft grain, cool cyan haze; no photo plates, no hard cut between beats',
+                    ...whiteboardSchemaExtra,
                 },
             ],
         }, null, 2),
@@ -177,6 +195,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`',
         '- Cấm visual_description tự đặt palette, font hoặc theme hệ thống; toàn clip lấy từ visual_style',
         '- Không xuất `hf_prompt_type` hoặc `image_url`',
+        ...whiteboardRules,
         '- Chỉ dùng catalog ID nguyên văn và bọc bằng backtick trong visual_description; mỗi ID tối đa 1 beat; không có ID thì không tham chiếu catalog',
         catalogRule,
         '',

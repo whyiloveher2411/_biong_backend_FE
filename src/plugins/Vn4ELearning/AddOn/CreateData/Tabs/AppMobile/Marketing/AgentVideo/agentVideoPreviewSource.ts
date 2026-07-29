@@ -1,4 +1,5 @@
 import type { AgentRenderMode } from './agentVideoApi';
+import { isAgentWhiteboardMode } from './agentVideoVisualMode';
 
 export type AgentPreviewSource = 'final' | 'html_beat';
 
@@ -8,7 +9,10 @@ export type AgentPreviewSourceInput = {
     agentVideoUrl: string;
     beatMapReady: boolean;
     beatsHtmlCompleted: number;
+    beatsImageCompleted?: number;
+    agentVisualMode?: string;
     beatHtml: Record<string, { html?: string }>;
+    beatImage?: Record<string, { image_url?: string }>;
     importHtml: string;
 };
 
@@ -16,7 +20,6 @@ export function canShowFinalPreview(input: AgentPreviewSourceInput): boolean {
     return String(input.agentVideoUrl || '').trim() !== '';
 }
 
-/** Có beat HTML để preview — không phụ thuộc audio / renderMode. */
 export function hasBeatHtmlForPreview(input: AgentPreviewSourceInput): boolean {
     if (Number(input.beatsHtmlCompleted || 0) > 0) {
         return true;
@@ -28,12 +31,22 @@ export function hasBeatHtmlForPreview(input: AgentPreviewSourceInput): boolean {
     return String(input.importHtml || '').trim().length > 0;
 }
 
+export function hasBeatImageForPreview(input: AgentPreviewSourceInput): boolean {
+    if (Number(input.beatsImageCompleted || 0) > 0) {
+        return true;
+    }
+    const beatImage = input.beatImage || {};
+    return Object.values(beatImage).some((entry) => String(entry?.image_url || '').trim() !== '');
+}
+
 export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean {
+    if (isAgentWhiteboardMode(input.agentVisualMode)) {
+        return hasBeatImageForPreview(input);
+    }
     return hasBeatHtmlForPreview(input);
 }
 
 export function canShowPreviewSourceTabs(input: AgentPreviewSourceInput): boolean {
-    // Hiện tab khi có ít nhất một nguồn — không ẩn HTML beat chỉ vì chưa có video final (hoặc ngược lại).
     return canShowFinalPreview(input) || canShowHtmlBeatPreview(input);
 }
 
@@ -66,8 +79,16 @@ export function resolveActivePreviewSource(
     return 'html_beat';
 }
 
-export function resolvePreviewSourceTitle(source: AgentPreviewSource): string {
-    return source === 'html_beat' ? 'Preview HTML beat + audio' : 'Preview video HyperFrames';
+export function resolvePreviewSourceTitle(
+    source: AgentPreviewSource,
+    agentVisualMode?: string,
+): string {
+    if (source !== 'html_beat') {
+        return 'Preview video HyperFrames';
+    }
+    return isAgentWhiteboardMode(agentVisualMode)
+        ? 'Preview ảnh beat + audio'
+        : 'Preview HTML beat + audio';
 }
 
 export function canPlaybackPreviewSource(
@@ -77,6 +98,5 @@ export function canPlaybackPreviewSource(
     if (source === 'final') {
         return canShowFinalPreview(input);
     }
-    // Cho phép focus preview HTML beat dù chưa có audio (spacebar no-op nếu không có media).
     return canShowHtmlBeatPreview(input);
 }

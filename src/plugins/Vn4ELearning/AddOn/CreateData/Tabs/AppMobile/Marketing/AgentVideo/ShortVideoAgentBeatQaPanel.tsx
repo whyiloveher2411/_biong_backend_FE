@@ -20,6 +20,7 @@ import {
     BEAT_QA_STATUS_LABELS,
     normalizeBeatQaStatus,
     type BeatHtmlEntry,
+    type BeatImageEntry,
     type BeatQaQuickNoteGroup,
     type BeatQaQuickNoteOption,
     type BeatQaStatus,
@@ -33,6 +34,8 @@ type Props = {
     beatId: string;
     beatIndex: number | null;
     beatHtml: BeatHtmlEntry | null;
+    beatImage?: BeatImageEntry | null;
+    isWhiteboardMode?: boolean;
     versions?: BeatVersion[];
     activeVersionId?: string;
     visualDescription?: string;
@@ -309,6 +312,8 @@ function RestoreVersionButton({
 export default function ShortVideoAgentBeatQaPanel({
     beatId,
     beatHtml,
+    beatImage = null,
+    isWhiteboardMode = false,
     versions = [],
     activeVersionId = '',
     visualDescription = '',
@@ -328,48 +333,55 @@ export default function ShortVideoAgentBeatQaPanel({
     const [qaRefineNote, setQaRefineNote] = React.useState('');
     const syncedBeatRef = React.useRef('');
 
+    const qaSource = isWhiteboardMode ? beatImage : beatHtml;
+    const qaStatusValue = qaSource?.qa_status;
+    const qaRefineNoteValue = qaSource?.qa_refine_note;
+
     React.useEffect(() => {
         if (!beatId || syncedBeatRef.current === beatId) {
             return;
         }
         syncedBeatRef.current = beatId;
         setTab('qa');
-        setQaStatus(normalizeBeatQaStatus(beatHtml?.qa_status));
-        setQaRefineNote(String(beatHtml?.qa_refine_note || ''));
-    }, [beatHtml?.qa_refine_note, beatHtml?.qa_status, beatId]);
+        setQaStatus(normalizeBeatQaStatus(qaStatusValue));
+        setQaRefineNote(String(qaRefineNoteValue || ''));
+    }, [qaRefineNoteValue, qaStatusValue, beatId]);
 
     React.useEffect(() => {
         if (!beatId) {
             syncedBeatRef.current = '';
             return;
         }
-        const nextStatus = normalizeBeatQaStatus(beatHtml?.qa_status);
-        const nextNote = String(beatHtml?.qa_refine_note || '');
+        const nextStatus = normalizeBeatQaStatus(qaStatusValue);
+        const nextNote = String(qaRefineNoteValue || '');
         if (syncedBeatRef.current !== beatId) {
             return;
         }
         setQaStatus((current) => (current === nextStatus ? current : nextStatus));
         setQaRefineNote((current) => (current === nextNote ? current : nextNote));
-    }, [beatHtml?.qa_refine_note, beatHtml?.qa_status, beatId]);
+    }, [qaRefineNoteValue, qaStatusValue, beatId]);
 
-    const initialQaStatus = normalizeBeatQaStatus(beatHtml?.qa_status);
-    const initialQaRefineNote = String(beatHtml?.qa_refine_note || '');
+    const initialQaStatus = normalizeBeatQaStatus(qaStatusValue);
+    const initialQaRefineNote = String(qaRefineNoteValue || '');
     const qaDirty = qaStatus !== initialQaStatus || qaRefineNote !== initialQaRefineNote;
     const isQuickIterateRunning = iterateStage === 'visual' || iterateStage === 'html';
     const busy = saving || quickIterating;
     const canSaveQa = Boolean(beatId) && qaDirty && !busy;
     const hasBeatHtml = Boolean(String(beatHtml?.html || '').trim());
-    // Beat đang chờ trong hàng đợi vẫn lưu/restore version được; chỉ khóa khi đang chạy visual/html.
-    const canSaveVersion = Boolean(beatId) && hasBeatHtml && !saving && !isQuickIterateRunning;
+    const hasBeatImage = Boolean(String(beatImage?.image_url || '').trim());
+    const hasBeatContent = isWhiteboardMode ? hasBeatImage : hasBeatHtml;
+    const canSaveVersion = Boolean(beatId) && hasBeatContent && !saving && !isQuickIterateRunning;
     const canQuickIterate = Boolean(
         beatId
         && hasBeatHtml
+        && !isWhiteboardMode
         && !busy
         && typeof onQuickIterateBeat === 'function'
     );
     const canEditHtml = Boolean(
         beatId
         && hasBeatHtml
+        && !isWhiteboardMode
         && qaRefineNote.trim()
         && !busy
         && typeof onEditHtmlBeat === 'function'
@@ -823,7 +835,8 @@ export default function ShortVideoAgentBeatQaPanel({
                                 }}
                             >
                                 <Typography sx={{ color: TEXT_MUTED, fontSize: 12, lineHeight: 1.5 }}>
-                                    Chưa có snapshot. Lưu version để giữ lại visual + HTML hiện tại.
+                                    Chưa có snapshot. Lưu version để giữ lại visual
+                                    {isWhiteboardMode ? ' + ảnh' : ' + HTML'} hiện tại.
                                 </Typography>
                             </Box>
                         ) : (
@@ -840,7 +853,11 @@ export default function ShortVideoAgentBeatQaPanel({
                                             key={version.version_id}
                                             title={version.label}
                                             subtitle={`${formatSavedAt(version.saved_at)} · ${qaLabel}`}
-                                            body={truncateText(version.visual_description || '—')}
+                                            body={truncateText(
+                                                isWhiteboardMode
+                                                    ? (version.image_prompt || version.visual_description || '—')
+                                                    : (version.visual_description || '—'),
+                                            )}
                                             active={isActive}
                                             action={(
                                                 <RestoreVersionButton
@@ -872,9 +889,11 @@ export default function ShortVideoAgentBeatQaPanel({
                             gap: 0.75,
                         }}
                     >
-                        {!hasBeatHtml ? (
+                        {!hasBeatContent ? (
                             <Typography sx={{ color: '#fbbf24', fontSize: 11 }}>
-                                Cần có HTML mới lưu được version
+                                {isWhiteboardMode
+                                    ? 'Cần có ảnh beat mới lưu được version'
+                                    : 'Cần có HTML mới lưu được version'}
                             </Typography>
                         ) : null}
                         <LoadingButton

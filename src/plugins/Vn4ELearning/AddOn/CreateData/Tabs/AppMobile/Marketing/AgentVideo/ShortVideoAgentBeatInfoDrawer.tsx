@@ -24,10 +24,12 @@ import {
     validateBeatBackground,
     validateBeatVisualDescription,
     type BeatHtmlEntry,
+    type BeatImageEntry,
     type BeatMap,
     type BeatMapSection,
 } from './agentVideoBeatMap';
 import ShortVideoAgentBeatVisualPreview from './ShortVideoAgentBeatVisualPreview';
+import ShortVideoAgentBeatImagePreview from './ShortVideoAgentBeatImagePreview';
 
 type Props = {
     open: boolean;
@@ -35,6 +37,8 @@ type Props = {
     beatMap: BeatMap | null;
     beat: BeatMapSection | null;
     beatHtml?: BeatHtmlEntry | null;
+    beatImage?: BeatImageEntry | null;
+    isWhiteboardMode?: boolean;
     audioUrl?: string;
     beatIndex?: number | null;
     clipAspect?: import('./agentVideoClipAspect').ClipAspect;
@@ -118,6 +122,8 @@ export default function ShortVideoAgentBeatInfoDrawer({
     beatMap,
     beat,
     beatHtml = null,
+    beatImage = null,
+    isWhiteboardMode = false,
     audioUrl = '',
     beatIndex = null,
     clipAspect = '9:16',
@@ -370,16 +376,27 @@ export default function ShortVideoAgentBeatInfoDrawer({
                         </Stack>
                     </DetailSection>
 
-                    <DetailSection eyebrow="Live HTML" title="Preview visual">
-                        <ShortVideoAgentBeatVisualPreview
-                            beatId={beat.id}
-                            html={String(beatHtml?.html || '')}
-                            revision={String(beatHtml?.updated_at || '')}
-                            audioUrl={audioUrl}
-                            startSec={beat.startSec}
-                            durationSec={beat.durationSec}
-                            clipAspect={clipAspect}
-                        />
+                    <DetailSection
+                        eyebrow={isWhiteboardMode ? 'Live ảnh' : 'Live HTML'}
+                        title="Preview visual"
+                    >
+                        {isWhiteboardMode ? (
+                            <ShortVideoAgentBeatImagePreview
+                                beatId={beat.id}
+                                imageUrl={String(beatImage?.image_url || '')}
+                                clipAspect={clipAspect}
+                            />
+                        ) : (
+                            <ShortVideoAgentBeatVisualPreview
+                                beatId={beat.id}
+                                html={String(beatHtml?.html || '')}
+                                revision={String(beatHtml?.updated_at || '')}
+                                audioUrl={audioUrl}
+                                startSec={beat.startSec}
+                                durationSec={beat.durationSec}
+                                clipAspect={clipAspect}
+                            />
+                        )}
                     </DetailSection>
 
                     <DetailSection eyebrow="Beat map" title="Thông tin toàn video">

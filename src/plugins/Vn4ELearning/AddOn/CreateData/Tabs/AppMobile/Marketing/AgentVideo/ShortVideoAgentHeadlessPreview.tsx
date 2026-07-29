@@ -36,6 +36,7 @@ type Props = {
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
     geminiDivisionStatus?: string;
+    geminiImageFillStatus?: string;
     geminiFillStatus?: string;
     geminiThumbnailFillStatus?: string;
     geminiThumbnailIdeaStatus?: string;
@@ -131,6 +132,7 @@ export default function ShortVideoAgentHeadlessPreview({
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
     geminiDivisionStatus = 'none',
+    geminiImageFillStatus = 'none',
     geminiFillStatus = 'none',
     geminiThumbnailFillStatus = 'none',
     geminiThumbnailIdeaStatus = 'none',
@@ -162,6 +164,7 @@ export default function ShortVideoAgentHeadlessPreview({
 
     const geminiJobActive = isActiveJobStatus(geminiScriptStatus)
         || isActiveJobStatus(geminiDivisionStatus)
+        || isActiveJobStatus(geminiImageFillStatus)
         || (
             // Phonetic / thumbnail chỉ mirror khi backend đã báo headless (có browser thật).
             headlessBrowserActive

@@ -8,6 +8,8 @@ export type BeatMapSection = {
     durationSec: number;
     phrase_anchor: string;
     visual_description: string;
+    /** Prompt ảnh Duck.ai — bắt buộc khi agent_visual_mode=whiteboard */
+    image_prompt?: string;
     /** Set dressing per beat (EN). Có thể rỗng trên map cũ trước khi chia lại. */
     background: string;
 };
@@ -20,7 +22,7 @@ export type BeatMap = {
     sections: BeatMapSection[];
 };
 
-export type BeatQaActionStatus = 'approved' | 'needs_html_refill' | 'needs_visual_tweak';
+export type BeatQaActionStatus = 'approved' | 'needs_html_refill' | 'needs_image_refill' | 'needs_visual_tweak';
 
 export type BeatQaStatus = BeatQaActionStatus | '';
 
@@ -28,6 +30,20 @@ export type BeatHtmlEntry = {
     html: string;
     updated_at?: string;
     /** Prompt sáng tạo / refine — user hoặc pipeline AI ghi để dùng lại. */
+    creative_prompt?: string;
+    qa_status?: BeatQaStatus;
+    qa_refine_note?: string;
+    render_status?: 'error' | 'ok' | string;
+    render_error?: string;
+    render_error_code?: string;
+    render_error_stage?: 'assemble' | 'render' | string;
+    render_error_at?: string;
+};
+
+export type BeatImageEntry = {
+    image_url: string;
+    image_prompt?: string;
+    updated_at?: string;
     creative_prompt?: string;
     qa_status?: BeatQaStatus;
     qa_refine_note?: string;
@@ -51,7 +67,9 @@ export type BeatVersion = {
     phrase_anchor: string;
     visual_description: string;
     background: string;
-    html: string;
+    html?: string;
+    image_url?: string;
+    image_prompt?: string;
     creative_prompt?: string;
     qa_status?: BeatQaStatus;
     qa_refine_note?: string;
@@ -112,12 +130,14 @@ export type BeatHtmlVisualState = 'missing' | 'ok' | 'error';
 export const BEAT_QA_STATUSES: BeatQaActionStatus[] = [
     'approved',
     'needs_html_refill',
+    'needs_image_refill',
     'needs_visual_tweak',
 ];
 
 export const BEAT_QA_STATUS_LABELS: Record<BeatQaActionStatus, string> = {
     approved: 'Ổn',
     needs_html_refill: 'Chưa ổn HTML',
+    needs_image_refill: 'Chưa ổn ảnh',
     needs_visual_tweak: 'Đổi visual',
 };
 
@@ -204,10 +224,11 @@ export function normalizeBeatQaStatus(raw: unknown): BeatQaStatus {
 export function countBeatQaByStatus(
     beatMap: BeatMap | null,
     beatHtml: Record<string, BeatHtmlEntry>,
-): Record<'approved' | 'needs_html_refill' | 'needs_visual_tweak' | 'unreviewed', number> {
+): Record<'approved' | 'needs_html_refill' | 'needs_image_refill' | 'needs_visual_tweak' | 'unreviewed', number> {
     const counts = {
         approved: 0,
         needs_html_refill: 0,
+        needs_image_refill: 0,
         needs_visual_tweak: 0,
         unreviewed: 0,
     };
@@ -260,7 +281,8 @@ export function parseBeatVersion(entry: unknown): BeatVersion | null {
     const label = String(raw.label || '').trim();
     const beatId = String(raw.beat_id || raw.id || '').trim();
     const html = String(raw.html || '');
-    if (!versionId || !label || !beatId || !html.trim()) {
+    const imageUrl = String(raw.image_url || '').trim();
+    if (!versionId || !label || !beatId || (!html.trim() && !imageUrl)) {
         return null;
     }
     const startSec = Number(raw.startSec);
@@ -281,7 +303,9 @@ export function parseBeatVersion(entry: unknown): BeatVersion | null {
         phrase_anchor: String(raw.phrase_anchor || ''),
         visual_description: String(raw.visual_description || ''),
         background: String(raw.background || ''),
-        html,
+        html: html.trim() ? html : undefined,
+        image_url: imageUrl || undefined,
+        image_prompt: raw.image_prompt != null ? String(raw.image_prompt) : undefined,
         creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
         qa_status: qaStatus || undefined,
         qa_refine_note: raw.qa_refine_note != null ? String(raw.qa_refine_note) : undefined,
@@ -378,6 +402,74 @@ export function validateBeatVisualDescription(value: unknown): string | null {
     return description;
 }
 
+export function validateBeatImagePrompt(value: unknown): string | null {
+    const prompt = String(value ?? '').trim();
+    const wordCount = prompt.split(/\s+/).filter(Boolean).length;
+    if (!prompt || wordCount < 8 || wordCount > 120 || prompt.length > 800) {
+        return null;
+    }
+    // Cho phép quote label tiếng Việt; vẫn yêu cầu có mô tả Latin/English.
+    if (!/[A-Za-z]/.test(prompt)) {
+        return null;
+    }
+    return prompt;
+}
+
+export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const raw = entry as Record<string, unknown>;
+    const imageUrl = String(raw.image_url || '').trim();
+    if (!imageUrl) {
+        return null;
+    }
+    const qaStatus = raw.qa_status != null ? normalizeBeatQaStatus(raw.qa_status) : undefined;
+    return {
+        image_url: imageUrl,
+        image_prompt: raw.image_prompt != null ? String(raw.image_prompt) : undefined,
+        updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+        creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
+        qa_status: qaStatus || undefined,
+        qa_refine_note: raw.qa_refine_note != null ? String(raw.qa_refine_note) : undefined,
+        render_status: raw.render_status ? String(raw.render_status) : undefined,
+        render_error: raw.render_error ? String(raw.render_error) : undefined,
+        render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,
+        render_error_stage: raw.render_error_stage ? String(raw.render_error_stage) : undefined,
+        render_error_at: raw.render_error_at ? String(raw.render_error_at) : undefined,
+    };
+}
+
+export function parseBeatImageBlock(raw: unknown): Record<string, BeatImageEntry> {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+    const next: Record<string, BeatImageEntry> = {};
+    Object.entries(raw as Record<string, unknown>).forEach(([beatId, entry]) => {
+        if (!/^beat_\d+$/.test(beatId)) {
+            return;
+        }
+        const parsed = parseBeatImageEntry(entry);
+        if (parsed) {
+            next[beatId] = parsed;
+        }
+    });
+    return next;
+}
+
+export function getBeatImageVisualState(
+    beatImage: Record<string, BeatImageEntry>,
+    beatId: string,
+): BeatHtmlVisualState {
+    if (!String(beatImage[beatId]?.image_url || '').trim()) {
+        return 'missing';
+    }
+    if (beatImage[beatId]?.render_status === 'error') {
+        return 'error';
+    }
+    return 'ok';
+}
+
 export function validateBeatBackground(value: unknown): string | null {
     const background = String(value ?? '').trim();
     const wordCount = background.split(/\s+/).filter(Boolean).length;
@@ -390,7 +482,10 @@ export function validateBeatBackground(value: unknown): string | null {
     return background;
 }
 
-export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: string[] } {
+export function parseBeatMapJson(
+    text: string,
+    options?: { requireImagePrompt?: boolean },
+): { map: BeatMap | null; errors: string[] } {
     const errors: string[] = [];
     const raw = stripJsonFences(text);
     if (!raw) {
@@ -441,6 +536,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             'durationSec',
             'phrase_anchor',
             'visual_description',
+            'image_prompt',
             'background',
         ]);
         const unexpectedFields = Object.keys(row).filter((key) => !allowedFields.has(key));
@@ -457,6 +553,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
         );
         const phraseAnchor = String(row.phrase_anchor ?? '').trim();
         const visualDescription = validateBeatVisualDescription(row.visual_description);
+        const imagePrompt = validateBeatImagePrompt(row.image_prompt);
         const background = validateBeatBackground(row.background);
 
         if (!/^beat_\d+$/.test(id)) {
@@ -477,6 +574,11 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
         if (!background) {
             errors.push(`${id || `Section #${index + 1}`}: background phải là tiếng Anh, dài 3–60 từ`);
         }
+        if (options?.requireImagePrompt && !imagePrompt) {
+            errors.push(`${id || `Section #${index + 1}`}: thiếu image_prompt cho whiteboard`);
+        } else if (row.image_prompt != null && String(row.image_prompt).trim() && !imagePrompt) {
+            errors.push(`${id || `Section #${index + 1}`}: image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt`);
+        }
 
         sections.push({
             id,
@@ -486,6 +588,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
             durationSec: durationSec ?? 0,
             phrase_anchor: phraseAnchor,
             visual_description: visualDescription ?? '',
+            image_prompt: imagePrompt ?? undefined,
             background: background ?? String(row.background ?? '').trim(),
         });
     });
@@ -509,7 +612,7 @@ export function parseBeatMapJson(text: string): { map: BeatMap | null; errors: s
 export function validateBeatMap(
     map: BeatMap,
     audioDurationSec: number,
-    options?: { relaxDurationBounds?: boolean },
+    options?: { relaxDurationBounds?: boolean; requireImagePrompt?: boolean },
 ): BeatMapValidation {
     const errors: string[] = [];
     const audioDur = Number(audioDurationSec) || 0;
@@ -543,6 +646,11 @@ export function validateBeatMap(
         }
         if (!validateBeatBackground(section.background)) {
             errors.push(`${label}: background phải là tiếng Anh, dài 3–60 từ`);
+        }
+        if (options?.requireImagePrompt && !validateBeatImagePrompt(section.image_prompt)) {
+            errors.push(`${label}: thiếu image_prompt cho whiteboard`);
+        } else if (String(section.image_prompt || '').trim() && !validateBeatImagePrompt(section.image_prompt)) {
+            errors.push(`${label}: image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt`);
         }
         // Soft 8–30s / cắt hết ý: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;
@@ -614,6 +722,61 @@ export function countMissingBeatHtml(map: BeatMap | null, beatHtml: Record<strin
         return 0;
     }
     return map.sections.filter((section) => isBeatHtmlMissing(beatHtml, section.id)).length;
+}
+
+export function isBeatImageMissing(beatImage: Record<string, BeatImageEntry>, beatId: string): boolean {
+    return !String(beatImage[beatId]?.image_url || '').trim();
+}
+
+export function countMissingBeatImage(
+    map: BeatMap | null,
+    beatImage: Record<string, BeatImageEntry>,
+): number {
+    if (!map?.sections?.length) {
+        return 0;
+    }
+    return map.sections.filter((section) => isBeatImageMissing(beatImage, section.id)).length;
+}
+
+export function listMissingBeatImageIds(
+    map: BeatMap | null,
+    beatImage: Record<string, BeatImageEntry>,
+): string[] {
+    if (!map?.sections?.length) {
+        return [];
+    }
+    return map.sections
+        .filter((section) => isBeatImageMissing(beatImage, section.id))
+        .map((section) => section.id);
+}
+
+export function listBeatIdsWithImage(beatImage: Record<string, BeatImageEntry>): string[] {
+    return Object.entries(beatImage)
+        .filter(([, entry]) => String(entry?.image_url || '').trim() !== '')
+        .map(([beatId]) => beatId);
+}
+
+export function countBeatIdsWithImage(beatImage: Record<string, BeatImageEntry>): number {
+    return listBeatIdsWithImage(beatImage).length;
+}
+
+export function getBeatImageRenderErrorMessage(
+    beatImage: Record<string, BeatImageEntry>,
+    beatId: string,
+): string {
+    const entry = beatImage[beatId];
+    if (!entry?.render_error?.trim()) {
+        return 'Beat lỗi render ảnh';
+    }
+    const stage = entry.render_error_stage ? ` (${entry.render_error_stage})` : '';
+    return `${entry.render_error.trim()}${stage}`;
+}
+
+export function listBeatImageRenderErrorIds(beatImage: Record<string, BeatImageEntry>): string[] {
+    return Object.entries(beatImage)
+        .filter(([, entry]) => entry?.render_status === 'error')
+        .map(([beatId]) => beatId)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 export function listMissingBeatIds(map: BeatMap | null, beatHtml: Record<string, BeatHtmlEntry>): string[] {

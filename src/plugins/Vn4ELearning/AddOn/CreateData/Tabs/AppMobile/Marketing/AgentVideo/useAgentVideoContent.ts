@@ -11,11 +11,14 @@ import {
 } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
+    type DuckAiWorkspaceBeat,
     fetchImportHtmlBeatHtmlPrompt,
     generateBeatHtmlViaGeminiWeb,
     openImportHtmlBeatGeminiFillOnly,
     openImportHtmlBeatGeminiForMissingBeats,
     openImportHtmlBeatAiStudioForMissingBeats,
+    openImportHtmlBeatDuckAiFillOnly,
+    openImportHtmlBeatDuckAiForMissingBeats,
 } from 'helpers/marketingImportHtmlWorkflow';
 import {
     approveAudioScript,
@@ -44,6 +47,8 @@ import {
     saveAgentIntroduceApp,
     saveAgentShowKaraoke,
     saveAgentClipAspect,
+    saveAgentVisualMode,
+    saveAgentWhiteboardConfig,
     listVerifiedAvatars,
     saveAgentAvatar,
     type AvatarPipAnchor,
@@ -71,6 +76,8 @@ import {
     uploadAgentAudioMp3,
     uploadAgentVisualImage,
     type AgentRenderMode,
+    type AgentVisualMode,
+    type AgentWhiteboardConfig,
     type AgentVideoContentResponse,
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
@@ -124,19 +131,26 @@ import { isCaptionSyncAssembleError } from './agentVideoImportHtmlBlockers';
 import {
     beatMapToJson,
     countMissingBeatHtml,
+    countMissingBeatImage,
+    listMissingBeatImageIds,
     listBeatIdsWithHtml,
     listMissingBeatIds,
     listBeatRenderErrorIds,
+    listBeatImageRenderErrorIds,
     isWorkingBeatDirtyVsActive,
     findBeatVersionMatchingWorking,
     parseBeatHtmlEntry,
+    parseBeatImageEntry,
     parseBeatMapJson,
     parseBeatVersionsBlock,
     validateBeatMap,
+    validateBeatImagePrompt,
     type BeatMap,
     type BeatHtmlEntry,
+    type BeatImageEntry,
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
+import { isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
@@ -443,6 +457,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
     const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
+    const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
+    const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    const [savingVisualMode, setSavingVisualMode] = React.useState(false);
+    const [savingWhiteboardConfig, setSavingWhiteboardConfig] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
     const [geminiFillStatus, setGeminiFillStatus] = React.useState('none');
     const [geminiRefineVisualStatus, setGeminiRefineVisualStatus] = React.useState('none');
@@ -583,6 +601,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatMap, setBeatMap] = React.useState<BeatMap | null>(null);
     const [beatMapJsonDraft, setBeatMapJsonDraft] = React.useState('');
     const [beatHtml, setBeatHtml] = React.useState<Record<string, BeatHtmlEntry>>({});
+    const [beatImage, setBeatImage] = React.useState<Record<string, BeatImageEntry>>({});
     const [beatVersions, setBeatVersions] = React.useState<BeatVersionsByBeatId>({});
     const [beatActiveVersionId, setBeatActiveVersionId] = React.useState<Record<string, string>>({});
     const beatVersionsRef = React.useRef<BeatVersionsByBeatId>({});
@@ -592,6 +611,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatMapReady, setBeatMapReady] = React.useState(false);
     const [beatsHtmlTotal, setBeatsHtmlTotal] = React.useState(0);
     const [beatsHtmlCompleted, setBeatsHtmlCompleted] = React.useState(0);
+    const [beatsImageTotal, setBeatsImageTotal] = React.useState(0);
+    const [beatsImageCompleted, setBeatsImageCompleted] = React.useState(0);
+    const [geminiImageFillStatus, setGeminiImageFillStatus] = React.useState('none');
     const [activeBeatId, setActiveBeatId] = React.useState('');
     const [beatEditorFocusRequest, setBeatEditorFocusRequest] = React.useState<{
         beatId: string;
@@ -669,6 +691,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
+    const [regeneratingBeatImageBeatId, setRegeneratingBeatImageBeatId] = React.useState('');
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
     const [openingAllMissingBeatAiStudio, setOpeningAllMissingBeatAiStudio] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadless, setFillingAllMissingBeatGeminiHeadless] = React.useState(false);
@@ -688,6 +711,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const importHtmlSaveTimerRef = React.useRef<number | null>(null);
     const beatMapSaveTimerRef = React.useRef<number | null>(null);
     const beatHtmlSaveTimerRef = React.useRef<Record<string, number>>({});
+    const beatImageSaveTimerRef = React.useRef<Record<string, number>>({});
     const visualCatalogSavedRef = React.useRef<string>('[]');
     const githubImageShotsSavedRef = React.useRef<string>('[]');
     const readmeMediaSavedRef = React.useRef<string>('[]');
@@ -824,6 +848,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentAvatarAnchor(nextAnchor);
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
+        setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
+        setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
         if (!(resolvedId > 0)) {
             setAgentAvatarMasterUrl('');
         } else {
@@ -832,6 +858,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const geminiFill = res?.import_html?.gemini_fill;
         const nextGeminiStatus = String(geminiFill?.status || 'none');
         setGeminiFillStatus(nextGeminiStatus);
+        const geminiImageFill = res?.import_html?.gemini_image_fill;
+        setGeminiImageFillStatus(String(geminiImageFill?.status || 'none'));
         const geminiRefineVisual = res?.import_html?.gemini_refine_visual;
         const geminiRefineHtml = res?.import_html?.gemini_refine_html;
         const visualStatusRaw = String(geminiRefineVisual?.status || 'none');
@@ -962,6 +990,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setHeadlessBrowserActive(resolveHeadlessBrowserActive(res?.import_html, {
             geminiScriptStatus: geminiScriptStatusNext,
             geminiScriptPhoneticStatus: phoneticStatusNext,
+            geminiImageFillStatus: String(geminiImageFill?.status || 'none'),
             pipelineHeadlessActive: Boolean(res?.full_auto_pipeline?.headless_browser_active),
         }));
         setAudioScriptTtsReading(serverReading);
@@ -1098,6 +1127,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             });
             return nextBeatHtml;
         });
+        setBeatImage((prev) => {
+            const beatImageRaw = importSummary?.beat_image ?? {};
+            const nextBeatImage: Record<string, BeatImageEntry> = {};
+            Object.entries(beatImageRaw).forEach(([beatId, entry]) => {
+                const parsed = parseBeatImageEntry(entry);
+                if (parsed) {
+                    nextBeatImage[beatId] = parsed;
+                }
+            });
+            Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
+                if (prev[beatId]?.image_url?.trim()) {
+                    nextBeatImage[beatId] = prev[beatId];
+                }
+            });
+            return nextBeatImage;
+        });
         setBeatVersions(parseBeatVersionsBlock(importSummary?.beat_versions));
         setBeatActiveVersionId(
             importSummary?.beat_active_version_id
@@ -1123,6 +1168,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatMapReady(Boolean(importSummary?.beat_map_ready));
         setBeatsHtmlTotal(Number(importSummary?.beats_html_total || 0));
         setBeatsHtmlCompleted(Number(importSummary?.beats_html_completed || 0));
+        setBeatsImageTotal(Number(importSummary?.beats_image_total || 0));
+        setBeatsImageCompleted(Number(importSummary?.beats_image_completed || 0));
         setActiveBeatId((prev) => prev || nextBeatMap?.sections?.[0]?.id || '');
         setWhisperStatus(String(importSummary?.whisper_status || res?.agent_workflow?.whisper_status || 'none'));
         setWhisperStale(Boolean(importSummary?.whisper_stale));
@@ -1305,6 +1352,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || geminiScriptStatus === 'processing'
         || geminiScriptPhoneticStatus === 'queued'
         || geminiScriptPhoneticStatus === 'processing'
+        || geminiImageFillStatus === 'queued'
+        || geminiImageFillStatus === 'processing'
         || headlessBrowserActive
         || fullAutoPipeline?.status === 'running'
         || githubTopEnrich?.status === 'preparing'
@@ -1837,11 +1886,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setHeadlessBrowserActive(resolveHeadlessBrowserActive(summary, {
             geminiScriptStatus: geminiScriptStatus,
             geminiScriptPhoneticStatus: geminiScriptPhoneticStatus,
+            geminiImageFillStatus: String(summary.gemini_image_fill?.status || 'none'),
         }));
         if (summary.gemini_fill) {
             const fill = summary.gemini_fill;
             const nextGeminiStatus = String(fill.status || 'none');
             setGeminiFillStatus(nextGeminiStatus);
+        }
+        if (summary.gemini_image_fill) {
+            setGeminiImageFillStatus(String(summary.gemini_image_fill.status || 'none'));
         }
         if (summary.gemini_refine_visual) {
             const block = summary.gemini_refine_visual;
@@ -1916,6 +1969,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 return nextBeatHtml;
             });
         }
+        if (summary.beat_image) {
+            setBeatImage((prev) => {
+                const nextBeatImage: Record<string, BeatImageEntry> = {};
+                Object.entries(summary.beat_image ?? {}).forEach(([beatId, entry]) => {
+                    const parsed = parseBeatImageEntry(entry);
+                    if (parsed) {
+                        nextBeatImage[beatId] = parsed;
+                    }
+                });
+                Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
+                    if (prev[beatId]?.image_url?.trim()) {
+                        nextBeatImage[beatId] = prev[beatId];
+                    }
+                });
+                return nextBeatImage;
+            });
+        }
         if (summary.beat_versions !== undefined) {
             setBeatVersions(parseBeatVersionsBlock(summary.beat_versions));
         }
@@ -1933,6 +2003,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setBeatsHtmlTotal(Number(summary.beats_html_total || summary.beat_map?.sections?.length || 0));
         setBeatsHtmlCompleted(Number(summary.beats_html_completed || 0));
+        setBeatsImageTotal(Number(summary.beats_image_total || summary.beat_map?.sections?.length || 0));
+        setBeatsImageCompleted(Number(summary.beats_image_completed || 0));
         applyImportHtmlResources(summary);
     }, [applyBeatMapDraft, applyImportHtmlResources]);
 
@@ -1942,6 +2014,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap?: BeatMap;
         beatId?: string;
         beatHtml?: string;
+        beatImageUrl?: string;
+        beatImagePrompt?: string;
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
@@ -1958,6 +2032,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatMap: payload.beatMap,
                 beatId: payload.beatId,
                 beatHtml: payload.beatHtml,
+                beatImageUrl: payload.beatImageUrl,
+                beatImagePrompt: payload.beatImagePrompt,
                 creativePrompt: payload.creativePrompt,
                 qaStatus: payload.qaStatus,
                 qaRefineNote: payload.qaRefineNote,
@@ -1983,10 +2059,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 applyImportHtmlSummary(res.import_html);
             }
             if (payload.beatId) {
-                const pendingTimer = beatHtmlSaveTimerRef.current[payload.beatId];
-                if (pendingTimer != null) {
-                    window.clearTimeout(pendingTimer);
+                const pendingHtmlTimer = beatHtmlSaveTimerRef.current[payload.beatId];
+                if (pendingHtmlTimer != null) {
+                    window.clearTimeout(pendingHtmlTimer);
                     delete beatHtmlSaveTimerRef.current[payload.beatId];
+                }
+                const pendingImageTimer = beatImageSaveTimerRef.current[payload.beatId];
+                if (pendingImageTimer != null) {
+                    window.clearTimeout(pendingImageTimer);
+                    delete beatImageSaveTimerRef.current[payload.beatId];
                 }
             }
             return true;
@@ -2583,7 +2664,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     : section
             )),
         };
-        const parsed = parseBeatMapJson(beatMapToJson(nextMap));
+        const parsed = parseBeatMapJson(beatMapToJson(nextMap), {
+            requireImagePrompt: isAgentWhiteboardMode(agentVisualMode),
+        });
         if (!parsed.map) {
             showMessage(parsed.errors.join('; '), 'warning');
             return false;
@@ -2594,6 +2677,229 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return saved;
     }, [applyBeatMapDraft, beatMap, persistImportHtml, showMessage]);
+
+    const handleBeatImagePromptChange = React.useCallback(async (
+        beatId: string,
+        imagePrompt: string,
+        visualDescription?: string,
+        background?: string,
+    ): Promise<boolean> => {
+        if (!beatMap) {
+            return false;
+        }
+        const trimmedPrompt = imagePrompt.trim();
+        if (!validateBeatImagePrompt(trimmedPrompt)) {
+            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            return false;
+        }
+        const nextMap: BeatMap = {
+            ...beatMap,
+            sections: beatMap.sections.map((section) => (
+                section.id === beatId
+                    ? {
+                        ...section,
+                        image_prompt: trimmedPrompt,
+                        visual_description: visualDescription !== undefined
+                            ? visualDescription.trim()
+                            : section.visual_description,
+                        background: background !== undefined
+                            ? background.trim()
+                            : String(section.background || '').trim(),
+                    }
+                    : section
+            )),
+        };
+        const parsed = parseBeatMapJson(beatMapToJson(nextMap), { requireImagePrompt: true });
+        if (!parsed.map) {
+            showMessage(parsed.errors.join('; '), 'warning');
+            return false;
+        }
+        const saved = await persistImportHtml({
+            beatMap: parsed.map,
+            beatId,
+            beatImagePrompt: trimmedPrompt,
+        });
+        if (saved) {
+            applyBeatMapDraft(parsed.map);
+        }
+        return saved;
+    }, [applyBeatMapDraft, beatMap, persistImportHtml, showMessage]);
+
+    const commitBeatImageChange = React.useCallback(async (
+        beatId: string,
+        payload: {
+            imagePrompt: string;
+            creativePrompt?: string;
+            imageUrl?: string;
+        },
+        options?: { immediate?: boolean },
+    ): Promise<boolean> => {
+        const imagePrompt = payload.imagePrompt.trim();
+        const creativePrompt = payload.creativePrompt;
+        const draftUpdatedAt = new Date().toISOString();
+        setBeatImage((prev) => ({
+            ...prev,
+            [beatId]: {
+                ...prev[beatId],
+                image_url: payload.imageUrl ?? prev[beatId]?.image_url ?? '',
+                image_prompt: imagePrompt,
+                updated_at: draftUpdatedAt,
+                ...(creativePrompt !== undefined ? { creative_prompt: creativePrompt } : {}),
+            },
+        }));
+
+        const existingTimer = beatImageSaveTimerRef.current[beatId];
+        if (existingTimer != null) {
+            window.clearTimeout(existingTimer);
+            delete beatImageSaveTimerRef.current[beatId];
+        }
+
+        const persistPayload = {
+            beatId,
+            beatImagePrompt: imagePrompt,
+            ...(creativePrompt !== undefined ? { creativePrompt } : {}),
+            ...(payload.imageUrl !== undefined ? { beatImageUrl: payload.imageUrl } : {}),
+        };
+
+        if (options?.immediate) {
+            return persistImportHtml(persistPayload);
+        }
+
+        beatImageSaveTimerRef.current[beatId] = window.setTimeout(() => {
+            delete beatImageSaveTimerRef.current[beatId];
+            void persistImportHtml(persistPayload);
+        }, 1000);
+        return true;
+    }, [persistImportHtml]);
+
+    const handleOpenBeatImageDuckAiManual = React.useCallback(async (
+        beatId: string,
+        imagePrompt: string,
+    ): Promise<string | null> => {
+        const prompt = String(imagePrompt || '').trim();
+        if (!validateBeatImagePrompt(prompt)) {
+            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            return null;
+        }
+        setRegeneratingBeatImageBeatId(beatId);
+        try {
+            const mapSaved = await handleBeatImagePromptChange(beatId, prompt);
+            if (!mapSaved) {
+                return null;
+            }
+            const workspaceBeats = (beatMap?.sections || []).reduce<DuckAiWorkspaceBeat[]>((acc, section, index) => {
+                    const id = String(section?.id || '').trim();
+                    const promptValue = String(
+                        (id === beatId ? prompt : '')
+                        || beatImage[id]?.image_prompt
+                        || section?.image_prompt
+                        || '',
+                    ).trim();
+                    if (!id || !promptValue) {
+                        return acc;
+                    }
+                    acc.push({
+                        beatId: id,
+                        beatIndex: index + 1,
+                        imagePrompt: promptValue,
+                        imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                    });
+                    return acc;
+                }, []);
+            if (workspaceBeats.length > 0) {
+                await openImportHtmlBeatDuckAiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
+                    imagePrompt: prompt,
+                    imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    title,
+                    autoSubmit: true,
+                });
+            } else {
+                await openImportHtmlBeatDuckAiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    imagePrompt: prompt,
+                    autoSubmit: true,
+                });
+            }
+            setActiveBeatId(beatId);
+            setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
+            showMessage(
+                `Đã mở tab Duck.ai cho ${beatId}. Prompt sẽ tự điền + submit — upload ảnh vào beat này khi xong.`,
+                'success',
+            );
+            return beatImage[beatId]?.image_url || null;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return null;
+        } finally {
+            setRegeneratingBeatImageBeatId('');
+        }
+    }, [
+        beatImage,
+        beatMap?.sections,
+        handleBeatImagePromptChange,
+        openImportHtmlBeatDuckAiFillOnly,
+        shortVideoId,
+        showMessage,
+        title,
+    ]);
+
+    const handleUploadBeatImageFromFile = React.useCallback(async (
+        beatId: string,
+        file: File,
+    ): Promise<string | null> => {
+        const normalizedBeatId = String(beatId || '').trim();
+        if (!normalizedBeatId) {
+            showMessage('Thiếu beat_id để upload ảnh', 'error');
+            return null;
+        }
+        if (!(file instanceof File)) {
+            showMessage('File ảnh không hợp lệ', 'error');
+            return null;
+        }
+
+        setSavingImportHtml(true);
+        try {
+            const uploaded = await uploadAgentVisualImage(shortVideoId, file);
+            if (!uploaded?.success) {
+                showMessage(parseApiMessage(uploaded?.message) || 'Upload ảnh thất bại', 'error');
+                return null;
+            }
+            const imageUrl = String(uploaded.url || uploaded.preview_url || '').trim();
+            if (!imageUrl) {
+                showMessage('Upload xong nhưng không có URL ảnh', 'error');
+                return null;
+            }
+            const currentPrompt = String(
+                beatImage[normalizedBeatId]?.image_prompt
+                || beatMap?.sections?.find((section) => section.id === normalizedBeatId)?.image_prompt
+                || '',
+            ).trim();
+            const saved = await commitBeatImageChange(
+                normalizedBeatId,
+                {
+                    imagePrompt: currentPrompt,
+                    imageUrl,
+                },
+                { immediate: true },
+            );
+            if (!saved) {
+                showMessage('Không lưu được ảnh vào beat hiện tại', 'error');
+                return null;
+            }
+            showMessage(`Đã gắn ảnh vào ${normalizedBeatId}`, 'success');
+            return imageUrl;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return null;
+        } finally {
+            setSavingImportHtml(false);
+        }
+    }, [beatImage, beatMap, commitBeatImageChange, shortVideoId, showMessage]);
 
     const handleSaveBeatQa = React.useCallback(async (
         beatId: string,
@@ -2614,18 +2920,30 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             qaRefineNote: normalizedNote,
         });
         if (saved) {
-            setBeatHtml((prev) => ({
-                ...prev,
-                [beatId]: {
-                    ...prev[beatId],
-                    html: prev[beatId]?.html || '',
-                    qa_status: normalizedStatus || undefined,
-                    qa_refine_note: normalizedNote || undefined,
-                },
-            }));
+            if (isAgentWhiteboardMode(agentVisualMode)) {
+                setBeatImage((prev) => ({
+                    ...prev,
+                    [beatId]: {
+                        ...prev[beatId],
+                        image_url: prev[beatId]?.image_url || '',
+                        qa_status: normalizedStatus || undefined,
+                        qa_refine_note: normalizedNote || undefined,
+                    },
+                }));
+            } else {
+                setBeatHtml((prev) => ({
+                    ...prev,
+                    [beatId]: {
+                        ...prev[beatId],
+                        html: prev[beatId]?.html || '',
+                        qa_status: normalizedStatus || undefined,
+                        qa_refine_note: normalizedNote || undefined,
+                    },
+                }));
+            }
         }
         return saved;
-    }, [persistImportHtml, showMessage]);
+    }, [agentVisualMode, persistImportHtml, showMessage]);
 
     const handleSaveBeatVersion = React.useCallback(async (
         beatId: string,
@@ -2641,6 +2959,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         if (
             !options?.trustServer
+            && isAgentWhiteboardMode(agentVisualMode)
+            && !String(beatImage[normalizedId]?.image_url || '').trim()
+        ) {
+            if (!options?.quiet) {
+                showMessage('Chỉ lưu version khi beat đã có ảnh', 'warning');
+            }
+            return null;
+        }
+        if (
+            !options?.trustServer
+            && !isAgentWhiteboardMode(agentVisualMode)
             && !String(beatHtml[normalizedId]?.html || '').trim()
         ) {
             if (!options?.quiet) {
@@ -2691,7 +3020,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setSavingImportHtml(false);
         }
-    }, [applyImportHtmlSummary, beatHtml, shortVideoId, showMessage]);
+    }, [agentVisualMode, applyImportHtmlSummary, beatHtml, beatImage, shortVideoId, showMessage]);
 
     const handleQuickIterateBeatFromQa = React.useCallback(async (
         beatId: string,
@@ -3628,6 +3957,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return;
         }
 
+        if (isAgentWhiteboardMode(agentVisualMode)) {
+            void handleOpenBeatImageDuckAiManual(
+                beatId,
+                String(beat.image_prompt || beatImage[beatId]?.image_prompt || '').trim(),
+            );
+            return;
+        }
+
         setOpeningBeatGeminiBeatIds((prev) => (prev.includes(beatId) ? prev : [...prev, beatId]));
         void (async () => {
             try {
@@ -3712,9 +4049,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
-        const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
+        const isWhiteboard = isAgentWhiteboardMode(agentVisualMode);
+        const missingBeatIds = isWhiteboard
+            ? listMissingBeatImageIds(beatMap, beatImage)
+            : listMissingBeatIds(beatMap, beatHtml);
         if (!missingBeatIds.length) {
-            showMessage('Không có beat thiếu HTML', 'info');
+            showMessage(
+                isWhiteboard ? 'Không có beat thiếu ảnh' : 'Không có beat thiếu HTML',
+                'info',
+            );
             return;
         }
         if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
@@ -3725,16 +4068,43 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
         void (async () => {
             try {
-                const result = await openImportHtmlBeatGeminiForMissingBeats({
-                    shortVideoId,
-                    beatIds: missingBeatIds,
-                    autoSubmit: true,
-                });
+                const workspaceBeats: DuckAiWorkspaceBeat[] = isWhiteboard
+                    ? beatMap.sections.map((section, index) => {
+                        const id = String(section?.id || '').trim();
+                        const prompt = String(
+                            beatImage[id]?.image_prompt
+                            || section?.image_prompt
+                            || '',
+                        ).trim();
+                        return {
+                            beatId: id,
+                            beatIndex: index + 1,
+                            imagePrompt: prompt,
+                            imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                            missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                        };
+                    }).filter((item) => item.beatId && item.imagePrompt)
+                    : [];
+                const result = isWhiteboard
+                    ? await openImportHtmlBeatDuckAiForMissingBeats({
+                        shortVideoId,
+                        title,
+                        beats: workspaceBeats,
+                        activeBeatId: missingBeatIds[0] || '',
+                        autoSubmit: true,
+                    })
+                    : await openImportHtmlBeatGeminiForMissingBeats({
+                        shortVideoId,
+                        beatIds: missingBeatIds,
+                        autoSubmit: true,
+                    });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
                     : '';
                 showMessage(
-                    `Đã mở ${result.opened} tab Gemini — kiểm tra từng tab, copy HTML rồi bấm Lưu HTML vào CMS${failNote}`,
+                    isWhiteboard
+                        ? `Đã mở ${result.opened} tab Duck.ai (mỗi beat 1 tab) — đã auto điền + submit; upload ảnh khi xong${failNote}`
+                        : `Đã mở ${result.opened} tab Gemini — kiểm tra từng tab, copy HTML rồi bấm Lưu HTML vào CMS${failNote}`,
                     result.failed.length ? 'warning' : 'success',
                 );
             } catch (e) {
@@ -3755,9 +4125,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
-        const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
+        const isWhiteboard = isAgentWhiteboardMode(agentVisualMode);
+        const missingBeatIds = isWhiteboard
+            ? listMissingBeatImageIds(beatMap, beatImage)
+            : listMissingBeatIds(beatMap, beatHtml);
         if (!missingBeatIds.length) {
-            showMessage('Không có beat thiếu HTML', 'info');
+            showMessage(
+                isWhiteboard ? 'Không có beat thiếu ảnh' : 'Không có beat thiếu HTML',
+                'info',
+            );
             return;
         }
         if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
@@ -3768,16 +4144,43 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
         void (async () => {
             try {
-                const result = await openImportHtmlBeatAiStudioForMissingBeats({
-                    shortVideoId,
-                    beatIds: missingBeatIds,
-                    autoSubmit: true,
-                });
+                const workspaceBeats: DuckAiWorkspaceBeat[] = isWhiteboard
+                    ? beatMap.sections.map((section, index) => {
+                        const id = String(section?.id || '').trim();
+                        const prompt = String(
+                            beatImage[id]?.image_prompt
+                            || section?.image_prompt
+                            || '',
+                        ).trim();
+                        return {
+                            beatId: id,
+                            beatIndex: index + 1,
+                            imagePrompt: prompt,
+                            imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                            missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                        };
+                    }).filter((item) => item.beatId && item.imagePrompt)
+                    : [];
+                const result = isWhiteboard
+                    ? await openImportHtmlBeatDuckAiForMissingBeats({
+                        shortVideoId,
+                        title,
+                        beats: workspaceBeats,
+                        activeBeatId: missingBeatIds[0] || '',
+                        autoSubmit: true,
+                    })
+                    : await openImportHtmlBeatAiStudioForMissingBeats({
+                        shortVideoId,
+                        beatIds: missingBeatIds,
+                        autoSubmit: true,
+                    });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
                     : '';
                 showMessage(
-                    `Đã mở ${result.opened} tab AI Studio — chờ Run xong rồi bấm Lưu HTML vào CMS (extract từ response)${failNote}`,
+                    isWhiteboard
+                        ? `Đã mở ${result.opened} tab Duck.ai (mỗi beat 1 tab) — đã auto điền + submit; upload ảnh khi xong${failNote}`
+                        : `Đã mở ${result.opened} tab AI Studio — chờ Run xong rồi bấm Lưu HTML vào CMS (extract từ response)${failNote}`,
                     result.failed.length ? 'warning' : 'success',
                 );
             } catch (e) {
@@ -3796,6 +4199,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         if (whisperStatus !== 'completed') {
             showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        if (isAgentWhiteboardMode(agentVisualMode)) {
+            void handleOpenAllMissingBeatAiStudio();
             return;
         }
         const missingBeatIds = listMissingBeatIds(beatMap, beatHtml);
@@ -4130,6 +4537,79 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingClipAspect(false);
+        }
+    };
+
+    const handleAgentVisualModeChange = async (nextMode: AgentVisualMode) => {
+        if (savingVisualMode || nextMode === agentVisualMode) {
+            return;
+        }
+        const hasBeatHtml = beatsHtmlCompleted > 0
+            || Object.values(beatHtml).some((entry) => Boolean(String(entry?.html || '').trim()));
+        const hasBeatImage = beatsImageCompleted > 0
+            || Object.values(beatImage).some((entry) => Boolean(String(entry?.image_url || '').trim()));
+        if (hasBeatHtml || hasBeatImage) {
+            const confirmed = window.confirm(
+                'Clip đã có beat HTML hoặc beat image. '
+                + 'Đổi chế độ visual không xóa dữ liệu cũ — beat có thể không khớp pipeline mới. Tiếp tục?',
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+        const previousMode = agentVisualMode;
+        setAgentVisualMode(nextMode);
+        setSavingVisualMode(true);
+        try {
+            const res = await saveAgentVisualMode(shortVideoId, nextMode);
+            if (!res?.success) {
+                setAgentVisualMode(previousMode);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được chế độ visual',
+                    'error',
+                );
+                return;
+            }
+            setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode || nextMode));
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (nextMode === 'whiteboard'
+                        ? 'Đã chọn clip whiteboard'
+                        : 'Đã chọn clip motion HTML'),
+                'success',
+            );
+            loadRow();
+        } catch (e) {
+            setAgentVisualMode(previousMode);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingVisualMode(false);
+        }
+    };
+
+    const handleAgentWhiteboardConfigChange = async (patch: Partial<AgentWhiteboardConfig>) => {
+        if (savingWhiteboardConfig) {
+            return;
+        }
+        const nextConfig = { ...agentWhiteboardConfig, ...patch };
+        setSavingWhiteboardConfig(true);
+        try {
+            const res = await saveAgentWhiteboardConfig(shortVideoId, nextConfig);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình whiteboard',
+                    'error',
+                );
+                return false;
+            }
+            setAgentWhiteboardConfig(res.agent_whiteboard_config ?? nextConfig);
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu cấu hình whiteboard', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingWhiteboardConfig(false);
         }
     };
 
@@ -5437,12 +5917,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         [beatMap, beatHtml],
     );
 
+    const missingBeatImageCount = React.useMemo(
+        () => countMissingBeatImage(beatMap, beatImage),
+        [beatMap, beatImage],
+    );
+
     const beatRenderErrorIds = React.useMemo(
         () => listBeatRenderErrorIds(beatHtml),
         [beatHtml],
     );
 
+    const beatImageRenderErrorIds = React.useMemo(
+        () => listBeatImageRenderErrorIds(beatImage),
+        [beatImage],
+    );
+
     const beatsRenderErrorCount = beatRenderErrorIds.length;
+    const isWhiteboardMode = isAgentWhiteboardMode(agentVisualMode);
 
     return {
         title,
@@ -5474,6 +5965,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentClipAspect,
         savingClipAspect,
         handleAgentClipAspectChange,
+        agentVisualMode,
+        agentWhiteboardConfig,
+        savingVisualMode,
+        savingWhiteboardConfig,
+        isWhiteboardMode,
+        handleAgentVisualModeChange,
+        handleAgentWhiteboardConfigChange,
         avatarDrawerOpen,
         setAvatarDrawerOpen,
         geminiFillStatus,
@@ -5610,11 +6108,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap,
         beatMapJsonDraft,
         beatHtml,
+        beatImage,
         beatVersions,
         beatActiveVersionId,
         missingBeatHtmlCount,
+        missingBeatImageCount,
+        beatsImageTotal,
+        beatsImageCompleted,
+        geminiImageFillStatus,
         beatsRenderErrorCount,
         beatRenderErrorIds,
+        beatImageRenderErrorIds,
         beatMapReady,
         beatsHtmlTotal,
         beatsHtmlCompleted,
@@ -5730,6 +6234,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
         refiningBeatHtmlBeatId,
+        regeneratingBeatImageBeatId,
         openingAllMissingBeatGemini,
         openingAllMissingBeatAiStudio,
         fillingAllMissingBeatGeminiHeadless,
@@ -5745,8 +6250,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleGithubScreenshotHomepageChange,
         handleIntroduceAppChange,
         handleAgentAvatarApply,
-        handleAgentShowKaraokeChange,
-        handleAgentClipAspectChange,
         handleStartFullAutoPipeline,
         handleRerunRenderUpload,
         handleCancelFullAutoPipeline,
@@ -5788,6 +6291,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRestoreBeatVersion,
         handleBeatHtmlChange,
         commitBeatHtmlChange,
+        commitBeatImageChange,
+        handleBeatImagePromptChange,
+        handleOpenBeatImageDuckAiManual,
+        handleUploadBeatImageFromFile,
+        /** @deprecated Alias tương thích cũ */
+        handleRegenerateBeatImageZImage: handleOpenBeatImageDuckAiManual,
         handleRefineBeatHtmlViaGemini,
         handleOpenBeatDivisionGemini,
         handleEnqueueBeatDivisionGeminiHeadless,

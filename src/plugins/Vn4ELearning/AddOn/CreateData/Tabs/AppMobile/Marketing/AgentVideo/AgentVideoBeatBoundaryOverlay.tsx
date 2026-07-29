@@ -5,6 +5,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ComputerIcon from '@mui/icons-material/Computer';
 import CodeIcon from '@mui/icons-material/Code';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
@@ -24,11 +25,14 @@ import {
 import {
     getBeatBoundaryMarkers,
     getBeatHtmlVisualState,
+    getBeatImageRenderErrorMessage,
+    getBeatImageVisualState,
     getBeatRenderErrorMessage,
     getBeatTimelineSegments,
     normalizeBeatQaStatus,
     BEAT_QA_STATUS_LABELS,
     type BeatHtmlEntry,
+    type BeatImageEntry,
     type BeatMap,
     type BeatQaStatus,
     type BeatVersion,
@@ -41,6 +45,8 @@ import {
 type Props = {
     beatMap: BeatMap | null;
     beatHtml: Record<string, BeatHtmlEntry>;
+    beatImage?: Record<string, BeatImageEntry>;
+    isWhiteboardMode?: boolean;
     activeBeatId: string;
     copyingBeatHtmlPromptBeatId: string;
     pastingBeatHtmlBeatId: string;
@@ -91,6 +97,8 @@ const QUICK_ITERATE_STAGE_TOOLTIP: Record<'queued' | 'visual' | 'html', string> 
 export default function AgentVideoBeatBoundaryOverlay({
     beatMap,
     beatHtml,
+    beatImage = {},
+    isWhiteboardMode = false,
     activeBeatId,
     copyingBeatHtmlPromptBeatId,
     pastingBeatHtmlBeatId,
@@ -167,7 +175,9 @@ export default function AgentVideoBeatBoundaryOverlay({
     const trackTop = rulerHeight + trackTopGap;
     const menuSegment = segments.find((segment) => segment.beatId === menuBeatId) || null;
     const menuVisualState = menuSegment
-        ? getBeatHtmlVisualState(beatHtml, menuSegment.beatId)
+        ? (isWhiteboardMode
+            ? getBeatImageVisualState(beatImage, menuSegment.beatId)
+            : getBeatHtmlVisualState(beatHtml, menuSegment.beatId))
         : 'missing';
     const menuIsCopying = menuBeatId !== '' && copyingBeatHtmlPromptBeatId === menuBeatId;
     const menuIsPasting = menuBeatId !== '' && pastingBeatHtmlBeatId === menuBeatId;
@@ -223,12 +233,20 @@ export default function AgentVideoBeatBoundaryOverlay({
                 {segments.map((segment) => {
                     const leftPx = toLeft(segment.startSec);
                     const widthPx = Math.max(2, toLeft(segment.endSec) - leftPx);
-                    const visualState = getBeatHtmlVisualState(beatHtml, segment.beatId);
-                    const qaStatus = normalizeBeatQaStatus(beatHtml[segment.beatId]?.qa_status);
+                    const visualState = isWhiteboardMode
+                        ? getBeatImageVisualState(beatImage, segment.beatId)
+                        : getBeatHtmlVisualState(beatHtml, segment.beatId);
+                    const qaStatus = normalizeBeatQaStatus(
+                        isWhiteboardMode
+                            ? beatImage[segment.beatId]?.qa_status
+                            : beatHtml[segment.beatId]?.qa_status,
+                    );
                     const segmentColor = visualState === 'error'
                         ? 'warning.main'
                         : (visualState === 'ok' ? 'success.main' : 'error.main');
-                    const errorMessage = getBeatRenderErrorMessage(beatHtml, segment.beatId);
+                    const errorMessage = isWhiteboardMode
+                        ? getBeatImageRenderErrorMessage(beatImage, segment.beatId)
+                        : getBeatRenderErrorMessage(beatHtml, segment.beatId);
                     const isActive = segment.beatId === activeBeatId;
                     const isCopying = copyingBeatHtmlPromptBeatId === segment.beatId;
                     const isPasting = pastingBeatHtmlBeatId === segment.beatId;
@@ -768,9 +786,18 @@ export default function AgentVideoBeatBoundaryOverlay({
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 36 }}>
-                            <CodeIcon fontSize="small" />
+                            {isWhiteboardMode ? (
+                                <ImageOutlinedIcon fontSize="small" />
+                            ) : (
+                                <CodeIcon fontSize="small" />
+                            )}
                         </ListItemIcon>
-                        <ListItemText primary="Sửa HTML" secondary="Mở form chỉnh HTML beat" />
+                        <ListItemText
+                            primary={isWhiteboardMode ? 'Sửa ảnh' : 'Sửa HTML'}
+                            secondary={isWhiteboardMode
+                                ? 'Mở form chỉnh image_prompt / Duck.ai thủ công'
+                                : 'Mở form chỉnh HTML beat'}
+                        />
                     </MenuItem>
                 ) : null}
 

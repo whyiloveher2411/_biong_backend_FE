@@ -33,6 +33,8 @@ export type ImportHtmlContextPayload = {
     agent_show_karaoke?: boolean;
     agent_clip_aspect?: ClipAspect | string;
     clip_render_spec?: ClipRenderSpec;
+    agent_visual_mode?: 'hyperframes' | 'whiteboard' | string;
+    agent_whiteboard_config?: Record<string, unknown>;
     /** @deprecated Transitional read fallback only. */
     hf_theme?: string;
     audio_script?: string;

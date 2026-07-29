@@ -28,6 +28,7 @@ import {
     countBeatIdsWithHtml,
     countBeatQaByStatus,
     type BeatHtmlEntry,
+    type BeatImageEntry,
     type BeatMap,
     type BeatQaStatus,
     type BeatVersion,
@@ -143,6 +144,8 @@ type Props = {
     previewSourceKey?: string;
     beatMap?: BeatMap | null;
     beatHtml?: Record<string, BeatHtmlEntry>;
+    beatImage?: Record<string, BeatImageEntry>;
+    isWhiteboardMode?: boolean;
     activeBeatId?: string;
     onBeatClick?: (beatId: string) => void;
     onCopyBeatPrompt?: (beatId: string) => void;
@@ -167,6 +170,7 @@ type Props = {
     deletingBeatHtmlBeatId?: string;
     deletingAllBeatHtml?: boolean;
     missingBeatHtmlCount?: number;
+    missingBeatImageCount?: number;
     openingAllMissingBeatGemini?: boolean;
     openingAllMissingBeatAiStudio?: boolean;
     fillingAllMissingBeatGeminiHeadless?: boolean;
@@ -207,6 +211,8 @@ export default function ShortVideoAgentVideoTimeline({
     previewSourceKey = '',
     beatMap = null,
     beatHtml = {},
+    beatImage = {},
+    isWhiteboardMode = false,
     activeBeatId = '',
     onBeatClick,
     onCopyBeatPrompt,
@@ -231,6 +237,7 @@ export default function ShortVideoAgentVideoTimeline({
     deletingBeatHtmlBeatId = '',
     deletingAllBeatHtml = false,
     missingBeatHtmlCount = 0,
+    missingBeatImageCount = 0,
     openingAllMissingBeatGemini = false,
     openingAllMissingBeatAiStudio = false,
     fillingAllMissingBeatGeminiHeadless = false,
@@ -268,14 +275,26 @@ export default function ShortVideoAgentVideoTimeline({
         onTimeUpdateRef.current?.(currentTimeSec);
     }, [currentTimeSec]);
 
+    const effectiveMissingCount = isWhiteboardMode ? missingBeatImageCount : missingBeatHtmlCount;
+
     const beatsWithHtmlCount = React.useMemo(
         () => countBeatIdsWithHtml(beatHtml),
         [beatHtml],
     );
-    const beatQaCounts = React.useMemo(
-        () => countBeatQaByStatus(beatMap, beatHtml),
-        [beatMap, beatHtml],
-    );
+    const beatQaCounts = React.useMemo(() => {
+        if (isWhiteboardMode) {
+            const pseudoHtml: Record<string, BeatHtmlEntry> = {};
+            Object.entries(beatImage).forEach(([beatId, entry]) => {
+                pseudoHtml[beatId] = {
+                    html: '',
+                    qa_status: entry.qa_status,
+                    qa_refine_note: entry.qa_refine_note,
+                };
+            });
+            return countBeatQaByStatus(beatMap, pseudoHtml);
+        }
+        return countBeatQaByStatus(beatMap, beatHtml);
+    }, [beatMap, beatHtml, beatImage, isWhiteboardMode]);
     const showBeatQaSummary = Boolean(beatMap?.sections?.length) && (
         beatQaCounts.approved > 0
         || beatQaCounts.needs_html_refill > 0
@@ -284,10 +303,10 @@ export default function ShortVideoAgentVideoTimeline({
     const geminiFillQueueActive = geminiFillStatus === 'queued'
         || geminiFillStatus === 'processing';
     const showDeleteAllBeatHtml = Boolean(beatMap?.sections?.length) && beatsWithHtmlCount > 0;
-    const showOpenAllMissingGemini = Boolean(beatMap?.sections?.length) && missingBeatHtmlCount > 0;
+    const showOpenAllMissingGemini = Boolean(beatMap?.sections?.length) && effectiveMissingCount > 0;
     const showFillAllMissingGeminiHeadless = (
         showOpenAllMissingGemini || geminiFillQueueActive
-    ) && Boolean(onFillAllMissingBeatGeminiHeadless);
+    ) && Boolean(onFillAllMissingBeatGeminiHeadless) && !isWhiteboardMode;
     const showTimelineActions = showOpenAllMissingGemini
         || showFillAllMissingGeminiHeadless
         || showDeleteAllBeatHtml
@@ -665,7 +684,9 @@ export default function ShortVideoAgentVideoTimeline({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
                             <Tooltip
-                                title="Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab"
+                                title={isWhiteboardMode
+                                    ? 'Mở Duck.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit.'
+                                    : 'Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab'}
                                 placement="top"
                             >
                                 <span>
@@ -679,12 +700,14 @@ export default function ShortVideoAgentVideoTimeline({
                                         startIcon={<AutoAwesomeIcon fontSize="small" />}
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >
-                                        {`Mở Gemini tất cả beat thiếu (${missingBeatHtmlCount})`}
+                                        {isWhiteboardMode
+                                            ? `Mở Duck.ai tất cả beat thiếu ảnh (${effectiveMissingCount})`
+                                            : `Mở Gemini tất cả beat thiếu (${effectiveMissingCount})`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
                         ) : null}
-                        {showOpenAllMissingGemini && onOpenAllMissingBeatAiStudio ? (
+                        {!isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatAiStudio ? (
                             <Tooltip
                                 title="Extension mở AI Studio (Gemini 3.6 Flash), điền prompt + Run — bấm Lưu HTML để extract từ response vào CMS"
                                 placement="top"
@@ -700,7 +723,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         startIcon={<AutoAwesomeIcon fontSize="small" />}
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >
-                                        {`Mở AI Studio tất cả beat thiếu (${missingBeatHtmlCount})`}
+                                        {`Mở AI Studio tất cả beat thiếu (${effectiveMissingCount})`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
@@ -749,7 +772,7 @@ export default function ShortVideoAgentVideoTimeline({
                                             if (geminiFillQueueActive) {
                                                 return 'Đang fill HTML beat (queue)…';
                                             }
-                                            return `API fill tất cả beat thiếu (${missingBeatHtmlCount})`;
+                                            return `API fill tất cả beat thiếu (${effectiveMissingCount})`;
                                         })()}
                                     </LoadingButton>
                                 </span>
@@ -933,6 +956,8 @@ export default function ShortVideoAgentVideoTimeline({
                             <AgentVideoBeatBoundaryOverlay
                                 beatMap={beatMap}
                                 beatHtml={beatHtml}
+                                beatImage={beatImage}
+                                isWhiteboardMode={isWhiteboardMode}
                                 activeBeatId={activeBeatId}
                                 copyingBeatHtmlPromptBeatId={copyingBeatHtmlPromptBeatId}
                                 pastingBeatHtmlBeatId={pastingBeatHtmlBeatId}

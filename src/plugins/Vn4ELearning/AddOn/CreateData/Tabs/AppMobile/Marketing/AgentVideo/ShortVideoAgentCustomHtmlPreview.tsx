@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { resolveActiveBeatSection, type BeatMap } from './agentVideoBeatMap';
 import { createHtmlBeatMediaProxy, type HtmlBeatMediaProxy } from './agentVideoHtmlBeatMediaProxy';
 import {
@@ -10,10 +10,13 @@ import {
 import { seekCustomHtmlIframe } from './agentVideoCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import type { AvatarPipAnchor } from './agentVideoApi';
+import type { BeatImageEntry } from './agentVideoBeatMap';
 
 type Props = {
     beatMap: BeatMap | null;
     beatHtml: Record<string, { html?: string; updated_at?: string }>;
+    beatImage?: Record<string, BeatImageEntry>;
+    isWhiteboardMode?: boolean;
     audioUrl: string;
     audioDurationSec: number | null;
     videoRef: React.Ref<HTMLVideoElement>;
@@ -29,6 +32,8 @@ const EMPTY_HTML = '<html><body style="margin:0;background:#111;color:#666;displ
 export default function ShortVideoAgentCustomHtmlPreview({
     beatMap,
     beatHtml,
+    beatImage = {},
+    isWhiteboardMode = false,
     audioUrl,
     audioDurationSec,
     videoRef,
@@ -66,8 +71,12 @@ export default function ShortVideoAgentCustomHtmlPreview({
     );
 
     const activeHtml = activeBeat ? (beatHtml[activeBeat.id]?.html || '') : '';
+    const activeImageUrl = activeBeat ? (beatImage[activeBeat.id]?.image_url || '') : '';
     const activeHtmlRevision = activeBeat
         ? `${activeBeat.id}:${beatHtml[activeBeat.id]?.updated_at || ''}:${activeHtml.length}`
+        : 'empty';
+    const activeImageRevision = activeBeat
+        ? `${activeBeat.id}:${beatImage[activeBeat.id]?.updated_at || ''}:${activeImageUrl.length}`
         : 'empty';
 
     React.useImperativeHandle(videoRef, () => mediaProxyRef.current as HtmlBeatMediaProxy, []);
@@ -128,10 +137,68 @@ export default function ShortVideoAgentCustomHtmlPreview({
     }, [audioUrl]);
 
     React.useEffect(() => {
+        if (isWhiteboardMode) {
+            return;
+        }
         const beat = resolveActiveBeatSection(beatMap, localTimeSec);
         const localT = beat ? Math.max(0, localTimeSec - beat.startSec) : 0;
         seekCustomHtmlIframe(iframeRef.current, localT);
-    }, [activeHtml, beatMap, localTimeSec]);
+    }, [activeHtml, beatMap, isWhiteboardMode, localTimeSec]);
+
+    const imagePreview = isWhiteboardMode ? (
+        <Box
+            key={activeImageRevision}
+            sx={{
+                width: stage.width,
+                height: stage.height,
+                position: 'relative',
+                bgcolor: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            {activeImageUrl ? (
+                <Box
+                    component="img"
+                    src={activeImageUrl}
+                    alt={`Preview ${activeBeat?.id || 'beat'}`}
+                    sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        display: 'block',
+                    }}
+                />
+            ) : (
+                <Typography variant="body2" color="text.secondary">
+                    Chưa có ảnh beat
+                </Typography>
+            )}
+            <ShortVideoAgentAvatarPipOverlay
+                show={Boolean(showAvatarPip)}
+                masterUrl={avatarMasterUrl}
+                anchor={avatarAnchor}
+                showKaraoke={showKaraoke}
+                stageMode
+            />
+        </Box>
+    ) : (
+        <Box
+            component="iframe"
+            key={activeHtmlRevision}
+            ref={iframeRef}
+            title="HTML beat preview"
+            sandbox="allow-scripts allow-same-origin"
+            srcDoc={activeHtml || EMPTY_HTML}
+            sx={{
+                width: stage.width,
+                height: stage.height,
+                border: 0,
+                display: 'block',
+            }}
+        />
+    );
 
     return (
         <Box
@@ -163,39 +230,19 @@ export default function ShortVideoAgentCustomHtmlPreview({
                         flexShrink: 0,
                     }}
                 >
-                    <Box
-                        sx={{
-                            width: stage.width,
-                            height: stage.height,
-                            transform: `scale(${containScale})`,
-                            transformOrigin: 'top left',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                        }}
-                    >
                         <Box
-                            component="iframe"
-                            key={activeHtmlRevision}
-                            ref={iframeRef}
-                            title="HTML beat preview"
-                            sandbox="allow-scripts allow-same-origin"
-                            srcDoc={activeHtml || EMPTY_HTML}
                             sx={{
                                 width: stage.width,
                                 height: stage.height,
-                                border: 0,
-                                display: 'block',
+                                transform: `scale(${containScale})`,
+                                transformOrigin: 'top left',
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
                             }}
-                        />
-                        <ShortVideoAgentAvatarPipOverlay
-                            show={Boolean(showAvatarPip)}
-                            masterUrl={avatarMasterUrl}
-                            anchor={avatarAnchor}
-                            showKaraoke={showKaraoke}
-                            stageMode
-                        />
-                    </Box>
+                        >
+                            {imagePreview}
+                        </Box>
                 </Box>
             </Box>
             <Box

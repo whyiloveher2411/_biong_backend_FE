@@ -87,7 +87,7 @@ const COLOR_MAX = 120;
 const TRANSITION_DURATION_PRESETS = [0.8, 1.2, 2, 3] as const;
 const TRANSITION_DURATION_MIN = 0.3;
 const TRANSITION_DURATION_MAX = 8;
-const MAX_SCENES = 5;
+const MAX_SCENES = 40;
 
 const GEN_STYLES: { id: GenStyle; label: string }[] = [
     { id: 'whiteboard', label: 'Whiteboard' },

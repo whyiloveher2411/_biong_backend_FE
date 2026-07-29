@@ -385,6 +385,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             headlessSteps={state.fullAutoPipeline.headless_steps}
                             aiSteps={state.fullAutoPipeline.ai_steps}
                             qaLoops={state.fullAutoPipeline.qa_loops}
+                            agentVisualMode={state.agentVisualMode}
                             currentStep={state.fullAutoPipeline.current_step || ''}
                             pipelineStatus={state.fullAutoPipeline.status || 'idle'}
                             restartableSet={restartableSet}

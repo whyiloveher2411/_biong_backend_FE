@@ -1145,6 +1145,7 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                             headlessSteps={state.fullAutoPipeline?.headless_steps}
                                             aiSteps={state.fullAutoPipeline?.ai_steps}
                                             qaLoops={state.fullAutoPipeline?.qa_loops}
+                                            agentVisualMode={state.agentVisualMode}
                                             pipelineStatus={state.fullAutoPipeline?.status}
                                             currentStep={state.fullAutoPipeline?.current_step}
                                             restartableSet={restartableSet}
@@ -1294,6 +1295,36 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                                             {state.agentClipAspect === '16:9'
                                                 ? 'Canvas 1920×1080 — band caption ~120px.'
                                                 : 'Canvas 1080×1920 — band caption ~360px (mặc định).'}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ px: 1.25, py: 1 }}>
+                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                            Chế độ visual clip
+                                        </Typography>
+                                        <ToggleButtonGroup
+                                            exclusive
+                                            fullWidth
+                                            size="small"
+                                            value={state.agentVisualMode}
+                                            disabled={state.savingVisualMode}
+                                            onChange={(_event, value: 'hyperframes' | 'whiteboard' | null) => {
+                                                if (value) {
+                                                    void state.handleAgentVisualModeChange(value);
+                                                }
+                                            }}
+                                            aria-label="Chế độ visual clip"
+                                        >
+                                            <ToggleButton value="hyperframes" aria-label="Motion HTML">
+                                                Motion HTML
+                                            </ToggleButton>
+                                            <ToggleButton value="whiteboard" aria-label="Whiteboard">
+                                                Whiteboard
+                                            </ToggleButton>
+                                        </ToggleButtonGroup>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                            {state.isWhiteboardMode
+                                                ? 'Whiteboard: Duck.ai thủ công theo beat + render bảng vẽ tay.'
+                                                : 'Motion HTML: HyperFrames HTML theo beat (mặc định).'}
                                         </Typography>
                                     </Box>
                                     <FormControlLabel
