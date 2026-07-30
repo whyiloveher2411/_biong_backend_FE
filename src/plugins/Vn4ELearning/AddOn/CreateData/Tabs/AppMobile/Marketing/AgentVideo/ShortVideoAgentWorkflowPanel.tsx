@@ -4,6 +4,7 @@ import {
     Box,
     Chip,
     CircularProgress,
+    Divider,
     FormControl,
     FormControlLabel,
     InputLabel,
@@ -11,6 +12,9 @@ import {
     Select,
     Stack,
     Switch,
+    TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -242,6 +246,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 additionalInfo: state.savedAgentAdditionalInfo,
                 introduceApp: state.agentIntroduceApp,
                 sourceFormat: state.agentSourceFormat,
+                desiredScriptDurationSec: state.desiredScriptDurationSec,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -293,6 +298,259 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </Alert>
                 ) : null}
 
+                <WorkflowSection title="Tùy chọn clip" tone="visual">
+                    <Stack
+                        divider={<Divider flexItem />}
+                        sx={{
+                            borderRadius: 1,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'background.paper',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                px: 1.25,
+                                py: 1,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
+                                    checked={state.agentIntroduceApp}
+                                    disabled={state.savingIntroduceApp}
+                                    onChange={(e) => {
+                                        void state.handleIntroduceAppChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Giới thiệu app trong video' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Giới thiệu app trong video
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Bật: CTA cuối mời mở/tải app. Tắt: chỉ CTA engagement.
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                px: 1.25,
+                                py: 1,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
+                                    checked={state.agentShowKaraoke}
+                                    disabled={state.savingShowKaraoke}
+                                    onChange={(e) => {
+                                        void state.handleAgentShowKaraokeChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Hiện text karaoke' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Hiện text karaoke
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Tắt: không ghép caption layer. Band dưới beat vẫn chừa theo tỉ lệ clip (9:16 ~360px, 16:9 ~120px).
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+                        {state.audioScriptStyles.length > 0 ? (
+                            <Box sx={{ px: 1.25, py: 1 }}>
+                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                    Phong cách giọng đọc
+                                </Typography>
+                                <FormControl fullWidth size="small">
+                                    <Select
+                                        value={state.agentAudioScriptStyleId}
+                                        onChange={(e) => {
+                                            void state.handleAgentAudioScriptStyleChange(Number(e.target.value));
+                                        }}
+                                        disabled={state.savingAudioScriptStyle}
+                                        displayEmpty
+                                        aria-label="Phong cách giọng đọc"
+                                    >
+                                        <MenuItem value={0}>
+                                            <em>Mặc định</em>
+                                        </MenuItem>
+                                        {state.audioScriptStyles
+                                            .filter((style) => style.status === 'ready')
+                                            .map((style) => (
+                                                <MenuItem key={style.id} value={style.id}>
+                                                    {style.title || `Style #${style.id}`}
+                                                    {style.channel ? ` (${style.channel})` : ''}
+                                                </MenuItem>
+                                            ))}
+                                    </Select>
+                                </FormControl>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                    Áp dụng khi sinh hoặc cải thiện script qua Gemini. Mặc định giữ prompt hiện tại.
+                                </Typography>
+                            </Box>
+                        ) : null}
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Thời lượng script mong muốn
+                            </Typography>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <TextField
+                                    size="small"
+                                    type="number"
+                                    value={state.desiredScriptDurationInput}
+                                    onChange={(e) => {
+                                        state.setDesiredScriptDurationInput(e.target.value);
+                                    }}
+                                    onBlur={() => {
+                                        void state.commitDesiredScriptDuration(state.desiredScriptDurationInput);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            (e.target as HTMLInputElement).blur();
+                                        }
+                                    }}
+                                    disabled={state.savingDesiredScriptDuration}
+                                    placeholder="Để trống = tự chọn"
+                                    inputProps={{
+                                        min: 15,
+                                        max: 3600,
+                                        step: 1,
+                                        'aria-label': 'Thời lượng script mong muốn (giây)',
+                                    }}
+                                    sx={{ width: 140 }}
+                                />
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{ fontVariantNumeric: 'tabular-nums', minWidth: 64 }}
+                                >
+                                    {(() => {
+                                        const n = Number(String(state.desiredScriptDurationInput || '').trim());
+                                        if (!Number.isFinite(n) || n <= 0) {
+                                            return '—';
+                                        }
+                                        const s = Math.max(0, Math.floor(n));
+                                        const h = Math.floor(s / 3600);
+                                        const m = Math.floor((s % 3600) / 60);
+                                        const sec = s % 60;
+                                        return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+                                    })()}
+                                </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                Nhập số giây (15–3600). Áp dụng khi sinh/cải thiện script. Để trống giữ behavior cũ.
+                            </Typography>
+                        </Box>
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Tỉ lệ clip
+                            </Typography>
+                            <ToggleButtonGroup
+                                exclusive
+                                fullWidth
+                                size="small"
+                                value={state.agentClipAspect}
+                                disabled={state.savingClipAspect}
+                                onChange={(_event, value: '9:16' | '16:9' | null) => {
+                                    if (value) {
+                                        void state.handleAgentClipAspectChange(value);
+                                    }
+                                }}
+                                aria-label="Tỉ lệ clip"
+                            >
+                                <ToggleButton value="9:16" aria-label="9:16 dọc">
+                                    9:16 dọc
+                                </ToggleButton>
+                                <ToggleButton value="16:9" aria-label="16:9 ngang">
+                                    16:9 ngang
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                {state.agentClipAspect === '16:9'
+                                    ? 'Canvas 1920×1080 — band caption ~120px.'
+                                    : 'Canvas 1080×1920 — band caption ~360px (mặc định).'}
+                            </Typography>
+                        </Box>
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Chế độ visual clip
+                            </Typography>
+                            <ToggleButtonGroup
+                                exclusive
+                                fullWidth
+                                size="small"
+                                value={state.agentVisualMode}
+                                disabled={state.savingVisualMode}
+                                onChange={(_event, value: 'hyperframes' | 'whiteboard' | null) => {
+                                    if (value) {
+                                        void state.handleAgentVisualModeChange(value);
+                                    }
+                                }}
+                                aria-label="Chế độ visual clip"
+                            >
+                                <ToggleButton value="hyperframes" aria-label="Motion HTML">
+                                    Motion HTML
+                                </ToggleButton>
+                                <ToggleButton value="whiteboard" aria-label="Whiteboard">
+                                    Whiteboard
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                {state.isWhiteboardMode
+                                    ? 'Whiteboard: sinh ảnh beat bằng Gemini + render bảng vẽ tay.'
+                                    : 'Motion HTML: HyperFrames HTML theo beat (mặc định).'}
+                            </Typography>
+                        </Box>
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                px: 1.25,
+                                py: 1,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
+                                    checked={state.agentGeminiOpenBrowser}
+                                    disabled={state.savingGeminiOpenBrowser}
+                                    onChange={(e) => {
+                                        void state.handleGeminiOpenBrowserChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Hiện browser Gemini
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Mở cửa sổ trình duyệt khi chạy fill/chia beat headless.
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+                    </Stack>
+                </WorkflowSection>
+
                 <WorkflowSection title="Thông tin chung" tone="info">
                     <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                     <MetaRow
@@ -305,14 +563,24 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
                     />
                     <MetaRow label="TTS chain" value={chainDisplay} />
-                    <MetaRow
-                        label="Giọng OmniVoice"
-                        value={
-                            state.omnivoiceVoiceMode === 'design'
-                                ? `Thiết kế giọng · ${formatOmnivoiceVoiceDesignVi(state.omnivoiceVoiceDesign || '') || '—'}`
-                                : (state.omnivoiceVoice || 'minh_quân')
-                        }
-                    />
+                    {state.selectedPlatforms.includes('omnivoice_local')
+                        || state.ttsChain.includes('omnivoice_local') ? (
+                        <MetaRow
+                            label="Giọng OmniVoice"
+                            value={
+                                state.omnivoiceVoiceMode === 'design'
+                                    ? `Thiết kế giọng · ${formatOmnivoiceVoiceDesignVi(state.omnivoiceVoiceDesign || '') || '—'}`
+                                    : (state.omnivoiceVoice || 'minh_quân')
+                            }
+                        />
+                    ) : null}
+                    {state.selectedPlatforms.includes('saydi')
+                        || state.ttsChain.includes('saydi') ? (
+                        <MetaRow
+                            label="Giọng Saydi"
+                            value={state.saydiVoice || 'adam-11labs-vi'}
+                        />
+                    ) : null}
                     <MetaRow label="Video status" status={state.agentVideoStatus || 'none'} />
                     <MetaRow
                         label="Render mode"

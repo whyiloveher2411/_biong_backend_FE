@@ -134,6 +134,7 @@ export default function ShortVideoAgentThumbnailPanel({ state }: Props) {
                     <ShortVideoAgentThumbnailImagePreview
                         imageUrl={state.thumbnailImageUrl}
                         shortVideoId={state.shortVideoId}
+                        clipAspect={state.agentClipAspect}
                         onDownloadError={(message) => state.showMessage(message, 'error')}
                     />
                 </WorkflowSection>

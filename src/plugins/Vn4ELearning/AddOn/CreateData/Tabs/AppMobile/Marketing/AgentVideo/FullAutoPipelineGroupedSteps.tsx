@@ -14,7 +14,6 @@ import {
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
-import { PipelineRenderRunButton } from './PipelineRenderRunButton';
 import {
     getPipelineGroupSurface,
     PIPELINE_STEP_STATUS_LABEL,
@@ -23,6 +22,7 @@ import {
     pipelineHeadlessLegendSx,
     pipelineStepStatusColor,
 } from './agentVideoPipelineUi';
+import { PipelineRenderRunButton } from './PipelineRenderRunButton';
 import {
     isScriptImproveQaLoopStep,
     scriptQaLoopStepStatusLabel,

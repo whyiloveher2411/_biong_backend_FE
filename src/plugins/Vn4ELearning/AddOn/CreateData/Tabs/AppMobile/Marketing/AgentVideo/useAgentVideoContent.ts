@@ -19,6 +19,8 @@ import {
     openImportHtmlBeatAiStudioForMissingBeats,
     openImportHtmlBeatDuckAiFillOnly,
     openImportHtmlBeatDuckAiForMissingBeats,
+    openImportHtmlBeatMetaAiFillOnly,
+    openImportHtmlBeatMetaAiForMissingBeats,
 } from 'helpers/marketingImportHtmlWorkflow';
 import {
     approveAudioScript,
@@ -31,6 +33,9 @@ import {
     saveAgentVisualStyle,
     saveAgentImportHtml,
     saveAgentOmnivoiceVoice,
+    saveAgentSaydiVoice,
+    fetchSaydiVoiceSamples,
+    DEFAULT_SAYDI_VOICE,
     saveAgentSourceContent,
     saveAgentCaptionAlignments,
     saveTtsPhoneticDict,
@@ -45,6 +50,11 @@ import {
     saveAgentGeminiOpenBrowser,
     saveAgentGithubScreenshotHomepage,
     saveAgentIntroduceApp,
+    saveAgentScriptStyle,
+    saveAgentDesiredScriptDuration,
+    saveAgentCapcutConfig,
+    addAudioToCapcut,
+    listAudioScriptStyles,
     saveAgentShowKaraoke,
     saveAgentClipAspect,
     saveAgentVisualMode,
@@ -59,6 +69,8 @@ import {
     enqueueGeminiWebThumbnailFill,
     enqueueGeminiWebThumbnailIdea,
     captureAgentThumbnail,
+    uploadLocalAgentVideo,
+    renderWhiteboardAgentVideo,
     enqueueGeminiWebAudioScript,
     enqueueGeminiWebScriptPhonetic,
     saveAdminAudioScriptTtsReading,
@@ -72,13 +84,16 @@ import {
     postTikTok,
     resolveOmnivoiceVoicePreviewUrl,
     resolveOmnivoiceVoiceDesignPreviewUrl,
+    resolveSaydiVoicePreviewUrl,
     transcribeAgentAudio,
     uploadAgentAudioMp3,
     uploadAgentVisualImage,
     type AgentRenderMode,
     type AgentVisualMode,
     type AgentWhiteboardConfig,
+    type AudioScriptStyleItem,
     type AgentVideoContentResponse,
+    type NarrationSegment,
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
     type GithubTopEnrichSummary,
@@ -93,6 +108,7 @@ import {
     type OmnivoiceVoiceMode,
     type OmnivoiceVoiceDesignTokenGroup,
     type SaveOmnivoiceVoicePayload,
+    type SaydiVoiceSampleItem,
     type ImportHtmlSummary,
     type ImportHtmlGeminiJobBlock,
     type ImportHtmlThumbnailBlock,
@@ -127,6 +143,7 @@ import {
     readAgentVideoScriptDraftRecord,
     writeAgentVideoScriptDraft,
 } from './agentVideoDraft';
+import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
 import { isCaptionSyncAssembleError } from './agentVideoImportHtmlBlockers';
 import {
     beatMapToJson,
@@ -438,6 +455,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [scriptApproved, setScriptApproved] = React.useState(false);
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
     const [audioDurationSec, setAudioDurationSec] = React.useState<number | null>(null);
+    const [narrationSegments, setNarrationSegments] = React.useState<NarrationSegment[]>([]);
     const [agentTtsAuto, setAgentTtsAuto] = React.useState(true);
     const [agentAutoFillBeatHtml, setAgentAutoFillBeatHtml] = React.useState(false);
     const [savingAutoFillBeatHtml, setSavingAutoFillBeatHtml] = React.useState(false);
@@ -447,6 +465,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingGithubScreenshotHomepage, setSavingGithubScreenshotHomepage] = React.useState(false);
     const [agentIntroduceApp, setAgentIntroduceApp] = React.useState(false);
     const [savingIntroduceApp, setSavingIntroduceApp] = React.useState(false);
+    const [agentAudioScriptStyleId, setAgentAudioScriptStyleId] = React.useState(0);
+    const [savingAudioScriptStyle, setSavingAudioScriptStyle] = React.useState(false);
+    const [audioScriptStyles, setAudioScriptStyles] = React.useState<AudioScriptStyleItem[]>([]);
+    const [desiredScriptDurationSec, setDesiredScriptDurationSec] = React.useState<number | null>(null);
+    const [desiredScriptDurationInput, setDesiredScriptDurationInput] = React.useState('');
+    const [savingDesiredScriptDuration, setSavingDesiredScriptDuration] = React.useState(false);
+    const [capcutProjectName, setCapcutProjectName] = React.useState('');
+    const [capcutProjectPath, setCapcutProjectPath] = React.useState('');
+    const [savingCapcutConfig, setSavingCapcutConfig] = React.useState(false);
+    const [addingAudioToCapcut, setAddingAudioToCapcut] = React.useState(false);
     const [agentAvatarId, setAgentAvatarId] = React.useState(0);
     const [agentShowAvatar, setAgentShowAvatar] = React.useState(false);
     const [agentAvatarAnchor, setAgentAvatarAnchor] = React.useState<AvatarPipAnchor>('bottom_right');
@@ -544,6 +572,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentVideoStatus, setAgentVideoStatus] = React.useState('none');
     const [agentVideoUrl, setAgentVideoUrl] = React.useState('');
     const [agentVideoRenderedAt, setAgentVideoRenderedAt] = React.useState('');
+    const [hasLocalFinalMp4, setHasLocalFinalMp4] = React.useState(false);
+    const [localFinalMp4Url, setLocalFinalMp4Url] = React.useState('');
+    const [localFinalMp4SizeBytes, setLocalFinalMp4SizeBytes] = React.useState(0);
+    const [localFinalMp4ModifiedAt, setLocalFinalMp4ModifiedAt] = React.useState('');
+    const [uploadingLocalAgentVideo, setUploadingLocalAgentVideo] = React.useState(false);
     const [agentTtsJobId, setAgentTtsJobId] = React.useState<number | null>(null);
     const [agentTtsStatus, setAgentTtsStatus] = React.useState('');
     const [ttsChain, setTtsChain] = React.useState<string[]>([]);
@@ -563,6 +596,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [omnivoiceVoiceCatalog, setOmnivoiceVoiceCatalog] = React.useState<OmnivoiceVoiceCatalogItem[]>([]);
     const [omnivoiceVoiceDesignTokens, setOmnivoiceVoiceDesignTokens] = React.useState<OmnivoiceVoiceDesignTokenGroup[]>([]);
     const [savingOmnivoiceVoice, setSavingOmnivoiceVoice] = React.useState(false);
+    const [saydiVoice, setSaydiVoice] = React.useState(DEFAULT_SAYDI_VOICE);
+    const [saydiSamples, setSaydiSamples] = React.useState<SaydiVoiceSampleItem[]>([]);
+    const [saydiGenders, setSaydiGenders] = React.useState<string[]>([]);
+    const [saydiLanguages, setSaydiLanguages] = React.useState<string[]>([]);
+    const [saydiLoading, setSaydiLoading] = React.useState(false);
+    const [saydiError, setSaydiError] = React.useState('');
+    const [savingSaydiVoice, setSavingSaydiVoice] = React.useState(false);
     const [previewingVoiceDesign, setPreviewingVoiceDesign] = React.useState(false);
     const [playingVoiceUrl, setPlayingVoiceUrl] = React.useState<string | null>(null);
     const voicePreviewAudioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -693,6 +733,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
     const [regeneratingBeatImageBeatId, setRegeneratingBeatImageBeatId] = React.useState('');
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
+    const [openingAllMissingBeatMetaAi, setOpeningAllMissingBeatMetaAi] = React.useState(false);
     const [openingAllMissingBeatAiStudio, setOpeningAllMissingBeatAiStudio] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadless, setFillingAllMissingBeatGeminiHeadless] = React.useState(false);
     const [fillingAllMissingBeatGeminiHeadlessProgress, setFillingAllMissingBeatGeminiHeadlessProgress] = React.useState<{
@@ -827,11 +868,39 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }));
         setScriptApproved(Boolean(res?.audio_script_approved ?? res?.agent_workflow?.script_approved));
         setAudioFileUrl(String(res?.audio_file || '').trim());
+        setCapcutProjectName(String(res?.capcut_project_name || '').trim());
+        setCapcutProjectPath(String(res?.capcut_project_path || '').trim());
+        const nextSegments = Array.isArray(res?.narration_segments)
+            ? res.narration_segments
+                .filter((seg): seg is NarrationSegment => Boolean(seg && String(seg.url || '').trim()))
+                .map((seg, idx) => ({
+                    index: Number(seg.index ?? idx),
+                    text: String(seg.text || ''),
+                    word_count: Number(seg.word_count || 0),
+                    url: String(seg.url || '').trim(),
+                    s3_key: String(seg.s3_key || '').trim(),
+                    duration_sec: Number(seg.duration_sec || 0),
+                    tts_engine: String(seg.tts_engine || '').trim(),
+                    status: String(seg.status || 'ready').trim() || 'ready',
+                }))
+            : [];
+        setNarrationSegments(nextSegments);
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
         setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
         setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
         setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
         setAgentIntroduceApp(Boolean(res?.agent_introduce_app));
+        const styleId = Number(res?.audio_script_style_id ?? 0);
+        setAgentAudioScriptStyleId(Number.isFinite(styleId) && styleId > 0 ? styleId : 0);
+        const desiredRaw = res?.desired_script_duration_sec;
+        const desiredNum = desiredRaw == null
+            ? null
+            : Number(desiredRaw);
+        const desiredResolved = desiredNum != null && Number.isFinite(desiredNum) && desiredNum > 0
+            ? Math.round(desiredNum)
+            : null;
+        setDesiredScriptDurationSec(desiredResolved);
+        setDesiredScriptDurationInput(desiredResolved != null ? String(desiredResolved) : '');
         const nextAvatarId = Number(res?.agent_avatar_id || res?.agent_avatar?.avatar_id || 0);
         const resolvedId = Number.isFinite(nextAvatarId) && nextAvatarId > 0 ? nextAvatarId : 0;
         const masterFromApi = String(res?.agent_avatar?.master_url || '').trim();
@@ -1007,6 +1076,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentVideoStatus(String(res?.agent_video_status || 'none'));
         setAgentVideoUrl(String(res?.agent_video_url || '').trim());
         setAgentVideoRenderedAt(String(res?.agent_video_rendered_at || '').trim());
+        setHasLocalFinalMp4(Boolean(res?.has_local_final_mp4));
+        setLocalFinalMp4Url(String(res?.local_final_mp4_url || '').trim());
+        setLocalFinalMp4SizeBytes(Math.max(0, Number(res?.local_final_mp4_size_bytes || 0)));
+        setLocalFinalMp4ModifiedAt(String(res?.local_final_mp4_modified_at || '').trim());
         setAgentTtsJobId(res?.agent_tts_job_id ?? null);
         setAgentTtsStatus(String(res?.agent_tts_status || '').trim());
         setTtsChain(Array.isArray(res?.tts_chain) ? res.tts_chain : []);
@@ -1042,6 +1115,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setOmnivoiceVoiceDesignTokens(
             Array.isArray(res?.omnivoice_voice_design_tokens) ? res.omnivoice_voice_design_tokens : [],
         );
+        setSaydiVoice(String(res?.agent_saydi_voice || DEFAULT_SAYDI_VOICE).trim() || DEFAULT_SAYDI_VOICE);
         const mpId = Number(res?.marketing_post_id || 0);
         setMarketingPostId(Number.isFinite(mpId) && mpId > 0 ? mpId : 0);
         const nextSource = String(res?.agent_source_content || '');
@@ -1281,6 +1355,21 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 // ignore — select vẫn dùng được với id đã lưu
             }
         })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
+    React.useEffect(() => {
+        if (!open) {
+            return;
+        }
+        let cancelled = false;
+        void listAudioScriptStyles().then((res) => {
+            if (!cancelled) {
+                setAudioScriptStyles(res?.styles ?? []);
+            }
+        });
         return () => {
             cancelled = true;
         };
@@ -1573,6 +1662,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 additionalInfo: savedAgentAdditionalInfo,
                 introduceApp: agentIntroduceApp,
                 sourceFormat: agentSourceFormat,
+                desiredScriptDurationSec,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -1751,6 +1841,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (json?.audio_reset) {
                 setAudioFileUrl('');
                 setAudioDurationSec(null);
+                setNarrationSegments([]);
                 setTtsPending(false);
                 setTtsFailed(false);
                 setScriptApproved(false);
@@ -2514,6 +2605,34 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleLaunchImportHtmlRender = async () => {
         setLaunchingScriptRender(true);
         try {
+            if (isAgentWhiteboardMode(agentVisualMode)) {
+                const res = await renderWhiteboardAgentVideo(shortVideoId, true);
+                if (!res?.success) {
+                    showMessage(parseApiMessage(res?.message) || 'Render whiteboard thất bại', 'error');
+                    loadRow();
+                    return;
+                }
+                if (res.queued) {
+                    showMessage(parseApiMessage(res?.message) || 'Đã enqueue render whiteboard — chờ job xong rồi bấm Render lại', 'info');
+                    if (res.full_auto_pipeline) {
+                        setFullAutoPipeline(res.full_auto_pipeline);
+                    }
+                    loadRow();
+                    return;
+                }
+                showMessage(parseApiMessage(res?.message) || 'Đã mux whiteboard + audio thành final.mp4', 'success');
+                if (res.has_local_final_mp4 !== undefined) {
+                    setHasLocalFinalMp4(Boolean(res.has_local_final_mp4));
+                }
+                if (res.local_final_mp4_url) {
+                    setLocalFinalMp4Url(String(res.local_final_mp4_url).trim());
+                }
+                if (res.full_auto_pipeline) {
+                    setFullAutoPipeline(res.full_auto_pipeline);
+                }
+                loadRow();
+                return;
+            }
             const result = await launchImportHtmlRender(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
@@ -2548,6 +2667,57 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             loadRow();
         } finally {
             setLaunchingScriptRender(false);
+        }
+    };
+
+    const localFinalMp4OpenUrl = React.useMemo(
+        () => (hasLocalFinalMp4 ? resolveAgentLocalVideoOpenUrl(localFinalMp4Url) : ''),
+        [hasLocalFinalMp4, localFinalMp4Url],
+    );
+
+    const handleUploadLocalAgentVideo = async () => {
+        if (!hasLocalFinalMp4) {
+            showMessage('Chưa có file final.mp4 local', 'error');
+            return;
+        }
+        setUploadingLocalAgentVideo(true);
+        try {
+            const res = await uploadLocalAgentVideo(shortVideoId);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Upload video local thất bại', 'error');
+                return;
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã upload video lên store', 'success');
+            if (res.agent_video_url) {
+                setAgentVideoUrl(String(res.agent_video_url).trim());
+            }
+            if (res.agent_video_status) {
+                setAgentVideoStatus(String(res.agent_video_status));
+            }
+            if (res.agent_video_rendered_at) {
+                setAgentVideoRenderedAt(String(res.agent_video_rendered_at).trim());
+            }
+            if (res.has_local_final_mp4 !== undefined) {
+                setHasLocalFinalMp4(Boolean(res.has_local_final_mp4));
+            }
+            if (res.local_final_mp4_url) {
+                setLocalFinalMp4Url(String(res.local_final_mp4_url).trim());
+            }
+            if (res.local_final_mp4_size_bytes !== undefined) {
+                setLocalFinalMp4SizeBytes(Math.max(0, Number(res.local_final_mp4_size_bytes || 0)));
+            }
+            if (res.local_final_mp4_modified_at) {
+                setLocalFinalMp4ModifiedAt(String(res.local_final_mp4_modified_at).trim());
+            }
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            setHasAgentVideo(Boolean(res.agent_video_url) || agentVideoUrl.trim() !== '');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setUploadingLocalAgentVideo(false);
         }
     };
 
@@ -2843,6 +3013,82 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatMap?.sections,
         handleBeatImagePromptChange,
         openImportHtmlBeatDuckAiFillOnly,
+        shortVideoId,
+        showMessage,
+        title,
+    ]);
+
+    const handleOpenBeatImageMetaAiManual = React.useCallback(async (
+        beatId: string,
+        imagePrompt: string,
+    ): Promise<string | null> => {
+        const prompt = String(imagePrompt || '').trim();
+        if (!validateBeatImagePrompt(prompt)) {
+            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            return null;
+        }
+        setRegeneratingBeatImageBeatId(beatId);
+        try {
+            const mapSaved = await handleBeatImagePromptChange(beatId, prompt);
+            if (!mapSaved) {
+                return null;
+            }
+            const workspaceBeats = (beatMap?.sections || []).reduce<DuckAiWorkspaceBeat[]>((acc, section, index) => {
+                    const id = String(section?.id || '').trim();
+                    const promptValue = String(
+                        (id === beatId ? prompt : '')
+                        || beatImage[id]?.image_prompt
+                        || section?.image_prompt
+                        || '',
+                    ).trim();
+                    if (!id || !promptValue) {
+                        return acc;
+                    }
+                    acc.push({
+                        beatId: id,
+                        beatIndex: index + 1,
+                        imagePrompt: promptValue,
+                        imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                    });
+                    return acc;
+                }, []);
+            if (workspaceBeats.length > 0) {
+                await openImportHtmlBeatMetaAiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
+                    imagePrompt: prompt,
+                    imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    title,
+                    autoSubmit: true,
+                });
+            } else {
+                await openImportHtmlBeatMetaAiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    imagePrompt: prompt,
+                    autoSubmit: true,
+                });
+            }
+            setActiveBeatId(beatId);
+            setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
+            showMessage(
+                `Đã mở tab Meta.ai cho ${beatId}. Prompt sẽ tự điền + submit — download ảnh trên Meta.ai → tự lưu beat.`,
+                'success',
+            );
+            return beatImage[beatId]?.image_url || null;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return null;
+        } finally {
+            setRegeneratingBeatImageBeatId('');
+        }
+    }, [
+        beatImage,
+        beatMap?.sections,
+        handleBeatImagePromptChange,
+        openImportHtmlBeatMetaAiFillOnly,
         shortVideoId,
         showMessage,
         title,
@@ -3983,6 +4229,33 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const handleOpenBeatMetaAi = (beatId: string) => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const beat = beatMap.sections.find((item) => item.id === beatId);
+        if (!beat) {
+            showMessage('Không tìm thấy beat', 'error');
+            return;
+        }
+        if (openingBeatGeminiBeatIds.includes(beatId)) {
+            return;
+        }
+        if (!isAgentWhiteboardMode(agentVisualMode)) {
+            showMessage('Meta.ai chỉ dùng cho whiteboard beat image', 'info');
+            return;
+        }
+        void handleOpenBeatImageMetaAiManual(
+            beatId,
+            String(beat.image_prompt || beatImage[beatId]?.image_prompt || '').trim(),
+        );
+    };
+
     const handleOpenBeatGeminiHeadless = (beatId: string) => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -4060,7 +4333,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             );
             return;
         }
-        if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
+        if (openingAllMissingBeatGemini || openingAllMissingBeatMetaAi || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
             return;
         }
 
@@ -4116,6 +4389,76 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         })();
     };
 
+    const handleOpenAllMissingBeatMetaAi = () => {
+        if (!beatMapReady || !beatMap) {
+            showMessage('Cần beat-map hợp lệ trước', 'warning');
+            return;
+        }
+        if (whisperStatus !== 'completed') {
+            showMessage('Whisper chưa hoàn tất', 'warning');
+            return;
+        }
+        const isWhiteboard = isAgentWhiteboardMode(agentVisualMode);
+        if (!isWhiteboard) {
+            showMessage('Meta.ai chỉ dùng cho whiteboard beat image', 'info');
+            return;
+        }
+        const missingBeatIds = listMissingBeatImageIds(beatMap, beatImage);
+        if (!missingBeatIds.length) {
+            showMessage('Không có beat thiếu ảnh', 'info');
+            return;
+        }
+        if (
+            openingAllMissingBeatGemini
+            || openingAllMissingBeatMetaAi
+            || openingAllMissingBeatAiStudio
+            || fillingAllMissingBeatGeminiHeadless
+        ) {
+            return;
+        }
+
+        setOpeningAllMissingBeatMetaAi(true);
+        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
+        void (async () => {
+            try {
+                const workspaceBeats: DuckAiWorkspaceBeat[] = beatMap.sections.map((section, index) => {
+                    const id = String(section?.id || '').trim();
+                    const prompt = String(
+                        beatImage[id]?.image_prompt
+                        || section?.image_prompt
+                        || '',
+                    ).trim();
+                    return {
+                        beatId: id,
+                        beatIndex: index + 1,
+                        imagePrompt: prompt,
+                        imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                    };
+                }).filter((item) => item.beatId && item.imagePrompt);
+                const result = await openImportHtmlBeatMetaAiForMissingBeats({
+                    shortVideoId,
+                    title,
+                    beats: workspaceBeats,
+                    activeBeatId: missingBeatIds[0] || '',
+                    autoSubmit: true,
+                });
+                const failNote = result.failed.length
+                    ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
+                    : '';
+                showMessage(
+                    `Đã mở ${result.opened} tab Meta.ai (mỗi beat 1 tab) — download ảnh trên Meta.ai → tự lưu beat${failNote}`,
+                    result.failed.length ? 'warning' : 'success',
+                );
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+            } finally {
+                setOpeningAllMissingBeatMetaAi(false);
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
+            }
+        })();
+    };
+
     const handleOpenAllMissingBeatAiStudio = () => {
         if (!beatMapReady || !beatMap) {
             showMessage('Cần beat-map hợp lệ trước', 'warning');
@@ -4136,7 +4479,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             );
             return;
         }
-        if (openingAllMissingBeatGemini || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
+        if (openingAllMissingBeatGemini || openingAllMissingBeatMetaAi || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
             return;
         }
 
@@ -4213,6 +4556,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (
             fillingAllMissingBeatGeminiHeadless
             || openingAllMissingBeatGemini
+            || openingAllMissingBeatMetaAi
             || openingAllMissingBeatAiStudio
             || geminiFillStatus === 'queued'
             || geminiFillStatus === 'processing'
@@ -4397,6 +4741,161 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingIntroduceApp(false);
+        }
+    };
+
+    const handleAgentAudioScriptStyleChange = async (styleId: number) => {
+        if (savingAudioScriptStyle) {
+            return;
+        }
+        setSavingAudioScriptStyle(true);
+        try {
+            const res = await saveAgentScriptStyle(shortVideoId, styleId > 0 ? styleId : null);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được phong cách script',
+                    'error',
+                );
+                return;
+            }
+            setAgentAudioScriptStyleId(styleId > 0 ? styleId : 0);
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (styleId > 0 ? 'Đã gắn phong cách script' : 'Đã dùng phong cách mặc định'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingAudioScriptStyle(false);
+        }
+    };
+
+    const commitDesiredScriptDuration = async (rawInput: string) => {
+        if (savingDesiredScriptDuration) {
+            return;
+        }
+        const trimmed = String(rawInput || '').trim();
+        let next: number | null = null;
+        if (trimmed !== '') {
+            const parsed = Number(trimmed);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                showMessage('Thời lượng mong muốn phải là số giây dương (15–3600)', 'error');
+                setDesiredScriptDurationInput(
+                    desiredScriptDurationSec != null ? String(desiredScriptDurationSec) : '',
+                );
+                return;
+            }
+            next = Math.round(parsed);
+            if (next < 15 || next > 3600) {
+                showMessage('Thời lượng mong muốn phải từ 15–3600 giây', 'error');
+                setDesiredScriptDurationInput(
+                    desiredScriptDurationSec != null ? String(desiredScriptDurationSec) : '',
+                );
+                return;
+            }
+        }
+        if (next === desiredScriptDurationSec) {
+            setDesiredScriptDurationInput(next != null ? String(next) : '');
+            return;
+        }
+        setSavingDesiredScriptDuration(true);
+        try {
+            const res = await saveAgentDesiredScriptDuration(shortVideoId, next);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được thời lượng script mong muốn',
+                    'error',
+                );
+                setDesiredScriptDurationInput(
+                    desiredScriptDurationSec != null ? String(desiredScriptDurationSec) : '',
+                );
+                return;
+            }
+            const savedRaw = res?.desired_script_duration_sec;
+            const savedNum = savedRaw == null
+                ? null
+                : Number(savedRaw);
+            const saved = savedNum != null && Number.isFinite(savedNum) && savedNum > 0
+                ? Math.round(savedNum)
+                : null;
+            setDesiredScriptDurationSec(saved);
+            setDesiredScriptDurationInput(saved != null ? String(saved) : '');
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (saved != null
+                        ? `Đã đặt thời lượng script mong muốn: ${saved}s`
+                        : 'Đã bỏ thời lượng script mong muốn'),
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            setDesiredScriptDurationInput(
+                desiredScriptDurationSec != null ? String(desiredScriptDurationSec) : '',
+            );
+        } finally {
+            setSavingDesiredScriptDuration(false);
+        }
+    };
+
+    const handleSaveCapcutConfig = async () => {
+        if (savingCapcutConfig) {
+            return;
+        }
+        const normalizedName = String(capcutProjectName || '').trim();
+        const normalizedPath = String(capcutProjectPath || '').trim();
+        if (normalizedName === '' && normalizedPath === '') {
+            showMessage('Nhập tên project hoặc project path CapCut trước khi lưu', 'warning');
+            return;
+        }
+        setSavingCapcutConfig(true);
+        try {
+            const res = await saveAgentCapcutConfig(shortVideoId, {
+                projectName: normalizedName,
+                projectPath: normalizedPath,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được config CapCut', 'error');
+                return;
+            }
+            setCapcutProjectName(String(res?.project_name || normalizedName).trim());
+            setCapcutProjectPath(String(res?.project_path || normalizedPath).trim());
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu config CapCut', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingCapcutConfig(false);
+        }
+    };
+
+    const handleAddAudioToCapcut = async () => {
+        if (addingAudioToCapcut) {
+            return;
+        }
+        if (!hasAudio) {
+            showMessage('Chưa có MP3 để add vào CapCut', 'warning');
+            return;
+        }
+        setAddingAudioToCapcut(true);
+        try {
+            const res = await addAudioToCapcut(shortVideoId);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Add audio vào CapCut thất bại', 'error');
+                return;
+            }
+            if (res?.project_name) {
+                setCapcutProjectName(String(res.project_name).trim());
+            }
+            if (res?.project_path) {
+                setCapcutProjectPath(String(res.project_path).trim());
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã add audio vào CapCut', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setAddingAudioToCapcut(false);
         }
     };
 
@@ -4947,6 +5446,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (json?.audio_reset) {
                 setAudioFileUrl('');
                 setAudioDurationSec(null);
+                setNarrationSegments([]);
                 setTtsPending(false);
                 setTtsFailed(false);
             }
@@ -5468,6 +5968,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 if (json?.audio_reset || json?.tts_status === 'queued') {
                     setAudioFileUrl('');
                     setAudioDurationSec(null);
+                    setNarrationSegments([]);
                 }
                 showMessage(parseApiMessage(json?.message) || 'Đã duyệt script — đã queue TTS', 'success');
             } else if (enqueueError) {
@@ -5538,6 +6039,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             } else {
                 setAudioFileUrl('');
                 setAudioDurationSec(null);
+                setNarrationSegments([]);
                 setTtsPending(true);
                 showMessage(
                     parseApiMessage(regen?.message) || 'Đã queue tạo lại audio TTS',
@@ -5592,6 +6094,66 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const loadSaydiVoiceSamples = React.useCallback(async (forceRefresh = false) => {
+        setSaydiLoading(true);
+        setSaydiError('');
+        try {
+            const res = await fetchSaydiVoiceSamples(shortVideoId, { forceRefresh });
+            if (!res?.success) {
+                setSaydiError(parseApiMessage(res?.message) || 'Không tải được danh sách giọng Saydi');
+                setSaydiSamples([]);
+                return;
+            }
+            setSaydiSamples(Array.isArray(res.samples) ? res.samples : []);
+            setSaydiGenders(Array.isArray(res.genders) ? res.genders : []);
+            setSaydiLanguages(Array.isArray(res.languages) ? res.languages : []);
+            if (res.agent_saydi_voice) {
+                setSaydiVoice(String(res.agent_saydi_voice).trim() || DEFAULT_SAYDI_VOICE);
+            }
+        } catch (e) {
+            setSaydiError(e instanceof Error ? e.message : String(e));
+            setSaydiSamples([]);
+        } finally {
+            setSaydiLoading(false);
+        }
+    }, [shortVideoId]);
+
+    const handleSaydiVoiceChange = async (voiceName: string): Promise<boolean> => {
+        const voice = String(voiceName || '').trim();
+        if (!voice || voice === saydiVoice) {
+            return false;
+        }
+
+        const shouldAskRerender = hasAudio || scriptApproved;
+        if (shouldAskRerender) {
+            const ok = window.confirm(
+                'Đổi giọng Saydi? Audio TTS hiện tại sẽ được tạo lại với giọng mới (MP3 cũ bị thay sau khi queue hoàn tất).',
+            );
+            if (!ok) {
+                return false;
+            }
+        }
+
+        setSavingSaydiVoice(true);
+        try {
+            const res = await saveAgentSaydiVoice(shortVideoId, voice);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được giọng Saydi', 'error');
+                return false;
+            }
+            setSaydiVoice(String(res.agent_saydi_voice || voice).trim() || DEFAULT_SAYDI_VOICE);
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu giọng Saydi', 'success');
+            await maybeRegenerateOmnivoiceTts(shouldAskRerender);
+            loadRow();
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingSaydiVoice(false);
+        }
+    };
+
     const handleOmnivoiceVoicePreview = React.useCallback((item: OmnivoiceVoiceCatalogItem) => {
         const url = resolveOmnivoiceVoicePreviewUrl(item);
         if (!url) {
@@ -5620,6 +6182,44 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setPlayingVoiceUrl(null);
             voicePreviewAudioRef.current = null;
             showMessage('Không phát được file nghe thử', 'warning');
+        };
+        void audio.play().then(() => {
+            setPlayingVoiceUrl(url);
+        }).catch(() => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+            showMessage('Trình duyệt chặn phát audio — thử bấm lại', 'warning');
+        });
+    }, [playingVoiceUrl, showMessage]);
+
+    const handleSaydiVoicePreview = React.useCallback((item: SaydiVoiceSampleItem) => {
+        const url = resolveSaydiVoicePreviewUrl(item);
+        if (!url) {
+            showMessage('Không có file nghe thử cho giọng Saydi này', 'warning');
+            return;
+        }
+
+        if (playingVoiceUrl === url && voicePreviewAudioRef.current) {
+            voicePreviewAudioRef.current.pause();
+            voicePreviewAudioRef.current = null;
+            setPlayingVoiceUrl(null);
+            return;
+        }
+
+        if (voicePreviewAudioRef.current) {
+            voicePreviewAudioRef.current.pause();
+        }
+
+        const audio = new Audio(url);
+        voicePreviewAudioRef.current = audio;
+        audio.onended = () => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+        };
+        audio.onerror = () => {
+            setPlayingVoiceUrl(null);
+            voicePreviewAudioRef.current = null;
+            showMessage('Không phát được file nghe thử Saydi', 'warning');
         };
         void audio.play().then(() => {
             setPlayingVoiceUrl(url);
@@ -5861,6 +6461,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             setAudioFileUrl('');
             setAudioDurationSec(null);
+            setNarrationSegments([]);
             setTtsPending(true);
             setTtsFailed(false);
             setNeedsTtsEnqueue(false);
@@ -5944,6 +6545,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         scriptApproved,
         audioFileUrl,
         audioDurationSec,
+        narrationSegments,
         agentTtsAuto,
         agentAutoFillBeatHtml,
         savingAutoFillBeatHtml,
@@ -5953,6 +6555,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingGithubScreenshotHomepage,
         agentIntroduceApp,
         savingIntroduceApp,
+        handleIntroduceAppChange,
+        agentAudioScriptStyleId,
+        savingAudioScriptStyle,
+        audioScriptStyles,
+        handleAgentAudioScriptStyleChange,
+        desiredScriptDurationSec,
+        desiredScriptDurationInput,
+        setDesiredScriptDurationInput,
+        savingDesiredScriptDuration,
+        commitDesiredScriptDuration,
+        capcutProjectName,
+        setCapcutProjectName,
+        capcutProjectPath,
+        setCapcutProjectPath,
+        savingCapcutConfig,
+        addingAudioToCapcut,
+        handleSaveCapcutConfig,
+        handleAddAudioToCapcut,
         agentAvatarId,
         agentShowAvatar,
         agentAvatarAnchor,
@@ -6043,6 +6663,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentVideoStatus,
         agentVideoUrl,
         agentVideoRenderedAt,
+        hasLocalFinalMp4,
+        localFinalMp4Url,
+        localFinalMp4OpenUrl,
+        localFinalMp4SizeBytes,
+        localFinalMp4ModifiedAt,
+        uploadingLocalAgentVideo,
+        handleUploadLocalAgentVideo,
         agentTtsJobId,
         agentTtsStatus,
         ttsChain,
@@ -6061,6 +6688,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         omnivoiceSpeed,
         omnivoiceVoiceCatalog,
         omnivoiceVoiceDesignTokens,
+        saydiVoice,
+        saydiSamples,
+        saydiGenders,
+        saydiLanguages,
+        saydiLoading,
+        saydiError,
         playingVoiceUrl,
         previewingVoiceDesign,
         stopVoicePreview,
@@ -6207,6 +6840,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingTtsMode,
         savingVisualStyle,
         savingOmnivoiceVoice,
+        savingSaydiVoice,
+        handleSaydiVoiceChange,
+        loadSaydiVoiceSamples,
         savingPublishFlags,
         savingScript,
         approvingScript,
@@ -6236,6 +6872,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         refiningBeatHtmlBeatId,
         regeneratingBeatImageBeatId,
         openingAllMissingBeatGemini,
+        openingAllMissingBeatMetaAi,
         openingAllMissingBeatAiStudio,
         fillingAllMissingBeatGeminiHeadless,
         fillingAllMissingBeatGeminiHeadlessProgress,
@@ -6248,7 +6885,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleAutoFillBeatHtmlChange,
         handleGeminiOpenBrowserChange,
         handleGithubScreenshotHomepageChange,
-        handleIntroduceAppChange,
         handleAgentAvatarApply,
         handleStartFullAutoPipeline,
         handleRerunRenderUpload,
@@ -6258,6 +6894,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleVisualStyleChange,
         handleOmnivoiceVoiceChange,
         handleOmnivoiceVoicePreview,
+        handleSaydiVoicePreview,
         handleOmnivoiceVoiceDesignPreview,
         handlePostEligibleChange,
         handleSocialPostedChange,
@@ -6294,6 +6931,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         commitBeatImageChange,
         handleBeatImagePromptChange,
         handleOpenBeatImageDuckAiManual,
+        handleOpenBeatImageMetaAiManual,
         handleUploadBeatImageFromFile,
         /** @deprecated Alias tương thích cũ */
         handleRegenerateBeatImageZImage: handleOpenBeatImageDuckAiManual,
@@ -6307,8 +6945,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleDeleteBeatHtml,
         handleDeleteAllBeatHtml,
         handleOpenBeatGemini,
+        handleOpenBeatMetaAi,
         handleOpenBeatGeminiHeadless,
         handleOpenAllMissingBeatGemini,
+        handleOpenAllMissingBeatMetaAi,
         handleOpenAllMissingBeatAiStudio,
         handleFillAllMissingBeatGeminiHeadless,
         handleImportHtmlChange,

@@ -8,6 +8,7 @@ import {
     Collapse,
     Divider,
     Stack,
+    TextField,
     Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -26,7 +27,9 @@ import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutl
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { isKaraokeSyncPoor } from './agentVideoApi';
+import {
+    isKaraokeSyncPoor,
+} from './agentVideoApi';
 import {
     resolveOmnivoiceDisplaySummary,
     whisperStatusLabel,
@@ -345,6 +348,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 additionalInfo: state.savedAgentAdditionalInfo,
                 introduceApp: state.agentIntroduceApp,
                 sourceFormat: state.agentSourceFormat,
+                desiredScriptDurationSec: state.desiredScriptDurationSec,
             });
         } finally {
             setOpeningImproveScriptGemini(false);
@@ -364,6 +368,25 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
         state.stopVoicePreview();
         setAudioSettingsOpen(false);
     };
+
+    React.useEffect(() => {
+        if (!audioSettingsOpen) {
+            return;
+        }
+        if (!state.selectedPlatforms.includes('saydi')) {
+            return;
+        }
+        if (state.saydiSamples.length > 0 || state.saydiLoading) {
+            return;
+        }
+        void state.loadSaydiVoiceSamples();
+    }, [
+        audioSettingsOpen,
+        state.selectedPlatforms,
+        state.saydiSamples.length,
+        state.saydiLoading,
+        state.loadSaydiVoiceSamples,
+    ]);
 
     return (
         <Box
@@ -795,11 +818,74 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             </Typography>
                             {state.hasAudio ? (
                                 <Stack spacing={1}>
-                                    <audio controls src={state.audioFileUrl} style={{ width: '100%', height: 36 }}>
-                                        <track kind="captions" />
-                                    </audio>
+                                    {state.narrationSegments.length > 0 ? (
+                                        <Stack spacing={1}>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {state.narrationSegments.length} đoạn TTS
+                                                {state.audioDurationSec != null
+                                                    ? ` · tổng ${state.audioDurationSec.toFixed(1)}s (file ghép cho Whisper/render)`
+                                                    : ''}
+                                            </Typography>
+                                            {state.narrationSegments.map((seg, idx) => {
+                                                const total = state.narrationSegments.length;
+                                                const label = `Đoạn ${idx + 1}/${total}`;
+                                                const preview = String(seg.text || '').replace(/\s+/g, ' ').trim();
+                                                const previewShort = preview.length > 120
+                                                    ? `${preview.slice(0, 120)}…`
+                                                    : preview;
+                                                return (
+                                                    <Box
+                                                        key={`narration-seg-${seg.index ?? idx}`}
+                                                        sx={{
+                                                            p: 1,
+                                                            borderRadius: 1,
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
+                                                            bgcolor: 'background.paper',
+                                                        }}
+                                                    >
+                                                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
+                                                            <Typography variant="caption" fontWeight={700}>
+                                                                {label}
+                                                            </Typography>
+                                                            {seg.duration_sec > 0 ? (
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {Number(seg.duration_sec).toFixed(1)}s
+                                                                </Typography>
+                                                            ) : null}
+                                                            {seg.word_count > 0 ? (
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {seg.word_count} từ
+                                                                </Typography>
+                                                            ) : null}
+                                                            {seg.tts_engine ? (
+                                                                <Chip size="small" label={seg.tts_engine} variant="outlined" />
+                                                            ) : null}
+                                                        </Stack>
+                                                        {previewShort ? (
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                                display="block"
+                                                                sx={{ mb: 0.75, lineHeight: 1.35 }}
+                                                            >
+                                                                {previewShort}
+                                                            </Typography>
+                                                        ) : null}
+                                                        <audio controls src={seg.url} style={{ width: '100%', height: 32 }}>
+                                                            <track kind="captions" />
+                                                        </audio>
+                                                    </Box>
+                                                );
+                                            })}
+                                        </Stack>
+                                    ) : (
+                                        <audio controls src={state.audioFileUrl} style={{ width: '100%', height: 36 }}>
+                                            <track kind="captions" />
+                                        </audio>
+                                    )}
                                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-                                        {state.audioDurationSec != null ? (
+                                        {state.narrationSegments.length === 0 && state.audioDurationSec != null ? (
                                             <Typography variant="caption" color="text.secondary">
                                                 {state.audioDurationSec.toFixed(1)}s
                                             </Typography>
@@ -846,6 +932,47 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                             >
                                 {state.hasAudio ? 'Upload lại MP3' : 'Upload MP3'}
                             </LoadingButton>
+                        </Box>
+
+                        <Box sx={subPanelSx(SECTION_THEMES.audio)}>
+                            <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" sx={{ mb: 1 }}>
+                                CapCut project
+                            </Typography>
+                            <Stack spacing={1}>
+                                <TextField
+                                    size="small"
+                                    label="Tên project CapCut"
+                                    value={state.capcutProjectName}
+                                    onChange={(event) => state.setCapcutProjectName(event.target.value)}
+                                    placeholder="Ví dụ: ShortVideo_123"
+                                />
+                                <TextField
+                                    size="small"
+                                    label="Project path (draft local)"
+                                    value={state.capcutProjectPath}
+                                    onChange={(event) => state.setCapcutProjectPath(event.target.value)}
+                                    placeholder="/Users/.../Movies/CapCut/.../MyProject"
+                                />
+                                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        loading={state.savingCapcutConfig}
+                                        onClick={() => { void state.handleSaveCapcutConfig(); }}
+                                    >
+                                        Lưu config
+                                    </LoadingButton>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="contained"
+                                        loading={state.addingAudioToCapcut}
+                                        disabled={!state.hasAudio}
+                                        onClick={() => { void state.handleAddAudioToCapcut(); }}
+                                    >
+                                        Add audio đến CapCut
+                                    </LoadingButton>
+                                </Stack>
+                            </Stack>
                         </Box>
                     </Stack>
                 </SectionShell>
@@ -1022,6 +1149,15 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 })}
                 onPlayPreview={state.handleOmnivoiceVoicePreview}
                 onPlayDesignPreview={state.handleOmnivoiceVoiceDesignPreview}
+                saydiVoice={state.saydiVoice || 'adam-11labs-vi'}
+                saydiSamples={state.saydiSamples}
+                saydiGenders={state.saydiGenders}
+                saydiLanguages={state.saydiLanguages}
+                saydiLoading={state.saydiLoading}
+                saydiError={state.saydiError}
+                savingSaydiVoice={state.savingSaydiVoice}
+                onSelectSaydiVoice={state.handleSaydiVoiceChange}
+                onPlaySaydiPreview={state.handleSaydiVoicePreview}
             />
         </Box>
     );

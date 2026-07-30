@@ -5,19 +5,24 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { downloadImageUrl, openImagePopup } from 'helpers/image';
 
+import { getClipStageDimensions, type ClipAspect } from './agentVideoClipAspect';
+
 type Props = {
     imageUrl: string;
     shortVideoId?: number;
+    clipAspect?: ClipAspect;
     onDownloadError?: (message: string) => void;
 };
 
 export default function ShortVideoAgentThumbnailImagePreview({
     imageUrl,
     shortVideoId = 0,
+    clipAspect = '9:16',
     onDownloadError,
 }: Props) {
     const [downloading, setDownloading] = React.useState(false);
     const url = String(imageUrl || '').trim();
+    const stage = getClipStageDimensions(clipAspect);
 
     const handleDownload = React.useCallback(async () => {
         if (!url) {
@@ -63,6 +68,8 @@ export default function ShortVideoAgentThumbnailImagePreview({
                     borderRadius: 2,
                     overflow: 'hidden',
                     bgcolor: '#111',
+                    aspectRatio: stage.aspectRatioCss,
+                    maxHeight: clipAspect === '16:9' ? 360 : 420,
                 }}
             >
                 <Box
@@ -72,8 +79,8 @@ export default function ShortVideoAgentThumbnailImagePreview({
                     sx={{
                         display: 'block',
                         width: '100%',
-                        maxHeight: 420,
-                        objectFit: 'contain',
+                        height: '100%',
+                        objectFit: 'cover',
                     }}
                 />
             </Box>

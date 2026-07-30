@@ -62,6 +62,7 @@ type Props = {
     onOpenInfo?: (beatId: string) => void;
     onDeleteBeatData?: (beatId: string) => void;
     onOpenGemini?: (beatId: string) => void;
+    onOpenMetaAi?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
@@ -114,6 +115,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     onOpenInfo,
     onDeleteBeatData,
     onOpenGemini,
+    onOpenMetaAi,
     onOpenGeminiHeadless,
     onSaveBeatQa,
     onQuickIterateBeat,
@@ -795,7 +797,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                         <ListItemText
                             primary={isWhiteboardMode ? 'Sửa ảnh' : 'Sửa HTML'}
                             secondary={isWhiteboardMode
-                                ? 'Mở form chỉnh image_prompt / Duck.ai thủ công'
+                                ? 'Mở form chỉnh image_prompt / Duck.ai hoặc Meta.ai thủ công'
                                 : 'Mở form chỉnh HTML beat'}
                         />
                     </MenuItem>
@@ -850,7 +852,34 @@ export default function AgentVideoBeatBoundaryOverlay({
                                 <AutoAwesomeIcon fontSize="small" />
                             )}
                         </ListItemIcon>
-                        <ListItemText primary="Gemini" secondary="Mở tab Gemini (tự bấm Gửi)" />
+                        <ListItemText
+                            primary={isWhiteboardMode ? 'Duck.ai' : 'Gemini'}
+                            secondary={isWhiteboardMode
+                                ? 'Mở tab Duck.ai (auto điền + submit)'
+                                : 'Mở tab Gemini (tự bấm Gửi)'}
+                        />
+                    </MenuItem>
+                ) : null}
+
+                {isWhiteboardMode && onOpenMetaAi ? (
+                    <MenuItem
+                        disabled={menuIsBusy || savingImportHtml}
+                        onClick={() => {
+                            const beatId = menuBeatId;
+                            runMenuAction(() => { void onOpenMetaAi(beatId); });
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                            {menuIsOpeningGemini ? (
+                                <CircularProgress size={16} />
+                            ) : (
+                                <AutoAwesomeIcon fontSize="small" />
+                            )}
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Meta.ai"
+                            secondary="Mở tab Meta.ai (download ảnh → tự lưu beat)"
+                        />
                     </MenuItem>
                 ) : null}
 

@@ -3,9 +3,11 @@ import { Timeline, type TimelineState } from '@xzdarcy/react-timeline-editor';
 import '@xzdarcy/react-timeline-editor/dist/react-timeline-editor.css';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import { Box, Button, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     TIMELINE_EDIT_AREA_TOP_GAP,
@@ -20,6 +22,14 @@ import {
     timeSecToTimelineLeftPx,
 } from './agentVideoTimelineModel';
 import AgentVideoBeatBoundaryOverlay from './AgentVideoBeatBoundaryOverlay';
+import {
+    PipelineGroupedMenuItems,
+    resolveRestartableSet,
+} from './FullAutoPipelineGroupedSteps';
+import type {
+    FullAutoPipelineStepKey,
+    FullAutoPipelineSummary,
+} from './agentVideoApi';
 import TimelineZoomControls, {
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
@@ -155,9 +165,11 @@ type Props = {
     onDeleteBeatHtml?: (beatId: string) => void;
     onDeleteAllBeatHtml?: () => void;
     onOpenAllMissingBeatGemini?: () => void;
+    onOpenAllMissingBeatMetaAi?: () => void;
     onOpenAllMissingBeatAiStudio?: () => void;
     onFillAllMissingBeatGeminiHeadless?: () => void;
     onOpenBeatGemini?: (beatId: string) => void;
+    onOpenBeatMetaAi?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
@@ -172,6 +184,7 @@ type Props = {
     missingBeatHtmlCount?: number;
     missingBeatImageCount?: number;
     openingAllMissingBeatGemini?: boolean;
+    openingAllMissingBeatMetaAi?: boolean;
     openingAllMissingBeatAiStudio?: boolean;
     fillingAllMissingBeatGeminiHeadless?: boolean;
     fillingAllMissingBeatGeminiHeadlessProgress?: {
@@ -199,6 +212,13 @@ type Props = {
     hasAgentVideo?: boolean;
     launchingImportAssemble?: boolean;
     onLaunchImportAssemble?: () => void;
+    showPipelineControls?: boolean;
+    fullAutoPipeline?: FullAutoPipelineSummary | null;
+    agentVisualMode?: string;
+    startingFullAuto?: boolean;
+    cancellingFullAuto?: boolean;
+    onStartPipelineFromStep?: (stepKey: FullAutoPipelineStepKey) => void;
+    onCancelPipeline?: () => void;
 };
 
 export default function ShortVideoAgentVideoTimeline({
@@ -222,9 +242,11 @@ export default function ShortVideoAgentVideoTimeline({
     onDeleteBeatHtml,
     onDeleteAllBeatHtml,
     onOpenAllMissingBeatGemini,
+    onOpenAllMissingBeatMetaAi,
     onOpenAllMissingBeatAiStudio,
     onFillAllMissingBeatGeminiHeadless,
     onOpenBeatGemini,
+    onOpenBeatMetaAi,
     onOpenBeatGeminiHeadless,
     onSaveBeatQa,
     onQuickIterateBeat,
@@ -239,6 +261,7 @@ export default function ShortVideoAgentVideoTimeline({
     missingBeatHtmlCount = 0,
     missingBeatImageCount = 0,
     openingAllMissingBeatGemini = false,
+    openingAllMissingBeatMetaAi = false,
     openingAllMissingBeatAiStudio = false,
     fillingAllMissingBeatGeminiHeadless = false,
     fillingAllMissingBeatGeminiHeadlessProgress = null,
@@ -255,6 +278,13 @@ export default function ShortVideoAgentVideoTimeline({
     hasAgentVideo = false,
     launchingImportAssemble = false,
     onLaunchImportAssemble,
+    showPipelineControls = false,
+    fullAutoPipeline = null,
+    agentVisualMode = '',
+    startingFullAuto = false,
+    cancellingFullAuto = false,
+    onStartPipelineFromStep,
+    onCancelPipeline,
 }: Props) {
     const timelineRef = React.useRef<TimelineState>(null);
     const timelineHostRef = React.useRef<HTMLDivElement>(null);
@@ -264,6 +294,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
+    const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -307,17 +338,34 @@ export default function ShortVideoAgentVideoTimeline({
     const showFillAllMissingGeminiHeadless = (
         showOpenAllMissingGemini || geminiFillQueueActive
     ) && Boolean(onFillAllMissingBeatGeminiHeadless) && !isWhiteboardMode;
+    const pipelineRunning = String(fullAutoPipeline?.status || '').trim().toLowerCase() === 'running';
+    const restartableSet = React.useMemo(
+        () => resolveRestartableSet(
+            fullAutoPipeline?.restartable_steps,
+            fullAutoPipeline?.steps,
+            fullAutoPipeline?.current_step,
+        ),
+        [
+            fullAutoPipeline?.restartable_steps,
+            fullAutoPipeline?.steps,
+            fullAutoPipeline?.current_step,
+        ],
+    );
+    const showPipelineRunControls = showPipelineControls && Boolean(onStartPipelineFromStep);
     const showTimelineActions = showOpenAllMissingGemini
         || showFillAllMissingGeminiHeadless
         || showDeleteAllBeatHtml
-        || showImportAssemble;
+        || showImportAssemble
+        || showPipelineRunControls;
     const timelineActionsBusy = deletingAllBeatHtml
         || openingAllMissingBeatGemini
+        || openingAllMissingBeatMetaAi
         || openingAllMissingBeatAiStudio
         || fillingAllMissingBeatGeminiHeadless
         || geminiFillQueueActive
         || savingImportHtml
         || launchingImportAssemble
+        || startingFullAuto
         || Boolean(deletingBeatHtmlBeatId);
     const showBeatTimelineOverlay = customHtmlPreview && Boolean(beatMap?.sections?.length);
 
@@ -685,7 +733,7 @@ export default function ShortVideoAgentVideoTimeline({
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
                             <Tooltip
                                 title={isWhiteboardMode
-                                    ? 'Mở Duck.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit.'
+                                    ? 'Mở Duck.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Duck.ai → tự lưu beat.'
                                     : 'Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab'}
                                 placement="top"
                             >
@@ -703,6 +751,27 @@ export default function ShortVideoAgentVideoTimeline({
                                         {isWhiteboardMode
                                             ? `Mở Duck.ai tất cả beat thiếu ảnh (${effectiveMissingCount})`
                                             : `Mở Gemini tất cả beat thiếu (${effectiveMissingCount})`}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                        {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
+                            <Tooltip
+                                title="Mở Meta.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Meta.ai → tự lưu beat."
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="contained"
+                                        color="secondary"
+                                        disabled={!hasVideo || timelineActionsBusy || whisperStatus !== 'completed'}
+                                        loading={openingAllMissingBeatMetaAi}
+                                        onClick={() => { onOpenAllMissingBeatMetaAi(); }}
+                                        startIcon={<AutoAwesomeIcon fontSize="small" />}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        {`Mở Meta.ai tất cả beat thiếu ảnh (${effectiveMissingCount})`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
@@ -777,6 +846,67 @@ export default function ShortVideoAgentVideoTimeline({
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
+                        ) : null}
+                        {showPipelineRunControls ? (
+                            <>
+                                <LoadingButton
+                                    size="small"
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<PlayArrowIcon fontSize="small" />}
+                                    endIcon={<ArrowDropDownIcon fontSize="small" />}
+                                    loading={startingFullAuto}
+                                    disabled={pipelineRunning || startingFullAuto}
+                                    onClick={(event) => {
+                                        setRestartMenuAnchor(event.currentTarget);
+                                    }}
+                                    sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                >
+                                    Chạy pipeline
+                                </LoadingButton>
+                                <Menu
+                                    anchorEl={restartMenuAnchor}
+                                    open={Boolean(restartMenuAnchor)}
+                                    onClose={() => setRestartMenuAnchor(null)}
+                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                                >
+                                    <PipelineGroupedMenuItems
+                                        steps={fullAutoPipeline?.steps}
+                                        headlessSteps={fullAutoPipeline?.headless_steps}
+                                        aiSteps={fullAutoPipeline?.ai_steps}
+                                        qaLoops={fullAutoPipeline?.qa_loops}
+                                        agentVisualMode={agentVisualMode}
+                                        pipelineStatus={fullAutoPipeline?.status}
+                                        currentStep={fullAutoPipeline?.current_step}
+                                        restartableSet={restartableSet}
+                                        disabled={startingFullAuto}
+                                        onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
+                                            setRestartMenuAnchor(null);
+                                            onStartPipelineFromStep?.(stepKey);
+                                        }}
+                                        onRerunRenderUpload={() => {
+                                            setRestartMenuAnchor(null);
+                                            onStartPipelineFromStep?.('render');
+                                        }}
+                                        rerunningRenderUpload={startingFullAuto}
+                                        rerunRenderUploadDisabled={pipelineRunning || startingFullAuto}
+                                    />
+                                </Menu>
+                                {pipelineRunning ? (
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        color="inherit"
+                                        startIcon={<StopIcon fontSize="small" />}
+                                        loading={cancellingFullAuto}
+                                        disabled={cancellingFullAuto}
+                                        onClick={() => { onCancelPipeline?.(); }}
+                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                                    >
+                                        Dừng
+                                    </LoadingButton>
+                                ) : null}
+                            </>
                         ) : null}
                         {showImportAssemble && onLaunchImportAssemble ? (
                             <Tooltip
@@ -973,6 +1103,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onOpenInfo={onOpenBeatInfo}
                                 onDeleteBeatData={onDeleteBeatHtml}
                                 onOpenGemini={onOpenBeatGemini}
+                                onOpenMetaAi={onOpenBeatMetaAi}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
                                 onSaveBeatQa={onSaveBeatQa}
                                 onQuickIterateBeat={onQuickIterateBeat}

@@ -4,26 +4,18 @@ import {
     Box,
     Button,
     Chip,
-    Divider,
     FormControl,
-    FormControlLabel,
     InputLabel,
     LinearProgress,
-    Menu,
     MenuItem,
     Select,
     Stack,
     Switch,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -34,10 +26,6 @@ import TextareaForm from 'components/atoms/fields/textarea/Form';
 import { convertToURL, validURL } from 'helpers/url';
 import { openImagePopup } from 'helpers/image';
 import type { useAgentVideoContent } from './useAgentVideoContent';
-import {
-    type FullAutoPipelineStepKey,
-} from './agentVideoApi';
-import { PipelineGroupedMenuItems, resolveRestartableSet } from './FullAutoPipelineGroupedSteps';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
 import { scriptQaLoopCurrentStepLabel, useScriptImproveQaLoopView } from './agentVideoPipelineQaLoopUi';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
@@ -191,19 +179,6 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
     const contentPostRef = React.useRef({
         agent_source_content: state.agentSourceContent,
     });
-    const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
-    const restartableSet = React.useMemo(
-        () => resolveRestartableSet(
-            state.fullAutoPipeline?.restartable_steps,
-            state.fullAutoPipeline?.steps,
-            state.fullAutoPipeline?.current_step,
-        ),
-        [
-            state.fullAutoPipeline?.restartable_steps,
-            state.fullAutoPipeline?.steps,
-            state.fullAutoPipeline?.current_step,
-        ],
-    );
     const scriptQaLoopView = useScriptImproveQaLoopView(state.fullAutoPipeline);
     const currentPipelineStepLabel = React.useMemo(() => {
         const step = String(state.fullAutoPipeline?.current_step || '').trim();
@@ -1103,264 +1078,6 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             </Alert>
                         ) : null}
                         <Stack spacing={1.25}>
-                            <Box
-                                sx={{
-                                    p: 1.25,
-                                    borderRadius: 1,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    bgcolor: 'background.paper',
-                                }}
-                            >
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    display="block"
-                                    sx={{ mb: 1, fontWeight: 600, letterSpacing: 0.2 }}
-                                >
-                                    Chạy pipeline
-                                </Typography>
-                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                                    <LoadingButton
-                                        size="small"
-                                        variant="contained"
-                                        startIcon={<PlayArrowIcon />}
-                                        endIcon={<ArrowDropDownIcon />}
-                                        loading={state.startingFullAuto}
-                                        disabled={state.fullAutoPipeline?.status === 'running'}
-                                        onClick={(event) => {
-                                            setRestartMenuAnchor(event.currentTarget);
-                                        }}
-                                    >
-                                        Chạy từ bước…
-                                    </LoadingButton>
-                                    <Menu
-                                        anchorEl={restartMenuAnchor}
-                                        open={Boolean(restartMenuAnchor)}
-                                        onClose={() => setRestartMenuAnchor(null)}
-                                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                                    >
-                                        <PipelineGroupedMenuItems
-                                            steps={state.fullAutoPipeline?.steps}
-                                            headlessSteps={state.fullAutoPipeline?.headless_steps}
-                                            aiSteps={state.fullAutoPipeline?.ai_steps}
-                                            qaLoops={state.fullAutoPipeline?.qa_loops}
-                                            agentVisualMode={state.agentVisualMode}
-                                            pipelineStatus={state.fullAutoPipeline?.status}
-                                            currentStep={state.fullAutoPipeline?.current_step}
-                                            restartableSet={restartableSet}
-                                            disabled={state.startingFullAuto}
-                                            onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
-                                                setRestartMenuAnchor(null);
-                                                void state.handleStartFullAutoPipeline('restart', stepKey);
-                                            }}
-                                            onRerunRenderUpload={() => {
-                                                setRestartMenuAnchor(null);
-                                                if (typeof state.handleRerunRenderUpload === 'function') {
-                                                    void state.handleRerunRenderUpload();
-                                                    return;
-                                                }
-                                                void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
-                                            }}
-                                            rerunningRenderUpload={state.startingFullAuto}
-                                            rerunRenderUploadDisabled={
-                                                state.startingFullAuto
-                                                || String(state.fullAutoPipeline?.status || '').trim().toLowerCase() === 'running'
-                                            }
-                                        />
-                                    </Menu>
-                                    {state.fullAutoPipeline?.status === 'running' ? (
-                                        <LoadingButton
-                                            size="small"
-                                            variant="outlined"
-                                            color="inherit"
-                                            startIcon={<StopIcon />}
-                                            loading={state.cancellingFullAuto}
-                                            disabled={state.cancellingFullAuto}
-                                            onClick={() => { void state.handleCancelFullAutoPipeline(); }}
-                                        >
-                                            Dừng
-                                        </LoadingButton>
-                                    ) : null}
-                                </Stack>
-                            </Box>
-
-                            <Box
-                                sx={{
-                                    borderRadius: 1,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    bgcolor: 'background.paper',
-                                    overflow: 'hidden',
-                                }}
-                            >
-                                <Box sx={{ px: 1.25, pt: 1.25, pb: 0.75 }}>
-                                    <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                        display="block"
-                                        sx={{ fontWeight: 600, letterSpacing: 0.2 }}
-                                    >
-                                        Tùy chọn clip
-                                    </Typography>
-                                </Box>
-                                <Stack divider={<Divider flexItem />}>
-                                    <FormControlLabel
-                                        sx={{
-                                            m: 0,
-                                            px: 1.25,
-                                            py: 1,
-                                            width: '100%',
-                                            alignItems: 'flex-start',
-                                            gap: 1,
-                                        }}
-                                        control={(
-                                            <Switch
-                                                size="small"
-                                                checked={state.agentIntroduceApp}
-                                                disabled={state.savingIntroduceApp}
-                                                onChange={(e) => {
-                                                    void state.handleIntroduceAppChange(e.target.checked);
-                                                }}
-                                                inputProps={{ 'aria-label': 'Giới thiệu app trong video' }}
-                                            />
-                                        )}
-                                        label={(
-                                            <Box sx={{ pt: 0.25 }}>
-                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                                    Giới thiệu app trong video
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                                    Bật: CTA cuối mời mở/tải app. Tắt: chỉ CTA engagement.
-                                                </Typography>
-                                            </Box>
-                                        )}
-                                    />
-                                    <FormControlLabel
-                                        sx={{
-                                            m: 0,
-                                            px: 1.25,
-                                            py: 1,
-                                            width: '100%',
-                                            alignItems: 'flex-start',
-                                            gap: 1,
-                                        }}
-                                        control={(
-                                            <Switch
-                                                size="small"
-                                                checked={state.agentShowKaraoke}
-                                                disabled={state.savingShowKaraoke}
-                                                onChange={(e) => {
-                                                    void state.handleAgentShowKaraokeChange(e.target.checked);
-                                                }}
-                                                inputProps={{ 'aria-label': 'Hiện text karaoke' }}
-                                            />
-                                        )}
-                                        label={(
-                                            <Box sx={{ pt: 0.25 }}>
-                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                                    Hiện text karaoke
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                                    Tắt: không ghép caption layer. Band dưới beat vẫn chừa theo tỉ lệ clip (9:16 ~360px, 16:9 ~120px).
-                                                </Typography>
-                                            </Box>
-                                        )}
-                                    />
-                                    <Box sx={{ px: 1.25, py: 1 }}>
-                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
-                                            Tỉ lệ clip
-                                        </Typography>
-                                        <ToggleButtonGroup
-                                            exclusive
-                                            fullWidth
-                                            size="small"
-                                            value={state.agentClipAspect}
-                                            disabled={state.savingClipAspect}
-                                            onChange={(_event, value: '9:16' | '16:9' | null) => {
-                                                if (value) {
-                                                    void state.handleAgentClipAspectChange(value);
-                                                }
-                                            }}
-                                            aria-label="Tỉ lệ clip"
-                                        >
-                                            <ToggleButton value="9:16" aria-label="9:16 dọc">
-                                                9:16 dọc
-                                            </ToggleButton>
-                                            <ToggleButton value="16:9" aria-label="16:9 ngang">
-                                                16:9 ngang
-                                            </ToggleButton>
-                                        </ToggleButtonGroup>
-                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
-                                            {state.agentClipAspect === '16:9'
-                                                ? 'Canvas 1920×1080 — band caption ~120px.'
-                                                : 'Canvas 1080×1920 — band caption ~360px (mặc định).'}
-                                        </Typography>
-                                    </Box>
-                                    <Box sx={{ px: 1.25, py: 1 }}>
-                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
-                                            Chế độ visual clip
-                                        </Typography>
-                                        <ToggleButtonGroup
-                                            exclusive
-                                            fullWidth
-                                            size="small"
-                                            value={state.agentVisualMode}
-                                            disabled={state.savingVisualMode}
-                                            onChange={(_event, value: 'hyperframes' | 'whiteboard' | null) => {
-                                                if (value) {
-                                                    void state.handleAgentVisualModeChange(value);
-                                                }
-                                            }}
-                                            aria-label="Chế độ visual clip"
-                                        >
-                                            <ToggleButton value="hyperframes" aria-label="Motion HTML">
-                                                Motion HTML
-                                            </ToggleButton>
-                                            <ToggleButton value="whiteboard" aria-label="Whiteboard">
-                                                Whiteboard
-                                            </ToggleButton>
-                                        </ToggleButtonGroup>
-                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
-                                            {state.isWhiteboardMode
-                                                ? 'Whiteboard: Duck.ai thủ công theo beat + render bảng vẽ tay.'
-                                                : 'Motion HTML: HyperFrames HTML theo beat (mặc định).'}
-                                        </Typography>
-                                    </Box>
-                                    <FormControlLabel
-                                        sx={{
-                                            m: 0,
-                                            px: 1.25,
-                                            py: 1,
-                                            width: '100%',
-                                            alignItems: 'flex-start',
-                                            gap: 1,
-                                        }}
-                                        control={(
-                                            <Switch
-                                                size="small"
-                                                checked={state.agentGeminiOpenBrowser}
-                                                disabled={state.savingGeminiOpenBrowser}
-                                                onChange={(e) => {
-                                                    void state.handleGeminiOpenBrowserChange(e.target.checked);
-                                                }}
-                                                inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
-                                            />
-                                        )}
-                                        label={(
-                                            <Box sx={{ pt: 0.25 }}>
-                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                                    Hiện browser Gemini
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                                    Mở cửa sổ trình duyệt khi chạy fill/chia beat headless.
-                                                </Typography>
-                                            </Box>
-                                        )}
-                                    />
-                                </Stack>
-                            </Box>
-
                             <Box
                                 sx={{
                                     p: 1.25,

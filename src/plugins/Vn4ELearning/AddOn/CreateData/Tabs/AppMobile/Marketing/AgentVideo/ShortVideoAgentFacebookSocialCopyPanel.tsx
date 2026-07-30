@@ -61,6 +61,7 @@ export default function ShortVideoAgentFacebookSocialCopyPanel({ state }: Props)
                     <ShortVideoAgentThumbnailImagePreview
                         imageUrl={state.thumbnailUrl || state.thumbnailImageUrl}
                         shortVideoId={state.shortVideoId}
+                        clipAspect={state.agentClipAspect}
                         onDownloadError={(message) => { showMessage(message, 'error'); }}
                     />
                 </Box>

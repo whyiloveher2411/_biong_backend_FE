@@ -11,6 +11,8 @@ export type ImproveAudioScriptPromptInput = {
     introduceApp?: boolean;
     /** agent_source_format — nhánh topic_research = video học tập. */
     sourceFormat?: string;
+    /** Thời lượng mong muốn (giây) — ép word budget khi admin đã nhập. */
+    desiredScriptDurationSec?: number | null;
     /** Lần thử cải thiện (1-based) — từ pipeline QA loop. */
     qaAttempt?: number;
     /** Script lần trước khi audit fail. */
@@ -41,12 +43,12 @@ export const SCRIPT_QA_RUBRIC_BLOCK = `## Tiêu chí QA bắt buộc (pass = kh�
 | Kỹ thuật | \`orphan_stat\` | critical | Số liệu/tên riêng đứng câu riêng |
 | Kỹ thuật | \`listing_connector\` | critical | Dùng từ liệt kê thay But/Therefore |
 | Kỹ thuật | \`missing_sfx\` | critical | Thiếu \`[SFX: ...]\` ở hook |
-| Kỹ thuật | \`disallowed_tag\` | critical | Tag \`[...]\` lạ/SSML/\`[gasp]\` — **không** áp dụng cho \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` |
+| Kỹ thuật | \`disallowed_tag\` | critical | Tag \`[...]\` lạ/SSML/\`[gasp]\`/tag voice — **không** áp dụng cho \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` |
 | Kỹ thuật | \`duration_short\` | warning | <60s word budget |
 
 ### Phân loại tag (đừng audit sai)
 - **Marker sản xuất (hợp lệ):** \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` — cho pipeline media/TTS; **không** báo \`disallowed_tag\`.
-- **OmniVoice expressive (allowlist):** \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` — cấm \`[gasp]\` và tag lạ khác.
+- **Tag voice (cấm):** \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` và mọi non-verbal/SSML — báo \`disallowed_tag\`.
 - **\`listing_connector\`:** câu mở bằng Và/Rồi/Tiếp theo/Sau đó **không** mang nghĩa But/Therefore — severity critical.
 
 **Pass:** \`pass: true\` khi **không còn** issue \`severity: critical\`.`;
@@ -68,7 +70,7 @@ export const SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK = `## Tiêu chí QA bắt bu�
 | Kỹ thuật | \`em_dash_detected\` | critical | Có em dash \`—\` hoặc \`–\` |
 | Kỹ thuật | \`orphan_stat\` | critical | Số liệu/tên riêng đứng câu riêng không giải thích |
 | Kỹ thuật | \`missing_sfx\` | critical | Thiếu \`[SFX: ...]\` ở mở đầu |
-| Kỹ thuật | \`disallowed_tag\` | critical | Tag \`[...]\` lạ/SSML/\`[gasp]\` — **không** áp dụng cho \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` |
+| Kỹ thuật | \`disallowed_tag\` | critical | Tag \`[...]\` lạ/SSML/\`[gasp]\`/tag voice — **không** áp dụng cho \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` |
 | Thời lượng | \`duration_short\` | warning | Script **rõ ràng** quá ngắn so với độ dày nguồn (không ép 60–180s) |
 
 ### Quy tắc học tập (đừng audit kiểu viral ngắn)
@@ -79,12 +81,49 @@ export const SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK = `## Tiêu chí QA bắt bu�
 
 ### Phân loại tag (đừng audit sai)
 - **Marker sản xuất (hợp lệ):** \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` — **không** báo \`disallowed_tag\`.
-- **OmniVoice expressive (allowlist):** \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` — cấm \`[gasp]\` và tag lạ khác.
+- **Tag voice (cấm):** \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` và mọi non-verbal/SSML — báo \`disallowed_tag\`.
 
 **Pass:** \`pass: true\` khi **không còn** issue \`severity: critical\`.`;
 
 function isTopicResearchFormat(sourceFormat?: string): boolean {
     return String(sourceFormat || '').trim() === 'topic_research';
+}
+
+function buildDesiredDurationBlock(desiredSec?: number | null): string {
+    const n = Number(desiredSec);
+    if (!Number.isFinite(n) || n <= 0) {
+        return '';
+    }
+    const sec = Math.round(n);
+    const wordTarget = Math.max(1, Math.round(sec * 2.5));
+    const wordMin = Math.max(1, Math.round(wordTarget * 0.92));
+    const wordMax = Math.max(wordMin, Math.round(wordTarget * 1.08));
+    const minParagraphs = Math.max(6, Math.round(sec / 12));
+    const minutes = Math.round((sec / 60) * 10) / 10;
+    return [
+        '## ⚠️ THỜI LƯỢNG MỤC TIÊU — ƯU TIÊN SỐ 1 (bắt buộc tuyệt đối)',
+        'Admin đã khóa thời lượng voiceover. Mọi hướng dẫn 60–180s / 90–150s / “theo độ dày” / “viral ngắn” trong prompt này **VÔ HIỆU**.',
+        '',
+        '### Chỉ số bắt buộc',
+        `- Thời lượng: **đúng ${sec} giây** (~${minutes} phút)`,
+        `- Word budget: **mục tiêu ${wordTarget} từ** tiếng Việt (≈2.5 từ/giây)`,
+        `- Band chấp nhận: **${wordMin}–${wordMax} từ** — ngoài band = FAIL (phải viết lại trước khi trả)`,
+        `- Số đoạn (cách nhau dòng trống): **tối thiểu ${minParagraphs} đoạn** (mỗi đoạn 1–3 câu ≈ 8–12s)`,
+        `- estimated_duration_sec / timeline HASCAS scale theo **${sec}s**`,
+        '',
+        '### Cách đạt độ dài',
+        '- Nếu nội dung nguồn ngắn hơn mục tiêu: **mở rộng** bằng ví dụ đời, tình huống, giải thích từng bước, so sánh, tóm tắt trung gian — **cấm bịa fact** ngoài nguồn.',
+        `- Nếu nguồn dài hơn mục tiêu: chọn ý quan trọng nhất để **vừa khung ${sec}s** — vẫn đủ ${wordMin}+ từ.`,
+        `- **CẤM** dừng sớm / tóm tắt còn vài phút khi mục tiêu là ${sec}s.`,
+        `- **CẤM** trả script ~60–180s hoặc “vừa đủ viral” khi admin đã chọn ${sec}s.`,
+        '',
+        '### Self-check trước khi trả (bắt buộc)',
+        '1. Đếm từ lời thoại (không tính tag `[...]`).',
+        `2. Nếu < ${wordMin} từ → **tiếp tục viết** thêm đoạn cho đủ — không được kết thúc.`,
+        `3. Nếu > ${wordMax} từ → rút gọn nhẹ cho vào band.`,
+        `4. Chỉ trả plain text script hoàn chỉnh khi đã trong band ${wordMin}–${wordMax} từ.`,
+        '',
+    ].join('\n');
 }
 
 function buildImproveCtaLines(introduceApp: boolean, appName: string): string[] {
@@ -180,6 +219,7 @@ export function buildImproveAudioScriptPrompt(
     const hasMarketingPost = Boolean(input.hasMarketingPost);
     const introduceApp = Boolean(input.introduceApp);
     const isTopicResearch = isTopicResearchFormat(input.sourceFormat);
+    const desiredDurationBlock = buildDesiredDurationBlock(input.desiredScriptDurationSec);
     const rubricBlock = isTopicResearch
         ? SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK
         : SCRIPT_QA_RUBRIC_BLOCK;
@@ -191,6 +231,17 @@ export function buildImproveAudioScriptPrompt(
     const qaRetryBlock = buildQaRetryBlock(input, isTopicResearch);
     const enrichHint = !hasMarketingPost && sourceContent ? ' và nội dung nguồn' : '';
     const extraFactHint = additionalInfo ? ', thông tin thêm' : '';
+
+    const durationLineEdu = desiredDurationBlock
+        ? ''
+        : '- Thời lượng theo độ dày (~2.5 từ/giây) — **được dài hơn** nếu cần cover đủ. **Cấm** ưu tiên rút về 90–150s / 60–180s nếu làm mất ý.\n';
+    const durationLineViral = desiredDurationBlock
+        ? ''
+        : '- Nếu nội dung đủ dày: ưu tiên thời lượng **90–150 giây** thay vì rút gọn.\n';
+    const expandIfShortHint = desiredDurationBlock
+        ? 'Nếu script hiện tại **ngắn hơn word budget mục tiêu** → BẮT BUỘC mở rộng đến đủ band từ (không được chỉ paraphrase ngắn).\n'
+        : '';
+    const missionLead = desiredDurationBlock ? `${desiredDurationBlock}\n` : '';
 
     const sourceBlock = !hasMarketingPost && sourceContent
         ? [
@@ -230,20 +281,19 @@ export function buildImproveAudioScriptPrompt(
         : '';
 
     const missionBlock = isTopicResearch
-        ? `Bạn là biên tập kịch bản voiceover **video học tập** tiếng Việt (topic_research).
+        ? `${missionLead}Bạn là biên tập kịch bản voiceover **video học tập** tiếng Việt (topic_research).
 
 ## Nhiệm vụ
 Viết lại (cải thiện) audio script bên dưới: **dễ hiểu hơn**, **hài hước nhẹ hơn**, nhịp kể chuyện học tập mượt hơn — **không** rút gọn để “viral hơn”.
 Giữ và **bổ sung** mọi ý đã có trong script hoặc trong content nguồn; nếu script thiếu so với nguồn → **thêm đoạn còn thiếu**.
-
+${expandIfShortHint}
 ${rubricBlock}
 
 ${qaRetryBlock}## Cover & giọng (bắt buộc)
 - **Cấm lược bỏ** ý/khái niệm/định nghĩa/cơ chế đã có trong script hoặc trong content nguồn.
 - Giọng kể cho trẻ **dưới 12 tuổi**: từ đơn giản, ví dụ đời sống, hài hước nhẹ (không thô, không chế giễu người học).
 - **Cấm bịa** số liệu / claim ngoài script gốc${enrichHint}${extraFactHint}.
-- Thời lượng theo độ dày (~2.5 từ/giây) — **được dài hơn** nếu cần cover đủ. **Cấm** ưu tiên rút về 90–150s / 60–180s nếu làm mất ý.
-
+${durationLineEdu}
 ## Chia đoạn cho phân cảnh (bắt buộc)
 Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (Whisper + beat-map).
 - Chia thành **các đoạn rõ ràng** — mỗi đoạn cách nhau bằng **một dòng trống**.
@@ -252,19 +302,18 @@ Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (W
 - **Cấm** viết thành khối văn dài liền một mạch — không gộp nhiều ý khác nhau vào cùng một đoạn.
 - Cấu trúc học tập nếu phù hợp: mở tò mò nhẹ → giải thích lần lượt → tóm tắt nhớ được → CTA. **Không** ép HASCAS viral ngắn.
 - Tag \`[...]\` đặt ở đầu đoạn hoặc ngay trước câu liên quan — không tách tag khỏi đoạn mà nó thuộc về.`
-        : `Bạn là biên tập kịch bản voiceover short video tiếng Việt.
+        : `${missionLead}Bạn là biên tập kịch bản voiceover short video tiếng Việt.
 
 ## Nhiệm vụ
 Viết lại (cải thiện) audio script bên dưới: văn nói tự nhiên hơn, retention tốt hơn, **làm giàu nội dung** nhưng giữ đúng ý chính từ ${hasMarketingPost ? 'bài marketing / script gốc' : 'nội dung nguồn đã lưu + script gốc'}.
-
+${expandIfShortHint}
 ${rubricBlock}
 
 ${qaRetryBlock}## Làm giàu nội dung (bắt buộc)
 - **Không chỉ paraphrase** 2–3 ý tiêu đề — mở rộng narrative bằng ví dụ đời, tình huống, cảm xúc suy ra từ script gốc${!hasMarketingPost && sourceContent ? ' và nội dung nguồn' : ''}.
 - **Cấm bịa** số liệu, tính năng, case study không có trong script gốc${!hasMarketingPost && sourceContent ? ', nội dung nguồn' : ''}${additionalInfo ? ', thông tin thêm' : ''} hoặc tiêu đề bài.
 - Phần solve phải có **nhiều đoạn** (mỗi ý một đoạn); nếu script gốc quá ngắn, hãy khai thác sâu hơn các ý đã có thay vì thêm fact mới.
-- Nếu nội dung đủ dày: ưu tiên thời lượng **90–150 giây** thay vì rút gọn.
-
+${durationLineViral}
 ## Chia đoạn cho phân cảnh (bắt buộc)
 Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (Whisper + beat-map).
 - Chia thành **các đoạn rõ ràng** — mỗi đoạn cách nhau bằng **một dòng trống**.
@@ -279,9 +328,9 @@ Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (W
 ${appCtaLines.join('\n')}
 ## Quy tắc tag (bắt buộc)
 - **Marker sản xuất** \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\`: GIỮ NGUYÊN nội dung tag — cấm xóa/đổi (pipeline media cần).
-- **OmniVoice expressive**: chỉ \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` — cấm \`[gasp]\`, SSML, tag lạ.
-- Chỉ được dùng đúng các tag đã có trong script gốc — CẤM thêm tag mới (trừ khi retry QA yêu cầu sửa issue critical).
-- Được phép viết lại phần văn nói xung quanh tag; khi fail \`listing_connector\` phải sửa câu mở đầu (thay Và/Rồi bằng But/Therefore tự nhiên).
+- **Cấm** tag voice non-verbal: \`[sigh]\`, \`[laughter]\`, \`[dissatisfaction-hnn]\` — xóa nếu script gốc còn; cấm SSML/tag lạ.
+- Chỉ được dùng đúng các marker sản xuất đã có trong script gốc — CẤM thêm tag voice mới.
+- Được phép viết lại phần văn nói xung quanh marker; khi fail \`listing_connector\` phải sửa câu mở đầu (thay Và/Rồi bằng But/Therefore tự nhiên).
 
 ## Tiêu đề bài viết
 ${articleTitle}
@@ -292,5 +341,7 @@ ${script}
 \`\`\`
 
 ## Output
-Chỉ trả về audio script đã viết lại (plain text), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.`;
+Chỉ trả về audio script đã viết lại (plain text), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.${desiredDurationBlock
+        ? '\n\n## Nhắc lại thời lượng (trước khi trả)\n- Self-check đếm từ lời thoại (không tính tag). Ngoài band mục tiêu = FAIL — viết tiếp hoặc rút cho vào band rồi mới trả.'
+        : ''}`;
 }

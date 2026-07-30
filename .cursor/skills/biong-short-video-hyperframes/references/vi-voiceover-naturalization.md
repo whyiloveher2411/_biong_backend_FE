@@ -47,10 +47,10 @@ Align với timeline [viral-retention-structure.md](viral-retention-structure.md
 
 | Giai đoạn | Thời gian (trong Hook/Agitate) | Giọng & nội dung |
 |-----------|-------------------------------|------------------|
-| **Hook** | ~0–3s đầu video | Câu hỏi gai, khẳng định mạnh — dùng `?!` và `. . .` (không mood tag) |
-| **Agitate** | ~3–15s (trong block Agitate) | Cảm thán ngắn, khoét nỗi đau. `[sigh]`, `[dissatisfaction-hnn]` |
-| **Solve** | ~60% script | Neutral, rõ ràng, plain language. Không mood tag dài |
-| **CTA/Loop** | ~10% cuối | Nhẹ, tự tin, dứt khoát. `[laughter]` hoặc slogan ngắn |
+| **Hook** | ~0–3s đầu video | Câu hỏi gai, khẳng định mạnh — dùng `?!` và `. . .` (không mood/tag voice) |
+| **Agitate** | ~3–15s (trong block Agitate) | Cảm thán ngắn, khoét nỗi đau — `. . .` / `?!` |
+| **Solve** | ~60% script | Neutral, rõ ràng, plain language |
+| **CTA/Loop** | ~10% cuối | Nhẹ, tự tin, dứt khoát — slogan ngắn |
 
 ---
 
@@ -122,6 +122,6 @@ Self-check: ≥3 mốc But/Therefore trong script 60–90s; không từ blocklis
 - [ ] Hook giật gân 0–3s; Agitate có cảm thán ngắn (§3)
 - [ ] Có `...` / `?!` / chấm rời ở chỗ nhấn (§4)
 - [ ] Brand EN giữ nguyên trong script; không SSML (§5)
-- [ ] Expressive tag theo [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) — allowlist 3 tag
+- [ ] Expressive: **không** tag voice — chỉ `[BGM]`/`[SFX]`/`[Dừng]` + prosody ([omnivoice-expressive-tags.md](omnivoice-expressive-tags.md))
 - [ ] Narrative Flow: không từ liệt kê; ≥3 But/Therefore (§6)
 - [ ] `/audit-audio-script` pass — không issue critical

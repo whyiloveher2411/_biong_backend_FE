@@ -30,7 +30,7 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/viral-audio-script`, 
 | `unnatural_sentence` | warning | Câu >25 từ và khó hiểu | Tách câu, đơn giản hóa |
 | `jargon_heavy` | warning | Thuật ngữ không giải thích | Plain language — ví dụ đời |
 | `weak_prosody` | warning | Solve thiếu `...` hoặc `. . .` | Thêm punctuation §4 vi-voiceover |
-| `disallowed_tag` | critical | Tag ngoài allowlist 3 tag | Thay/bỏ |
+| `disallowed_tag` | critical | Tag voice / SSML / tag lạ | Xóa — chỉ `[BGM]`/`[SFX]`/`[Dừng]` |
 | `missing_sfx` | critical | Thiếu `[SFX: ...]` hook | Thêm `[SFX: vine boom]` |
 | `duration_short` | warning | <60s word budget | Mở rộng Solve |
 | `missing_but_therefore` | warning | <3 mốc But/Therefore (60–90s) | Thêm liên từ nhân quả |
@@ -44,7 +44,7 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/viral-audio-script`, 
 ```text
 [BGM: dark tech ambient] [SFX: vine boom] Google tìm kiếm đạt đỉnh lịch sử — công ty vẫn hoảng loạn?!
 ...
-[laughter] Tìm kiếm đạt đỉnh — Google vẫn hoảng loạn?!
+Tìm kiếm đạt đỉnh — Google vẫn hoảng loạn?!
 ```
 
 **Chẩn đoán:** `em_dash_detected`, `bullet_point_syndrome`, `hook_loop_collision`
@@ -56,14 +56,14 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/viral-audio-script`, 
 ```text
 [BGM: dark tech ambient] [SFX: vine boom] Google tìm kiếm đạt đỉnh lịch sử ... nhưng công ty lại đang hoảng loạn?!
 ...
-[laughter] Bạn nghĩ sao về tương lai của Google? . . . Theo dõi kênh để không bỏ lỡ nhé!
+Bạn nghĩ sao về tương lai của Google? . . . Theo dõi kênh để không bỏ lỡ nhé!
 ```
 
 ---
 
 ## Luật sửa (bắt buộc)
 
-1. **Cấm** thêm/xóa/di chuyển non-verbal tags ngoài `expressive_plan`
+1. **Cấm** gắn tag voice (`[laughter]`, `[sigh]`, `[dissatisfaction-hnn]`) — xóa nếu còn
 2. **Cấm** SSML; giữ `[BGM]`, `[SFX]`, `[Dừng]` nguyên vị trí
 3. **Cấm** em dash trong `fixed_script`
 4. CTA: nối `loop_hook_line` — **không** copy-paste hook
@@ -78,5 +78,5 @@ Skill phase 1 — cổng kiểm tra **bắt buộc** sau `/viral-audio-script`, 
 - [ ] Không em dash `—`
 - [ ] Plain language; ≥3 But/Therefore (60–90s)
 - [ ] CTA không lặp hook verbatim
-- [ ] Tags allowlist; có `[SFX: ...]` hook
-- [ ] Metadata: `script_diagnosis`, `core_signals`, `expressive_plan` — **không** `visual_shot_plan`
+- [ ] Không tag voice; có `[SFX: ...]` hook
+- [ ] Metadata: `script_diagnosis`, `core_signals`, `expressive_plan` (rỗng) — **không** `visual_shot_plan`

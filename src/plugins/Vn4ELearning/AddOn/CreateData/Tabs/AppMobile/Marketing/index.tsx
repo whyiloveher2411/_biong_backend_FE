@@ -54,6 +54,7 @@ import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
+import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -475,6 +476,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
+    const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -813,6 +815,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 >
                                     GitHub Trending
                                 </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<SubtitlesOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenScriptStyleDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Script Style
+                                </Button>
                             </Stack>
                         </>
                     )}
@@ -1106,6 +1117,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingImageToWhiteboardDrawer
                 open={openWhiteboardDrawer}
                 onClose={() => setOpenWhiteboardDrawer(false)}
+            />
+
+            <AudioScriptStyleManagerDrawer
+                open={openScriptStyleDrawer}
+                onClose={() => setOpenScriptStyleDrawer(false)}
             />
         </div >
     );

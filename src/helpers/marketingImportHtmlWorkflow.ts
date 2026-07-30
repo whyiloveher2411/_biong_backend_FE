@@ -12,6 +12,8 @@ const OPEN_IMPORT_HTML_AISTUDIO_EVENT = 'vn4-open-import-html-beat-aistudio';
 const OPEN_IMPORT_HTML_AISTUDIO_RESULT_EVENT = 'vn4-open-import-html-beat-aistudio-result';
 const OPEN_IMPORT_HTML_DUCKAI_EVENT = 'vn4-open-import-html-beat-duckai';
 const OPEN_IMPORT_HTML_DUCKAI_RESULT_EVENT = 'vn4-open-import-html-beat-duckai-result';
+const OPEN_IMPORT_HTML_METAAI_EVENT = 'vn4-open-import-html-beat-metaai';
+const OPEN_IMPORT_HTML_METAAI_RESULT_EVENT = 'vn4-open-import-html-beat-metaai-result';
 
 /** Extension dispatch sau khi lưu beat HTML từ Gemini — drawer Agent Video lắng nghe để reload. */
 export const IMPORT_HTML_BEAT_HTML_SAVED_EVENT = 'vn4-import-html-beat-html-saved';
@@ -228,6 +230,15 @@ function dispatchOpenImportHtmlDuckAiEvent(detail: Record<string, unknown>): Pro
         OPEN_IMPORT_HTML_DUCKAI_EVENT,
         detail,
         OPEN_IMPORT_HTML_DUCKAI_RESULT_EVENT,
+        12000,
+    );
+}
+
+function dispatchOpenImportHtmlMetaAiEvent(detail: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+    return dispatchCmsExtensionEvent(
+        OPEN_IMPORT_HTML_METAAI_EVENT,
+        detail,
+        OPEN_IMPORT_HTML_METAAI_RESULT_EVENT,
         12000,
     );
 }
@@ -565,6 +576,117 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
 
     if (opened === 0 && failed.length > 0) {
         throw new Error(`Không mở được tab Duck.ai cho beat: ${failed.join(', ')}`);
+    }
+
+    return { opened, failed };
+}
+
+export async function openImportHtmlBeatMetaAiFillOnly(options: {
+    shortVideoId: number;
+    beatId: string;
+    imagePrompt: string;
+    beatIndex?: number;
+    title?: string;
+    imageUrl?: string;
+    autoSubmit?: boolean;
+}): Promise<void> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const beatId = String(options.beatId || '').trim();
+    const imagePrompt = String(options.imagePrompt || '').trim();
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+    if (!beatId) {
+        throw new Error('Thiếu beat_id');
+    }
+    if (!imagePrompt) {
+        throw new Error('Thiếu image_prompt');
+    }
+
+    const extensionReady = await waitForExtensionReady(8000);
+    if (!extensionReady) {
+        throw new Error(
+            'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
+        );
+    }
+
+    const accessToken = getAccessToken() ?? '';
+    const result = await dispatchOpenImportHtmlMetaAiEvent({
+        short_video_id: shortVideoId,
+        beat_id: beatId,
+        beat_index: Number.isFinite(Number(options.beatIndex)) ? Number(options.beatIndex) : 0,
+        image_prompt: imagePrompt,
+        image_url: String(options.imageUrl || '').trim(),
+        title: String(options.title || '').trim(),
+        access_token: accessToken,
+        save_api_url: pluginApiPath('short-video/save-agent-import-html'),
+        upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
+        ...(options.autoSubmit === false ? {} : { auto_submit: true }),
+    });
+    if (!result.ok) {
+        throw new Error(result.error || 'Không mở được tab Meta.ai');
+    }
+}
+
+export type MetaAiWorkspaceBeat = DuckAiWorkspaceBeat;
+
+export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
+    shortVideoId: number;
+    beats: MetaAiWorkspaceBeat[];
+    title?: string;
+    activeBeatId?: string;
+    autoSubmit?: boolean;
+}): Promise<{ opened: number; failed: string[] }> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const beats = Array.isArray(options.beats)
+        ? options.beats
+            .map((item) => ({
+                beatId: String(item?.beatId || '').trim(),
+                beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
+                imagePrompt: String(item?.imagePrompt || '').trim(),
+                imageUrl: String(item?.imageUrl || '').trim(),
+                missingImage: Boolean(item?.missingImage),
+            }))
+            .filter((item) => item.beatId && item.imagePrompt)
+        : [];
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+    if (!beats.length) {
+        return { opened: 0, failed: [] };
+    }
+
+    const openList = beats.filter((b) => b.missingImage === true || !String(b.imageUrl || '').trim());
+    if (!openList.length) {
+        return { opened: 0, failed: [] };
+    }
+
+    const failed: string[] = [];
+    let opened = 0;
+    for (let i = 0; i < openList.length; i += 1) {
+        if (i > 0) {
+            await sleepMs(BULK_OPEN_IMPORT_HTML_GEMINI_DELAY_MS);
+        }
+        const beat = openList[i];
+        try {
+            await openImportHtmlBeatMetaAiFillOnly({
+                shortVideoId,
+                beatId: beat.beatId,
+                beatIndex: beat.beatIndex,
+                imagePrompt: beat.imagePrompt,
+                imageUrl: beat.imageUrl,
+                title: options.title,
+                autoSubmit: options.autoSubmit !== false,
+            });
+            opened += 1;
+        } catch (e) {
+            failed.push(beat.beatId);
+            console.warn('[Meta.ai] open beat failed', beat.beatId, e);
+        }
+    }
+
+    if (opened === 0 && failed.length > 0) {
+        throw new Error(`Không mở được tab Meta.ai cho beat: ${failed.join(', ')}`);
     }
 
     return { opened, failed };

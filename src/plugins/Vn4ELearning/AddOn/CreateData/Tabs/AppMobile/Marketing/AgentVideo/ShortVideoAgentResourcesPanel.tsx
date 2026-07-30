@@ -17,6 +17,7 @@ import {
     Typography,
 } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -37,6 +38,13 @@ import {
     humanizeImportHtmlAssembleError,
     isCaptionSyncAssembleError,
 } from './agentVideoImportHtmlBlockers';
+
+function formatLocalFileSizeMb(bytes: number): string {
+    if (bytes <= 0) {
+        return '';
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function resolveGithubRepoUrl(repoRaw: string): string {
     const repo = String(repoRaw || '').trim();
@@ -771,6 +779,48 @@ export default function ShortVideoAgentResourcesPanel({ state, embedded = false 
             >
                 Render video
             </LoadingButton>
+
+            {state.hasLocalFinalMp4 ? (
+                <Box sx={{ mt: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        Đã có final.mp4 local
+                        {state.localFinalMp4SizeBytes > 0
+                            ? ` (${formatLocalFileSizeMb(state.localFinalMp4SizeBytes)})`
+                            : ''}
+                        {state.localFinalMp4ModifiedAt
+                            ? ` — cập nhật ${state.localFinalMp4ModifiedAt}`
+                            : ''}
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            fullWidth
+                            component="a"
+                            href={state.localFinalMp4OpenUrl || undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            disabled={!state.localFinalMp4OpenUrl}
+                            startIcon={<OpenInNewIcon />}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Mở video local
+                        </Button>
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            color="secondary"
+                            fullWidth
+                            loading={state.uploadingLocalAgentVideo}
+                            startIcon={<CloudUploadIcon />}
+                            onClick={() => { void state.handleUploadLocalAgentVideo(); }}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Upload lên store
+                        </LoadingButton>
+                    </Stack>
+                </Box>
+            ) : null}
 
             {!canRender ? (
                 <Alert severity="info" sx={{ mt: 1.5 }}>

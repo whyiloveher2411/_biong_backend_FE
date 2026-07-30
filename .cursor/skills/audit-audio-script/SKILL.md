@@ -22,7 +22,7 @@ Cổng **QA + sửa lỗi** sau `/viral-audio-script` — trước `save_audio_s
 |-------|-------|
 | `draft_script` | Output `/viral-audio-script` |
 | `core_signals` | `/extract-core-signals` |
-| `expressive_plan` | `/viral-audio-script` |
+| `expressive_plan` | `/viral-audio-script` (luôn rỗng) |
 | `content_plain_text` | Optional |
 
 **Không** audit `visual_shot_plan` — shot-plan sinh ở Phase 2.
@@ -38,7 +38,7 @@ Cổng **QA + sửa lỗi** sau `/viral-audio-script` — trước `save_audio_s
 | `em_dash_detected` | Thay `—` / `–` bằng phẩy, câu mới, `. . .` |
 | `unnatural_sentence` | Tách câu >25 từ khó hiểu |
 | `jargon_heavy` | Đơn giản hóa thuật ngữ |
-| `disallowed_tag` | Thay/bỏ tag ngoài allowlist |
+| `disallowed_tag` | Xóa tag voice / SSML / tag lạ (chỉ giữ `[BGM]`/`[SFX]`/`[Dừng]`) |
 | `missing_sfx` | Thêm `[SFX: vine boom]` |
 
 ## Bước tiếp

@@ -1,6 +1,6 @@
-# viral-audio-script — kịch bản giữ chân cao (bản nháp + non-verbal tags)
+# viral-audio-script — kịch bản giữ chân cao (bản nháp)
 
-**Model TTS:** `k2-fsa/OmniVoice` — chỉ tag trong [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md) allowlist (3 tag).
+**Model TTS:** `k2-fsa/OmniVoice` — plain text + marker sản xuất; **không** tag voice non-verbal. Xem [omnivoice-expressive-tags.md](omnivoice-expressive-tags.md).
 
 **Đọc cùng:**
 - [narrative-flow-vi.md](narrative-flow-vi.md) — **bắt buộc**
@@ -20,18 +20,17 @@
 
 ---
 
-## Non-verbal tags (allowlist)
+## Tags
 
-| Section | Tag gợi ý |
-|---------|-----------|
-| Agitate | `[sigh]`, `[dissatisfaction-hnn]` |
-| Twist / CTA | `[laughter]` |
+| Loại | Hợp lệ? |
+|------|---------|
+| `[BGM: ...]`, `[SFX: ...]`, `[Dừng ...]` | Có — production |
+| `[laughter]`, `[sigh]`, `[dissatisfaction-hnn]` | **Không** — đã tắt |
+| Mood / SSML | **Không** |
 
-**Cấm:** `[gasp]`, `[happy]`, `[singing]`, `[whisper]` và mọi tag ngoài allowlist — server reject khi save.
+Metadata: `expressive_plan: { hook: [], agitate: [], solve: [], cta: [] }` — luôn rỗng.
 
-Metadata: `expressive_plan: { hook, agitate, solve, cta }`.
-
-Mood Hook/CTA: **neutral + `?!` + `. . .`** — không mood tag.
+Mood Hook/CTA: **neutral + `?!` + `. . .`**.
 
 ---
 
@@ -39,10 +38,10 @@ Mood Hook/CTA: **neutral + `?!` + `. . .`** — không mood tag.
 
 | Section | % thời lượng | Ghi chú |
 |---------|--------------|---------|
-| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `?!` — không tag |
-| Agitate | ~15% | `[sigh]` / `[dissatisfaction-hnn]` optional |
+| Hook | ~5% | Shock 0–3s + **[SFX] bắt buộc** + `?!` |
+| Agitate | ~15% | Cảm thán + `. . .` — không tag voice |
 | Solve | ~70% | Narrative chain But/Therefore — **không checklist** |
-| CTA/Loop | ~10% | Optional `[laughter]` |
+| CTA/Loop | ~10% | Slogan ngắn |
 
 ---
 
@@ -50,7 +49,5 @@ Mood Hook/CTA: **neutral + `?!` + `. . .`** — không mood tag.
 
 - Structural summarization — fact rời nối bằng dấu chấm
 - Từ liệt kê: Tiếp theo, Ngoài ra, Đầu tiên, Một là…
-- Tag mood (`[happy]`, `[singing]`, `[gasp]`, …)
-- Tag không có trong allowlist
-- >2 non-verbal / video
+- Tag voice / mood (`[laughter]`, `[sigh]`, `[happy]`, `[gasp]`, …)
 - SSML XML

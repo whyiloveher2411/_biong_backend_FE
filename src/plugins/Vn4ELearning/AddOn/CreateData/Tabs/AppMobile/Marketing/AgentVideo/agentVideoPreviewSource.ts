@@ -39,9 +39,14 @@ export function hasBeatImageForPreview(input: AgentPreviewSourceInput): boolean 
     return Object.values(beatImage).some((entry) => String(entry?.image_url || '').trim() !== '');
 }
 
+/** Whiteboard: vào view ảnh beat ngay khi đã chia beat-map (ảnh có thể chưa sinh). */
+export function canEnterWhiteboardBeatPreviewView(input: AgentPreviewSourceInput): boolean {
+    return Boolean(input.beatMapReady);
+}
+
 export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean {
     if (isAgentWhiteboardMode(input.agentVisualMode)) {
-        return hasBeatImageForPreview(input);
+        return canEnterWhiteboardBeatPreviewView(input) || hasBeatImageForPreview(input);
     }
     return hasBeatHtmlForPreview(input);
 }

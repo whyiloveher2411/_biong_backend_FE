@@ -69,7 +69,7 @@ function HtmlBeatMissingPlaceholder({ isWhiteboardMode = false }: { isWhiteboard
             </Typography>
             <Typography variant="body2" color="text.secondary">
                 {isWhiteboardMode
-                    ? 'Dùng timeline để mở Duck.ai thủ công và upload ảnh cho từng beat.'
+                    ? 'Chọn tab Ảnh beat sau khi đã chia beat-map. Sinh/upload ảnh từ timeline hoặc chạy pipeline.'
                     : 'Dùng timeline hoặc tab Render bên trái để sinh HTML từng beat.'}
             </Typography>
         </Box>

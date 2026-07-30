@@ -248,6 +248,15 @@ export default function ShortVideoAgentVideoWorkspace({
         return state.handleOpenBeatImageDuckAiManual(editBeatImageId, payload.imagePrompt);
     }, [editBeatImageId, state.handleOpenBeatImageDuckAiManual]);
 
+    const handleRegenerateEditBeatImageMetaAi = React.useCallback(async (payload: {
+        imagePrompt: string;
+    }) => {
+        if (!editBeatImageId) {
+            return null;
+        }
+        return state.handleOpenBeatImageMetaAiManual(editBeatImageId, payload.imagePrompt);
+    }, [editBeatImageId, state.handleOpenBeatImageMetaAiManual]);
+
     const handleUploadBeatImageFile = React.useCallback(async (file: File) => {
         if (!editBeatImageId) {
             return null;
@@ -491,6 +500,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenAllMissingBeatGemini={() => {
                         state.handleOpenAllMissingBeatGemini();
                     }}
+                    onOpenAllMissingBeatMetaAi={() => {
+                        state.handleOpenAllMissingBeatMetaAi();
+                    }}
                     onOpenAllMissingBeatAiStudio={() => {
                         state.handleOpenAllMissingBeatAiStudio();
                     }}
@@ -499,6 +511,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     }}
                     onOpenBeatGemini={(beatId) => {
                         void state.handleOpenBeatGemini(beatId);
+                    }}
+                    onOpenBeatMetaAi={(beatId) => {
+                        void state.handleOpenBeatMetaAi(beatId);
                     }}
                     onOpenBeatGeminiHeadless={(beatId) => {
                         void state.handleOpenBeatGeminiHeadless(beatId);
@@ -524,6 +539,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     missingBeatHtmlCount={state.missingBeatHtmlCount}
                     missingBeatImageCount={state.missingBeatImageCount}
                     openingAllMissingBeatGemini={state.openingAllMissingBeatGemini}
+                    openingAllMissingBeatMetaAi={state.openingAllMissingBeatMetaAi}
                     openingAllMissingBeatAiStudio={state.openingAllMissingBeatAiStudio}
                     fillingAllMissingBeatGeminiHeadless={state.fillingAllMissingBeatGeminiHeadless}
                     fillingAllMissingBeatGeminiHeadlessProgress={
@@ -545,6 +561,17 @@ export default function ShortVideoAgentVideoWorkspace({
                     hasAgentVideo={state.hasAgentVideo}
                     launchingImportAssemble={state.launchingImportAssemble}
                     onLaunchImportAssemble={() => { void state.handleLaunchAgentImportAssemble(); }}
+                    showPipelineControls
+                    fullAutoPipeline={state.fullAutoPipeline}
+                    agentVisualMode={state.agentVisualMode}
+                    startingFullAuto={state.startingFullAuto}
+                    cancellingFullAuto={state.cancellingFullAuto}
+                    onStartPipelineFromStep={(stepKey) => {
+                        void state.handleStartFullAutoPipeline('restart', stepKey);
+                    }}
+                    onCancelPipeline={() => {
+                        void state.handleCancelFullAutoPipeline();
+                    }}
                     onTimeUpdate={setCurrentTimeSec}
                 />
             </Box>
@@ -579,6 +606,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 regenerating={state.regeneratingBeatImageBeatId === editBeatImageId}
                 onSave={handleSaveEditBeatImage}
                 onRegenerateZImage={handleRegenerateEditBeatImage}
+                onRegenerateMetaAi={handleRegenerateEditBeatImageMetaAi}
                 onUploadImageFile={handleUploadBeatImageFile}
             />
             <ShortVideoAgentBeatInfoDrawer

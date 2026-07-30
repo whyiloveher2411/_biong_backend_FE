@@ -17,6 +17,8 @@ type OpenGeminiScriptInput = {
     introduceApp?: boolean;
     /** agent_source_format — nhánh topic_research. */
     sourceFormat?: string;
+    /** Thời lượng mong muốn (giây) khi admin đã nhập. */
+    desiredScriptDurationSec?: number | null;
 };
 
 function resolveSourceContent(input: OpenGeminiScriptInput): string {
@@ -82,6 +84,7 @@ export function useAgentVideoOpenGeminiScriptActions() {
             hasMarketingPost: marketingPostId > 0,
             introduceApp: Boolean(input.introduceApp),
             sourceFormat: String(input.sourceFormat || '').trim(),
+            desiredScriptDurationSec: input.desiredScriptDurationSec,
         });
         if (!improvePrompt) {
             showMessage('Chưa có audio script', 'warning');

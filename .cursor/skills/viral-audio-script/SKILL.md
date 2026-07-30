@@ -1,13 +1,13 @@
 ---
 name: viral-audio-script
-description: Script HASCAS 60–180s hoàn chỉnh — plain language, từ đệm, OmniVoice tags. One-pass; sau đó /audit-audio-script trước save.
+description: Script HASCAS 60–180s hoàn chỉnh — plain language, từ đệm. One-pass; sau đó /audit-audio-script trước save. Không tag voice OmniVoice.
 ---
 
 # viral-audio-script
 
-Viết **script hoàn chỉnh** HASCAS 60–180 giây **một lần** — gồm non-verbal tags, từ đệm, văn nói tự nhiên. **Không** cần bước `/humanize-audio-script` riêng.
+Viết **script hoàn chỉnh** HASCAS 60–180 giây **một lần** — từ đệm, văn nói tự nhiên, marker sản xuất. **Không** cần bước `/humanize-audio-script` riêng.
 
-**CHỈ allowlist OmniVoice (3 tag)**. **Cấm** `[gasp]`, mood tag. Ghi đủ trong `expressive_plan`.
+**Cấm** tag voice non-verbal: `[laughter]`, `[sigh]`, `[dissatisfaction-hnn]`. Mood qua `. . .` / `?!`. `expressive_plan` luôn rỗng.
 
 **Cấm Structural Summarization** — expand `narrative_chain` bằng But/Therefore.
 
@@ -25,7 +25,7 @@ Viết **script hoàn chỉnh** HASCAS 60–180 giây **một lần** — gồm 
 2. Viết **câu tự nhiên** — kể như giải thích cho bạn 12 tuổi
 3. Gắn **2–4 từ đệm** (ừm, thật ra, nói thật…)
 4. **Cấm em dash** `—` — dùng phẩy, câu mới, `. . .`
-5. Gắn tag OmniVoice + `[BGM]` + `[SFX: vine boom]` hook
+5. Gắn `[BGM]` + `[SFX: vine boom]` hook — **không** tag voice
 
 ## Narrative Flow (bắt buộc)
 
@@ -33,18 +33,17 @@ Viết **script hoàn chỉnh** HASCAS 60–180 giây **một lần** — gồm 
 2. **Cấm** blocklist từ liệt kê (narrative-flow-vi.md §3)
 3. Gom thông số → 1 câu cảm thán/so sánh
 
-## Non-verbal tags
+## Prosody (không tag voice)
 
-| Section | Tag gợi ý |
+| Section | Cách nhấn |
 |---------|-----------|
-| Agitate | `[sigh]`, `[dissatisfaction-hnn]` |
-| Twist / CTA | `[laughter]` |
-
-Mood: **neutral + `?!` + `. . .`** — không mood tag.
+| Hook | `?!` + `[SFX]` |
+| Agitate | Cảm thán ngắn + `. . .` |
+| Twist / CTA | Slogan ngắn + `?!` |
 
 ## Quy tắc khác
 
-- **Cấm SSML**; cấm tag ngoài allowlist
+- **Cấm SSML**; cấm mọi tag ngoài `[BGM]`/`[SFX]`/`[Dừng]`
 - **Bắt buộc** `[SFX: vine boom]` ở Hook
 - Câu **tự nhiên** — không giới hạn 12 từ
 

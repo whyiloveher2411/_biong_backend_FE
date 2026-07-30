@@ -42,6 +42,7 @@ type Props = {
         background: string;
     }) => Promise<boolean>;
     onRegenerateZImage: (payload: { imagePrompt: string }) => Promise<string | null>;
+    onRegenerateMetaAi?: (payload: { imagePrompt: string }) => Promise<string | null>;
     onUploadImageFile: (file: File) => Promise<string | null>;
 };
 
@@ -61,6 +62,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
     regenerating = false,
     onSave,
     onRegenerateZImage,
+    onRegenerateMetaAi,
     onUploadImageFile,
 }: Props) {
     const { showMessage } = useFloatingMessages();
@@ -161,6 +163,26 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         }
     };
 
+    const handleRegenerateMetaAi = async () => {
+        if (!onRegenerateMetaAi) {
+            return;
+        }
+        const prompt = imagePrompt.trim();
+        if (!validateBeatImagePrompt(prompt)) {
+            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            return;
+        }
+        setAiLoading(true);
+        try {
+            const nextUrl = await onRegenerateMetaAi({ imagePrompt: prompt });
+            if (nextUrl) {
+                setPreviewUrl(nextUrl);
+            }
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
     return (
         <DrawerCustom
             open={open}
@@ -201,7 +223,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         >
             <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
                 <Alert severity="info" sx={{ py: 0.5, flexShrink: 0 }}>
-                    Chỉnh image_prompt → mở Duck.ai (không auto submit) → tự upload ảnh vào beat hiện tại.
+                    Chỉnh image_prompt → mở Duck.ai hoặc Meta.ai → download ảnh → tự lưu vào beat hiện tại.
                 </Alert>
 
                 <ShortVideoAgentBeatImagePreview
@@ -235,7 +257,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                 />
 
                 <TextField
-                    label="Image prompt (Duck.ai)"
+                    label="Image prompt (Duck.ai / Meta.ai)"
                     value={imagePrompt}
                     onChange={(event) => setImagePrompt(event.target.value)}
                     fullWidth
@@ -248,23 +270,44 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                     InputProps={{
                         endAdornment: (
                             <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
-                                <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Duck.ai' : 'Cần image_prompt hợp lệ'}>
-                                    <span>
-                                        <IconButton
-                                            color="primary"
-                                            edge="end"
-                                            disabled={!canRegenerate}
-                                            onClick={() => { void handleRegenerate(); }}
-                                            aria-label="Sinh lại ảnh Duck.ai"
-                                        >
-                                            {(aiLoading || regenerating) ? (
-                                                <CircularProgress size={18} />
-                                            ) : (
-                                                <AutoAwesomeIcon fontSize="small" />
-                                            )}
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
+                                <Stack direction="row" spacing={0.25}>
+                                    <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Duck.ai' : 'Cần image_prompt hợp lệ'}>
+                                        <span>
+                                            <IconButton
+                                                color="primary"
+                                                edge="end"
+                                                disabled={!canRegenerate}
+                                                onClick={() => { void handleRegenerate(); }}
+                                                aria-label="Sinh lại ảnh Duck.ai"
+                                            >
+                                                {(aiLoading || regenerating) ? (
+                                                    <CircularProgress size={18} />
+                                                ) : (
+                                                    <AutoAwesomeIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                    {onRegenerateMetaAi ? (
+                                        <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Meta.ai' : 'Cần image_prompt hợp lệ'}>
+                                            <span>
+                                                <IconButton
+                                                    color="secondary"
+                                                    edge="end"
+                                                    disabled={!canRegenerate}
+                                                    onClick={() => { void handleRegenerateMetaAi(); }}
+                                                    aria-label="Sinh lại ảnh Meta.ai"
+                                                >
+                                                    {(aiLoading || regenerating) ? (
+                                                        <CircularProgress size={18} />
+                                                    ) : (
+                                                        <AutoAwesomeIcon fontSize="small" />
+                                                    )}
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+                                    ) : null}
+                                </Stack>
                             </InputAdornment>
                         ),
                     }}

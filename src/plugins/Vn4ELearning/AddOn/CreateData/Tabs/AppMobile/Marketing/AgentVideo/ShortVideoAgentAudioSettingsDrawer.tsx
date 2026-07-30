@@ -16,9 +16,11 @@ import {
     type OmnivoiceVoiceCatalogItem,
     type OmnivoiceVoiceDesignTokenGroup,
     type OmnivoiceVoiceMode,
+    type SaydiVoiceSampleItem,
 } from './agentVideoApi';
 import { TTS_PLATFORM_OPTIONS } from './agentVideoUi';
 import ShortVideoAgentOmnivoiceVoicePicker from './ShortVideoAgentOmnivoiceVoicePicker';
+import ShortVideoAgentSaydiVoicePicker from './ShortVideoAgentSaydiVoicePicker';
 
 type Props = {
     open: boolean;
@@ -45,6 +47,15 @@ type Props = {
     onApplyDesign: (design: string) => void | Promise<boolean>;
     onPlayPreview: (item: OmnivoiceVoiceCatalogItem) => void;
     onPlayDesignPreview: (design: string) => void;
+    saydiVoice: string;
+    saydiSamples: SaydiVoiceSampleItem[];
+    saydiGenders: string[];
+    saydiLanguages: string[];
+    saydiLoading: boolean;
+    saydiError: string;
+    savingSaydiVoice: boolean;
+    onSelectSaydiVoice: (voiceName: string) => void | Promise<boolean>;
+    onPlaySaydiPreview: (item: SaydiVoiceSampleItem) => void;
 };
 
 const SPEED_MARKS = [
@@ -78,10 +89,21 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     onApplyDesign,
     onPlayPreview,
     onPlayDesignPreview,
+    saydiVoice,
+    saydiSamples,
+    saydiGenders,
+    saydiLanguages,
+    saydiLoading,
+    saydiError,
+    savingSaydiVoice,
+    onSelectSaydiVoice,
+    onPlaySaydiPreview,
 }: Props) {
     const voiceSaving = savingVoice || regeneratingTts;
     const [draftSpeed, setDraftSpeed] = React.useState(omnivoiceSpeed);
     const showChatgptCookieWarning = selectedPlatforms.includes('chatgpt_web') && !chatgptWebAvailable;
+    const showOmnivoice = selectedPlatforms.includes('omnivoice_local');
+    const showSaydi = selectedPlatforms.includes('saydi');
 
     React.useEffect(() => {
         if (open) {
@@ -101,6 +123,16 @@ export default function ShortVideoAgentAudioSettingsDrawer({
 
     const handleApplyDesign = async (design: string) => {
         const saved = await onApplyDesign(design);
+        if (saved) {
+            onClose();
+        }
+    };
+
+    const handleSelectSaydi = async (voiceName: string) => {
+        if (voiceName === saydiVoice) {
+            return;
+        }
+        const saved = await onSelectSaydiVoice(voiceName);
         if (saved) {
             onClose();
         }
@@ -177,56 +209,84 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                 ) : null}
             </Box>
 
-            <Box sx={{ px: 0.5 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                    <Typography variant="subtitle2">
-                        Tốc độ OmniVoice
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                        {`x${draftSpeed.toFixed(2)}`}
-                    </Typography>
-                </Stack>
-                <Slider
-                    value={draftSpeed}
-                    min={0.5}
-                    max={1.5}
-                    step={0.05}
-                    marks={SPEED_MARKS}
-                    disabled={savingTtsMode}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(v) => `x${Number(v).toFixed(2)}`}
-                    onChange={(_e, value) => {
-                        setDraftSpeed(Array.isArray(value) ? value[0] : value);
-                    }}
-                    onChangeCommitted={(_e, value) => {
-                        const next = Array.isArray(value) ? value[0] : value;
-                        void onOmnivoiceSpeedChange(next);
-                    }}
-                />
-            </Box>
+            {showOmnivoice ? (
+                <>
+                    <Box sx={{ px: 0.5 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                            <Typography variant="subtitle2">
+                                Tốc độ OmniVoice
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                                {`x${draftSpeed.toFixed(2)}`}
+                            </Typography>
+                        </Stack>
+                        <Slider
+                            value={draftSpeed}
+                            min={0.5}
+                            max={1.5}
+                            step={0.05}
+                            marks={SPEED_MARKS}
+                            disabled={savingTtsMode}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={(v) => `x${Number(v).toFixed(2)}`}
+                            onChange={(_e, value) => {
+                                setDraftSpeed(Array.isArray(value) ? value[0] : value);
+                            }}
+                            onChangeCommitted={(_e, value) => {
+                                const next = Array.isArray(value) ? value[0] : value;
+                                void onOmnivoiceSpeedChange(next);
+                            }}
+                        />
+                    </Box>
 
-            <Divider />
+                    <Divider />
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Giọng OmniVoice
-                </Typography>
-                <ShortVideoAgentOmnivoiceVoicePicker
-                    active={open}
-                    catalog={catalog}
-                    selectedVoice={selectedVoice}
-                    selectedVoiceMode={selectedVoiceMode}
-                    selectedVoiceDesign={selectedVoiceDesign}
-                    designTokenGroups={designTokenGroups}
-                    saving={voiceSaving}
-                    previewingDesign={previewingDesign}
-                    onSelectClone={handleSelectClone}
-                    onApplyDesign={handleApplyDesign}
-                    onPlayPreview={onPlayPreview}
-                    onPlayDesignPreview={onPlayDesignPreview}
-                    playingUrl={playingUrl}
-                />
-            </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Giọng OmniVoice
+                        </Typography>
+                        <ShortVideoAgentOmnivoiceVoicePicker
+                            active={open}
+                            catalog={catalog}
+                            selectedVoice={selectedVoice}
+                            selectedVoiceMode={selectedVoiceMode}
+                            selectedVoiceDesign={selectedVoiceDesign}
+                            designTokenGroups={designTokenGroups}
+                            saving={voiceSaving}
+                            previewingDesign={previewingDesign}
+                            onSelectClone={handleSelectClone}
+                            onApplyDesign={handleApplyDesign}
+                            onPlayPreview={onPlayPreview}
+                            onPlayDesignPreview={onPlayDesignPreview}
+                            playingUrl={playingUrl}
+                        />
+                    </Box>
+                </>
+            ) : null}
+
+            {showSaydi ? (
+                <>
+                    {showOmnivoice ? <Divider /> : null}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Giọng Saydi
+                        </Typography>
+                        <ShortVideoAgentSaydiVoicePicker
+                            active={open && showSaydi}
+                            samples={saydiSamples}
+                            genders={saydiGenders}
+                            languages={saydiLanguages}
+                            selectedVoice={saydiVoice}
+                            loading={saydiLoading}
+                            saving={savingSaydiVoice || regeneratingTts}
+                            errorMessage={saydiError}
+                            playingUrl={playingUrl}
+                            onSelect={handleSelectSaydi}
+                            onPlayPreview={onPlaySaydiPreview}
+                        />
+                    </Box>
+                </>
+            ) : null}
         </DrawerCustom>
     );
 }

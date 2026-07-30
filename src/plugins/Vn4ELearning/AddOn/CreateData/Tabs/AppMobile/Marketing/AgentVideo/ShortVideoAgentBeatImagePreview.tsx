@@ -70,7 +70,7 @@ export default function ShortVideoAgentBeatImagePreview({
                     Chưa có ảnh cho {beatId}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75 }}>
-                    Mở Duck.ai thủ công từ timeline/drawer rồi upload ảnh vào beat này
+                    Mở Duck.ai hoặc Meta.ai từ timeline/drawer — download ảnh → tự lưu vào beat này
                 </Typography>
             </Box>
         );

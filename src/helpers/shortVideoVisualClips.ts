@@ -477,6 +477,46 @@ export function resolveRenderCachePreviewAssetUrl(relativePath: string): string 
     return url.toString();
 }
 
+/** URL mở tab mới cho video local agent — public URL hoặc API stream có access_token. */
+export function resolveAgentLocalVideoOpenUrl(relativeOrAbsoluteUrl: string): string {
+    const trimmed = relativeOrAbsoluteUrl.trim();
+    if (!trimmed) {
+        return '';
+    }
+
+    const needsAuth = trimmed.includes('stream-local-agent-video')
+        || trimmed.includes('render-cache-asset')
+        || trimmed.startsWith('/api/');
+
+    if (needsAuth) {
+        if (trimmed.startsWith('/api/')) {
+            const base = trimmed.split('?')[0];
+            const url = new URL(convertToURL(getApiHost(), base));
+            const query = trimmed.includes('?') ? trimmed.split('?')[1] : '';
+            const params = new URLSearchParams(query);
+            params.forEach((value, key) => {
+                url.searchParams.set(key, value);
+            });
+            const token = getAccessToken();
+            if (token) {
+                url.searchParams.set('access_token', token);
+            }
+            url.searchParams.set('v', String(Date.now()));
+            return url.toString();
+        }
+        return resolveRenderCachePreviewAssetUrl(trimmed);
+    }
+
+    try {
+        const url = new URL(trimmed, window.location.origin);
+        url.searchParams.set('v', String(Date.now()));
+        return url.toString();
+    } catch {
+        const sep = trimmed.includes('?') ? '&' : '?';
+        return `${trimmed}${sep}v=${Date.now()}`;
+    }
+}
+
 /**
  * URL playback cho preview CMS — luôn thêm access_token cho render-cache API.
  * Dùng chung timeline thumbnail, Remotion Player, inspector.

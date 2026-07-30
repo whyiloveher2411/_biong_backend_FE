@@ -41,9 +41,9 @@ Chain TTS: **OmniVoice local → VieNeu → Saydi → Vbee** — response `tts_p
 1. `/extract-core-signals` → `/hyperframes-creative` → `/viral-audio-script` (one-pass) → `/audit-audio-script` → `save_audio_script` → **DỪNG**
 2. Đọc [plain-language-storytelling-vi.md](references/plain-language-storytelling-vi.md) — kể cho bạn 12 tuổi; cấm em dash `—`
 3. Đọc [narrative-flow-vi.md](references/narrative-flow-vi.md) — But/Therefore
-4. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md)
+4. Đọc [vi-voiceover-naturalization.md](references/vi-voiceover-naturalization.md) + [omnivoice-expressive-tags.md](references/omnivoice-expressive-tags.md) — **không** gắn tag voice non-verbal
 
-**Sau TTS:** `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `visual_shot_plan` (N beats) → `map-shot-plan-to-beat-map.mjs` (prosody tags đổi duration).
+**Sau TTS:** `bootstrap-phase2-assets.mjs` → `transcribe-audio.mjs` → caption sync → `visual_shot_plan` (N beats) → `map-shot-plan-to-beat-map.mjs` (prosody `. . .` đổi duration).
 
 **Prereq OmniVoice (local):**
 
@@ -95,7 +95,7 @@ Deliverable: `my-video/media-plan.md` — `sfx_hook` + `bgm_global`/`bgm_2`… +
 |---|-------|--------|
 | 1 | `/extract-core-signals` | `core_signals`: hook, tension, takeaway, **narrative_chain**, perspective |
 | 2 | `/hyperframes-creative` | Narrative Flow But/Therefore + góc nhìn plain language |
-| 3 | `/viral-audio-script` | Script **hoàn chỉnh** HASCAS + timeline + markers + `expressive_plan` |
+| 3 | `/viral-audio-script` | Script **hoàn chỉnh** HASCAS + timeline + markers + `expressive_plan` (rỗng) |
 | 4 | `/audit-audio-script` | **QA + sửa** — pass bắt buộc trước save |
 
 Docs: [plain-language-storytelling-vi.md](references/plain-language-storytelling-vi.md) · [audit-audio-script.md](references/audit-audio-script.md) · [narrative-flow-vi.md](references/narrative-flow-vi.md) · [viral-retention-structure.md](references/viral-retention-structure.md)

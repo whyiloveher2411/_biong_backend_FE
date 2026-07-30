@@ -310,8 +310,27 @@ export type SaveOmnivoiceVoicePayload = {
     design?: string;
 };
 
+export type SaydiVoiceSampleItem = {
+    name: string;
+    display_name: string;
+    gender?: string;
+    language?: string;
+    accent?: string;
+    age?: string;
+    description?: string;
+    featured?: boolean;
+    priority?: number;
+    preview_url?: string;
+};
+
+const DEFAULT_SAYDI_VOICE = 'adam-11labs-vi';
+export { DEFAULT_SAYDI_VOICE };
+
 const OMNIVOICE_VOICE_PREVIEW_API_PATH =
     'plugin/vn4-e-learning/app-mobile/marketing/short-video/preview-omnivoice-voice';
+
+const SAYDI_VOICE_PREVIEW_API_PATH =
+    'plugin/vn4-e-learning/app-mobile/marketing/short-video/preview-saydi-voice';
 
 function withAccessToken(path: string): string {
     if (!path) {
@@ -357,6 +376,23 @@ export function resolveOmnivoiceVoiceDesignPreviewUrl(design: string): string {
     return withAccessToken(path);
 }
 
+export function resolveSaydiVoicePreviewUrl(
+    item: Pick<SaydiVoiceSampleItem, 'name' | 'preview_url'> | string,
+): string {
+    const name = typeof item === 'string'
+        ? String(item || '').trim()
+        : String(item?.name || '').trim();
+    const rawPreview = typeof item === 'string'
+        ? ''
+        : String(item?.preview_url || '').trim();
+
+    let path = rawPreview;
+    if (!path && name) {
+        path = `${SAYDI_VOICE_PREVIEW_API_PATH}?voice=${encodeURIComponent(name)}`;
+    }
+    return withAccessToken(path);
+}
+
 export type AgentSourceFormatCatalogItem = {
     key: string;
     label: string;
@@ -370,6 +406,17 @@ export type AvatarPipAnchor =
     | 'bottom_right'
     | 'center';
 
+export type NarrationSegment = {
+    index: number;
+    text: string;
+    word_count: number;
+    url: string;
+    s3_key?: string;
+    duration_sec: number;
+    tts_engine?: string;
+    status?: string;
+};
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -382,11 +429,17 @@ export type AgentVideoContentResponse = {
     audio_script_tts_reading_updated_at?: string;
     audio_file?: string;
     audio_file_duration_sec?: number;
+    capcut_project_name?: string;
+    capcut_project_path?: string;
+    capcut_last_sync_json?: Record<string, unknown>;
+    narration_segments?: NarrationSegment[];
     agent_tts_auto?: boolean;
     agent_auto_fill_beat_html?: boolean;
     agent_gemini_open_browser?: boolean;
     agent_github_screenshot_homepage?: boolean;
     agent_introduce_app?: boolean;
+    desired_script_duration_sec?: number | null;
+    audio_script_style_id?: number | null;
     agent_avatar_id?: number;
     agent_show_avatar?: boolean;
     agent_avatar_anchor?: AvatarPipAnchor;
@@ -407,11 +460,16 @@ export type AgentVideoContentResponse = {
     agent_omnivoice_voice_mode?: OmnivoiceVoiceMode;
     agent_omnivoice_voice_design?: string;
     agent_omnivoice_speed?: number;
+    agent_saydi_voice?: string;
     omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
     omnivoice_voice_design_tokens?: OmnivoiceVoiceDesignTokenGroup[];
     agent_video_status?: string;
     agent_video_url?: string;
     agent_video_rendered_at?: string;
+    has_local_final_mp4?: boolean;
+    local_final_mp4_url?: string;
+    local_final_mp4_size_bytes?: number;
+    local_final_mp4_modified_at?: string;
     agent_video_summary?: {
         estimated_duration_sec?: number | null;
         cta_mode?: string;
@@ -721,7 +779,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     beat_division: 'Chia beat',
     beat_division_qa: 'Đánh giá beat',
     beat_fill: 'Fill HTML beat',
-    beat_image_fill: 'Ảnh beat thủ công (Duck.ai)',
+    beat_image_fill: 'Ảnh beat (Gemini)',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
@@ -1097,6 +1155,41 @@ export async function saveAgentOmnivoiceVoice(
     );
 }
 
+export async function fetchSaydiVoiceSamples(
+    shortVideoId: number,
+    options?: { forceRefresh?: boolean },
+): Promise<JsonResponse & {
+    samples?: SaydiVoiceSampleItem[];
+    genders?: string[];
+    languages?: string[];
+    agent_saydi_voice?: string;
+    default_saydi_voice?: string;
+    count?: number;
+    cached?: boolean;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-saydi-voice-samples',
+        shortVideoBody(shortVideoId, {
+            force_refresh: options?.forceRefresh ? '1' : '0',
+        }),
+    );
+}
+
+export async function saveAgentSaydiVoice(
+    shortVideoId: number,
+    voice: string,
+): Promise<JsonResponse & {
+    agent_saydi_voice?: string;
+    default_saydi_voice?: string;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-saydi-voice',
+        shortVideoBody(shortVideoId, {
+            agent_saydi_voice: voice,
+        }),
+    );
+}
+
 export async function saveAgentTtsSettings(
     shortVideoId: number,
     enabled?: boolean,
@@ -1463,6 +1556,59 @@ export async function captureAgentThumbnail(
         image_url?: string;
         thumbnail?: ImportHtmlThumbnailBlock;
         import_html?: ImportHtmlSummary;
+    }>;
+}
+
+export async function uploadLocalAgentVideo(
+    shortVideoId: number,
+): Promise<JsonResponse & {
+    agent_video_url?: string;
+    agent_video_status?: string;
+    agent_video_rendered_at?: string;
+    has_local_final_mp4?: boolean;
+    local_final_mp4_url?: string;
+    local_final_mp4_size_bytes?: number;
+    local_final_mp4_modified_at?: string;
+    full_auto_pipeline?: FullAutoPipelineSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/upload-local-agent-video',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & {
+        agent_video_url?: string;
+        agent_video_status?: string;
+        agent_video_rendered_at?: string;
+        has_local_final_mp4?: boolean;
+        local_final_mp4_url?: string;
+        local_final_mp4_size_bytes?: number;
+        local_final_mp4_modified_at?: string;
+        full_auto_pipeline?: FullAutoPipelineSummary;
+    }>;
+}
+
+export async function renderWhiteboardAgentVideo(
+    shortVideoId: number,
+    forceRender = false,
+): Promise<JsonResponse & {
+    queued?: boolean;
+    job_id?: number;
+    silent_stale?: boolean;
+    has_local_final_mp4?: boolean;
+    local_final_mp4_url?: string;
+    full_auto_pipeline?: FullAutoPipelineSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/render-whiteboard-agent-video',
+        shortVideoBody(shortVideoId, {
+            force_render: forceRender ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        queued?: boolean;
+        job_id?: number;
+        silent_stale?: boolean;
+        has_local_final_mp4?: boolean;
+        local_final_mp4_url?: string;
+        full_auto_pipeline?: FullAutoPipelineSummary;
     }>;
 }
 
@@ -2128,6 +2274,82 @@ export async function saveAgentCaptionAlignments(
             caption_sync: payload.captionSync ?? {},
         },
     );
+}
+
+export async function saveAgentScriptStyle(
+    shortVideoId: number,
+    styleId: number | null,
+): Promise<JsonResponse & { audio_script_style_id?: number | null }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-script-style',
+        shortVideoBody(shortVideoId, {
+            audio_script_style_id: styleId ?? 0,
+        }),
+    ) as Promise<JsonResponse & { audio_script_style_id?: number | null }>;
+}
+
+export async function saveAgentDesiredScriptDuration(
+    shortVideoId: number,
+    durationSec: number | null,
+): Promise<JsonResponse & { desired_script_duration_sec?: number | null }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-desired-script-duration',
+        shortVideoBody(shortVideoId, {
+            desired_script_duration_sec: durationSec ?? '',
+        }),
+    ) as Promise<JsonResponse & { desired_script_duration_sec?: number | null }>;
+}
+
+export async function saveAgentCapcutConfig(
+    shortVideoId: number,
+    payload: { projectName: string; projectPath: string },
+): Promise<JsonResponse & {
+    project_name?: string;
+    project_path?: string;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-capcut-config',
+        shortVideoBody(shortVideoId, {
+            capcut_project_name: payload.projectName,
+            capcut_project_path: payload.projectPath,
+        }),
+    ) as Promise<JsonResponse & {
+        project_name?: string;
+        project_path?: string;
+    }>;
+}
+
+export async function addAudioToCapcut(
+    shortVideoId: number,
+): Promise<JsonResponse & {
+    project_name?: string;
+    project_path?: string;
+    created_project?: boolean;
+    capcut_last_sync_json?: Record<string, unknown>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/add-audio-to-capcut',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & {
+        project_name?: string;
+        project_path?: string;
+        created_project?: boolean;
+        capcut_last_sync_json?: Record<string, unknown>;
+    }>;
+}
+
+export type AudioScriptStyleItem = {
+    id: number;
+    title: string;
+    channel: string;
+    status: string;
+};
+
+export async function listAudioScriptStyles(): Promise<JsonResponse & { styles?: AudioScriptStyleItem[] }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-audio-script-styles',
+        {},
+    ) as Promise<JsonResponse & { styles?: AudioScriptStyleItem[] }>;
 }
 
 export async function fetchImportHtmlContext(shortVideoId: number) {

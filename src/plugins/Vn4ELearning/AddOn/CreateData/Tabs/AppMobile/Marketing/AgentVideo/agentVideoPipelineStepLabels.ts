@@ -6,14 +6,14 @@ import { isAgentWhiteboardMode } from './agentVideoVisualMode';
 
 export const EXTENDED_PIPELINE_STEP_LABELS: Record<string, string> = {
     ...FULL_AUTO_PIPELINE_STEP_LABELS,
-    beat_image_fill: 'Ảnh beat thủ công (Duck.ai)',
+    beat_image_fill: 'Ảnh beat (Gemini)',
     whiteboard_render: 'Render whiteboard',
     whiteboard_mux: 'Mux whiteboard + audio',
 };
 
 const WHITEBOARD_PIPELINE_STEP_LABELS: Record<string, string> = {
     beat_fill: 'Fill HTML beat (bỏ qua)',
-    beat_image_fill: 'Ảnh beat thủ công (Duck.ai)',
+    beat_image_fill: 'Ảnh beat (Gemini)',
     beat_refine_visual: 'Refine visual (bỏ qua)',
     beat_refine_html: 'Refine HTML (bỏ qua)',
     render: 'Render whiteboard',
