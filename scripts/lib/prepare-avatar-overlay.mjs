@@ -103,7 +103,7 @@ export async function prepareAvatarOverlay(projectDir, ctx, importHtml, log = co
     avatar_id: render.avatar_id || 0,
     assets: localAssets,
     composite_hints: render.composite_hints || null,
-    pip: render.pip || { anchor: "bottom_right", width_ratio: 0.2, margin_px: 28 },
+    pip: render.pip || { anchor: "bottom_right", width_ratio: 0.05, margin_px: 28 },
     words,
     words_source: Array.isArray(whisper) && whisper.length ? "whisper" : "caption",
   };

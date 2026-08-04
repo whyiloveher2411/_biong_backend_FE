@@ -6,6 +6,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { loadRenderSpecFromProject } from "../../../../scripts/lib/clip-render-spec.mjs";
 
 function main() {
   const projectDir = path.resolve(process.argv[2] || "");
@@ -47,6 +48,14 @@ function main() {
   }
 
   duration = +Number(duration).toFixed(2);
+  const renderSpec = loadRenderSpecFromProject(projectDir);
+  const canvasW = renderSpec.width;
+  const canvasH = renderSpec.height;
+  // Tỷ lệ theo chiều rộng so với chuẩn 9:16 (1080px) — giữ brand cân đối trên mọi aspect.
+  const scale = canvasW / 1080;
+  const logoHeight = Math.max(24, Math.round(56 * scale));
+  const gapPx = Math.max(4, Math.round(10 * scale));
+  const marginPx = Math.max(12, Math.round(28 * scale));
   const outPath = path.join(projectDir, "compositions/brand-watermark.html");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
@@ -54,7 +63,7 @@ function main() {
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1080, height=1920" />
+  <meta name="viewport" content="width=${canvasW}, height=${canvasH}" />
   <title>Watermark — Spacedev</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <style>
@@ -67,44 +76,35 @@ function main() {
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 1080px;
-      height: 1920px;
+      width: ${canvasW}px;
+      height: ${canvasH}px;
       overflow: hidden;
       background: transparent !important;
     }
     #root {
       position: relative;
-      width: 1080px;
-      height: 1920px;
+      width: ${canvasW}px;
+      height: ${canvasH}px;
     }
     .brand-wrap {
       position: absolute;
-      left: 28px;
-      top: 28px;
+      left: ${marginPx}px;
+      top: ${marginPx}px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: ${gapPx}px;
       z-index: 10;
       opacity: 0.92;
       pointer-events: none;
       filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
     }
-    .brand-wrap img { height: 56px; width: auto; display: block; }
-    .brand-wrap span {
-      font-family: "Be Vietnam Pro", system-ui, sans-serif;
-      font-size: 20px;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.92);
-      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-      letter-spacing: 0.02em;
-    }
+    .brand-wrap img { height: ${logoHeight}px; width: auto; display: block; }
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="brand-watermark" data-start="0" data-duration="${duration}" data-width="1080" data-height="1920">
+  <div id="root" data-composition-id="brand-watermark" data-start="0" data-duration="${duration}" data-width="${canvasW}" data-height="${canvasH}">
     <div class="brand-wrap">
       <img src="assets/images/spacedev-logo.png" alt="" />
-      <span>© Spacedev</span>
     </div>
   </div>
   <script>
@@ -117,7 +117,9 @@ function main() {
 </html>`;
 
   fs.writeFileSync(outPath, html);
-  console.log(`[gen-brand-watermark] wrote ${outPath} (${duration}s)`);
+  console.log(
+    `[gen-brand-watermark] wrote ${outPath} (${duration}s, ${canvasW}x${canvasH})`,
+  );
 }
 
 main();

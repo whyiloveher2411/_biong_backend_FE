@@ -426,6 +426,37 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 </Box>
                             )}
                         />
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                px: 1.25,
+                                py: 1,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
+                                    checked={state.agentRenderDebug}
+                                    disabled={state.savingRenderDebug}
+                                    onChange={(e) => {
+                                        void state.handleAgentRenderDebugChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Debug render 3 beat đầu' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Debug render (3 beat đầu)
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Bật: chỉ render 3 beat đầu để test nhanh — MP4 ngắn, audio cắt theo video. Tắt đi rồi restart từ render để có bản đầy đủ.
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
                         <Box sx={{ px: 1.25, py: 1 }}>
                             <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
                                 Avatar lip-sync

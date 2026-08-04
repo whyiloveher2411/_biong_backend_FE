@@ -93,6 +93,7 @@ export async function runAssembleImportHtml(body, authHeader) {
   const launchToken = String(authHeader || body?.launch_token || "").trim();
   const allowCaptionMismatch =
     Boolean(body?.allow_caption_mismatch) || Boolean(body?.auto_confirm);
+  const limitBeats = Number(body?.limit_beats || 0);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -113,6 +114,9 @@ export async function runAssembleImportHtml(body, authHeader) {
   ];
   if (apiBaseUrl) {
     assembleArgs.push("--api-base-url", apiBaseUrl);
+  }
+  if (limitBeats > 0) {
+    assembleArgs.push("--limit-beats", String(limitBeats));
   }
   if (allowCaptionMismatch) {
     assembleArgs.push("--allow-caption-mismatch");
@@ -142,6 +146,7 @@ export async function runRenderImportHtml(body, authHeader) {
   // Pipeline full-auto gửi auto_confirm / allow_caption_mismatch — luôn bypass verify caption
   const allowCaptionMismatch =
     Boolean(body?.allow_caption_mismatch) || Boolean(body?.auto_confirm);
+  const limitBeats = Number(body?.limit_beats || 0);
 
   if (!Number.isInteger(shortVideoId) || shortVideoId <= 0) {
     throw new Error("Thiếu short_video_id hợp lệ");
@@ -164,6 +169,9 @@ export async function runRenderImportHtml(body, authHeader) {
     if (apiBaseUrl) {
       assembleArgs.push("--api-base-url", apiBaseUrl);
     }
+    if (limitBeats > 0) {
+      assembleArgs.push("--limit-beats", String(limitBeats));
+    }
     if (allowCaptionMismatch) {
       assembleArgs.push("--allow-caption-mismatch");
       console.log(
@@ -182,6 +190,9 @@ export async function runRenderImportHtml(body, authHeader) {
   ];
   if (apiBaseUrl) {
     renderArgs.push("--api-base-url", apiBaseUrl);
+  }
+  if (limitBeats > 0) {
+    renderArgs.push("--limit-beats", String(limitBeats));
   }
   const result = await spawnNodeScript("scripts/render-import-html.mjs", renderArgs);
 

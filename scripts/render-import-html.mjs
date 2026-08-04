@@ -27,8 +27,10 @@ function parseArgs(argv) {
   const out = {
     shortVideoId: 0,
     skipAssemble: false,
+    allowCaptionMismatch: false,
     apiBaseUrl: "",
     accessToken: "",
+    limitBeats: 0,
   };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
@@ -40,6 +42,8 @@ function parseArgs(argv) {
       out.apiBaseUrl = argv[++i] ?? "";
     } else if (arg === "--access-token") {
       out.accessToken = argv[++i] ?? "";
+    } else if (arg === "--limit-beats") {
+      out.limitBeats = parseInt(argv[++i] ?? "0", 10);
     }
   }
   return out;
@@ -163,13 +167,29 @@ async function main() {
     }
 
     const beatMap = loadBeatMap(projectDir);
-    const totalVideoSec = Number(beatMap.totalVideoSec || 0);
+    let totalVideoSec = Number(beatMap.totalVideoSec || 0);
     if (!(totalVideoSec > 0)) {
       throw new Error("beat-map.totalVideoSec invalid");
     }
     const sections = snapBeatSectionsForIndex(beatMap.sections || [], totalVideoSec);
     if (!sections.length) {
       throw new Error("beat-map.sections empty");
+    }
+    const limitBeats = Number(args.limitBeats || 0);
+    if (limitBeats > 0 && sections.length > limitBeats) {
+      const sliced = sections.slice(0, limitBeats);
+      const last = sliced[sliced.length - 1];
+      const slicedTotal =
+        last && Number(last.endSec || 0) > 0
+          ? Number(last.endSec)
+          : sliced.reduce((sum, sec) => sum + Number(sec.durationSec || 0), 0);
+      if (slicedTotal > 0) {
+        totalVideoSec = slicedTotal;
+      }
+      console.log(
+        `[render-import-html] LIMIT BEATS ${limitBeats} — render ${sliced.length} beat đầu, ~${totalVideoSec}s`,
+      );
+      sections.splice(0, sections.length, ...sliced);
     }
 
     const rendersDir = path.join(projectDir, "renders");
@@ -241,6 +261,7 @@ async function main() {
         underlaySrc: "underlay.mp4",
         avatarOverlay,
         showCaptions,
+        showBrand: false,
         renderSpec,
       }),
       "utf8",
@@ -257,6 +278,7 @@ async function main() {
       videoPath: overlayMp4,
       outputPath: finalMp4,
       sfxHook: hasSfxHook(projectDir),
+      limitToVideoDuration: limitBeats > 0,
     });
 
     // Touch final last so findLatestMp4 still works

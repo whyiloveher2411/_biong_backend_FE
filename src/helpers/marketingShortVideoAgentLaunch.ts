@@ -127,6 +127,7 @@ async function triggerImportHtmlDaemonDirect(
         daemon_action: ImportHtmlDaemonAction;
         force_assemble?: boolean;
         allow_caption_mismatch?: boolean;
+        limit_beats?: number;
     },
     timeoutMs = 120000,
 ): Promise<{ ok: boolean; error?: string; result?: unknown }> {
@@ -151,6 +152,7 @@ async function triggerImportHtmlDaemonDirect(
                 launch_token: payload.launch_token,
                 force_assemble: Boolean(payload.force_assemble),
                 allow_caption_mismatch: Boolean(payload.allow_caption_mismatch),
+                limit_beats: payload.limit_beats && payload.limit_beats > 0 ? payload.limit_beats : 0,
             }),
             signal: controller.signal,
         });
@@ -276,6 +278,7 @@ async function triggerAgentLaunchViaExtension(payload: {
     daemon_action?: ImportHtmlDaemonAction;
     force_assemble?: boolean;
     allow_caption_mismatch?: boolean;
+    limit_beats?: number;
 }, timeoutMs = 120000): Promise<{ ok: boolean; error?: string; result?: unknown }> {
     const result = await dispatchExtensionEvent(
         'vn4-trigger-agent-render',
@@ -418,7 +421,7 @@ export async function launchShortVideoAgentImportAssemble(shortVideoId: number):
 export async function launchImportHtmlDaemonAction(
     shortVideoId: number,
     daemonAction: ImportHtmlDaemonAction,
-    options: { forceAssemble?: boolean; allowCaptionMismatch?: boolean } = {},
+    options: { forceAssemble?: boolean; allowCaptionMismatch?: boolean; limitBeats?: number } = {},
 ): Promise<LaunchAgentRenderResult> {
     const id = Number(shortVideoId || 0);
     if (!Number.isInteger(id) || id <= 0) {
@@ -464,6 +467,7 @@ export async function launchImportHtmlDaemonAction(
         daemon_action: daemonAction,
         force_assemble: options.forceAssemble,
         allow_caption_mismatch: options.allowCaptionMismatch === true,
+        limit_beats: options.limitBeats && options.limitBeats > 0 ? options.limitBeats : 0,
     };
     const timeoutMs = daemonAction === 'render-import-html' ? 900000 : 300000;
     const trigger = useDirectDaemon
@@ -532,11 +536,12 @@ export async function launchImportHtmlPreview(shortVideoId: number): Promise<Lau
 
 export async function launchImportHtmlRender(
     shortVideoId: number,
-    options: { allowCaptionMismatch?: boolean } = {},
+    options: { allowCaptionMismatch?: boolean; limitBeats?: number } = {},
 ): Promise<LaunchAgentRenderResult> {
     return launchImportHtmlDaemonAction(shortVideoId, 'render-import-html', {
         forceAssemble: true,
         allowCaptionMismatch: options.allowCaptionMismatch,
+        limitBeats: options.limitBeats,
     });
 }
 
