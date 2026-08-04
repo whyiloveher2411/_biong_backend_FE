@@ -485,6 +485,7 @@ export function resolveAgentLocalVideoOpenUrl(relativeOrAbsoluteUrl: string): st
     }
 
     const needsAuth = trimmed.includes('stream-local-agent-video')
+        || trimmed.includes('stream-whiteboard-agent-beat-video')
         || trimmed.includes('render-cache-asset')
         || trimmed.startsWith('/api/');
 
@@ -507,7 +508,37 @@ export function resolveAgentLocalVideoOpenUrl(relativeOrAbsoluteUrl: string): st
         return resolveRenderCachePreviewAssetUrl(trimmed);
     }
 
+    // Public uploads (local-final.mp4): luôn gắn API host — FE Vite origin không serve file này.
+    const isUploadsPath = trimmed.startsWith('/uploads/')
+        || trimmed.includes('/uploads/agent-renders/');
+    if (isUploadsPath || trimmed.startsWith('/')) {
+        try {
+            const pathOnly = trimmed.startsWith('http')
+                ? new URL(trimmed).pathname + (new URL(trimmed).search || '')
+                : trimmed;
+            const url = new URL(convertToURL(getApiHost(), pathOnly.split('?')[0]));
+            const query = pathOnly.includes('?') ? pathOnly.split('?')[1] : '';
+            const params = new URLSearchParams(query);
+            params.forEach((value, key) => {
+                url.searchParams.set(key, value);
+            });
+            url.searchParams.set('v', String(Date.now()));
+            return url.toString();
+        } catch {
+            // fall through
+        }
+    }
+
     try {
+        // Absolute URL lệch APP_URL (vd :8000) trong khi API thật :9999 → rewrite host.
+        if (/^https?:\/\//i.test(trimmed) && trimmed.includes('/uploads/agent-renders/')) {
+            const parsed = new URL(trimmed);
+            const apiBase = new URL(getApiHost());
+            parsed.protocol = apiBase.protocol;
+            parsed.host = apiBase.host;
+            parsed.searchParams.set('v', String(Date.now()));
+            return parsed.toString();
+        }
         const url = new URL(trimmed, window.location.origin);
         url.searchParams.set('v', String(Date.now()));
         return url.toString();

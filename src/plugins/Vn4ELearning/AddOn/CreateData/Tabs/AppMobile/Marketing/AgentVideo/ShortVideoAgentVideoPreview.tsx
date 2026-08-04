@@ -2,7 +2,9 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Chip,
     CircularProgress,
+    LinearProgress,
     Tab,
     Tabs,
     Typography,
@@ -15,6 +17,10 @@ import {
     resolvePreviewSourceTitle,
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
+import {
+    whiteboardRenderPhaseSubtitle,
+    whiteboardRenderProgressLabel,
+} from './agentVideoWhiteboardRenderProgress';
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
@@ -35,6 +41,7 @@ function buildPreviewSourceInput(state: AgentVideoState) {
         renderMode: state.renderMode,
         hasAudio: state.hasAudio,
         agentVideoUrl: state.agentVideoUrl,
+        localFinalMp4Url: state.localFinalMp4OpenUrl || state.localFinalMp4Url,
         beatMapReady: state.beatMapReady,
         beatsHtmlCompleted: state.beatsHtmlCompleted,
         beatsImageCompleted: state.beatsImageCompleted,
@@ -149,9 +156,20 @@ export default function ShortVideoAgentVideoPreview({
     const showHtmlBeat = activeSource === 'html_beat' && canShowHtmlBeatPreview(previewInput);
     const isWhiteboardMode = state.isWhiteboardMode;
     const beatPreviewTabLabel = isWhiteboardMode ? 'Ảnh beat' : 'HTML beat';
+    const whiteboardRenderProgress = state.whiteboardRenderProgress;
+    const showWhiteboardRenderProgress = Boolean(
+        isWhiteboardMode
+        && whiteboardRenderProgress?.active,
+    );
+    const whiteboardProgressTitle = showWhiteboardRenderProgress
+        ? whiteboardRenderProgressLabel(whiteboardRenderProgress)
+        : '';
+    const whiteboardProgressSubtitle = showWhiteboardRenderProgress
+        ? whiteboardRenderPhaseSubtitle(whiteboardRenderProgress)
+        : '';
 
     const placeholder = resolvePreviewPlaceholder({
-        agentVideoUrl: showHtmlBeat ? '' : state.agentVideoUrl,
+        agentVideoUrl: showHtmlBeat ? '' : (state.localFinalMp4OpenUrl || state.agentVideoUrl),
         agentVideoStatus: state.agentVideoStatus,
         phase: state.workflowPhase,
         hasScript: state.hasScript,
@@ -311,6 +329,53 @@ export default function ShortVideoAgentVideoPreview({
                 )}
             </Box>
 
+            {showWhiteboardRenderProgress ? (
+                <Box sx={{ px: 3, pb: 1.5 }}>
+                    <Box
+                        sx={{
+                            borderRadius: 1.5,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'background.paper',
+                            px: 1.5,
+                            py: 1,
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1,
+                                mb: 0.75,
+                            }}
+                        >
+                            <Typography variant="caption" fontWeight={700} color="text.primary">
+                                {whiteboardProgressTitle}
+                            </Typography>
+                            {whiteboardRenderProgress.failed.length > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${whiteboardRenderProgress.failed.length} lỗi`}
+                                    sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
+                        <LinearProgress
+                            variant="determinate"
+                            value={Math.max(0, Math.min(100, whiteboardRenderProgress.percent))}
+                            sx={{ height: 6, borderRadius: 1, mb: 0.5 }}
+                        />
+                        {whiteboardProgressSubtitle ? (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                                {whiteboardProgressSubtitle}
+                            </Typography>
+                        ) : null}
+                    </Box>
+                </Box>
+            ) : null}
+
             <Box
                 sx={{
                     flex: 1,
@@ -336,7 +401,7 @@ export default function ShortVideoAgentVideoPreview({
                     }}
                 >
                     <PortraitPreviewFrame>
-                        {activeSource === 'final' && state.agentVideoUrl ? (
+                        {activeSource === 'final' && (state.localFinalMp4OpenUrl || state.agentVideoUrl) ? (
                             <Box
                                 sx={{
                                     width: '100%',
@@ -350,7 +415,8 @@ export default function ShortVideoAgentVideoPreview({
                                 <video
                                     ref={videoRef}
                                     controls
-                                    src={state.agentVideoUrl}
+                                    key={state.localFinalMp4OpenUrl || state.agentVideoUrl}
+                                    src={state.localFinalMp4OpenUrl || state.agentVideoUrl}
                                     style={{
                                         width: '100%',
                                         height: '100%',
@@ -419,9 +485,11 @@ export default function ShortVideoAgentVideoPreview({
                         ) : null}
                     </PortraitPreviewFrame>
 
-                    {activeSource === 'final' && state.agentVideoUrl && state.agentVideoRenderedAt ? (
+                    {activeSource === 'final' && (state.localFinalMp4OpenUrl || state.agentVideoUrl) && state.agentVideoRenderedAt ? (
                         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-                            Render lúc: {state.agentVideoRenderedAt}
+                            {state.localFinalMp4OpenUrl ? 'Local final' : 'CDN'}
+                            {' · '}
+                            Render lúc: {state.localFinalMp4ModifiedAt || state.agentVideoRenderedAt}
                         </Typography>
                     ) : null}
 
@@ -463,11 +531,44 @@ export default function ShortVideoAgentVideoPreview({
                                 quickIterating={currentBeatQuickIterating}
                                 iterateStage={currentBeatIterateStage}
                                 iterateKind={currentBeatIterateKind}
+                                whiteboardBeatRender={state.whiteboardBeatRenders?.[currentBeatId] || null}
+                                uploadingBeatVideoToCapcut={
+                                    (state.uploadingBeatVideoToCapcutIds || []).includes(currentBeatId)
+                                }
+                                beatDurationSec={Number(currentBeatSection?.durationSec ?? 8) || 8}
+                                isLastBeat={
+                                    activeBeatIndex != null
+                                    && Boolean(state.beatMap?.sections?.length)
+                                    && activeBeatIndex >= (state.beatMap?.sections?.length || 0) - 1
+                                }
+                                agentWhiteboardConfig={state.agentWhiteboardConfig || {}}
+                                whiteboardBeatOverride={
+                                    state.agentWhiteboardBeatOverrides?.[currentBeatId] || null
+                                }
+                                savingWhiteboardBeatOverride={state.savingWhiteboardBeatOverride}
                                 onSaveBeatQa={handleSaveCurrentBeatQa}
                                 onQuickIterateBeat={handleQuickIterateCurrentBeat}
                                 onEditHtmlBeat={handleEditHtmlCurrentBeat}
                                 onSaveBeatVersion={handleSaveCurrentBeatVersion}
                                 onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
+                                onRenderWhiteboardBeat={
+                                    isWhiteboardMode
+                                        ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
+                                        : undefined
+                                }
+                                onAddBeatVideoToCapcut={
+                                    isWhiteboardMode
+                                        ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }
+                                        : undefined
+                                }
+                                onSaveWhiteboardBeatOverride={
+                                    isWhiteboardMode
+                                        ? (override) => state.handleSaveWhiteboardBeatOverride(
+                                            currentBeatId,
+                                            override,
+                                        )
+                                        : undefined
+                                }
                             />
                         ) : (
                             <Typography

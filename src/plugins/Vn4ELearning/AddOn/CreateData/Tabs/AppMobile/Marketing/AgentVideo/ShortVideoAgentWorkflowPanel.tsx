@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Button,
     Chip,
     CircularProgress,
     Divider,
@@ -18,23 +19,36 @@ import {
     Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { FULL_AUTO_PIPELINE_STEP_LABELS, type FullAutoPipelineStepKey, type FullAutoPipelineSummary } from './agentVideoApi';
+import { convertToURL, validURL } from 'helpers/url';
 import {
-    PipelineGroupedWorkflowListV2 as PipelineGroupedWorkflowList,
+    DEFAULT_WHITEBOARD_TRANSITIONS,
+    FULL_AUTO_PIPELINE_STEP_LABELS,
+    fetchWhiteboardTransitions,
+    type FullAutoPipelineStepKey,
+    type FullAutoPipelineSummary,
+    type WhiteboardTransitionOption,
+} from './agentVideoApi';
+import {
+    PipelineGroupedWorkflowListV3 as PipelineGroupedWorkflowList,
     resolveRestartableSet,
 } from './FullAutoPipelineGroupedSteps';
 import { PipelineRenderRunButton } from './PipelineRenderRunButton';
+import { appendHeadlessHowtoToError } from './agentVideoHeadlessPrerequisites';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
 import { resolveScriptImproveQaLoopView, scriptQaLoopCurrentStepLabel } from './agentVideoPipelineQaLoopUi';
 import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import ShortVideoAgentPromptLibrary from './ShortVideoAgentPromptLibrary';
-import { WorkflowSection } from './workflowPanelSection';
+import ShortVideoAgentAvatarDrawer, {
+    AVATAR_PIP_ANCHORS,
+} from './ShortVideoAgentAvatarDrawer';
+import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -278,6 +292,50 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const pipelineBusy = state.startingFullAuto
         || String(state.fullAutoPipeline?.status || '').trim().toLowerCase() === 'running';
 
+    const [whiteboardTransitions, setWhiteboardTransitions] = React.useState<WhiteboardTransitionOption[]>(
+        DEFAULT_WHITEBOARD_TRANSITIONS,
+    );
+
+    React.useEffect(() => {
+        if (!state.isWhiteboardMode) {
+            return undefined;
+        }
+        let cancelled = false;
+        void fetchWhiteboardTransitions().then((res) => {
+            if (cancelled || res.transitions.length === 0) {
+                return;
+            }
+            setWhiteboardTransitions(res.transitions);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [state.isWhiteboardMode]);
+
+    const whiteboardTransitionId = React.useMemo(() => {
+        const raw = String(state.agentWhiteboardConfig?.transition || 'page_flip').trim() || 'page_flip';
+        if (whiteboardTransitions.some((t) => t.id === raw)) {
+            return raw;
+        }
+        return whiteboardTransitions[0]?.id || 'page_flip';
+    }, [state.agentWhiteboardConfig?.transition, whiteboardTransitions]);
+
+    const whiteboardPhotoPlaceMode = React.useMemo(() => {
+        const raw = String(state.agentWhiteboardConfig?.photo_place_mode || 'drag').trim().toLowerCase();
+        if (raw === 'draw' || raw === 'instant') {
+            return raw as 'draw' | 'instant';
+        }
+        return 'drag' as const;
+    }, [state.agentWhiteboardConfig?.photo_place_mode]);
+
+    const clipOptionStackSx = {
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        overflow: 'hidden',
+    } as const;
+
     return (
         <Box
             sx={{
@@ -299,16 +357,13 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 ) : null}
 
                 <WorkflowSection title="Tùy chọn clip" tone="visual">
-                    <Stack
-                        divider={<Divider flexItem />}
-                        sx={{
-                            borderRadius: 1,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            bgcolor: 'background.paper',
-                            overflow: 'hidden',
-                        }}
-                    >
+                    <Stack spacing={1.25}>
+                        <Stack divider={<Divider flexItem />} sx={clipOptionStackSx}>
+                            <Box sx={{ px: 1.25, py: 0.75, bgcolor: 'action.hover' }}>
+                                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                    Cấu hình chung
+                                </Typography>
+                            </Box>
                         <FormControlLabel
                             sx={{
                                 m: 0,
@@ -371,6 +426,108 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 </Box>
                             )}
                         />
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Avatar lip-sync
+                            </Typography>
+                            {(() => {
+                                const selected = state.verifiedAvatars.find(
+                                    (item) => item.id === state.agentAvatarId,
+                                );
+                                const masterRaw = String(
+                                    state.agentAvatarMasterUrl || selected?.master_url || '',
+                                ).trim();
+                                let thumbSrc = '';
+                                if (masterRaw) {
+                                    if (validURL(masterRaw) || masterRaw.startsWith('data:')) {
+                                        thumbSrc = masterRaw;
+                                    } else if (masterRaw.startsWith('//')) {
+                                        thumbSrc = `https:${masterRaw}`;
+                                    } else {
+                                        thumbSrc = convertToURL(
+                                            process.env.REACT_APP_BASE_URL,
+                                            masterRaw.replace(/^\//, ''),
+                                        );
+                                    }
+                                }
+                                const anchorLabel = AVATAR_PIP_ANCHORS.find(
+                                    (item) => item.id === state.agentAvatarAnchor,
+                                )?.label || 'Dưới phải';
+                                const hasAvatar = state.agentAvatarId > 0;
+                                return (
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        color="inherit"
+                                        disabled={state.savingAgentAvatar}
+                                        onClick={() => state.setAvatarDrawerOpen(true)}
+                                        endIcon={<ChevronRightIcon />}
+                                        sx={{
+                                            ...workflowFieldSurfaceSx,
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            py: 1,
+                                            px: 1.25,
+                                        }}
+                                    >
+                                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+                                            <Box
+                                                sx={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: '50%',
+                                                    overflow: 'hidden',
+                                                    bgcolor: '#fff',
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {thumbSrc ? (
+                                                    <Box
+                                                        component="img"
+                                                        src={thumbSrc}
+                                                        alt=""
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover',
+                                                            display: 'block',
+                                                        }}
+                                                    />
+                                                ) : null}
+                                            </Box>
+                                            <Box sx={{ minWidth: 0, textAlign: 'left', flex: 1 }}>
+                                                <Typography variant="body2" fontWeight={600} noWrap>
+                                                    {selected?.title
+                                                        || (hasAvatar
+                                                            ? `Avatar #${state.agentAvatarId}`
+                                                            : 'Chọn avatar')}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                                    {hasAvatar
+                                                        ? `PiP · ${anchorLabel} · whiteboard + motion HTML`
+                                                        : 'Không dùng · mở drawer để chọn'}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                    </Button>
+                                );
+                            })()}
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                PiP góc clip, lip-sync theo Whisper. Áp dụng khi mux whiteboard / render HyperFrames.
+                            </Typography>
+                            <ShortVideoAgentAvatarDrawer
+                                open={state.avatarDrawerOpen}
+                                onClose={() => state.setAvatarDrawerOpen(false)}
+                                avatars={state.verifiedAvatars}
+                                selectedId={state.agentAvatarId}
+                                selectedAnchor={state.agentAvatarAnchor}
+                                clipAspect={state.agentClipAspect}
+                                saving={state.savingAgentAvatar}
+                                onApply={state.handleAgentAvatarApply}
+                            />
+                        </Box>
                         {state.audioScriptStyles.length > 0 ? (
                             <Box sx={{ px: 1.25, py: 1 }}>
                                 <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
@@ -513,8 +670,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             </ToggleButtonGroup>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                 {state.isWhiteboardMode
-                                    ? 'Whiteboard: sinh ảnh beat bằng Gemini + render bảng vẽ tay.'
-                                    : 'Motion HTML: HyperFrames HTML theo beat (mặc định).'}
+                                    ? 'Whiteboard: ảnh beat + render bảng. Cấu hình riêng ở khối Whiteboard bên dưới.'
+                                    : 'Motion HTML: HyperFrames HTML theo beat. Cấu hình riêng ở khối Motion HTML bên dưới.'}
                             </Typography>
                         </Box>
                         <FormControlLabel
@@ -548,6 +705,133 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 </Box>
                             )}
                         />
+                        </Stack>
+
+                        {state.isWhiteboardMode ? (
+                            <Stack divider={<Divider flexItem />} sx={clipOptionStackSx}>
+                                <Box sx={{ px: 1.25, py: 0.75, bgcolor: 'action.hover' }}>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Whiteboard
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ px: 1.25, py: 1 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                        Cách đưa ảnh vào khung
+                                    </Typography>
+                                    <ToggleButtonGroup
+                                        exclusive
+                                        fullWidth
+                                        size="small"
+                                        value={whiteboardPhotoPlaceMode}
+                                        disabled={state.savingWhiteboardConfig}
+                                        onChange={(_event, value: 'instant' | 'draw' | 'drag' | null) => {
+                                            if (value) {
+                                                void state.handleAgentWhiteboardConfigChange({
+                                                    photo_place_mode: value,
+                                                });
+                                            }
+                                        }}
+                                        aria-label="Cách đưa ảnh vào khung whiteboard"
+                                    >
+                                        <ToggleButton value="instant" aria-label="Không vẽ tay">
+                                            Không vẽ tay
+                                        </ToggleButton>
+                                        <ToggleButton value="drag" aria-label="Kéo ảnh vào">
+                                            Kéo ảnh vào
+                                        </ToggleButton>
+                                        <ToggleButton value="draw" aria-label="Vẽ tô ảnh">
+                                            Vẽ tô ảnh
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                        {whiteboardPhotoPlaceMode === 'instant'
+                                            ? 'Frame đầu = ảnh đầy đủ, không tay vẽ. Chuyển cảnh sang ảnh beat sau theo hiệu ứng bên dưới.'
+                                            : (whiteboardPhotoPlaceMode === 'draw'
+                                                ? 'Brush tô vùng ảnh thật sau outline.'
+                                                : 'Tay kéo cutout ảnh thật vào trước, rồi mới vẽ doodle (mặc định).')}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mt: 1.25, mb: 0.75 }}>
+                                        Cách chuyển cảnh
+                                    </Typography>
+                                    <FormControl fullWidth size="small" disabled={state.savingWhiteboardConfig}>
+                                        <Select
+                                            value={whiteboardTransitionId}
+                                            onChange={(e) => {
+                                                const value = String(e.target.value || '').trim();
+                                                if (value) {
+                                                    void state.handleAgentWhiteboardConfigChange({
+                                                        transition: value,
+                                                    });
+                                                }
+                                            }}
+                                            inputProps={{ 'aria-label': 'Cách chuyển cảnh whiteboard' }}
+                                        >
+                                            {whiteboardTransitions.map((t) => (
+                                                <MenuItem key={t.id} value={t.id}>
+                                                    {t.label}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                        {whiteboardPhotoPlaceMode === 'instant'
+                                            ? (
+                                                whiteboardTransitionId === 'random'
+                                                    ? 'Ngẫu nhiên mỗi beat: rút hết danh sách không lặp, hết thì xáo lại. Mọi hiệu ứng lộ ảnh 2.'
+                                                    : whiteboardTransitionId === 'erase'
+                                                        ? 'Xóa bảng: ảnh 1 đè lên ảnh 2; tay gôm lau dần lộ ảnh 2 phía dưới (không qua bảng trống).'
+                                                        : whiteboardTransitionId === 'camera_pan'
+                                                            ? 'Camera pan: máy ảo trượt/zoom từ ảnh 1 sang ảnh 2 trên bảng liên tục.'
+                                                            : whiteboardTransitionId === 'slide'
+                                                                ? 'Tay kéo: bàn tay đẩy ảnh 1 ra, kéo ảnh 2 vào.'
+                                                                : whiteboardTransitionId === 'ink_pop'
+                                                                    ? 'Loang màu nước: vết loang lộ dần ảnh 2 trên nền ảnh 1 (không phủ mực đen kín).'
+                                                                    : whiteboardTransitionId === 'fade'
+                                                                        ? 'Cắt / Fade: ảnh 1 mờ dần sang ảnh 2.'
+                                                                        : whiteboardTransitionId === 'paper_tear'
+                                                                            ? 'Xé giấy: green→ảnh 1, blue→ảnh 2; giữ cánh giấy trắng từ video asset.'
+                                                                            : whiteboardTransitionId === 'paint_stroke'
+                                                                                ? 'Quét cọ: green→ảnh 1, blue→ảnh 2; mép cọ lấy từ video asset quet_co_1.'
+                                                                                : 'Lật trang: ảnh 2 sẵn trên mặt trang khi lật. Beat cuối không transition.'
+                                            )
+                                            : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Ngẫu nhiên để rút hết danh sách không lặp, hết thì xáo lại.'}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        ) : (
+                            <Stack divider={<Divider flexItem />} sx={clipOptionStackSx}>
+                                <Box sx={{ px: 1.25, py: 0.75, bgcolor: 'action.hover' }}>
+                                    <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                        Motion HTML
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ px: 1.25, py: 1 }}>
+                                    <FormControl fullWidth size="small" disabled={state.savingVisualStyle}>
+                                        <InputLabel id="visual-style-select-label">Phong cách visual</InputLabel>
+                                        <Select
+                                            labelId="visual-style-select-label"
+                                            label="Phong cách visual"
+                                            value={state.visualStyle || 'auto'}
+                                            onChange={(e) => { void state.handleVisualStyleChange(String(e.target.value)); }}
+                                        >
+                                            {(state.visualStyleCatalog.length > 0
+                                                ? state.visualStyleCatalog
+                                                : [{ key: 'auto', label: 'Tự động (agent)' }]
+                                            ).map((item) => (
+                                                <MenuItem key={item.key} value={item.key}>
+                                                    {item.label}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                        {state.visualStyleResolved
+                                            ? `Render: ${visualStyleLabel(state.visualStyleResolved, state.visualStyleCatalog)}${state.visualStyleSource ? ` (${state.visualStyleSource})` : ''}`
+                                            : 'Chỉ áp dụng khi chế độ Motion HTML.'}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        )}
                     </Stack>
                 </WorkflowSection>
 
@@ -656,11 +940,35 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             agentVisualMode={state.agentVisualMode}
                             currentStep={state.fullAutoPipeline.current_step || ''}
                             pipelineStatus={state.fullAutoPipeline.status || 'idle'}
+                            stepToggles={state.fullAutoStepToggles}
+                            stepToggleDisabled={state.savingFullAutoStepToggles || pipelineBusy}
+                            onStepToggleChange={(toggleKey, checked) => {
+                                void state.handleFullAutoStepToggleChange(toggleKey, checked);
+                            }}
+                            beatImageFillMode={state.beatImageFillMode}
+                            beatImageFillModeDisabled={state.savingBeatImageFillMode || pipelineBusy}
+                            onBeatImageFillModeChange={(mode) => {
+                                void state.handleBeatImageFillModeChange(mode);
+                            }}
                             restartableSet={restartableSet}
                             selectStepDisabled={pipelineBusy}
                             onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
                                 void state.handleStartFullAutoPipeline('restart', stepKey);
                             }}
+                            onRunSingleStep={(stepKey: FullAutoPipelineStepKey) => {
+                                if (typeof state.handleRunSinglePipelineStep === 'function') {
+                                    void state.handleRunSinglePipelineStep(stepKey);
+                                    return;
+                                }
+                                void state.handleStartFullAutoPipeline(
+                                    'restart',
+                                    stepKey,
+                                    undefined,
+                                    { singleStep: true },
+                                );
+                            }}
+                            runSingleStepDisabled={pipelineBusy}
+                            runningSingleStep={state.startingFullAuto}
                             onRerunRenderUpload={() => {
                                 if (typeof state.handleRerunRenderUpload === 'function') {
                                     void state.handleRerunRenderUpload();
@@ -672,8 +980,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             rerunRenderUploadDisabled={pipelineBusy}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
-                            <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
-                                {state.fullAutoPipeline.last_error.message}
+                            <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>
+                                {appendHeadlessHowtoToError(state.fullAutoPipeline.last_error.message)}
                                 {Array.isArray(
                                     (state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: unknown[] } } | undefined)?.diagnosis?.issues,
                                 ) && ((state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues?.length ?? 0) > 0 ? (
@@ -714,35 +1022,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         />
                     </WorkflowSection>
                 ) : null}
-
-                <WorkflowSection title="Phong cách visual" tone="visual">
-                    <FormControl fullWidth size="small" disabled={state.savingVisualStyle}>
-                        <InputLabel id="visual-style-select-label">Phong cách</InputLabel>
-                        <Select
-                            labelId="visual-style-select-label"
-                            label="Phong cách"
-                            value={state.visualStyle || 'auto'}
-                            onChange={(e) => { void state.handleVisualStyleChange(String(e.target.value)); }}
-                        >
-                            {(state.visualStyleCatalog.length > 0
-                                ? state.visualStyleCatalog
-                                : [{ key: 'auto', label: 'Tự động (agent)' }]
-                            ).map((item) => (
-                                <MenuItem key={item.key} value={item.key}>
-                                    {item.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <MetaRow
-                        label="Phong cách render"
-                        value={
-                            state.visualStyleResolved
-                                ? `${visualStyleLabel(state.visualStyleResolved, state.visualStyleCatalog)}${state.visualStyleSource ? ` (${state.visualStyleSource})` : ''}`
-                                : '—'
-                        }
-                    />
-                </WorkflowSection>
 
                 <WorkflowSection title="Hành động" tone="action">
                     <Stack spacing={1}>

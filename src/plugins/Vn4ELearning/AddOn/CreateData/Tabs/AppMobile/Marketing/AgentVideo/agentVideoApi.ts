@@ -24,7 +24,30 @@ export type AgentWhiteboardConfig = {
     gen_style?: string;
     hold_ratio?: number;
     color_ratio?: number;
+    photo_place_mode?: 'draw' | 'drag' | 'instant' | string;
     transition_duration_sec?: number;
+};
+
+export type AgentWhiteboardBeatOverride = {
+    hand?: string;
+    board_theme?: string;
+    gen_style?: 'whiteboard' | 'sketch' | 'hybrid' | string;
+    photo_place_mode?: 'draw' | 'drag' | 'instant' | string;
+    duration_sec?: number;
+    hold_sec?: number;
+    color_sec?: number;
+    transition_duration_sec?: number;
+};
+
+export type WhiteboardBeatRenderEntry = {
+    status?: 'none' | 'queued' | 'processing' | 'completed' | 'failed' | string;
+    job_id?: number;
+    silent_mp4?: string;
+    video_path?: string;
+    video_url?: string;
+    error?: string;
+    queued_at?: string;
+    updated_at?: string;
 };
 
 export type SocialAccountItem = {
@@ -417,6 +440,16 @@ export type NarrationSegment = {
     status?: string;
 };
 
+/** Mode bước Ảnh beat — sibling agent_video_json.beat_image_fill_mode. */
+export type BeatImageFillMode = 'auto' | 'manual';
+
+export const DEFAULT_BEAT_IMAGE_FILL_MODE: BeatImageFillMode = 'auto';
+
+export function normalizeBeatImageFillMode(raw?: string | null): BeatImageFillMode {
+    const value = String(raw || '').trim().toLowerCase();
+    return value === 'manual' ? 'manual' : 'auto';
+}
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -448,6 +481,8 @@ export type AgentVideoContentResponse = {
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
+    agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
+    whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
     agent_avatar?: {
         show?: boolean;
         avatar_id?: number;
@@ -565,6 +600,8 @@ export type AgentVideoContentResponse = {
     import_html?: ImportHtmlSummary;
     tts_phonetic_dict?: TtsPhoneticDictEntry[];
     full_auto_pipeline?: FullAutoPipelineSummary;
+    full_auto_step_toggles?: FullAutoStepToggles;
+    beat_image_fill_mode?: BeatImageFillMode | string;
     github_top_enrich?: GithubTopEnrichSummary;
     topic_research?: TopicResearchBlock;
     remix?: RemixBlock;
@@ -652,7 +689,6 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'approve_tts',
     'whisper',
     'beat_division',
-    'beat_division_qa',
     'beat_fill',
     'beat_image_fill',
     'beat_refine_visual',
@@ -679,8 +715,8 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'script_phonetic_normalize',
     'approve_tts',
     'beat_division',
-    'beat_division_qa',
     'beat_fill',
+    'beat_image_fill',
     'beat_refine_visual',
     'beat_refine_html',
     'render',
@@ -706,7 +742,6 @@ export const FULL_AUTO_PIPELINE_AI_STEPS = [
     'approve_tts',
     'whisper',
     'beat_division',
-    'beat_division_qa',
     'beat_fill',
     'beat_refine_visual',
     'beat_refine_html',
@@ -768,6 +803,41 @@ export type FullAutoPipelineSummary = {
     qa_loops?: Record<string, FullAutoPipelineScriptQaLoop>;
 };
 
+/** Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles (mặc định true). */
+export type FullAutoStepToggleKey =
+    | 'script_improve'
+    | 'script_hook_enhance'
+    | 'script_phonetic_normalize';
+
+export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
+
+export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
+    script_improve: true,
+    script_hook_enhance: true,
+    script_phonetic_normalize: true,
+};
+
+export function normalizeFullAutoStepToggles(
+    raw?: Partial<FullAutoStepToggles> | null,
+): FullAutoStepToggles {
+    return {
+        script_improve: raw?.script_improve !== false,
+        script_hook_enhance: raw?.script_hook_enhance !== false,
+        script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
+    };
+}
+
+/** Map pipeline step → toggle key (improve+QA dùng chung). */
+export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggleKey | null {
+    if (stepKey === 'script_improve' || stepKey === 'script_improve_qa') {
+        return 'script_improve';
+    }
+    if (stepKey === 'script_hook_enhance' || stepKey === 'script_phonetic_normalize') {
+        return stepKey;
+    }
+    return null;
+}
+
 export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, string> = {
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
@@ -777,9 +847,8 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
     beat_division: 'Chia beat',
-    beat_division_qa: 'Đánh giá beat',
     beat_fill: 'Fill HTML beat',
-    beat_image_fill: 'Ảnh beat (Gemini)',
+    beat_image_fill: 'Ảnh beat',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
@@ -809,7 +878,6 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
         label: 'Beat',
         steps: [
             'beat_division',
-            'beat_division_qa',
             'beat_fill',
             'beat_image_fill',
             'beat_refine_visual',
@@ -1224,6 +1292,30 @@ export async function saveAgentAutoFillBeatHtml(
     ) as Promise<JsonResponse & { agent_auto_fill_beat_html?: boolean }>;
 }
 
+export async function saveFullAutoStepToggles(
+    shortVideoId: number,
+    toggles: Partial<FullAutoStepToggles>,
+): Promise<JsonResponse & { full_auto_step_toggles?: FullAutoStepToggles }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-full-auto-step-toggles',
+        shortVideoBody(shortVideoId, {
+            full_auto_step_toggles: toggles,
+        }),
+    ) as Promise<JsonResponse & { full_auto_step_toggles?: FullAutoStepToggles }>;
+}
+
+export async function saveBeatImageFillMode(
+    shortVideoId: number,
+    mode: BeatImageFillMode,
+): Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-image-fill-mode',
+        shortVideoBody(shortVideoId, {
+            beat_image_fill_mode: mode,
+        }),
+    ) as Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode }>;
+}
+
 export async function saveAgentGeminiOpenBrowser(
     shortVideoId: number,
     enabled: boolean,
@@ -1310,6 +1402,56 @@ export async function saveAgentVisualMode(
     ) as Promise<JsonResponse & { agent_visual_mode?: AgentVisualMode }>;
 }
 
+export type WhiteboardTransitionOption = {
+    id: string;
+    label: string;
+};
+
+export const DEFAULT_WHITEBOARD_TRANSITIONS: WhiteboardTransitionOption[] = [
+    { id: 'camera_pan', label: 'Camera pan' },
+    { id: 'erase', label: 'Xóa bảng' },
+    { id: 'slide', label: 'Tay kéo' },
+    { id: 'ink_pop', label: 'Loang màu nước' },
+    { id: 'fade', label: 'Cắt / Fade' },
+    { id: 'page_flip', label: 'Lật trang' },
+    { id: 'paper_tear', label: 'Xé giấy' },
+    { id: 'paint_stroke', label: 'Quét cọ' },
+    { id: 'random', label: 'Ngẫu nhiên' },
+];
+
+export async function fetchWhiteboardTransitions(): Promise<{
+    transitions: WhiteboardTransitionOption[];
+    default_transition: string;
+}> {
+    try {
+        const res = await postJson(
+            'plugin/vn4-e-learning/app-mobile/marketing/whiteboard/transitions',
+            {},
+        ) as JsonResponse & {
+            transitions?: WhiteboardTransitionOption[];
+            default_transition?: string;
+        };
+        const list = Array.isArray(res.transitions)
+            ? res.transitions.filter((t) => t?.id).map((t) => ({
+                id: String(t.id),
+                label: String(t.label || t.id),
+            }))
+            : [];
+        if (list.length > 0) {
+            return {
+                transitions: list,
+                default_transition: String(res.default_transition || list[0].id || 'page_flip'),
+            };
+        }
+    } catch {
+        // fallback bên dưới
+    }
+    return {
+        transitions: DEFAULT_WHITEBOARD_TRANSITIONS,
+        default_transition: 'page_flip',
+    };
+}
+
 export async function saveAgentWhiteboardConfig(
     shortVideoId: number,
     config: Partial<AgentWhiteboardConfig>,
@@ -1318,6 +1460,25 @@ export async function saveAgentWhiteboardConfig(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-whiteboard-config',
         shortVideoBody(shortVideoId, { agent_whiteboard_config: config }),
     ) as Promise<JsonResponse & { agent_whiteboard_config?: AgentWhiteboardConfig }>;
+}
+
+export async function saveAgentWhiteboardBeatOverride(
+    shortVideoId: number,
+    beatId: string,
+    override: Partial<AgentWhiteboardBeatOverride>,
+): Promise<JsonResponse & {
+    beat_id?: string;
+    override?: AgentWhiteboardBeatOverride;
+    agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-whiteboard-beat-override',
+        shortVideoBody(shortVideoId, { beat_id: beatId, override }),
+    ) as Promise<JsonResponse & {
+        beat_id?: string;
+        override?: AgentWhiteboardBeatOverride;
+        agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
+    }>;
 }
 
 export async function enqueueGeminiWebBeatImageFill(
@@ -2075,18 +2236,23 @@ export async function startFullAutoPipeline(
     mode: 'resume' | 'restart' = 'resume',
     fromStep?: string,
     untilStep?: string,
+    opts?: { singleStep?: boolean },
 ): Promise<JsonResponse & {
     full_auto_pipeline?: FullAutoPipelineSummary;
     mode?: string;
     from_step?: string | null;
     until_step?: string | null;
+    single_step?: boolean;
 }> {
     const body: Record<string, unknown> = { mode };
     if (mode === 'restart' && fromStep) {
         body.from_step = fromStep;
     }
-    if (mode === 'restart' && untilStep) {
+    if (mode === 'restart' && untilStep && !opts?.singleStep) {
         body.until_step = untilStep;
+    }
+    if (mode === 'restart' && opts?.singleStep) {
+        body.single_step = true;
     }
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/start-full-auto-pipeline',
@@ -2096,6 +2262,7 @@ export async function startFullAutoPipeline(
         mode?: string;
         from_step?: string | null;
         until_step?: string | null;
+        single_step?: boolean;
     }>;
 }
 
@@ -2125,6 +2292,41 @@ export async function getAgentHeadlessPreviewAccess(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-headless-preview-access',
         shortVideoBody(shortVideoId),
     ) as Promise<AgentHeadlessPreviewAccessResponse>;
+}
+
+export type HeadlessPrerequisitesStatusResponse = JsonResponse & {
+    checked_at?: string;
+    ready_for_headless?: boolean;
+    summary?: string;
+    worker?: {
+        ok?: boolean;
+        running?: boolean;
+        pids?: number[];
+        detail?: string;
+    };
+    preview_relay?: {
+        ok?: boolean;
+        running?: boolean;
+        optional?: boolean;
+        url?: string;
+        sessions?: number;
+        detail?: string;
+    };
+    gemini_profile?: {
+        ok?: boolean;
+        configured?: boolean;
+        exists?: boolean;
+        has_cookie_file?: boolean;
+        path?: string;
+        detail?: string;
+    };
+};
+
+export async function getHeadlessPrerequisitesStatus(): Promise<HeadlessPrerequisitesStatusResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-headless-prerequisites-status',
+        {},
+    ) as Promise<HeadlessPrerequisitesStatusResponse>;
 }
 
 export async function saveAgentImportHtml(
@@ -2334,6 +2536,54 @@ export async function addAudioToCapcut(
         project_name?: string;
         project_path?: string;
         created_project?: boolean;
+        capcut_last_sync_json?: Record<string, unknown>;
+    }>;
+}
+
+export async function renderWhiteboardAgentBeat(
+    shortVideoId: number,
+    beatId: string,
+): Promise<JsonResponse & {
+    queued?: boolean;
+    job_id?: number;
+    beat_id?: string;
+    skipped_active?: number;
+    whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/render-whiteboard-agent-beat',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<JsonResponse & {
+        queued?: boolean;
+        job_id?: number;
+        beat_id?: string;
+        skipped_active?: number;
+        whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
+    }>;
+}
+
+export async function addBeatVideoToCapcut(
+    shortVideoId: number,
+    beatId: string,
+): Promise<JsonResponse & {
+    project_name?: string;
+    project_path?: string;
+    created_project?: boolean;
+    beat_id?: string;
+    start_sec?: number;
+    video_path?: string;
+    capcut_last_sync_json?: Record<string, unknown>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/add-beat-video-to-capcut',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<JsonResponse & {
+        project_name?: string;
+        project_path?: string;
+        created_project?: boolean;
+        beat_id?: string;
+        start_sec?: number;
+        video_path?: string;
         capcut_last_sync_json?: Record<string, unknown>;
     }>;
 }

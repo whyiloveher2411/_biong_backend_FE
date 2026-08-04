@@ -5,14 +5,16 @@ import ErrorIcon from '@mui/icons-material/Error';
 import {
     FULL_AUTO_PIPELINE_AI_STEPS,
     FULL_AUTO_PIPELINE_HEADLESS_STEPS,
-    FULL_AUTO_PIPELINE_STEP_GROUPS,
     FULL_AUTO_PIPELINE_STEP_ORDER,
-    getFullAutoPipelineStepIndex,
+    fullAutoStepToggleKeyForStep,
     isFullAutoPipelineAiStep,
     isFullAutoPipelineHeadlessStep,
+    type BeatImageFillMode,
     type FullAutoPipelineStep,
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
+    type FullAutoStepToggleKey,
+    type FullAutoStepToggles,
 } from './agentVideoApi';
 import {
     getPipelineGroupSurface,
@@ -23,6 +25,7 @@ import {
     pipelineStepStatusColor,
 } from './agentVideoPipelineUi';
 import { PipelineRenderRunButton } from './PipelineRenderRunButton';
+import { PipelineHeadlessPrerequisitesHint } from './PipelineHeadlessPrerequisitesHint';
 import {
     isScriptImproveQaLoopStep,
     scriptQaLoopStepStatusLabel,
@@ -33,9 +36,22 @@ import {
 import {
     PipelineScriptQaLoopSection,
 } from './PipelineScriptQaLoopUi';
-import { resolveFullAutoPipelineStepLabel } from './agentVideoPipelineStepLabels';
+import { PipelineStepToggleCheckbox } from './PipelineStepToggleCheckbox';
+import { PipelineBeatImageFillModeToggle } from './PipelineBeatImageFillModeToggle';
+import {
+    getVisibleFullAutoPipelineStepGroups,
+    getVisibleFullAutoPipelineStepIndex,
+    isFullAutoPipelineStepRelevantForMode,
+    resolveFullAutoPipelineStepLabel,
+    type VisibleFullAutoPipelineStepGroup,
+} from './agentVideoPipelineStepLabels';
 
-const PIPELINE_HEADLESS_TOOLTIP = 'Bước này dùng trình duyệt nền (Puppeteer / headless Chrome)';
+const PIPELINE_HEADLESS_TOOLTIP = [
+    'Bước này dùng trình duyệt nền (Puppeteer / headless Chrome).',
+    'Cần: ./run_worker.sh trong _biong_backend.',
+    'Preview live (tuỳ chọn): npm run headless-preview:relay:local trong marketing-ai.',
+    'Login Google lần đầu: GEMINI_WEB_OPEN_BROWSER=1 GEMINI_WEB_HEADLESS=false node scripts/run-gemini-web-beat.mjs',
+].join(' ');
 const PIPELINE_AI_TOOLTIP = 'Bước này dùng AI (Gemini, Whisper, ChatGPT TTS…)';
 
 function resolveHeadlessStepSet(headlessSteps?: FullAutoPipelineStepKey[]): Set<string> {
@@ -150,6 +166,7 @@ function PipelineAiBadge({ variant = 'dark', compact = false }: { variant?: 'lig
 type PipelineStepTitleProps = {
     stepKey: FullAutoPipelineStepKey;
     agentVisualMode?: string;
+    beatImageFillMode?: BeatImageFillMode;
     variant?: 'light' | 'dark';
     headlessStepSet: Set<string>;
     aiStepSet: Set<string>;
@@ -161,6 +178,7 @@ type PipelineStepTitleProps = {
 function PipelineStepTitle({
     stepKey,
     agentVisualMode,
+    beatImageFillMode = 'auto',
     variant = 'dark',
     headlessStepSet,
     aiStepSet,
@@ -168,9 +186,12 @@ function PipelineStepTitle({
     typographySx,
     compact = false,
 }: PipelineStepTitleProps) {
-    const showHeadless = headlessStepSet.has(stepKey) || isFullAutoPipelineHeadlessStep(stepKey);
+    const showHeadless = headlessStepSet.has(stepKey)
+        || isFullAutoPipelineHeadlessStep(stepKey)
+        || (stepKey === 'beat_image_fill' && beatImageFillMode === 'auto');
     const showAi = aiStepSet.has(stepKey) || isFullAutoPipelineAiStep(stepKey);
-    const label = `${getFullAutoPipelineStepIndex(stepKey)}. ${resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}`;
+    const stepIndex = getVisibleFullAutoPipelineStepIndex(stepKey, agentVisualMode);
+    const label = `${stepIndex > 0 ? `${stepIndex}. ` : ''}${resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}`;
 
     if (compact) {
         return (
@@ -305,6 +326,13 @@ type PipelineGroupedCommonProps = {
     agentVisualMode?: string;
     pipelineStatus?: string;
     currentStep?: string;
+    /** Checkbox Chạy — mặc định true; tắt = full-auto skip. */
+    stepToggles?: FullAutoStepToggles;
+    stepToggleDisabled?: boolean;
+    onStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
+    beatImageFillMode?: BeatImageFillMode;
+    beatImageFillModeDisabled?: boolean;
+    onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
 };
 
 type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
@@ -314,6 +342,10 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     onRerunRenderUpload?: () => void;
     rerunRenderUploadDisabled?: boolean;
     rerunningRenderUpload?: boolean;
+    /** Chỉ chạy đúng 1 bước (invalidate bước sau, không auto tiếp). */
+    onRunSingleStep?: (stepKey: FullAutoPipelineStepKey) => void;
+    runSingleStepDisabled?: boolean;
+    runningSingleStep?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -324,12 +356,21 @@ export function PipelineGroupedMenuItems({
     agentVisualMode,
     pipelineStatus,
     currentStep = '',
+    stepToggles,
+    stepToggleDisabled = false,
+    onStepToggleChange,
+    beatImageFillMode = 'auto',
+    beatImageFillModeDisabled = false,
+    onBeatImageFillModeChange,
     restartableSet,
     disabled = false,
     onSelectStep,
     onRerunRenderUpload,
     rerunRenderUploadDisabled = false,
     rerunningRenderUpload = false,
+    onRunSingleStep,
+    runSingleStepDisabled = false,
+    runningSingleStep = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -345,25 +386,45 @@ export function PipelineGroupedMenuItems({
         current_step: currentStep,
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
+    const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        [agentVisualMode],
+    );
 
-    const renderMenuStep = (stepKey: FullAutoPipelineStepKey, inLoop = false) => {
-        const enabled = restartableSet.has(stepKey);
-        const stepInfo = steps?.[stepKey];
+    const renderMenuStep = (stepKey: string, inLoop = false) => {
+        const key = stepKey as FullAutoPipelineStepKey;
+        const enabled = restartableSet.has(key);
+        const stepInfo = steps?.[key];
         const status = String(stepInfo?.status || 'pending');
-        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
-        const isCurrent = stepKey === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
+        const statusLabel = resolveStepStatusLabel(key, status, loopView);
+        const isCurrent = key === currentStep && String(pipelineStatus || '').toLowerCase() === 'running';
+        const canRunSingle = Boolean(
+            onRunSingleStep
+            && enabled
+            && !disabled
+            && !runSingleStepDisabled,
+        );
+        const stepLabel = resolveFullAutoPipelineStepLabel(key, agentVisualMode);
+        const rowToggleKey = !inLoop && !isScriptImproveQaLoopStep(key)
+            ? fullAutoStepToggleKeyForStep(key)
+            : null;
+        const showRowToggle = Boolean(
+            rowToggleKey
+            && onStepToggleChange
+            && (rowToggleKey === 'script_hook_enhance' || rowToggleKey === 'script_phonetic_normalize'),
+        );
 
         return (
             <MenuItem
-                key={stepKey}
+                key={key}
                 disabled={!enabled || disabled}
-                onClick={() => onSelectStep(stepKey)}
+                onClick={() => onSelectStep(key)}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: 2,
-                    minWidth: 300,
+                    gap: 1.25,
+                    minWidth: 340,
                     py: inLoop ? 0.65 : 0.85,
                     pl: inLoop ? 1.5 : 3.25,
                     pr: inLoop ? 1.25 : 1.75,
@@ -379,8 +440,9 @@ export function PipelineGroupedMenuItems({
                 }}
             >
                 <PipelineStepTitle
-                    stepKey={stepKey}
+                    stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatImageFillMode={beatImageFillMode}
                     variant="light"
                     typographyVariant="body2"
                     headlessStepSet={headlessStepSet}
@@ -390,21 +452,57 @@ export function PipelineGroupedMenuItems({
                         fontWeight: isCurrent || status === 'running' ? 700 : 400,
                     }}
                 />
-                <Typography
-                    component="span"
-                    variant="caption"
+                <Box
                     sx={{
-                        color: enabled
-                            ? pipelineStepStatusColor(status, 'dark')
-                            : 'text.disabled',
-                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
                         flexShrink: 0,
-                        textAlign: 'right',
-                        maxWidth: 140,
                     }}
                 >
-                    {statusLabel}
-                </Typography>
+                    <Typography
+                        component="span"
+                        variant="caption"
+                        sx={{
+                            color: enabled
+                                ? pipelineStepStatusColor(status, 'dark')
+                                : 'text.disabled',
+                            fontWeight: 600,
+                            textAlign: 'right',
+                            maxWidth: 100,
+                        }}
+                    >
+                        {statusLabel}
+                    </Typography>
+                    {onRunSingleStep ? (
+                        <PipelineRenderRunButton
+                            size="compact"
+                            label="Run"
+                            testId={`pipeline-menu-run-single-${key}`}
+                            title={`Chỉ chạy bước này (các bước sau phải chạy lại): ${stepLabel}`}
+                            disabled={!canRunSingle}
+                            loading={runningSingleStep && isCurrent}
+                            onClick={() => {
+                                onRunSingleStep(key);
+                            }}
+                        />
+                    ) : null}
+                    {showRowToggle && rowToggleKey && onStepToggleChange ? (
+                        <PipelineStepToggleCheckbox
+                            toggleKey={rowToggleKey}
+                            checked={stepToggles?.[rowToggleKey] !== false}
+                            disabled={disabled || stepToggleDisabled}
+                            onChange={onStepToggleChange}
+                        />
+                    ) : null}
+                    {key === 'beat_image_fill' && onBeatImageFillModeChange ? (
+                        <PipelineBeatImageFillModeToggle
+                            value={beatImageFillMode}
+                            disabled={disabled || beatImageFillModeDisabled}
+                            onChange={onBeatImageFillModeChange}
+                        />
+                    ) : null}
+                </Box>
             </MenuItem>
         );
     };
@@ -414,7 +512,10 @@ export function PipelineGroupedMenuItems({
             <Box sx={{ px: 2, pt: 0.5, pb: 0.25 }}>
                 <PipelineStepLegend variant="light" />
             </Box>
-            {FULL_AUTO_PIPELINE_STEP_GROUPS.map((group, groupIndex) => {
+            <Box sx={{ px: 1, pb: 0.5 }}>
+                <PipelineHeadlessPrerequisitesHint compact dense />
+            </Box>
+            {visibleGroups.map((group, groupIndex) => {
                 const surface = getPipelineGroupSurface(group.key, 'light');
                 const isRenderGroup = group.key === 'render';
                 return (
@@ -423,7 +524,7 @@ export function PipelineGroupedMenuItems({
                         sx={{
                             mx: 1,
                             mt: groupIndex === 0 ? 0.5 : 1,
-                            mb: groupIndex === FULL_AUTO_PIPELINE_STEP_GROUPS.length - 1 ? 0.5 : 0,
+                            mb: groupIndex === visibleGroups.length - 1 ? 0.5 : 0,
                             borderRadius: 1,
                             border: '1px solid',
                             borderColor: surface.borderColor,
@@ -476,6 +577,11 @@ export function PipelineGroupedMenuItems({
                                             compact
                                             improveNode={renderMenuStep('script_improve', true)}
                                             qaNode={renderMenuStep('script_improve_qa', true)}
+                                            runEnabled={stepToggles?.script_improve !== false}
+                                            runToggleDisabled={disabled || stepToggleDisabled}
+                                            onRunEnabledChange={onStepToggleChange
+                                                ? (checked) => onStepToggleChange('script_improve', checked)
+                                                : undefined}
                                         />
                                     </Box>
                                     {split.after.map((stepKey) => renderMenuStep(stepKey))}
@@ -497,6 +603,7 @@ export function PipelineGroupedStepList({
     aiSteps,
     qaLoops,
     agentVisualMode,
+    beatImageFillMode = 'auto',
     pipelineStatus,
     currentStep = '',
 }: PipelineGroupedStepListProps) {
@@ -514,15 +621,20 @@ export function PipelineGroupedStepList({
         current_step: currentStep,
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
+    const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        [agentVisualMode],
+    );
 
-    const renderDarkStep = (stepKey: FullAutoPipelineStepKey, inLoop = false) => {
-        const status = String(steps?.[stepKey]?.status || 'pending');
-        const isCurrent = stepKey === currentStep;
-        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+    const renderDarkStep = (stepKey: string, inLoop = false) => {
+        const key = stepKey as FullAutoPipelineStepKey;
+        const status = String(steps?.[key]?.status || 'pending');
+        const isCurrent = key === currentStep;
+        const statusLabel = resolveStepStatusLabel(key, status, loopView);
 
         return (
             <Box
-                key={stepKey}
+                key={key}
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -537,8 +649,9 @@ export function PipelineGroupedStepList({
                 }}
             >
                 <PipelineStepTitle
-                    stepKey={stepKey}
+                    stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatImageFillMode={beatImageFillMode}
                     variant="dark"
                     headlessStepSet={headlessStepSet}
                     aiStepSet={aiStepSet}
@@ -569,7 +682,7 @@ export function PipelineGroupedStepList({
     return (
         <>
             <PipelineStepLegend variant="dark" />
-            {FULL_AUTO_PIPELINE_STEP_GROUPS.map((group, groupIndex) => {
+            {visibleGroups.map((group, groupIndex) => {
                 const surface = getPipelineGroupSurface(group.key, 'dark');
                 return (
                     <Box
@@ -629,10 +742,14 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     restartableSet?: Set<FullAutoPipelineStepKey>;
     onSelectStep?: (stepKey: FullAutoPipelineStepKey) => void;
     selectStepDisabled?: boolean;
+    /** Chỉ chạy đúng 1 bước (invalidate bước sau, không auto tiếp). */
+    onRunSingleStep?: (stepKey: FullAutoPipelineStepKey) => void;
+    runSingleStepDisabled?: boolean;
+    runningSingleStep?: boolean;
 };
 
-/** V2: đổi tên export để Fast Refresh remount — tránh giữ UI list cũ không có nút Run. */
-export function PipelineGroupedWorkflowListV2({
+/** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
+export function PipelineGroupedWorkflowListV3({
     steps,
     headlessSteps,
     aiSteps,
@@ -640,12 +757,21 @@ export function PipelineGroupedWorkflowListV2({
     agentVisualMode,
     currentStep = '',
     pipelineStatus = '',
+    stepToggles,
+    stepToggleDisabled = false,
+    onStepToggleChange,
+    beatImageFillMode = 'auto',
+    beatImageFillModeDisabled = false,
+    onBeatImageFillModeChange,
     onRerunRenderUpload,
     rerunRenderUploadDisabled = false,
     rerunningRenderUpload = false,
     restartableSet,
     onSelectStep,
     selectStepDisabled = false,
+    onRunSingleStep,
+    runSingleStepDisabled = false,
+    runningSingleStep = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -661,33 +787,51 @@ export function PipelineGroupedWorkflowListV2({
         current_step: currentStep,
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
+    const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        [agentVisualMode],
+    );
 
     const renderWorkflowStep = (
-        stepKey: FullAutoPipelineStepKey,
+        stepKey: string,
         borderColor: string,
         inLoop = false,
     ) => {
-        const status = String(steps?.[stepKey]?.status || 'pending');
-        const isCurrent = stepKey === currentStep
+        const key = stepKey as FullAutoPipelineStepKey;
+        const status = String(steps?.[key]?.status || 'pending');
+        const isCurrent = key === currentStep
             && String(pipelineStatus || '').trim().toLowerCase() === 'running';
-        const statusLabel = resolveStepStatusLabel(stepKey, status, loopView);
+        const statusLabel = resolveStepStatusLabel(key, status, loopView);
         const canRestart = Boolean(
             onSelectStep
-            && restartableSet?.has(stepKey)
+            && restartableSet?.has(key)
             && !selectStepDisabled,
         );
-        const stepLabel = resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode);
+        const canRunSingle = Boolean(
+            onRunSingleStep
+            && restartableSet?.has(key)
+            && !runSingleStepDisabled,
+        );
+        const stepLabel = resolveFullAutoPipelineStepLabel(key, agentVisualMode);
+        const rowToggleKey = !inLoop && !isScriptImproveQaLoopStep(key)
+            ? fullAutoStepToggleKeyForStep(key)
+            : null;
+        const showRowToggle = Boolean(
+            rowToggleKey
+            && onStepToggleChange
+            && (rowToggleKey === 'script_hook_enhance' || rowToggleKey === 'script_phonetic_normalize'),
+        );
 
         return (
             <Box
-                key={stepKey}
+                key={key}
                 role={canRestart ? 'button' : undefined}
                 tabIndex={canRestart ? 0 : undefined}
-                onClick={canRestart ? () => onSelectStep?.(stepKey) : undefined}
+                onClick={canRestart ? () => onSelectStep?.(key) : undefined}
                 onKeyDown={canRestart ? (event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        onSelectStep?.(stepKey);
+                        onSelectStep?.(key);
                     }
                 } : undefined}
                 title={canRestart ? `Chạy pipeline từ bước: ${stepLabel}` : undefined}
@@ -714,8 +858,9 @@ export function PipelineGroupedWorkflowListV2({
                 }}
             >
                 <PipelineStepTitle
-                    stepKey={stepKey}
+                    stepKey={key}
                     agentVisualMode={agentVisualMode}
+                    beatImageFillMode={beatImageFillMode}
                     variant="light"
                     headlessStepSet={headlessStepSet}
                     aiStepSet={aiStepSet}
@@ -725,7 +870,7 @@ export function PipelineGroupedWorkflowListV2({
                     }}
                 />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifySelf: 'start' }}>
-                    {isScriptImproveQaLoopStep(stepKey) && loopView.isLoopActive ? (
+                    {isScriptImproveQaLoopStep(key) && loopView.isLoopActive ? (
                         <Chip
                             size="small"
                             color="info"
@@ -743,15 +888,42 @@ export function PipelineGroupedWorkflowListV2({
                     ) : (
                         <PipelineStepStatusChip status={status} compact />
                     )}
+                    {onRunSingleStep ? (
+                        <PipelineRenderRunButton
+                            size="compact"
+                            label="Run"
+                            testId={`pipeline-run-single-${key}`}
+                            title={`Chỉ chạy bước này (các bước sau phải chạy lại): ${stepLabel}`}
+                            disabled={!canRunSingle}
+                            loading={runningSingleStep && isCurrent}
+                            onClick={() => onRunSingleStep(key)}
+                        />
+                    ) : null}
+                    {showRowToggle && rowToggleKey && onStepToggleChange ? (
+                        <PipelineStepToggleCheckbox
+                            toggleKey={rowToggleKey}
+                            checked={stepToggles?.[rowToggleKey] !== false}
+                            disabled={selectStepDisabled || stepToggleDisabled}
+                            onChange={onStepToggleChange}
+                        />
+                    ) : null}
+                    {key === 'beat_image_fill' && onBeatImageFillModeChange ? (
+                        <PipelineBeatImageFillModeToggle
+                            value={beatImageFillMode}
+                            disabled={selectStepDisabled || beatImageFillModeDisabled}
+                            onChange={onBeatImageFillModeChange}
+                        />
+                    ) : null}
                 </Box>
             </Box>
         );
     };
 
     const extraSteps = steps
-        ? Object.entries(steps).filter(
-            ([stepKey]) => !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(stepKey),
-        )
+        ? Object.entries(steps).filter(([stepKey]) => (
+            !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(stepKey)
+            && isFullAutoPipelineStepRelevantForMode(stepKey, agentVisualMode)
+        ))
         : [];
 
     return (
@@ -759,7 +931,8 @@ export function PipelineGroupedWorkflowListV2({
             <Typography component="span" sx={{ ...pipelineHeadlessLegendSx('light'), fontSize: 9, pb: 0 }}>
                 Headless = trình duyệt nền · AI = Gemini / Whisper / TTS AI
             </Typography>
-            {FULL_AUTO_PIPELINE_STEP_GROUPS.map((group) => {
+            <PipelineHeadlessPrerequisitesHint compact dense />
+            {visibleGroups.map((group) => {
                 const surface = getPipelineGroupSurface(group.key, 'light');
                 const isRenderGroup = group.key === 'render';
                 return (
@@ -816,6 +989,11 @@ export function PipelineGroupedWorkflowListV2({
                                         compact
                                         improveNode={renderWorkflowStep('script_improve', surface.borderColor, true)}
                                         qaNode={renderWorkflowStep('script_improve_qa', surface.borderColor, true)}
+                                        runEnabled={stepToggles?.script_improve !== false}
+                                        runToggleDisabled={selectStepDisabled || stepToggleDisabled}
+                                        onRunEnabledChange={onStepToggleChange
+                                            ? (checked) => onStepToggleChange('script_improve', checked)
+                                            : undefined}
                                     />
                                     {split.after.map((stepKey) => renderWorkflowStep(stepKey, surface.borderColor))}
                                 </>
@@ -874,4 +1052,5 @@ export function PipelineGroupedWorkflowListV2({
     );
 }
 
-export { PipelineGroupedWorkflowListV2 as PipelineGroupedWorkflowList };
+export { PipelineGroupedWorkflowListV3 as PipelineGroupedWorkflowList };
+export { PipelineGroupedWorkflowListV3 as PipelineGroupedWorkflowListV2 };

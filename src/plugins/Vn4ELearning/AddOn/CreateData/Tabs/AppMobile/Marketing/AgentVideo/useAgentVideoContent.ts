@@ -47,6 +47,8 @@ import {
     searchAgentBgm,
     saveAgentTtsSettings,
     saveAgentAutoFillBeatHtml,
+    saveFullAutoStepToggles,
+    saveBeatImageFillMode,
     saveAgentGeminiOpenBrowser,
     saveAgentGithubScreenshotHomepage,
     saveAgentIntroduceApp,
@@ -54,11 +56,14 @@ import {
     saveAgentDesiredScriptDuration,
     saveAgentCapcutConfig,
     addAudioToCapcut,
+    renderWhiteboardAgentBeat,
+    addBeatVideoToCapcut,
     listAudioScriptStyles,
     saveAgentShowKaraoke,
     saveAgentClipAspect,
     saveAgentVisualMode,
     saveAgentWhiteboardConfig,
+    saveAgentWhiteboardBeatOverride,
     listVerifiedAvatars,
     saveAgentAvatar,
     type AvatarPipAnchor,
@@ -91,11 +96,20 @@ import {
     type AgentRenderMode,
     type AgentVisualMode,
     type AgentWhiteboardConfig,
+    type AgentWhiteboardBeatOverride,
+    type WhiteboardBeatRenderEntry,
     type AudioScriptStyleItem,
     type AgentVideoContentResponse,
     type NarrationSegment,
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
+    type FullAutoStepToggleKey,
+    type FullAutoStepToggles,
+    type BeatImageFillMode,
+    normalizeFullAutoStepToggles,
+    normalizeBeatImageFillMode,
+    DEFAULT_BEAT_IMAGE_FILL_MODE,
+    DEFAULT_FULL_AUTO_STEP_TOGGLES,
     type GithubTopEnrichSummary,
     type TopicResearchBlock,
     type RemixBlock,
@@ -168,6 +182,10 @@ import {
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
 import { isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
+import {
+    deriveWhiteboardRenderProgress,
+    type WhiteboardRenderProgress,
+} from './agentVideoWhiteboardRenderProgress';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
@@ -403,7 +421,9 @@ function resolveGeminiBeatProgress(summary: ImportHtmlSummary | null | undefined
     if (!summary) {
         return null;
     }
+    // Ưu tiên ảnh beat (Meta.ai) — đang chạy riêng với fill HTML.
     const activeBlocks: Array<ImportHtmlGeminiJobBlock | undefined> = [
+        summary.gemini_image_fill,
         summary.gemini_refine_html,
         summary.gemini_refine_visual,
         summary.gemini_fill,
@@ -420,6 +440,17 @@ function resolveGeminiBeatProgress(summary: ImportHtmlSummary | null | undefined
             succeeded: Number(block.progress?.succeeded || 0),
             failed: toStringIdList(block.progress?.failed),
             error: String(block.error || '').trim(),
+        };
+    }
+    const imageFill = summary.gemini_image_fill;
+    if (imageFill?.progress || String(imageFill?.status || 'none') !== 'none') {
+        return {
+            current: Number(imageFill?.progress?.current || 0),
+            total: Number(imageFill?.progress?.total || 0),
+            beatId: String(imageFill?.progress?.beat_id || ''),
+            succeeded: Number(imageFill?.progress?.succeeded || 0),
+            failed: toStringIdList(imageFill?.progress?.failed),
+            error: String(imageFill?.error || '').trim(),
         };
     }
     const fill = summary.gemini_fill;
@@ -459,6 +490,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentTtsAuto, setAgentTtsAuto] = React.useState(true);
     const [agentAutoFillBeatHtml, setAgentAutoFillBeatHtml] = React.useState(false);
     const [savingAutoFillBeatHtml, setSavingAutoFillBeatHtml] = React.useState(false);
+    const [fullAutoStepToggles, setFullAutoStepToggles] = React.useState<FullAutoStepToggles>(
+        DEFAULT_FULL_AUTO_STEP_TOGGLES,
+    );
+    const [savingFullAutoStepToggles, setSavingFullAutoStepToggles] = React.useState(false);
+    const [beatImageFillMode, setBeatImageFillMode] = React.useState<BeatImageFillMode>(
+        DEFAULT_BEAT_IMAGE_FILL_MODE,
+    );
+    const [savingBeatImageFillMode, setSavingBeatImageFillMode] = React.useState(false);
     const [agentGeminiOpenBrowser, setAgentGeminiOpenBrowser] = React.useState(false);
     const [savingGeminiOpenBrowser, setSavingGeminiOpenBrowser] = React.useState(false);
     const [agentGithubScreenshotHomepage, setAgentGithubScreenshotHomepage] = React.useState(false);
@@ -487,6 +526,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    const [agentWhiteboardBeatOverrides, setAgentWhiteboardBeatOverrides] = React.useState<
+        Record<string, AgentWhiteboardBeatOverride>
+    >({});
+    const [savingWhiteboardBeatOverride, setSavingWhiteboardBeatOverride] = React.useState(false);
+    const [whiteboardBeatRenders, setWhiteboardBeatRenders] = React.useState<
+        Record<string, WhiteboardBeatRenderEntry>
+    >({});
+    const [renderingWhiteboardBeatIds, setRenderingWhiteboardBeatIds] = React.useState<string[]>([]);
+    const [uploadingBeatVideoToCapcutIds, setUploadingBeatVideoToCapcutIds] = React.useState<string[]>([]);
     const [savingVisualMode, setSavingVisualMode] = React.useState(false);
     const [savingWhiteboardConfig, setSavingWhiteboardConfig] = React.useState(false);
     const [avatarDrawerOpen, setAvatarDrawerOpen] = React.useState(false);
@@ -887,6 +935,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setNarrationSegments(nextSegments);
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
         setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
+        setFullAutoStepToggles(normalizeFullAutoStepToggles(res?.full_auto_step_toggles));
+        setBeatImageFillMode(normalizeBeatImageFillMode(res?.beat_image_fill_mode));
         setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
         setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
         setAgentIntroduceApp(Boolean(res?.agent_introduce_app));
@@ -919,6 +969,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
+        setAgentWhiteboardBeatOverrides(
+            res?.agent_whiteboard_beat_overrides && typeof res.agent_whiteboard_beat_overrides === 'object'
+                ? res.agent_whiteboard_beat_overrides
+                : {},
+        );
+        setWhiteboardBeatRenders(
+            res?.whiteboard_beat_renders && typeof res.whiteboard_beat_renders === 'object'
+                ? res.whiteboard_beat_renders
+                : {},
+        );
         if (!(resolvedId > 0)) {
             setAgentAvatarMasterUrl('');
         } else {
@@ -1445,6 +1505,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || geminiImageFillStatus === 'processing'
         || headlessBrowserActive
         || fullAutoPipeline?.status === 'running'
+        || Object.values(whiteboardBeatRenders).some((entry) => {
+            const status = String(entry?.status || '').trim().toLowerCase();
+            return status === 'queued' || status === 'processing';
+        })
+        || renderingWhiteboardBeatIds.length > 0
         || githubTopEnrich?.status === 'preparing'
         || topicResearch?.fetch?.status === 'preparing'
         || topicResearch?.synthesize?.status === 'preparing'
@@ -4638,6 +4703,66 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleFullAutoStepToggleChange = async (
+        toggleKey: FullAutoStepToggleKey,
+        checked: boolean,
+    ) => {
+        if (savingFullAutoStepToggles) {
+            return;
+        }
+        const prev = fullAutoStepToggles;
+        const next = { ...prev, [toggleKey]: checked };
+        setFullAutoStepToggles(next);
+        setSavingFullAutoStepToggles(true);
+        try {
+            const res = await saveFullAutoStepToggles(shortVideoId, { [toggleKey]: checked });
+            if (!res?.success) {
+                setFullAutoStepToggles(prev);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được tùy chọn bước pipeline',
+                    'error',
+                );
+                return;
+            }
+            if (res.full_auto_step_toggles) {
+                setFullAutoStepToggles(normalizeFullAutoStepToggles(res.full_auto_step_toggles));
+            }
+        } catch (e) {
+            setFullAutoStepToggles(prev);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingFullAutoStepToggles(false);
+        }
+    };
+
+    const handleBeatImageFillModeChange = async (mode: BeatImageFillMode) => {
+        if (savingBeatImageFillMode || mode === beatImageFillMode) {
+            return;
+        }
+        const prev = beatImageFillMode;
+        setBeatImageFillMode(mode);
+        setSavingBeatImageFillMode(true);
+        try {
+            const res = await saveBeatImageFillMode(shortVideoId, mode);
+            if (!res?.success) {
+                setBeatImageFillMode(prev);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được chế độ Ảnh beat',
+                    'error',
+                );
+                return;
+            }
+            if (res.beat_image_fill_mode) {
+                setBeatImageFillMode(normalizeBeatImageFillMode(res.beat_image_fill_mode));
+            }
+        } catch (e) {
+            setBeatImageFillMode(prev);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingBeatImageFillMode(false);
+        }
+    };
+
     const handleGeminiOpenBrowserChange = async (checked: boolean) => {
         if (savingGeminiOpenBrowser) {
             return;
@@ -4899,6 +5024,81 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleRenderWhiteboardBeat = async (beatId: string) => {
+        const id = String(beatId || '').trim();
+        if (!id || renderingWhiteboardBeatIds.includes(id)) {
+            return;
+        }
+        if (!isAgentWhiteboardMode(agentVisualMode)) {
+            showMessage('Chỉ render video beat ở chế độ whiteboard', 'warning');
+            return;
+        }
+        setRenderingWhiteboardBeatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        try {
+            const res = await renderWhiteboardAgentBeat(shortVideoId, id);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Render video beat thất bại', 'error');
+                return;
+            }
+            if (res.whiteboard_beat_renders && typeof res.whiteboard_beat_renders === 'object') {
+                setWhiteboardBeatRenders(res.whiteboard_beat_renders);
+            } else {
+                setWhiteboardBeatRenders((prev) => ({
+                    ...prev,
+                    [id]: {
+                        ...(prev[id] || {}),
+                        status: 'queued',
+                        job_id: Number(res.job_id || 0) || undefined,
+                        error: '',
+                    },
+                }));
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã bắt đầu render video beat', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setRenderingWhiteboardBeatIds((prev) => prev.filter((x) => x !== id));
+        }
+    };
+
+    const handleAddBeatVideoToCapcut = async (beatId: string) => {
+        const id = String(beatId || '').trim();
+        if (!id || uploadingBeatVideoToCapcutIds.includes(id)) {
+            return;
+        }
+        if (!isAgentWhiteboardMode(agentVisualMode)) {
+            showMessage('Chỉ upload video beat ở chế độ whiteboard', 'warning');
+            return;
+        }
+        const entry = whiteboardBeatRenders[id];
+        const status = String(entry?.status || '').trim();
+        if (status !== 'completed') {
+            showMessage('Chưa có video beat — hãy Render video beat trước', 'warning');
+            return;
+        }
+        setUploadingBeatVideoToCapcutIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        try {
+            const res = await addBeatVideoToCapcut(shortVideoId, id);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Upload video beat vào CapCut thất bại', 'error');
+                return;
+            }
+            if (res?.project_name) {
+                setCapcutProjectName(String(res.project_name).trim());
+            }
+            if (res?.project_path) {
+                setCapcutProjectPath(String(res.project_path).trim());
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã thêm video beat vào CapCut', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setUploadingBeatVideoToCapcutIds((prev) => prev.filter((x) => x !== id));
+        }
+    };
+
     const applyAvatarSaveResult = (res: {
         agent_avatar_id?: number;
         agent_show_avatar?: boolean;
@@ -5112,17 +5312,61 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleSaveWhiteboardBeatOverride = async (
+        beatId: string,
+        override: Partial<AgentWhiteboardBeatOverride>,
+    ) => {
+        const id = String(beatId || '').trim();
+        if (!id || savingWhiteboardBeatOverride) {
+            return false;
+        }
+        setSavingWhiteboardBeatOverride(true);
+        try {
+            const res = await saveAgentWhiteboardBeatOverride(shortVideoId, id, override);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình whiteboard beat',
+                    'error',
+                );
+                return false;
+            }
+            if (res.agent_whiteboard_beat_overrides
+                && typeof res.agent_whiteboard_beat_overrides === 'object') {
+                setAgentWhiteboardBeatOverrides(res.agent_whiteboard_beat_overrides);
+            } else if (res.override) {
+                setAgentWhiteboardBeatOverrides((prev) => ({
+                    ...prev,
+                    [id]: res.override as AgentWhiteboardBeatOverride,
+                }));
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu cấu hình whiteboard beat', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingWhiteboardBeatOverride(false);
+        }
+    };
+
     const handleStartFullAutoPipeline = async (
         mode: 'resume' | 'restart' = 'resume',
         fromStep?: string,
         untilStep?: string,
+        opts?: { singleStep?: boolean },
     ) => {
         if (startingFullAuto) {
             return;
         }
         setStartingFullAuto(true);
         try {
-            const res = await startFullAutoPipeline(shortVideoId, mode, fromStep, untilStep);
+            const res = await startFullAutoPipeline(
+                shortVideoId,
+                mode,
+                fromStep,
+                untilStep,
+                opts,
+            );
             if (!res?.success) {
                 showMessage(
                     parseApiMessage(res?.message) || 'Không khởi chạy được pipeline A→Z',
@@ -5144,11 +5388,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(
                 parseApiMessage(res?.message)
                     || (mode === 'restart'
-                        ? (untilStep
-                            ? `Đã chạy lại từ «${stepLabel}» đến «${untilLabel}»`
-                            : (fromStep && fromStep !== 'script_create'
-                                ? `Đã chạy lại từ bước «${stepLabel}»`
-                                : 'Đã chạy lại pipeline A→Z từ đầu'))
+                        ? (opts?.singleStep
+                            ? `Đã chạy lại chỉ bước «${stepLabel}»`
+                            : (untilStep
+                                ? `Đã chạy lại từ «${stepLabel}» đến «${untilLabel}»`
+                                : (fromStep && fromStep !== 'script_create'
+                                    ? `Đã chạy lại từ bước «${stepLabel}»`
+                                    : 'Đã chạy lại pipeline A→Z từ đầu')))
                         : 'Đã bật / tiếp tục pipeline A→Z'),
                 'success',
             );
@@ -5158,6 +5404,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setStartingFullAuto(false);
         }
+    };
+
+    const handleRunSinglePipelineStep = async (stepKey: string) => {
+        if (
+            startingFullAuto
+            || String(fullAutoPipeline?.status || '').trim().toLowerCase() === 'running'
+        ) {
+            return;
+        }
+        await handleStartFullAutoPipeline('restart', stepKey, undefined, { singleStep: true });
     };
 
     const handleRerunRenderUpload = async () => {
@@ -6536,6 +6792,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const beatsRenderErrorCount = beatRenderErrorIds.length;
     const isWhiteboardMode = isAgentWhiteboardMode(agentVisualMode);
 
+    const whiteboardRenderProgress = React.useMemo((): WhiteboardRenderProgress => {
+        if (!isWhiteboardMode) {
+            return deriveWhiteboardRenderProgress({});
+        }
+        return deriveWhiteboardRenderProgress({
+            sections: beatMap?.sections,
+            renders: whiteboardBeatRenders,
+            pipelineStep: fullAutoPipeline?.current_step,
+            pipelineStatus: fullAutoPipeline?.status,
+        });
+    }, [
+        isWhiteboardMode,
+        beatMap?.sections,
+        whiteboardBeatRenders,
+        fullAutoPipeline?.current_step,
+        fullAutoPipeline?.status,
+    ]);
+
     return {
         title,
         shortVideoId,
@@ -6549,6 +6823,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentTtsAuto,
         agentAutoFillBeatHtml,
         savingAutoFillBeatHtml,
+        fullAutoStepToggles,
+        savingFullAutoStepToggles,
+        handleFullAutoStepToggleChange,
+        beatImageFillMode,
+        savingBeatImageFillMode,
+        handleBeatImageFillModeChange,
         agentGeminiOpenBrowser,
         savingGeminiOpenBrowser,
         agentGithubScreenshotHomepage,
@@ -6573,6 +6853,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         addingAudioToCapcut,
         handleSaveCapcutConfig,
         handleAddAudioToCapcut,
+        whiteboardBeatRenders,
+        whiteboardRenderProgress,
+        renderingWhiteboardBeatIds,
+        uploadingBeatVideoToCapcutIds,
+        handleRenderWhiteboardBeat,
+        handleAddBeatVideoToCapcut,
         agentAvatarId,
         agentShowAvatar,
         agentAvatarAnchor,
@@ -6587,11 +6873,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleAgentClipAspectChange,
         agentVisualMode,
         agentWhiteboardConfig,
+        agentWhiteboardBeatOverrides,
         savingVisualMode,
         savingWhiteboardConfig,
+        savingWhiteboardBeatOverride,
         isWhiteboardMode,
         handleAgentVisualModeChange,
         handleAgentWhiteboardConfigChange,
+        handleSaveWhiteboardBeatOverride,
         avatarDrawerOpen,
         setAvatarDrawerOpen,
         geminiFillStatus,
@@ -6887,6 +7176,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleGithubScreenshotHomepageChange,
         handleAgentAvatarApply,
         handleStartFullAutoPipeline,
+        handleRunSinglePipelineStep,
         handleRerunRenderUpload,
         handleCancelFullAutoPipeline,
         handleHeadlessNewChat,

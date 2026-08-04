@@ -53,7 +53,7 @@ type TransitionOption = {
 };
 
 type SourceMode = 'upload' | 'prompt';
-type GenStyle = 'whiteboard' | 'sketch';
+type GenStyle = 'whiteboard' | 'sketch' | 'hybrid';
 type AspectRatio = '16:9' | '9:16';
 type VideoResolution = '720p' | '1080p';
 
@@ -65,6 +65,7 @@ type SceneConfig = {
     genStyle: GenStyle;
     boardTheme: string;
     hand: string;
+    photoPlaceMode: 'draw' | 'drag' | 'instant';
     durationPreset: number | 'custom';
     customDuration: string;
     holdPreset: number | 'custom';
@@ -78,6 +79,7 @@ type SceneConfig = {
 const DURATION_PRESETS = [5, 8, 10, 15, 30, 45, 60] as const;
 const DURATION_MIN = 3;
 const DURATION_MAX = 120;
+const INSTANT_DURATION_MIN = 0;
 const HOLD_PRESETS = [0, 1, 2, 5, 10, 20] as const;
 const HOLD_MIN = 0;
 const HOLD_MAX = 120;
@@ -90,6 +92,7 @@ const TRANSITION_DURATION_MAX = 8;
 const MAX_SCENES = 40;
 
 const GEN_STYLES: { id: GenStyle; label: string }[] = [
+    { id: 'hybrid', label: 'Hybrid' },
     { id: 'whiteboard', label: 'Whiteboard' },
     { id: 'sketch', label: 'Sketch' },
 ];
@@ -135,6 +138,7 @@ function createEmptyScene(defaults?: Partial<SceneConfig>): SceneConfig {
         genStyle: 'whiteboard',
         boardTheme: defaults?.boardTheme ?? 'whiteboard',
         hand: defaults?.hand ?? '',
+        photoPlaceMode: defaults?.photoPlaceMode ?? 'draw',
         durationPreset: defaults?.durationPreset ?? 8,
         customDuration: defaults?.customDuration ?? '20',
         holdPreset: defaults?.holdPreset ?? 1,
@@ -226,9 +230,11 @@ function resolveWhiteboardVideoUrl(jobId: number, res: StatusResponse): string |
 }
 
 function resolveSceneDurationSec(scene: SceneConfig): number | null {
+    const instant = scene.photoPlaceMode === 'instant';
+    const min = instant ? INSTANT_DURATION_MIN : DURATION_MIN;
     if (scene.durationPreset === 'custom') {
         const n = Math.round(Number(scene.customDuration));
-        if (!Number.isFinite(n) || n < DURATION_MIN || n > DURATION_MAX) {
+        if (!Number.isFinite(n) || n < min || n > DURATION_MAX) {
             return null;
         }
         return n;
@@ -248,6 +254,9 @@ function resolveSceneHoldSec(scene: SceneConfig): number | null {
 }
 
 function resolveSceneColorSec(scene: SceneConfig): number | null {
+    if (scene.photoPlaceMode === 'instant' || scene.photoPlaceMode === 'drag') {
+        return 0;
+    }
     if (scene.colorPreset === 'custom') {
         const n = Number(scene.customColor);
         if (!Number.isFinite(n) || n < COLOR_MIN || n > COLOR_MAX) {
@@ -279,23 +288,30 @@ function validateScene(
     sceneCount = 1
 ): string | null {
     const label = `Cảnh ${index + 1}`;
+    const instant = scene.photoPlaceMode === 'instant';
     if (scene.sourceMode === 'upload' && !scene.file) {
         return `${label}: chọn ảnh trước`;
     }
     if (scene.sourceMode === 'prompt' && !scene.prompt.trim()) {
         return `${label}: nhập prompt để sinh ảnh`;
     }
-    if (!scene.hand) {
+    if (!instant && !scene.hand) {
         return `${label}: chọn kiểu bàn tay`;
     }
     if (!scene.boardTheme) {
         return `${label}: chọn nền bảng`;
     }
     if (resolveSceneDurationSec(scene) == null) {
-        return `${label}: thời gian vẽ tùy chỉnh phải từ ${DURATION_MIN}–${DURATION_MAX} giây`;
+        return instant
+            ? `${label}: thời gian vẽ (instant) phải từ ${INSTANT_DURATION_MIN}–${DURATION_MAX} giây`
+            : `${label}: thời gian vẽ tùy chỉnh phải từ ${DURATION_MIN}–${DURATION_MAX} giây`;
     }
-    if (resolveSceneHoldSec(scene) == null) {
+    const hold = resolveSceneHoldSec(scene);
+    if (hold == null) {
         return `${label}: thời gian chờ tùy chỉnh phải từ ${HOLD_MIN}–${HOLD_MAX} giây`;
+    }
+    if (instant && hold < 0.05) {
+        return `${label}: Không vẽ tay cần hold ≥ 0.05s`;
     }
     if (resolveSceneColorSec(scene) == null) {
         return `${label}: thời gian tô màu tùy chỉnh phải từ ${COLOR_MIN}–${COLOR_MAX} giây`;
@@ -331,12 +347,17 @@ async function enqueueWhiteboard(opts: {
         const colorSec = resolveSceneColorSec(sc);
         const row: Record<string, string | number> = {
             source_mode: sc.sourceMode,
-            duration_sec: durationSec ?? 8,
+            duration_sec: sc.photoPlaceMode === 'instant'
+                ? (durationSec ?? 0)
+                : (durationSec ?? 8),
             hold_sec: holdSec ?? 1,
-            color_sec: colorSec ?? 0,
+            color_sec: sc.photoPlaceMode === 'instant' || sc.photoPlaceMode === 'drag'
+                ? 0
+                : (colorSec ?? 0),
             hand_style: sc.hand,
             board_theme: sc.boardTheme,
             gen_style: sc.genStyle,
+            photo_place_mode: sc.photoPlaceMode,
             prompt: sc.sourceMode === 'prompt' ? sc.prompt.trim() : '',
         };
         if (i < opts.scenes.length - 1) {
@@ -417,6 +438,7 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
             createEmptyScene({
                 hand: base?.hand,
                 boardTheme: base?.boardTheme,
+                photoPlaceMode: base?.photoPlaceMode,
                 durationPreset: base?.durationPreset,
                 customDuration: base?.customDuration,
                 holdPreset: base?.holdPreset,
@@ -765,7 +787,17 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
                             {(transitions.length > 0
                                 ? transitions
-                                : [{ id: 'erase', label: 'Gôm / xóa' }]
+                                : [
+                                    { id: 'camera_pan', label: 'Camera pan' },
+                                    { id: 'erase', label: 'Xóa bảng' },
+                                    { id: 'slide', label: 'Tay kéo' },
+                                    { id: 'ink_pop', label: 'Loang màu nước' },
+                                    { id: 'fade', label: 'Cắt / Fade' },
+                                    { id: 'page_flip', label: 'Lật trang' },
+                                    { id: 'paper_tear', label: 'Xé giấy' },
+                                    { id: 'paint_stroke', label: 'Quét cọ' },
+                                    { id: 'random', label: 'Ngẫu nhiên' },
+                                ]
                             ).map((t) => (
                                 <Chip
                                     key={t.id}
@@ -778,6 +810,15 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                                 />
                             ))}
                         </Stack>
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block', mt: 0.75, lineHeight: 1.35 }}
+                        >
+                            {transition === 'random'
+                                ? 'Ngẫu nhiên: mỗi khoảng chuyển rút 1 hiệu ứng, không lặp trong vòng; hết danh sách thì xáo lại. Nên bật «Không vẽ tay» trên mọi cảnh để test reveal ảnh 2.'
+                                : '≥2 cảnh. Với «Không vẽ tay»: mọi hiệu ứng (kể cả xóa bảng) lộ ảnh 2 — xóa bảng = lau ảnh 1, lớp dưới là ảnh 2.'}
+                        </Typography>
                     </Box>
                 )}
 
@@ -954,9 +995,11 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                                 color="text.secondary"
                                 sx={{ display: 'block', mt: 0.75 }}
                             >
-                                {activeScene.genStyle === 'whiteboard'
-                                    ? 'Z-Image sinh ảnh marker whiteboard, rồi animate vẽ tay (không convert lại)'
-                                    : 'Z-Image sinh ảnh pencil sketch, rồi animate vẽ tay'}
+                                {activeScene.genStyle === 'hybrid'
+                                    ? 'Z-Image sinh collage ảnh thật + marker; tay vẽ doodle rồi reveal vùng ảnh/màu'
+                                    : activeScene.genStyle === 'whiteboard'
+                                      ? 'Z-Image sinh ảnh marker whiteboard, rồi animate vẽ tay (không convert lại)'
+                                      : 'Z-Image sinh ảnh pencil sketch, rồi animate vẽ tay'}
                             </Typography>
                         </>
                     )}
@@ -1047,6 +1090,87 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                         color="text.secondary"
                         sx={{ fontWeight: 600, display: 'block', mt: 2, mb: 1 }}
                     >
+                        Ảnh thật (hybrid) — cách đưa ảnh
+                    </Typography>
+                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
+                        <Chip
+                            label="Không vẽ tay"
+                            size="small"
+                            color={activeScene.photoPlaceMode === 'instant' ? 'primary' : 'default'}
+                            variant={activeScene.photoPlaceMode === 'instant' ? 'filled' : 'outlined'}
+                            onClick={() => updateActiveScene({
+                                photoPlaceMode: 'instant',
+                                durationPreset: 0,
+                                colorPreset: 0,
+                                holdPreset: typeof activeScene.holdPreset === 'number' && activeScene.holdPreset >= 1
+                                    ? activeScene.holdPreset
+                                    : 2,
+                            })}
+                            sx={{ textTransform: 'none' }}
+                        />
+                        <Chip
+                            label="Vẽ tô ảnh"
+                            size="small"
+                            color={activeScene.photoPlaceMode === 'draw' ? 'primary' : 'default'}
+                            variant={activeScene.photoPlaceMode === 'draw' ? 'filled' : 'outlined'}
+                            onClick={() => updateActiveScene({
+                                photoPlaceMode: 'draw',
+                                durationPreset: activeScene.durationPreset === 0 ? 8 : activeScene.durationPreset,
+                            })}
+                            sx={{ textTransform: 'none' }}
+                        />
+                        <Chip
+                            label="Kéo ảnh vào"
+                            size="small"
+                            color={activeScene.photoPlaceMode === 'drag' ? 'primary' : 'default'}
+                            variant={activeScene.photoPlaceMode === 'drag' ? 'filled' : 'outlined'}
+                            onClick={() => updateActiveScene({
+                                photoPlaceMode: 'drag',
+                                colorPreset: 0,
+                                durationPreset: activeScene.durationPreset === 0 ? 8 : activeScene.durationPreset,
+                            })}
+                            sx={{ textTransform: 'none' }}
+                        />
+                    </Stack>
+                    {scenes.length >= 2 && (
+                        <Button
+                            size="small"
+                            variant="text"
+                            sx={{ textTransform: 'none', mb: 1, px: 0 }}
+                            onClick={() => {
+                                setScenes((prev) => prev.map((sc) => ({
+                                    ...sc,
+                                    photoPlaceMode: 'instant' as const,
+                                    durationPreset: 0,
+                                    colorPreset: 0,
+                                    holdPreset: typeof sc.holdPreset === 'number' && sc.holdPreset >= 1
+                                        ? sc.holdPreset
+                                        : 2,
+                                })));
+                            }}
+                        >
+                            Áp dụng «Không vẽ tay» cho mọi cảnh
+                        </Button>
+                    )}
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 1 }}
+                    >
+                        {activeScene.photoPlaceMode === 'instant'
+                            ? 'Frame đầu = ảnh đầy đủ, không tay vẽ. Dùng ≥2 cảnh + hiệu ứng chuyển cảnh để test reveal ảnh 2.'
+                            : activeScene.photoPlaceMode === 'drag'
+                                ? 'Kéo cutout ảnh thật vào khung trước, rồi vẽ doodle. Thời gian tô màu = 0.'
+                                : 'Tô ảnh thật bằng brush sau khi vẽ outline (mặc định).'}
+                    </Typography>
+
+                    {activeScene.photoPlaceMode !== 'instant' ? (
+                        <>
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600, display: 'block', mt: 2, mb: 1 }}
+                    >
                         Thời gian vẽ
                     </Typography>
                     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
@@ -1088,13 +1212,21 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                             sx={{ mt: 1.25, width: 140 }}
                         />
                     )}
+                        </>
+                    ) : (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, mb: 0.5 }}>
+                            Instant: duration vẽ = 0 — độ dài cảnh ≈ thời gian chờ (hold) bên dưới.
+                        </Typography>
+                    )}
 
                     <Typography
                         variant="caption"
                         color="text.secondary"
                         sx={{ fontWeight: 600, display: 'block', mt: 2, mb: 1 }}
                     >
-                        Thời gian chờ (sau vẽ, không tay)
+                        {activeScene.photoPlaceMode === 'instant'
+                            ? 'Thời gian giữ ảnh (hold)'
+                            : 'Thời gian chờ (sau vẽ, không tay)'}
                     </Typography>
                     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
                         {HOLD_PRESETS.map((d) => (
@@ -1132,6 +1264,8 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                         />
                     )}
 
+                    {activeScene.photoPlaceMode === 'draw' && (
+                        <>
                     <Typography
                         variant="caption"
                         color="text.secondary"
@@ -1180,6 +1314,8 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                             helperText={`${COLOR_MIN}–${COLOR_MAX} giây`}
                             sx={{ mt: 1.25, width: 140 }}
                         />
+                    )}
+                        </>
                     )}
 
                     {scenes.length >= 2 && activeSceneIndex < scenes.length - 1 && (

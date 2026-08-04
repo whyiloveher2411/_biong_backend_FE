@@ -13,6 +13,8 @@ import { snapBeatSectionsForIndex } from "./build-import-html-index.mjs";
 const SFX_HOOK_VOLUME = 0.45;
 const SFX_BEAT_VOLUME = 0.55;
 const SFX_DURATION_SEC = 0.58;
+/** Narration: +40% so với mức 1.0 (clip trước đây nhỏ). */
+const NARRATION_VOLUME = 1.4;
 
 function runFfmpeg(args) {
   console.log(`\n▶ ffmpeg ${args.join(" ")}`);
@@ -78,7 +80,11 @@ export function mixImportHtmlAudio({
   const mixLabels = [];
 
   // [0]=video, [1]=narration
-  filterParts.push(`[1:a]volume=1.0,aformat=sample_rates=44100:channel_layouts=stereo[narr]`);
+  // Mono→stereo bằng pan (duplicate), KHÔNG dùng aformat channel_layouts=stereo
+  // (pan-law ~-3dB triệt tiêu volume×1.4).
+  filterParts.push(
+    `[1:a]aformat=sample_rates=44100,pan=stereo|c0=c0|c1=c0,volume=${NARRATION_VOLUME}[narr]`,
+  );
   mixLabels.push("[narr]");
 
   let inputIndex = 2;

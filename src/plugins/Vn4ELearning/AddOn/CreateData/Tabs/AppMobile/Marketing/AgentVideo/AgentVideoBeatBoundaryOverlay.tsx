@@ -12,6 +12,8 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
     Box,
     CircularProgress,
@@ -64,6 +66,11 @@ type Props = {
     onOpenGemini?: (beatId: string) => void;
     onOpenMetaAi?: (beatId: string) => void;
     onOpenGeminiHeadless?: (beatId: string) => void;
+    onRenderWhiteboardBeat?: (beatId: string) => void;
+    onAddBeatVideoToCapcut?: (beatId: string) => void;
+    whiteboardBeatRenders?: Record<string, { status?: string; error?: string }>;
+    renderingWhiteboardBeatIds?: string[];
+    uploadingBeatVideoToCapcutIds?: string[];
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
     beatVersions?: Record<string, BeatVersion[]>;
@@ -117,6 +124,11 @@ export default function AgentVideoBeatBoundaryOverlay({
     onOpenGemini,
     onOpenMetaAi,
     onOpenGeminiHeadless,
+    onRenderWhiteboardBeat,
+    onAddBeatVideoToCapcut,
+    whiteboardBeatRenders = {},
+    renderingWhiteboardBeatIds = [],
+    uploadingBeatVideoToCapcutIds = [],
     onSaveBeatQa,
     onQuickIterateBeat,
     beatVersions = {},
@@ -189,6 +201,18 @@ export default function AgentVideoBeatBoundaryOverlay({
         && openingBeatGeminiHeadlessBeatIds.includes(menuBeatId);
     const menuIsQuickIterating = menuBeatId !== ''
         && Boolean(quickIterateBeatStages[menuBeatId]);
+    const menuBeatRenderStatus = menuBeatId !== ''
+        ? String(whiteboardBeatRenders[menuBeatId]?.status || '').trim()
+        : '';
+    const menuIsRenderingWhiteboardBeat = menuBeatId !== ''
+        && (
+            renderingWhiteboardBeatIds.includes(menuBeatId)
+            || menuBeatRenderStatus === 'queued'
+            || menuBeatRenderStatus === 'processing'
+        );
+    const menuIsUploadingBeatVideoToCapcut = menuBeatId !== ''
+        && uploadingBeatVideoToCapcutIds.includes(menuBeatId);
+    const menuBeatVideoReady = menuBeatRenderStatus === 'completed';
     const menuIsBusy = menuIsCopying
         || menuIsPasting
         || menuIsDeleting
@@ -243,12 +267,44 @@ export default function AgentVideoBeatBoundaryOverlay({
                             ? beatImage[segment.beatId]?.qa_status
                             : beatHtml[segment.beatId]?.qa_status,
                     );
-                    const segmentColor = visualState === 'error'
+                    const wbRenderStatusRaw = isWhiteboardMode
+                        ? String(whiteboardBeatRenders[segment.beatId]?.status || '').trim().toLowerCase()
+                        : '';
+                    const isLocalWbRendering = isWhiteboardMode
+                        && renderingWhiteboardBeatIds.includes(segment.beatId);
+                    const wbRenderStatus = (
+                        isLocalWbRendering
+                        && wbRenderStatusRaw !== 'completed'
+                        && wbRenderStatusRaw !== 'failed'
+                    )
+                        ? 'processing'
+                        : wbRenderStatusRaw;
+                    const hasWbRenderStatus = wbRenderStatus === 'queued'
+                        || wbRenderStatus === 'processing'
+                        || wbRenderStatus === 'completed'
+                        || wbRenderStatus === 'failed';
+                    let segmentColor: string = visualState === 'error'
                         ? 'warning.main'
                         : (visualState === 'ok' ? 'success.main' : 'error.main');
-                    const errorMessage = isWhiteboardMode
-                        ? getBeatImageRenderErrorMessage(beatImage, segment.beatId)
-                        : getBeatRenderErrorMessage(beatHtml, segment.beatId);
+                    if (hasWbRenderStatus) {
+                        if (wbRenderStatus === 'completed') {
+                            segmentColor = 'success.main';
+                        } else if (wbRenderStatus === 'processing') {
+                            segmentColor = 'info.main';
+                        } else if (wbRenderStatus === 'queued') {
+                            segmentColor = 'grey.600';
+                        } else if (wbRenderStatus === 'failed') {
+                            segmentColor = 'error.main';
+                        }
+                    }
+                    const wbRenderError = isWhiteboardMode
+                        ? String(whiteboardBeatRenders[segment.beatId]?.error || '').trim()
+                        : '';
+                    const errorMessage = wbRenderStatus === 'failed' && wbRenderError
+                        ? wbRenderError
+                        : (isWhiteboardMode
+                            ? getBeatImageRenderErrorMessage(beatImage, segment.beatId)
+                            : getBeatRenderErrorMessage(beatHtml, segment.beatId));
                     const isActive = segment.beatId === activeBeatId;
                     const isCopying = copyingBeatHtmlPromptBeatId === segment.beatId;
                     const isPasting = pastingBeatHtmlBeatId === segment.beatId;
@@ -260,12 +316,15 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const isQuickIterateActive = quickIterateStage === 'visual'
                         || quickIterateStage === 'html';
                     const isQuickIterateQueued = quickIterateStage === 'queued';
+                    const isWbProcessing = wbRenderStatus === 'processing';
+                    const isWbQueued = wbRenderStatus === 'queued';
                     const isBusy = isCopying
                         || isPasting
                         || isDeleting
                         || isOpeningGemini
                         || isOpeningGeminiHeadless
-                        || isQuickIterating;
+                        || isQuickIterating
+                        || isWbProcessing;
                     const isMenuOpen = menuBeatId === segment.beatId;
                     const versions = beatVersions?.[segment.beatId] || [];
                     const activeVersionId = String(beatActiveVersionId?.[segment.beatId] || '');
@@ -298,22 +357,24 @@ export default function AgentVideoBeatBoundaryOverlay({
                                 overflow: 'hidden',
                                 bgcolor: segmentColor,
                                 color: 'common.white',
-                                opacity: isActive ? 1 : (isQuickIterateQueued ? 0.95 : 0.9),
+                                opacity: isActive ? 1 : (isQuickIterateQueued || isWbQueued ? 0.95 : 0.9),
                                 outline: isActive && !isQuickIterating && !isApproved
                                     ? '2px solid rgba(255,255,255,0.9)'
                                     : 'none',
                                 outlineOffset: -2,
-                                boxShadow: isQuickIterateActive
-                                    ? '0 0 0 1px rgba(251,191,36,0.85), 0 0 10px rgba(251,191,36,0.45)'
-                                    : (showApprovedBorder
-                                        ? '0 0 0 2px rgba(244,114,182,0.95), 0 0 14px rgba(236,72,153,0.75), inset 0 0 0 1px rgba(255,255,255,0.25)'
-                                        : (isActive
-                                            ? 'inset 0 0 0 1px rgba(0,0,0,0.25)'
-                                            : 'none')),
-                                border: isQuickIterateQueued
+                                boxShadow: isWbProcessing
+                                    ? '0 0 0 1px rgba(56,189,248,0.9), 0 0 10px rgba(56,189,248,0.45)'
+                                    : (isQuickIterateActive
+                                        ? '0 0 0 1px rgba(251,191,36,0.85), 0 0 10px rgba(251,191,36,0.45)'
+                                        : (showApprovedBorder
+                                            ? '0 0 0 2px rgba(244,114,182,0.95), 0 0 14px rgba(236,72,153,0.75), inset 0 0 0 1px rgba(255,255,255,0.25)'
+                                            : (isActive
+                                                ? 'inset 0 0 0 1px rgba(0,0,0,0.25)'
+                                                : 'none'))),
+                                border: isQuickIterateQueued || isWbQueued
                                     ? '2px dashed rgba(251,191,36,0.95)'
                                     : 'none',
-                                animation: isQuickIterateQueued
+                                animation: isQuickIterateQueued || isWbQueued
                                     ? 'quickIterateQueuedPulse 1.4s ease-in-out infinite'
                                     : 'none',
                                 '@keyframes quickIterateQueuedPulse': {
@@ -442,8 +503,13 @@ export default function AgentVideoBeatBoundaryOverlay({
                                             maxWidth: '100%',
                                         }}
                                     >
-                                        {isQuickIterating ? (
-                                            <Tooltip title={quickIterateTooltip} placement="top">
+                                        {isQuickIterating || isWbProcessing ? (
+                                            <Tooltip
+                                                title={isWbProcessing
+                                                    ? 'Đang render whiteboard…'
+                                                    : quickIterateTooltip}
+                                                placement="top"
+                                            >
                                                 <Box
                                                     component="span"
                                                     sx={{
@@ -455,13 +521,13 @@ export default function AgentVideoBeatBoundaryOverlay({
                                                     <CircularProgress
                                                         size={11}
                                                         thickness={5}
-                                                        sx={{ color: '#fde68a' }}
+                                                        sx={{ color: isWbProcessing ? '#e0f2fe' : '#fde68a' }}
                                                     />
                                                 </Box>
                                             </Tooltip>
                                         ) : null}
-                                        {visualState === 'error' ? (
-                                            <Tooltip title={errorMessage} placement="top">
+                                        {visualState === 'error' || wbRenderStatus === 'failed' ? (
+                                            <Tooltip title={errorMessage || 'Beat lỗi'} placement="top">
                                                 <WarningAmberIcon sx={{ fontSize: 12, color: 'common.white' }} />
                                             </Tooltip>
                                         ) : null}
@@ -634,7 +700,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         overflow: 'hidden',
                                     }}
                                 >
-                                    {versions.map((version, idx) => {
+                                    {!isWhiteboardMode ? versions.map((version, idx) => {
                                         const isVersionActive = activeVersionId === version.version_id;
                                         return (
                                             <Tooltip
@@ -689,7 +755,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                                 />
                                             </Tooltip>
                                         );
-                                    })}
+                                    }) : null}
                                     {onQuickIterateBeat ? (
                                         <Tooltip
                                             title={
@@ -879,6 +945,71 @@ export default function AgentVideoBeatBoundaryOverlay({
                         <ListItemText
                             primary="Meta.ai"
                             secondary="Mở tab Meta.ai (download ảnh → tự lưu beat)"
+                        />
+                    </MenuItem>
+                ) : null}
+
+                {isWhiteboardMode && onRenderWhiteboardBeat ? (
+                    <MenuItem
+                        disabled={
+                            menuIsBusy
+                            || savingImportHtml
+                            || menuVisualState === 'missing'
+                            || menuIsRenderingWhiteboardBeat
+                        }
+                        onClick={() => {
+                            const beatId = menuBeatId;
+                            runMenuAction(() => { void onRenderWhiteboardBeat(beatId); });
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                            {menuIsRenderingWhiteboardBeat ? (
+                                <CircularProgress size={16} />
+                            ) : (
+                                <VideocamOutlinedIcon fontSize="small" />
+                            )}
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Render video beat"
+                            secondary={
+                                menuIsRenderingWhiteboardBeat
+                                    ? 'Đang render vẽ tay + audio…'
+                                    : menuBeatRenderStatus === 'failed'
+                                        ? (String(whiteboardBeatRenders[menuBeatId]?.error || '').trim()
+                                            || 'Render trước đó thất bại — thử lại')
+                                        : 'Vẽ tay + audio beat'
+                            }
+                        />
+                    </MenuItem>
+                ) : null}
+
+                {isWhiteboardMode && onAddBeatVideoToCapcut ? (
+                    <MenuItem
+                        disabled={
+                            menuIsBusy
+                            || savingImportHtml
+                            || !menuBeatVideoReady
+                            || menuIsUploadingBeatVideoToCapcut
+                        }
+                        onClick={() => {
+                            const beatId = menuBeatId;
+                            runMenuAction(() => { void onAddBeatVideoToCapcut(beatId); });
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                            {menuIsUploadingBeatVideoToCapcut ? (
+                                <CircularProgress size={16} />
+                            ) : (
+                                <UploadFileOutlinedIcon fontSize="small" />
+                            )}
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Upload video beat → CapCut"
+                            secondary={
+                                menuBeatVideoReady
+                                    ? 'Thêm vào project CapCut đã cấu hình'
+                                    : 'Cần Render video beat trước'
+                            }
                         />
                     </MenuItem>
                 ) : null}

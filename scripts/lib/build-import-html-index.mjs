@@ -77,7 +77,7 @@ ${captionsCss}${avatarCss}    .hf-overlay-brand { z-index:9500 !important; point
 </head>
 <body>
   <div id="root" data-composition-id="main" data-start="0" data-duration="${t}" data-width="${w}" data-height="${h}">
-    <audio id="narration" class="clip" src="assets/audio/narration.mp3" data-start="0" data-duration="${t}" data-track-index="10" data-volume="1.0"></audio>
+    <audio id="narration" class="clip" src="assets/audio/narration.mp3" data-start="0" data-duration="${t}" data-track-index="10" data-volume="1.4"></audio>
 ${sfxHook}${beatHosts}
     <div id="ambient-layer" class="clip beat-host" data-composition-id="ambient" data-composition-src="compositions/ambient-layer.html" data-start="0" data-duration="${t}" data-track-index="30" style="position:absolute;inset:0;z-index:800;"></div>
     <div id="beat-progress-host" class="clip beat-progress-host" data-start="0" data-duration="${t}" data-track-index="31" style="position:absolute;top:0;left:0;width:${w}px;height:4px;z-index:8990;pointer-events:none;"><div class="beat-progress-track" style="position:absolute;inset:0;background:transparent;overflow:hidden;"><div class="beat-progress-fill" style="width:100%;height:100%;background:linear-gradient(90deg,#37b8ff 0%,#5fd6ff 18%,#78f0d8 34%,#c0f36a 50%,#ffd86b 66%,#ff9b49 82%,#ff5a36 92%,#ff3b1f 100%);box-shadow:0 0 8px rgba(95,214,255,0.28),0 0 14px rgba(255,170,84,0.30),0 0 20px rgba(255,90,54,0.22);border-radius:0 2px 2px 0;clip-path:inset(0 100% 0 0);"></div></div></div>

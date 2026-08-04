@@ -19,7 +19,7 @@ describe('beat map whiteboard image_prompt', () => {
 
     it('accepts image_prompt in schema v2 sections', () => {
         const imagePrompt =
-            "Whiteboard marker line art of two computers linked by curved arrows and packet icons with Vietnamese label 'Gói tin', thin black ink on pure white, outline only no fills, simple educational diagram, no watermark";
+            "High-impact hybrid whiteboard collage of two computers as photorealistic cutouts linked by thick black marker arrows with Vietnamese label 'Gói tin', selective red accents, strong hierarchy, pure white background, no watermark";
         const { map, errors } = parseBeatMapJson(JSON.stringify({
             schema_version: 2,
             totalVideoSec: 10,
@@ -43,7 +43,7 @@ describe('beat map whiteboard image_prompt', () => {
 
     it('validateBeatImagePrompt accepts English with Vietnamese label quotes', () => {
         const prompt =
-            "Whiteboard marker line art of a tired person in bed above three outline boxes with Vietnamese labels 'những điều bạn muốn làm', 'những điều bạn cần làm', 'xử lý việc không muốn & không cần' and title '3 NGUYÊN LIỆU', thin black ink on pure white, outline only no fills, no watermark";
+            "High-impact hybrid whiteboard collage of a tired young adult photorealistic cutout lying in bed beside a large black alarm clock, bold Vietnamese headline '3 NGUYÊN LIỆU', labels 'những điều bạn muốn làm', 'những điều bạn cần làm', 'xử lý việc không muốn & không cần', thick marker arrows, selective red accents, no watermark";
         expect(validateBeatImagePrompt(prompt)).toBe(prompt);
     });
 

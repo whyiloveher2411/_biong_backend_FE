@@ -268,6 +268,7 @@ export default function ShortVideoAgentVideoWorkspace({
         renderMode: state.renderMode,
         hasAudio: state.hasAudio,
         agentVideoUrl: state.agentVideoUrl,
+        localFinalMp4Url: state.localFinalMp4OpenUrl || state.localFinalMp4Url,
         beatMapReady: state.beatMapReady,
         beatsHtmlCompleted: state.beatsHtmlCompleted,
         beatsImageCompleted: state.beatsImageCompleted,
@@ -279,6 +280,8 @@ export default function ShortVideoAgentVideoWorkspace({
         state.renderMode,
         state.hasAudio,
         state.agentVideoUrl,
+        state.localFinalMp4OpenUrl,
+        state.localFinalMp4Url,
         state.beatMapReady,
         state.beatsHtmlCompleted,
         state.beatsImageCompleted,
@@ -287,6 +290,8 @@ export default function ShortVideoAgentVideoWorkspace({
         state.beatImage,
         state.importHtml,
     ]);
+
+    const finalPreviewVideoUrl = state.localFinalMp4OpenUrl || state.agentVideoUrl;
 
     const activePreviewSource = resolveActivePreviewSource(previewSource, previewInput);
 
@@ -363,15 +368,19 @@ export default function ShortVideoAgentVideoWorkspace({
             >
                 Refresh
             </Button>
-            {state.agentVideoUrl ? (
+            {finalPreviewVideoUrl ? (
                 <Button
                     size="small"
                     variant="contained"
                     startIcon={<OpenInNewIcon />}
-                    onClick={() => {
-                        const raw = String(state.agentVideoUrl || '').trim();
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        // Tab mới: ưu tiên CDN public (ổn định). Local chỉ khi chưa có agent_video_url.
+                        const raw = String(
+                            state.agentVideoUrl || state.localFinalMp4OpenUrl || finalPreviewVideoUrl || '',
+                        ).trim();
                         if (!raw) return;
-                        // Cache-bust bằng timestamp client mỗi lần click — tránh mở file video cũ.
                         let openUrl = raw;
                         try {
                             const u = new URL(raw, window.location.origin);
@@ -381,7 +390,16 @@ export default function ShortVideoAgentVideoWorkspace({
                             const sep = raw.includes('?') ? '&' : '?';
                             openUrl = `${raw}${sep}v=${Date.now()}`;
                         }
-                        window.open(openUrl, '_blank', 'noopener,noreferrer');
+                        // Quan trọng: features có `noopener` khiến window.open luôn trả null
+                        // dù tab mới đã mở — không được fallback location.assign (sẽ navigate tab hiện tại).
+                        const opened = window.open(openUrl, '_blank');
+                        if (opened) {
+                            try {
+                                opened.opener = null;
+                            } catch {
+                                // ignore
+                            }
+                        }
                     }}
                     sx={{
                         color: 'grey.900',
@@ -471,7 +489,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     </Box>
                 </Box>
                 <ShortVideoAgentVideoTimeline
-                    videoUrl={state.agentVideoUrl}
+                    videoUrl={finalPreviewVideoUrl}
                     videoRef={videoRef}
                     clipLabel={state.title || `Short video #${shortVideoId}`}
                     audioDurationSec={state.audioDurationSec}
@@ -518,6 +536,16 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenBeatGeminiHeadless={(beatId) => {
                         void state.handleOpenBeatGeminiHeadless(beatId);
                     }}
+                    onRenderWhiteboardBeat={(beatId) => {
+                        void state.handleRenderWhiteboardBeat(beatId);
+                    }}
+                    onAddBeatVideoToCapcut={(beatId) => {
+                        void state.handleAddBeatVideoToCapcut(beatId);
+                    }}
+                    whiteboardBeatRenders={state.whiteboardBeatRenders}
+                    renderingWhiteboardBeatIds={state.renderingWhiteboardBeatIds}
+                    whiteboardRenderProgress={state.whiteboardRenderProgress}
+                    uploadingBeatVideoToCapcutIds={state.uploadingBeatVideoToCapcutIds}
                     onSaveBeatQa={(beatId, qaStatus, qaRefineNote) => (
                         state.handleSaveBeatQa(beatId, qaStatus, qaRefineNote)
                     )}
@@ -563,11 +591,33 @@ export default function ShortVideoAgentVideoWorkspace({
                     onLaunchImportAssemble={() => { void state.handleLaunchAgentImportAssemble(); }}
                     showPipelineControls
                     fullAutoPipeline={state.fullAutoPipeline}
+                    fullAutoStepToggles={state.fullAutoStepToggles}
+                    savingFullAutoStepToggles={state.savingFullAutoStepToggles}
+                    onFullAutoStepToggleChange={(toggleKey, checked) => {
+                        void state.handleFullAutoStepToggleChange(toggleKey, checked);
+                    }}
+                    beatImageFillMode={state.beatImageFillMode}
+                    savingBeatImageFillMode={state.savingBeatImageFillMode}
+                    onBeatImageFillModeChange={(mode) => {
+                        void state.handleBeatImageFillModeChange(mode);
+                    }}
                     agentVisualMode={state.agentVisualMode}
                     startingFullAuto={state.startingFullAuto}
                     cancellingFullAuto={state.cancellingFullAuto}
                     onStartPipelineFromStep={(stepKey) => {
                         void state.handleStartFullAutoPipeline('restart', stepKey);
+                    }}
+                    onRunSinglePipelineStep={(stepKey) => {
+                        if (typeof state.handleRunSinglePipelineStep === 'function') {
+                            void state.handleRunSinglePipelineStep(stepKey);
+                            return;
+                        }
+                        void state.handleStartFullAutoPipeline(
+                            'restart',
+                            stepKey,
+                            undefined,
+                            { singleStep: true },
+                        );
                     }}
                     onCancelPipeline={() => {
                         void state.handleCancelFullAutoPipeline();
@@ -630,6 +680,8 @@ export default function ShortVideoAgentVideoWorkspace({
                 geminiFillProgress={state.geminiFillProgress}
                 headlessBrowserActive={state.headlessBrowserActive}
                 agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
+                agentVisualMode={state.agentVisualMode}
+                whiteboardRenderProgress={state.whiteboardRenderProgress}
                 geminiScriptStatus={state.geminiScriptStatus}
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
                 geminiDivisionStatus={state.geminiDivisionStatus}

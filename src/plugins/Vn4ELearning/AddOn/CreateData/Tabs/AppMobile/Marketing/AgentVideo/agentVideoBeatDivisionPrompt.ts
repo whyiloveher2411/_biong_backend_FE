@@ -136,8 +136,12 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '',
         whiteboardBlock,
         whiteboardBlock ? '' : '',
-        '## Cách chia (bắt buộc — ưu tiên hết ý, rồi mới 8–30s)',
-        '- Đọc `audio_script`: ưu tiên **1 beat ≈ 1 đoạn** (cách nhau dòng trống) khi đoạn đó là một ý visual đủ rõ và nằm trong **8–30s**.',
+        isWhiteboard
+            ? '## Cách chia (bắt buộc — ưu tiên hết ý, rồi mới 5–15s)'
+            : '## Cách chia (bắt buộc — ưu tiên hết ý, rồi mới 8–30s)',
+        isWhiteboard
+            ? '- Đọc `audio_script`: ưu tiên **1 beat ≈ 1 đoạn** (cách nhau dòng trống) khi đoạn đó là một ý visual đủ rõ và nằm trong **5–15s**.'
+            : '- Đọc `audio_script`: ưu tiên **1 beat ≈ 1 đoạn** (cách nhau dòng trống) khi đoạn đó là một ý visual đủ rõ và nằm trong **8–30s**.',
         '- Trong một đoạn nhiều câu: được **gộp** nhiều câu cùng ý; nếu tách thì **chỉ cắt sau dấu kết câu** (`.?!…`) hoặc sau **xuống dòng**.',
         '- **Cấm** cắt sau `,` `;` `:` hoặc giữa mệnh đề đang nói dở — dấu phẩy **không** phải biên beat.',
         '- **Cấm** đặt `endSec` giữa cụm từ đang nói dở — không bao giờ cắt giữa câu.',
@@ -147,17 +151,29 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- Ví dụ BAD: `phrase_anchor` kết thúc `…nguyên khối đâu,` / `endSec` giữa câu.',
         '- Ví dụ GOOD: giữ tới hết `…gọi là packets.` rồi mới cắt beat tiếp.',
         '',
-        '## Beat duration — target 8–30s (không validate cứng trong code)',
-        '- Target mỗi beat **8–30s** (`durationSec`).',
-        '- Beat **< ~8s**: **gộp** với câu/ý kế tiếp cùng đoạn (trừ khi không thể gộp mà vẫn phủ timeline liên tục).',
-        '- Beat **> ~30s**: tách thêm chỉ tại **cuối câu** gần biên 30s — **cấm** cắt giữa câu chỉ để “vừa giây”.',
-        '- Nếu **một câu** Whisper dài hơn 30s → **giữ nguyên câu**, được phép >30s hơn là cắt giữa câu.',
-        '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
-        '- Chỉ bắt buộc: durationSec > 0, sections phủ liên tục 0 → totalVideoSec.',
+        ...(isWhiteboard
+            ? [
+                '## Beat duration — whiteboard soft target 5–15s (không validate cứng trong code)',
+                '- Target mỗi beat / bối cảnh **5–15s** (`durationSec`).',
+                '- **Tối thiểu ~5s:** vừa đủ nhận diện hình ảnh và đọc một câu thoại ngắn; ngắn hơn dễ ngợp → **gộp** với câu/ý kế tiếp cùng đoạn (trừ khi không thể gộp mà vẫn phủ timeline liên tục).',
+                '- **Tối đa ~15s:** sau đó nếu bàn tay không vẽ thêm chi tiết mới hoặc bối cảnh không đổi, mắt dễ mất tập trung → **tách** chỉ tại **cuối câu** gần biên 15s — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+                '- Nếu **một câu** Whisper dài hơn 15s → **giữ nguyên câu**, được phép >15s hơn là cắt giữa câu.',
+                '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+                '- Chỉ bắt buộc: durationSec > 0, sections phủ liên tục 0 → totalVideoSec.',
+            ]
+            : [
+                '## Beat duration — target 8–30s (không validate cứng trong code)',
+                '- Target mỗi beat **8–30s** (`durationSec`).',
+                '- Beat **< ~8s**: **gộp** với câu/ý kế tiếp cùng đoạn (trừ khi không thể gộp mà vẫn phủ timeline liên tục).',
+                '- Beat **> ~30s**: tách thêm chỉ tại **cuối câu** gần biên 30s — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+                '- Nếu **một câu** Whisper dài hơn 30s → **giữ nguyên câu**, được phép >30s hơn là cắt giữa câu.',
+                '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+                '- Chỉ bắt buộc: durationSec > 0, sections phủ liên tục 0 → totalVideoSec.',
+            ]),
         '',
         buildHtmlChatbotNoKaraokeRulesBlock(),
         buildBeatDivisionVisualCreativeDirectionBlock(),
-        buildBeatDivisionSingleOutputRulesBlock(),
+        buildBeatDivisionSingleOutputRulesBlock({ whiteboardDuration: isWhiteboard }),
         '## Output (bắt buộc)',
         '- Trả về **JSON thuần** — không markdown, không giải thích, không ``` fence',
         '- Schema:',
@@ -186,7 +202,9 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         `- \`totalVideoSec\` = **${total}** (không đổi)`,
         '- `sections` phủ liên tục từ 0 → totalVideoSec, không overlap, không gap',
         '- `id` / `beat_id` = `beat_1`, `beat_2`, …',
-        '- `durationSec` = endSec - startSec; target **8–30s** (ưu tiên hết câu/hết ý trước khi ép giây); cắt chỉ ở cuối câu/xuống dòng — **cấm** cắt sau `,`',
+        isWhiteboard
+            ? '- `durationSec` = endSec - startSec; target **5–15s** (ưu tiên hết câu/hết ý trước khi ép giây); cắt chỉ ở cuối câu/xuống dòng — **cấm** cắt sau `,`'
+            : '- `durationSec` = endSec - startSec; target **8–30s** (ưu tiên hết câu/hết ý trước khi ép giây); cắt chỉ ở cuối câu/xuống dòng — **cấm** cắt sau `,`',
         '- `phrase_anchor` = toàn bộ lời thoại thuộc beat, hết ý (metadata lập kế hoạch — không render karaoke)',
         '- Top-level bắt buộc `schema_version: 2`',
         '- `visual_description`: follow **Visual description — creative direction** above; English; approximately **40–100 words**; semantic and style-neutral',

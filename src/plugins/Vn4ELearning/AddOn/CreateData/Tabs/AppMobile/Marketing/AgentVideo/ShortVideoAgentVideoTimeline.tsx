@@ -7,7 +7,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import { Box, Button, CircularProgress, IconButton, Menu, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     TIMELINE_EDIT_AREA_TOP_GAP,
@@ -27,9 +27,16 @@ import {
     resolveRestartableSet,
 } from './FullAutoPipelineGroupedSteps';
 import type {
+    BeatImageFillMode,
     FullAutoPipelineStepKey,
     FullAutoPipelineSummary,
+    FullAutoStepToggleKey,
+    FullAutoStepToggles,
 } from './agentVideoApi';
+import {
+    whiteboardRenderProgressLabel,
+    type WhiteboardRenderProgress,
+} from './agentVideoWhiteboardRenderProgress';
 import TimelineZoomControls, {
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
@@ -171,6 +178,12 @@ type Props = {
     onOpenBeatGemini?: (beatId: string) => void;
     onOpenBeatMetaAi?: (beatId: string) => void;
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
+    onRenderWhiteboardBeat?: (beatId: string) => void;
+    onAddBeatVideoToCapcut?: (beatId: string) => void;
+    whiteboardBeatRenders?: Record<string, { status?: string; error?: string }>;
+    renderingWhiteboardBeatIds?: string[];
+    whiteboardRenderProgress?: WhiteboardRenderProgress | null;
+    uploadingBeatVideoToCapcutIds?: string[];
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
     beatVersions?: Record<string, BeatVersion[]>;
@@ -214,10 +227,17 @@ type Props = {
     onLaunchImportAssemble?: () => void;
     showPipelineControls?: boolean;
     fullAutoPipeline?: FullAutoPipelineSummary | null;
+    fullAutoStepToggles?: FullAutoStepToggles;
+    savingFullAutoStepToggles?: boolean;
+    onFullAutoStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
+    beatImageFillMode?: BeatImageFillMode;
+    savingBeatImageFillMode?: boolean;
+    onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
     agentVisualMode?: string;
     startingFullAuto?: boolean;
     cancellingFullAuto?: boolean;
     onStartPipelineFromStep?: (stepKey: FullAutoPipelineStepKey) => void;
+    onRunSinglePipelineStep?: (stepKey: FullAutoPipelineStepKey) => void;
     onCancelPipeline?: () => void;
 };
 
@@ -248,6 +268,12 @@ export default function ShortVideoAgentVideoTimeline({
     onOpenBeatGemini,
     onOpenBeatMetaAi,
     onOpenBeatGeminiHeadless,
+    onRenderWhiteboardBeat,
+    onAddBeatVideoToCapcut,
+    whiteboardBeatRenders = {},
+    renderingWhiteboardBeatIds = [],
+    whiteboardRenderProgress = null,
+    uploadingBeatVideoToCapcutIds = [],
     onSaveBeatQa,
     onQuickIterateBeat,
     beatVersions = {},
@@ -280,10 +306,17 @@ export default function ShortVideoAgentVideoTimeline({
     onLaunchImportAssemble,
     showPipelineControls = false,
     fullAutoPipeline = null,
+    fullAutoStepToggles,
+    savingFullAutoStepToggles = false,
+    onFullAutoStepToggleChange,
+    beatImageFillMode = 'auto',
+    savingBeatImageFillMode = false,
+    onBeatImageFillModeChange,
     agentVisualMode = '',
     startingFullAuto = false,
     cancellingFullAuto = false,
     onStartPipelineFromStep,
+    onRunSinglePipelineStep,
     onCancelPipeline,
 }: Props) {
     const timelineRef = React.useRef<TimelineState>(null);
@@ -331,6 +364,26 @@ export default function ShortVideoAgentVideoTimeline({
         || beatQaCounts.needs_html_refill > 0
         || beatQaCounts.needs_visual_tweak > 0
     );
+    const showWhiteboardRenderProgress = Boolean(
+        isWhiteboardMode
+        && whiteboardRenderProgress?.active
+        && Number(whiteboardRenderProgress?.total || 0) > 0,
+    );
+    const whiteboardProgressChipLabel = showWhiteboardRenderProgress && whiteboardRenderProgress
+        ? (() => {
+            const base = `${whiteboardRenderProgress.completed}/${whiteboardRenderProgress.total} · ${whiteboardRenderProgress.percent}%`;
+            if (whiteboardRenderProgress.phase === 'mux') {
+                return `Mux · ${base}`;
+            }
+            if (whiteboardRenderProgress.phase === 'concat') {
+                return `Ghép · ${base}`;
+            }
+            const beatNote = whiteboardRenderProgress.activeBeatId
+                ? ` · ${whiteboardRenderProgress.activeBeatId}`
+                : '';
+            return `${base}${beatNote}`;
+        })()
+        : '';
     const geminiFillQueueActive = geminiFillStatus === 'queued'
         || geminiFillStatus === 'processing';
     const showDeleteAllBeatHtml = Boolean(beatMap?.sections?.length) && beatsWithHtmlCount > 0;
@@ -717,6 +770,43 @@ export default function ShortVideoAgentVideoTimeline({
                     {formatPlaybackClock(currentTimeSec)} / {formatPlaybackClock(contentDurationSec)}
                 </Typography>
                 <Box sx={{ flex: 1, minWidth: 8 }} />
+                {showWhiteboardRenderProgress && whiteboardRenderProgress ? (
+                    <Tooltip
+                        title={whiteboardRenderProgressLabel(whiteboardRenderProgress)}
+                        placement="top"
+                    >
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.75,
+                                minWidth: 140,
+                                maxWidth: 280,
+                            }}
+                        >
+                            <Chip
+                                size="small"
+                                color={whiteboardRenderProgress.failed.length > 0 ? 'error' : 'info'}
+                                label={whiteboardProgressChipLabel}
+                                sx={{
+                                    height: 22,
+                                    maxWidth: '100%',
+                                    '& .MuiChip-label': {
+                                        px: 0.75,
+                                        fontSize: 11,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    },
+                                }}
+                            />
+                            <LinearProgress
+                                variant="determinate"
+                                value={Math.max(0, Math.min(100, whiteboardRenderProgress.percent))}
+                                sx={{ flex: 1, minWidth: 48, height: 4, borderRadius: 1 }}
+                            />
+                        </Box>
+                    </Tooltip>
+                ) : null}
                 {showBeatQaSummary ? (
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
                         {`Ổn: ${beatQaCounts.approved} · HTML: ${beatQaCounts.needs_html_refill} · Visual: ${beatQaCounts.needs_visual_tweak}`}
@@ -878,12 +968,24 @@ export default function ShortVideoAgentVideoTimeline({
                                         agentVisualMode={agentVisualMode}
                                         pipelineStatus={fullAutoPipeline?.status}
                                         currentStep={fullAutoPipeline?.current_step}
+                                        stepToggles={fullAutoStepToggles}
+                                        stepToggleDisabled={savingFullAutoStepToggles || startingFullAuto}
+                                        onStepToggleChange={onFullAutoStepToggleChange}
+                                        beatImageFillMode={beatImageFillMode}
+                                        beatImageFillModeDisabled={savingBeatImageFillMode || startingFullAuto}
+                                        onBeatImageFillModeChange={onBeatImageFillModeChange}
                                         restartableSet={restartableSet}
                                         disabled={startingFullAuto}
                                         onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
                                             setRestartMenuAnchor(null);
                                             onStartPipelineFromStep?.(stepKey);
                                         }}
+                                        onRunSingleStep={(stepKey: FullAutoPipelineStepKey) => {
+                                            setRestartMenuAnchor(null);
+                                            onRunSinglePipelineStep?.(stepKey);
+                                        }}
+                                        runSingleStepDisabled={pipelineRunning || startingFullAuto}
+                                        runningSingleStep={startingFullAuto}
                                         onRerunRenderUpload={() => {
                                             setRestartMenuAnchor(null);
                                             onStartPipelineFromStep?.('render');
@@ -1105,6 +1207,11 @@ export default function ShortVideoAgentVideoTimeline({
                                 onOpenGemini={onOpenBeatGemini}
                                 onOpenMetaAi={onOpenBeatMetaAi}
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
+                                onRenderWhiteboardBeat={onRenderWhiteboardBeat}
+                                onAddBeatVideoToCapcut={onAddBeatVideoToCapcut}
+                                whiteboardBeatRenders={whiteboardBeatRenders}
+                                renderingWhiteboardBeatIds={renderingWhiteboardBeatIds}
+                                uploadingBeatVideoToCapcutIds={uploadingBeatVideoToCapcutIds}
                                 onSaveBeatQa={onSaveBeatQa}
                                 onQuickIterateBeat={onQuickIterateBeat}
                                 beatVersions={beatVersions}

@@ -4,6 +4,7 @@ import {
     Chip,
     CircularProgress,
     IconButton,
+    LinearProgress,
     Paper,
     Tooltip,
     Typography,
@@ -14,12 +15,19 @@ import StopIcon from '@mui/icons-material/Stop';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
-    FULL_AUTO_PIPELINE_STEP_LABELS,
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
 } from './agentVideoApi';
 import { PipelineGroupedStepList } from './FullAutoPipelineGroupedSteps';
+import { appendHeadlessHowtoToError } from './agentVideoHeadlessPrerequisites';
+import { resolveFullAutoPipelineStepLabel } from './agentVideoPipelineStepLabels';
+import { isAgentWhiteboardMode } from './agentVideoVisualMode';
+import {
+    whiteboardRenderPhaseSubtitle,
+    whiteboardRenderProgressLabel,
+    type WhiteboardRenderProgress,
+} from './agentVideoWhiteboardRenderProgress';
 import { useAgentHeadlessPreview } from './useAgentHeadlessPreview';
 
 type Props = {
@@ -28,11 +36,16 @@ type Props = {
     pipeline: FullAutoPipelineSummary | null;
     geminiFillProgress?: {
         beatId?: string;
+        current?: number;
+        total?: number;
+        succeeded?: number;
     } | null;
     /** Backend: true khi có job Puppeteer/headless đang chạy — bật preview realtime tự động. */
     headlessBrowserActive?: boolean;
     /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
     agentGeminiOpenBrowser?: boolean;
+    agentVisualMode?: string;
+    whiteboardRenderProgress?: WhiteboardRenderProgress | null;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
     geminiDivisionStatus?: string;
@@ -89,18 +102,21 @@ function storedPreviewWidth(): number {
     }
 }
 
-function stepLabel(step: string): string {
-    if (step in FULL_AUTO_PIPELINE_STEP_LABELS) {
-        return FULL_AUTO_PIPELINE_STEP_LABELS[step as FullAutoPipelineStepKey];
-    }
-    return step || 'Đang chuẩn bị pipeline';
+function stepLabel(step: string, agentVisualMode?: string): string {
+    return resolveFullAutoPipelineStepLabel(step, agentVisualMode)
+        || step
+        || 'Đang chuẩn bị pipeline';
 }
 
 function pipelineProgressLabel(step: string): string {
     const index = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(step as FullAutoPipelineStepKey);
-    return index >= 0
-        ? `Bước ${index + 1}/${FULL_AUTO_PIPELINE_STEP_ORDER.length}`
-        : 'Pipeline A→Z';
+    if (index >= 0) {
+        return `Bước ${index + 1}/${FULL_AUTO_PIPELINE_STEP_ORDER.length}`;
+    }
+    if (step === 'whiteboard_render' || step === 'whiteboard_mux') {
+        return step === 'whiteboard_mux' ? 'Mux whiteboard' : 'Render whiteboard';
+    }
+    return 'Pipeline A→Z';
 }
 
 function resultLabel(status: string): string {
@@ -117,6 +133,15 @@ function usesChatgptWebTts(platforms: string[] | undefined): boolean {
     return Array.isArray(platforms) && platforms.includes('chatgpt_web');
 }
 
+function isWhiteboardPipelineStep(step: string, isWhiteboardMode: boolean): boolean {
+    if (!isWhiteboardMode) {
+        return false;
+    }
+    return step === 'render'
+        || step === 'whiteboard_render'
+        || step === 'whiteboard_mux';
+}
+
 function isActiveJobStatus(status: string): boolean {
     const normalized = String(status || '').trim().toLowerCase();
     return normalized === 'queued' || normalized === 'processing';
@@ -129,6 +154,8 @@ export default function ShortVideoAgentHeadlessPreview({
     geminiFillProgress,
     headlessBrowserActive = false,
     agentGeminiOpenBrowser = false,
+    agentVisualMode = '',
+    whiteboardRenderProgress = null,
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
     geminiDivisionStatus = 'none',
@@ -155,6 +182,15 @@ export default function ShortVideoAgentHeadlessPreview({
     const status = String(pipeline?.status || 'idle').trim().toLowerCase();
     const currentStep = String(pipeline?.current_step || '').trim();
     const pipelineRunning = open && status === 'running';
+    const isWhiteboardMode = isAgentWhiteboardMode(agentVisualMode);
+    const wbPipelineStep = isWhiteboardPipelineStep(currentStep, isWhiteboardMode);
+    const showWhiteboardRenderProgress = Boolean(
+        isWhiteboardMode
+        && (
+            whiteboardRenderProgress?.active
+            || (pipelineRunning && wbPipelineStep)
+        ),
+    );
 
     const chatgptInChain = usesChatgptWebTts(selectedTtsPlatforms);
     const chatgptTtsActive = chatgptInChain && (
@@ -296,18 +332,48 @@ export default function ShortVideoAgentHeadlessPreview({
         return null;
     }
 
-    const title = pipelineRunning
-        ? stepLabel(currentStep)
-        : (isActiveJobStatus(geminiScriptPhoneticStatus)
-            ? stepLabel('script_phonetic_normalize')
-            : (chatgptTtsActive
-                ? 'Duyệt / TTS (ChatGPT)'
-                : (geminiJobActive ? 'Gemini headless' : resultLabel(status))));
     const beatId = String(
-        preview.metadata?.beat_id
+        (showWhiteboardRenderProgress && whiteboardRenderProgress?.activeBeatId)
+        || preview.metadata?.beat_id
         || geminiFillProgress?.beatId
         || '',
     ).trim();
+    const imageFillProgressLabel = (() => {
+        const current = Number(geminiFillProgress?.current || 0);
+        const total = Number(geminiFillProgress?.total || 0);
+        const beatPart = beatId || 'đang chờ beat…';
+        if (total > 0 && current > 0) {
+            return `Ảnh beat · ${beatPart} (${current}/${total})`;
+        }
+        return `Ảnh beat · ${beatPart}`;
+    })();
+    const isImageFillStep = (
+        (pipelineRunning && currentStep === 'beat_image_fill')
+        || isActiveJobStatus(geminiImageFillStatus)
+    );
+    const title = showWhiteboardRenderProgress && whiteboardRenderProgress?.active
+        ? whiteboardRenderProgressLabel(whiteboardRenderProgress)
+        : (isImageFillStep
+            ? imageFillProgressLabel
+            : (pipelineRunning
+                ? stepLabel(currentStep, agentVisualMode)
+                : (isActiveJobStatus(geminiScriptPhoneticStatus)
+                    ? stepLabel('script_phonetic_normalize', agentVisualMode)
+                    : (chatgptTtsActive
+                        ? 'Duyệt / TTS (ChatGPT)'
+                        : (geminiJobActive ? 'Gemini headless' : resultLabel(status))))));
+    const whiteboardSubtitle = showWhiteboardRenderProgress
+        ? (
+            (whiteboardRenderProgress
+                ? whiteboardRenderPhaseSubtitle(whiteboardRenderProgress)
+                : '')
+            || (
+                whiteboardRenderProgress && whiteboardRenderProgress.total > 0
+                    ? `${whiteboardRenderProgress.completed}/${whiteboardRenderProgress.total} beat`
+                    : 'Đang chuẩn bị render whiteboard…'
+            )
+        )
+        : '';
     const previewSessionId = String(
         preview.metadata?.session_id
         || preview.metadata?.preview_session_id
@@ -332,12 +398,17 @@ export default function ShortVideoAgentHeadlessPreview({
                             ? 'TRỰC TIẾP'
                             : (preview.sessionActive ? 'Chờ frame' : 'Chờ Gemini');
     const emptyPreviewHint = preview.error
-        || (
-            previewDisconnected
-                ? 'Đang nối lại WebSocket preview…'
-                : preview.sessionActive
-                    ? 'Publisher đã nối — đang chờ JPEG screencast'
-                    : 'Relay đã nối nhưng chưa có session Gemini publish frame. Kiểm tra worker có HEADLESS_PREVIEW_INGEST_URL và job đang chạy thật.'
+        ? appendHeadlessHowtoToError(preview.error)
+        : (
+            preview.connectionStatus === 'error'
+                ? appendHeadlessHowtoToError(
+                    'Không nối được headless preview relay. Kiểm tra relay đang chạy trên :8791.',
+                )
+                : previewDisconnected
+                    ? 'Đang nối lại WebSocket preview…'
+                    : preview.sessionActive
+                        ? 'Publisher đã nối — đang chờ JPEG screencast'
+                        : 'Relay đã nối nhưng chưa có session Gemini publish frame. Kiểm tra worker có HEADLESS_PREVIEW_INGEST_URL và job đang chạy thật.'
         );
 
     return (
@@ -419,14 +490,20 @@ export default function ShortVideoAgentHeadlessPreview({
                         noWrap
                         sx={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 10 }}
                     >
-                        {pipelineRunning ? pipelineProgressLabel(currentStep) : (
-                            isActiveJobStatus(geminiScriptPhoneticStatus)
-                                ? pipelineProgressLabel('script_phonetic_normalize')
-                                : (chatgptTtsActive
-                                    ? 'ChatGPT Web TTS'
-                                    : `Short video #${shortVideoId}`)
-                        )}
-                        {beatId ? ` · ${beatId}` : ''}
+                        {isImageFillStep
+                            ? (
+                                Number(geminiFillProgress?.total || 0) > 0
+                                    ? `Meta.ai · ${Number(geminiFillProgress?.current || 0)}/${Number(geminiFillProgress?.total || 0)}`
+                                    : 'Meta.ai headless'
+                            )
+                            : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
+                                isActiveJobStatus(geminiScriptPhoneticStatus)
+                                    ? pipelineProgressLabel('script_phonetic_normalize')
+                                    : (chatgptTtsActive
+                                        ? 'ChatGPT Web TTS'
+                                        : `Short video #${shortVideoId}`)
+                            ))}
+                        {!isImageFillStep && beatId ? ` · ${beatId}` : ''}
                     </Typography>
                 </Box>
                 {browserStep && !minimized ? (
@@ -531,6 +608,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         headlessSteps={pipeline.headless_steps}
                         aiSteps={pipeline.ai_steps}
                         qaLoops={pipeline.qa_loops}
+                        agentVisualMode={agentVisualMode}
                         pipelineStatus={pipeline.status}
                         currentStep={currentStep}
                     />
@@ -561,6 +639,43 @@ export default function ShortVideoAgentHeadlessPreview({
                                 objectFit: 'contain',
                             }}
                         />
+                    ) : showWhiteboardRenderProgress ? (
+                        <Box sx={{ px: 3, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+                            {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
+                            <Typography variant="body2" fontWeight={600}>
+                                {whiteboardRenderProgress?.active
+                                    ? whiteboardRenderProgressLabel(whiteboardRenderProgress)
+                                    : stepLabel(currentStep, agentVisualMode)}
+                            </Typography>
+                            {whiteboardRenderProgress && whiteboardRenderProgress.total > 0 ? (
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={Math.max(0, Math.min(100, whiteboardRenderProgress.percent))}
+                                    sx={{
+                                        mt: 1.5,
+                                        mb: 1,
+                                        height: 8,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255,255,255,0.12)',
+                                        '& .MuiLinearProgress-bar': { bgcolor: 'info.light' },
+                                    }}
+                                />
+                            ) : null}
+                            <Typography
+                                variant="caption"
+                                sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.72)' }}
+                            >
+                                {whiteboardSubtitle}
+                            </Typography>
+                            {whiteboardRenderProgress && whiteboardRenderProgress.failed.length > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${whiteboardRenderProgress.failed.length} beat lỗi`}
+                                    sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
                     ) : (
                         <Box sx={{ px: 4, textAlign: 'center' }}>
                             {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}

@@ -7,6 +7,7 @@ export type AgentPreviewSourceInput = {
     renderMode: AgentRenderMode;
     hasAudio: boolean;
     agentVideoUrl: string;
+    localFinalMp4Url?: string;
     beatMapReady: boolean;
     beatsHtmlCompleted: number;
     beatsImageCompleted?: number;
@@ -17,7 +18,8 @@ export type AgentPreviewSourceInput = {
 };
 
 export function canShowFinalPreview(input: AgentPreviewSourceInput): boolean {
-    return String(input.agentVideoUrl || '').trim() !== '';
+    return String(input.agentVideoUrl || '').trim() !== ''
+        || String(input.localFinalMp4Url || '').trim() !== '';
 }
 
 export function hasBeatHtmlForPreview(input: AgentPreviewSourceInput): boolean {

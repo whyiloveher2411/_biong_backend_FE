@@ -10,7 +10,7 @@ import { tokenizeScript } from "./lib/caption-script-align.mjs";
 import {
   loadRenderSpecFromProject,
   resolveCaptionLayout,
-} from "../../../scripts/lib/clip-render-spec.mjs";
+} from "../../../../scripts/lib/clip-render-spec.mjs";
 
 function assertCaptionMatchesScript(projectDir, captionWords) {
   const scriptPath = path.join(projectDir, "assets/audio-script.txt");

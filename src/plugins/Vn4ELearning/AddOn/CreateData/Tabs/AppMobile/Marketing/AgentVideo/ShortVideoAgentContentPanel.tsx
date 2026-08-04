@@ -2,7 +2,6 @@ import React from 'react';
 import {
     Alert,
     Box,
-    Button,
     Chip,
     FormControl,
     InputLabel,
@@ -16,22 +15,18 @@ import {
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import TextareaForm from 'components/atoms/fields/textarea/Form';
-import { convertToURL, validURL } from 'helpers/url';
 import { openImagePopup } from 'helpers/image';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
+import { appendHeadlessHowtoToError } from './agentVideoHeadlessPrerequisites';
 import { scriptQaLoopCurrentStepLabel, useScriptImproveQaLoopView } from './agentVideoPipelineQaLoopUi';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
-import ShortVideoAgentAvatarDrawer, {
-    AVATAR_PIP_ANCHORS,
-} from './ShortVideoAgentAvatarDrawer';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -1071,126 +1066,12 @@ export default function ShortVideoAgentContentPanel({ state }: Props) {
                             </Stack>
                         ) : null}
                         {state.fullAutoPipeline?.last_error?.message ? (
-                            <Alert severity="error" sx={{ mb: 1.5, py: 0.5 }}>
+                            <Alert severity="error" sx={{ mb: 1.5, py: 0.5, whiteSpace: 'pre-wrap' }}>
                                 [{state.fullAutoPipeline.last_error.step || '?'}]
                                 {' '}
-                                {state.fullAutoPipeline.last_error.message}
+                                {appendHeadlessHowtoToError(state.fullAutoPipeline.last_error.message)}
                             </Alert>
                         ) : null}
-                        <Stack spacing={1.25}>
-                            <Box
-                                sx={{
-                                    p: 1.25,
-                                    borderRadius: 1,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    bgcolor: 'background.paper',
-                                }}
-                            >
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    display="block"
-                                    sx={{ mb: 1, fontWeight: 600, letterSpacing: 0.2 }}
-                                >
-                                    Avatar lip-sync
-                                </Typography>
-                                {(() => {
-                                    const selected = state.verifiedAvatars.find(
-                                        (item) => item.id === state.agentAvatarId,
-                                    );
-                                    const masterRaw = String(
-                                        state.agentAvatarMasterUrl || selected?.master_url || '',
-                                    ).trim();
-                                    let thumbSrc = '';
-                                    if (masterRaw) {
-                                        if (validURL(masterRaw) || masterRaw.startsWith('data:')) {
-                                            thumbSrc = masterRaw;
-                                        } else if (masterRaw.startsWith('//')) {
-                                            thumbSrc = `https:${masterRaw}`;
-                                        } else {
-                                            thumbSrc = convertToURL(
-                                                process.env.REACT_APP_BASE_URL,
-                                                masterRaw.replace(/^\//, ''),
-                                            );
-                                        }
-                                    }
-                                    const anchorLabel = AVATAR_PIP_ANCHORS.find(
-                                        (item) => item.id === state.agentAvatarAnchor,
-                                    )?.label || 'Dưới phải';
-                                    const hasAvatar = state.agentAvatarId > 0;
-                                    return (
-                                        <Button
-                                            fullWidth
-                                            variant="outlined"
-                                            color="inherit"
-                                            disabled={state.savingAgentAvatar}
-                                            onClick={() => state.setAvatarDrawerOpen(true)}
-                                            endIcon={<ChevronRightIcon />}
-                                            sx={{
-                                                ...workflowFieldSurfaceSx,
-                                                justifyContent: 'flex-start',
-                                                textTransform: 'none',
-                                                py: 1,
-                                                px: 1.25,
-                                            }}
-                                        >
-                                            <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
-                                                <Box
-                                                    sx={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        borderRadius: '50%',
-                                                        overflow: 'hidden',
-                                                        bgcolor: '#fff',
-                                                        border: '1px solid',
-                                                        borderColor: 'divider',
-                                                        flexShrink: 0,
-                                                    }}
-                                                >
-                                                    {thumbSrc ? (
-                                                        <Box
-                                                            component="img"
-                                                            src={thumbSrc}
-                                                            alt=""
-                                                            sx={{
-                                                                width: '100%',
-                                                                height: '100%',
-                                                                objectFit: 'cover',
-                                                                display: 'block',
-                                                            }}
-                                                        />
-                                                    ) : null}
-                                                </Box>
-                                                <Box sx={{ minWidth: 0, textAlign: 'left', flex: 1 }}>
-                                                    <Typography variant="body2" fontWeight={600} noWrap>
-                                                        {selected?.title
-                                                            || (hasAvatar
-                                                                ? `Avatar #${state.agentAvatarId}`
-                                                                : 'Chọn avatar')}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary" noWrap display="block">
-                                                        {hasAvatar
-                                                            ? `PiP · ${anchorLabel}`
-                                                            : 'Không dùng · mở drawer để chọn'}
-                                                    </Typography>
-                                                </Box>
-                                            </Stack>
-                                        </Button>
-                                    );
-                                })()}
-                                <ShortVideoAgentAvatarDrawer
-                                    open={state.avatarDrawerOpen}
-                                    onClose={() => state.setAvatarDrawerOpen(false)}
-                                    avatars={state.verifiedAvatars}
-                                    selectedId={state.agentAvatarId}
-                                    selectedAnchor={state.agentAvatarAnchor}
-                                    clipAspect={state.agentClipAspect}
-                                    saving={state.savingAgentAvatar}
-                                    onApply={state.handleAgentAvatarApply}
-                                />
-                            </Box>
-                        </Stack>
                     </WorkflowSection>
                 </Stack>
             </Box>

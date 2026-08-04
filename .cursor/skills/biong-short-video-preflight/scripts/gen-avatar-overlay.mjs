@@ -12,7 +12,7 @@ import fs from "fs";
 import path from "path";
 import { buildLipSyncTimeline } from "./lib/avatar-lip-sync.mjs";
 import { createAudioEnergy } from "./lib/avatar-audio-energy.mjs";
-import { loadRenderSpecFromProject } from "../../../scripts/lib/clip-render-spec.mjs";
+import { loadRenderSpecFromProject } from "../../../../scripts/lib/clip-render-spec.mjs";
 
 function defaultHints() {
   return {

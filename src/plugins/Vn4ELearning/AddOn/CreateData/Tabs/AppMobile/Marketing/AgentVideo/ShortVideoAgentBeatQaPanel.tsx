@@ -12,8 +12,11 @@ import {
     Typography,
 } from '@mui/material';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
+import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
 import {
     BEAT_QA_QUICK_NOTE_GROUPS,
     BEAT_QA_STATUSES,
@@ -26,8 +29,13 @@ import {
     type BeatQaStatus,
     type BeatVersion,
 } from './agentVideoBeatMap';
+import type {
+    AgentWhiteboardBeatOverride,
+    AgentWhiteboardConfig,
+} from './agentVideoApi';
+import ShortVideoAgentWhiteboardBeatSettings from './ShortVideoAgentWhiteboardBeatSettings';
 
-type PanelTab = 'qa' | 'version';
+type PanelTab = 'qa' | 'version' | 'video';
 export type BeatQuickIterateStage = 'idle' | 'queued' | 'visual' | 'html';
 
 type Props = {
@@ -46,6 +54,17 @@ type Props = {
     iterateStage?: BeatQuickIterateStage;
     /** Phân biệt visual+fill vs edit HTML để label busy đúng. */
     iterateKind?: 'quick_iterate' | 'edit_html' | null;
+    whiteboardBeatRender?: {
+        status?: string;
+        video_url?: string;
+        error?: string;
+    } | null;
+    uploadingBeatVideoToCapcut?: boolean;
+    beatDurationSec?: number;
+    isLastBeat?: boolean;
+    agentWhiteboardConfig?: AgentWhiteboardConfig;
+    whiteboardBeatOverride?: AgentWhiteboardBeatOverride | null;
+    savingWhiteboardBeatOverride?: boolean;
     onSaveBeatQa: (qaStatus: BeatQaStatus, qaRefineNote: string) => Promise<boolean>;
     onQuickIterateBeat?: (qaRefineNote: string) => Promise<boolean>;
     onEditHtmlBeat?: (qaRefineNote: string) => Promise<boolean>;
@@ -54,6 +73,9 @@ type Props = {
         qaRefineNote: string;
     }) => Promise<string | null>;
     onRestoreBeatVersion: (versionId: string, label: string) => Promise<string | null>;
+    onRenderWhiteboardBeat?: () => void;
+    onAddBeatVideoToCapcut?: () => void;
+    onSaveWhiteboardBeatOverride?: (override: AgentWhiteboardBeatOverride) => Promise<boolean>;
 };
 
 const PANEL_BG = '#0b0b0c';
@@ -321,11 +343,21 @@ export default function ShortVideoAgentBeatQaPanel({
     quickIterating = false,
     iterateStage = 'idle',
     iterateKind = null,
+    whiteboardBeatRender = null,
+    uploadingBeatVideoToCapcut = false,
+    beatDurationSec = 8,
+    isLastBeat = false,
+    agentWhiteboardConfig = {},
+    whiteboardBeatOverride = null,
+    savingWhiteboardBeatOverride = false,
     onSaveBeatQa,
     onQuickIterateBeat,
     onEditHtmlBeat,
     onSaveBeatVersion,
     onRestoreBeatVersion,
+    onRenderWhiteboardBeat,
+    onAddBeatVideoToCapcut,
+    onSaveWhiteboardBeatOverride,
 }: Props) {
     const { showMessage } = useFloatingMessages();
     const [tab, setTab] = React.useState<PanelTab>('qa');
@@ -337,6 +369,18 @@ export default function ShortVideoAgentBeatQaPanel({
     const qaStatusValue = qaSource?.qa_status;
     const qaRefineNoteValue = qaSource?.qa_refine_note;
 
+    const beatRenderStatus = String(whiteboardBeatRender?.status || '').trim();
+    const beatVideoReady = beatRenderStatus === 'completed'
+        && Boolean(String(whiteboardBeatRender?.video_url || '').trim());
+    const beatVideoRendering = beatRenderStatus === 'queued' || beatRenderStatus === 'processing';
+    const beatVideoPreviewUrl = React.useMemo(() => {
+        const raw = String(whiteboardBeatRender?.video_url || '').trim();
+        if (!raw || !beatVideoReady) {
+            return '';
+        }
+        return resolveAgentLocalVideoOpenUrl(raw);
+    }, [beatVideoReady, whiteboardBeatRender?.video_url]);
+
     React.useEffect(() => {
         if (!beatId || syncedBeatRef.current === beatId) {
             return;
@@ -346,6 +390,12 @@ export default function ShortVideoAgentBeatQaPanel({
         setQaStatus(normalizeBeatQaStatus(qaStatusValue));
         setQaRefineNote(String(qaRefineNoteValue || ''));
     }, [qaRefineNoteValue, qaStatusValue, beatId]);
+
+    React.useEffect(() => {
+        if (!isWhiteboardMode && tab === 'video') {
+            setTab('qa');
+        }
+    }, [isWhiteboardMode, tab]);
 
     React.useEffect(() => {
         if (!beatId) {
@@ -550,8 +600,10 @@ export default function ShortVideoAgentBeatQaPanel({
                         },
                         '& .MuiTab-root': {
                             minHeight: 40,
+                            minWidth: 0,
+                            px: 0.5,
                             textTransform: 'none',
-                            fontSize: 13,
+                            fontSize: isWhiteboardMode ? 12 : 13,
                             fontWeight: 600,
                             color: TEXT_MUTED,
                             '&.Mui-selected': { color: TEXT_PRIMARY },
@@ -560,6 +612,9 @@ export default function ShortVideoAgentBeatQaPanel({
                 >
                     <Tab label="QA" value="qa" />
                     <Tab label={`Version · ${versions.length}`} value="version" />
+                    {isWhiteboardMode ? (
+                        <Tab label="Video beat" value="video" />
+                    ) : null}
                 </Tabs>
             </Box>
             <Divider sx={{ borderColor: BORDER }} />
@@ -791,7 +846,9 @@ export default function ShortVideoAgentBeatQaPanel({
                         </Stack>
                     </Box>
                 </Box>
-            ) : (
+            ) : null}
+
+            {tab === 'version' ? (
                 <Box
                     sx={{
                         flex: 1,
@@ -923,7 +980,169 @@ export default function ShortVideoAgentBeatQaPanel({
                         </LoadingButton>
                     </Box>
                 </Box>
-            )}
+            ) : null}
+
+            {tab === 'video' && isWhiteboardMode ? (
+                <Box
+                    sx={{
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            flexShrink: 0,
+                            px: 1.75,
+                            pt: 1.75,
+                            pb: 1,
+                        }}
+                    >
+                        <SectionLabel>Preview video beat</SectionLabel>
+                        {beatVideoPreviewUrl ? (
+                            <Box
+                                sx={{
+                                    borderRadius: 1.5,
+                                    overflow: 'hidden',
+                                    border: `1px solid ${BORDER}`,
+                                    bgcolor: '#000',
+                                    aspectRatio: '9 / 16',
+                                    maxHeight: 240,
+                                    mx: 'auto',
+                                    width: '100%',
+                                }}
+                            >
+                                <Box
+                                    component="video"
+                                    key={beatVideoPreviewUrl}
+                                    src={beatVideoPreviewUrl}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    sx={{
+                                        display: 'block',
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'contain',
+                                        bgcolor: '#000',
+                                    }}
+                                />
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    borderRadius: 1.5,
+                                    border: `1px dashed ${BORDER}`,
+                                    bgcolor: SURFACE,
+                                    px: 1.5,
+                                    py: 2,
+                                    textAlign: 'center',
+                                }}
+                            >
+                                <VideocamOutlinedIcon sx={{ color: TEXT_MUTED, fontSize: 28, mb: 1 }} />
+                                <Typography sx={{ color: TEXT_SOFT, fontSize: 13, fontWeight: 600 }}>
+                                    {beatVideoRendering
+                                        ? 'Đang render video beat…'
+                                        : beatRenderStatus === 'failed'
+                                            ? 'Render video beat thất bại'
+                                            : 'Chưa có video beat'}
+                                </Typography>
+                                <Typography sx={{ mt: 0.75, color: TEXT_MUTED, fontSize: 11, lineHeight: 1.45 }}>
+                                    {beatRenderStatus === 'failed'
+                                        ? (String(whiteboardBeatRender?.error || '').trim()
+                                            || 'Thử render lại từ menu Thao tác beat hoặc nút bên dưới')
+                                        : 'Render video vẽ tay + audio để xem preview và upload CapCut'}
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+
+                    <Stack
+                        spacing={1.25}
+                        sx={{
+                            flex: 1,
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            px: 1.75,
+                            pb: 1.25,
+                        }}
+                    >
+                        {typeof onSaveWhiteboardBeatOverride === 'function' ? (
+                            <ShortVideoAgentWhiteboardBeatSettings
+                                beatId={beatId}
+                                beatDurationSec={beatDurationSec}
+                                isLastBeat={isLastBeat}
+                                clipConfig={agentWhiteboardConfig}
+                                savedOverride={whiteboardBeatOverride}
+                                saving={savingWhiteboardBeatOverride}
+                                onSave={onSaveWhiteboardBeatOverride}
+                            />
+                        ) : null}
+                    </Stack>
+
+                    <Box
+                        sx={{
+                            flexShrink: 0,
+                            px: 1.75,
+                            py: 1.25,
+                            borderTop: `1px solid ${BORDER}`,
+                            bgcolor: 'rgba(0,0,0,0.35)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 0.75,
+                        }}
+                    >
+                        {typeof onRenderWhiteboardBeat === 'function' ? (
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                loading={beatVideoRendering}
+                                disabled={beatVideoRendering || !hasBeatImage}
+                                startIcon={<VideocamOutlinedIcon fontSize="small" />}
+                                onClick={() => { onRenderWhiteboardBeat(); }}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 650,
+                                    color: '#93c5fd',
+                                    borderColor: 'rgba(96,165,250,0.4)',
+                                    '&:hover': {
+                                        borderColor: 'rgba(96,165,250,0.7)',
+                                        bgcolor: 'rgba(59,130,246,0.1)',
+                                    },
+                                }}
+                            >
+                                {beatVideoReady ? 'Render lại video beat' : 'Render video beat'}
+                            </LoadingButton>
+                        ) : null}
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            loading={uploadingBeatVideoToCapcut}
+                            disabled={!beatVideoReady || uploadingBeatVideoToCapcut || typeof onAddBeatVideoToCapcut !== 'function'}
+                            startIcon={<UploadFileOutlinedIcon fontSize="small" />}
+                            onClick={() => { onAddBeatVideoToCapcut?.(); }}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 650,
+                                bgcolor: beatVideoReady ? '#3b82f6' : 'rgba(255,255,255,0.08)',
+                                color: beatVideoReady ? '#fff' : TEXT_MUTED,
+                                boxShadow: 'none',
+                                '&:hover': {
+                                    bgcolor: beatVideoReady ? '#2563eb' : 'rgba(255,255,255,0.08)',
+                                    boxShadow: 'none',
+                                },
+                                '&.Mui-disabled': {
+                                    bgcolor: 'rgba(255,255,255,0.08)',
+                                    color: TEXT_MUTED,
+                                },
+                            }}
+                        >
+                            Upload CapCut
+                        </LoadingButton>
+                    </Box>
+                </Box>
+            ) : null}
         </Box>
     );
 }

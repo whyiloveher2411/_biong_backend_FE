@@ -12,7 +12,7 @@ import { fileURLToPath } from "url";
 import {
   resolveRenderSpecFromContext,
   writeClipRenderSpecAsset,
-} from "../../../scripts/lib/clip-render-spec.mjs";
+} from "../../../../scripts/lib/clip-render-spec.mjs";
 
 const DEFAULT_CONTEXT_REL = "assets/get-context-snapshot.json";
 const AUDIO_SCRIPT_REL = "assets/audio-script.txt";

@@ -110,8 +110,10 @@ export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
 
 export function buildBeatDivisionSingleOutputRulesBlock(options?: {
     relaxDurationBounds?: boolean;
+    whiteboardDuration?: boolean;
 }): string {
     const relax = Boolean(options?.relaxDurationBounds);
+    const whiteboardDuration = !relax && Boolean(options?.whiteboardDuration);
     const durationRules = relax
         ? [
             '## Beat duration (khuyến nghị phân bố nội dung — không validate cứng)',
@@ -120,18 +122,32 @@ export function buildBeatDivisionSingleOutputRulesBlock(options?: {
             '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
             '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
         ]
-        : [
-            '## Beat duration & cắt hết ý (không validate cứng)',
-            '- Target mỗi beat **8–30s**; ưu tiên **hết câu / hết ý** trước khi ép giây.',
-            '- Beat **< ~8s**: gộp với câu/ý kế tiếp; beat **> ~30s**: tách chỉ tại **cuối câu** gần biên — **cấm** cắt giữa câu chỉ để “vừa giây”.',
-            '- Nếu một câu Whisper >30s → giữ nguyên câu (được phép >30s) hơn là cắt giữa câu.',
-            '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **cấm** cắt sau `,` `;` `:` hoặc giữa mệnh đề.',
-            '- `phrase_anchor` hết ý; `endSec` = Whisper end của từ cuối `phrase_anchor`.',
-            '- Ví dụ BAD: kết thúc `…nguyên khối đâu,` — GOOD: giữ tới `…gọi là packets.`',
-            '- Neo `startSec`/`endSec` theo Whisper tại biên câu đó (cuối từ cuối câu / trước từ đầu câu sau).',
-            '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
-            '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
-        ];
+        : whiteboardDuration
+            ? [
+                '## Beat duration — whiteboard soft target 5–15s (không validate cứng)',
+                '- Target mỗi beat / bối cảnh **5–15s** (`durationSec`); ưu tiên **hết câu / hết ý** trước khi ép giây.',
+                '- **Tối thiểu ~5s:** vừa đủ nhận diện hình ảnh và đọc một câu thoại ngắn; ngắn hơn dễ ngợp → **gộp** với câu/ý kế tiếp.',
+                '- **Tối đa ~15s:** sau đó nếu bàn tay không vẽ thêm chi tiết mới hoặc bối cảnh không đổi, mắt dễ mất tập trung → **tách** chỉ tại **cuối câu** gần biên 15s — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+                '- Nếu một câu Whisper >15s → giữ nguyên câu (được phép >15s) hơn là cắt giữa câu.',
+                '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **cấm** cắt sau `,` `;` `:` hoặc giữa mệnh đề.',
+                '- `phrase_anchor` hết ý; `endSec` = Whisper end của từ cuối `phrase_anchor`.',
+                '- Ví dụ BAD: kết thúc `…nguyên khối đâu,` — GOOD: giữ tới `…gọi là packets.`',
+                '- Neo `startSec`/`endSec` theo Whisper tại biên câu đó (cuối từ cuối câu / trước từ đầu câu sau).',
+                '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+                '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
+            ]
+            : [
+                '## Beat duration & cắt hết ý (không validate cứng)',
+                '- Target mỗi beat **8–30s**; ưu tiên **hết câu / hết ý** trước khi ép giây.',
+                '- Beat **< ~8s**: gộp với câu/ý kế tiếp; beat **> ~30s**: tách chỉ tại **cuối câu** gần biên — **cấm** cắt giữa câu chỉ để “vừa giây”.',
+                '- Nếu một câu Whisper >30s → giữ nguyên câu (được phép >30s) hơn là cắt giữa câu.',
+                '- **Cắt beat** chỉ tại **cuối câu** (sau `.?!…`) hoặc sau **xuống dòng**; **cấm** cắt sau `,` `;` `:` hoặc giữa mệnh đề.',
+                '- `phrase_anchor` hết ý; `endSec` = Whisper end của từ cuối `phrase_anchor`.',
+                '- Ví dụ BAD: kết thúc `…nguyên khối đâu,` — GOOD: giữ tới `…gọi là packets.`',
+                '- Neo `startSec`/`endSec` theo Whisper tại biên câu đó (cuối từ cuối câu / trước từ đầu câu sau).',
+                '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
+                '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
+            ];
 
     return [
         '## OUTPUT — đúng 1 artifact duy nhất (bắt buộc)',

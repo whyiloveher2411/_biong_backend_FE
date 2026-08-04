@@ -15,6 +15,7 @@ import {
     scriptQaLoopPhaseLabel,
     type ScriptImproveQaLoopView,
 } from './agentVideoPipelineQaLoopUi';
+import { PipelineStepToggleCheckbox } from './PipelineStepToggleCheckbox';
 
 type Variant = 'light' | 'dark';
 
@@ -178,6 +179,10 @@ type PipelineScriptQaLoopSectionProps = {
     compact?: boolean;
     improveNode: React.ReactNode;
     qaNode: React.ReactNode;
+    /** Checkbox chung cho cả improve + QA trong full-auto. */
+    runEnabled?: boolean;
+    runToggleDisabled?: boolean;
+    onRunEnabledChange?: (checked: boolean) => void;
 };
 
 export function PipelineScriptQaLoopSection({
@@ -186,6 +191,9 @@ export function PipelineScriptQaLoopSection({
     compact = false,
     improveNode,
     qaNode,
+    runEnabled = true,
+    runToggleDisabled = false,
+    onRunEnabledChange,
 }: PipelineScriptQaLoopSectionProps) {
     if (!view.showLoopChrome) {
         return (
@@ -213,11 +221,44 @@ export function PipelineScriptQaLoopSection({
                 border: '1.5px solid',
                 borderColor: colors.border,
                 bgcolor: colors.bg,
+                opacity: runEnabled ? 1 : 0.78,
             }}
         >
             <BorderLabel label="Cải thiện script" variant={variant} active={view.isLoopActive} />
 
-            <Box sx={{ position: 'absolute', top: 0, right: 10, transform: 'translateY(-50%)', zIndex: 1 }}>
+            <Box
+                sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 10,
+                    transform: 'translateY(-50%)',
+                    zIndex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                }}
+            >
+                {onRunEnabledChange ? (
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            px: 0.35,
+                            borderRadius: 999,
+                            bgcolor: colors.labelBg,
+                            border: '1px solid',
+                            borderColor: colors.border,
+                        }}
+                    >
+                        <PipelineStepToggleCheckbox
+                            toggleKey="script_improve"
+                            checked={runEnabled}
+                            disabled={runToggleDisabled}
+                            size="section"
+                            onChange={(_key, checked) => onRunEnabledChange(checked)}
+                        />
+                    </Box>
+                ) : null}
                 <Tooltip title={phaseLabel} arrow placement="top">
                     <Chip
                         size="small"
