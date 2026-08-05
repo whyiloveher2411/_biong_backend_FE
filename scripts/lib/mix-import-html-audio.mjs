@@ -61,7 +61,6 @@ export function mixImportHtmlAudio({
   videoPath,
   outputPath,
   sfxHook = false,
-  limitToVideoDuration = false,
 }) {
   const beatMap = loadBeatMap(projectDir);
   const totalVideoSec = Number(beatMap.totalVideoSec || 0);
@@ -163,11 +162,8 @@ export function mixImportHtmlAudio({
 
   const videoDur = probeMediaDurationSec(videoPath);
   const narrDur = probeMediaDurationSec(narration);
-  // Debug render (limit beats): audio cắt theo video — không pad/tpad bản phủ audio dài hơn.
-  const outputDur = limitToVideoDuration
-    ? Math.max(videoDur, 0.001)
-    : Math.max(videoDur, narrDur, totalVideoSec);
-  const padSec = limitToVideoDuration ? 0 : Math.max(0, outputDur - videoDur);
+  const outputDur = Math.max(videoDur, narrDur, totalVideoSec);
+  const padSec = Math.max(0, outputDur - videoDur);
   const videoMap = padSec > 0.01 ? "[vout]" : "0:v:0";
   if (padSec > 0.01) {
     filterParts.unshift(

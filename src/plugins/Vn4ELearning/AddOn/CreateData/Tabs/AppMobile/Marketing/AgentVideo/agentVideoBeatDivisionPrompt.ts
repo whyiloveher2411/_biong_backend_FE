@@ -33,9 +33,16 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const sourceFormat = String(context.source_format || '').trim();
     const isGithubTop = GITHUB_TOP_FORMATS.has(sourceFormat);
     const isWhiteboard = String(context.agent_visual_mode || 'hyperframes').trim() === 'whiteboard';
-    const whiteboardBlock = isWhiteboard ? buildBeatDivisionWhiteboardImagePromptBlock() : '';
-    const whiteboardRules = isWhiteboard ? buildBeatDivisionWhiteboardOutputRules() : [];
-    const whiteboardSchemaExtra = buildBeatDivisionWhiteboardSchemaExtra(isWhiteboard);
+    const whiteboardGenStyle = String(
+        (context.agent_whiteboard_config?.gen_style as string | undefined) || 'hybrid',
+    ).trim().toLowerCase() === 'collage_art' ? 'collage_art' : 'hybrid';
+    const whiteboardBlock = isWhiteboard
+        ? buildBeatDivisionWhiteboardImagePromptBlock(whiteboardGenStyle)
+        : '';
+    const whiteboardRules = isWhiteboard
+        ? buildBeatDivisionWhiteboardOutputRules(whiteboardGenStyle)
+        : [];
+    const whiteboardSchemaExtra = buildBeatDivisionWhiteboardSchemaExtra(isWhiteboard, whiteboardGenStyle);
     const visualSuffix = isWhiteboard
         ? ' (ảnh whiteboard làm thủ công qua Duck.ai sau — **chỉ visual, không karaoke**).'
         : ' (HTML generate sau — **chỉ visual, không karaoke**).';

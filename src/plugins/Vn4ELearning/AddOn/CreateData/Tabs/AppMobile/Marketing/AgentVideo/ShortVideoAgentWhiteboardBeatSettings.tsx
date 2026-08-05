@@ -91,7 +91,7 @@ export function seedWhiteboardBeatOverrideDraft(
     return {
         hand: String(saved?.hand || clip.hand || 'but_chi').trim() || 'but_chi',
         board_theme: String(saved?.board_theme || clip.board_theme || 'whiteboard').trim() || 'whiteboard',
-        gen_style: (['whiteboard', 'sketch', 'hybrid'].includes(String(saved?.gen_style || clip.gen_style || ''))
+        gen_style: (['whiteboard', 'sketch', 'hybrid', 'collage_art'].includes(String(saved?.gen_style || clip.gen_style || ''))
             ? String(saved?.gen_style || clip.gen_style)
             : 'hybrid') as AgentWhiteboardBeatOverride['gen_style'],
         photo_place_mode: photo,
@@ -293,6 +293,7 @@ export default function ShortVideoAgentWhiteboardBeatSettings({
             case 'gen_style':
                 return [
                     { value: 'hybrid', label: 'hybrid' },
+                    { value: 'collage_art', label: 'collage_art' },
                     { value: 'whiteboard', label: 'whiteboard' },
                     { value: 'sketch', label: 'sketch' },
                 ];

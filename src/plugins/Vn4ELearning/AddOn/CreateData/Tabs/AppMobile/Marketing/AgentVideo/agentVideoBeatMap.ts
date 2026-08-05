@@ -395,10 +395,6 @@ export function validateBeatVisualDescription(value: unknown): string | null {
     if (!description || description.length > 1200) {
         return null;
     }
-    // Visual descriptions are an English machine contract. Catalog IDs may contain "-" and "_".
-    if (!/[A-Za-z]/.test(description) || /[À-ỹ]/.test(description)) {
-        return null;
-    }
     return description;
 }
 
@@ -474,9 +470,6 @@ export function validateBeatBackground(value: unknown): string | null {
     const background = String(value ?? '').trim();
     const wordCount = background.split(/\s+/).filter(Boolean).length;
     if (!background || wordCount < 3 || wordCount > 60 || background.length > 400) {
-        return null;
-    }
-    if (!/[A-Za-z]/.test(background) || /[À-ỹ]/.test(background)) {
         return null;
     }
     return background;
@@ -569,10 +562,10 @@ export function parseBeatMapJson(
             errors.push(`${id || `Section #${index + 1}`}: thiếu phrase_anchor`);
         }
         if (!visualDescription) {
-            errors.push(`${id || `Section #${index + 1}`}: visual_description phải là tiếng Anh và không được để trống`);
+            errors.push(`${id || `Section #${index + 1}`}: visual_description không được để trống`);
         }
         if (!background) {
-            errors.push(`${id || `Section #${index + 1}`}: background phải là tiếng Anh, dài 3–60 từ`);
+            errors.push(`${id || `Section #${index + 1}`}: background không được để trống, dài 3–60 từ`);
         }
         if (options?.requireImagePrompt && !imagePrompt) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu image_prompt cho whiteboard`);
@@ -642,10 +635,10 @@ export function validateBeatMap(
             errors.push(`${label}: durationSec phải > 0`);
         }
         if (!validateBeatVisualDescription(section.visual_description)) {
-            errors.push(`${label}: visual_description phải là tiếng Anh và không được để trống`);
+            errors.push(`${label}: visual_description không được để trống`);
         }
         if (!validateBeatBackground(section.background)) {
-            errors.push(`${label}: background phải là tiếng Anh, dài 3–60 từ`);
+            errors.push(`${label}: background không được để trống, dài 3–60 từ`);
         }
         if (options?.requireImagePrompt && !validateBeatImagePrompt(section.image_prompt)) {
             errors.push(`${label}: thiếu image_prompt cho whiteboard`);

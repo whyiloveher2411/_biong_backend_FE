@@ -477,7 +477,6 @@ export type AgentVideoContentResponse = {
     agent_show_avatar?: boolean;
     agent_avatar_anchor?: AvatarPipAnchor;
     agent_show_karaoke?: boolean;
-    agent_render_debug?: boolean;
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
@@ -1373,18 +1372,6 @@ export async function saveAgentShowKaraoke(
     ) as Promise<JsonResponse & { agent_show_karaoke?: boolean }>;
 }
 
-export async function saveAgentRenderDebug(
-    shortVideoId: number,
-    enabled: boolean,
-): Promise<JsonResponse & { agent_render_debug?: boolean }> {
-    return postJson(
-        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-render-debug',
-        shortVideoBody(shortVideoId, {
-            agent_render_debug: enabled ? '1' : '0',
-        }),
-    ) as Promise<JsonResponse & { agent_render_debug?: boolean }>;
-}
-
 export async function saveAgentClipAspect(
     shortVideoId: number,
     aspect: '9:16' | '16:9',
@@ -1806,6 +1793,15 @@ export async function enqueueGeminiWebBeatDivision(
         job_ids?: number[];
         gemini_division?: ImportHtmlSummary['gemini_division'];
     }>;
+}
+
+export async function fetchBeatDivisionPrompt(
+    shortVideoId: number,
+): Promise<JsonResponse & { prompt?: string }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/get-beat-division-prompt',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & { prompt?: string }>;
 }
 
 export async function enqueueGeminiWebAudioScript(
@@ -2284,6 +2280,15 @@ export async function cancelFullAutoPipeline(
 ): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/cancel-full-auto-pipeline',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
+}
+
+export async function markBeatDivisionDone(
+    shortVideoId: number,
+): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/mark-beat-division-done',
         shortVideoBody(shortVideoId),
     ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
 }

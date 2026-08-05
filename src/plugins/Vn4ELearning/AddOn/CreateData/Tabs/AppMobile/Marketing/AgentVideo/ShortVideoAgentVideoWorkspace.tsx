@@ -494,6 +494,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     clipLabel={state.title || `Short video #${shortVideoId}`}
                     audioDurationSec={state.audioDurationSec}
                     estimatedDurationSec={state.agentVideoSummary?.estimated_duration_sec}
+                    shortVideoId={shortVideoId}
+                    agentSourceFormat={state.agentSourceFormat}
+                    onSaveBeatMapManual={state.handleManualBeatDivisionSave}
                     customHtmlPreview={useCustomHtmlPreview}
                     previewSourceKey={activePreviewSource}
                     beatMap={state.beatMapReady ? state.beatMap : null}

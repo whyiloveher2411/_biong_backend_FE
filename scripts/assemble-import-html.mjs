@@ -7,7 +7,6 @@
  *     [--api-base-url URL] [--access-token TOKEN] [--mcp-token TOKEN]
  *     [--skip-bgm-download] [--dry-run] [--skip-preflight]
  *     [--allow-caption-mismatch]  # bỏ verify --strict; karaoke text = script
- *     [--limit-beats N]           # chỉ render N beat đầu (debug), video ngắn
  *     [--context-snapshot PATH]  # bỏ qua MCP fetch, dùng file JSON local
  */
 import fs from "node:fs";
@@ -70,7 +69,6 @@ function parseArgs(argv) {
     skipPreflight: false,
     allowCaptionMismatch: false,
     contextSnapshot: "",
-    limitBeats: 0,
   };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
@@ -92,8 +90,6 @@ function parseArgs(argv) {
       out.skipPreflight = true;
     } else if (arg === "--allow-caption-mismatch") {
       out.allowCaptionMismatch = true;
-    } else if (arg === "--limit-beats") {
-      out.limitBeats = parseInt(argv[++i] ?? "0", 10);
     }
   }
   return out;
@@ -370,39 +366,6 @@ function patchTimelineDurationFromCaption({
   renderSpec = null,
 }) {
   const reportPath = path.join(projectDir, "assets/caption-sync-report.json");
-  const forceTotalSec = Number(options.forceTotalSec || 0);
-  if (forceTotalSec > 0) {
-    beatMap.totalVideoSec = forceTotalSec;
-    beatMap.sections = sections;
-    fs.writeFileSync(path.join(projectDir, "assets/beat-map.json"), JSON.stringify(beatMap, null, 2));
-    fs.writeFileSync(
-      path.join(projectDir, "index.html"),
-      buildImportHtmlIndexHtml({
-        shortVideoId,
-        totalVideoSec: forceTotalSec,
-        sections,
-        options,
-      }),
-    );
-    fs.writeFileSync(
-      path.join(projectDir, "compositions/ambient-layer.html"),
-      buildAmbientLayerHtml(forceTotalSec, renderSpec),
-    );
-    fs.writeFileSync(
-      path.join(projectDir, "meta.json"),
-      JSON.stringify(
-        buildMetaJson(
-          renderSpec || resolveRenderSpecFromContext(null),
-          beatMap.title || `Short Video #${shortVideoId}`,
-          forceTotalSec,
-        ),
-        null,
-        2,
-      ),
-    );
-
-    return forceTotalSec;
-  }
   if (!fs.existsSync(reportPath)) {
     return Math.max(Number(beatMap.totalVideoSec || 0), Number(audioDurationSec || 0));
   }
@@ -541,22 +504,6 @@ async function main() {
     // Giữ nguyên sections từ CMS — không tách beat_*_partN trong code.
     // Gợi ý 5–20s chỉ nằm ở prompt chia beat (AI phân bố nội dung).
 
-    const limitBeats = Number(args.limitBeats || 0);
-    const debugBeats = limitBeats > 0;
-    if (debugBeats) {
-      sections = sections.slice(0, limitBeats);
-      const last = sections[sections.length - 1];
-      const slicedTotal =
-        last && Number(last.endSec || 0) > 0
-          ? Number(last.endSec)
-          : sections.reduce((sum, sec) => sum + Number(sec.durationSec || 0), 0);
-      beatMap.sections = sections;
-      if (slicedTotal > 0) {
-        beatMap.totalVideoSec = slicedTotal;
-      }
-      log(`LIMIT BEATS ${limitBeats} — render ${sections.length} beat đầu, ~${slicedTotal}s`);
-    }
-
     const totalVideoSec = Number(
       beatMap.totalVideoSec || ctx.audio_file_duration_sec || sections.at(-1)?.endSec || 0,
     );
@@ -679,11 +626,8 @@ async function main() {
     runNodeScript("sync-caption-from-script.mjs", projectDir, [], "sync-caption-from-script");
 
     if (showCaptions) {
-      if (args.allowCaptionMismatch || debugBeats) {
-        log(
-          "⚠️ " + (args.allowCaptionMismatch ? "allow-caption-mismatch" : "limit-beats")
-            + " — bỏ verify strict; karaoke text = script",
-        );
+      if (args.allowCaptionMismatch) {
+        log("⚠️ allow-caption-mismatch — bỏ verify strict; karaoke text = script");
         const forced = forceCaptionWordsTextFromScript(projectDir);
         log(
           `Ép caption text từ script: ${forced.scriptWordCount} từ (trước đó ${forced.previousWordCount})`,
@@ -708,7 +652,7 @@ async function main() {
       shortVideoId,
       beatMap,
       sections,
-      options: { sfxHook, avatarOverlay, showCaptions, renderSpec, forceTotalSec: debugBeats ? totalVideoSec : 0 },
+      options: { sfxHook, avatarOverlay, showCaptions, renderSpec },
       audioDurationSec: narrationDurationSec || Number(ctx.audio_file_duration_sec || 0),
       renderSpec,
     });
@@ -764,6 +708,12 @@ async function main() {
       }
       log("Bỏ gen-captions-html (karaoke tắt)");
     }
+    runNodeScript(
+      "gen-brand-watermark.mjs",
+      projectDir,
+      ["--duration", String(timelineSec)],
+      "gen-brand-watermark",
+    );
     if (avatarOverlay) {
       prepareAvatarLipSyncTimeline(projectDir, timelineSec, log);
       runNodeScript(
@@ -784,7 +734,7 @@ async function main() {
     runNodeScript("patch-import-html-render-lint.mjs", projectDir, [], "patch-import-html-render-lint");
     runNodeScript("sync-index-beats-from-map.mjs", projectDir, [], "sync-index-beats-final");
 
-    if (!args.skipPreflight && !debugBeats) {
+    if (!args.skipPreflight) {
       try {
         runImportHtmlPreflight(projectDir, {
           strictCaption: showCaptions && !args.allowCaptionMismatch,

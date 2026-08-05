@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Chip, CircularProgress, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, CircularProgress, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import {
@@ -346,6 +346,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     onRunSingleStep?: (stepKey: FullAutoPipelineStepKey) => void;
     runSingleStepDisabled?: boolean;
     runningSingleStep?: boolean;
+    /** Mở drawer chia beat thủ công (chỉ hiển thị trên bước beat_division). */
+    onManualBeatDivision?: () => void;
+    manualBeatDivisionDisabled?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -371,6 +374,8 @@ export function PipelineGroupedMenuItems({
     onRunSingleStep,
     runSingleStepDisabled = false,
     runningSingleStep = false,
+    onManualBeatDivision,
+    manualBeatDivisionDisabled = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -486,6 +491,33 @@ export function PipelineGroupedMenuItems({
                                 onRunSingleStep(key);
                             }}
                         />
+                    ) : null}
+                    {key === 'beat_division' && onManualBeatDivision ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            sx={{
+                                minWidth: 0,
+                                px: 1,
+                                py: 0.15,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                lineHeight: 1.6,
+                                whiteSpace: 'nowrap',
+                                color: 'text.secondary',
+                                borderColor: 'divider',
+                            }}
+                            disabled={disabled || manualBeatDivisionDisabled}
+                            title={`Chia beat thủ công: copy prompt → dán AI trả về → phân tích → lưu (bỏ qua bước headless bị treo)`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onManualBeatDivision();
+                            }}
+                        >
+                            Thủ công
+                        </Button>
                     ) : null}
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox
@@ -746,6 +778,9 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     onRunSingleStep?: (stepKey: FullAutoPipelineStepKey) => void;
     runSingleStepDisabled?: boolean;
     runningSingleStep?: boolean;
+    /** Mở drawer chia beat thủ công (chỉ hiển thị trên bước beat_division). */
+    onManualBeatDivision?: () => void;
+    manualBeatDivisionDisabled?: boolean;
 };
 
 /** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
@@ -772,6 +807,8 @@ export function PipelineGroupedWorkflowListV3({
     onRunSingleStep,
     runSingleStepDisabled = false,
     runningSingleStep = false,
+    onManualBeatDivision,
+    manualBeatDivisionDisabled = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -898,6 +935,33 @@ export function PipelineGroupedWorkflowListV3({
                             loading={runningSingleStep && isCurrent}
                             onClick={() => onRunSingleStep(key)}
                         />
+                    ) : null}
+                    {key === 'beat_division' && onManualBeatDivision ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            sx={{
+                                minWidth: 0,
+                                px: 1,
+                                py: 0.15,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                lineHeight: 1.6,
+                                whiteSpace: 'nowrap',
+                                color: 'text.secondary',
+                                borderColor: 'divider',
+                            }}
+                            disabled={manualBeatDivisionDisabled}
+                            title={`Chia beat thủ công: copy prompt → dán AI trả về → phân tích → lưu (bỏ qua bước headless bị treo)`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onManualBeatDivision();
+                            }}
+                        >
+                            Thủ công
+                        </Button>
                     ) : null}
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox

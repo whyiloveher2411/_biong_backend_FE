@@ -10,18 +10,18 @@ function words(count: number): string {
 }
 
 describe('beat map background + visual_description limits', () => {
-    it('validateBeatVisualDescription requires non-empty English text', () => {
+    it('validateBeatVisualDescription requires non-empty text (any language)', () => {
         expect(validateBeatVisualDescription(words(1))).toBeTruthy();
         expect(validateBeatVisualDescription(words(100))).toBeTruthy();
+        expect(validateBeatVisualDescription('nền tối mịn, ánh sáng vàng')).toBeTruthy();
         expect(validateBeatVisualDescription('')).toBeNull();
-        expect(validateBeatVisualDescription('nền tối')).toBeNull();
     });
 
-    it('validateBeatBackground requires English 3–60 words', () => {
+    it('validateBeatBackground accepts any language 3–60 words', () => {
         expect(validateBeatBackground('Dark navy void soft grain')).toBeTruthy();
+        expect(validateBeatBackground('Nền tối mịn, hạt nhẹ, ánh sáng vàng ấm')).toBeTruthy();
         expect(validateBeatBackground('ab')).toBeNull();
         expect(validateBeatBackground('')).toBeNull();
-        expect(validateBeatBackground('nền tối grain')).toBeNull();
     });
 
     it('parseBeatMapJson requires background', () => {

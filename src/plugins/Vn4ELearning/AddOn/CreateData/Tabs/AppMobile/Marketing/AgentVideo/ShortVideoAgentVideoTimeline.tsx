@@ -26,6 +26,7 @@ import {
     PipelineGroupedMenuItems,
     resolveRestartableSet,
 } from './FullAutoPipelineGroupedSteps';
+import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import type {
     BeatImageFillMode,
     FullAutoPipelineStepKey,
@@ -57,6 +58,10 @@ const TIMELINE_SCALE_SPLIT_COUNT = 5;
 const TIMELINE_START_LEFT = 20;
 const CURSOR_HEAD_OVERFLOW = 10;
 const HORIZONTAL_SCROLLBAR_HEIGHT = 12;
+
+async function fallbackManualBeatDivisionSave(): Promise<boolean> {
+    return false;
+}
 
 function getTimelineScrollGrids(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('.timeline-editor-edit-area .ReactVirtualized__Grid'));
@@ -157,6 +162,9 @@ type Props = {
     clipLabel?: string;
     audioDurationSec?: number | null;
     estimatedDurationSec?: number | null;
+    shortVideoId?: number;
+    agentSourceFormat?: string;
+    onSaveBeatMapManual?: (map: BeatMap) => Promise<boolean>;
     customHtmlPreview?: boolean;
     previewSourceKey?: string;
     beatMap?: BeatMap | null;
@@ -247,6 +255,9 @@ export default function ShortVideoAgentVideoTimeline({
     clipLabel = 'HyperFrames',
     audioDurationSec,
     estimatedDurationSec,
+    shortVideoId = 0,
+    agentSourceFormat = '',
+    onSaveBeatMapManual,
     customHtmlPreview = false,
     previewSourceKey = '',
     beatMap = null,
@@ -328,6 +339,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
+    const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -992,6 +1004,11 @@ export default function ShortVideoAgentVideoTimeline({
                                         }}
                                         rerunningRenderUpload={startingFullAuto}
                                         rerunRenderUploadDisabled={pipelineRunning || startingFullAuto}
+                                        onManualBeatDivision={() => {
+                                            setRestartMenuAnchor(null);
+                                            setBeatDivisionManualOpen(true);
+                                        }}
+                                        manualBeatDivisionDisabled={pipelineRunning || startingFullAuto}
                                     />
                                 </Menu>
                                 {pipelineRunning ? (
@@ -1229,6 +1246,15 @@ export default function ShortVideoAgentVideoTimeline({
                     </Box>
                 </Box>
             )}
+            <ShortVideoAgentBeatDivisionManualDrawer
+                open={beatDivisionManualOpen}
+                onClose={() => setBeatDivisionManualOpen(false)}
+                shortVideoId={shortVideoId}
+                audioDurationSec={audioDurationSec}
+                agentSourceFormat={agentSourceFormat}
+                isWhiteboard={isWhiteboardMode}
+                onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSave}
+            />
         </Box>
     );
 }

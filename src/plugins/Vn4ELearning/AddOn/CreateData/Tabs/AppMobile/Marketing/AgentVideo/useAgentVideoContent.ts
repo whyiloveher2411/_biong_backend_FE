@@ -60,7 +60,6 @@ import {
     addBeatVideoToCapcut,
     listAudioScriptStyles,
     saveAgentShowKaraoke,
-    saveAgentRenderDebug,
     saveAgentClipAspect,
     saveAgentVisualMode,
     saveAgentWhiteboardConfig,
@@ -82,6 +81,7 @@ import {
     saveAdminAudioScriptTtsReading,
     startFullAutoPipeline,
     cancelFullAutoPipeline,
+    markBeatDivisionDone,
     requestAgentHeadlessNewChat,
     FULL_AUTO_PIPELINE_STEP_LABELS,
     savePublishFlags,
@@ -523,8 +523,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingAgentAvatar, setSavingAgentAvatar] = React.useState(false);
     const [agentShowKaraoke, setAgentShowKaraoke] = React.useState(true);
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
-    const [agentRenderDebug, setAgentRenderDebug] = React.useState(false);
-    const [savingRenderDebug, setSavingRenderDebug] = React.useState(false);
     const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
@@ -969,7 +967,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentShowAvatar(resolvedId > 0);
         setAgentAvatarAnchor(nextAnchor);
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
-        setAgentRenderDebug(Boolean(res?.agent_render_debug));
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
@@ -2702,9 +2699,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 loadRow();
                 return;
             }
-            const result = await launchImportHtmlRender(shortVideoId, {
-                limitBeats: agentRenderDebug ? 3 : 0,
-            });
+            const result = await launchImportHtmlRender(shortVideoId);
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
             if (!result.ok && isCaptionSyncAssembleError(result.message || '')) {
@@ -2730,7 +2725,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const result = await launchImportHtmlRender(shortVideoId, {
                 allowCaptionMismatch: true,
-                limitBeats: agentRenderDebug ? 3 : 0,
             });
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
@@ -2883,6 +2877,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             void persistImportHtml({ renderMode: 'import_html', beatMap: map });
         }, 1000);
     };
+
+    const handleManualBeatDivisionSave = React.useCallback(async (map: BeatMap): Promise<boolean> => {
+        setRenderMode('import_html');
+        applyBeatMapDraft(map);
+        const saved = await persistImportHtml({ renderMode: 'import_html', beatMap: map });
+        if (saved) {
+            try {
+                const res = await markBeatDivisionDone(shortVideoId);
+                if (res.full_auto_pipeline) {
+                    setFullAutoPipeline(res.full_auto_pipeline);
+                }
+            } catch {
+                // Không chặn lưu nếu mark step thất bại — beat map đã lưu xong.
+            }
+        }
+        return saved;
+    }, [applyBeatMapDraft, persistImportHtml, shortVideoId]);
 
     const handleBeatVisualDescriptionChange = React.useCallback(async (
         beatId: string,
@@ -5207,36 +5218,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleAgentRenderDebugChange = async (checked: boolean) => {
-        if (savingRenderDebug) {
-            return;
-        }
-        setAgentRenderDebug(checked);
-        setSavingRenderDebug(true);
-        try {
-            const res = await saveAgentRenderDebug(shortVideoId, checked);
-            if (!res?.success) {
-                setAgentRenderDebug(!checked);
-                showMessage(
-                    parseApiMessage(res?.message) || 'Không lưu được cấu hình debug render',
-                    'error',
-                );
-                return;
-            }
-            setAgentRenderDebug(Boolean(res?.agent_render_debug));
-            showMessage(
-                parseApiMessage(res?.message)
-                    || (checked ? 'Đã bật debug render (3 beat đầu)' : 'Đã tắt debug render'),
-                'success',
-            );
-        } catch (e) {
-            setAgentRenderDebug(!checked);
-            showMessage(e instanceof Error ? e.message : String(e), 'error');
-        } finally {
-            setSavingRenderDebug(false);
-        }
-    };
-
     const handleAgentClipAspectChange = async (nextAspect: ClipAspect) => {
         if (savingClipAspect || nextAspect === agentClipAspect) {
             return;
@@ -6905,9 +6886,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentShowKaraoke,
         savingShowKaraoke,
         handleAgentShowKaraokeChange,
-        agentRenderDebug,
-        savingRenderDebug,
-        handleAgentRenderDebugChange,
         agentClipAspect,
         savingClipAspect,
         handleAgentClipAspectChange,
@@ -7250,6 +7228,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleLaunchAgentImportHtmlFull,
         handleRenderModeChange,
         handleBeatMapJsonChange,
+        handleManualBeatDivisionSave,
         handleBeatVisualDescriptionChange,
         handleSaveBeatQa,
         handleQuickIterateBeatFromQa,

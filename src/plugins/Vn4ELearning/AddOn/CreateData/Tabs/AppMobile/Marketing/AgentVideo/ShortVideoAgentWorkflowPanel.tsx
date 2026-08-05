@@ -48,6 +48,7 @@ import ShortVideoAgentPromptLibrary from './ShortVideoAgentPromptLibrary';
 import ShortVideoAgentAvatarDrawer, {
     AVATAR_PIP_ANCHORS,
 } from './ShortVideoAgentAvatarDrawer';
+import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -296,6 +297,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         DEFAULT_WHITEBOARD_TRANSITIONS,
     );
 
+    const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
+
     React.useEffect(() => {
         if (!state.isWhiteboardMode) {
             return undefined;
@@ -327,6 +330,14 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         }
         return 'drag' as const;
     }, [state.agentWhiteboardConfig?.photo_place_mode]);
+
+    const whiteboardGenStyle = React.useMemo(() => {
+        const raw = String(state.agentWhiteboardConfig?.gen_style || 'hybrid').trim();
+        if (raw === 'collage_art' || raw === 'whiteboard' || raw === 'sketch') {
+            return raw;
+        }
+        return 'hybrid';
+    }, [state.agentWhiteboardConfig?.gen_style]);
 
     const clipOptionStackSx = {
         borderRadius: 1,
@@ -422,37 +433,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
                                         Tắt: không ghép caption layer. Band dưới beat vẫn chừa theo tỉ lệ clip (9:16 ~360px, 16:9 ~120px).
-                                    </Typography>
-                                </Box>
-                            )}
-                        />
-                        <FormControlLabel
-                            sx={{
-                                m: 0,
-                                px: 1.25,
-                                py: 1,
-                                width: '100%',
-                                alignItems: 'flex-start',
-                                gap: 1,
-                            }}
-                            control={(
-                                <Switch
-                                    size="small"
-                                    checked={state.agentRenderDebug}
-                                    disabled={state.savingRenderDebug}
-                                    onChange={(e) => {
-                                        void state.handleAgentRenderDebugChange(e.target.checked);
-                                    }}
-                                    inputProps={{ 'aria-label': 'Debug render 3 beat đầu' }}
-                                />
-                            )}
-                            label={(
-                                <Box sx={{ pt: 0.25 }}>
-                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                        Debug render (3 beat đầu)
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                        Bật: chỉ render 3 beat đầu để test nhanh — MP4 ngắn, audio cắt theo video. Tắt đi rồi restart từ render để có bản đầy đủ.
                                     </Typography>
                                 </Box>
                             )}
@@ -557,6 +537,15 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 clipAspect={state.agentClipAspect}
                                 saving={state.savingAgentAvatar}
                                 onApply={state.handleAgentAvatarApply}
+                            />
+                            <ShortVideoAgentBeatDivisionManualDrawer
+                                open={beatDivisionManualOpen}
+                                onClose={() => setBeatDivisionManualOpen(false)}
+                                shortVideoId={state.shortVideoId}
+                                audioDurationSec={state.audioDurationSec}
+                                agentSourceFormat={state.agentSourceFormat}
+                                isWhiteboard={state.isWhiteboardMode}
+                                onSave={state.handleManualBeatDivisionSave}
                             />
                         </Box>
                         {state.audioScriptStyles.length > 0 ? (
@@ -827,6 +816,29 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             )
                                             : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Ngẫu nhiên để rút hết danh sách không lặp, hết thì xáo lại.'}
                                     </Typography>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mt: 1.25, mb: 0.75 }}>
+                                        Phong cách hình ảnh
+                                    </Typography>
+                                    <FormControl fullWidth size="small" disabled={state.savingWhiteboardConfig}>
+                                        <Select
+                                            value={whiteboardGenStyle}
+                                            onChange={(e) => {
+                                                const value = String(e.target.value || '').trim();
+                                                if (value) {
+                                                    void state.handleAgentWhiteboardConfigChange({
+                                                        gen_style: value,
+                                                    });
+                                                }
+                                            }}
+                                            inputProps={{ 'aria-label': 'Phong cách hình ảnh whiteboard' }}
+                                        >
+                                            <MenuItem value="hybrid">Hybrid</MenuItem>
+                                            <MenuItem value="collage_art">Collage Art</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                        Hybrid: outline + hình ảnh thật trên nền bảng. Collage Art: giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.
+                                    </Typography>
                                 </Box>
                             </Stack>
                         ) : (
@@ -1009,6 +1021,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             }}
                             rerunningRenderUpload={state.startingFullAuto}
                             rerunRenderUploadDisabled={pipelineBusy}
+                            onManualBeatDivision={() => setBeatDivisionManualOpen(true)}
+                            manualBeatDivisionDisabled={pipelineBusy}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>
