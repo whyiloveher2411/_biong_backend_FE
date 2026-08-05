@@ -21,6 +21,7 @@ import {
     buildBeatDivisionWhiteboardImagePromptBlock,
     buildBeatDivisionWhiteboardOutputRules,
     buildBeatDivisionWhiteboardSchemaExtra,
+    resolveWhiteboardGenStyle,
 } from './agentVideoBeatDivisionWhiteboard';
 
 const GITHUB_TOP_FORMATS = new Set([
@@ -45,9 +46,9 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const beatFrequencyDurationLinesBlock = beatFrequencyDurationLines(beatFrequency, isWhiteboard);
     const beatFrequencyDurationSecRuleLine = beatFrequencyDurationSecRule(beatFrequency, isWhiteboard);
     const beatFrequencyMetaLineText = beatFrequencyMetaLine(beatFrequency);
-    const whiteboardGenStyle = String(
-        (context.agent_whiteboard_config?.gen_style as string | undefined) || 'hybrid',
-    ).trim().toLowerCase() === 'collage_art' ? 'collage_art' : 'hybrid';
+    const whiteboardGenStyle = resolveWhiteboardGenStyle(
+        context.agent_whiteboard_config?.gen_style as string | undefined,
+    );
     const whiteboardBlock = isWhiteboard
         ? buildBeatDivisionWhiteboardImagePromptBlock(whiteboardGenStyle)
         : '';

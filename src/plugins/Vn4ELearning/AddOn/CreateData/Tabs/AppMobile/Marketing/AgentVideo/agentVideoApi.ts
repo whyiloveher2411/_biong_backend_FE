@@ -31,7 +31,7 @@ export type AgentWhiteboardConfig = {
 export type AgentWhiteboardBeatOverride = {
     hand?: string;
     board_theme?: string;
-    gen_style?: 'whiteboard' | 'sketch' | 'hybrid' | string;
+    gen_style?: 'whiteboard' | 'sketch' | 'hybrid' | 'collage_art' | 'vox' | 'courtroom_sketch' | string;
     photo_place_mode?: 'draw' | 'drag' | 'instant' | string;
     duration_sec?: number;
     hold_sec?: number;

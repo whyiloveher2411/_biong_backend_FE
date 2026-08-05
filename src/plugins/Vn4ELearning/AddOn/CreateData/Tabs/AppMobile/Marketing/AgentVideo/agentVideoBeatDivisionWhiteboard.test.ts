@@ -12,6 +12,22 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
         expect(beatImageStyleSuffix('COLLAGE_ART')).toContain('collage art');
     });
 
+    it('beatImageStyleSuffix trả vox suffix khi gen_style=vox', () => {
+        expect(beatImageStyleSuffix('vox')).toContain('vox-style');
+        expect(beatImageStyleSuffix('VOX')).toContain('vox-style');
+    });
+
+    it('beatImageStyleSuffix trả courtroom suffix khi gen_style=courtroom_sketch', () => {
+        expect(beatImageStyleSuffix('courtroom_sketch')).toContain('courtroom sketch');
+        expect(beatImageStyleSuffix('COURTROOM_SKETCH')).toContain('courtroom sketch');
+    });
+
+    it('appendBeatImageStyleSuffix nối suffix vox/courtroom vào cuối prompt', () => {
+        const prompt = 'A tired young adult lying in bed beside a black alarm clock';
+        expect(appendBeatImageStyleSuffix(prompt, 'vox')).toContain('vox-style');
+        expect(appendBeatImageStyleSuffix(prompt, 'courtroom_sketch')).toContain('courtroom sketch');
+    });
+
     it('appendBeatImageStyleSuffix luôn nối suffix vào cuối prompt', () => {
         const prompt = 'A tired young adult lying in bed beside a black alarm clock';
         const result = appendBeatImageStyleSuffix(prompt, 'hybrid');

@@ -334,7 +334,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
 
     const whiteboardGenStyle = React.useMemo(() => {
         const raw = String(state.agentWhiteboardConfig?.gen_style || 'hybrid').trim();
-        if (raw === 'collage_art' || raw === 'whiteboard' || raw === 'sketch') {
+        if (raw === 'collage_art' || raw === 'whiteboard' || raw === 'sketch' || raw === 'vox' || raw === 'courtroom_sketch') {
             return raw;
         }
         return 'hybrid';
@@ -872,11 +872,24 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                         >
                                             <MenuItem value="hybrid">Hybrid</MenuItem>
                                             <MenuItem value="collage_art">Collage Art</MenuItem>
+                                            <MenuItem value="vox">Vox</MenuItem>
+                                            <MenuItem value="courtroom_sketch">Courtroom Sketch</MenuItem>
                                         </Select>
                                     </FormControl>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
-                                        Hybrid: outline + hình ảnh thật trên nền bảng. Collage Art: giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.
-                                    </Typography>
+                                    <Box component="ul" sx={{ m: 0, pl: 1.5, mt: 0.75, color: 'text.secondary' }}>
+                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Hybrid</Box> — outline + hình ảnh thật trên nền bảng.
+                                        </Typography>
+                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Collage Art</Box> — giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.
+                                        </Typography>
+                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Vox</Box> — phòng điều tra/tài liệu giải thích: cutout làm vật chứng, nét marker đen/đỏ nối vật thể, mũi tên, dấu chấm hỏi, khoanh tròn nhấn dữ liệu, lưới tọa độ/biểu đồ ẩn nền.
+                                        </Typography>
+                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Courtroom Sketch</Box> — phác thảo tòa án vẽ tay: bút chì màu/phấn màu/nước trên giấy vân nhám, nét nhanh thô, màu trầm.
+                                        </Typography>
+                                    </Box>
                                 </Box>
                             </Stack>
                         ) : (
