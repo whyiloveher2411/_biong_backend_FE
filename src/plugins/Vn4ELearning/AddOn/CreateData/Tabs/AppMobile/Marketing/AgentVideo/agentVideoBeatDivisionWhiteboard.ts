@@ -31,6 +31,21 @@ function isCollage(genStyle: string | null | undefined): boolean {
     return String(genStyle || '').trim().toLowerCase() === 'collage_art';
 }
 
+/** Dòng phong cách image theo gen_style — append khi DÙNG prompt (mở Duck.ai/Meta.ai), không lưu. */
+export function beatImageStyleSuffix(genStyle: string = 'hybrid'): string {
+    return isCollage(genStyle) ? WHITEBOARD_COLLAGE_STYLE_SUFFIX : WHITEBOARD_HYBRID_STYLE_SUFFIX;
+}
+
+/** Luôn nối dòng phong cách image vào cuối prompt (bản gửi đi). */
+export function appendBeatImageStyleSuffix(prompt: string, genStyle: string = 'hybrid'): string {
+    const trimmed = String(prompt || '').trim();
+    const suffix = beatImageStyleSuffix(genStyle);
+    if (!trimmed) {
+        return suffix;
+    }
+    return `${trimmed.replace(/[, ]+$/u, '')}, ${suffix}`;
+}
+
 export function buildBeatDivisionWhiteboardImagePromptBlock(genStyle: string = 'hybrid'): string {
     if (isCollage(genStyle)) {
         return [

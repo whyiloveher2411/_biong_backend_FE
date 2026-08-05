@@ -480,6 +480,7 @@ export type AgentVideoContentResponse = {
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
+    agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
     agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
     whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
@@ -1400,6 +1401,16 @@ export async function saveAgentVisualMode(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-visual-mode',
         shortVideoBody(shortVideoId, { agent_visual_mode: mode }),
     ) as Promise<JsonResponse & { agent_visual_mode?: AgentVisualMode }>;
+}
+
+export async function saveAgentBeatFrequency(
+    shortVideoId: number,
+    frequency: import('./agentVideoBeatFrequency').AgentBeatFrequency,
+): Promise<JsonResponse & { agent_beat_frequency?: string }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-frequency',
+        shortVideoBody(shortVideoId, { agent_beat_frequency: frequency }),
+    ) as Promise<JsonResponse & { agent_beat_frequency?: string }>;
 }
 
 export type WhiteboardTransitionOption = {

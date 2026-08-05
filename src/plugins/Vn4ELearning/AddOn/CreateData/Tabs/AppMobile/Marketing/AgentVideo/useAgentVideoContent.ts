@@ -62,6 +62,7 @@ import {
     saveAgentShowKaraoke,
     saveAgentClipAspect,
     saveAgentVisualMode,
+    saveAgentBeatFrequency,
     saveAgentWhiteboardConfig,
     saveAgentWhiteboardBeatOverride,
     listVerifiedAvatars,
@@ -188,8 +189,10 @@ import {
     type WhiteboardRenderProgress,
 } from './agentVideoWhiteboardRenderProgress';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
+import { normalizeAgentBeatFrequency, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import { beatImageStyleSuffix } from './agentVideoBeatDivisionWhiteboard';
 import {
     buildBeatHtmlPrompt,
     parseImportHtmlContextMessage,
@@ -525,8 +528,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
     const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
+    const [agentBeatFrequency, setAgentBeatFrequency] = React.useState<AgentBeatFrequency>('free');
+    const [savingBeatFrequency, setSavingBeatFrequency] = React.useState(false);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    const whiteboardImageStyleSuffix = React.useMemo(
+        () => beatImageStyleSuffix(String(agentWhiteboardConfig?.gen_style || 'hybrid')),
+        [agentWhiteboardConfig],
+    );
     const [agentWhiteboardBeatOverrides, setAgentWhiteboardBeatOverrides] = React.useState<
         Record<string, AgentWhiteboardBeatOverride>
     >({});
@@ -969,6 +978,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
+        setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
         setAgentWhiteboardBeatOverrides(
             res?.agent_whiteboard_beat_overrides && typeof res.agent_whiteboard_beat_overrides === 'object'
@@ -3069,6 +3079,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
                     title,
                     autoSubmit: true,
+                    imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
             } else {
                 await openImportHtmlBeatDuckAiFillOnly({
@@ -3076,6 +3087,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatId,
                     imagePrompt: prompt,
                     autoSubmit: true,
+                    imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
             }
             setActiveBeatId(beatId);
@@ -3099,6 +3111,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         shortVideoId,
         showMessage,
         title,
+        whiteboardImageStyleSuffix,
     ]);
 
     const handleOpenBeatImageMetaAiManual = React.useCallback(async (
@@ -3145,6 +3158,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
                     title,
                     autoSubmit: true,
+                    imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
             } else {
                 await openImportHtmlBeatMetaAiFillOnly({
@@ -3152,6 +3166,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatId,
                     imagePrompt: prompt,
                     autoSubmit: true,
+                    imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
             }
             setActiveBeatId(beatId);
@@ -3175,6 +3190,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         shortVideoId,
         showMessage,
         title,
+        whiteboardImageStyleSuffix,
     ]);
 
     const handleUploadBeatImageFromFile = React.useCallback(async (
@@ -4525,6 +4541,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beats: workspaceBeats,
                     activeBeatId: missingBeatIds[0] || '',
                     autoSubmit: true,
+                    imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
@@ -4594,6 +4611,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beats: workspaceBeats,
                         activeBeatId: missingBeatIds[0] || '',
                         autoSubmit: true,
+                        imageStyleSuffix: whiteboardImageStyleSuffix,
                     })
                     : await openImportHtmlBeatAiStudioForMissingBeats({
                         shortVideoId,
@@ -5254,6 +5272,42 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingClipAspect(false);
+        }
+    };
+
+    const handleAgentBeatFrequencyChange = async (nextFrequency: AgentBeatFrequency) => {
+        if (savingBeatFrequency || nextFrequency === agentBeatFrequency) {
+            return;
+        }
+        if (beatMapReady) {
+            const confirmed = window.confirm(
+                'Clip đã có beat-map. Đổi tần suất beat không tự chia lại — '
+                + 'bạn cần chia lại beat để áp dụng pacing mới. Tiếp tục?',
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+        const previousFrequency = agentBeatFrequency;
+        setAgentBeatFrequency(nextFrequency);
+        setSavingBeatFrequency(true);
+        try {
+            const res = await saveAgentBeatFrequency(shortVideoId, nextFrequency);
+            if (!res?.success) {
+                setAgentBeatFrequency(previousFrequency);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được tần suất beat',
+                    'error',
+                );
+                return;
+            }
+            setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency || nextFrequency));
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu tần suất beat', 'success');
+        } catch (e) {
+            setAgentBeatFrequency(previousFrequency);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingBeatFrequency(false);
         }
     };
 
@@ -6889,6 +6943,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentClipAspect,
         savingClipAspect,
         handleAgentClipAspectChange,
+        agentBeatFrequency,
+        savingBeatFrequency,
+        handleAgentBeatFrequencyChange,
         agentVisualMode,
         agentWhiteboardConfig,
         agentWhiteboardBeatOverrides,

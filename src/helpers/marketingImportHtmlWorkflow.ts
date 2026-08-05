@@ -48,6 +48,14 @@ export type ImportHtmlWorkflowStatus = {
     render_mode?: string;
 };
 
+/** Nối dòng phong cách image vào prompt trước khi dispatch mở tab. */
+function withImageStyleSuffix(prompt: string, suffix?: string): string {
+    if (!suffix || !prompt) {
+        return prompt;
+    }
+    return `${prompt.replace(/[, ]+$/u, '')}, ${suffix}`;
+}
+
 function apiHost(): string {
     return getApiHost();
 }
@@ -432,10 +440,14 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
     title?: string;
     imageUrl?: string;
     autoSubmit?: boolean;
+    imageStyleSuffix?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
-    const imagePrompt = String(options.imagePrompt || '').trim();
+    const imagePrompt = withImageStyleSuffix(
+        String(options.imagePrompt || '').trim(),
+        options.imageStyleSuffix,
+    );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
     }
@@ -486,6 +498,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
     beats: DuckAiWorkspaceBeat[];
     activeBeatId?: string;
     autoSubmit?: boolean;
+    imageStyleSuffix?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     if (!shortVideoId) {
@@ -515,6 +528,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
         imageUrl: target.imageUrl,
         title: options.title,
         autoSubmit: options.autoSubmit,
+        imageStyleSuffix: options.imageStyleSuffix,
     });
 }
 
@@ -524,6 +538,7 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
     title?: string;
     activeBeatId?: string;
     autoSubmit?: boolean;
+    imageStyleSuffix?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beats = Array.isArray(options.beats)
@@ -566,6 +581,7 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 imageUrl: beat.imageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
+                imageStyleSuffix: options.imageStyleSuffix,
             });
             opened += 1;
         } catch (e) {
@@ -589,10 +605,14 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     title?: string;
     imageUrl?: string;
     autoSubmit?: boolean;
+    imageStyleSuffix?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
-    const imagePrompt = String(options.imagePrompt || '').trim();
+    const imagePrompt = withImageStyleSuffix(
+        String(options.imagePrompt || '').trim(),
+        options.imageStyleSuffix,
+    );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
     }
@@ -636,6 +656,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     title?: string;
     activeBeatId?: string;
     autoSubmit?: boolean;
+    imageStyleSuffix?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beats = Array.isArray(options.beats)
@@ -677,6 +698,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imageUrl: beat.imageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
+                imageStyleSuffix: options.imageStyleSuffix,
             });
             opened += 1;
         } catch (e) {

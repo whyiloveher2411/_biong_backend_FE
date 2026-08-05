@@ -27,7 +27,7 @@ type Props = {
     open: boolean;
     onClose: () => void;
     shortVideoId: number;
-    audioDurationSec: number | null;
+    audioDurationSec?: number | null;
     agentSourceFormat?: string;
     isWhiteboard: boolean;
     onSave: (map: BeatMap) => Promise<boolean>;
@@ -191,7 +191,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         window.setTimeout(() => {
             const result = analyzeBeatResponse(
                 aiResponse,
-                audioDurationSec,
+                audioDurationSec ?? null,
                 relaxDurationBounds,
                 isWhiteboard,
             );

@@ -4,6 +4,7 @@
  */
 import { formatDurationSec } from './agentVideoHfPromptDuration';
 import { getClipRenderSpec, type ClipAspect } from './agentVideoClipAspect';
+import { beatFrequencyDurationLines, normalizeAgentBeatFrequency } from './agentVideoBeatFrequency';
 
 export function buildHtmlChatbotNoLegacyBorrowRulesBlock(): string {
     return [
@@ -111,9 +112,11 @@ export function buildHtmlChatbotJsContractBlock(durationSec: number): string {
 export function buildBeatDivisionSingleOutputRulesBlock(options?: {
     relaxDurationBounds?: boolean;
     whiteboardDuration?: boolean;
+    beatFrequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
 }): string {
     const relax = Boolean(options?.relaxDurationBounds);
     const whiteboardDuration = !relax && Boolean(options?.whiteboardDuration);
+    const beatFrequency = normalizeAgentBeatFrequency(options?.beatFrequency);
     const durationRules = relax
         ? [
             '## Beat duration (khuyến nghị phân bố nội dung — không validate cứng)',
@@ -122,7 +125,9 @@ export function buildBeatDivisionSingleOutputRulesBlock(options?: {
             '- Pipeline **không** tách/gộp lại beat trong code — beat-map trả về giữ nguyên.',
             '- Chỉ bắt buộc: durationSec > 0, sections liên tục, không overlap/gap.',
         ]
-        : whiteboardDuration
+        : beatFrequency !== 'free'
+            ? beatFrequencyDurationLines(beatFrequency, whiteboardDuration)
+            : whiteboardDuration
             ? [
                 '## Beat duration — whiteboard soft target 5–15s (không validate cứng)',
                 '- Target mỗi beat / bối cảnh **5–15s** (`durationSec`); ưu tiên **hết câu / hết ý** trước khi ép giây.',

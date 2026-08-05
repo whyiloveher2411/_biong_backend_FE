@@ -50,6 +50,7 @@ import ShortVideoAgentAvatarDrawer, {
 } from './ShortVideoAgentAvatarDrawer';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
+import { AGENT_BEAT_FREQUENCY_OPTIONS, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -693,6 +694,43 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     ? 'Whiteboard: ảnh beat + render bảng. Cấu hình riêng ở khối Whiteboard bên dưới.'
                                     : 'Motion HTML: HyperFrames HTML theo beat. Cấu hình riêng ở khối Motion HTML bên dưới.'}
                             </Typography>
+                        </Box>
+                        <Box sx={{ px: 1.25, py: 1 }}>
+                            <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                Tần suất beat
+                            </Typography>
+                            <FormControl fullWidth size="small" disabled={state.savingBeatFrequency}>
+                                <Select
+                                    value={state.agentBeatFrequency}
+                                    onChange={(e) => {
+                                        const value = String(e.target.value || '').trim() as AgentBeatFrequency;
+                                        if (value) {
+                                            void state.handleAgentBeatFrequencyChange(value);
+                                        }
+                                    }}
+                                    inputProps={{ 'aria-label': 'Tần suất beat' }}
+                                >
+                                    {AGENT_BEAT_FREQUENCY_OPTIONS.map((option) => (
+                                        <MenuItem key={option.key} value={option.key}>
+                                            {option.label} ({option.rangeLabel})
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                {(() => {
+                                    const option = AGENT_BEAT_FREQUENCY_OPTIONS.find(
+                                        (o) => o.key === state.agentBeatFrequency,
+                                    );
+                                    return option ? option.description : '';
+                                })()}
+                                {' '}Áp dụng khi sinh/cải thiện script (bước 1) và khi chia beat — cần sinh lại script hoặc chia lại để áp dụng.
+                            </Typography>
+                            {state.isWhiteboardMode && state.agentBeatFrequency === 'fast' && (
+                                <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                    Whiteboard nhịp nhanh: nên chọn "Không vẽ tay" ở Cách đưa ảnh vào khung để ảnh hiện đầy đủ từ frame đầu.
+                                </Typography>
+                            )}
                         </Box>
                         <FormControlLabel
                             sx={{
