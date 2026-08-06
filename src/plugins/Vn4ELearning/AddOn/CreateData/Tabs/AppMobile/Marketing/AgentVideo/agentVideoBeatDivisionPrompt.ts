@@ -206,7 +206,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- `visual_description`: follow **Visual description — creative direction** above; English; approximately **40–100 words**; semantic and style-neutral',
         '- `background` bắt buộc mỗi section, tiếng Anh 3–60 từ: mood + texture + ràng buộc ngắn; AI tự chọn nền phù hợp visual',
         '- Ví dụ background: `Dark navy void, soft grain, cyan haze; no photo plates, no hard cut between beats`',
-        '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`',
+        '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`; ngoại lệ duy nhất: `image_prompt` (bắt buộc JSON object nên nháy kép phải escape `\\"` đầy đủ).',
         '- Cấm visual_description tự đặt palette, font hoặc theme hệ thống; toàn clip lấy từ visual_style',
         '- Không xuất `hf_prompt_type` hoặc `image_url`',
         ...whiteboardRules,

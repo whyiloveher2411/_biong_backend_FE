@@ -749,16 +749,16 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     onChange={(e) => {
                                         void state.handleGeminiOpenBrowserChange(e.target.checked);
                                     }}
-                                    inputProps={{ 'aria-label': 'Hiện browser Gemini' }}
+                                    inputProps={{ 'aria-label': 'Hiển thị browser debug' }}
                                 />
                             )}
                             label={(
                                 <Box sx={{ pt: 0.25 }}>
                                     <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
-                                        Hiện browser Gemini
+                                        Hiển thị browser debug
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
-                                        Mở cửa sổ trình duyệt khi chạy fill/chia beat headless.
+                                        Mở cửa sổ trình duyệt ở TẤT CẢ các bước dùng headless (Gemini, Meta.ai, Duck.ai, ChatGPT TTS, post…).
                                     </Typography>
                                 </Box>
                             )}

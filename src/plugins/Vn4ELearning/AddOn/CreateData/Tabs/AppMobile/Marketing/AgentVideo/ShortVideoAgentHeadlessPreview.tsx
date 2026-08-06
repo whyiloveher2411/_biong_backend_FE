@@ -13,6 +13,7 @@ import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import RemoveIcon from '@mui/icons-material/Remove';
 import StopIcon from '@mui/icons-material/Stop';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import ReplayIcon from '@mui/icons-material/Replay';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     FULL_AUTO_PIPELINE_STEP_ORDER,
@@ -57,8 +58,10 @@ type Props = {
     selectedTtsPlatforms?: string[];
     cancelling: boolean;
     requestingNewChat: boolean;
+    requestingNewSection: boolean;
     onStop: () => void | Promise<void>;
     onNewChat: (sessionId?: string) => void | Promise<void>;
+    onNewSection: (sessionId?: string) => void | Promise<void>;
 };
 
 const RESULT_VISIBLE_MS = 3500;
@@ -167,8 +170,10 @@ export default function ShortVideoAgentHeadlessPreview({
     selectedTtsPlatforms = [],
     cancelling,
     requestingNewChat,
+    requestingNewSection,
     onStop,
     onNewChat,
+    onNewSection,
 }: Props) {
     void agentGeminiOpenBrowser; // headed Chrome do backend xử lý; không chặn WS preview
     void geminiFillStatus;
@@ -543,9 +548,30 @@ export default function ShortVideoAgentHeadlessPreview({
                         size="small"
                         variant="outlined"
                         color="inherit"
+                        startIcon={<ReplayIcon />}
+                        loading={requestingNewSection}
+                        disabled={requestingNewSection || cancelling || !previewSessionId}
+                        onClick={() => { void onNewSection(previewSessionId); }}
+                        aria-label="Đóng browser hiện tại và mở browser mới — tính là 1 lần thử mới"
+                        sx={{
+                            minWidth: 112,
+                            height: 26,
+                            px: 1,
+                            color: 'common.white',
+                            borderColor: 'rgba(255,255,255,0.45)',
+                        }}
+                    >
+                        New section
+                    </LoadingButton>
+                ) : null}
+                {showNewChat && !minimized ? (
+                    <LoadingButton
+                        size="small"
+                        variant="outlined"
+                        color="inherit"
                         startIcon={<ChatBubbleOutlineIcon />}
                         loading={requestingNewChat}
-                        disabled={requestingNewChat || cancelling || !previewSessionId}
+                        disabled={requestingNewChat || requestingNewSection || cancelling || !previewSessionId}
                         onClick={() => { void onNewChat(previewSessionId); }}
                         aria-label="Bỏ lần chat hiện tại và tạo chat Gemini mới"
                         sx={{
@@ -566,7 +592,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         color="error"
                         startIcon={<StopIcon />}
                         loading={cancelling}
-                        disabled={cancelling || requestingNewChat}
+                        disabled={cancelling || requestingNewChat || requestingNewSection}
                         onClick={() => { void onStop(); }}
                         aria-label="Dừng pipeline A đến Z"
                         sx={{

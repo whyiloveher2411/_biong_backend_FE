@@ -84,6 +84,7 @@ import {
     cancelFullAutoPipeline,
     markBeatDivisionDone,
     requestAgentHeadlessNewChat,
+    requestAgentHeadlessNewSection,
     FULL_AUTO_PIPELINE_STEP_LABELS,
     savePublishFlags,
     saveSocialCopy,
@@ -621,6 +622,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [startingFullAuto, setStartingFullAuto] = React.useState(false);
     const [cancellingFullAuto, setCancellingFullAuto] = React.useState(false);
     const [requestingHeadlessNewChat, setRequestingHeadlessNewChat] = React.useState(false);
+    const [requestingHeadlessNewSection, setRequestingHeadlessNewSection] = React.useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>(DEFAULT_TTS_PLATFORMS);
     const [chatgptWebAvailable, setChatgptWebAvailable] = React.useState(true);
     const [ttsPending, setTtsPending] = React.useState(false);
@@ -2952,7 +2954,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         const trimmedPrompt = imagePrompt.trim();
         if (!validateBeatImagePrompt(trimmedPrompt)) {
-            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            showMessage('image_prompt phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)', 'warning');
             return false;
         }
         const nextMap: BeatMap = {
@@ -3041,7 +3043,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     ): Promise<string | null> => {
         const prompt = String(imagePrompt || '').trim();
         if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            showMessage('image_prompt phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)', 'warning');
             return null;
         }
         setRegeneratingBeatImageBeatId(beatId);
@@ -3120,7 +3122,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     ): Promise<string | null> => {
         const prompt = String(imagePrompt || '').trim();
         if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt', 'warning');
+            showMessage('image_prompt phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)', 'warning');
             return null;
         }
         setRegeneratingBeatImageBeatId(beatId);
@@ -4808,7 +4810,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const res = await saveAgentGeminiOpenBrowser(shortVideoId, checked);
             if (!res?.success) {
                 showMessage(
-                    parseApiMessage(res?.message) || 'Không lưu được cấu hình hiện browser Gemini',
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình hiển thị browser debug',
                     'error',
                 );
                 return;
@@ -4817,8 +4819,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(
                 parseApiMessage(res?.message)
                     || (checked
-                        ? 'Đã bật hiện browser Gemini cho short video này'
-                        : 'Đã tắt hiện browser Gemini'),
+                        ? 'Đã bật hiển thị browser debug cho mọi bước headless'
+                        : 'Đã tắt hiển thị browser debug'),
                 'success',
             );
         } catch (e) {
@@ -5546,6 +5548,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setRequestingHeadlessNewChat(false);
+        }
+    };
+
+    const handleHeadlessNewSection = async (sessionId?: string) => {
+        if (requestingHeadlessNewSection) {
+            return;
+        }
+        setRequestingHeadlessNewSection(true);
+        try {
+            const res = await requestAgentHeadlessNewSection(shortVideoId, sessionId);
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không mở được browser mới',
+                    'error',
+                );
+                return;
+            }
+            showMessage(
+                parseApiMessage(res?.message) || 'Đã bỏ lần thử hiện tại và mở browser mới',
+                'success',
+            );
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setRequestingHeadlessNewSection(false);
         }
     };
 
@@ -7018,6 +7045,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         startingFullAuto,
         cancellingFullAuto,
         requestingHeadlessNewChat,
+        requestingHeadlessNewSection,
         selectedPlatforms,
         chatgptWebAvailable,
         ttsPending,
@@ -7255,6 +7283,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRerunRenderUpload,
         handleCancelFullAutoPipeline,
         handleHeadlessNewChat,
+        handleHeadlessNewSection,
         handleOmnivoiceSpeedChange,
         handleVisualStyleChange,
         handleOmnivoiceVoiceChange,

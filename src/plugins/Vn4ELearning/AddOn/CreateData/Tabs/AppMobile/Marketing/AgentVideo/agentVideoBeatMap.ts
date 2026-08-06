@@ -1,4 +1,5 @@
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import { WHITEBOARD_IMAGE_PROMPT_JSON_KEYS } from './agentVideoBeatDivisionWhiteboard';
 
 export type BeatMapSection = {
     id: string;
@@ -400,12 +401,25 @@ export function validateBeatVisualDescription(value: unknown): string | null {
 
 export function validateBeatImagePrompt(value: unknown): string | null {
     const prompt = String(value ?? '').trim();
-    const wordCount = prompt.split(/\s+/).filter(Boolean).length;
-    if (!prompt || wordCount < 8 || wordCount > 120 || prompt.length > 800) {
+    if (!prompt || prompt.length > 2000) {
         return null;
     }
-    // Cho phép quote label tiếng Việt; vẫn yêu cầu có mô tả Latin/English.
-    if (!/[A-Za-z]/.test(prompt)) {
+    // Bắt buộc JSON object đủ 9 key — image_prompt không còn chấp nhận text thuần.
+    let parsed: unknown = null;
+    try {
+        parsed = JSON.parse(prompt);
+    } catch {
+        return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+    }
+    const record = parsed as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (keys.length !== WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.length) {
+        return null;
+    }
+    if (WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.some((key) => !keys.includes(key) || !String(record[key] ?? '').trim())) {
         return null;
     }
     return prompt;
@@ -567,10 +581,11 @@ export function parseBeatMapJson(
         if (!background) {
             errors.push(`${id || `Section #${index + 1}`}: background không được để trống, dài 3–60 từ`);
         }
-        if (options?.requireImagePrompt && !imagePrompt) {
+        const hasImagePromptRaw = row.image_prompt != null && String(row.image_prompt).trim() !== '';
+        if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu image_prompt cho whiteboard`);
-        } else if (row.image_prompt != null && String(row.image_prompt).trim() && !imagePrompt) {
-            errors.push(`${id || `Section #${index + 1}`}: image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt`);
+        } else if (hasImagePromptRaw && !imagePrompt) {
+            errors.push(`${id || `Section #${index + 1}`}: image_prompt không hợp lệ — phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)`);
         }
 
         sections.push({
@@ -640,10 +655,11 @@ export function validateBeatMap(
         if (!validateBeatBackground(section.background)) {
             errors.push(`${label}: background không được để trống, dài 3–60 từ`);
         }
-        if (options?.requireImagePrompt && !validateBeatImagePrompt(section.image_prompt)) {
+        const hasImagePromptRaw = String(section.image_prompt || '').trim() !== '';
+        if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${label}: thiếu image_prompt cho whiteboard`);
-        } else if (String(section.image_prompt || '').trim() && !validateBeatImagePrompt(section.image_prompt)) {
-            errors.push(`${label}: image_prompt phải có mô tả English (~30–120 từ), được phép quote label tiếng Việt`);
+        } else if (hasImagePromptRaw && !validateBeatImagePrompt(section.image_prompt)) {
+            errors.push(`${label}: image_prompt không hợp lệ — phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)`);
         }
         // Soft 8–30s / cắt hết ý: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;

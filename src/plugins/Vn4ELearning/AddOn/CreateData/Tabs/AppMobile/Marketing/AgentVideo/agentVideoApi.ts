@@ -2314,6 +2314,16 @@ export async function requestAgentHeadlessNewChat(
     ) as Promise<JsonResponse>;
 }
 
+export async function requestAgentHeadlessNewSection(
+    shortVideoId: number,
+    sessionId?: string,
+): Promise<JsonResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/request-agent-headless-new-section',
+        shortVideoBody(shortVideoId, sessionId ? { session_id: sessionId } : {}),
+    ) as Promise<JsonResponse>;
+}
+
 export async function getAgentHeadlessPreviewAccess(
     shortVideoId: number,
 ): Promise<AgentHeadlessPreviewAccessResponse> {

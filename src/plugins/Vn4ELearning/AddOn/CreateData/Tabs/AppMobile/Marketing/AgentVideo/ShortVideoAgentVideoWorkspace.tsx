@@ -698,6 +698,8 @@ export default function ShortVideoAgentVideoWorkspace({
                 requestingNewChat={state.requestingHeadlessNewChat}
                 onStop={state.handleCancelFullAutoPipeline}
                 onNewChat={state.handleHeadlessNewChat}
+                requestingNewSection={state.requestingHeadlessNewSection}
+                onNewSection={state.handleHeadlessNewSection}
             />
         </DrawerCustom>
     );

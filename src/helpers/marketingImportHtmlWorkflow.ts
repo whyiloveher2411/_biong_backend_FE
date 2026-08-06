@@ -48,10 +48,18 @@ export type ImportHtmlWorkflowStatus = {
     render_mode?: string;
 };
 
-/** Nối dòng phong cách image vào prompt trước khi dispatch mở tab. */
+/** Nối dòng phong cách image vào prompt trước khi dispatch mở tab. Prompt JSON → thêm key `style` vào trong JSON. */
 function withImageStyleSuffix(prompt: string, suffix?: string): string {
     if (!suffix || !prompt) {
         return prompt;
+    }
+    try {
+        const parsed = JSON.parse(prompt);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return JSON.stringify({ ...parsed, style: suffix }, null, 2);
+        }
+    } catch {
+        // Không phải JSON → fallback nối suffix sau dấu phẩy như cũ.
     }
     return `${prompt.replace(/[, ]+$/u, '')}, ${suffix}`;
 }

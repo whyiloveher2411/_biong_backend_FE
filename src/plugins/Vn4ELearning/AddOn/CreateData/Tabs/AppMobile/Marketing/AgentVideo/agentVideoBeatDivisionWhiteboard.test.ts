@@ -51,4 +51,34 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
     it('appendBeatImageStyleSuffix trả đúng suffix khi prompt rỗng', () => {
         expect(appendBeatImageStyleSuffix('', 'hybrid')).toBe(beatImageStyleSuffix('hybrid'));
     });
+
+    it('appendBeatImageStyleSuffix thêm key style vào trong JSON khi prompt là JSON', () => {
+        const jsonPrompt = JSON.stringify({
+            purpose: 'p',
+            context: 'c',
+            subject: 's',
+            action: 'a',
+            scene: 's',
+            text_overlay: 't',
+            mood: 'm',
+            composition: 'c',
+            must_avoid: 'm',
+        });
+        const result = appendBeatImageStyleSuffix(jsonPrompt, 'vox');
+        const parsed = JSON.parse(result);
+        expect(parsed.style).toContain('vox-style');
+        expect(parsed.purpose).toBe('p');
+        expect(parsed.must_avoid).toBe('m');
+    });
+
+    it('appendBeatImageStyleSuffix xử lý image_prompt đã decode từ beat-map', () => {
+        // Mô phỏng: beat-map lưu `\"` escape, khi decode runtime value có nháy kép thật.
+        const beatMap = JSON.parse(JSON.stringify({
+            image_prompt: JSON.stringify({ purpose: 'p', context: 'c' }),
+        }));
+        const result = appendBeatImageStyleSuffix(beatMap.image_prompt, 'hybrid');
+        const parsed = JSON.parse(result);
+        expect(parsed.style).toContain('hybrid whiteboard collage');
+        expect(parsed.purpose).toBe('p');
+    });
 });
