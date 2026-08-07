@@ -58,7 +58,7 @@ export const SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK = `## Tiêu chí QA bắt bu�
 | Nhóm | Mã | Severity | Mô tả |
 |------|-----|----------|-------|
 | Nội dung | \`content_omission\` | critical | Thiếu ý / phần lớn so với content nguồn tổng hợp — **cấm lược bỏ** để rút ngắn |
-| Ngôn ngữ | \`too_advanced_language\` | critical | Từ chuyên môn không giải thích; không phù hợp trẻ dưới 12 tuổi |
+| Ngôn ngữ | \`too_advanced_language\` | critical | Từ chuyên môn không giải thích; không phù hợp người 13–18 tuổi |
 | Mở đầu | \`weak_hook\` | warning | Mở đầu không gây tò mò nhẹ (học tập — không đòi stop-scroll viral) |
 | Nhịp | \`monotonous_rhythm\` | warning | Đọc đều đều, thiếu ví dụ / hài hước nhẹ / chuyển ý |
 | Nhịp | \`bullet_point_syndrome\` | warning | ≥3 câu liên tiếp kiểu liệt kê máy móc, không kể chuyện |
@@ -77,7 +77,7 @@ export const SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK = `## Tiêu chí QA bắt bu�
 - **Không** fail vì script dài hơn 180s nếu vẫn cover đủ nội dung nguồn.
 - **Không** yêu cầu rút về 90–150s hay HASCAS viral.
 - **\`content_omission\`:** so với agent_source_content / content tổng hợp — mọi phần lớn phải có trong script.
-- **Giọng:** plain language dưới 12 tuổi; được hài hước nhẹ; cấm thô / chế giễu người học.
+- **Giọng:** plain language cho người 13–18 tuổi; được hài hước nhẹ; cấm thô / chế giễu người học.
 
 ### Phân loại tag (đừng audit sai)
 - **Marker sản xuất (hợp lệ):** \`[BGM: ...]\`, \`[SFX: ...]\`, \`[Dừng ...]\` — **không** báo \`disallowed_tag\`.
@@ -96,32 +96,35 @@ function buildDesiredDurationBlock(desiredSec?: number | null): string {
     }
     const sec = Math.round(n);
     const wordTarget = Math.max(1, Math.round(sec * 2.5));
-    const wordMin = Math.max(1, Math.round(wordTarget * 0.92));
-    const wordMax = Math.max(wordMin, Math.round(wordTarget * 1.08));
-    const minParagraphs = Math.max(6, Math.round(sec / 12));
     const minutes = Math.round((sec / 60) * 10) / 10;
+    const minutesMin = Math.max(1, Math.ceil(minutes));
+    const minutesMax = Math.max(minutesMin, Math.ceil(minutes + 1.5));
     return [
-        '## ⚠️ THỜI LƯỢNG MỤC TIÊU — ƯU TIÊN SỐ 1 (bắt buộc tuyệt đối)',
+        '## ⚠️ THỜI LƯỢNG MỤC TIÊU — ƯU TIÊN SỐ 1 (bắt buộc)',
         'Admin đã khóa thời lượng voiceover. Mọi hướng dẫn 60–180s / 90–150s / “theo độ dày” / “viral ngắn” trong prompt này **VÔ HIỆU**.',
+        `Video có thời lượng tối thiểu: **${sec} giây** (~${minutes} phút).`,
         '',
         '### Chỉ số bắt buộc',
-        `- Thời lượng: **đúng ${sec} giây** (~${minutes} phút)`,
-        `- Word budget: **mục tiêu ${wordTarget} từ** tiếng Việt (≈2.5 từ/giây)`,
-        `- Band chấp nhận: **${wordMin}–${wordMax} từ** — ngoài band = FAIL (phải viết lại trước khi trả)`,
-        `- Số đoạn (cách nhau dòng trống): **tối thiểu ${minParagraphs} đoạn** (mỗi đoạn 1–3 câu ≈ 8–12s)`,
+        `- Thời lượng: **tối thiểu ${sec} giây** (~${minutes} phút)`,
+        `- Mục tiêu độ dài: **khoảng ${minutesMin}–${minutesMax} phút voiceover tự nhiên**`,
+        `- Word budget tham khảo: ~${wordTarget} từ tiếng Việt (≈2.5 từ/giây) — **không đếm từ**, chỉ để ước lượng`,
+        '- Mỗi đoạn trung bình 8–15 giây, **không giới hạn số đoạn** — chia theo ý, không cào thành đoạn quá nhỏ',
         `- estimated_duration_sec / timeline HASCAS scale theo **${sec}s**`,
         '',
         '### Cách đạt độ dài',
-        '- Nếu nội dung nguồn ngắn hơn mục tiêu: **mở rộng** bằng ví dụ đời, tình huống, giải thích từng bước, so sánh, tóm tắt trung gian — **cấm bịa fact** ngoài nguồn.',
-        `- Nếu nguồn dài hơn mục tiêu: chọn ý quan trọng nhất để **vừa khung ${sec}s** — vẫn đủ ${wordMin}+ từ.`,
+        '- Nếu nội dung nguồn ngắn hơn mục tiêu: **mở rộng** bằng ví dụ đời, tình huống, giải thích từng bước, so sánh, tóm tắt trung gian. **Được phép thêm ví dụ minh họa phi thực chứng, miễn không thêm số liệu hoặc kết luận y khoa mới.**',
+        `- Nếu nguồn dài hơn mục tiêu: chọn ý quan trọng nhất để **vừa khung tối thiểu ${sec}s**.`,
         `- **CẤM** dừng sớm / tóm tắt còn vài phút khi mục tiêu là ${sec}s.`,
         `- **CẤM** trả script ~60–180s hoặc “vừa đủ viral” khi admin đã chọn ${sec}s.`,
         '',
-        '### Self-check trước khi trả (bắt buộc)',
-        '1. Đếm từ lời thoại (không tính tag `[...]`).',
-        `2. Nếu < ${wordMin} từ → **tiếp tục viết** thêm đoạn cho đủ — không được kết thúc.`,
-        `3. Nếu > ${wordMax} từ → rút gọn nhẹ cho vào band.`,
-        `4. Chỉ trả plain text script hoàn chỉnh khi đã trong band ${wordMin}–${wordMax} từ.`,
+        '### Xử lý số liệu',
+        '- Khi nhiều số liệu liên tiếp: **nhóm thành insight dễ nhớ** thay vì đọc như báo cáo thống kê — giữ số liệu nhưng đan vào câu chuyện.',
+        '',
+        '### Tự kiểm tra trước khi trả (không đếm từ)',
+        '1. Đã cover đủ các ý chính của nội dung nguồn chưa?',
+        '2. Mạch nhân quả có mượt, dễ nghe không?',
+        `3. Ước lượng đọc thoại có đạt **khoảng ${minutesMin}–${minutesMax} phút** không? Ngắn hơn rõ rệt → viết thêm; dài hơn hẳn → rút gọn ý phụ.`,
+        '4. Chỉ trả script hoàn chỉnh khi thỏa mãn 3 mục trên.',
         '',
     ].join('\n');
 }
@@ -185,7 +188,7 @@ function buildQaRetryBlock(input: ImproveAudioScriptPromptInput, isTopicResearch
     if (issueLines.length > 0) {
         parts.push(...issueLines);
     } else if (isTopicResearch) {
-        parts.push('- (Không có chi tiết issue — hãy cải thiện độ dễ hiểu, cover đủ nguồn, giọng dưới 12 tuổi theo rubric QA.)');
+        parts.push('- (Không có chi tiết issue — hãy cải thiện độ dễ hiểu, cover đủ nguồn, giọng 13–18 tuổi theo rubric QA.)');
     } else {
         parts.push('- (Không có chi tiết issue — hãy cải thiện hook, nhịp, CTA và payoff theo rubric QA.)');
     }
@@ -239,7 +242,7 @@ export function buildImproveAudioScriptPrompt(
         ? ''
         : '- Nếu nội dung đủ dày: ưu tiên thời lượng **90–150 giây** thay vì rút gọn.\n';
     const expandIfShortHint = desiredDurationBlock
-        ? 'Nếu script hiện tại **ngắn hơn word budget mục tiêu** → BẮT BUỘC mở rộng đến đủ band từ (không được chỉ paraphrase ngắn).\n'
+        ? 'Nếu script hiện tại **ngắn hơn mục tiêu thời lượng** → **mở rộng** thêm đoạn cho đủ độ dài (không được chỉ paraphrase ngắn; **không đếm từ**).\n'
         : '';
     const missionLead = desiredDurationBlock ? `${desiredDurationBlock}\n` : '';
 
@@ -290,9 +293,11 @@ ${expandIfShortHint}
 ${rubricBlock}
 
 ${qaRetryBlock}## Cover & giọng (bắt buộc)
-- **Cấm lược bỏ** ý/khái niệm/định nghĩa/cơ chế đã có trong script hoặc trong content nguồn.
-- Giọng kể cho trẻ **dưới 12 tuổi**: từ đơn giản, ví dụ đời sống, hài hước nhẹ (không thô, không chế giễu người học).
-- **Cấm bịa** số liệu / claim ngoài script gốc${enrichHint}${extraFactHint}.
+- **Cấm lược bỏ** ý/khái niệm/định nghĩa/cơ chế đã có trong script hoặc trong content nguồn — **ưu tiên ý chính**; ý phụ được tóm lược ngắn hơn, không cào bằng thời lượng.
+- Giọng giải thích **dễ hiểu cho người 13–18 tuổi**: từ đơn giản, ví dụ đời sống, hài hước nhẹ (không thô, không chế giễu người học).
+- **Cấm bịa** số liệu / claim ngoài script gốc${enrichHint}${extraFactHint}; được thêm ví dụ minh họa phi thực chứng miễn không thêm số liệu hoặc kết luận y khoa mới.
+- Nhiều số liệu liên tiếp → **nhóm thành insight dễ nhớ**, không đọc như báo cáo thống kê.
+- Thứ tự ưu tiên khi xung đột: 1) Độ chính xác nội dung, 2) Mạch nhân quả dễ hiểu, 3) Kể chuyện tự nhiên, 4) Thời lượng.
 ${durationLineEdu}
 ## Chia đoạn cho phân cảnh (bắt buộc)
 Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (Whisper + beat-map).
@@ -341,7 +346,7 @@ ${script}
 \`\`\`
 
 ## Output
-Chỉ trả về audio script đã viết lại (plain text), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.${desiredDurationBlock
-        ? '\n\n## Nhắc lại thời lượng (trước khi trả)\n- Self-check đếm từ lời thoại (không tính tag). Ngoài band mục tiêu = FAIL — viết tiếp hoặc rút cho vào band rồi mới trả.'
+Chỉ trả về script đã viết lại dạng văn bản (marker sản xuất \`[SFX]\`/\`[BGM]\`/\`[Dừng]\` được phép), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.${desiredDurationBlock
+        ? '\n\n## Nhắc lại thời lượng (trước khi trả)\n- Tự kiểm tra: cover đủ ý chính + mạch nhân quả; ước lượng độ dài đạt mục tiêu phút. **Không đếm từ** — còn ngắn thì viết tiếp, quá dài thì rút ý phụ.'
         : ''}`;
 }
