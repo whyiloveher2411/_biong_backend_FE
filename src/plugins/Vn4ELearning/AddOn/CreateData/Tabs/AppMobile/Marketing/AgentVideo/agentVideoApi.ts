@@ -686,7 +686,6 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'script_create',
     'script_improve',
     'script_improve_qa',
-    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -713,7 +712,6 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'script_create',
     'script_improve',
     'script_improve_qa',
-    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'beat_division',
@@ -739,7 +737,6 @@ export const FULL_AUTO_PIPELINE_AI_STEPS = [
     'script_create',
     'script_improve',
     'script_improve_qa',
-    'script_hook_enhance',
     'script_phonetic_normalize',
     'approve_tts',
     'whisper',
@@ -808,14 +805,12 @@ export type FullAutoPipelineSummary = {
 /** Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles (mặc định true). */
 export type FullAutoStepToggleKey =
     | 'script_improve'
-    | 'script_hook_enhance'
     | 'script_phonetic_normalize';
 
 export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 
 export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     script_improve: true,
-    script_hook_enhance: true,
     script_phonetic_normalize: true,
 };
 
@@ -824,7 +819,6 @@ export function normalizeFullAutoStepToggles(
 ): FullAutoStepToggles {
     return {
         script_improve: raw?.script_improve !== false,
-        script_hook_enhance: raw?.script_hook_enhance !== false,
         script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
     };
 }
@@ -834,7 +828,7 @@ export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggl
     if (stepKey === 'script_improve' || stepKey === 'script_improve_qa') {
         return 'script_improve';
     }
-    if (stepKey === 'script_hook_enhance' || stepKey === 'script_phonetic_normalize') {
+    if (stepKey === 'script_phonetic_normalize') {
         return stepKey;
     }
     return null;
@@ -844,7 +838,6 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     script_create: 'Tạo script',
     script_improve: 'Cải thiện script',
     script_improve_qa: 'Đánh giá script',
-    script_hook_enhance: 'Hook viral 3s',
     script_phonetic_normalize: 'Chuẩn hóa giọng đọc',
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
@@ -869,7 +862,6 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
             'script_create',
             'script_improve',
             'script_improve_qa',
-            'script_hook_enhance',
             'script_phonetic_normalize',
             'approve_tts',
             'whisper',
@@ -1821,11 +1813,22 @@ export async function enqueueGeminiWebBeatDivision(
 
 export async function fetchBeatDivisionPrompt(
     shortVideoId: number,
-): Promise<JsonResponse & { prompt?: string }> {
+    contentMode: 'text' | 'file' = 'text',
+): Promise<JsonResponse & {
+    prompt?: string;
+    content?: string;
+    content_file_name?: string;
+}> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/get-beat-division-prompt',
-        shortVideoBody(shortVideoId),
-    ) as Promise<JsonResponse & { prompt?: string }>;
+        shortVideoBody(shortVideoId, {
+            content_mode: contentMode === 'file' ? 'file' : 'inline',
+        }),
+    ) as Promise<JsonResponse & {
+        prompt?: string;
+        content?: string;
+        content_file_name?: string;
+    }>;
 }
 
 export async function fetchScriptCreatePrompt(
@@ -1873,28 +1876,6 @@ export async function enqueueGeminiWebAudioScript(
         mode?: string;
         job_ids?: number[];
         gemini_script?: AgentVideoContentResponse['gemini_script'];
-    }>;
-}
-
-export async function enqueueGeminiWebScriptHook(
-    shortVideoId: number,
-    force = true,
-): Promise<JsonResponse & {
-    queued?: number;
-    skipped_active?: number;
-    job_ids?: number[];
-    gemini_script_hook?: AgentVideoContentResponse['gemini_script_hook'];
-}> {
-    return postJson(
-        'plugin/vn4-e-learning/app-mobile/marketing/short-video/enqueue-gemini-web-script-hook',
-        shortVideoBody(shortVideoId, {
-            force: force ? '1' : '0',
-        }),
-    ) as Promise<JsonResponse & {
-        queued?: number;
-        skipped_active?: number;
-        job_ids?: number[];
-        gemini_script_hook?: AgentVideoContentResponse['gemini_script_hook'];
     }>;
 }
 
@@ -2344,6 +2325,15 @@ export async function markScriptCreateDone(
 ): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/mark-script-create-done',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
+}
+
+export async function markScriptPhoneticDone(
+    shortVideoId: number,
+): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/mark-script-phonetic-done',
         shortVideoBody(shortVideoId),
     ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
 }

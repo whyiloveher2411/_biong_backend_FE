@@ -499,6 +499,8 @@ export default function ShortVideoAgentVideoWorkspace({
                     onSaveBeatMapManual={state.handleManualBeatDivisionSave}
                     audioScript={state.audioScript}
                     onSaveScriptManual={state.handleManualScriptCreateSave}
+                    audioScriptTtsReading={state.audioScriptTtsReading}
+                    onSaveScriptPhonetic={state.handleManualScriptPhoneticSave}
                     customHtmlPreview={useCustomHtmlPreview}
                     previewSourceKey={activePreviewSource}
                     beatMap={state.beatMapReady ? state.beatMap : null}

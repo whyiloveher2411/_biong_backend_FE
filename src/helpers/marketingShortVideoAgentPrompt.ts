@@ -82,6 +82,8 @@ export type ShortVideoPromptFetchResponse = {
     prompt?: string;
     stage?: string;
     short_video_id?: number;
+    content?: string;
+    content_file_name?: string;
     message?: { content?: string } | string;
 };
 
@@ -117,6 +119,7 @@ export async function fetchShortVideoAgentPrompt(
 async function postShortVideoPrompt(
     suffix: string,
     shortVideoId: number,
+    extra: Record<string, unknown> = {},
 ): Promise<ShortVideoPromptFetchResponse> {
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath(suffix), {
@@ -131,6 +134,7 @@ async function postShortVideoPrompt(
             short_video_id: shortVideoId,
             id: shortVideoId,
             access_token: token,
+            ...extra,
         }),
     });
     return res.json() as Promise<ShortVideoPromptFetchResponse>;
@@ -144,8 +148,11 @@ export async function fetchImproveScriptPrompt(
 
 export async function fetchScriptPhoneticPrompt(
     shortVideoId: number,
+    contentMode: 'text' | 'file' = 'text',
 ): Promise<ShortVideoPromptFetchResponse> {
-    return postShortVideoPrompt('short-video/get-script-phonetic-prompt', shortVideoId);
+    return postShortVideoPrompt('short-video/get-script-phonetic-prompt', shortVideoId, {
+        content_mode: contentMode === 'file' ? 'file' : 'inline',
+    });
 }
 
 export function parseShortVideoPromptMessage(

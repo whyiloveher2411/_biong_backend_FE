@@ -85,6 +85,7 @@ import {
     cancelFullAutoPipeline,
     markBeatDivisionDone,
     markScriptCreateDone,
+    markScriptPhoneticDone,
     requestAgentHeadlessNewChat,
     requestAgentHeadlessNewSection,
     FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -1939,6 +1940,40 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setSavingScriptTtsReading(false);
         }
     };
+
+    const handleManualScriptPhoneticSave = React.useCallback(async (text: string): Promise<boolean> => {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) {
+            showMessage('Bản đọc TTS trống', 'warning');
+            return false;
+        }
+        const json = await saveAdminAudioScriptTtsReading(shortVideoId, trimmed);
+        if (!json?.success) {
+            showMessage(parseApiMessage(json?.message) || 'Không lưu được bản đọc TTS', 'error');
+            return false;
+        }
+        savedTtsReadingRef.current = trimmed;
+        setAudioScriptTtsReading(trimmed);
+        if (json?.audio_reset) {
+            setAudioFileUrl('');
+            setAudioDurationSec(null);
+            setNarrationSegments([]);
+            setTtsPending(false);
+            setTtsFailed(false);
+            setScriptApproved(false);
+        }
+        try {
+            const done = await markScriptPhoneticDone(shortVideoId);
+            if (done?.full_auto_pipeline) {
+                setFullAutoPipeline(done.full_auto_pipeline);
+            }
+        } catch {
+            // Không chặn lưu nếu mark step thất bại — bản đọc TTS đã lưu xong.
+        }
+        loadRow();
+        showMessage(parseApiMessage(json?.message) || 'Đã lưu bản đọc TTS', 'success');
+        return true;
+    }, [shortVideoId, showMessage, loadRow]);
 
     const handleOpenMediaSuggestGemini = async () => {
         if (!marketingPostId) {
@@ -4495,9 +4530,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (openingAllMissingBeatGemini || openingAllMissingBeatMetaAi || openingAllMissingBeatAiStudio || fillingAllMissingBeatGeminiHeadless) {
             return;
         }
+        // Mỗi lần click chỉ mở tối đa 10 beat thiếu ảnh để browser không bị ngốn RAM.
+        const batchIds = isWhiteboard ? missingBeatIds.slice(0, 10) : missingBeatIds;
 
         setOpeningAllMissingBeatGemini(true);
-        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
+        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...batchIds])));
         void (async () => {
             try {
                 const workspaceBeats: DuckAiWorkspaceBeat[] = isWhiteboard
@@ -4515,27 +4552,28 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             imageUrl: String(beatImage[id]?.image_url || '').trim(),
                             missingImage: !String(beatImage[id]?.image_url || '').trim(),
                         };
-                    }).filter((item) => item.beatId && item.imagePrompt)
+                    }).filter((item) => item.beatId && item.imagePrompt && batchIds.includes(item.beatId))
                     : [];
                 const result = isWhiteboard
                     ? await openImportHtmlBeatDuckAiForMissingBeats({
                         shortVideoId,
                         title,
                         beats: workspaceBeats,
-                        activeBeatId: missingBeatIds[0] || '',
+                        activeBeatId: batchIds[0] || '',
                         autoSubmit: true,
                     })
                     : await openImportHtmlBeatGeminiForMissingBeats({
                         shortVideoId,
-                        beatIds: missingBeatIds,
+                        beatIds: batchIds,
                         autoSubmit: true,
                     });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
                     : '';
+                const remaining = isWhiteboard ? Math.max(0, missingBeatIds.length - batchIds.length) : 0;
                 showMessage(
                     isWhiteboard
-                        ? `Đã mở ${result.opened} tab Duck.ai (mỗi beat 1 tab) — đã auto điền + submit; upload ảnh khi xong${failNote}`
+                        ? `Đã mở ${result.opened} tab Duck.ai (mỗi beat 1 tab) — còn ${remaining} beat thiếu ảnh${failNote}`
                         : `Đã mở ${result.opened} tab Gemini — kiểm tra từng tab, copy HTML rồi bấm Lưu HTML vào CMS${failNote}`,
                     result.failed.length ? 'warning' : 'success',
                 );
@@ -4543,7 +4581,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 showMessage(e instanceof Error ? e.message : String(e), 'error');
             } finally {
                 setOpeningAllMissingBeatGemini(false);
-                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !batchIds.includes(id)));
             }
         })();
     };
@@ -4575,9 +4613,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         ) {
             return;
         }
+        // Mỗi lần click chỉ mở tối đa 10 beat thiếu ảnh để browser không bị ngốn RAM.
+        const batchIds = missingBeatIds.slice(0, 10);
 
         setOpeningAllMissingBeatMetaAi(true);
-        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...missingBeatIds])));
+        setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...batchIds])));
         void (async () => {
             try {
                 const workspaceBeats: DuckAiWorkspaceBeat[] = beatMap.sections.map((section, index) => {
@@ -4594,27 +4634,28 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
                         missingImage: !String(beatImage[id]?.image_url || '').trim(),
                     };
-                }).filter((item) => item.beatId && item.imagePrompt);
+                }).filter((item) => item.beatId && item.imagePrompt && batchIds.includes(item.beatId));
                 const result = await openImportHtmlBeatMetaAiForMissingBeats({
                     shortVideoId,
                     title,
                     beats: workspaceBeats,
-                    activeBeatId: missingBeatIds[0] || '',
+                    activeBeatId: batchIds[0] || '',
                     autoSubmit: true,
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                 });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
                     : '';
+                const remaining = Math.max(0, missingBeatIds.length - batchIds.length);
                 showMessage(
-                    `Đã mở ${result.opened} tab Meta.ai (mỗi beat 1 tab) — download ảnh trên Meta.ai → tự lưu beat${failNote}`,
+                    `Đã mở ${result.opened} tab Meta.ai (mỗi beat 1 tab) — còn ${remaining} beat thiếu ảnh; download ảnh trên Meta.ai → tự lưu beat${failNote}`,
                     result.failed.length ? 'warning' : 'success',
                 );
             } catch (e) {
                 showMessage(e instanceof Error ? e.message : String(e), 'error');
             } finally {
                 setOpeningAllMissingBeatMetaAi(false);
-                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !missingBeatIds.includes(id)));
+                setOpeningBeatGeminiBeatIds((prev) => prev.filter((id) => !batchIds.includes(id)));
             }
         })();
     };
@@ -7116,6 +7157,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingScriptTtsReading,
         handleEnqueueScriptPhoneticHeadless,
         handleSaveScriptTtsReading,
+        handleManualScriptPhoneticSave,
         fullAutoPipeline,
         githubTopEnrich,
         topicResearch,

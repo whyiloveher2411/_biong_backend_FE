@@ -133,7 +133,7 @@ function buildDesiredDurationBlock(
 
     return [
         '## ⚠️ THỜI LƯỢNG MỤC TIÊU — ƯU TIÊN SỐ 1 (bắt buộc)',
-        'Admin đã khóa thời lượng voiceover. Mọi hướng dẫn 60–180s / 90–150s / “theo độ dày” / “viral ngắn” trong prompt này **VÔ HIỆU**.',
+        // 'Admin đã khóa thời lượng voiceover. Mọi hướng dẫn 60–180s / 90–150s / “theo độ dày” / “viral ngắn” trong prompt này **VÔ HIỆU**.',
         `Video có thời lượng tối thiểu: **${sec} giây** (~${minutes} phút).`,
         '',
         '### Chỉ số bắt buộc',

@@ -698,6 +698,59 @@ export function getBeatBoundaryMarkers(map: BeatMap | null): BeatBoundaryMarker[
     }));
 }
 
+/**
+ * Tự động so khớp thời gian beat với beat trước/sau (mirror backend
+ * marketing_short_video_agent_beat_map_align_timings):
+ * - Beat đầu tiên: startSec = 0.
+ * - Overlap (start < end beat trước) → đẩy start về đúng end beat trước.
+ * - Gap (start > end beat trước) → kéo end beat trước lên đúng start beat sau.
+ * - Beat cuối cùng: endSec = totalVideoSec (nếu có).
+ * - Chỉ khi có thay đổi: tính lại durationSec = endSec - startSec cho mọi beat.
+ */
+export function normalizeBeatMapTimings(map: BeatMap): BeatMap {
+    if (!map?.sections || map.sections.length === 0) {
+        return map;
+    }
+    const sections = [...map.sections].sort(
+        (a, b) => a.startSec - b.startSec || a.endSec - b.endSec,
+    );
+    const total = Number(map.totalVideoSec || 0);
+    let changed = false;
+
+    if (Math.abs(sections[0].startSec) > 0.001) {
+        sections[0].startSec = 0;
+        changed = true;
+    }
+
+    for (let i = 1; i < sections.length; i++) {
+        const prev = sections[i - 1];
+        const cur = sections[i];
+        if (cur.startSec < prev.endSec - 0.001) {
+            cur.startSec = prev.endSec;
+            changed = true;
+        } else if (cur.startSec > prev.endSec + 0.001) {
+            prev.endSec = cur.startSec;
+            changed = true;
+        }
+    }
+
+    if (total > 0) {
+        const last = sections[sections.length - 1];
+        if (Math.abs(last.endSec - total) > 0.001) {
+            last.endSec = total;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        for (const section of sections) {
+            section.durationSec = Math.round((section.endSec - section.startSec) * 100) / 100;
+        }
+    }
+
+    return { ...map, sections };
+}
+
 export function getBeatTimelineSegments(map: BeatMap | null): BeatTimelineSegment[] {
     if (!map?.sections?.length) {
         return [];

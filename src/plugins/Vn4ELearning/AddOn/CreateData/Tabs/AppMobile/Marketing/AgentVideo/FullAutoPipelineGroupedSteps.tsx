@@ -1,6 +1,8 @@
 import React from 'react';
 import { Box, Button, Chip, CircularProgress, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CreateIcon from '@mui/icons-material/Create';
 import ErrorIcon from '@mui/icons-material/Error';
 import {
     FULL_AUTO_PIPELINE_AI_STEPS,
@@ -22,7 +24,6 @@ import {
     pipelineAiBadgeSx,
     pipelineHeadlessBadgeSx,
     pipelineHeadlessLegendSx,
-    pipelineStepStatusColor,
 } from './agentVideoPipelineUi';
 import { PipelineRenderRunButton } from './PipelineRenderRunButton';
 import { PipelineHeadlessPrerequisitesHint } from './PipelineHeadlessPrerequisitesHint';
@@ -318,6 +319,57 @@ function resolveStepStatusLabel(
     return PIPELINE_STEP_STATUS_LABEL[status] || status;
 }
 
+/** Nút "Thủ công" — nổi bật vừa đủ, tách khỏi nút Run xanh. */
+function PipelineManualStepButton({
+    title,
+    disabled = false,
+    onClick,
+    children,
+}: {
+    title: string;
+    disabled?: boolean;
+    onClick: (event: React.MouseEvent) => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <Button
+            size="small"
+            variant="outlined"
+            color="inherit"
+            startIcon={<CreateIcon sx={{ fontSize: 11 }} />}
+            sx={(theme) => ({
+                minWidth: 0,
+                px: 0.75,
+                py: 0.15,
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: 'none',
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                color: theme.palette.primary.main,
+                borderColor: alpha(theme.palette.primary.main, 0.45),
+                bgcolor: alpha(theme.palette.primary.main, 0.06),
+                '& .MuiButton-startIcon': {
+                    mr: 0.4,
+                    ml: 0,
+                },
+                '&:hover': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.14),
+                    borderColor: theme.palette.primary.main,
+                },
+            })}
+            disabled={disabled}
+            title={title}
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick(e);
+            }}
+        >
+            {children}
+        </Button>
+    );
+}
+
 type PipelineGroupedCommonProps = {
     steps?: FullAutoPipelineSummary['steps'];
     headlessSteps?: FullAutoPipelineSummary['headless_steps'];
@@ -352,6 +404,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     /** Mở drawer tạo script thủ công (chỉ hiển thị trên bước script_create). */
     onManualScriptCreate?: () => void;
     manualScriptCreateDisabled?: boolean;
+    /** Mở drawer chuẩn hóa giọng đọc thủ công (chỉ hiển thị trên bước script_phonetic_normalize). */
+    onManualScriptPhonetic?: () => void;
+    manualScriptPhoneticDisabled?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -381,6 +436,8 @@ export function PipelineGroupedMenuItems({
     manualBeatDivisionDisabled = false,
     onManualScriptCreate,
     manualScriptCreateDisabled = false,
+    onManualScriptPhonetic,
+    manualScriptPhoneticDisabled = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -421,7 +478,7 @@ export function PipelineGroupedMenuItems({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && (rowToggleKey === 'script_hook_enhance' || rowToggleKey === 'script_phonetic_normalize'),
+            && (rowToggleKey === 'script_phonetic_normalize'),
         );
 
         return (
@@ -470,20 +527,24 @@ export function PipelineGroupedMenuItems({
                         flexShrink: 0,
                     }}
                 >
-                    <Typography
-                        component="span"
-                        variant="caption"
-                        sx={{
-                            color: enabled
-                                ? pipelineStepStatusColor(status, 'dark')
-                                : 'text.disabled',
-                            fontWeight: 600,
-                            textAlign: 'right',
-                            maxWidth: 100,
-                        }}
-                    >
-                        {statusLabel}
-                    </Typography>
+                    {isScriptImproveQaLoopStep(key) && loopView.isLoopActive ? (
+                        <Chip
+                            size="small"
+                            color="info"
+                            label={statusLabel}
+                            sx={{
+                                height: 18,
+                                maxWidth: '100%',
+                                '& .MuiChip-label': {
+                                    px: 0.55,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                },
+                            }}
+                        />
+                    ) : (
+                        <PipelineStepStatusChip status={status} compact />
+                    )}
                     {onRunSingleStep ? (
                         <PipelineRenderRunButton
                             size="compact"
@@ -498,58 +559,31 @@ export function PipelineGroupedMenuItems({
                         />
                     ) : null}
                     {key === 'beat_division' && onManualBeatDivision ? (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            color="inherit"
-                            sx={{
-                                minWidth: 0,
-                                px: 1,
-                                py: 0.15,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                lineHeight: 1.6,
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary',
-                                borderColor: 'divider',
-                            }}
-                            disabled={disabled || manualBeatDivisionDisabled}
+                        <PipelineManualStepButton
                             title={`Chia beat thủ công: copy prompt → dán AI trả về → phân tích → lưu (bỏ qua bước headless bị treo)`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onManualBeatDivision();
-                            }}
+                            disabled={disabled || manualBeatDivisionDisabled}
+                            onClick={() => onManualBeatDivision()}
                         >
                             Thủ công
-                        </Button>
+                        </PipelineManualStepButton>
                     ) : null}
                     {key === 'script_create' && onManualScriptCreate ? (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            color="inherit"
-                            sx={{
-                                minWidth: 0,
-                                px: 1,
-                                py: 0.15,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                lineHeight: 1.6,
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary',
-                                borderColor: 'divider',
-                            }}
-                            disabled={disabled || manualScriptCreateDisabled}
+                        <PipelineManualStepButton
                             title={`Tạo script thủ công: copy prompt → dán script AI trả về → lưu (bỏ qua bước headless bị treo)`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onManualScriptCreate();
-                            }}
+                            disabled={disabled || manualScriptCreateDisabled}
+                            onClick={() => onManualScriptCreate()}
                         >
                             Thủ công
-                        </Button>
+                        </PipelineManualStepButton>
+                    ) : null}
+                    {key === 'script_phonetic_normalize' && onManualScriptPhonetic ? (
+                        <PipelineManualStepButton
+                            title={`Chuẩn hóa giọng đọc thủ công: copy prompt → dán kết quả AI → lưu bản đọc TTS (bỏ qua bước headless bị treo)`}
+                            disabled={disabled || manualScriptPhoneticDisabled}
+                            onClick={() => onManualScriptPhonetic()}
+                        >
+                            Thủ công
+                        </PipelineManualStepButton>
                     ) : null}
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox
@@ -726,19 +760,24 @@ export function PipelineGroupedStepList({
                         fontSize: 'inherit',
                     }}
                 />
-                <Typography
-                    variant="caption"
-                    sx={{
-                        flexShrink: 0,
-                        fontWeight: 600,
-                        color: pipelineStepStatusColor(status, 'light'),
-                        fontSize: 10,
-                        textAlign: 'right',
-                        maxWidth: 130,
-                    }}
-                >
-                    {statusLabel}
-                </Typography>
+                {isScriptImproveQaLoopStep(key) && loopView.isLoopActive ? (
+                    <Chip
+                        size="small"
+                        color="info"
+                        label={statusLabel}
+                        sx={{
+                            height: 18,
+                            flexShrink: 0,
+                            '& .MuiChip-label': {
+                                px: 0.55,
+                                fontSize: 10,
+                                fontWeight: 700,
+                            },
+                        }}
+                    />
+                ) : (
+                    <PipelineStepStatusChip status={status} compact />
+                )}
             </Box>
         );
     };
@@ -816,6 +855,9 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     /** Mở drawer tạo script thủ công (chỉ hiển thị trên bước script_create). */
     onManualScriptCreate?: () => void;
     manualScriptCreateDisabled?: boolean;
+    /** Mở drawer chuẩn hóa giọng đọc thủ công (chỉ hiển thị trên bước script_phonetic_normalize). */
+    onManualScriptPhonetic?: () => void;
+    manualScriptPhoneticDisabled?: boolean;
 };
 
 /** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
@@ -846,6 +888,8 @@ export function PipelineGroupedWorkflowListV3({
     manualBeatDivisionDisabled = false,
     onManualScriptCreate,
     manualScriptCreateDisabled = false,
+    onManualScriptPhonetic,
+    manualScriptPhoneticDisabled = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -893,7 +937,7 @@ export function PipelineGroupedWorkflowListV3({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && (rowToggleKey === 'script_hook_enhance' || rowToggleKey === 'script_phonetic_normalize'),
+            && (rowToggleKey === 'script_phonetic_normalize'),
         );
 
         return (
@@ -974,58 +1018,31 @@ export function PipelineGroupedWorkflowListV3({
                         />
                     ) : null}
                     {key === 'beat_division' && onManualBeatDivision ? (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            color="inherit"
-                            sx={{
-                                minWidth: 0,
-                                px: 1,
-                                py: 0.15,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                lineHeight: 1.6,
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary',
-                                borderColor: 'divider',
-                            }}
-                            disabled={manualBeatDivisionDisabled}
+                        <PipelineManualStepButton
                             title={`Chia beat thủ công: copy prompt → dán AI trả về → phân tích → lưu (bỏ qua bước headless bị treo)`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onManualBeatDivision();
-                            }}
+                            disabled={manualBeatDivisionDisabled}
+                            onClick={() => onManualBeatDivision()}
                         >
                             Thủ công
-                        </Button>
+                        </PipelineManualStepButton>
                     ) : null}
                     {key === 'script_create' && onManualScriptCreate ? (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            color="inherit"
-                            sx={{
-                                minWidth: 0,
-                                px: 1,
-                                py: 0.15,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                lineHeight: 1.6,
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary',
-                                borderColor: 'divider',
-                            }}
-                            disabled={manualScriptCreateDisabled}
+                        <PipelineManualStepButton
                             title={`Tạo script thủ công: copy prompt → dán script AI trả về → lưu (bỏ qua bước headless bị treo)`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onManualScriptCreate();
-                            }}
+                            disabled={manualScriptCreateDisabled}
+                            onClick={() => onManualScriptCreate()}
                         >
                             Thủ công
-                        </Button>
+                        </PipelineManualStepButton>
+                    ) : null}
+                    {key === 'script_phonetic_normalize' && onManualScriptPhonetic ? (
+                        <PipelineManualStepButton
+                            title={`Chuẩn hóa giọng đọc thủ công: copy prompt → dán kết quả AI → lưu bản đọc TTS (bỏ qua bước headless bị treo)`}
+                            disabled={manualScriptPhoneticDisabled}
+                            onClick={() => onManualScriptPhonetic()}
+                        >
+                            Thủ công
+                        </PipelineManualStepButton>
                     ) : null}
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox

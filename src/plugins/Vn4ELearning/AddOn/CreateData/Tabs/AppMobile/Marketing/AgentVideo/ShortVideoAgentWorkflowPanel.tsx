@@ -50,6 +50,7 @@ import ShortVideoAgentAvatarDrawer, {
 } from './ShortVideoAgentAvatarDrawer';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
+import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import { AGENT_BEAT_FREQUENCY_OPTIONS, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -304,6 +305,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
 
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
+    const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
 
     React.useEffect(() => {
         if (!state.isWhiteboardMode) {
@@ -590,6 +592,13 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 shortVideoId={state.shortVideoId}
                                 initialScript={state.audioScript}
                                 onSave={state.handleManualScriptCreateSave}
+                            />
+                            <ShortVideoAgentScriptPhoneticManualDrawer
+                                open={scriptPhoneticManualOpen}
+                                onClose={() => setScriptPhoneticManualOpen(false)}
+                                shortVideoId={state.shortVideoId}
+                                initialReading={state.audioScriptTtsReading}
+                                onSave={state.handleManualScriptPhoneticSave}
                             />
                         </Box>
                         {state.audioScriptStyles.length > 0 ? (
@@ -1119,6 +1128,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             manualBeatDivisionDisabled={pipelineBusy}
                             onManualScriptCreate={() => setScriptManualOpen(true)}
                             manualScriptCreateDisabled={pipelineBusy}
+                            onManualScriptPhonetic={() => setScriptPhoneticManualOpen(true)}
+                            manualScriptPhoneticDisabled={pipelineBusy}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>

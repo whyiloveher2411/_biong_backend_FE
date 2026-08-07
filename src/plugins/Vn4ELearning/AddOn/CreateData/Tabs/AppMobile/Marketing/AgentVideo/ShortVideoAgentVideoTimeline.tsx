@@ -28,6 +28,7 @@ import {
 } from './FullAutoPipelineGroupedSteps';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
+import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import type {
     BeatImageFillMode,
     FullAutoPipelineStepKey,
@@ -65,6 +66,10 @@ async function fallbackManualBeatDivisionSave(): Promise<boolean> {
 }
 
 async function fallbackManualScriptSave(): Promise<boolean> {
+    return false;
+}
+
+async function fallbackManualScriptPhoneticSave(): Promise<boolean> {
     return false;
 }
 
@@ -174,6 +179,10 @@ type Props = {
     audioScript?: string;
     /** Lưu script thủ công → mark script_create done. */
     onSaveScriptManual?: (text: string) => Promise<boolean>;
+    /** Bản đọc TTS hiện tại — prefill drawer chuẩn hóa giọng đọc thủ công. */
+    audioScriptTtsReading?: string;
+    /** Lưu bản đọc TTS thủ công → mark script_phonetic_normalize done. */
+    onSaveScriptPhonetic?: (text: string) => Promise<boolean>;
     customHtmlPreview?: boolean;
     previewSourceKey?: string;
     beatMap?: BeatMap | null;
@@ -269,6 +278,8 @@ export default function ShortVideoAgentVideoTimeline({
     onSaveBeatMapManual,
     audioScript = '',
     onSaveScriptManual,
+    audioScriptTtsReading = '',
+    onSaveScriptPhonetic,
     customHtmlPreview = false,
     previewSourceKey = '',
     beatMap = null,
@@ -353,6 +364,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
 
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
+    const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -365,6 +377,9 @@ export default function ShortVideoAgentVideoTimeline({
     }, [currentTimeSec]);
 
     const effectiveMissingCount = isWhiteboardMode ? missingBeatImageCount : missingBeatHtmlCount;
+    // Mỗi lần click chỉ mở 10 beat thiếu ảnh — hiển thị batch + số còn lại.
+    const imageBatchSize = isWhiteboardMode ? Math.min(10, effectiveMissingCount) : 0;
+    const imageRemaining = Math.max(0, effectiveMissingCount - imageBatchSize);
 
     const beatsWithHtmlCount = React.useMemo(
         () => countBeatIdsWithHtml(beatHtml),
@@ -848,7 +863,7 @@ export default function ShortVideoAgentVideoTimeline({
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
                             <Tooltip
                                 title={isWhiteboardMode
-                                    ? 'Mở Duck.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Duck.ai → tự lưu beat.'
+                                    ? `Mở Duck.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Duck.ai → tự lưu beat.`
                                     : 'Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab'}
                                 placement="top"
                             >
@@ -864,7 +879,9 @@ export default function ShortVideoAgentVideoTimeline({
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >
                                         {isWhiteboardMode
-                                            ? `Mở Duck.ai tất cả beat thiếu ảnh (${effectiveMissingCount})`
+                                            ? (imageRemaining > 0
+                                                ? `Mở Duck.ai 10 beat (còn ${imageRemaining})`
+                                                : `Mở Duck.ai ${imageBatchSize} beat thiếu ảnh`)
                                             : `Mở Gemini tất cả beat thiếu (${effectiveMissingCount})`}
                                     </LoadingButton>
                                 </span>
@@ -872,7 +889,7 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                         {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
                             <Tooltip
-                                title="Mở Meta.ai cho từng beat thiếu ảnh. Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Meta.ai → tự lưu beat."
+                                title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Meta.ai → tự lưu beat.`}
                                 placement="top"
                             >
                                 <span>
@@ -886,7 +903,9 @@ export default function ShortVideoAgentVideoTimeline({
                                         startIcon={<AutoAwesomeIcon fontSize="small" />}
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >
-                                        {`Mở Meta.ai tất cả beat thiếu ảnh (${effectiveMissingCount})`}
+                                        {imageRemaining > 0
+                                            ? `Mở Meta.ai 10 beat (còn ${imageRemaining})`
+                                            : `Mở Meta.ai ${imageBatchSize} beat thiếu ảnh`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
@@ -1027,6 +1046,11 @@ export default function ShortVideoAgentVideoTimeline({
                                             setScriptManualOpen(true);
                                         }}
                                         manualScriptCreateDisabled={pipelineRunning || startingFullAuto}
+                                        onManualScriptPhonetic={() => {
+                                            setRestartMenuAnchor(null);
+                                            setScriptPhoneticManualOpen(true);
+                                        }}
+                                        manualScriptPhoneticDisabled={pipelineRunning || startingFullAuto}
                                     />
                                 </Menu>
                                 {pipelineRunning ? (
@@ -1279,6 +1303,13 @@ export default function ShortVideoAgentVideoTimeline({
                 shortVideoId={shortVideoId}
                 initialScript={audioScript}
                 onSave={onSaveScriptManual ?? fallbackManualScriptSave}
+            />
+            <ShortVideoAgentScriptPhoneticManualDrawer
+                open={scriptPhoneticManualOpen}
+                onClose={() => setScriptPhoneticManualOpen(false)}
+                shortVideoId={shortVideoId}
+                initialReading={audioScriptTtsReading}
+                onSave={onSaveScriptPhonetic ?? fallbackManualScriptPhoneticSave}
             />
         </Box>
     );

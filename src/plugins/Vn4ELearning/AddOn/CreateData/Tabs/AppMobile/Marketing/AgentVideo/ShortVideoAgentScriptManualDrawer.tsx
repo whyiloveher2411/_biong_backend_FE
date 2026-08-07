@@ -33,7 +33,7 @@ export default function ShortVideoAgentScriptManualDrawer({
     initialScript = '',
     onSave,
 }: Props) {
-    const [contentMode, setContentMode] = React.useState<'text' | 'file'>('text');
+    const [contentMode, setContentMode] = React.useState<'text' | 'file'>('file');
     const [prompt, setPrompt] = React.useState('');
     const [content, setContent] = React.useState('');
     const [contentFileName, setContentFileName] = React.useState('content.txt');

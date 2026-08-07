@@ -3,7 +3,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     Divider,
     Stack,
@@ -12,157 +11,65 @@ import {
     ToggleButtonGroup,
     Typography,
 } from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
-import ErrorIcon from '@mui/icons-material/Error';
 import SaveIcon from '@mui/icons-material/Save';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { fetchBeatDivisionPrompt } from './agentVideoApi';
-import {
-    normalizeBeatMapTimings,
-    parseBeatMapJson,
-    validateBeatMap,
-    type BeatMap,
-} from './agentVideoBeatMap';
+import { fetchScriptPhoneticPrompt } from 'helpers/marketingShortVideoAgentPrompt';
 
 type Props = {
     open: boolean;
     onClose: () => void;
     shortVideoId: number;
-    audioDurationSec?: number | null;
-    agentSourceFormat?: string;
-    isWhiteboard: boolean;
-    onSave: (map: BeatMap) => Promise<boolean>;
+    initialReading: string;
+    onSave: (text: string) => Promise<boolean>;
 };
 
-type BeatAnalysis = {
-    id: string;
-    valid: boolean;
-    errors: string[];
-};
-
-type AnalysisResult = {
-    valid: boolean;
-    beatCount: number;
-    totalVideoSec: number;
-    map: BeatMap | null;
-    globalErrors: string[];
-    beats: BeatAnalysis[];
-};
-
-function analyzeBeatResponse(
-    text: string,
-    audioDurationSec: number | null,
-    relaxDurationBounds: boolean,
-    isWhiteboard: boolean,
-): AnalysisResult {
-    const parsed = parseBeatMapJson(text, { requireImagePrompt: isWhiteboard });
-    if (!parsed.map) {
-        return {
-            valid: false,
-            beatCount: 0,
-            totalVideoSec: 0,
-            map: null,
-            globalErrors: parsed.errors,
-            beats: [],
-        };
-    }
-    // Tự so khớp thời gian beat với beat trước/sau trước khi validate — backend làm tương tự khi lưu.
-    const map = normalizeBeatMapTimings(parsed.map);
-    const globalErrors = [...parsed.errors];
-
-    const beats: BeatAnalysis[] = map.sections.map((section) => {
-        const errors: string[] = [];
-        if (!/^beat_\d+$/.test(section.id)) {
-            errors.push(`id phải dạng beat_N (hiện tại: ${section.id || '(trống)'})`);
-        }
-        if (section.endSec <= section.startSec) {
-            errors.push('startSec/endSec không hợp lệ (endSec phải > startSec)');
-        }
-        if (section.durationSec <= 0) {
-            errors.push('durationSec phải > 0');
-        }
-        if (!String(section.phrase_anchor || '').trim()) {
-            errors.push('Thiếu phrase_anchor');
-        }
-        if (!String(section.visual_description || '').trim()) {
-            errors.push('Thiếu visual_description');
-        }
-        if (!String(section.background || '').trim()) {
-            errors.push('Thiếu background');
-        }
-        if (isWhiteboard && !String(section.image_prompt || '').trim()) {
-            errors.push('Thiếu image_prompt (whiteboard)');
-        }
-        return { id: section.id, valid: errors.length === 0, errors };
-    });
-
-    const validation = audioDurationSec != null && audioDurationSec > 0
-        ? validateBeatMap(map, audioDurationSec, { relaxDurationBounds })
-        : { valid: true, errors: [] as string[] };
-    globalErrors.push(...validation.errors);
-
-    const valid = globalErrors.length === 0 && beats.every((beat) => beat.valid);
-
-    return {
-        valid,
-        beatCount: map.sections.length,
-        totalVideoSec: map.totalVideoSec,
-        map,
-        globalErrors,
-        beats,
-    };
-}
-
-export default function ShortVideoAgentBeatDivisionManualDrawer({
+export default function ShortVideoAgentScriptPhoneticManualDrawer({
     open,
     onClose,
     shortVideoId,
-    audioDurationSec,
-    agentSourceFormat = '',
-    isWhiteboard,
+    initialReading = '',
     onSave,
 }: Props) {
-    const [prompt, setPrompt] = React.useState('');
     const [contentMode, setContentMode] = React.useState<'text' | 'file'>('file');
+    const [prompt, setPrompt] = React.useState('');
     const [content, setContent] = React.useState('');
     const [contentFileName, setContentFileName] = React.useState('content.txt');
     const [loadingPrompt, setLoadingPrompt] = React.useState(false);
     const [promptError, setPromptError] = React.useState('');
     const [copied, setCopied] = React.useState(false);
-    const [aiResponse, setAiResponse] = React.useState('');
-    const [analyzing, setAnalyzing] = React.useState(false);
-    const [analysis, setAnalysis] = React.useState<AnalysisResult | null>(null);
+    const [reading, setReading] = React.useState('');
     const [saving, setSaving] = React.useState(false);
     const [saveError, setSaveError] = React.useState('');
-
-    const relaxDurationBounds = ['github_top', 'github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
-        String(agentSourceFormat || ''),
-    );
 
     React.useEffect(() => {
         if (!open) {
             return;
         }
         let cancelled = false;
+        setReading(String(initialReading || '').trim());
         setPrompt('');
         setContent('');
         setContentFileName('content.txt');
         setPromptError('');
         setCopied(false);
-        setAiResponse('');
-        setAnalysis(null);
         setSaveError('');
         setLoadingPrompt(true);
-        void fetchBeatDivisionPrompt(shortVideoId, contentMode)
+        void fetchScriptPhoneticPrompt(shortVideoId, contentMode)
             .then((res) => {
                 if (cancelled) {
                     return;
                 }
                 if (!res?.success) {
-                    setPromptError(String(res?.message || 'Không lấy được prompt chia beat'));
+                    setPromptError(
+                        String(
+                            typeof res?.message === 'object'
+                                ? res?.message?.content || 'Không lấy được prompt chuẩn hóa giọng đọc'
+                                : res?.message || 'Không lấy được prompt chuẩn hóa giọng đọc',
+                        ),
+                    );
                     return;
                 }
                 setPrompt(String(res.prompt || ''));
@@ -184,7 +91,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         return () => {
             cancelled = true;
         };
-    }, [open, shortVideoId, contentMode]);
+    }, [open, shortVideoId, initialReading, contentMode]);
 
     const handleCopyPrompt = async () => {
         if (!prompt) {
@@ -214,29 +121,15 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         URL.revokeObjectURL(url);
     };
 
-    const handleAnalyze = () => {
-        setAnalyzing(true);
-        setSaveError('');
-        window.setTimeout(() => {
-            const result = analyzeBeatResponse(
-                aiResponse,
-                audioDurationSec ?? null,
-                relaxDurationBounds,
-                isWhiteboard,
-            );
-            setAnalysis(result);
-            setAnalyzing(false);
-        }, 0);
-    };
-
     const handleSave = async () => {
-        if (!analysis?.map || !analysis.valid) {
+        const trimmed = reading.trim();
+        if (!trimmed) {
             return;
         }
         setSaving(true);
         setSaveError('');
         try {
-            const ok = await onSave(analysis.map);
+            const ok = await onSave(trimmed);
             if (ok) {
                 onClose();
             } else {
@@ -249,13 +142,11 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         }
     };
 
-    const canSave = Boolean(analysis?.valid && analysis?.map);
-
     return (
         <DrawerCustom
             open={open}
             onClose={onClose}
-            title="Chia beat thủ công"
+            title="Chuẩn hóa giọng đọc thủ công"
             width={760}
             restDialogContent={{
                 sx: {
@@ -292,12 +183,12 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                         {contentMode === 'text'
-                            ? 'Text: audio script + whisper word timing nằm ngay trong prompt — copy prompt là đủ.'
-                            : 'File content: prompt ngắn, không nhúng script/whisper — tải file và đính kèm khi hỏi chatbot để tránh hiểu nhầm.'}
+                            ? 'Text: audio script nằm ngay trong prompt — copy prompt là đủ.'
+                            : 'File content: prompt ngắn, không nhúng script — tải file và đính kèm khi hỏi chatbot để tránh hiểu nhầm.'}
                     </Typography>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Typography variant="subtitle1" fontWeight={700} flex={1}>
-                            Prompt chia beat
+                            Prompt chuẩn hóa giọng đọc
                         </Typography>
                         {loadingPrompt ? (
                             <CircularProgress size={18} />
@@ -357,7 +248,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
 
                 <Box>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                        Phản hồi từ AI
+                        Bản đọc TTS sau chuẩn hóa
                     </Typography>
                     <TextField
                         fullWidth
@@ -365,104 +256,35 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                         minRows={10}
                         maxRows={20}
                         size="small"
-                        placeholder="Dán toàn bộ JSON beat map AI trả về (schema_version 2) vào đây…"
-                        value={aiResponse}
+                        placeholder="Dán kết quả AI trả về vào đây (số đã được đổi thành cách đọc tiếng Việt)…"
+                        value={reading}
                         onChange={(e) => {
-                            setAiResponse(e.target.value);
-                            setAnalysis(null);
+                            setReading(e.target.value);
                             setSaveError('');
                         }}
                         inputProps={{ style: { fontSize: 12, fontFamily: 'monospace' } }}
                     />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                        Đây là bản đọc TTS riêng (chữ số → cách đọc tiếng Việt) — script gốc vẫn giữ nguyên.
+                        Lưu xong bước "Chuẩn hóa giọng đọc" được đánh dấu hoàn tất, job auto đang chờ sẽ bị hủy.
+                    </Typography>
                 </Box>
-
-                {analysis ? (
-                    <Box>
-                        <Alert
-                            severity={analysis.valid ? 'success' : 'error'}
-                            icon={analysis.valid ? <CheckCircleIcon fontSize="inherit" /> : <ErrorIcon fontSize="inherit" />}
-                            sx={{ mb: 1 }}
-                        >
-                            {analysis.valid
-                                ? `Hợp lệ: ${analysis.beatCount} beat, tổng ${Math.round(analysis.totalVideoSec)}s`
-                                : `Có lỗi: ${analysis.globalErrors.length} lỗi tổng thể, ${analysis.beats.filter((b) => !b.valid).length} beat lỗi`}
-                        </Alert>
-                        {analysis.globalErrors.length > 0 ? (
-                            <Box
-                                sx={{
-                                    maxHeight: 120,
-                                    overflow: 'auto',
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    borderRadius: 1,
-                                    p: 1,
-                                    mb: 1,
-                                }}
-                            >
-                                {analysis.globalErrors.map((err, idx) => (
-                                    <Typography key={`g-${idx}`} variant="caption" color="error" display="block" sx={{ lineHeight: 1.4 }}>
-                                        • {err}
-                                    </Typography>
-                                ))}
-                            </Box>
-                        ) : null}
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            {analysis.beats.map((beat) => (
-                                <Chip
-                                    key={beat.id}
-                                    size="small"
-                                    color={beat.valid ? 'success' : 'error'}
-                                    icon={beat.valid
-                                        ? <CheckCircleIcon />
-                                        : <ErrorIcon />}
-                                    label={beat.valid ? beat.id : `${beat.id} · ${beat.errors.length} lỗi`}
-                                    title={beat.errors.join('\n')}
-                                />
-                            ))}
-                        </Stack>
-                        {analysis.beats.some((b) => !b.valid) ? (
-                            <Box sx={{ mt: 1 }}>
-                                {analysis.beats.filter((b) => !b.valid).map((beat) => (
-                                    <Box key={beat.id} sx={{ mb: 0.5 }}>
-                                        <Typography variant="caption" color="error" fontWeight={700}>
-                                            {beat.id}:
-                                        </Typography>
-                                        {beat.errors.map((err, idx) => (
-                                            <Typography key={`${beat.id}-${idx}`} variant="caption" color="error" display="block" sx={{ pl: 1.5, lineHeight: 1.4 }}>
-                                                - {err}
-                                            </Typography>
-                                        ))}
-                                    </Box>
-                                ))}
-                            </Box>
-                        ) : null}
-                    </Box>
-                ) : null}
 
                 {saveError ? (
                     <Alert severity="error">{saveError}</Alert>
                 ) : null}
 
                 <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => { void handleAnalyze(); }}
-                        disabled={!aiResponse.trim() || analyzing}
-                        startIcon={analyzing ? <CircularProgress size={14} /> : undefined}
-                    >
-                        Phân tích
-                    </Button>
                     <LoadingButton
                         size="small"
                         variant="contained"
                         color="primary"
                         startIcon={<SaveIcon />}
                         loading={saving}
-                        disabled={!canSave}
+                        disabled={!reading.trim()}
                         onClick={() => { void handleSave(); }}
                     >
-                        Lưu
+                        Lưu bản đọc TTS
                     </LoadingButton>
                 </Stack>
             </Stack>
