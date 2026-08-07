@@ -1745,6 +1745,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 additionalInfo: savedAgentAdditionalInfo,
                 introduceApp: agentIntroduceApp,
                 sourceFormat: agentSourceFormat,
+                agentBeatFrequency,
+                isWhiteboard: isWhiteboardMode,
                 desiredScriptDurationSec,
             });
         } finally {

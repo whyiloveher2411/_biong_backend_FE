@@ -17,6 +17,10 @@ type OpenGeminiScriptInput = {
     introduceApp?: boolean;
     /** agent_source_format — nhánh topic_research. */
     sourceFormat?: string;
+    /** Tần suất beat đã chọn (fast/medium/slow/free). */
+    agentBeatFrequency?: string;
+    /** Whiteboard mode. */
+    isWhiteboard?: boolean;
     /** Thời lượng mong muốn (giây) khi admin đã nhập. */
     desiredScriptDurationSec?: number | null;
 };
@@ -84,6 +88,8 @@ export function useAgentVideoOpenGeminiScriptActions() {
             hasMarketingPost: marketingPostId > 0,
             introduceApp: Boolean(input.introduceApp),
             sourceFormat: String(input.sourceFormat || '').trim(),
+            agentBeatFrequency: input.agentBeatFrequency,
+            isWhiteboard: Boolean(input.isWhiteboard),
             desiredScriptDurationSec: input.desiredScriptDurationSec,
         });
         if (!improvePrompt) {

@@ -11,6 +11,10 @@ export type ImproveAudioScriptPromptInput = {
     introduceApp?: boolean;
     /** agent_source_format — nhánh topic_research = video học tập. */
     sourceFormat?: string;
+    /** Tần suất beat đã chọn (fast/medium/slow/free) — độ dài mỗi dòng theo range. */
+    agentBeatFrequency?: string;
+    /** Whiteboard mode — range dòng khác (5–15s). */
+    isWhiteboard?: boolean;
     /** Thời lượng mong muốn (giây) — ép word budget khi admin đã nhập. */
     desiredScriptDurationSec?: number | null;
     /** Lần thử cải thiện (1-based) — từ pipeline QA loop. */
@@ -89,7 +93,11 @@ function isTopicResearchFormat(sourceFormat?: string): boolean {
     return String(sourceFormat || '').trim() === 'topic_research';
 }
 
-function buildDesiredDurationBlock(desiredSec?: number | null): string {
+function buildDesiredDurationBlock(
+    desiredSec?: number | null,
+    beatFrequency?: string,
+    isWhiteboard = false,
+): string {
     const n = Number(desiredSec);
     if (!Number.isFinite(n) || n <= 0) {
         return '';
@@ -99,6 +107,30 @@ function buildDesiredDurationBlock(desiredSec?: number | null): string {
     const minutes = Math.round((sec / 60) * 10) / 10;
     const minutesMin = Math.max(1, Math.ceil(minutes));
     const minutesMax = Math.max(minutesMin, Math.ceil(minutes + 1.5));
+
+    const frequency = String(beatFrequency || '').trim().toLowerCase();
+    const freqKey = frequency === 'fast' || frequency === 'medium' || frequency === 'slow'
+        ? frequency
+        : 'free';
+    const beatRanges: Record<string, [number, number]> = {
+        fast: [1.5, 3.0],
+        medium: [3.0, 5.0],
+        slow: [5.0, 8.0],
+        free: isWhiteboard ? [5.0, 15.0] : [8.0, 30.0],
+    };
+    const [minSec, maxSec] = beatRanges[freqKey] ?? beatRanges.free;
+    const formatNum = (value: number): string => (
+        Math.floor(value) === value ? String(value) : value.toFixed(1)
+    );
+    const beatRangeLabel = `${formatNum(minSec)}–${formatNum(maxSec)}s`;
+    const wordRanges: Record<string, string> = {
+        fast: '4–8 từ',
+        medium: '8–13 từ',
+        slow: '13–20 từ',
+        free: isWhiteboard ? '13–38 từ' : '20–75 từ',
+    };
+    const wordRange = wordRanges[freqKey] ?? wordRanges.free;
+
     return [
         '## ⚠️ THỜI LƯỢNG MỤC TIÊU — ƯU TIÊN SỐ 1 (bắt buộc)',
         'Admin đã khóa thời lượng voiceover. Mọi hướng dẫn 60–180s / 90–150s / “theo độ dày” / “viral ngắn” trong prompt này **VÔ HIỆU**.',
@@ -108,7 +140,7 @@ function buildDesiredDurationBlock(desiredSec?: number | null): string {
         `- Thời lượng: **tối thiểu ${sec} giây** (~${minutes} phút)`,
         `- Mục tiêu độ dài: **khoảng ${minutesMin}–${minutesMax} phút voiceover tự nhiên**`,
         `- Word budget tham khảo: ~${wordTarget} từ tiếng Việt (≈2.5 từ/giây) — **không đếm từ**, chỉ để ước lượng`,
-        '- Mỗi đoạn trung bình 8–15 giây, **không giới hạn số đoạn** — chia theo ý, không cào thành đoạn quá nhỏ',
+        `- Mỗi dòng script = **1 beat** khi chia beat — độ dài mỗi dòng theo **tần suất beat đã chọn**: ~**${beatRangeLabel}** khi đọc (~${wordRange}); **không giới hạn số dòng**`,
         `- estimated_duration_sec / timeline HASCAS scale theo **${sec}s**`,
         '',
         '### Cách đạt độ dài',
@@ -222,7 +254,11 @@ export function buildImproveAudioScriptPrompt(
     const hasMarketingPost = Boolean(input.hasMarketingPost);
     const introduceApp = Boolean(input.introduceApp);
     const isTopicResearch = isTopicResearchFormat(input.sourceFormat);
-    const desiredDurationBlock = buildDesiredDurationBlock(input.desiredScriptDurationSec);
+    const desiredDurationBlock = buildDesiredDurationBlock(
+        input.desiredScriptDurationSec,
+        input.agentBeatFrequency,
+        Boolean(input.isWhiteboard),
+    );
     const rubricBlock = isTopicResearch
         ? SCRIPT_QA_RUBRIC_TOPIC_RESEARCH_BLOCK
         : SCRIPT_QA_RUBRIC_BLOCK;
@@ -242,7 +278,7 @@ export function buildImproveAudioScriptPrompt(
         ? ''
         : '- Nếu nội dung đủ dày: ưu tiên thời lượng **90–150 giây** thay vì rút gọn.\n';
     const expandIfShortHint = desiredDurationBlock
-        ? 'Nếu script hiện tại **ngắn hơn mục tiêu thời lượng** → **mở rộng** thêm đoạn cho đủ độ dài (không được chỉ paraphrase ngắn; **không đếm từ**).\n'
+        ? 'Nếu script hiện tại **ngắn hơn mục tiêu thời lượng** → **mở rộng** thêm dòng cho đủ độ dài (không được chỉ paraphrase ngắn; **không đếm từ**).\n'
         : '';
     const missionLead = desiredDurationBlock ? `${desiredDurationBlock}\n` : '';
 
@@ -288,7 +324,7 @@ export function buildImproveAudioScriptPrompt(
 
 ## Nhiệm vụ
 Viết lại (cải thiện) audio script bên dưới: **dễ hiểu hơn**, **hài hước nhẹ hơn**, nhịp kể chuyện học tập mượt hơn — **không** rút gọn để “viral hơn”.
-Giữ và **bổ sung** mọi ý đã có trong script hoặc trong content nguồn; nếu script thiếu so với nguồn → **thêm đoạn còn thiếu**.
+Giữ và **bổ sung** mọi ý đã có trong script hoặc trong content nguồn; nếu script thiếu so với nguồn → **thêm dòng còn thiếu**.
 ${expandIfShortHint}
 ${rubricBlock}
 
@@ -299,14 +335,14 @@ ${qaRetryBlock}## Cover & giọng (bắt buộc)
 - Nhiều số liệu liên tiếp → **nhóm thành insight dễ nhớ**, không đọc như báo cáo thống kê.
 - Thứ tự ưu tiên khi xung đột: 1) Độ chính xác nội dung, 2) Mạch nhân quả dễ hiểu, 3) Kể chuyện tự nhiên, 4) Thời lượng.
 ${durationLineEdu}
-## Chia đoạn cho phân cảnh (bắt buộc)
+## Chia dòng cho phân cảnh (bắt buộc)
 Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (Whisper + beat-map).
-- Chia thành **các đoạn rõ ràng** — mỗi đoạn cách nhau bằng **một dòng trống**.
-- Mỗi đoạn = **một ý học tập / một khoảnh khắc visual**.
-- Mỗi đoạn nên **1–3 câu ngắn**, dễ đọc TTS và dễ gán \`phrase_anchor\` khi chia beat.
-- **Cấm** viết thành khối văn dài liền một mạch — không gộp nhiều ý khác nhau vào cùng một đoạn.
+- Viết theo **dòng**: mỗi dòng không trống = **1 beat** — \`phrase_anchor\` sẽ lấy nguyên dòng.
+- Mỗi dòng = **một ý học tập / một khoảnh khắc visual**.
+- Mỗi dòng trọn ý, tự đứng được, dễ đọc TTS và dễ gán \`phrase_anchor\` khi chia beat; dòng trống chỉ phân tách nhóm, không tạo thêm beat.
+- **Cấm** viết thành khối văn dài liền một mạch — không gộp nhiều ý khác nhau vào cùng một dòng.
 - Cấu trúc học tập nếu phù hợp: mở tò mò nhẹ → giải thích lần lượt → tóm tắt nhớ được → CTA. **Không** ép HASCAS viral ngắn.
-- Tag \`[...]\` đặt ở đầu đoạn hoặc ngay trước câu liên quan — không tách tag khỏi đoạn mà nó thuộc về.`
+- Tag \`[...]\` đặt ở đầu dòng hoặc ngay trước câu liên quan — không tách tag khỏi dòng mà nó thuộc về.`
         : `${missionLead}Bạn là biên tập kịch bản voiceover short video tiếng Việt.
 
 ## Nhiệm vụ
@@ -317,16 +353,16 @@ ${rubricBlock}
 ${qaRetryBlock}## Làm giàu nội dung (bắt buộc)
 - **Không chỉ paraphrase** 2–3 ý tiêu đề — mở rộng narrative bằng ví dụ đời, tình huống, cảm xúc suy ra từ script gốc${!hasMarketingPost && sourceContent ? ' và nội dung nguồn' : ''}.
 - **Cấm bịa** số liệu, tính năng, case study không có trong script gốc${!hasMarketingPost && sourceContent ? ', nội dung nguồn' : ''}${additionalInfo ? ', thông tin thêm' : ''} hoặc tiêu đề bài.
-- Phần solve phải có **nhiều đoạn** (mỗi ý một đoạn); nếu script gốc quá ngắn, hãy khai thác sâu hơn các ý đã có thay vì thêm fact mới.
+- Phần solve phải có **nhiều dòng** (mỗi ý một dòng); nếu script gốc quá ngắn, hãy khai thác sâu hơn các ý đã có thay vì thêm fact mới.
 ${durationLineViral}
-## Chia đoạn cho phân cảnh (bắt buộc)
+## Chia dòng cho phân cảnh (bắt buộc)
 Script sau cải thiện phải dễ chia beat / phân cảnh visual sau này (Whisper + beat-map).
-- Chia thành **các đoạn rõ ràng** — mỗi đoạn cách nhau bằng **một dòng trống**.
-- Mỗi đoạn = **một ý / một khoảnh khắc visual** (hook, một twist, một số liệu, một bước giải pháp, CTA…).
-- Mỗi đoạn nên **1–3 câu ngắn**, dễ đọc TTS và dễ gán \`phrase_anchor\` khi chia beat.
-- **Cấm** viết thành khối văn dài liền một mạch — không gộp nhiều ý khác nhau vào cùng một đoạn.
-- Giữ nhịp HASCAS nếu script gốc có: đoạn hook ngắn → agitate → solve (có thể nhiều đoạn) → CTA.
-- Tag \`[...]\` đặt ở đầu đoạn hoặc ngay trước câu liên quan — không tách tag khỏi đoạn mà nó thuộc về.`;
+- Viết theo **dòng**: mỗi dòng không trống = **1 beat** — \`phrase_anchor\` sẽ lấy nguyên dòng.
+- Mỗi dòng = **một ý / một khoảnh khắc visual** (hook, một twist, một số liệu, một bước giải pháp, CTA…).
+- Mỗi dòng trọn ý, tự đứng được, dễ đọc TTS và dễ gán \`phrase_anchor\` khi chia beat; dòng trống chỉ phân tách nhóm, không tạo thêm beat.
+- **Cấm** viết thành khối văn dài liền một mạch — không gộp nhiều ý khác nhau vào cùng một dòng.
+- Giữ nhịp HASCAS nếu script gốc có: dòng hook ngắn → agitate → solve (có thể nhiều dòng) → CTA.
+- Tag \`[...]\` đặt ở đầu dòng hoặc ngay trước câu liên quan — không tách tag khỏi dòng mà nó thuộc về.`;
 
     return `${missionBlock}
 
@@ -346,7 +382,7 @@ ${script}
 \`\`\`
 
 ## Output
-Chỉ trả về script đã viết lại dạng văn bản (marker sản xuất \`[SFX]\`/\`[BGM]\`/\`[Dừng]\` được phép), **có dòng trống giữa các đoạn**, ${outputCtaHint}, không giải thích thêm.${desiredDurationBlock
+Chỉ trả về script đã viết lại dạng văn bản (marker sản xuất \`[SFX]\`/\`[BGM]\`/\`[Dừng]\` được phép), **mỗi dòng = 1 beat, có dòng trống giữa các nhóm**, ${outputCtaHint}, không giải thích thêm.${desiredDurationBlock
         ? '\n\n## Nhắc lại thời lượng (trước khi trả)\n- Tự kiểm tra: cover đủ ý chính + mạch nhân quả; ước lượng độ dài đạt mục tiêu phút. **Không đếm từ** — còn ngắn thì viết tiếp, quá dài thì rút ý phụ.'
         : ''}`;
 }

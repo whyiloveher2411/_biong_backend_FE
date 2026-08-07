@@ -263,6 +263,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 additionalInfo: state.savedAgentAdditionalInfo,
                 introduceApp: state.agentIntroduceApp,
                 sourceFormat: state.agentSourceFormat,
+                agentBeatFrequency: state.agentBeatFrequency,
+                isWhiteboard: state.isWhiteboardMode,
                 desiredScriptDurationSec: state.desiredScriptDurationSec,
             });
         } finally {

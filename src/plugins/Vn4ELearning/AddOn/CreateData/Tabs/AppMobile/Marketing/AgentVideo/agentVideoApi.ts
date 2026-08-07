@@ -1830,14 +1830,24 @@ export async function fetchBeatDivisionPrompt(
 
 export async function fetchScriptCreatePrompt(
     shortVideoId: number,
-): Promise<JsonResponse & { prompt?: string }> {
+    contentMode: 'text' | 'file' = 'text',
+): Promise<JsonResponse & {
+    prompt?: string;
+    content?: string;
+    content_file_name?: string;
+}> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-prompt',
         shortVideoBody(shortVideoId, {
             phase: '1',
             variant: 'chatbot',
+            content_mode: contentMode === 'file' ? 'file' : 'inline',
         }),
-    ) as Promise<JsonResponse & { prompt?: string }>;
+    ) as Promise<JsonResponse & {
+        prompt?: string;
+        content?: string;
+        content_file_name?: string;
+    }>;
 }
 
 export async function enqueueGeminiWebAudioScript(
