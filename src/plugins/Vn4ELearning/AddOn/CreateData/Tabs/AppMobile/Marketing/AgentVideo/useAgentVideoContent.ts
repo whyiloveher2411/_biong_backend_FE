@@ -83,6 +83,7 @@ import {
     startFullAutoPipeline,
     cancelFullAutoPipeline,
     markBeatDivisionDone,
+    markScriptCreateDone,
     requestAgentHeadlessNewChat,
     requestAgentHeadlessNewSection,
     FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -2906,6 +2907,54 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return saved;
     }, [applyBeatMapDraft, persistImportHtml, shortVideoId]);
+
+    const handleManualScriptCreateSave = React.useCallback(async (text: string): Promise<boolean> => {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) {
+            showMessage('Script trống', 'warning');
+            return false;
+        }
+        const json = await saveAdminAudioScript(shortVideoId, trimmed);
+        if (!json?.success) {
+            showMessage(parseApiMessage(json?.message) || 'Không lưu được script', 'error');
+            return false;
+        }
+        setScriptApproved(Boolean(json?.audio_script_approved) === true);
+        savedScriptRef.current = trimmed;
+        setAudioScript(trimmed);
+        clearAgentVideoScriptDraft(shortVideoId);
+        if (json?.audio_reset) {
+            setAudioFileUrl('');
+            setAudioDurationSec(null);
+            setNarrationSegments([]);
+            setTtsPending(false);
+            setTtsFailed(false);
+        }
+        try {
+            const res = await markScriptCreateDone(shortVideoId);
+            if (res?.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+        } catch {
+            // Không chặn lưu nếu mark step thất bại — script đã lưu xong.
+        }
+        loadRow();
+        showMessage(parseApiMessage(json?.message) || 'Đã lưu script', 'success');
+        return true;
+    }, [
+        clearAgentVideoScriptDraft,
+        loadRow,
+        setAudioDurationSec,
+        setAudioFileUrl,
+        setAudioScript,
+        setFullAutoPipeline,
+        setNarrationSegments,
+        setScriptApproved,
+        setTtsFailed,
+        setTtsPending,
+        shortVideoId,
+        showMessage,
+    ]);
 
     const handleBeatVisualDescriptionChange = React.useCallback(async (
         beatId: string,
@@ -7315,6 +7364,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRenderModeChange,
         handleBeatMapJsonChange,
         handleManualBeatDivisionSave,
+        handleManualScriptCreateSave,
         handleBeatVisualDescriptionChange,
         handleSaveBeatQa,
         handleQuickIterateBeatFromQa,

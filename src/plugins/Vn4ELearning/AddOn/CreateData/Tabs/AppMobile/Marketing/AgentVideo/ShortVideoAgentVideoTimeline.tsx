@@ -27,6 +27,7 @@ import {
     resolveRestartableSet,
 } from './FullAutoPipelineGroupedSteps';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
+import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import type {
     BeatImageFillMode,
     FullAutoPipelineStepKey,
@@ -60,6 +61,10 @@ const CURSOR_HEAD_OVERFLOW = 10;
 const HORIZONTAL_SCROLLBAR_HEIGHT = 12;
 
 async function fallbackManualBeatDivisionSave(): Promise<boolean> {
+    return false;
+}
+
+async function fallbackManualScriptSave(): Promise<boolean> {
     return false;
 }
 
@@ -165,6 +170,10 @@ type Props = {
     shortVideoId?: number;
     agentSourceFormat?: string;
     onSaveBeatMapManual?: (map: BeatMap) => Promise<boolean>;
+    /** Audio script hiện tại — prefill drawer tạo script thủ công. */
+    audioScript?: string;
+    /** Lưu script thủ công → mark script_create done. */
+    onSaveScriptManual?: (text: string) => Promise<boolean>;
     customHtmlPreview?: boolean;
     previewSourceKey?: string;
     beatMap?: BeatMap | null;
@@ -258,6 +267,8 @@ export default function ShortVideoAgentVideoTimeline({
     shortVideoId = 0,
     agentSourceFormat = '',
     onSaveBeatMapManual,
+    audioScript = '',
+    onSaveScriptManual,
     customHtmlPreview = false,
     previewSourceKey = '',
     beatMap = null,
@@ -340,6 +351,8 @@ export default function ShortVideoAgentVideoTimeline({
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
+
+    const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -1009,6 +1022,11 @@ export default function ShortVideoAgentVideoTimeline({
                                             setBeatDivisionManualOpen(true);
                                         }}
                                         manualBeatDivisionDisabled={pipelineRunning || startingFullAuto}
+                                        onManualScriptCreate={() => {
+                                            setRestartMenuAnchor(null);
+                                            setScriptManualOpen(true);
+                                        }}
+                                        manualScriptCreateDisabled={pipelineRunning || startingFullAuto}
                                     />
                                 </Menu>
                                 {pipelineRunning ? (
@@ -1254,6 +1272,13 @@ export default function ShortVideoAgentVideoTimeline({
                 agentSourceFormat={agentSourceFormat}
                 isWhiteboard={isWhiteboardMode}
                 onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSave}
+            />
+            <ShortVideoAgentScriptManualDrawer
+                open={scriptManualOpen}
+                onClose={() => setScriptManualOpen(false)}
+                shortVideoId={shortVideoId}
+                initialScript={audioScript}
+                onSave={onSaveScriptManual ?? fallbackManualScriptSave}
             />
         </Box>
     );

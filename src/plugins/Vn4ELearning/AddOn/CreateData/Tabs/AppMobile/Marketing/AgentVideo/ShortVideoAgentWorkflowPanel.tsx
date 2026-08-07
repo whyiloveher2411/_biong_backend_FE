@@ -49,6 +49,7 @@ import ShortVideoAgentAvatarDrawer, {
     AVATAR_PIP_ANCHORS,
 } from './ShortVideoAgentAvatarDrawer';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
+import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import { AGENT_BEAT_FREQUENCY_OPTIONS, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -300,6 +301,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
 
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
 
+    const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
+
     React.useEffect(() => {
         if (!state.isWhiteboardMode) {
             return undefined;
@@ -547,6 +550,13 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 agentSourceFormat={state.agentSourceFormat}
                                 isWhiteboard={state.isWhiteboardMode}
                                 onSave={state.handleManualBeatDivisionSave}
+                            />
+                            <ShortVideoAgentScriptManualDrawer
+                                open={scriptManualOpen}
+                                onClose={() => setScriptManualOpen(false)}
+                                shortVideoId={state.shortVideoId}
+                                initialScript={state.audioScript}
+                                onSave={state.handleManualScriptCreateSave}
                             />
                         </Box>
                         {state.audioScriptStyles.length > 0 ? (
@@ -884,7 +894,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Collage Art</Box> — giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.
                                         </Typography>
                                         <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
-                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Vox</Box> — phòng điều tra/tài liệu giải thích: cutout làm vật chứng, nét marker đen/đỏ nối vật thể, mũi tên, dấu chấm hỏi, khoanh tròn nhấn dữ liệu, lưới tọa độ/biểu đồ ẩn nền.
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Vox</Box> — bảng tài liệu giải thích (documentary explainer): cutout minh họa chủ đề, nét marker đen/đỏ nối vật thể, mũi tên, dấu chấm hỏi, khoanh tròn nhấn dữ liệu, lưới tọa độ/biểu đồ ẩn nền.
                                         </Typography>
                                         <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
                                             <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Courtroom Sketch</Box> — phác thảo tòa án vẽ tay: bút chì màu/phấn màu/nước trên giấy vân nhám, nét nhanh thô, màu trầm.
@@ -1074,6 +1084,8 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             rerunRenderUploadDisabled={pipelineBusy}
                             onManualBeatDivision={() => setBeatDivisionManualOpen(true)}
                             manualBeatDivisionDisabled={pipelineBusy}
+                            onManualScriptCreate={() => setScriptManualOpen(true)}
+                            manualScriptCreateDisabled={pipelineBusy}
                         />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>

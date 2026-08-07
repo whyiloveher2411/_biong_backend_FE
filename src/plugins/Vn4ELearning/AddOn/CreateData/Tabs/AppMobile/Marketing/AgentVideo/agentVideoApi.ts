@@ -1815,6 +1815,18 @@ export async function fetchBeatDivisionPrompt(
     ) as Promise<JsonResponse & { prompt?: string }>;
 }
 
+export async function fetchScriptCreatePrompt(
+    shortVideoId: number,
+): Promise<JsonResponse & { prompt?: string }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-prompt',
+        shortVideoBody(shortVideoId, {
+            phase: '1',
+            variant: 'chatbot',
+        }),
+    ) as Promise<JsonResponse & { prompt?: string }>;
+}
+
 export async function enqueueGeminiWebAudioScript(
     shortVideoId: number,
     mode: 'create' | 'improve',
@@ -2300,6 +2312,15 @@ export async function markBeatDivisionDone(
 ): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/mark-beat-division-done',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
+}
+
+export async function markScriptCreateDone(
+    shortVideoId: number,
+): Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/mark-script-create-done',
         shortVideoBody(shortVideoId),
     ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
 }

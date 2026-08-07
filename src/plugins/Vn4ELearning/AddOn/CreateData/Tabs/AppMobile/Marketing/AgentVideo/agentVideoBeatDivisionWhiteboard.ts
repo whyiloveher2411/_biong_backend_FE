@@ -7,10 +7,10 @@ export const WHITEBOARD_COLLAGE_STYLE_SUFFIX =
     'analog paper collage art on warm cream textured paper background, 1 focal magazine-cutout subject with torn deckled paper edges, layered overlapping photo fragments, halftone dots, washi tape strips, thick black marker annotations arrows scribbles underlines, bold vintage magazine headline typography, selective bright red accents on 1-2 keywords, muted retro palette, paper grain, strong hierarchy, compact editorial composition, no watermark';
 
 export const WHITEBOARD_VOX_STYLE_SUFFIX =
-    'vox-style investigation explainer, photorealistic cutout subjects as evidence pinned on a clean light background, thick black and bright red marker strokes connecting objects, directional arrows, question marks, circled emphasis marks highlighting key data, faint coordinate grid and subtle maps or bar-line charts in the background, bold Vietnamese hand-lettered callouts, muted documentary palette, compact editorial composition, no watermark';
+    'vox-style documentary explainer board, photorealistic cutout subjects illustrating the topic pinned on a clean light background, thick black and bright red marker strokes connecting objects, directional arrows, question marks, circled emphasis marks highlighting key data, faint coordinate grid and subtle bar-line charts in the background, bold Vietnamese hand-lettered callouts, muted documentary palette, compact editorial composition, no watermark';
 
 export const WHITEBOARD_COURTROOM_STYLE_SUFFIX =
-    'courtroom sketch style, hand-drawn reportage illustration in colored pencil soft pastel light watercolor on textured rough paper, quick loose dramatic strokes, muted low-saturation colors, gritty authentic trial atmosphere energy, focal subject caught mid-expression, visible paper grain and sketchy hatching, candid news framing, no watermark';
+    'sketch style, hand-drawn reportage illustration in colored pencil soft pastel light watercolor on textured rough paper, quick loose dramatic strokes, muted low-saturation colors, gritty authentic atmosphere energy, focal subject caught mid-expression, visible paper grain and sketchy hatching, candid news framing, no watermark';
 
 /** 9 key bắt buộc của image_prompt JSON — đồng bộ validation agentVideoBeatMap + PHP import-html-helper. */
 export const WHITEBOARD_IMAGE_PROMPT_JSON_KEYS = [
@@ -54,24 +54,24 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
         must_avoid: 'watermark, logo, neon glow UI, clean digital white-edge cutout, dense text',
     },
     vox: {
-        purpose: 'Evidence-board explainer: cutout subject is the evidence illustrating the 3-ingredient rule.',
+        purpose: "Documentary explainer board: cutout subject illustrates the beat's main idea clearly.",
         context: 'A tired young adult lies in bed at dawn beside a loud alarm clock; narration lists three task groups to handle.',
-        subject: 'Photorealistic cutout of a tired young adult and a black alarm clock pinned as evidence',
-        action: 'Cutout figures pinned on the board, connected by thick marker strokes',
-        scene: 'Clean light investigation-room background with faint coordinate grid and subtle bar-chart traces',
+        subject: 'Photorealistic cutout of a tired young adult and a black alarm clock pinned on the explainer board',
+        action: 'Cutout figures placed on the board, connected by thick marker strokes',
+        scene: 'Clean light documentary explainer board background with faint coordinate grid and subtle bar-chart traces',
         text_overlay:
             "Callouts '3 NGUYÊN LIỆU', 'những điều bạn muốn làm', 'những điều bạn cần làm', 'xử lý việc không muốn & không cần'",
-        mood: 'Documentary investigation, muted palette, mildly tense',
+        mood: 'Muted documentary palette, calm informative',
         composition:
             'Thick black and bright red marker strokes connecting objects, arrows, question marks, circled emphasis, compact editorial',
-        must_avoid: 'watermark, logo, neon glow UI, flat colorful vector fills, full-bleed photorealistic scene without cutouts',
+        must_avoid: 'watermark, logo, neon glow UI, flat colorful vector fills, full-bleed photorealistic scene without cutouts, crime/courtroom/investigation imagery',
     },
     courtroom_sketch: {
-        purpose: "Courtroom-reportage style illustration capturing the dramatic moment behind the beat's main idea.",
+        purpose: "Reportage-style illustration capturing the dramatic moment behind the beat's main idea.",
         context: 'A tired young adult caught in a tense early-morning moment; narration explains the 3-ingredient rule for handling tasks.',
         subject: 'Tired young adult caught mid-expression beside a black alarm clock and floating task papers',
         action: 'Dramatic pose, quick loose strokes, candid newsroom framing',
-        scene: 'Courtroom-sketch style, colored pencil / soft pastel / light watercolor on textured rough paper',
+        scene: 'Sketch style, colored pencil / soft pastel / light watercolor on textured rough paper',
         text_overlay: "Short hand-written label '3 NGUYÊN LIỆU' and brief notes",
         mood: 'Gritty authentic, muted low-saturation, mysterious reportage',
         composition: 'Focal subject central or off-center dramatic, visible paper grain and sketchy hatching',
@@ -177,27 +177,27 @@ const STYLE_SPEC: Record<WhiteboardGenStyle, { header: string; intro: string; ru
         banned: '- **Cấm** flat colorful cartoon fills, neon glow UI, cluttered rainbow icons, photoreal full-bleed backgrounds, clean digital white-edge cutout (hero phải là giấy cắt tay).',
     },
     vox: {
-        header: 'Vox-style phòng điều tra / tài liệu giải thích (bắt buộc)',
-        intro: '- Clip đang ở chế độ **whiteboard**: mỗi beat dùng **ảnh phong cách Vox-style** — cutout photo đóng vai **vật chứng** minh họa; nét marker đen/đỏ nối các vật thể, mũi tên, dấu chấm hỏi, vùng khoanh tròn giải thích câu chuyện — không phải HTML motion.',
-        rule: '- `image_prompt` (**JSON**): scene/subject mô tả **cutout subjects như vật chứng (evidence)** + marker strokes (đen hoặc đỏ tươi) nối các vật thể + arrows / question marks / circled emphasis marks + faint grid / map / chart nền (style vox).',
+        header: 'Vox-style explainer / tài liệu giải thích (documentary, bắt buộc)',
+        intro: '- Clip đang ở chế độ **whiteboard**: mỗi beat dùng **ảnh phong cách Vox-style** — cutout photo đóng vai **minh họa chủ đề** trên bảng giải thích; nét marker đen/đỏ nối các vật thể, mũi tên, dấu chấm hỏi, vùng khoanh tròn giải thích câu chuyện — không phải HTML motion.',
+        rule: '- `image_prompt` (**JSON**): scene/subject mô tả **cutout subjects minh họa nội dung beat** + marker strokes (đen hoặc đỏ tươi) nối các vật thể + arrows / question marks / circled emphasis marks + faint grid / map / chart nền (style vox).',
         spec: [
-            '  - Hero = 1–3 photorealistic cutout subject (person/object) đóng vai **vật chứng** (evidence) — đặt rải trên nền sáng sạch, không full-bleed scene.',
+            '  - Hero = 1–3 photorealistic cutout subject (person/object) minh họa nội dung beat — đặt rải trên nền sáng sạch, không full-bleed scene.',
             '  - Annotations = nét marker **đen hoặc đỏ tươi** nối các vật thể với nhau: mũi tên chỉ hướng, dấu chấm hỏi `?`, vùng khoanh tròn/underline nhấn mạnh dữ liệu — dày, expressive, không outline mảnh.',
-            '  - Nền = lưới tọa độ (coordinate grid) mờ, bản đồ địa chính trị hoặc biểu đồ cột/đường in nhạt phía sau (subtle, không cướp tiêu điểm).',
+            '  - Nền = lưới tọa độ (coordinate grid) mờ hoặc biểu đồ cột/đường in nhạt phía sau (subtle, không cướp tiêu điểm); nền là bảng giải thích sạch — **không** bối cảnh cảnh sát/tòa án/phòng điều tra.',
             '  - Typography = bold hand-lettered Vietnamese callouts + short labels; **1–2 từ duy nhất màu đỏ tươi**; còn lại đen.',
-            '  - Composition = bố cục kiểu phòng điều tra phá án / trang tài liệu giải thích chuyên sâu — hierarchy mạnh, mật độ gọn, editorial thumbnail energy.',
+            '  - Composition = bố cục kiểu trang tài liệu giải thích chuyên sâu (documentary explainer board) — hierarchy mạnh, mật độ gọn, editorial thumbnail energy.',
         ],
-        banned: '- **Cấm** flat colorful vector fills, neon glow UI, cluttered rainbow icons, watermark, logo, blurry, full-bleed photorealistic scene without cutouts, thin outline-only diagram, cartoon.',
+        banned: '- **Cấm** flat colorful vector fills, neon glow UI, cluttered rainbow icons, watermark, logo, blurry, full-bleed photorealistic scene without cutouts, thin outline-only diagram, cartoon, cảnh điều tra/phá án/tòa án/cảnh sát (không liên quan chủ đề).',
     },
     courtroom_sketch: {
-        header: 'Phác thảo tòa án (Courtroom sketch, bắt buộc)',
-        intro: '- Clip đang ở chế độ **whiteboard**: mỗi beat dùng **ảnh phác thảo tòa án vẽ tay** — bút chì màu / phấn màu pastel / màu nước nhạt trên giấy vân nhám, nét vẽ nhanh thô mộc, màu trầm, tập trung bắt trọn khoảnh khắc kịch tính — không phải HTML motion.',
-        rule: '- `image_prompt` (**JSON**): scene/subject mô tả **hand-drawn courtroom sketch reportage** + colored pencil / soft pastel / light watercolor trên giấy vân nhám + nét vẽ nhanh loose + màu trầm muted + khoảnh khắc/biểu cảm kịch tính của nhân vật chính (style courtroom_sketch).',
+        header: 'Ký họa vẽ tay (Courtroom sketch style — kỹ thuật vẽ, bắt buộc)',
+        intro: '- Clip đang ở chế độ **whiteboard**: mỗi beat dùng **ảnh ký họa vẽ tay** — bút chì màu / phấn màu pastel / màu nước nhạt trên giấy vân nhám, nét vẽ nhanh thô mộc, màu trầm, tập trung bắt trọn khoảnh khắc kịch tính — không phải HTML motion.',
+        rule: '- `image_prompt` (**JSON**): scene/subject mô tả **hand-drawn reportage sketch** + colored pencil / soft pastel / light watercolor trên giấy vân nhám + nét vẽ nhanh loose + màu trầm muted + khoảnh khắc/biểu cảm kịch tính của nhân vật chính + bold Vietnamese label ngắn (style courtroom_sketch).',
         spec: [
             '  - Chất liệu = bút chì màu / phấn màu pastel / màu nước nhạt trên giấy có vân nhám (paper tooth) — không vector phẳng, không render kỹ thuật số sạch.',
             '  - Nét vẽ = nhanh, thô mộc, loose — bắt trọn khoảnh khắc và biểu cảm của nhân vật chính, không trau chuốt, mang tính phóng sự.',
             '  - Màu = trầm, bão hòa thấp (muted) — **cấm** màu neon, bảng màu rực rỡ.',
-            '  - Bối cảnh = phòng xử án / sự kiện phóng sự điều tra — khung hình candid kiểu ký họa tòa án (courtroom reportage), chính trị gia / nhân vật lịch sử / phiên tòa.',
+            '  - Bối cảnh = khung hình candid kiểu ký họa báo chí (reportage) — bối cảnh lấy theo **chủ đề của beat** (vd. giấc ngủ, đồng hồ báo thức, tờ nhiệm vụ).',
             '  - Typography = label tiếng Việt ngắn viết tay; 1–2 từ đậm nếu cần nhấn; giữ phong cách vẽ tay, không font máy.',
             '  - Composition = hierarchy rõ, focal character trung tâm hoặc lệch tâm kịch tính, mật độ phóng sự, không layout trang trí cầu kỳ.',
         ],
@@ -266,8 +266,8 @@ export function buildBeatDivisionWhiteboardOutputRules(genStyle: string = 'hybri
     const outputRule: Record<WhiteboardGenStyle, string> = {
         hybrid: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo hybrid whiteboard collage (photorealistic cutout hero + thick marker annotations, selective red accents); tổng ≤ ~400 từ; no watermark.',
         collage_art: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo collage art (magazine-cutout hero torn/deckled on cream paper, layered fragments); tổng ≤ ~400 từ; no watermark.',
-        vox: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo vox-style (cutout evidence + black/red marker strokes + arrows/question marks/circled emphasis + faint grid/map/chart); tổng ≤ ~400 từ; no watermark.',
-        courtroom_sketch: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo courtroom sketch (colored pencil/pastel/watercolor on rough paper, loose strokes, muted colors, dramatic moment); tổng ≤ ~400 từ; no watermark.',
+        vox: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo vox-style (cutout subject minh họa nội dung beat + black/red marker strokes + arrows/question marks/circled emphasis + faint grid/chart, nền bảng giải thích sạch, **cấm** cảnh điều tra/tòa án); tổng ≤ ~400 từ; no watermark.',
+        courtroom_sketch: '- `image_prompt`: **JSON object đủ 9 key** theo **Whiteboard mode — image_prompt** above; `context`/`purpose` lấy từ beat này\'s `phrase_anchor`; scene/subject theo courtroom sketch (**colored pencil/pastel/watercolor on rough paper** + loose strokes + muted colors + dramatic moment); **specific** Vietnamese label quotes từ `phrase_anchor` (no generic "Nguyên liệu 1/2/3"); tổng ≤ ~400 từ; no watermark.',
     };
     return [outputRule[style]];
 }

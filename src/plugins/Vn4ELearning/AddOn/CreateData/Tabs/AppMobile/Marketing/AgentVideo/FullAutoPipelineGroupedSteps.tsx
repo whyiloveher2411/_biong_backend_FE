@@ -349,6 +349,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     /** Mở drawer chia beat thủ công (chỉ hiển thị trên bước beat_division). */
     onManualBeatDivision?: () => void;
     manualBeatDivisionDisabled?: boolean;
+    /** Mở drawer tạo script thủ công (chỉ hiển thị trên bước script_create). */
+    onManualScriptCreate?: () => void;
+    manualScriptCreateDisabled?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -376,6 +379,8 @@ export function PipelineGroupedMenuItems({
     runningSingleStep = false,
     onManualBeatDivision,
     manualBeatDivisionDisabled = false,
+    onManualScriptCreate,
+    manualScriptCreateDisabled = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -514,6 +519,33 @@ export function PipelineGroupedMenuItems({
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onManualBeatDivision();
+                            }}
+                        >
+                            Thủ công
+                        </Button>
+                    ) : null}
+                    {key === 'script_create' && onManualScriptCreate ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            sx={{
+                                minWidth: 0,
+                                px: 1,
+                                py: 0.15,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                lineHeight: 1.6,
+                                whiteSpace: 'nowrap',
+                                color: 'text.secondary',
+                                borderColor: 'divider',
+                            }}
+                            disabled={disabled || manualScriptCreateDisabled}
+                            title={`Tạo script thủ công: copy prompt → dán script AI trả về → lưu (bỏ qua bước headless bị treo)`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onManualScriptCreate();
                             }}
                         >
                             Thủ công
@@ -781,6 +813,9 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     /** Mở drawer chia beat thủ công (chỉ hiển thị trên bước beat_division). */
     onManualBeatDivision?: () => void;
     manualBeatDivisionDisabled?: boolean;
+    /** Mở drawer tạo script thủ công (chỉ hiển thị trên bước script_create). */
+    onManualScriptCreate?: () => void;
+    manualScriptCreateDisabled?: boolean;
 };
 
 /** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
@@ -809,6 +844,8 @@ export function PipelineGroupedWorkflowListV3({
     runningSingleStep = false,
     onManualBeatDivision,
     manualBeatDivisionDisabled = false,
+    onManualScriptCreate,
+    manualScriptCreateDisabled = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -958,6 +995,33 @@ export function PipelineGroupedWorkflowListV3({
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onManualBeatDivision();
+                            }}
+                        >
+                            Thủ công
+                        </Button>
+                    ) : null}
+                    {key === 'script_create' && onManualScriptCreate ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            sx={{
+                                minWidth: 0,
+                                px: 1,
+                                py: 0.15,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                lineHeight: 1.6,
+                                whiteSpace: 'nowrap',
+                                color: 'text.secondary',
+                                borderColor: 'divider',
+                            }}
+                            disabled={manualScriptCreateDisabled}
+                            title={`Tạo script thủ công: copy prompt → dán script AI trả về → lưu (bỏ qua bước headless bị treo)`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onManualScriptCreate();
                             }}
                         >
                             Thủ công
