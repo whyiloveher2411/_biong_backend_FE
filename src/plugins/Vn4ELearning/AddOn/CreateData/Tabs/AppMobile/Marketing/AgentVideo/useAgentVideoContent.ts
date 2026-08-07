@@ -60,6 +60,7 @@ import {
     addBeatVideoToCapcut,
     listAudioScriptStyles,
     saveAgentShowKaraoke,
+    saveAgentRenderDebug,
     saveAgentClipAspect,
     saveAgentVisualMode,
     saveAgentBeatFrequency,
@@ -528,6 +529,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingAgentAvatar, setSavingAgentAvatar] = React.useState(false);
     const [agentShowKaraoke, setAgentShowKaraoke] = React.useState(true);
     const [savingShowKaraoke, setSavingShowKaraoke] = React.useState(false);
+    const [agentRenderDebug, setAgentRenderDebug] = React.useState(false);
+    const [savingRenderDebug, setSavingRenderDebug] = React.useState(false);
     const [agentClipAspect, setAgentClipAspect] = React.useState<ClipAspect>('9:16');
     const [savingClipAspect, setSavingClipAspect] = React.useState(false);
     const [agentBeatFrequency, setAgentBeatFrequency] = React.useState<AgentBeatFrequency>('free');
@@ -979,6 +982,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAgentShowAvatar(resolvedId > 0);
         setAgentAvatarAnchor(nextAnchor);
         setAgentShowKaraoke(res?.agent_show_karaoke !== false);
+        setAgentRenderDebug(Boolean(res?.agent_render_debug));
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
         setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency));
@@ -2712,7 +2716,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 loadRow();
                 return;
             }
-            const result = await launchImportHtmlRender(shortVideoId);
+            const result = await launchImportHtmlRender(shortVideoId, {
+                limitBeats: agentRenderDebug ? 3 : 0,
+            });
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
             if (!result.ok && isCaptionSyncAssembleError(result.message || '')) {
@@ -2738,6 +2744,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const result = await launchImportHtmlRender(shortVideoId, {
                 allowCaptionMismatch: true,
+                limitBeats: agentRenderDebug ? 3 : 0,
             });
             showMessage(result.message, result.ok ? 'success' : 'error');
             loadRow();
@@ -5287,6 +5294,36 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    const handleAgentRenderDebugChange = async (checked: boolean) => {
+        if (savingRenderDebug) {
+            return;
+        }
+        setAgentRenderDebug(checked);
+        setSavingRenderDebug(true);
+        try {
+            const res = await saveAgentRenderDebug(shortVideoId, checked);
+            if (!res?.success) {
+                setAgentRenderDebug(!checked);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cấu hình debug render',
+                    'error',
+                );
+                return;
+            }
+            setAgentRenderDebug(Boolean(res?.agent_render_debug));
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (checked ? 'Đã bật debug render (3 beat đầu)' : 'Đã tắt debug render'),
+                'success',
+            );
+        } catch (e) {
+            setAgentRenderDebug(!checked);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingRenderDebug(false);
+        }
+    };
+
     const handleAgentClipAspectChange = async (nextAspect: ClipAspect) => {
         if (savingClipAspect || nextAspect === agentClipAspect) {
             return;
@@ -7016,6 +7053,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentShowKaraoke,
         savingShowKaraoke,
         handleAgentShowKaraokeChange,
+        agentRenderDebug,
+        savingRenderDebug,
+        handleAgentRenderDebugChange,
         agentClipAspect,
         savingClipAspect,
         handleAgentClipAspectChange,
