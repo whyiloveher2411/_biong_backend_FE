@@ -8,22 +8,25 @@ import {
     Divider,
     FormControl,
     FormControlLabel,
+    IconButton,
     InputLabel,
     MenuItem,
     Select,
     Stack,
     Switch,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
+import { AgentOptionToggleGroup } from './AgentOptionToggleGroup';
 import { convertToURL, validURL } from 'helpers/url';
 import {
     DEFAULT_WHITEBOARD_TRANSITIONS,
@@ -182,6 +185,47 @@ function StatusChip({ label, tone }: { label: string; tone?: StatusTone }) {
     );
 }
 
+/** Section ít quan tâm ở column phải — thu gọn mặc định (chỉ title + chevron); click để mở rộng nội dung. */
+function CollapsibleWorkflowSection({
+    title,
+    description,
+    tone,
+    headerAction,
+    children,
+}: {
+    title: string;
+    description?: string;
+    tone?: 'neutral' | 'info' | 'visual' | 'pipeline' | 'prompt' | 'meta' | 'action' | 'social';
+    headerAction?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    const [open, setOpen] = React.useState(false);
+    return (
+        <WorkflowSection
+            title={title}
+            description={description}
+            tone={tone}
+            headerAction={(
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {open && headerAction ? headerAction : null}
+                    <IconButton
+                        size="small"
+                        aria-label={open ? `Ẩn ${title}` : `Hiện ${title}`}
+                        onClick={() => setOpen((value) => !value)}
+                        sx={{ p: 0.25 }}
+                    >
+                        {open
+                            ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+                    </IconButton>
+                </Box>
+            )}
+        >
+            {open ? children : null}
+        </WorkflowSection>
+    );
+}
+
 function MetaRow({
     label,
     value,
@@ -192,8 +236,7 @@ function MetaRow({
     value?: React.ReactNode;
     status?: string | null;
     statusTone?: StatusTone;
-}) {
-    const resolvedStatus = String(status || '').trim().toLowerCase() === 'paused'
+}) {    const resolvedStatus = String(status || '').trim().toLowerCase() === 'paused'
         ? 'Đã dừng'
         : (status || '—');
     const resolvedStatusTone = statusTone
@@ -691,26 +734,16 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
                                 Tỉ lệ clip
                             </Typography>
-                            <ToggleButtonGroup
-                                exclusive
-                                fullWidth
-                                size="small"
+                            <AgentOptionToggleGroup
                                 value={state.agentClipAspect}
                                 disabled={state.savingClipAspect}
-                                onChange={(_event, value: '9:16' | '16:9' | null) => {
-                                    if (value) {
-                                        void state.handleAgentClipAspectChange(value);
-                                    }
-                                }}
-                                aria-label="Tỉ lệ clip"
-                            >
-                                <ToggleButton value="9:16" aria-label="9:16 dọc">
-                                    9:16 dọc
-                                </ToggleButton>
-                                <ToggleButton value="16:9" aria-label="16:9 ngang">
-                                    16:9 ngang
-                                </ToggleButton>
-                            </ToggleButtonGroup>
+                                onChange={(value) => { void state.handleAgentClipAspectChange(value as '9:16' | '16:9'); }}
+                                ariaLabel="Tỉ lệ clip"
+                                options={[
+                                    { value: '9:16', label: '9:16 dọc' },
+                                    { value: '16:9', label: '16:9 ngang' },
+                                ]}
+                            />
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                 {state.agentClipAspect === '16:9'
                                     ? 'Canvas 1920×1080 — band caption ~120px.'
@@ -721,32 +754,42 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
                                 Chế độ visual clip
                             </Typography>
-                            <ToggleButtonGroup
-                                exclusive
-                                fullWidth
-                                size="small"
+                            <AgentOptionToggleGroup
                                 value={state.agentVisualMode}
                                 disabled={state.savingVisualMode}
-                                onChange={(_event, value: 'hyperframes' | 'whiteboard' | null) => {
-                                    if (value) {
-                                        void state.handleAgentVisualModeChange(value);
-                                    }
-                                }}
-                                aria-label="Chế độ visual clip"
-                            >
-                                <ToggleButton value="hyperframes" aria-label="Motion HTML">
-                                    Motion HTML
-                                </ToggleButton>
-                                <ToggleButton value="whiteboard" aria-label="Whiteboard">
-                                    Whiteboard
-                                </ToggleButton>
-                            </ToggleButtonGroup>
+                                onChange={(value) => { void state.handleAgentVisualModeChange(value as 'hyperframes' | 'whiteboard'); }}
+                                ariaLabel="Chế độ visual clip"
+                                options={[
+                                    { value: 'hyperframes', label: 'Motion HTML' },
+                                    { value: 'whiteboard', label: 'Image' },
+                                ]}
+                            />
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                 {state.isWhiteboardMode
-                                    ? 'Whiteboard: ảnh beat + render bảng. Cấu hình riêng ở khối Whiteboard bên dưới.'
+                                    ? 'Image: ảnh beat theo phong cách (Whiteboard/Collage/Vox/Courtroom) + render. Cấu hình riêng ở khối Image bên dưới.'
                                     : 'Motion HTML: HyperFrames HTML theo beat. Cấu hình riêng ở khối Motion HTML bên dưới.'}
                             </Typography>
                         </Box>
+                        {state.isWhiteboardMode ? (
+                            <Box sx={{ px: 1.25, py: 1 }}>
+                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
+                                    Ngôn ngữ chữ trên ảnh beat
+                                </Typography>
+                                <AgentOptionToggleGroup
+                                    value={state.agentImageTextLang}
+                                    disabled={state.savingImageTextLang}
+                                    onChange={(value) => { void state.handleAgentImageTextLangChange(value as 'vi' | 'en'); }}
+                                    ariaLabel="Ngôn ngữ chữ trên ảnh beat"
+                                    options={[
+                                        { value: 'vi', label: 'Tiếng Việt' },
+                                        { value: 'en', label: 'English' },
+                                    ]}
+                                />
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                    Chữ hiển thị trên ảnh beat (Meta.ai / Duck.ai) phải đúng ngôn ngữ này. Ảnh đã sinh giữ nguyên; chỉ ảnh sinh sau áp dụng.
+                                </Typography>
+                            </Box>
+                        ) : null}
                         <Box sx={{ px: 1.25, py: 1 }}>
                             <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
                                 Tần suất beat
@@ -780,7 +823,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             </Typography>
                             {state.isWhiteboardMode && state.agentBeatFrequency === 'fast' && (
                                 <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
-                                    Whiteboard nhịp nhanh: nên chọn "Không vẽ tay" ở Cách đưa ảnh vào khung để ảnh hiện đầy đủ từ frame đầu.
+                                    Image nhịp nhanh: nên chọn "Không vẽ tay" ở Cách đưa ảnh vào khung để ảnh hiện đầy đủ từ frame đầu.
                                 </Typography>
                             )}
                         </Box>
@@ -828,31 +871,21 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.75 }}>
                                         Cách đưa ảnh vào khung
                                     </Typography>
-                                    <ToggleButtonGroup
-                                        exclusive
-                                        fullWidth
-                                        size="small"
+                                    <AgentOptionToggleGroup
                                         value={whiteboardPhotoPlaceMode}
                                         disabled={state.savingWhiteboardConfig}
-                                        onChange={(_event, value: 'instant' | 'draw' | 'drag' | null) => {
-                                            if (value) {
-                                                void state.handleAgentWhiteboardConfigChange({
-                                                    photo_place_mode: value,
-                                                });
-                                            }
+                                        onChange={(value) => {
+                                            void state.handleAgentWhiteboardConfigChange({
+                                                photo_place_mode: value as 'instant' | 'draw' | 'drag',
+                                            });
                                         }}
-                                        aria-label="Cách đưa ảnh vào khung whiteboard"
-                                    >
-                                        <ToggleButton value="instant" aria-label="Không vẽ tay">
-                                            Không vẽ tay
-                                        </ToggleButton>
-                                        <ToggleButton value="drag" aria-label="Kéo ảnh vào">
-                                            Kéo ảnh vào
-                                        </ToggleButton>
-                                        <ToggleButton value="draw" aria-label="Vẽ tô ảnh">
-                                            Vẽ tô ảnh
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
+                                        ariaLabel="Cách đưa ảnh vào khung whiteboard"
+                                        options={[
+                                            { value: 'instant', label: 'Không vẽ tay' },
+                                            { value: 'drag', label: 'Kéo ảnh vào' },
+                                            { value: 'draw', label: 'Vẽ tô ảnh' },
+                                        ]}
+                                    />
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                         {whiteboardPhotoPlaceMode === 'instant'
                                             ? 'Frame đầu = ảnh đầy đủ, không tay vẽ. Chuyển cảnh sang ảnh beat sau theo hiệu ứng bên dưới.'
@@ -886,62 +919,172 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                         {whiteboardPhotoPlaceMode === 'instant'
                                             ? (
-                                                whiteboardTransitionId === 'random'
-                                                    ? 'Ngẫu nhiên mỗi beat: rút hết danh sách không lặp, hết thì xáo lại. Mọi hiệu ứng lộ ảnh 2.'
-                                                    : whiteboardTransitionId === 'erase'
-                                                        ? 'Xóa bảng: ảnh 1 đè lên ảnh 2; tay gôm lau dần lộ ảnh 2 phía dưới (không qua bảng trống).'
-                                                        : whiteboardTransitionId === 'camera_pan'
-                                                            ? 'Camera pan: máy ảo trượt/zoom từ ảnh 1 sang ảnh 2 trên bảng liên tục.'
-                                                            : whiteboardTransitionId === 'slide'
-                                                                ? 'Tay kéo: bàn tay đẩy ảnh 1 ra, kéo ảnh 2 vào.'
-                                                                : whiteboardTransitionId === 'ink_pop'
-                                                                    ? 'Loang màu nước: vết loang lộ dần ảnh 2 trên nền ảnh 1 (không phủ mực đen kín).'
-                                                                    : whiteboardTransitionId === 'fade'
-                                                                        ? 'Cắt / Fade: ảnh 1 mờ dần sang ảnh 2.'
-                                                                        : whiteboardTransitionId === 'paper_tear'
-                                                                            ? 'Xé giấy: green→ảnh 1, blue→ảnh 2; giữ cánh giấy trắng từ video asset.'
-                                                                            : whiteboardTransitionId === 'paint_stroke'
-                                                                                ? 'Quét cọ: green→ảnh 1, blue→ảnh 2; mép cọ lấy từ video asset quet_co_1.'
-                                                                                : 'Lật trang: ảnh 2 sẵn trên mặt trang khi lật. Beat cuối không transition.'
+                                                whiteboardTransitionId === 'none'
+                                                    ? 'Cắt thẳng: beat sau hiện ngay, không hiệu ứng — không nằm trong Ngẫu nhiên.'
+                                                    : whiteboardTransitionId === 'random'
+                                                        ? 'Ngẫu nhiên mỗi beat: rút hết danh sách không lặp, hết thì xáo lại (không bao gồm Không hiệu ứng). Mọi hiệu ứng lộ ảnh 2.'
+                                                        : whiteboardTransitionId === 'erase'
+                                                            ? 'Xóa bảng: ảnh 1 đè lên ảnh 2; tay gôm lau dần lộ ảnh 2 phía dưới (không qua bảng trống).'
+                                                            : whiteboardTransitionId === 'camera_pan'
+                                                                ? 'Camera pan: máy ảo trượt/zoom từ ảnh 1 sang ảnh 2 trên bảng liên tục.'
+                                                                : whiteboardTransitionId === 'slide'
+                                                                    ? 'Tay kéo: bàn tay đẩy ảnh 1 ra, kéo ảnh 2 vào.'
+                                                                    : whiteboardTransitionId === 'ink_pop'
+                                                                        ? 'Loang màu nước: vết loang lộ dần ảnh 2 trên nền ảnh 1 (không phủ mực đen kín).'
+                                                                        : whiteboardTransitionId === 'fade'
+                                                                            ? 'Cắt / Fade: ảnh 1 mờ dần sang ảnh 2.'
+                                                                            : whiteboardTransitionId === 'paper_tear'
+                                                                                ? 'Xé giấy: green→ảnh 1, blue→ảnh 2; giữ cánh giấy trắng từ video asset.'
+                                                                                : whiteboardTransitionId === 'paint_stroke'
+                                                                                    ? 'Quét cọ: green→ảnh 1, blue→ảnh 2; mép cọ lấy từ video asset quet_co_1.'
+                                                                                    : 'Lật trang: ảnh 2 sẵn trên mặt trang khi lật. Beat cuối không transition.'
                                             )
-                                            : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Ngẫu nhiên để rút hết danh sách không lặp, hết thì xáo lại.'}
+                                            : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Không hiệu ứng để cắt thẳng; Ngẫu nhiên không bao gồm Không hiệu ứng.'}
                                     </Typography>
+                                    <FormControlLabel
+                                        sx={{
+                                            m: 0,
+                                            px: 1.25,
+                                            py: 1,
+                                            width: '100%',
+                                            alignItems: 'flex-start',
+                                            gap: 1,
+                                        }}
+                                        control={(
+                                            <Switch
+                                                size="small"
+                                                checked={Boolean(state.agentWhiteboardConfig?.assets_mode)}
+                                                disabled={state.savingWhiteboardConfig}
+                                                onChange={(e) => {
+                                                    void state.handleAgentWhiteboardConfigChange({
+                                                        assets_mode: e.target.checked,
+                                                    });
+                                                }}
+                                                inputProps={{ 'aria-label': 'Tài nguyên riêng lẻ cho CapCut' }}
+                                            />
+                                        )}
+                                        label={(
+                                            <Box sx={{ pt: 0.25 }}>
+                                                <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                                    Tài nguyên riêng lẻ (chuẩn bị cho CapCut)
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                                    Bật: chỉ giữ ảnh beat + prompt làm asset — bỏ qua render video beat, ghép video final, upload store, BGM và thumbnail.
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    />
+                                    <Box sx={{ px: 1.25, py: 1 }}>
+                                        <LoadingButton
+                                            fullWidth
+                                            size="small"
+                                            variant="contained"
+                                            color="primary"
+                                            loading={state.uploadingAllToCapcut}
+                                            disabled={state.addingAudioToCapcut
+                                                || (state.uploadingBeatVideoToCapcutIds?.length ?? 0) > 0}
+                                            startIcon={<UploadFileOutlinedIcon fontSize="small" />}
+                                            onClick={() => { void state.handleUploadAllToCapcut(); }}
+                                            sx={{ textTransform: 'none', py: 0.5 }}
+                                        >
+                                            {state.agentWhiteboardConfig?.assets_mode
+                                                ? 'Upload CapCut (audio + ảnh beat)'
+                                                : 'Upload CapCut (audio + video beat)'}
+                                        </LoadingButton>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
+                                            Upload toàn bộ audio + media từng beat đúng khung thời gian vào project CapCut.
+                                            {state.agentWhiteboardConfig?.assets_mode
+                                                ? ' Beat chưa có ảnh sẽ bị bỏ qua và báo lỗi.'
+                                                : ' Beat chưa render video sẽ bị bỏ qua và báo lỗi.'}
+                                        </Typography>
+                                    </Box>
                                     <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mt: 1.25, mb: 0.75 }}>
                                         Phong cách hình ảnh
                                     </Typography>
-                                    <FormControl fullWidth size="small" disabled={state.savingWhiteboardConfig}>
-                                        <Select
-                                            value={whiteboardGenStyle}
-                                            onChange={(e) => {
-                                                const value = String(e.target.value || '').trim();
-                                                if (value) {
-                                                    void state.handleAgentWhiteboardConfigChange({
-                                                        gen_style: value,
-                                                    });
-                                                }
-                                            }}
-                                            inputProps={{ 'aria-label': 'Phong cách hình ảnh whiteboard' }}
-                                        >
-                                            <MenuItem value="hybrid">Hybrid</MenuItem>
-                                            <MenuItem value="collage_art">Collage Art</MenuItem>
-                                            <MenuItem value="vox">Vox</MenuItem>
-                                            <MenuItem value="courtroom_sketch">Courtroom Sketch</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                    <Box component="ul" sx={{ m: 0, pl: 1.5, mt: 0.75, color: 'text.secondary' }}>
-                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
-                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Hybrid</Box> — outline + hình ảnh thật trên nền bảng.
-                                        </Typography>
-                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
-                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Collage Art</Box> — giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.
-                                        </Typography>
-                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
-                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Vox</Box> — bảng tài liệu giải thích (documentary explainer): cutout minh họa chủ đề, nét marker đen/đỏ nối vật thể, mũi tên, dấu chấm hỏi, khoanh tròn nhấn dữ liệu, lưới tọa độ/biểu đồ ẩn nền.
-                                        </Typography>
-                                        <Typography component="li" variant="caption" display="block" sx={{ lineHeight: 1.4, mb: 0.35 }}>
-                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>Courtroom Sketch</Box> — phác thảo tòa án vẽ tay: bút chì màu/phấn màu/nước trên giấy vân nhám, nét nhanh thô, màu trầm.
-                                        </Typography>
-                                    </Box>
+                                    <Stack spacing={0.75}>
+                                        {[
+                                            { key: 'hybrid', label: 'Whiteboard (Hybrid)', color: '#1976d2', desc: 'Phong cách whiteboard: outline + hình ảnh thật trên nền bảng.' },
+                                            { key: 'collage_art', label: 'Collage Art', color: '#e65100', desc: 'Giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.' },
+                                            { key: 'vox', label: 'Vox', color: '#d32f2f', desc: 'Editorial documentary collage: cutout minh họa chủ đề, layered composition, hierarchy, scale contrast; annotation marker tối thiểu.' },
+                                            { key: 'courtroom_sketch', label: 'Courtroom Sketch', color: '#6a1b9a', desc: 'Phác thảo tòa án vẽ tay: bút chì màu/phấn màu/nước trên giấy vân nhám, nét nhanh thô, màu trầm.' },
+                                        ].map((option) => {
+                                            const active = whiteboardGenStyle === option.key;
+                                            return (
+                                                <Box
+                                                    key={option.key}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-pressed={active}
+                                                    aria-label={`Phong cách hình ảnh ${option.label}`}
+                                                    onClick={() => {
+                                                        if (!state.savingWhiteboardConfig) {
+                                                            void state.handleAgentWhiteboardConfigChange({
+                                                                gen_style: option.key,
+                                                            });
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if ((e.key === 'Enter' || e.key === ' ') && !state.savingWhiteboardConfig) {
+                                                            e.preventDefault();
+                                                            void state.handleAgentWhiteboardConfigChange({
+                                                                gen_style: option.key,
+                                                            });
+                                                        }
+                                                    }}
+                                                    sx={{
+                                                        cursor: state.savingWhiteboardConfig ? 'default' : 'pointer',
+                                                        borderRadius: 1,
+                                                        border: '1px solid',
+                                                        borderColor: active ? option.color : 'rgba(25, 118, 210, 0.15)',
+                                                        bgcolor: active ? `${option.color}1A` : 'transparent',
+                                                        px: 1.25,
+                                                        py: 0.75,
+                                                        '&:hover': {
+                                                            borderColor: active ? option.color : 'rgba(25, 118, 210, 0.45)',
+                                                            bgcolor: active ? `${option.color}26` : 'rgba(25, 118, 210, 0.05)',
+                                                        },
+                                                    }}
+                                                >
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                                        {active ? (
+                                                            <CheckCircleIcon sx={{ color: option.color, fontSize: 15, flexShrink: 0 }} />
+                                                        ) : (
+                                                            <Box
+                                                                sx={{
+                                                                    width: 9,
+                                                                    height: 9,
+                                                                    borderRadius: '50%',
+                                                                    border: '1px solid',
+                                                                    borderColor: option.color,
+                                                                    bgcolor: 'transparent',
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <Typography
+                                                            variant="caption"
+                                                            display="block"
+                                                            sx={{
+                                                                fontWeight: 700,
+                                                                color: active ? option.color : 'text.primary',
+                                                                lineHeight: 1.3,
+                                                            }}
+                                                        >
+                                                            {option.label}
+                                                        </Typography>
+                                                    </Box>
+                                                    <Typography
+                                                        variant="caption"
+                                                        color="text.secondary"
+                                                        display="block"
+                                                        sx={{ lineHeight: 1.35, mt: 0.25, pl: 1.75 }}
+                                                    >
+                                                        {option.desc}
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })}
+                                    </Stack>
                                 </Box>
                             </Stack>
                         ) : (
@@ -981,7 +1124,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </Stack>
                 </WorkflowSection>
 
-                <WorkflowSection title="Thông tin chung" tone="info">
+                <CollapsibleWorkflowSection title="Thông tin chung" tone="info">
                     <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                     <MetaRow
                         label="Workflow mode"
@@ -1037,10 +1180,10 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         label="Rendered at"
                         value={state.agentVideoRenderedAt || '—'}
                     />
-                </WorkflowSection>
+                </CollapsibleWorkflowSection>
 
                 {showPipeline && state.fullAutoPipeline ? (
-                    <WorkflowSection
+                    <CollapsibleWorkflowSection
                         title="Pipeline A→Z"
                         tone="pipeline"
                         headerAction={(
@@ -1096,6 +1239,11 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             onBeatImageFillModeChange={(mode) => {
                                 void state.handleBeatImageFillModeChange(mode);
                             }}
+                            beatImageFillOnlyMissing={state.beatImageFillOnlyMissing}
+                            beatImageFillOnlyMissingDisabled={state.savingBeatImageFillMode || pipelineBusy}
+                            onBeatImageFillOnlyMissingChange={(checked) => {
+                                void state.handleBeatImageFillOnlyMissingChange(checked);
+                            }}
                             restartableSet={restartableSet}
                             selectStepDisabled={pipelineBusy}
                             onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
@@ -1147,15 +1295,15 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 ) : null}
                             </Alert>
                         ) : null}
-                    </WorkflowSection>
+                    </CollapsibleWorkflowSection>
                 ) : null}
 
-                <WorkflowSection title="Danh sách Prompt" tone="prompt">
+                <CollapsibleWorkflowSection title="Danh sách Prompt" tone="prompt">
                     <ShortVideoAgentPromptLibrary state={state} />
-                </WorkflowSection>
+                </CollapsibleWorkflowSection>
 
                 {state.agentVideoSummary ? (
-                    <WorkflowSection title="Metadata script" tone="meta">
+                    <CollapsibleWorkflowSection title="Metadata script" tone="meta">
                         <MetaRow
                             label="Ước tính"
                             value={
@@ -1172,10 +1320,10 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             label="Markers"
                             value={String(state.agentVideoSummary.marker_count ?? 0)}
                         />
-                    </WorkflowSection>
+                    </CollapsibleWorkflowSection>
                 ) : null}
 
-                <WorkflowSection title="Hành động" tone="action">
+                <CollapsibleWorkflowSection title="Hành động" tone="action">
                     <Stack spacing={1}>
                         {!state.hasScript && (
                             <Stack spacing={1}>
@@ -1312,7 +1460,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             </LoadingButton>
                         )}
                     </Stack>
-                </WorkflowSection>
+                </CollapsibleWorkflowSection>
 
                 <WorkflowSection title="Đăng social" tone="social">
                     <Stack spacing={0.5}>

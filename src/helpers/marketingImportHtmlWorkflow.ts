@@ -49,19 +49,43 @@ export type ImportHtmlWorkflowStatus = {
 };
 
 /** Nối dòng phong cách image vào prompt trước khi dispatch mở tab. Prompt JSON → thêm key `style` vào trong JSON. */
-function withImageStyleSuffix(prompt: string, suffix?: string): string {
-    if (!suffix || !prompt) {
+/** Rule an toàn mép ảnh — luôn tự động thêm vào MỌI prompt sinh ảnh (không cần chia beat lại). */
+const IMAGE_SAFE_AREA_SUFFIX = 'keep all important content, subjects and text away from the edges with a comfortable margin (safe area), nothing critical within the outer 10% of the frame';
+
+function withImageStyleSuffix(
+    prompt: string,
+    suffix?: string,
+    aspectSuffix?: string,
+    textLangRule?: string,
+    voiceContent?: string,
+): string {
+    if (!prompt) {
         return prompt;
     }
     try {
         const parsed = JSON.parse(prompt);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return JSON.stringify({ ...parsed, style: suffix }, null, 2);
+            const next = { ...parsed };
+            if (suffix) next.style = suffix;
+            if (aspectSuffix) next.aspect = aspectSuffix;
+            if (textLangRule && !String(next.text_language || '').trim()) {
+                next.text_language = textLangRule;
+            }
+            if (voiceContent && !String(next.voice_content || '').trim()) {
+                next.voice_content = voiceContent;
+            }
+            if (!String(next.safe_area || '').trim()) next.safe_area = IMAGE_SAFE_AREA_SUFFIX;
+            return JSON.stringify(next, null, 2);
         }
     } catch {
         // Không phải JSON → fallback nối suffix sau dấu phẩy như cũ.
     }
-    return `${prompt.replace(/[, ]+$/u, '')}, ${suffix}`;
+    const parts = [suffix, aspectSuffix, textLangRule, IMAGE_SAFE_AREA_SUFFIX].filter(Boolean);
+    let out = `${prompt.replace(/[, ]+$/u, '')}, ${parts.join(', ')}`;
+    if (voiceContent) {
+        out += `, the voiceover for this beat says: "${voiceContent}"`;
+    }
+    return out;
 }
 
 function apiHost(): string {
@@ -449,12 +473,18 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
     imageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
+    imageAspectSuffix?: string;
+    imageTextLangRule?: string;
+    imageVoiceContent?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
     const imagePrompt = withImageStyleSuffix(
         String(options.imagePrompt || '').trim(),
         options.imageStyleSuffix,
+        options.imageAspectSuffix,
+        options.imageTextLangRule,
+        options.imageVoiceContent,
     );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
@@ -497,6 +527,7 @@ export type DuckAiWorkspaceBeat = {
     imagePrompt: string;
     imageUrl?: string;
     missingImage?: boolean;
+    imageVoiceContent?: string;
 };
 
 /** Mở 1 tab Duck.ai cho 1 beat (activeBeatId hoặc beat đầu). */
@@ -507,6 +538,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
     activeBeatId?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
+    imageAspectSuffix?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     if (!shortVideoId) {
@@ -537,6 +569,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
         title: options.title,
         autoSubmit: options.autoSubmit,
         imageStyleSuffix: options.imageStyleSuffix,
+        imageAspectSuffix: options.imageAspectSuffix,
     });
 }
 
@@ -547,6 +580,8 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
     activeBeatId?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
+    imageAspectSuffix?: string;
+    imageTextLangRule?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beats = Array.isArray(options.beats)
@@ -557,6 +592,7 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
+                imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
             }))
             .filter((item) => item.beatId && item.imagePrompt)
         : [];
@@ -567,7 +603,6 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
         return { opened: 0, failed: [] };
     }
 
-    // Chỉ mở các beat thiếu ảnh.
     const openList = beats.filter((b) => b.missingImage === true || !String(b.imageUrl || '').trim());
     if (!openList.length) {
         return { opened: 0, failed: [] };
@@ -590,6 +625,9 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
                 imageStyleSuffix: options.imageStyleSuffix,
+                imageAspectSuffix: options.imageAspectSuffix,
+                imageTextLangRule: options.imageTextLangRule,
+                imageVoiceContent: beat.imageVoiceContent,
             });
             opened += 1;
         } catch (e) {
@@ -614,12 +652,18 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     imageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
+    imageAspectSuffix?: string;
+    imageTextLangRule?: string;
+    imageVoiceContent?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
     const imagePrompt = withImageStyleSuffix(
         String(options.imagePrompt || '').trim(),
         options.imageStyleSuffix,
+        options.imageAspectSuffix,
+        options.imageTextLangRule,
+        options.imageVoiceContent,
     );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
@@ -665,6 +709,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     activeBeatId?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
+    imageAspectSuffix?: string;
+    imageTextLangRule?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beats = Array.isArray(options.beats)
@@ -675,6 +721,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
+                imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
             }))
             .filter((item) => item.beatId && item.imagePrompt)
         : [];
@@ -707,6 +754,9 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
                 imageStyleSuffix: options.imageStyleSuffix,
+                imageAspectSuffix: options.imageAspectSuffix,
+                imageTextLangRule: options.imageTextLangRule,
+                imageVoiceContent: beat.imageVoiceContent,
             });
             opened += 1;
         } catch (e) {

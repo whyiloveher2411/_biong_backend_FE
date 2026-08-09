@@ -9,8 +9,8 @@ export type BeatMapSection = {
     durationSec: number;
     phrase_anchor: string;
     visual_description: string;
-    /** Prompt ảnh Duck.ai — bắt buộc khi agent_visual_mode=whiteboard */
-    image_prompt?: string;
+    /** Prompt ảnh — JSON object THẬT (mới); hỗ trợ string escaped (cũ). Bắt buộc khi whiteboard. */
+    image_prompt?: Record<string, unknown> | string;
     /** Set dressing per beat (EN). Có thể rỗng trên map cũ trước khi chia lại. */
     background: string;
 };
@@ -380,10 +380,102 @@ export type BeatMapValidation = {
     errors: string[];
 };
 
-function stripJsonFences(text: string): string {
+export function stripJsonFences(text: string): string {
     const trimmed = String(text || '').trim();
     const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     return fenced ? fenced[1].trim() : trimmed;
+}
+
+/**
+ * Parse output giai đoạn 2 (visual per chunk): `{ "sections": [ { "id": "beat_N", "visual_description": "...", "image_prompt": {...} } ] }`
+ * → map id → image_prompt + visual_description. KHÔNG cần schema_version/totalVideoSec (không phải beat-map đầy đủ).
+ */
+export function parseBeatVisualChunkJson(
+    text: string,
+    expectedIds: string[] = [],
+): {
+    imagePrompts: Record<string, Record<string, unknown>>;
+    visualDescriptions: Record<string, string>;
+    errors: string[];
+} {
+    const errors: string[] = [];
+    const stripped = stripJsonFences(String(text || '').trim());
+    const markerMatch = stripped.match(
+        /###IMPORT_HTML_BEAT_MAP:RESULT:BEGIN###([\s\S]*?)###IMPORT_HTML_BEAT_MAP:RESULT:END###/i,
+    );
+    const raw = (markerMatch ? markerMatch[1].trim() : stripped).trim();
+    if (!raw) {
+        return { imagePrompts: {}, visualDescriptions: {}, errors: ['JSON trống'] };
+    }
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        return { imagePrompts: {}, visualDescriptions: {}, errors: ['JSON không parse được'] };
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { imagePrompts: {}, visualDescriptions: {}, errors: ['Phải là JSON object'] };
+    }
+
+    const sections = (parsed as Record<string, unknown>).sections;
+    if (!Array.isArray(sections) || sections.length === 0) {
+        return { imagePrompts: {}, visualDescriptions: {}, errors: ['sections rỗng'] };
+    }
+
+    const imagePrompts: Record<string, Record<string, unknown>> = {};
+    const visualDescriptions: Record<string, string> = {};
+    sections.forEach((item, index) => {
+        if (!item || typeof item !== 'object') {
+            errors.push(`Chunk section #${index + 1} không hợp lệ`);
+            return;
+        }
+        const obj = item as Record<string, unknown>;
+        const id = String(obj.id || '').trim();
+        if (!/^beat_\d+$/.test(id)) {
+            errors.push(`Chunk section #${index + 1}: id phải dạng beat_N`);
+            return;
+        }
+        if (expectedIds.length > 0 && !expectedIds.includes(id)) {
+            errors.push(`${id}: ngoài danh sách chunk được cung cấp (expected: ${expectedIds.join(', ')})`);
+            return;
+        }
+        const visualDescription = String(obj.visual_description || '').trim();
+        const visualWordCount = visualDescription.split(/\s+/).filter(Boolean).length;
+        if (
+            !visualDescription
+            || visualDescription.length > 200
+            || visualWordCount < 2
+            || visualWordCount > 20
+            || /[À-ỹ]/u.test(visualDescription)
+            || !/[A-Za-z]/.test(visualDescription)
+        ) {
+            errors.push(`${id}: visual_description phải là 1 câu tiếng Anh, 2–20 từ, chỉ từ phrase_anchor`);
+            return;
+        }
+        const imagePrompt = normalizeBeatImagePrompt(obj.image_prompt);
+        if (!imagePrompt) {
+            errors.push(`${id}: thiếu image_prompt object (6 key)`);
+            return;
+        }
+        // Validate đủ 6 key + không key thừa + field ≥2 ký tự — mirror validateBeatImagePrompt.
+        const validated = validateBeatImagePrompt(imagePrompt);
+        if (!validated) {
+            const details = describeBeatImagePromptErrors(imagePrompt);
+            errors.push(`${id}: image_prompt không hợp lệ — ${details.join('; ')}`);
+            return;
+        }
+        imagePrompts[id] = imagePrompt;
+        visualDescriptions[id] = visualDescription;
+    });
+
+    const missing = expectedIds.filter((id) => !(id in imagePrompts));
+    if (missing.length > 0) {
+        errors.push(`Thiếu image_prompt cho: ${missing.join(', ')}`);
+    }
+
+    return { imagePrompts, visualDescriptions, errors };
 }
 
 function asNumber(value: unknown): number | null {
@@ -399,30 +491,115 @@ export function validateBeatVisualDescription(value: unknown): string | null {
     return description;
 }
 
-export function validateBeatImagePrompt(value: unknown): string | null {
-    const prompt = String(value ?? '').trim();
-    if (!prompt || prompt.length > 2000) {
+/** Chuẩn hóa image_prompt (object thật hoặc string escaped cũ) → object thật. */
+export function normalizeBeatImagePrompt(value: unknown): Record<string, unknown> | null {
+    if (!value) {
         return null;
     }
-    // Bắt buộc JSON object đủ 9 key — image_prompt không còn chấp nhận text thuần.
-    let parsed: unknown = null;
+    if (typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+    }
+    const raw = String(value).trim();
+    if (!raw || raw.length > 2000) {
+        return null;
+    }
     try {
-        parsed = JSON.parse(prompt);
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+        }
     } catch {
         return null;
     }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+}
+
+export function validateBeatImagePrompt(value: unknown): string | null {
+    const record = normalizeBeatImagePrompt(value);
+    if (!record) {
         return null;
     }
-    const record = parsed as Record<string, unknown>;
+    // Bắt buộc JSON object đủ 6 key — image_prompt không còn chấp nhận text thuần.
     const keys = Object.keys(record);
     if (keys.length !== WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.length) {
         return null;
     }
-    if (WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.some((key) => !keys.includes(key) || !String(record[key] ?? '').trim())) {
+    if (WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.some((key) => !keys.includes(key))) {
         return null;
     }
-    return prompt;
+    // text_overlay được phép rỗng "" (một số trường hợp AI bỏ trống) nhưng ưu tiên có
+    // 1–2 label từ khóa liên quan nội dung beat; các key khác bắt buộc non-empty.
+    const nonEmptyOk = WHITEBOARD_IMAGE_PROMPT_JSON_KEYS
+        .filter((key) => key !== 'text_overlay')
+        .every((key) => !keys.includes(key) || String(record[key] ?? '').trim() !== '');
+    if (!nonEmptyOk) {
+        return null;
+    }
+    // Chặn placeholder 1 chữ cái ("D", "C", "M"...), subject/action sơ sài, text_overlay cắt cụt.
+    if (!imagePromptFieldsQualityOk(record)) {
+        return null;
+    }
+    return JSON.stringify(record);
+}
+
+/** Chặn image_prompt rác (1 ký tự) — mirror backend marketing_short_video_agent_image_prompt_fields_quality_ok. */
+export function imagePromptFieldsQualityOk(record: Record<string, unknown>): boolean {
+    for (const key of ['subject', 'action', 'scene', 'composition', 'must_avoid']) {
+        const value = String(record[key] ?? '').trim();
+        if (value === '' || value.length < 2) {
+            return false;
+        }
+    }
+    const textOverlay = String(record.text_overlay ?? '').trim();
+    if (textOverlay !== '' && textOverlay.length < 2) {
+        return false;
+    }
+    return true;
+}
+
+/** Chuyển image_prompt (object thật hoặc string JSON) về text hiển thị/ghi — tránh "[object Object]". */
+export function beatImagePromptToText(value: unknown): string {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return '';
+        }
+    }
+    return String(value ?? '');
+}
+
+/** Liệt kê lỗi cụ thể của image_prompt (thiếu/thừa key, field rỗng/1 ký tự) — dùng cho message rõ ràng. */
+export function describeBeatImagePromptErrors(value: unknown): string[] {
+    const record = normalizeBeatImagePrompt(value);
+    if (!record) {
+        return ['image_prompt không phải JSON object'];
+    }
+    const errors: string[] = [];
+    const keys = Object.keys(record);
+    const missing = WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.filter((key) => !keys.includes(key));
+    if (missing.length > 0) {
+        errors.push(`thiếu key: ${missing.join(', ')}`);
+    }
+    const extra = keys.filter((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key));
+    if (extra.length > 0) {
+        errors.push(`key thừa (cấm): ${extra.join(', ')}`);
+    }
+    for (const key of WHITEBOARD_IMAGE_PROMPT_JSON_KEYS) {
+        const valueText = String(record[key] ?? '').trim();
+        if (key === 'text_overlay') {
+            if (valueText !== '' && valueText.length < 2) {
+                errors.push(`text_overlay phải rỗng hoặc ≥2 ký tự`);
+            }
+            continue;
+        }
+        if (valueText === '') {
+            errors.push(`${key} đang rỗng`);
+        } else if (valueText.length < 2) {
+            errors.push(`${key} quá ngắn (${valueText.length} ký tự)`);
+        }
+    }
+    return errors;
 }
 
 export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
@@ -491,7 +668,7 @@ export function validateBeatBackground(value: unknown): string | null {
 
 export function parseBeatMapJson(
     text: string,
-    options?: { requireImagePrompt?: boolean },
+    options?: { requireImagePrompt?: boolean; requireVisualDescription?: boolean },
 ): { map: BeatMap | null; errors: string[] } {
     const errors: string[] = [];
     const raw = stripJsonFences(text);
@@ -575,17 +752,17 @@ export function parseBeatMapJson(
         if (!phraseAnchor) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu phrase_anchor`);
         }
-        if (!visualDescription) {
+        if (options?.requireVisualDescription !== false && !visualDescription) {
             errors.push(`${id || `Section #${index + 1}`}: visual_description không được để trống`);
         }
-        if (!background) {
-            errors.push(`${id || `Section #${index + 1}`}: background không được để trống, dài 3–60 từ`);
-        }
+        // if (!background) {
+        //     errors.push(`${id || `Section #${index + 1}`}: background không được để trống, dài 3–60 từ`);
+        // }
         const hasImagePromptRaw = row.image_prompt != null && String(row.image_prompt).trim() !== '';
         if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu image_prompt cho whiteboard`);
         } else if (hasImagePromptRaw && !imagePrompt) {
-            errors.push(`${id || `Section #${index + 1}`}: image_prompt không hợp lệ — phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)`);
+            errors.push(`${id || `Section #${index + 1}`}: image_prompt không hợp lệ — phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)`);
         }
 
         sections.push({
@@ -596,7 +773,7 @@ export function parseBeatMapJson(
             durationSec: durationSec ?? 0,
             phrase_anchor: phraseAnchor,
             visual_description: visualDescription ?? '',
-            image_prompt: imagePrompt ?? undefined,
+            image_prompt: imagePrompt ? JSON.parse(imagePrompt) as Record<string, unknown> : undefined,
             background: background ?? String(row.background ?? '').trim(),
         });
     });
@@ -620,7 +797,11 @@ export function parseBeatMapJson(
 export function validateBeatMap(
     map: BeatMap,
     audioDurationSec: number,
-    options?: { relaxDurationBounds?: boolean; requireImagePrompt?: boolean },
+    options?: {
+        relaxDurationBounds?: boolean;
+        requireImagePrompt?: boolean;
+        requireVisualDescription?: boolean;
+    },
 ): BeatMapValidation {
     const errors: string[] = [];
     const audioDur = Number(audioDurationSec) || 0;
@@ -649,17 +830,17 @@ export function validateBeatMap(
         if (section.durationSec <= 0) {
             errors.push(`${label}: durationSec phải > 0`);
         }
-        if (!validateBeatVisualDescription(section.visual_description)) {
+        if (options?.requireVisualDescription !== false && !validateBeatVisualDescription(section.visual_description)) {
             errors.push(`${label}: visual_description không được để trống`);
         }
-        if (!validateBeatBackground(section.background)) {
-            errors.push(`${label}: background không được để trống, dài 3–60 từ`);
-        }
+        // if (!validateBeatBackground(section.background)) {
+        //     errors.push(`${label}: background không được để trống, dài 3–60 từ`);
+        // }
         const hasImagePromptRaw = String(section.image_prompt || '').trim() !== '';
         if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${label}: thiếu image_prompt cho whiteboard`);
         } else if (hasImagePromptRaw && !validateBeatImagePrompt(section.image_prompt)) {
-            errors.push(`${label}: image_prompt không hợp lệ — phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)`);
+            errors.push(`${label}: image_prompt không hợp lệ — phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)`);
         }
         // Soft 8–30s / cắt hết ý: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;

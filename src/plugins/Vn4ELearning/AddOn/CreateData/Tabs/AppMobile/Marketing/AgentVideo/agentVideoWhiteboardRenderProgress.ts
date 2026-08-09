@@ -144,13 +144,13 @@ export function whiteboardRenderProgressLabel(progress: WhiteboardRenderProgress
         ? `${progress.completed}/${progress.total} (${progress.percent}%)`
         : '0%';
     if (progress.phase === 'mux') {
-        return `Mux whiteboard · ${count}`;
+        return `Ghép audio · ${count}`;
     }
     if (progress.phase === 'concat') {
         return `Ghép silent · ${count}`;
     }
     const beatNote = progress.activeBeatId ? ` · ${progress.activeBeatId}` : '';
-    return `Render whiteboard · ${count}${beatNote}`;
+    return `Render ảnh beat · ${count}${beatNote}`;
 }
 
 export function whiteboardRenderPhaseSubtitle(progress: WhiteboardRenderProgress): string {

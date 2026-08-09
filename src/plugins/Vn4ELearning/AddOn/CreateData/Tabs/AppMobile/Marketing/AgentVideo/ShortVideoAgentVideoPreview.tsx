@@ -552,7 +552,7 @@ export default function ShortVideoAgentVideoPreview({
                                 onSaveBeatVersion={handleSaveCurrentBeatVersion}
                                 onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
                                 onRenderWhiteboardBeat={
-                                    isWhiteboardMode
+                                    isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode
                                         ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
                                         : undefined
                                 }

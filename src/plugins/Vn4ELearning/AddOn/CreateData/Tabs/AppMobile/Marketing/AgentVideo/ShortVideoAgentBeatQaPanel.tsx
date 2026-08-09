@@ -12,11 +12,13 @@ import {
     Typography,
 } from '@mui/material';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
+import { beatImagePromptToText } from './agentVideoBeatMap';
 import {
     BEAT_QA_QUICK_NOTE_GROUPS,
     BEAT_QA_STATUSES,
@@ -364,6 +366,22 @@ export default function ShortVideoAgentBeatQaPanel({
     const [qaStatus, setQaStatus] = React.useState<BeatQaStatus>('');
     const [qaRefineNote, setQaRefineNote] = React.useState('');
     const syncedBeatRef = React.useRef('');
+
+    const imagePromptText = beatImagePromptToText(beatImage?.image_prompt || '').trim();
+    const [copiedImagePrompt, setCopiedImagePrompt] = React.useState(false);
+
+    const handleCopyImagePrompt = async () => {
+        if (!imagePromptText) {
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(imagePromptText);
+            setCopiedImagePrompt(true);
+            window.setTimeout(() => setCopiedImagePrompt(false), 2000);
+        } catch {
+            showMessage('Không copy được — trình duyệt chặn clipboard', 'error');
+        }
+    };
 
     const qaSource = isWhiteboardMode ? beatImage : beatHtml;
     const qaStatusValue = qaSource?.qa_status;
@@ -999,7 +1017,30 @@ export default function ShortVideoAgentBeatQaPanel({
                             pb: 1,
                         }}
                     >
-                        <SectionLabel>Preview video beat</SectionLabel>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <SectionLabel sx={{ flex: 1, mb: 0 }}>Preview video beat</SectionLabel>
+                            {imagePromptText ? (
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<ContentCopyIcon fontSize="small" />}
+                                    onClick={() => { void handleCopyImagePrompt(); }}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 650,
+                                        fontSize: 11,
+                                        color: '#93c5fd',
+                                        borderColor: 'rgba(96,165,250,0.4)',
+                                        '&:hover': {
+                                            borderColor: 'rgba(96,165,250,0.7)',
+                                            bgcolor: 'rgba(59,130,246,0.1)',
+                                        },
+                                    }}
+                                >
+                                    {copiedImagePrompt ? 'Đã copy' : 'Copy prompt ảnh beat'}
+                                </Button>
+                            ) : null}
+                        </Stack>
                         {beatVideoPreviewUrl ? (
                             <Box
                                 sx={{

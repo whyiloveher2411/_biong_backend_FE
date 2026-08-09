@@ -21,7 +21,9 @@ import {
     buildBeatDivisionWhiteboardImagePromptBlock,
     buildBeatDivisionWhiteboardOutputRules,
     buildBeatDivisionWhiteboardSchemaExtra,
+    normalizeImageTextLang,
     resolveWhiteboardGenStyle,
+    stripVoiceMarkers,
 } from './agentVideoBeatDivisionWhiteboard';
 
 const GITHUB_TOP_FORMATS = new Set([
@@ -49,13 +51,18 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
     const whiteboardGenStyle = resolveWhiteboardGenStyle(
         context.agent_whiteboard_config?.gen_style as string | undefined,
     );
+    const imageTextLang = normalizeImageTextLang(context.agent_image_text_lang);
     const whiteboardBlock = isWhiteboard
-        ? buildBeatDivisionWhiteboardImagePromptBlock(whiteboardGenStyle)
+        ? buildBeatDivisionWhiteboardImagePromptBlock(whiteboardGenStyle, imageTextLang)
         : '';
     const whiteboardRules = isWhiteboard
-        ? buildBeatDivisionWhiteboardOutputRules(whiteboardGenStyle)
+        ? buildBeatDivisionWhiteboardOutputRules(whiteboardGenStyle, imageTextLang)
         : [];
-    const whiteboardSchemaExtra = buildBeatDivisionWhiteboardSchemaExtra(isWhiteboard, whiteboardGenStyle);
+    const whiteboardSchemaExtra = buildBeatDivisionWhiteboardSchemaExtra(
+        isWhiteboard,
+        whiteboardGenStyle,
+        imageTextLang,
+    );
     const visualSuffix = isWhiteboard
         ? ' (ảnh whiteboard làm thủ công qua Duck.ai sau — **chỉ visual, không karaoke**).'
         : ' (HTML generate sau — **chỉ visual, không karaoke**).';
@@ -109,7 +116,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             '- Mỗi section bắt buộc `visual_description`: follow **Visual description — creative summary** above; English; approximately **40–100 words**; semantic and style-neutral.',
             '- Mỗi section bắt buộc `background` (tiếng Anh, 3–60 từ): mood + texture + 1–2 ràng buộc ngắn; AI tự chọn nền phù hợp visual/nội dung beat.',
             '- Ví dụ background: `Dark navy void, soft grain, cyan haze; no photo plates, no hard cut between beats`.',
-            '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`.',
+            '- Field string JSON: **viết nội dung bình thường** — parser tự escape dấu nháy; `image_prompt` là JSON object thật (không phải string).',
             '- Cấm visual_description tự đặt palette, font hoặc theme hệ thống; toàn clip lấy từ visual_style.',
             '- Không xuất `hf_prompt_type` hoặc `image_url`.',
             ...whiteboardRules,
@@ -127,7 +134,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             `Source format: ${sourceFormat}`,
             '',
             '## Audio script',
-            String(context.audio_script || '').trim() || '(trống)',
+            stripVoiceMarkers(String(context.audio_script || '').trim()) || '(trống)',
             '',
             '## Whisper word timing (chỉ pacing — KHÔNG dùng text làm karaoke/subtitle trong HTML beat)',
             '```text',
@@ -139,8 +146,9 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
             JSON.stringify(visualLibrary, null, 2),
             '```',
             '',
-            '## Thumbnail',
-            context.thumbnail_url || '—',
+            ...(String(context.thumbnail_url || '').trim()
+                ? ['## Thumbnail', context.thumbnail_url || '—']
+                : []),
         ].join('\n');
     }
 
@@ -163,7 +171,18 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- **Cấm** đặt `endSec` giữa cụm từ đang nói dở — không bao giờ cắt giữa câu.',
         '- `phrase_anchor` = **toàn bộ** lời thoại thuộc beat, **hết ý**; `endSec` = Whisper end của **từ cuối** `phrase_anchor`.',
         '- Dùng Whisper word timing để neo `startSec`/`endSec` sát biên câu đó (cuối từ cuối của câu / trước từ đầu câu sau).',
-        '- Số beat = theo số ý/đoạn phù hợp — **không** target `ceil(duration/12)`.',
+        '- **Nội suy timing từ Whisper (deterministic)**: Whisper không căn đúng theo từng dòng script → khi một đoạn Whisper chứa **nhiều dòng script**: `word_count` = số token sau khi split theo **whitespace** — **dấu câu gắn liền token vẫn tính là 1 token** (vd `"DNA."` = 1 token); `duration_i = segment_duration × (word_count_i / total_word_count)`; gán lần lượt `startSec`/`endSec` theo biên cộng dồn (vd 2 dòng 10 từ + 20 từ → dòng 1 lấy 1/3, dòng 2 lấy 2/3 khoảng thời gian).',
+        '- **Gap Whisper**: nếu Whisper có **khoảng lặng** giữa 2 đoạn (đầu dòng sau muộn hơn hẳn cuối dòng trước) → **kéo dài beat trước tới `start` của beat sau** (gán khoảng lặng vào beat trước), đảm bảo sections liên tục không gap.',
+        '- **Merged transition beat**: semantic payload = **dòng THỨ 2** (dòng nội dung); transition phrase CHỈ ảnh hưởng narration flow — **cấm** lấy ý nghĩa transition phrase làm visual (vd "Nói cách khác" + "DNA bắt đầu hư hỏng" → subject/action theo DNA damage, KHÔNG vẽ chữ "Nói cách khác").',
+        '- **Số sections = số beat theo segmentation priority (deterministic)**: ① mỗi dòng không trống = 1 beat; ② CHỈ gộp khi dòng thuộc danh sách transition phrase ("Đầu tiên", "Nói cách khác", "Chưa dừng lại ở đó", "Thế nhưng", "Và thế là") → gộp với dòng kế tiếp; ③ KHÔNG suy luận semantic để gộp thêm; KHÔNG hardcode số beat, không dùng bất kỳ con số cố định nào.',
+        '- **Transition phrase match (deterministic tuyệt đối)**: CHỈ hợp lệ khi **toàn bộ dòng**, sau khi **trim whitespace đầu/cuối**, khớp **chính xác** một trong các chuỗi trên — **không** bỏ dấu câu, **không** case-insensitive (vd `"Đầu tiên:"`, `"Đầu tiên,"`, `"ĐẦU TIÊN"`, `"Đầu tiên chúng ta thấy"` KHÔNG phải transition phrase → beat độc lập).',
+        '- **Transition phrase ở dòng CUỐI** (không có dòng kế tiếp) → **coi là 1 beat độc lập** — không được bỏ qua.',
+        '- **NO SEMANTIC INFERENCE (cấm tuyệt đối)**: không dùng semantic similarity, causal flow, visual similarity hay scene similarity để **gộp beat**, **tách beat** hoặc **thay đổi phrase_anchor** — segmentation chỉ phụ thuộc: ① line boundary ② transition phrase list.',
+        '- **Coverage (công thức — BẮT BUỘC)**: `sections[0].startSec == 0`; `sections[last].endSec == totalVideoSec`; `∀i: sections[i].endSec == sections[i+1].startSec` (không overlap, không gap) — **sai số cho phép ±0.001 giây**.',
+        '- **Transition phrase match (deterministic tuyệt đối)**: CHỈ hợp lệ khi **toàn bộ dòng**, sau khi **trim whitespace đầu/cuối**, khớp **chính xác** một trong các chuỗi trên — **không** bỏ dấu câu, **không** case-insensitive (vd `"Đầu tiên:"`, `"ĐẦU TIÊN"` KHÔNG phải transition phrase → beat độc lập).',
+        '- **Transition phrase ở dòng CUỐI** (không có dòng kế tiếp) → **coi là 1 beat độc lập** — không được bỏ qua.',
+        '- `phrase_anchor` = **bản sao byte-for-byte của dòng script gốc** (sau khi loại bỏ ký tự xuống dòng cuối dòng) — **không chuẩn hóa chính tả, không sửa dấu câu, không thay đổi khoảng trắng bên trong**; `endSec` = Whisper end của **từ cuối** `phrase_anchor`.',
+        '- **Validation số beat (bắt buộc trước khi xuất JSON)**: `expected_beats` = số dòng không trống − số transition phrase hợp lệ (đã gộp); `actual_beats` = `sections.length`; **`expected_beats` PHẢI bằng `actual_beats`** — nếu không bằng → **tính lại segmentation** trước khi xuất.',
         '- Ví dụ BAD: `phrase_anchor` kết thúc `…nguyên khối đâu,` / `endSec` giữa câu.',
         '- Ví dụ GOOD: giữ tới hết `…gọi là packets.` rồi mới cắt beat tiếp.',
         '',
@@ -189,7 +208,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
                     durationSec: 12.4,
                     phrase_anchor: 'đoạn script tại beat này',
                     visual_description: 'A single content channel tries to grab four incompatible trend objects arriving from different directions: a comedy mask, a football, a news microphone, and a film clapper. Each object pulls the channel toward a different path, stretching and fragmenting its structure. As it reaches for the final trend, the channel breaks apart and becomes inactive while all four trends continue moving past, making the consequence visible without warning symbols.',
-                    background: 'Deep charcoal void, soft grain, cool cyan haze; no photo plates, no hard cut between beats',
+                    ...(isWhiteboard ? {} : { background: 'Deep charcoal void, soft grain, cool cyan haze; no photo plates, no hard cut between beats' }),
                     ...whiteboardSchemaExtra,
                 },
             ],
@@ -206,7 +225,7 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         '- `visual_description`: follow **Visual description — creative direction** above; English; approximately **40–100 words**; semantic and style-neutral',
         '- `background` bắt buộc mỗi section, tiếng Anh 3–60 từ: mood + texture + ràng buộc ngắn; AI tự chọn nền phù hợp visual',
         '- Ví dụ background: `Dark navy void, soft grain, cyan haze; no photo plates, no hard cut between beats`',
-        '- Field string JSON: **cấm nháy kép thô** trong nội dung — dùng nháy đơn hoặc `\\"`; ngoại lệ duy nhất: `image_prompt` (bắt buộc JSON object nên nháy kép phải escape `\\"` đầy đủ).',
+        '- Field string JSON: **viết nội dung bình thường** — parser tự escape dấu nháy; `image_prompt` là JSON object thật (không phải string).',
         '- Cấm visual_description tự đặt palette, font hoặc theme hệ thống; toàn clip lấy từ visual_style',
         '- Không xuất `hf_prompt_type` hoặc `image_url`',
         ...whiteboardRules,
@@ -234,7 +253,8 @@ export function buildBeatDivisionPrompt(context: ImportHtmlContextPayload): stri
         JSON.stringify(visualLibrary, null, 2),
         '```',
         '',
-        '## Thumbnail',
-        context.thumbnail_url || '—',
+        ...(String(context.thumbnail_url || '').trim()
+            ? ['## Thumbnail', context.thumbnail_url || '—']
+            : []),
     ].join('\n');
 }

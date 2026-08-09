@@ -26,6 +26,8 @@ export type AgentWhiteboardConfig = {
     color_ratio?: number;
     photo_place_mode?: 'draw' | 'drag' | 'instant' | string;
     transition_duration_sec?: number;
+    /** Tài nguyên riêng lẻ (chuẩn bị cho CapCut) — bỏ render video beat, ghép final, upload store, BGM, thumbnail. */
+    assets_mode?: boolean;
 };
 
 export type AgentWhiteboardBeatOverride = {
@@ -450,6 +452,25 @@ export function normalizeBeatImageFillMode(raw?: string | null): BeatImageFillMo
     return value === 'manual' ? 'manual' : 'auto';
 }
 
+/** Chỉ chạy beat còn thiếu ảnh khi fill ảnh beat — agent_video_json.beat_image_fill_only_missing. */
+export type BeatImageFillOnlyMissing = boolean;
+
+export const DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING = true;
+
+export function normalizeBeatImageFillOnlyMissing(raw?: boolean | string | number | null): boolean {
+    if (typeof raw === 'boolean') {
+        return raw;
+    }
+    if (typeof raw === 'number') {
+        return raw !== 0;
+    }
+    if (typeof raw === 'string') {
+        const value = raw.trim().toLowerCase();
+        return value === '' || ['1', 'true', 'yes', 'on'].includes(value);
+    }
+    return DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING;
+}
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -481,6 +502,7 @@ export type AgentVideoContentResponse = {
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
+    agent_image_text_lang?: AgentImageTextLang | string;
     agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
     agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
@@ -604,6 +626,7 @@ export type AgentVideoContentResponse = {
     full_auto_pipeline?: FullAutoPipelineSummary;
     full_auto_step_toggles?: FullAutoStepToggles;
     beat_image_fill_mode?: BeatImageFillMode | string;
+    beat_image_fill_only_missing?: boolean;
     github_top_enrich?: GithubTopEnrichSummary;
     topic_research?: TopicResearchBlock;
     remix?: RemixBlock;
@@ -805,13 +828,17 @@ export type FullAutoPipelineSummary = {
 /** Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles (mặc định true). */
 export type FullAutoStepToggleKey =
     | 'script_improve'
-    | 'script_phonetic_normalize';
+    | 'script_phonetic_normalize'
+    | 'render'
+    | 'thumbnail';
 
 export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 
 export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     script_improve: true,
     script_phonetic_normalize: true,
+    render: true,
+    thumbnail: true,
 };
 
 export function normalizeFullAutoStepToggles(
@@ -820,16 +847,24 @@ export function normalizeFullAutoStepToggles(
     return {
         script_improve: raw?.script_improve !== false,
         script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
+        render: raw?.render !== false,
+        thumbnail: raw?.thumbnail !== false,
     };
 }
 
-/** Map pipeline step → toggle key (improve+QA dùng chung). */
+/** Map pipeline step → toggle key (improve+QA dùng chung; render+upload; thumbnail 3 bước). */
 export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggleKey | null {
     if (stepKey === 'script_improve' || stepKey === 'script_improve_qa') {
         return 'script_improve';
     }
     if (stepKey === 'script_phonetic_normalize') {
         return stepKey;
+    }
+    if (stepKey === 'render' || stepKey === 'upload') {
+        return 'render';
+    }
+    if (stepKey === 'thumbnail_idea' || stepKey === 'thumbnail_fill' || stepKey === 'thumbnail_capture') {
+        return 'thumbnail';
     }
     return null;
 }
@@ -1301,13 +1336,15 @@ export async function saveFullAutoStepToggles(
 export async function saveBeatImageFillMode(
     shortVideoId: number,
     mode: BeatImageFillMode,
-): Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode }> {
+    onlyMissing?: boolean,
+): Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode; beat_image_fill_only_missing?: boolean }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-image-fill-mode',
         shortVideoBody(shortVideoId, {
             beat_image_fill_mode: mode,
+            ...(onlyMissing !== undefined ? { beat_image_fill_only_missing: onlyMissing ? '1' : '0' } : {}),
         }),
-    ) as Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode }>;
+    ) as Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode; beat_image_fill_only_missing?: boolean }>;
 }
 
 export async function saveAgentGeminiOpenBrowser(
@@ -1418,12 +1455,30 @@ export async function saveAgentBeatFrequency(
     ) as Promise<JsonResponse & { agent_beat_frequency?: string }>;
 }
 
+export type AgentImageTextLang = 'vi' | 'en';
+
+export function normalizeAgentImageTextLang(raw: unknown): AgentImageTextLang {
+    const value = String(raw || '').trim().toLowerCase();
+    return value === 'en' || value === 'english' ? 'en' : 'vi';
+}
+
+export async function saveAgentImageTextLang(
+    shortVideoId: number,
+    lang: AgentImageTextLang,
+): Promise<JsonResponse & { agent_image_text_lang?: AgentImageTextLang }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-image-text-lang',
+        shortVideoBody(shortVideoId, { agent_image_text_lang: lang }),
+    ) as Promise<JsonResponse & { agent_image_text_lang?: AgentImageTextLang }>;
+}
+
 export type WhiteboardTransitionOption = {
     id: string;
     label: string;
 };
 
 export const DEFAULT_WHITEBOARD_TRANSITIONS: WhiteboardTransitionOption[] = [
+    { id: 'none', label: 'Không hiệu ứng (cắt thẳng)' },
     { id: 'camera_pan', label: 'Camera pan' },
     { id: 'erase', label: 'Xóa bảng' },
     { id: 'slide', label: 'Tay kéo' },
@@ -1501,6 +1556,7 @@ export async function enqueueGeminiWebBeatImageFill(
     shortVideoId: number,
     beatIds?: string[],
     force = true,
+    onlyMissing = true,
 ): Promise<JsonResponse & {
     queued?: number;
     skipped_active?: number;
@@ -1512,6 +1568,7 @@ export async function enqueueGeminiWebBeatImageFill(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/enqueue-gemini-web-beat-image-fill',
         shortVideoBody(shortVideoId, {
             force: force ? '1' : '0',
+            only_missing: onlyMissing ? '1' : '0',
             ...(beatIds ? { beat_ids: beatIds } : {}),
         }),
     ) as Promise<JsonResponse & {
@@ -1814,20 +1871,102 @@ export async function enqueueGeminiWebBeatDivision(
 export async function fetchBeatDivisionPrompt(
     shortVideoId: number,
     contentMode: 'text' | 'file' = 'text',
+    limitBeats = 0,
+    phase: 'full' | 'segmentation' = 'full',
 ): Promise<JsonResponse & {
     prompt?: string;
     content?: string;
     content_file_name?: string;
+    limit_beats?: number;
+    phase?: string;
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/get-beat-division-prompt',
         shortVideoBody(shortVideoId, {
             content_mode: contentMode === 'file' ? 'file' : 'inline',
+            limit_beats: Math.max(0, Number(limitBeats) || 0),
+            phase: phase === 'segmentation' ? 'segmentation' : 'full',
         }),
     ) as Promise<JsonResponse & {
         prompt?: string;
         content?: string;
         content_file_name?: string;
+        limit_beats?: number;
+        phase?: string;
+    }>;
+}
+
+/** Giai đoạn 2 — prompt visual image_prompt theo chunk (2-phase manual). */
+export async function fetchBeatVisualPrompt(
+    shortVideoId: number,
+    segments: unknown[],
+    chunkIndex = 0,
+    chunkSize = 10,
+    all = false,
+): Promise<JsonResponse & {
+    prompt?: string;
+    chunk_index?: number;
+    chunk_size?: number;
+    chunk_total?: number;
+    beat_total?: number;
+    expected_ids?: string[];
+    all?: boolean;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/get-beat-visual-prompt',
+        shortVideoBody(shortVideoId, {
+            segments: JSON.stringify(segments),
+            chunk_index: Math.max(0, Number(chunkIndex) || 0),
+            chunk_size: Math.max(1, Number(chunkSize) || 10),
+            all: all ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & {
+        prompt?: string;
+        chunk_index?: number;
+        chunk_size?: number;
+        chunk_total?: number;
+        beat_total?: number;
+        expected_ids?: string[];
+        all?: boolean;
+    }>;
+}
+
+/** Lưu draft JSON giai đoạn 1/2 — giữ lại khi refresh, user sửa thủ công được. */
+export async function saveBeatDivisionDraft(
+    shortVideoId: number,
+    phase: '1' | '2',
+    jsonText: string,
+): Promise<JsonResponse & {
+    phase?: string;
+    beat_count?: number;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/save-beat-division-draft',
+        shortVideoBody(shortVideoId, {
+            phase,
+            json_text: jsonText,
+        }),
+    ) as Promise<JsonResponse & {
+        phase?: string;
+        beat_count?: number;
+    }>;
+}
+
+/** Đọc draft JSON giai đoạn 1/2 đã lưu. */
+export async function fetchBeatDivisionDraft(shortVideoId: number): Promise<JsonResponse & {
+    phase1_json?: string | null;
+    phase2_json?: string | null;
+    phase1_valid?: boolean;
+    phase2_valid?: boolean;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/get-beat-division-draft',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<JsonResponse & {
+        phase1_json?: string | null;
+        phase2_json?: string | null;
+        phase1_valid?: boolean;
+        phase2_valid?: boolean;
     }>;
 }
 
@@ -2609,6 +2748,47 @@ export async function addAudioToCapcut(
         project_name?: string;
         project_path?: string;
         created_project?: boolean;
+        capcut_last_sync_json?: Record<string, unknown>;
+    }>;
+}
+
+export type CapcutUploadBeatEntry = {
+    beat_id?: string;
+    start_sec?: number;
+    duration_sec?: number;
+    media?: 'image' | 'video' | string;
+};
+
+export type CapcutUploadFailedBeat = {
+    beat_id?: string;
+    reason?: string;
+};
+
+export async function uploadAllToCapcut(
+    shortVideoId: number,
+): Promise<JsonResponse & {
+    project_name?: string;
+    project_path?: string;
+    created_project?: boolean;
+    added_audio?: boolean;
+    audio_error?: string;
+    added_beats?: CapcutUploadBeatEntry[];
+    failed_beats?: CapcutUploadFailedBeat[];
+    assets_mode?: boolean;
+    capcut_last_sync_json?: Record<string, unknown>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/upload-all-to-capcut',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & {
+        project_name?: string;
+        project_path?: string;
+        created_project?: boolean;
+        added_audio?: boolean;
+        audio_error?: string;
+        added_beats?: CapcutUploadBeatEntry[];
+        failed_beats?: CapcutUploadFailedBeat[];
+        assets_mode?: boolean;
         capcut_last_sync_json?: Record<string, unknown>;
     }>;
 }

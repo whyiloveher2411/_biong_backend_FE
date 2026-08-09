@@ -19,6 +19,8 @@ import {
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
     type FullAutoPipelineSummary,
+    type FullAutoStepToggleKey,
+    type FullAutoStepToggles,
 } from './agentVideoApi';
 import { PipelineGroupedStepList } from './FullAutoPipelineGroupedSteps';
 import { appendHeadlessHowtoToError } from './agentVideoHeadlessPrerequisites';
@@ -46,6 +48,9 @@ type Props = {
     /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
     agentGeminiOpenBrowser?: boolean;
     agentVisualMode?: string;
+    stepToggles?: FullAutoStepToggles;
+    stepToggleDisabled?: boolean;
+    onStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     whiteboardRenderProgress?: WhiteboardRenderProgress | null;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
@@ -158,6 +163,9 @@ export default function ShortVideoAgentHeadlessPreview({
     headlessBrowserActive = false,
     agentGeminiOpenBrowser = false,
     agentVisualMode = '',
+    stepToggles,
+    stepToggleDisabled = false,
+    onStepToggleChange,
     whiteboardRenderProgress = null,
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
@@ -375,7 +383,7 @@ export default function ShortVideoAgentHeadlessPreview({
             || (
                 whiteboardRenderProgress && whiteboardRenderProgress.total > 0
                     ? `${whiteboardRenderProgress.completed}/${whiteboardRenderProgress.total} beat`
-                    : 'Đang chuẩn bị render whiteboard…'
+                    : 'Đang chuẩn bị render ảnh beat…'
             )
         )
         : '';
@@ -413,7 +421,7 @@ export default function ShortVideoAgentHeadlessPreview({
                     ? 'Đang nối lại WebSocket preview…'
                     : preview.sessionActive
                         ? 'Publisher đã nối — đang chờ JPEG screencast'
-                        : 'Relay đã nối nhưng chưa có session Gemini publish frame. Kiểm tra worker có HEADLESS_PREVIEW_INGEST_URL và job đang chạy thật.'
+                        : 'Relay đã nối nhưng chưa có session Gemini publish frame — job Gemini chưa mở browser hoặc đã fail (kiểm tra worker đang chạy, cookie Gemini/Meta.ai còn hạn, và log worker)'
         );
 
     return (
@@ -637,6 +645,9 @@ export default function ShortVideoAgentHeadlessPreview({
                         agentVisualMode={agentVisualMode}
                         pipelineStatus={pipeline.status}
                         currentStep={currentStep}
+                        stepToggles={stepToggles}
+                        stepToggleDisabled={stepToggleDisabled}
+                        onStepToggleChange={onStepToggleChange}
                     />
                 </Box>
             ) : null}

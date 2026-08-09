@@ -9,8 +9,8 @@ import { isAgentWhiteboardMode } from './agentVideoVisualMode';
 export const EXTENDED_PIPELINE_STEP_LABELS: Record<string, string> = {
     ...FULL_AUTO_PIPELINE_STEP_LABELS,
     beat_image_fill: 'Ảnh beat',
-    whiteboard_render: 'Render whiteboard beats',
-    whiteboard_mux: 'Mux whiteboard + audio',
+    whiteboard_render: 'Render ảnh beat',
+    whiteboard_mux: 'Ghép video + audio',
 };
 
 /** Chỉ thuộc Motion HTML — whiteboard auto-skip, ẩn khỏi UI. */
@@ -37,9 +37,9 @@ const FULL_AUTO_PIPELINE_UI_HIDDEN_EXTRA_STEPS = [
 
 const WHITEBOARD_PIPELINE_STEP_LABELS: Record<string, string> = {
     beat_image_fill: 'Ảnh beat',
-    render: 'Render whiteboard beats',
-    whiteboard_render: 'Render whiteboard beats',
-    whiteboard_mux: 'Mux whiteboard + audio',
+    render: 'Render ảnh beat',
+    whiteboard_render: 'Render ảnh beat',
+    whiteboard_mux: 'Ghép video + audio',
 };
 
 export function isFullAutoPipelineStepRelevantForMode(

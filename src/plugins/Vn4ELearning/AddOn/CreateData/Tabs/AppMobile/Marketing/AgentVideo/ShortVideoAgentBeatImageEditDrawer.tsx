@@ -134,7 +134,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
     const handleRegenerate = async () => {
         const prompt = imagePrompt.trim();
         if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)', 'warning');
+            showMessage('image_prompt phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)', 'warning');
             return;
         }
         setAiLoading(true);
@@ -169,7 +169,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         }
         const prompt = imagePrompt.trim();
         if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải là JSON đủ 9 field (purpose, context, subject, action, scene, text_overlay, mood, composition, must_avoid)', 'warning');
+            showMessage('image_prompt phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)', 'warning');
             return;
         }
         setAiLoading(true);

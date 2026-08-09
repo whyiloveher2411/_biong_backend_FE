@@ -201,19 +201,20 @@ function PipelineStepTitle({
                     minWidth: 0,
                     flex: 1,
                     display: 'flex',
-                    flexWrap: 'wrap',
                     alignItems: 'center',
                     columnGap: 0.45,
-                    rowGap: 0.2,
                 }}
             >
                 <Typography
                     component="span"
+                    noWrap
                     sx={{
                         fontSize: 11,
                         lineHeight: 1.25,
                         fontWeight: 500,
                         color: 'text.primary',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                         ...typographySx,
                     }}
                 >
@@ -385,6 +386,10 @@ type PipelineGroupedCommonProps = {
     beatImageFillMode?: BeatImageFillMode;
     beatImageFillModeDisabled?: boolean;
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
+    /** Chỉ chạy beat còn thiếu ảnh khi fill ảnh beat. */
+    beatImageFillOnlyMissing?: boolean;
+    beatImageFillOnlyMissingDisabled?: boolean;
+    onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
 };
 
 type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
@@ -423,6 +428,9 @@ export function PipelineGroupedMenuItems({
     beatImageFillMode = 'auto',
     beatImageFillModeDisabled = false,
     onBeatImageFillModeChange,
+    beatImageFillOnlyMissing = true,
+    beatImageFillOnlyMissingDisabled = false,
+    onBeatImageFillOnlyMissingChange,
     restartableSet,
     disabled = false,
     onSelectStep,
@@ -478,7 +486,7 @@ export function PipelineGroupedMenuItems({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && (rowToggleKey === 'script_phonetic_normalize'),
+            && rowToggleKey === 'script_phonetic_normalize',
         );
 
         return (
@@ -490,6 +498,8 @@ export function PipelineGroupedMenuItems({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    rowGap: 0.5,
                     gap: 1.25,
                     minWidth: 340,
                     py: inLoop ? 0.65 : 0.85,
@@ -523,8 +533,13 @@ export function PipelineGroupedMenuItems({
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        flexWrap: 'wrap',
+                        rowGap: 0.5,
                         gap: 0.75,
-                        flexShrink: 0,
+                        flexShrink: 1,
+                        minWidth: 0,
+                        maxWidth: '100%',
                     }}
                 >
                     {isScriptImproveQaLoopStep(key) && loopView.isLoopActive ? (
@@ -598,6 +613,9 @@ export function PipelineGroupedMenuItems({
                             value={beatImageFillMode}
                             disabled={disabled || beatImageFillModeDisabled}
                             onChange={onBeatImageFillModeChange}
+                            onlyMissing={beatImageFillOnlyMissing}
+                            onlyMissingDisabled={disabled || beatImageFillOnlyMissingDisabled}
+                            onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
                         />
                     ) : null}
                 </Box>
@@ -654,6 +672,15 @@ export function PipelineGroupedMenuItems({
                             >
                                 {group.label}
                             </Typography>
+                            {group.key === 'render' || group.key === 'thumbnail' ? (
+                                <PipelineStepToggleCheckbox
+                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
+                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
+                                    disabled={stepToggleDisabled}
+                                    onChange={onStepToggleChange}
+                                    size="section"
+                                />
+                            ) : null}
                             {isRenderGroup ? (
                                 <PipelineRenderRunButton
                                     onClick={onRerunRenderUpload}
@@ -704,6 +731,9 @@ export function PipelineGroupedStepList({
     beatImageFillMode = 'auto',
     pipelineStatus,
     currentStep = '',
+    stepToggles,
+    stepToggleDisabled = false,
+    onStepToggleChange,
 }: PipelineGroupedStepListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -729,6 +759,14 @@ export function PipelineGroupedStepList({
         const status = String(steps?.[key]?.status || 'pending');
         const isCurrent = key === currentStep;
         const statusLabel = resolveStepStatusLabel(key, status, loopView);
+        const rowToggleKey = !inLoop && !isScriptImproveQaLoopStep(key)
+            ? fullAutoStepToggleKeyForStep(key)
+            : null;
+        const showRowToggle = Boolean(
+            rowToggleKey
+            && onStepToggleChange
+            && rowToggleKey === 'script_phonetic_normalize',
+        );
 
         return (
             <Box
@@ -737,6 +775,8 @@ export function PipelineGroupedStepList({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    rowGap: 0.5,
                     gap: 1,
                     py: inLoop ? 0.3 : 0.35,
                     pl: inLoop ? 0.65 : 1.75,
@@ -778,6 +818,14 @@ export function PipelineGroupedStepList({
                 ) : (
                     <PipelineStepStatusChip status={status} compact />
                 )}
+                {showRowToggle && rowToggleKey ? (
+                    <PipelineStepToggleCheckbox
+                        toggleKey={rowToggleKey}
+                        checked={stepToggles?.[rowToggleKey] !== false}
+                        disabled={stepToggleDisabled}
+                        onChange={onStepToggleChange}
+                    />
+                ) : null}
             </Box>
         );
     };
@@ -800,20 +848,39 @@ export function PipelineGroupedStepList({
                             bgcolor: surface.bgcolor,
                         }}
                     >
-                        <Typography
-                            variant="subtitle2"
+                        <Box
                             sx={{
-                                display: 'block',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1,
                                 pb: 0.55,
-                                fontSize: 12,
-                                fontWeight: 800,
-                                color: surface.headerColor,
-                                letterSpacing: 0.2,
                                 px: 0.5,
                             }}
                         >
-                            {group.label}
-                        </Typography>
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    color: surface.headerColor,
+                                    letterSpacing: 0.2,
+                                }}
+                            >
+                                {group.label}
+                            </Typography>
+                            {group.key === 'render' || group.key === 'thumbnail' ? (
+                                <PipelineStepToggleCheckbox
+                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
+                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
+                                    disabled={stepToggleDisabled}
+                                    onChange={onStepToggleChange}
+                                    size="section"
+                                />
+                            ) : null}
+                        </Box>
                         {group.key === 'script' ? (() => {
                             const split = splitScriptGroupSteps(group.steps);
                             return (
@@ -858,6 +925,10 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     /** Mở drawer chuẩn hóa giọng đọc thủ công (chỉ hiển thị trên bước script_phonetic_normalize). */
     onManualScriptPhonetic?: () => void;
     manualScriptPhoneticDisabled?: boolean;
+    /** Chỉ chạy beat còn thiếu ảnh khi fill ảnh beat. */
+    beatImageFillOnlyMissing?: boolean;
+    beatImageFillOnlyMissingDisabled?: boolean;
+    onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
 };
 
 /** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
@@ -875,6 +946,9 @@ export function PipelineGroupedWorkflowListV3({
     beatImageFillMode = 'auto',
     beatImageFillModeDisabled = false,
     onBeatImageFillModeChange,
+    beatImageFillOnlyMissing = true,
+    beatImageFillOnlyMissingDisabled = false,
+    onBeatImageFillOnlyMissingChange,
     onRerunRenderUpload,
     rerunRenderUploadDisabled = false,
     rerunningRenderUpload = false,
@@ -937,7 +1011,7 @@ export function PipelineGroupedWorkflowListV3({
         const showRowToggle = Boolean(
             rowToggleKey
             && onStepToggleChange
-            && (rowToggleKey === 'script_phonetic_normalize'),
+            && rowToggleKey === 'script_phonetic_normalize',
         );
 
         return (
@@ -1057,6 +1131,9 @@ export function PipelineGroupedWorkflowListV3({
                             value={beatImageFillMode}
                             disabled={selectStepDisabled || beatImageFillModeDisabled}
                             onChange={onBeatImageFillModeChange}
+                            onlyMissing={beatImageFillOnlyMissing}
+                            onlyMissingDisabled={selectStepDisabled || beatImageFillOnlyMissingDisabled}
+                            onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
                         />
                     ) : null}
                 </Box>
@@ -1114,6 +1191,15 @@ export function PipelineGroupedWorkflowListV3({
                             >
                                 {group.label}
                             </Typography>
+                            {group.key === 'render' || group.key === 'thumbnail' ? (
+                                <PipelineStepToggleCheckbox
+                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
+                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
+                                    disabled={stepToggleDisabled}
+                                    onChange={onStepToggleChange}
+                                    size="section"
+                                />
+                            ) : null}
                             {isRenderGroup ? (
                                 <PipelineRenderRunButton
                                     onClick={onRerunRenderUpload}

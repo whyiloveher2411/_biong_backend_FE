@@ -10,5 +10,5 @@ export function isAgentWhiteboardMode(mode: unknown): boolean {
 }
 
 export function agentVisualModeLabel(mode: AgentVisualMode): string {
-    return mode === 'whiteboard' ? 'Whiteboard' : 'Motion HTML';
+    return mode === 'whiteboard' ? 'Image' : 'Motion HTML';
 }

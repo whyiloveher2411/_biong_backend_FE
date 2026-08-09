@@ -21,7 +21,7 @@ import {
     resolveDefaultPreviewSource,
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
-import { getBeatTimelineSegments, resolveActiveBeatSection } from './agentVideoBeatMap';
+import { beatImagePromptToText, getBeatTimelineSegments, resolveActiveBeatSection } from './agentVideoBeatMap';
 
 type Props = {
     open: boolean;
@@ -543,9 +543,11 @@ export default function ShortVideoAgentVideoWorkspace({
                     onOpenBeatGeminiHeadless={(beatId) => {
                         void state.handleOpenBeatGeminiHeadless(beatId);
                     }}
-                    onRenderWhiteboardBeat={(beatId) => {
-                        void state.handleRenderWhiteboardBeat(beatId);
-                    }}
+                    onRenderWhiteboardBeat={state.agentWhiteboardConfig?.assets_mode
+                        ? undefined
+                        : (beatId) => {
+                            void state.handleRenderWhiteboardBeat(beatId);
+                        }}
                     onAddBeatVideoToCapcut={(beatId) => {
                         void state.handleAddBeatVideoToCapcut(beatId);
                     }}
@@ -608,6 +610,10 @@ export default function ShortVideoAgentVideoWorkspace({
                     onBeatImageFillModeChange={(mode) => {
                         void state.handleBeatImageFillModeChange(mode);
                     }}
+                    beatImageFillOnlyMissing={state.beatImageFillOnlyMissing}
+                    onBeatImageFillOnlyMissingChange={(checked) => {
+                        void state.handleBeatImageFillOnlyMissingChange(checked);
+                    }}
                     agentVisualMode={state.agentVisualMode}
                     startingFullAuto={state.startingFullAuto}
                     cancellingFullAuto={state.cancellingFullAuto}
@@ -655,7 +661,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 durationSec={editBeatSection?.durationSec ?? null}
                 initialVisualDescription={String(editBeatSection?.visual_description || '')}
                 initialBackground={String(editBeatSection?.background || '')}
-                initialImagePrompt={String(state.beatImage[editBeatImageId]?.image_prompt || editBeatSection?.image_prompt || '')}
+                initialImagePrompt={beatImagePromptToText(state.beatImage[editBeatImageId]?.image_prompt || editBeatSection?.image_prompt || '')}
                 initialImageUrl={String(state.beatImage[editBeatImageId]?.image_url || '')}
                 initialCreativePrompt={String(state.beatImage[editBeatImageId]?.creative_prompt || '')}
                 clipAspect={state.agentClipAspect}
@@ -688,6 +694,11 @@ export default function ShortVideoAgentVideoWorkspace({
                 headlessBrowserActive={state.headlessBrowserActive}
                 agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
                 agentVisualMode={state.agentVisualMode}
+                stepToggles={state.fullAutoStepToggles}
+                stepToggleDisabled={state.savingFullAutoStepToggles}
+                onStepToggleChange={(toggleKey, checked) => {
+                    void state.handleFullAutoStepToggleChange(toggleKey, checked);
+                }}
                 whiteboardRenderProgress={state.whiteboardRenderProgress}
                 geminiScriptStatus={state.geminiScriptStatus}
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}

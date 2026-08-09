@@ -33,7 +33,7 @@ export const AGENT_BEAT_FREQUENCY_OPTIONS: AgentBeatFrequencyOption[] = [
         key: 'free',
         label: 'Không ràng buộc',
         rangeLabel: 'mặc định hiện tại',
-        description: 'Giữ mặc định: Motion HTML 8–30s, Whiteboard 5–15s.',
+        description: 'Giữ mặc định: Motion HTML 8–30s, Image 5–15s.',
     },
 ];
 

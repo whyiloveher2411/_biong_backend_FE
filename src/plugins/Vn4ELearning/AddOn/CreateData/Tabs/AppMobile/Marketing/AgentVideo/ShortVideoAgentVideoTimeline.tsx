@@ -65,6 +65,13 @@ async function fallbackManualBeatDivisionSave(): Promise<boolean> {
     return false;
 }
 
+async function fallbackManualBeatDivisionSaveWithOptions(
+    _map: BeatMap,
+    _options?: { limitBeats?: number },
+): Promise<boolean> {
+    return fallbackManualBeatDivisionSave();
+}
+
 async function fallbackManualScriptSave(): Promise<boolean> {
     return false;
 }
@@ -174,7 +181,7 @@ type Props = {
     estimatedDurationSec?: number | null;
     shortVideoId?: number;
     agentSourceFormat?: string;
-    onSaveBeatMapManual?: (map: BeatMap) => Promise<boolean>;
+    onSaveBeatMapManual?: (map: BeatMap, options?: { limitBeats?: number }) => Promise<boolean>;
     /** Audio script hiện tại — prefill drawer tạo script thủ công. */
     audioScript?: string;
     /** Lưu script thủ công → mark script_create done. */
@@ -259,6 +266,8 @@ type Props = {
     beatImageFillMode?: BeatImageFillMode;
     savingBeatImageFillMode?: boolean;
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
+    beatImageFillOnlyMissing?: boolean;
+    onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
     agentVisualMode?: string;
     startingFullAuto?: boolean;
     cancellingFullAuto?: boolean;
@@ -345,6 +354,8 @@ export default function ShortVideoAgentVideoTimeline({
     beatImageFillMode = 'auto',
     savingBeatImageFillMode = false,
     onBeatImageFillModeChange,
+    beatImageFillOnlyMissing = true,
+    onBeatImageFillOnlyMissingChange,
     agentVisualMode = '',
     startingFullAuto = false,
     cancellingFullAuto = false,
@@ -1017,6 +1028,11 @@ export default function ShortVideoAgentVideoTimeline({
                                         onStepToggleChange={onFullAutoStepToggleChange}
                                         beatImageFillMode={beatImageFillMode}
                                         beatImageFillModeDisabled={savingBeatImageFillMode || startingFullAuto}
+                                        beatImageFillOnlyMissing={beatImageFillOnlyMissing}
+                                        beatImageFillOnlyMissingDisabled={savingBeatImageFillMode || startingFullAuto}
+                                        onBeatImageFillOnlyMissingChange={(checked) => {
+                                            void onBeatImageFillOnlyMissingChange(checked);
+                                        }}
                                         onBeatImageFillModeChange={onBeatImageFillModeChange}
                                         restartableSet={restartableSet}
                                         disabled={startingFullAuto}
@@ -1295,7 +1311,7 @@ export default function ShortVideoAgentVideoTimeline({
                 audioDurationSec={audioDurationSec}
                 agentSourceFormat={agentSourceFormat}
                 isWhiteboard={isWhiteboardMode}
-                onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSave}
+                onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSaveWithOptions}
             />
             <ShortVideoAgentScriptManualDrawer
                 open={scriptManualOpen}

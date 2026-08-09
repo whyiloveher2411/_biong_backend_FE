@@ -506,7 +506,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         {isQuickIterating || isWbProcessing ? (
                                             <Tooltip
                                                 title={isWbProcessing
-                                                    ? 'Đang render whiteboard…'
+                                                    ? 'Đang render ảnh beat…'
                                                     : quickIterateTooltip}
                                                 placement="top"
                                             >
