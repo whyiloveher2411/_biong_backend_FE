@@ -3226,7 +3226,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     ): Promise<string | null> => {
         const prompt = String(imagePrompt || '').trim();
         if (!validateBeatImagePrompt(prompt)) {
-            showMessage(`image_prompt không hợp lệ — ${describeBeatImagePromptErrors(trimmedPrompt).join('; ') || 'phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)'}`, 'warning');
+            showMessage(`image_prompt không hợp lệ — ${describeBeatImagePromptErrors(prompt).join('; ') || 'phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)'}`, 'warning');
             return null;
         }
         setRegeneratingBeatImageBeatId(beatId);

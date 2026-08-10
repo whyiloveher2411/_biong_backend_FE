@@ -262,7 +262,7 @@ type Props = {
     fullAutoPipeline?: FullAutoPipelineSummary | null;
     fullAutoStepToggles?: FullAutoStepToggles;
     savingFullAutoStepToggles?: boolean;
-    onFullAutoStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
+    onFullAutoStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     beatImageFillMode?: BeatImageFillMode;
     savingBeatImageFillMode?: boolean;
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
@@ -1031,7 +1031,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         beatImageFillOnlyMissing={beatImageFillOnlyMissing}
                                         beatImageFillOnlyMissingDisabled={savingBeatImageFillMode || startingFullAuto}
                                         onBeatImageFillOnlyMissingChange={(checked) => {
-                                            void onBeatImageFillOnlyMissingChange(checked);
+                                            onBeatImageFillOnlyMissingChange?.(checked);
                                         }}
                                         onBeatImageFillModeChange={onBeatImageFillModeChange}
                                         restartableSet={restartableSet}

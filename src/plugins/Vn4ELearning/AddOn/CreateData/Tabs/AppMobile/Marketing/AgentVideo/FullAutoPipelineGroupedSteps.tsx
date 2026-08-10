@@ -382,7 +382,7 @@ type PipelineGroupedCommonProps = {
     /** Checkbox Chạy — mặc định true; tắt = full-auto skip. */
     stepToggles?: FullAutoStepToggles;
     stepToggleDisabled?: boolean;
-    onStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
+    onStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     beatImageFillMode?: BeatImageFillMode;
     beatImageFillModeDisabled?: boolean;
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;

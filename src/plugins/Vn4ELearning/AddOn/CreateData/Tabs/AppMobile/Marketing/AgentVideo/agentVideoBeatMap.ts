@@ -581,7 +581,7 @@ export function describeBeatImagePromptErrors(value: unknown): string[] {
     if (missing.length > 0) {
         errors.push(`thiếu key: ${missing.join(', ')}`);
     }
-    const extra = keys.filter((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key));
+    const extra = keys.filter((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number]));
     if (extra.length > 0) {
         errors.push(`key thừa (cấm): ${extra.join(', ')}`);
     }

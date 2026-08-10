@@ -50,7 +50,7 @@ type Props = {
     agentVisualMode?: string;
     stepToggles?: FullAutoStepToggles;
     stepToggleDisabled?: boolean;
-    onStepToggleChange?: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
+    onStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     whiteboardRenderProgress?: WhiteboardRenderProgress | null;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;

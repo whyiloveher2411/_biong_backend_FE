@@ -1,4 +1,5 @@
 import React from 'react';
+import type { SxProps, Theme } from '@mui/material/styles';
 import {
     Box,
     Button,
@@ -113,7 +114,7 @@ function formatSavedAt(iso: string): string {
     });
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, sx }: { children: React.ReactNode; sx?: SxProps<Theme> }) {
     return (
         <Typography
             variant="caption"
@@ -124,6 +125,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 fontWeight: 600,
+                ...sx,
             }}
         >
             {children}
