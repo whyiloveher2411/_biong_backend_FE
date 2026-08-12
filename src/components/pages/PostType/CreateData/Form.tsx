@@ -923,6 +923,7 @@ export interface IActionPostType {
     check_progress?: boolean,
     skip_confirm?: boolean,
     auto_refresh?: boolean,
+    loading_title?: string,
     color?: 'inherit'
     | 'primary'
     | 'secondary'

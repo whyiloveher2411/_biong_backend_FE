@@ -22,8 +22,10 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { AgentOptionToggleGroup } from './AgentOptionToggleGroup';
@@ -373,6 +375,65 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         }
         return whiteboardTransitions[0]?.id || 'page_flip';
     }, [state.agentWhiteboardConfig?.transition, whiteboardTransitions]);
+
+    const whiteboardTransitionSelected = React.useMemo(
+        () => whiteboardTransitions.find((t) => t.id === whiteboardTransitionId),
+        [whiteboardTransitions, whiteboardTransitionId],
+    );
+
+    const transitionSfxAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    const transitionSfxPlayingRef = React.useRef<string | null>(null);
+    const [transitionSfxPlaying, setTransitionSfxPlaying] = React.useState(false);
+
+    const toggleTransitionSfxPreview = React.useCallback((t: WhiteboardTransitionOption | undefined) => {
+        if (!t?.sfx_url) {
+            return;
+        }
+        if (transitionSfxAudioRef.current) {
+            transitionSfxAudioRef.current.pause();
+            transitionSfxAudioRef.current = null;
+            setTransitionSfxPlaying(false);
+            if (transitionSfxPlayingRef.current === t.sfx_url) {
+                transitionSfxPlayingRef.current = null;
+                return;
+            }
+        }
+        transitionSfxPlayingRef.current = t.sfx_url;
+        const audio = new Audio(t.sfx_url);
+        transitionSfxAudioRef.current = audio;
+        const start = Math.max(0, Number(t.sfx_start_sec) || 0);
+        const end = Number(t.sfx_end_sec) || 0;
+        audio.currentTime = start;
+        audio.addEventListener('timeupdate', () => {
+            if (end > 0 && audio.currentTime >= end) {
+                audio.pause();
+                audio.currentTime = start;
+            }
+        });
+        audio.addEventListener('ended', () => {
+            setTransitionSfxPlaying(false);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        audio.addEventListener('error', () => {
+            setTransitionSfxPlaying(false);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        audio.play().catch(() => {
+            setTransitionSfxPlaying(false);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        setTransitionSfxPlaying(true);
+    }, []);
+
+    React.useEffect(() => () => {
+        if (transitionSfxAudioRef.current) {
+            transitionSfxAudioRef.current.pause();
+            transitionSfxAudioRef.current = null;
+        }
+    }, []);
 
     const whiteboardPhotoPlaceMode = React.useMemo(() => {
         const raw = String(state.agentWhiteboardConfig?.photo_place_mode || 'drag').trim().toLowerCase();
@@ -896,26 +957,38 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                     <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mt: 1.25, mb: 0.75 }}>
                                         Cách chuyển cảnh
                                     </Typography>
-                                    <FormControl fullWidth size="small" disabled={state.savingWhiteboardConfig}>
-                                        <Select
-                                            value={whiteboardTransitionId}
-                                            onChange={(e) => {
-                                                const value = String(e.target.value || '').trim();
-                                                if (value) {
-                                                    void state.handleAgentWhiteboardConfigChange({
-                                                        transition: value,
-                                                    });
-                                                }
-                                            }}
-                                            inputProps={{ 'aria-label': 'Cách chuyển cảnh whiteboard' }}
-                                        >
-                                            {whiteboardTransitions.map((t) => (
-                                                <MenuItem key={t.id} value={t.id}>
-                                                    {t.label}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
+                                    <Stack direction="row" spacing={0.75} alignItems="center">
+                                        <FormControl fullWidth size="small" disabled={state.savingWhiteboardConfig}>
+                                            <Select
+                                                value={whiteboardTransitionId}
+                                                onChange={(e) => {
+                                                    const value = String(e.target.value || '').trim();
+                                                    if (value) {
+                                                        void state.handleAgentWhiteboardConfigChange({
+                                                            transition: value,
+                                                        });
+                                                    }
+                                                }}
+                                                inputProps={{ 'aria-label': 'Cách chuyển cảnh whiteboard' }}
+                                            >
+                                                {whiteboardTransitions.map((t) => (
+                                                    <MenuItem key={t.id} value={t.id}>
+                                                        {t.label}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                        {whiteboardTransitionSelected?.sfx_url && (
+                                            <IconButton
+                                                size="small"
+                                                color={transitionSfxPlaying ? 'primary' : 'default'}
+                                                title={transitionSfxPlaying ? 'Dừng nghe thử' : 'Nghe thử âm thanh hiệu ứng'}
+                                                onClick={() => toggleTransitionSfxPreview(whiteboardTransitionSelected)}
+                                            >
+                                                {transitionSfxPlaying ? <StopOutlinedIcon fontSize="small" /> : <GraphicEqOutlinedIcon fontSize="small" />}
+                                            </IconButton>
+                                        )}
+                                    </Stack>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
                                         {whiteboardPhotoPlaceMode === 'instant'
                                             ? (

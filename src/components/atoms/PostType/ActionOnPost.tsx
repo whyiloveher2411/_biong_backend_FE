@@ -1,4 +1,4 @@
-import { Box, Button, Theme } from "@mui/material";
+import { Box, Button, CircularProgress, Theme } from "@mui/material";
 import Icon from "components/atoms/Icon";
 import IconButton from "components/atoms/IconButton";
 import makeCSS from "components/atoms/makeCSS";
@@ -543,9 +543,17 @@ function ActionOnPost({
                                     }}
                                     variant="contained"
                                     color={actionColorProps.color}
+                                    disabled={Boolean(loadingStateButton[index])}
+                                    startIcon={
+                                        loadingStateButton[index] ? (
+                                            <CircularProgress size={14} color="inherit" />
+                                        ) : undefined
+                                    }
                                     sx={actionColorProps.sx}
                                 >
-                                    {action.title}
+                                    {loadingStateButton[index]
+                                        ? (action.loading_title || "Đang xử lý…")
+                                        : action.title}
                                 </Button>
                             </Box>
                             );

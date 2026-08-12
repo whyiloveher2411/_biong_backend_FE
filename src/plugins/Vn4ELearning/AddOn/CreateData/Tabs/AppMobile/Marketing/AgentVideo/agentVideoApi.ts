@@ -1475,6 +1475,11 @@ export async function saveAgentImageTextLang(
 export type WhiteboardTransitionOption = {
     id: string;
     label: string;
+    sfx_file?: string;
+    sfx_url?: string;
+    sfx_start_sec?: number | null;
+    sfx_end_sec?: number | null;
+    sfx_volume?: number | null;
 };
 
 export const DEFAULT_WHITEBOARD_TRANSITIONS: WhiteboardTransitionOption[] = [
@@ -1503,10 +1508,24 @@ export async function fetchWhiteboardTransitions(): Promise<{
             default_transition?: string;
         };
         const list = Array.isArray(res.transitions)
-            ? res.transitions.filter((t) => t?.id).map((t) => ({
-                id: String(t.id),
-                label: String(t.label || t.id),
-            }))
+            ? res.transitions.filter((t) => t?.id).map((t) => {
+                const option: WhiteboardTransitionOption = {
+                    id: String(t.id),
+                    label: String(t.label || t.id),
+                };
+                if (t.sfx_file) option.sfx_file = String(t.sfx_file);
+                if (t.sfx_url) option.sfx_url = String(t.sfx_url);
+                if (t.sfx_start_sec !== undefined && t.sfx_start_sec !== null) {
+                    option.sfx_start_sec = Number(t.sfx_start_sec);
+                }
+                if (t.sfx_end_sec !== undefined && t.sfx_end_sec !== null) {
+                    option.sfx_end_sec = Number(t.sfx_end_sec);
+                }
+                if (t.sfx_volume !== undefined && t.sfx_volume !== null) {
+                    option.sfx_volume = Number(t.sfx_volume);
+                }
+                return option;
+            })
             : [];
         if (list.length > 0) {
             return {

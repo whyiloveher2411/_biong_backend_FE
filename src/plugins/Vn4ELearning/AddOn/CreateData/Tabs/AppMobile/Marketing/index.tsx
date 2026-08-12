@@ -42,6 +42,7 @@ import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FaceRetouchingNaturalIcon from '@mui/icons-material/FaceRetouchingNatural';
 import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
+import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -54,6 +55,7 @@ import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
+import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
 import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
@@ -477,6 +479,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
     const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
+    const [openWhiteboardTransitionManager, setOpenWhiteboardTransitionManager] = useState(false);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -795,7 +798,16 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                     onClick={() => setOpenWhiteboardDrawer(true)}
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
                                 >
-                                    Whiteboard
+                                    Image → Whiteboard
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<AnimationOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenWhiteboardTransitionManager(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Hiệu ứng chuyển cảnh
                                 </Button>
                                 <Button
                                     size="small"
@@ -1117,6 +1129,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingImageToWhiteboardDrawer
                 open={openWhiteboardDrawer}
                 onClose={() => setOpenWhiteboardDrawer(false)}
+            />
+
+            <WhiteboardTransitionManagerDrawer
+                open={openWhiteboardTransitionManager}
+                onClose={() => setOpenWhiteboardTransitionManager(false)}
             />
 
             <AudioScriptStyleManagerDrawer

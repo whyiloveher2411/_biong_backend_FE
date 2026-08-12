@@ -14,6 +14,8 @@ import AddIcon from '@mui/icons-material/Add';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
+import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { getAdminApiPrefix, getApiHost } from 'helpers/apiHost';
@@ -50,6 +52,11 @@ type TransitionOption = {
     needs_asset?: boolean;
     thumb_url?: string;
     thumb_rel?: string;
+    sfx_file?: string;
+    sfx_url?: string;
+    sfx_start_sec?: number | null;
+    sfx_end_sec?: number | null;
+    sfx_volume?: number | null;
 };
 
 type SourceMode = 'upload' | 'prompt';
@@ -417,6 +424,59 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
     const [error, setError] = React.useState<string | null>(null);
     const [info, setInfo] = React.useState<string | null>(null);
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
+    const transitionSfxAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    const transitionSfxPlayingRef = React.useRef<string | null>(null);
+    const [transitionSfxPlaying, setTransitionSfxPlaying] = React.useState<string | null>(null);
+
+    const toggleTransitionSfxPreview = React.useCallback((t: TransitionOption) => {
+        if (!t.sfx_url) {
+            return;
+        }
+        if (transitionSfxAudioRef.current) {
+            transitionSfxAudioRef.current.pause();
+            transitionSfxAudioRef.current = null;
+            setTransitionSfxPlaying(null);
+            if (transitionSfxPlayingRef.current === t.sfx_url) {
+                transitionSfxPlayingRef.current = null;
+                return;
+            }
+        }
+        transitionSfxPlayingRef.current = t.sfx_url;
+        const audio = new Audio(t.sfx_url);
+        transitionSfxAudioRef.current = audio;
+        const start = Math.max(0, Number(t.sfx_start_sec) || 0);
+        const end = Number(t.sfx_end_sec) || 0;
+        audio.currentTime = start;
+        audio.addEventListener('timeupdate', () => {
+            if (end > 0 && audio.currentTime >= end) {
+                audio.pause();
+                audio.currentTime = start;
+            }
+        });
+        audio.addEventListener('ended', () => {
+            setTransitionSfxPlaying(null);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        audio.addEventListener('error', () => {
+            setTransitionSfxPlaying(null);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        audio.play().catch(() => {
+            setTransitionSfxPlaying(null);
+            transitionSfxAudioRef.current = null;
+            transitionSfxPlayingRef.current = null;
+        });
+        setTransitionSfxPlaying(t.sfx_url);
+    }, []);
+
+    React.useEffect(() => () => {
+        if (transitionSfxAudioRef.current) {
+            transitionSfxAudioRef.current.pause();
+            transitionSfxAudioRef.current = null;
+        }
+    }, []);
 
     const activeScene = scenes[activeSceneIndex] ?? scenes[0];
     const allScenesReady = scenes.every((sc, i) => isSceneReady(sc, scenes.length, i));
@@ -776,13 +836,22 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
 
                 {scenes.length >= 2 && (
                     <Box>
-                        <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ fontWeight: 600, display: 'block', mb: 1 }}
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1,
+                            }}
                         >
-                            2. Hiệu ứng chuyển cảnh
-                        </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                            >
+                                2. Hiệu ứng chuyển cảnh
+                            </Typography>
+                        </Box>
                         {transitionsLoading && <LinearProgress sx={{ mb: 1 }} />}
                         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
                             {(transitions.length > 0
@@ -806,6 +875,12 @@ export default function MarketingImageToWhiteboardDrawer({ open, onClose }: Prop
                                     color={transition === t.id ? 'primary' : 'default'}
                                     variant={transition === t.id ? 'filled' : 'outlined'}
                                     onClick={() => setTransition(t.id)}
+                                    onDelete={t.sfx_url ? () => toggleTransitionSfxPreview(t) : undefined}
+                                    deleteIcon={
+                                        transitionSfxPlaying === t.sfx_url
+                                            ? <StopOutlinedIcon fontSize="small" />
+                                            : <GraphicEqOutlinedIcon fontSize="small" />
+                                    }
                                     sx={{ textTransform: 'none' }}
                                 />
                             ))}
