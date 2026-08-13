@@ -1010,7 +1010,9 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                                                                 ? 'Xé giấy: green→ảnh 1, blue→ảnh 2; giữ cánh giấy trắng từ video asset.'
                                                                                 : whiteboardTransitionId === 'paint_stroke'
                                                                                     ? 'Quét cọ: green→ảnh 1, blue→ảnh 2; mép cọ lấy từ video asset quet_co_1.'
-                                                                                    : 'Lật trang: ảnh 2 sẵn trên mặt trang khi lật. Beat cuối không transition.'
+                                                                                    : (whiteboardTransitionSelected?.chroma_key === 'blue_green'
+                                                                                        ? `Hiệu ứng "${whiteboardTransitionSelected?.label || whiteboardTransitionId}": clip dual-chroma blue→cảnh 1, green→cảnh 2 — hiệu ứng ở giữa video.`
+                                                                                        : 'Lật trang: ảnh 2 sẵn trên mặt trang khi lật. Beat cuối không transition.')
                                             )
                                             : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Không hiệu ứng để cắt thẳng; Ngẫu nhiên không bao gồm Không hiệu ứng.'}
                                     </Typography>

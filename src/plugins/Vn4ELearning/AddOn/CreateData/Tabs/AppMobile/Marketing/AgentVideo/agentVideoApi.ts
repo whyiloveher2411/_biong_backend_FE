@@ -1475,6 +1475,9 @@ export async function saveAgentImageTextLang(
 export type WhiteboardTransitionOption = {
     id: string;
     label: string;
+    chroma_key?: string;
+    effect_duration_sec?: number | null;
+    effect_start_sec?: number | null;
     sfx_file?: string;
     sfx_url?: string;
     sfx_start_sec?: number | null;
@@ -1515,6 +1518,13 @@ export async function fetchWhiteboardTransitions(): Promise<{
                 };
                 if (t.sfx_file) option.sfx_file = String(t.sfx_file);
                 if (t.sfx_url) option.sfx_url = String(t.sfx_url);
+                if (t.chroma_key) option.chroma_key = String(t.chroma_key);
+                if (t.effect_duration_sec !== undefined && t.effect_duration_sec !== null) {
+                    option.effect_duration_sec = Number(t.effect_duration_sec);
+                }
+                if (t.effect_start_sec !== undefined && t.effect_start_sec !== null) {
+                    option.effect_start_sec = Number(t.effect_start_sec);
+                }
                 if (t.sfx_start_sec !== undefined && t.sfx_start_sec !== null) {
                     option.sfx_start_sec = Number(t.sfx_start_sec);
                 }
