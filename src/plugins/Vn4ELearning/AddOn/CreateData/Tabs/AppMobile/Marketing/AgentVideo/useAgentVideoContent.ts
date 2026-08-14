@@ -58,6 +58,7 @@ import {
     addAudioToCapcut,
     uploadAllToCapcut,
     renderWhiteboardAgentBeat,
+    getWhiteboardBeatRenders,
     addBeatVideoToCapcut,
     listAudioScriptStyles,
     saveAgentShowKaraoke,
@@ -1568,15 +1569,82 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         || topicResearch?.fetch?.status === 'preparing'
         || topicResearch?.synthesize?.status === 'preparing'
         || remix?.synthesize?.status === 'preparing';
+    // Beat whiteboard đang render (queued/processing)? Mirror qua ref để poll nặng
+    // (shouldPoll) đọc giá trị MỚI NHẤT không bị stale closure.
+    const anyWhiteboardBeatRenderBusy = Object.values(whiteboardBeatRenders).some((entry) => {
+        const status = String(entry?.status || '').trim().toLowerCase();
+        return status === 'queued' || status === 'processing';
+    });
+    const anyWhiteboardBeatRenderBusyRef = React.useRef(false);
+    anyWhiteboardBeatRenderBusyRef.current = anyWhiteboardBeatRenderBusy;
+
     React.useEffect(() => {
         if (!open || !shortVideoId || !shouldPoll) {
             return undefined;
         }
         const timer = window.setInterval(() => {
+            // Beat whiteboard đang render → lightweight poll đảm nhiệm; bỏ qua loadRow
+            // kẻo response CŨ (bắt đầu trước khi render xong, status queued) ghi đè
+            // update mới của lightweight poll → UI kẹt "đang render" mãi.
+            if (anyWhiteboardBeatRenderBusyRef.current) {
+                return;
+            }
             loadRow({ syncAggregate: true, includeCatalogs: false });
         }, 5000);
         return () => window.clearInterval(timer);
     }, [loadRow, open, shortVideoId, shouldPoll]);
+
+    // Poll RIÊNG cho whiteboard beat render — endpoint nhẹ get-whiteboard-beat-renders,
+    // set state trực tiếp (không qua applyResponse/payload nặng) → status + video beat
+    // tự cập nhật ngay khi worker xong, không cần refresh trang.
+    const whiteboardBeatRendersRef = React.useRef(whiteboardBeatRenders);
+    whiteboardBeatRendersRef.current = whiteboardBeatRenders;
+    React.useEffect(() => {
+        if (!open || !shortVideoId || !anyWhiteboardBeatRenderBusy) {
+            return undefined;
+        }
+        let cancelled = false;
+        let active = false;
+        let refreshedOnce = false;
+        const tick = async () => {
+            if (cancelled || active) {
+                return;
+            }
+            active = true;
+            try {
+                const res = await getWhiteboardBeatRenders(shortVideoId);
+                if (!cancelled && res?.success && res.whiteboard_beat_renders) {
+                    const busyBefore = Object.values(whiteboardBeatRendersRef.current).some((entry) => {
+                        const status = String(entry?.status || '').trim().toLowerCase();
+                        return status === 'queued' || status === 'processing';
+                    });
+                    const busyAfter = Object.values(res.whiteboard_beat_renders).some((entry) => {
+                        const status = String(entry?.status || '').trim().toLowerCase();
+                        return status === 'queued' || status === 'processing';
+                    });
+                    setWhiteboardBeatRenders(res.whiteboard_beat_renders);
+                    // Render xong → refresh toàn bộ row 1 lần (tương đương nút Refresh
+                    // trên giao diện) để mọi phần khác (progress, video...) đồng bộ.
+                    if (busyBefore && !busyAfter && !refreshedOnce) {
+                        refreshedOnce = true;
+                        loadRow();
+                    }
+                }
+            } catch {
+                // bỏ qua — lần poll sau sẽ thử lại
+            } finally {
+                active = false;
+            }
+        };
+        const timer = window.setInterval(() => {
+            void tick();
+        }, 3000);
+        void tick();
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [loadRow, open, shortVideoId, anyWhiteboardBeatRenderBusy]);
 
     const quickIterateBeatStages = React.useMemo(() => {
         const stages: Record<string, 'queued' | 'visual' | 'html'> = {};
@@ -2828,10 +2896,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const localFinalMp4OpenUrl = React.useMemo(
-        () => (hasLocalFinalMp4 ? resolveAgentLocalVideoOpenUrl(localFinalMp4Url) : ''),
-        [hasLocalFinalMp4, localFinalMp4Url],
-    );
+    const localFinalMp4OpenUrl = React.useMemo(() => {
+        if (!hasLocalFinalMp4) {
+            return '';
+        }
+        const resolved = resolveAgentLocalVideoOpenUrl(localFinalMp4Url);
+        if (!resolved) {
+            return '';
+        }
+        // Cache-bust: mtime của final.mp4 → URL đổi khi render lại → <video> re-fetch.
+        const stamp = String(localFinalMp4ModifiedAt || '').trim()
+            || String(agentVideoRenderedAt || '').trim();
+        if (!stamp) {
+            return resolved;
+        }
+        const sep = resolved.includes('?') ? '&' : '?';
+        return `${resolved}${sep}v=${encodeURIComponent(stamp)}`;
+    }, [hasLocalFinalMp4, localFinalMp4Url, localFinalMp4ModifiedAt, agentVideoRenderedAt]);
 
     const handleUploadLocalAgentVideo = async () => {
         if (!hasLocalFinalMp4) {

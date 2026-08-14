@@ -77,6 +77,8 @@ type Props = {
     }) => Promise<string | null>;
     onRestoreBeatVersion: (versionId: string, label: string) => Promise<string | null>;
     onRenderWhiteboardBeat?: () => void;
+    /** Đang click render (chờ enqueue) — hiển thị loading trước cả khi status queued. */
+    renderingBeatVideo?: boolean;
     onAddBeatVideoToCapcut?: () => void;
     onSaveWhiteboardBeatOverride?: (override: AgentWhiteboardBeatOverride) => Promise<boolean>;
 };
@@ -360,6 +362,7 @@ export default function ShortVideoAgentBeatQaPanel({
     onSaveBeatVersion,
     onRestoreBeatVersion,
     onRenderWhiteboardBeat,
+    renderingBeatVideo = false,
     onAddBeatVideoToCapcut,
     onSaveWhiteboardBeatOverride,
 }: Props) {
@@ -398,8 +401,19 @@ export default function ShortVideoAgentBeatQaPanel({
         if (!raw || !beatVideoReady) {
             return '';
         }
-        return resolveAgentLocalVideoOpenUrl(raw);
-    }, [beatVideoReady, whiteboardBeatRender?.video_url]);
+        const resolved = resolveAgentLocalVideoOpenUrl(raw);
+        if (!resolved) {
+            return '';
+        }
+        // Cache-bust: mỗi lần render xong updated_at đổi → URL đổi → <video key> re-mount
+        // và trình duyệt tải file mới (không hiện video cũ sau khi render lại beat).
+        const stamp = String(whiteboardBeatRender?.updated_at || '').trim();
+        if (!stamp) {
+            return resolved;
+        }
+        const sep = resolved.includes('?') ? '&' : '?';
+        return `${resolved}${sep}v=${encodeURIComponent(stamp)}`;
+    }, [beatVideoReady, whiteboardBeatRender?.video_url, whiteboardBeatRender?.updated_at]);
 
     React.useEffect(() => {
         if (!beatId || syncedBeatRef.current === beatId) {
@@ -1085,7 +1099,7 @@ export default function ShortVideoAgentBeatQaPanel({
                             >
                                 <VideocamOutlinedIcon sx={{ color: TEXT_MUTED, fontSize: 28, mb: 1 }} />
                                 <Typography sx={{ color: TEXT_SOFT, fontSize: 13, fontWeight: 600 }}>
-                                    {beatVideoRendering
+                                    {(beatVideoRendering || renderingBeatVideo)
                                         ? 'Đang render video beat…'
                                         : beatRenderStatus === 'failed'
                                             ? 'Render video beat thất bại'
@@ -1140,8 +1154,8 @@ export default function ShortVideoAgentBeatQaPanel({
                             <LoadingButton
                                 size="small"
                                 variant="outlined"
-                                loading={beatVideoRendering}
-                                disabled={beatVideoRendering || !hasBeatImage}
+                                loading={beatVideoRendering || renderingBeatVideo}
+                                disabled={beatVideoRendering || renderingBeatVideo || !hasBeatImage}
                                 startIcon={<VideocamOutlinedIcon fontSize="small" />}
                                 onClick={() => { onRenderWhiteboardBeat(); }}
                                 sx={{

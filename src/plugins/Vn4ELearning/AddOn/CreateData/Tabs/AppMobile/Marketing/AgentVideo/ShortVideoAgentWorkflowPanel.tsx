@@ -1016,6 +1016,27 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             )
                                             : 'Áp dụng cuối beat 1…n−1 (thường sang bảng trống). Beat cuối không có transition. Chọn Không hiệu ứng để cắt thẳng; Ngẫu nhiên không bao gồm Không hiệu ứng.'}
                                     </Typography>
+                                    <Box sx={{ px: 1.25, pt: 1, pb: 0.5 }}>
+                                        <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mb: 0.5 }}>
+                                            Số beat mỗi job render
+                                        </Typography>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <TextField
+                                                size="small"
+                                                type="number"
+                                                value={String(state.agentWhiteboardConfig?.beats_per_job ?? 1)}
+                                                disabled={state.savingWhiteboardConfig}
+                                                onChange={(e) => {
+                                                    const num = Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 1));
+                                                    void state.handleAgentWhiteboardConfigChange({ beats_per_job: num });
+                                                }}
+                                                inputProps={{ min: 1, max: 6, style: { width: 64 } }}
+                                            />
+                                            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+                                                Gom N beat vào 1 job và render song song để nhanh hơn (1 = mỗi beat 1 job như cũ).
+                                            </Typography>
+                                        </Stack>
+                                    </Box>
                                     <FormControlLabel
                                         sx={{
                                             m: 0,

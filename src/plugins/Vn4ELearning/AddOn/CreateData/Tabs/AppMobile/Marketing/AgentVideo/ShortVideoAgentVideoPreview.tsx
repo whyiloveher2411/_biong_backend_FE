@@ -24,6 +24,7 @@ import {
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import ShortVideoAgentAvatarPipOverlay from './ShortVideoAgentAvatarPipOverlay';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
+import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -201,6 +202,13 @@ export default function ShortVideoAgentVideoPreview({
     }, [state.agentAvatarMasterUrl, state.agentAvatarId, state.verifiedAvatars]);
     const avatarAnchor = state.agentAvatarAnchor || 'bottom_right';
     const showKaraoke = state.agentShowKaraoke !== false;
+
+    // Tab Ảnh beat (whiteboard): ảnh + điều khiển chuyển động hiển thị NGAY trong box
+    // bên dưới — KHÔNG còn box preview ảnh lớn phía trên (ảnh chỉ là hình, xem ở dưới rõ hơn).
+    const showImageAnimationControls = activeSource === 'html_beat'
+        && isWhiteboardMode
+        && Boolean(currentBeatId)
+        && Boolean(state.beatImage[currentBeatId || '']?.image_url);
 
     const activeBeatIndex = React.useMemo(() => {
         if (!currentBeatId || !state.beatMap?.sections?.length) {
@@ -400,90 +408,120 @@ export default function ShortVideoAgentVideoPreview({
                         overflow: 'hidden',
                     }}
                 >
-                    <PortraitPreviewFrame>
-                        {activeSource === 'final' && (state.localFinalMp4OpenUrl || state.agentVideoUrl) ? (
-                            <Box
-                                sx={{
-                                    width: '100%',
-                                    height: '100%',
-                                    bgcolor: 'common.black',
-                                    borderRadius: 2,
-                                    overflow: 'hidden',
-                                    boxShadow: 3,
+                    {showImageAnimationControls ? (
+                        <Box
+                            sx={{
+                                flex: 1,
+                                minHeight: 0,
+                                overflow: 'auto',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <ShortVideoAgentImageAnimationControls
+                                beatId={currentBeatId || ''}
+                                imageUrl={state.beatImage[currentBeatId || '']?.image_url || ''}
+                                clipAspect={state.agentClipAspect}
+                                clipConfig={state.agentWhiteboardConfig || null}
+                                clipSaving={state.savingWhiteboardConfig}
+                                onClipConfigChange={(patch) => {
+                                    state.handleAgentWhiteboardConfigChange(patch);
                                 }}
-                            >
-                                <video
-                                    ref={videoRef}
-                                    controls
-                                    key={state.localFinalMp4OpenUrl || state.agentVideoUrl}
-                                    src={state.localFinalMp4OpenUrl || state.agentVideoUrl}
-                                    style={{
+                                savedOverride={state.agentWhiteboardBeatOverrides?.[currentBeatId || ''] || null}
+                                saving={state.savingWhiteboardBeatOverride}
+                                onSave={(override) => state.handleSaveWhiteboardBeatOverride(
+                                    currentBeatId || '',
+                                    override,
+                                )}
+                            />
+                        </Box>
+                    ) : (
+                        <PortraitPreviewFrame>
+                            {activeSource === 'final' && (state.localFinalMp4OpenUrl || state.agentVideoUrl) ? (
+                                <Box
+                                    sx={{
                                         width: '100%',
                                         height: '100%',
-                                        objectFit: 'contain',
-                                        display: 'block',
+                                        bgcolor: 'common.black',
+                                        borderRadius: 2,
+                                        overflow: 'hidden',
+                                        boxShadow: 3,
                                     }}
                                 >
-                                    <track kind="captions" />
-                                </video>
-                            </Box>
-                        ) : showHtmlBeat ? (
-                            <ShortVideoAgentCustomHtmlPreview
-                                beatMap={state.beatMap}
-                                beatHtml={state.beatHtml}
-                                beatImage={state.beatImage}
-                                isWhiteboardMode={isWhiteboardMode}
-                                audioUrl={state.audioFileUrl}
-                                audioDurationSec={state.audioDurationSec}
-                                videoRef={videoRef}
-                                showAvatarPip={showAvatarPip}
-                                avatarMasterUrl={avatarMasterUrl}
-                                avatarAnchor={avatarAnchor}
-                                showKaraoke={showKaraoke}
-                                clipAspect={state.agentClipAspect}
-                            />
-                        ) : activeSource === 'html_beat' ? (
-                            <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode} />
-                        ) : placeholder ? (
-                            <Box
-                                sx={{
-                                    width: '100%',
-                                    height: '100%',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: 2,
-                                    border: 2,
-                                    borderStyle: 'dashed',
-                                    borderColor: 'divider',
-                                    bgcolor: 'background.paper',
-                                    p: 3,
-                                    textAlign: 'center',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                }}
-                            >
-                                {placeholder.loading ? (
-                                    <CircularProgress size={36} sx={{ mb: 2 }} />
-                                ) : null}
-                                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-                                    {placeholder.title}
-                                </Typography>
-                                {placeholder.description ? (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {placeholder.description}
-                                    </Typography>
-                                ) : null}
-                                <ShortVideoAgentAvatarPipOverlay
-                                    show={showAvatarPip && Boolean(avatarMasterUrl)}
-                                    masterUrl={avatarMasterUrl}
-                                    anchor={avatarAnchor}
+                                    <video
+                                        ref={videoRef}
+                                        controls
+                                        key={state.localFinalMp4OpenUrl || state.agentVideoUrl}
+                                        src={state.localFinalMp4OpenUrl || state.agentVideoUrl}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                        }}
+                                    >
+                                        <track kind="captions" />
+                                    </video>
+                                </Box>
+                            ) : showHtmlBeat ? (
+                                <ShortVideoAgentCustomHtmlPreview
+                                    beatMap={state.beatMap}
+                                    beatHtml={state.beatHtml}
+                                    beatImage={state.beatImage}
+                                    isWhiteboardMode={isWhiteboardMode}
+                                    audioUrl={state.audioFileUrl}
+                                    audioDurationSec={state.audioDurationSec}
+                                    videoRef={videoRef}
+                                    showAvatarPip={showAvatarPip}
+                                    avatarMasterUrl={avatarMasterUrl}
+                                    avatarAnchor={avatarAnchor}
                                     showKaraoke={showKaraoke}
+                                    clipAspect={state.agentClipAspect}
                                 />
-                            </Box>
-                        ) : null}
-                    </PortraitPreviewFrame>
+                            ) : activeSource === 'html_beat' ? (
+                                <HtmlBeatMissingPlaceholder isWhiteboardMode={isWhiteboardMode} />
+                            ) : placeholder ? (
+                                <Box
+                                    sx={{
+                                        width: '100%',
+                                        height: '100%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderRadius: 2,
+                                        border: 2,
+                                        borderStyle: 'dashed',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper',
+                                        p: 3,
+                                        textAlign: 'center',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {placeholder.loading ? (
+                                        <CircularProgress size={36} sx={{ mb: 2 }} />
+                                    ) : null}
+                                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                                        {placeholder.title}
+                                    </Typography>
+                                    {placeholder.description ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {placeholder.description}
+                                        </Typography>
+                                    ) : null}
+                                    <ShortVideoAgentAvatarPipOverlay
+                                        show={showAvatarPip && Boolean(avatarMasterUrl)}
+                                        masterUrl={avatarMasterUrl}
+                                        anchor={avatarAnchor}
+                                        showKaraoke={showKaraoke}
+                                    />
+                                </Box>
+                            ) : null}
+                        </PortraitPreviewFrame>
+                    )}
 
                     {activeSource === 'final' && (state.localFinalMp4OpenUrl || state.agentVideoUrl) && state.agentVideoRenderedAt ? (
                         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
@@ -556,6 +594,7 @@ export default function ShortVideoAgentVideoPreview({
                                         ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
                                         : undefined
                                 }
+                                renderingBeatVideo={state.renderingWhiteboardBeatIds.includes(currentBeatId)}
                                 onAddBeatVideoToCapcut={
                                     isWhiteboardMode
                                         ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }

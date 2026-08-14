@@ -16,6 +16,40 @@ export type AgentRenderMode = 'creative' | 'import_html';
 
 export type AgentVisualMode = 'hyperframes' | 'whiteboard';
 
+export type AgentImageAnimationEffect =
+    | 'none'
+    | 'random'
+    | 'zoom_in'
+    | 'zoom_out'
+    | 'pan_left'
+    | 'pan_right'
+    | 'tilt_up'
+    | 'tilt_down'
+    | 'focus_pull';
+
+export const AGENT_IMAGE_ANIMATION_OPTIONS: Array<{ value: AgentImageAnimationEffect; label: string }> = [
+    { value: 'random', label: 'Ngẫu nhiên' },
+    { value: 'none', label: 'Không hiệu ứng' },
+    { value: 'zoom_in', label: 'Zoom In' },
+    { value: 'zoom_out', label: 'Zoom Out' },
+    { value: 'pan_left', label: 'Pan Trái' },
+    { value: 'pan_right', label: 'Pan Phải' },
+    { value: 'tilt_up', label: 'Tilt Lên' },
+    { value: 'tilt_down', label: 'Tilt Xuống' },
+    { value: 'focus_pull', label: 'Mờ → nét' },
+];
+
+export type AgentImageAnimationBeatValue = AgentImageAnimationEffect | 'common';
+
+/** Options cho RIÊNG từng beat — mặc định 'common' = theo tiêu chuẩn chung. */
+export const AGENT_IMAGE_ANIMATION_BEAT_OPTIONS: Array<{
+    value: AgentImageAnimationBeatValue;
+    label: string;
+}> = [
+    { value: 'common', label: 'Theo tiêu chuẩn chung' },
+    ...AGENT_IMAGE_ANIMATION_OPTIONS,
+];
+
 export type AgentWhiteboardConfig = {
     resolution?: '720p' | '1080p' | string;
     board_theme?: string;
@@ -28,6 +62,10 @@ export type AgentWhiteboardConfig = {
     transition_duration_sec?: number;
     /** Tài nguyên riêng lẻ (chuẩn bị cho CapCut) — bỏ render video beat, ghép final, upload store, BGM, thumbnail. */
     assets_mode?: boolean;
+    /** Hiệu ứng chuyển động ảnh mặc định toàn clip (mặc định 'random'). */
+    image_animation_effect?: AgentImageAnimationEffect | string;
+    /** Số beat render mỗi job (batch, render song song) — 1 = mỗi beat 1 job. */
+    beats_per_job?: number;
 };
 
 export type AgentWhiteboardBeatOverride = {
@@ -39,6 +77,11 @@ export type AgentWhiteboardBeatOverride = {
     hold_sec?: number;
     color_sec?: number;
     transition_duration_sec?: number;
+    /** Hiệu ứng chuyển động ảnh cho beat này (override clip-level; 'common' = theo chung). */
+    image_animation_effect?: AgentImageAnimationBeatValue | string;
+    /** Điểm tập trung (0-1, ratio của ảnh gốc) — frame cuối đưa điểm này ra giữa màn hình. */
+    focus_x?: number | null;
+    focus_y?: number | null;
 };
 
 export type WhiteboardBeatRenderEntry = {
@@ -2840,6 +2883,23 @@ export async function renderWhiteboardAgentBeat(
         job_id?: number;
         beat_id?: string;
         skipped_active?: number;
+        whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
+    }>;
+}
+
+/**
+ * Lấy riêng whiteboard_beat_renders (endpoint nhẹ) — poll trạng thái render
+ * video beat không phụ thuộc get-agent-audio-content (payload nặng).
+ */
+export async function getWhiteboardBeatRenders(
+    shortVideoId: number,
+): Promise<JsonResponse & {
+    whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-whiteboard-beat-renders',
+        shortVideoBody(shortVideoId),
+    ) as Promise<JsonResponse & {
         whiteboard_beat_renders?: Record<string, WhiteboardBeatRenderEntry>;
     }>;
 }
