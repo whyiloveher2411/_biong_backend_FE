@@ -321,7 +321,7 @@ function copySharedAssets(projectDir) {
   copyIfExists(globalCssSrc, path.join(projectDir, "assets/global-default-styles.css"));
 }
 
-async function writeBgmChain(projectDir, segments, totalVideoSec, skipDownload) {
+async function writeBgmChain(projectDir, segments, totalVideoSec, skipDownload, loop = false) {
   if (!Array.isArray(segments) || segments.length === 0) {
     return;
   }
@@ -344,6 +344,7 @@ async function writeBgmChain(projectDir, segments, totalVideoSec, skipDownload) 
       id: seg.id || `bgm-${i + 1}`,
       file: rel,
       fileDurationSec: Number(seg.duration_sec || 0),
+      volume: Number(seg.volume) > 0 ? Number(seg.volume) : undefined,
     });
   }
 
@@ -351,6 +352,7 @@ async function writeBgmChain(projectDir, segments, totalVideoSec, skipDownload) 
     mood: "import_html",
     totalVideoSec,
     crossfadeSec: 0.5,
+    loop,
     segments: manifestSegments,
   };
   fs.writeFileSync(path.join(projectDir, "assets/bgm-chain.json"), JSON.stringify(manifest, null, 2));
@@ -579,9 +581,17 @@ async function main() {
 
     const assets = importHtml.assets || {};
     const bgmSegments = Array.isArray(assets.bgm_segments) ? assets.bgm_segments : [];
+    const bgmLoop = assets.bgm_loop !== false;
+    const bgmTotalSec = bgmSegments.reduce(
+      (sum, seg) => sum + Math.max(0, Number(seg.duration_sec || 0)),
+      0,
+    );
+    const bgmInsufficient = totalVideoSec > 0 && bgmTotalSec + 0.01 < totalVideoSec;
     if (bgmSegments.length > 0) {
-      await writeBgmChain(projectDir, bgmSegments, totalVideoSec, args.skipBgmDownload);
-      log(`BGM chain: ${bgmSegments.length} segment(s)`);
+      await writeBgmChain(projectDir, bgmSegments, totalVideoSec, args.skipBgmDownload, bgmLoop);
+      log(
+        `BGM chain: ${bgmSegments.length} segment(s) (${bgmTotalSec.toFixed(1)}s / ${totalVideoSec.toFixed(1)}s${bgmInsufficient ? " — sẽ lặp lại audio nền" : ""})`,
+      );
     }
 
     copySharedAssets(projectDir);
@@ -725,7 +735,12 @@ async function main() {
     }
 
     if (bgmSegments.length > 0) {
-      runNodeScript("wire-bgm-chain.mjs", projectDir, [], "wire-bgm-chain");
+      runNodeScript(
+        "wire-bgm-chain.mjs",
+        projectDir,
+        bgmInsufficient && bgmLoop ? ["--loop"] : [],
+        "wire-bgm-chain",
+      );
     }
     if (sfxBeatTransition) {
       runNodeScript("wire-beat-transition-sfx.mjs", projectDir, ["--volume=0.35"], "wire-beat-transition-sfx");

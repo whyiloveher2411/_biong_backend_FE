@@ -112,6 +112,8 @@ export type ImportHtmlBgmSegment = {
     preview_url?: string;
     duration_sec: number;
     provider?: string;
+    /** Volume riêng từng bài (0.05–1.5, mặc định 0.3). */
+    volume?: number;
 };
 
 export type ImportHtmlMarketingPostImage = {
@@ -151,6 +153,8 @@ export type ImportHtmlGithubImageShot = {
 
 export type ImportHtmlAssets = {
     bgm_segments?: ImportHtmlBgmSegment[];
+    /** Tự lặp lại audio nền khi tổng thời lượng < video (mặc định true). */
+    bgm_loop?: boolean;
     sfx_beat_transition?: boolean;
     sfx_hook?: boolean;
     visual_catalog?: ImportHtmlVisualCatalogItem[];
@@ -348,6 +352,7 @@ export type ImportHtmlSummary = {
     composition?: ImportHtmlComposition;
     bgm_total_sec?: number;
     bgm_covers_video?: boolean;
+    bgm_loop?: boolean;
     html?: string;
     beat_map?: import('./agentVideoBeatMap').BeatMap | null;
     beat_html?: Record<string, import('./agentVideoBeatMap').BeatHtmlEntry>;
@@ -2478,6 +2483,70 @@ export async function searchAgentBgm(query: string, limit = 8): Promise<{
     );
 }
 
+export type BgmPromptSuggestionItem = {
+    id: string;
+    label: string;
+    prompt: string;
+};
+
+export type FetchBgmPromptSuggestionsResponse = JsonResponse & {
+    short_video_id?: number;
+    title?: string;
+    target_sec?: number;
+    mood?: string;
+    style_id?: number;
+    suggestions?: BgmPromptSuggestionItem[];
+};
+
+export async function fetchBgmPromptSuggestions(
+    shortVideoId: number,
+): Promise<FetchBgmPromptSuggestionsResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-bgm-prompt-suggestions',
+        shortVideoBody(shortVideoId),
+    ) as Promise<FetchBgmPromptSuggestionsResponse>;
+}
+
+export type UploadBgmMp3Response = JsonResponse & {
+    short_video_id?: number;
+    url?: string;
+    s3_key?: string;
+    duration_sec?: number;
+    title?: string;
+};
+
+export async function uploadAgentBgmMp3(shortVideoId: number, file: File): Promise<UploadBgmMp3Response> {
+    const formData = new FormData();
+    formData.append('short_video_id', String(shortVideoId));
+    formData.append('id', String(shortVideoId));
+    formData.append('audio', file);
+    formData.append('__l', window.btoa(`${getLanguage().code}#${Date.now()}`));
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAccessToken();
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/upload-bgm-mp3',
+        ),
+        {
+            method: 'POST',
+            headers,
+            body: formData,
+        },
+    );
+
+    const result = await response.json() as UploadBgmMp3Response;
+    if (!response.ok && !result?.message) {
+        throw new Error(response.statusText || 'Upload thất bại');
+    }
+    return result;
+}
+
 export async function startFullAutoPipeline(
     shortVideoId: number,
     mode: 'resume' | 'restart' = 'resume',
@@ -2635,6 +2704,7 @@ export async function saveAgentImportHtml(
         thumbnailQaNote?: string;
         thumbnailApproved?: boolean;
         bgmSegments?: ImportHtmlBgmSegment[];
+        bgmLoop?: boolean;
         sfxBeatTransition?: boolean;
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
@@ -2718,6 +2788,9 @@ export async function saveAgentImportHtml(
     }
     if (payload.bgmSegments !== undefined) {
         body.bgm_segments = payload.bgmSegments;
+    }
+    if (payload.bgmLoop !== undefined) {
+        body.bgm_loop = payload.bgmLoop;
     }
     if (payload.sfxBeatTransition !== undefined) {
         body.sfx_beat_transition = payload.sfxBeatTransition;

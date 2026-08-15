@@ -32,30 +32,18 @@ import { AgentOptionToggleGroup } from './AgentOptionToggleGroup';
 import { convertToURL, validURL } from 'helpers/url';
 import {
     DEFAULT_WHITEBOARD_TRANSITIONS,
-    FULL_AUTO_PIPELINE_STEP_LABELS,
     fetchWhiteboardTransitions,
-    type FullAutoPipelineStepKey,
-    type FullAutoPipelineSummary,
     type WhiteboardTransitionOption,
 } from './agentVideoApi';
-import {
-    PipelineGroupedWorkflowListV3 as PipelineGroupedWorkflowList,
-    resolveRestartableSet,
-} from './FullAutoPipelineGroupedSteps';
-import { PipelineRenderRunButton } from './PipelineRenderRunButton';
+import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
 import { appendHeadlessHowtoToError } from './agentVideoHeadlessPrerequisites';
 import { PipelineScriptQaLoopMeta } from './PipelineScriptQaLoopUi';
-import { resolveScriptImproveQaLoopView, scriptQaLoopCurrentStepLabel } from './agentVideoPipelineQaLoopUi';
-import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
 import { formatOmnivoiceVoiceDesignVi } from './omnivoiceVoiceDesignLabels';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import ShortVideoAgentPromptLibrary from './ShortVideoAgentPromptLibrary';
 import ShortVideoAgentAvatarDrawer, {
     AVATAR_PIP_ANCHORS,
 } from './ShortVideoAgentAvatarDrawer';
-import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
-import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
-import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import { WorkflowSection, workflowFieldSurfaceSx } from './workflowPanelSection';
 import { AGENT_BEAT_FREQUENCY_OPTIONS, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -262,14 +250,6 @@ function MetaRow({
     );
 }
 
-function pipelineStepLabel(step: string, pipeline?: FullAutoPipelineSummary | null): string {
-    const loopView = resolveScriptImproveQaLoopView(pipeline);
-    if (step in FULL_AUTO_PIPELINE_STEP_LABELS) {
-        return scriptQaLoopCurrentStepLabel(step, loopView);
-    }
-    return step;
-}
-
 export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
@@ -327,30 +307,9 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         && (state.fullAutoPipeline.enabled || state.fullAutoPipeline.status !== 'idle'),
     );
 
-    const restartableSet = React.useMemo(
-        () => resolveRestartableSet(
-            state.fullAutoPipeline?.restartable_steps,
-            state.fullAutoPipeline?.steps,
-            state.fullAutoPipeline?.current_step,
-        ),
-        [
-            state.fullAutoPipeline?.restartable_steps,
-            state.fullAutoPipeline?.steps,
-            state.fullAutoPipeline?.current_step,
-        ],
-    );
-
-    const pipelineBusy = state.startingFullAuto
-        || String(state.fullAutoPipeline?.status || '').trim().toLowerCase() === 'running';
-
     const [whiteboardTransitions, setWhiteboardTransitions] = React.useState<WhiteboardTransitionOption[]>(
         DEFAULT_WHITEBOARD_TRANSITIONS,
     );
-
-    const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
-
-    const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
-    const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
 
     React.useEffect(() => {
         if (!state.isWhiteboardMode) {
@@ -680,29 +639,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                 clipAspect={state.agentClipAspect}
                                 saving={state.savingAgentAvatar}
                                 onApply={state.handleAgentAvatarApply}
-                            />
-                            <ShortVideoAgentBeatDivisionManualDrawer
-                                open={beatDivisionManualOpen}
-                                onClose={() => setBeatDivisionManualOpen(false)}
-                                shortVideoId={state.shortVideoId}
-                                audioDurationSec={state.audioDurationSec}
-                                agentSourceFormat={state.agentSourceFormat}
-                                isWhiteboard={state.isWhiteboardMode}
-                                onSave={state.handleManualBeatDivisionSave}
-                            />
-                            <ShortVideoAgentScriptManualDrawer
-                                open={scriptManualOpen}
-                                onClose={() => setScriptManualOpen(false)}
-                                shortVideoId={state.shortVideoId}
-                                initialScript={state.audioScript}
-                                onSave={state.handleManualScriptCreateSave}
-                            />
-                            <ShortVideoAgentScriptPhoneticManualDrawer
-                                open={scriptPhoneticManualOpen}
-                                onClose={() => setScriptPhoneticManualOpen(false)}
-                                shortVideoId={state.shortVideoId}
-                                initialReading={state.audioScriptTtsReading}
-                                onSave={state.handleManualScriptPhoneticSave}
                             />
                         </Box>
                         {state.audioScriptStyles.length > 0 ? (
@@ -1279,102 +1215,9 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 </CollapsibleWorkflowSection>
 
                 {showPipeline && state.fullAutoPipeline ? (
-                    <CollapsibleWorkflowSection
-                        title="Pipeline A→Z"
-                        tone="pipeline"
-                        headerAction={(
-                            <PipelineRenderRunButton
-                                label="Run"
-                                testId="pipeline-section-rerun-render-upload"
-                                disabled={pipelineBusy}
-                                loading={state.startingFullAuto}
-                                onClick={() => {
-                                    if (typeof state.handleRerunRenderUpload === 'function') {
-                                        void state.handleRerunRenderUpload();
-                                        return;
-                                    }
-                                    void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
-                                }}
-                            />
-                        )}
-                    >
+                    <CollapsibleWorkflowSection title="Pipeline A→Z" tone="pipeline">
                         <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
-                        <MetaRow
-                            label="Bước hiện tại"
-                            status={
-                                state.fullAutoPipeline.current_step
-                                    ? pipelineStepLabel(state.fullAutoPipeline.current_step, state.fullAutoPipeline)
-                                    : '—'
-                            }
-                            statusTone={
-                                state.fullAutoPipeline.status === 'running'
-                                    ? 'info'
-                                    : state.fullAutoPipeline.status === 'failed'
-                                        ? 'error'
-                                        : state.fullAutoPipeline.status === 'completed'
-                                            ? 'success'
-                                            : 'default'
-                            }
-                        />
                         <PipelineScriptQaLoopMeta pipeline={state.fullAutoPipeline} />
-                        <PipelineGroupedWorkflowList
-                            steps={state.fullAutoPipeline.steps}
-                            headlessSteps={state.fullAutoPipeline.headless_steps}
-                            aiSteps={state.fullAutoPipeline.ai_steps}
-                            qaLoops={state.fullAutoPipeline.qa_loops}
-                            agentVisualMode={state.agentVisualMode}
-                            currentStep={state.fullAutoPipeline.current_step || ''}
-                            pipelineStatus={state.fullAutoPipeline.status || 'idle'}
-                            stepToggles={state.fullAutoStepToggles}
-                            stepToggleDisabled={state.savingFullAutoStepToggles || pipelineBusy}
-                            onStepToggleChange={(toggleKey, checked) => {
-                                void state.handleFullAutoStepToggleChange(toggleKey, checked);
-                            }}
-                            beatImageFillMode={state.beatImageFillMode}
-                            beatImageFillModeDisabled={state.savingBeatImageFillMode || pipelineBusy}
-                            onBeatImageFillModeChange={(mode) => {
-                                void state.handleBeatImageFillModeChange(mode);
-                            }}
-                            beatImageFillOnlyMissing={state.beatImageFillOnlyMissing}
-                            beatImageFillOnlyMissingDisabled={state.savingBeatImageFillMode || pipelineBusy}
-                            onBeatImageFillOnlyMissingChange={(checked) => {
-                                void state.handleBeatImageFillOnlyMissingChange(checked);
-                            }}
-                            restartableSet={restartableSet}
-                            selectStepDisabled={pipelineBusy}
-                            onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
-                                void state.handleStartFullAutoPipeline('restart', stepKey);
-                            }}
-                            onRunSingleStep={(stepKey: FullAutoPipelineStepKey) => {
-                                if (typeof state.handleRunSinglePipelineStep === 'function') {
-                                    void state.handleRunSinglePipelineStep(stepKey);
-                                    return;
-                                }
-                                void state.handleStartFullAutoPipeline(
-                                    'restart',
-                                    stepKey,
-                                    undefined,
-                                    { singleStep: true },
-                                );
-                            }}
-                            runSingleStepDisabled={pipelineBusy}
-                            runningSingleStep={state.startingFullAuto}
-                            onRerunRenderUpload={() => {
-                                if (typeof state.handleRerunRenderUpload === 'function') {
-                                    void state.handleRerunRenderUpload();
-                                    return;
-                                }
-                                void state.handleStartFullAutoPipeline('restart', 'render', 'upload');
-                            }}
-                            rerunningRenderUpload={state.startingFullAuto}
-                            rerunRenderUploadDisabled={pipelineBusy}
-                            onManualBeatDivision={() => setBeatDivisionManualOpen(true)}
-                            manualBeatDivisionDisabled={pipelineBusy}
-                            onManualScriptCreate={() => setScriptManualOpen(true)}
-                            manualScriptCreateDisabled={pipelineBusy}
-                            onManualScriptPhonetic={() => setScriptPhoneticManualOpen(true)}
-                            manualScriptPhoneticDisabled={pipelineBusy}
-                        />
                         {state.fullAutoPipeline.last_error?.message ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>
                                 {appendHeadlessHowtoToError(state.fullAutoPipeline.last_error.message)}

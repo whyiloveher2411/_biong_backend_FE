@@ -412,6 +412,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     /** Mở drawer chuẩn hóa giọng đọc thủ công (chỉ hiển thị trên bước script_phonetic_normalize). */
     onManualScriptPhonetic?: () => void;
     manualScriptPhoneticDisabled?: boolean;
+    /** Mở drawer audio background thủ công (chỉ hiển thị trên bước bgm). */
+    onManualBgm?: () => void;
+    manualBgmDisabled?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -446,6 +449,8 @@ export function PipelineGroupedMenuItems({
     manualScriptCreateDisabled = false,
     onManualScriptPhonetic,
     manualScriptPhoneticDisabled = false,
+    onManualBgm,
+    manualBgmDisabled = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -600,6 +605,15 @@ export function PipelineGroupedMenuItems({
                             Thủ công
                         </PipelineManualStepButton>
                     ) : null}
+                    {key === 'bgm' && onManualBgm ? (
+                        <PipelineManualStepButton
+                            title={`Audio background thủ công: copy prompt tạo nhạc AI → upload MP3 → quản lý audio nền (lặp lại khi không đủ dài)`}
+                            disabled={disabled || manualBgmDisabled}
+                            onClick={() => onManualBgm()}
+                        >
+                            Thủ công
+                        </PipelineManualStepButton>
+                    ) : null}
                     {showRowToggle && rowToggleKey && onStepToggleChange ? (
                         <PipelineStepToggleCheckbox
                             toggleKey={rowToggleKey}
@@ -680,6 +694,15 @@ export function PipelineGroupedMenuItems({
                                     onChange={onStepToggleChange}
                                     size="section"
                                 />
+                            ) : null}
+                            {group.key === 'audio_background' && onManualBgm ? (
+                                <PipelineManualStepButton
+                                    title="Audio background thủ công: copy prompt tạo nhạc AI → upload MP3 → quản lý audio nền (lặp lại khi không đủ dài)"
+                                    disabled={disabled || manualBgmDisabled}
+                                    onClick={() => onManualBgm()}
+                                >
+                                    Thủ công
+                                </PipelineManualStepButton>
                             ) : null}
                             {isRenderGroup ? (
                                 <PipelineRenderRunButton
@@ -925,6 +948,9 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     /** Mở drawer chuẩn hóa giọng đọc thủ công (chỉ hiển thị trên bước script_phonetic_normalize). */
     onManualScriptPhonetic?: () => void;
     manualScriptPhoneticDisabled?: boolean;
+    /** Mở drawer audio background thủ công (chỉ hiển thị trên bước bgm). */
+    onManualBgm?: () => void;
+    manualBgmDisabled?: boolean;
     /** Chỉ chạy beat còn thiếu ảnh khi fill ảnh beat. */
     beatImageFillOnlyMissing?: boolean;
     beatImageFillOnlyMissingDisabled?: boolean;
@@ -964,6 +990,8 @@ export function PipelineGroupedWorkflowListV3({
     manualScriptCreateDisabled = false,
     onManualScriptPhonetic,
     manualScriptPhoneticDisabled = false,
+    onManualBgm,
+    manualBgmDisabled = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -1114,6 +1142,15 @@ export function PipelineGroupedWorkflowListV3({
                             title={`Chuẩn hóa giọng đọc thủ công: copy prompt → dán kết quả AI → lưu bản đọc TTS (bỏ qua bước headless bị treo)`}
                             disabled={manualScriptPhoneticDisabled}
                             onClick={() => onManualScriptPhonetic()}
+                        >
+                            Thủ công
+                        </PipelineManualStepButton>
+                    ) : null}
+                    {key === 'bgm' && onManualBgm ? (
+                        <PipelineManualStepButton
+                            title={`Audio background thủ công: copy prompt tạo nhạc AI → upload MP3 → quản lý audio nền (lặp lại khi không đủ dài)`}
+                            disabled={manualBgmDisabled}
+                            onClick={() => onManualBgm()}
                         >
                             Thủ công
                         </PipelineManualStepButton>

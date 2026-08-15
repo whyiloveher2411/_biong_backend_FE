@@ -7,7 +7,8 @@ import { execSync } from "child_process";
 
 export const BGM_CHAIN_MANIFEST_REL = "assets/bgm-chain.json";
 export const DEFAULT_CROSSFADE_SEC = 0.5;
-export const DEFAULT_BGM_VOLUME = 0.3;
+export const DEFAULT_BGM_VOLUME = 0.8;
+export const MAX_BGM_LOOP_CYCLES = 200;
 
 /** Track 11 = segment 1; bỏ 12 (SFX hook); 13,15,17,19; sau đó 29+ tránh beat-move 14–28 */
 export const BGM_CHAIN_TRACK_INDICES = [11, 13, 15, 17, 19, 29, 31, 33, 35];
@@ -139,6 +140,7 @@ function normalizeManifest(projectDir, raw, totalVideoSec, crossfadeSec) {
           : (BGM_CHAIN_TRACK_INDICES[i] ?? 29 + Math.max(0, i - 5) * 2),
       fileDurationSec,
       title: seg.title ?? "",
+      volume: Number(seg.volume) > 0 ? Math.min(1.5, Number(seg.volume)) : 0,
     };
   });
 
@@ -149,45 +151,83 @@ function normalizeManifest(projectDir, raw, totalVideoSec, crossfadeSec) {
     totalVideoSec: tvs,
     crossfadeSec: Number(raw.crossfadeSec) > 0 ? Number(raw.crossfadeSec) : crossfadeSec,
     volume: Number(raw.volume) > 0 ? Number(raw.volume) : DEFAULT_BGM_VOLUME,
+    loop: Boolean(raw.loop ?? raw.allowLoop ?? false),
     segments,
   };
 }
 
+/** Track index cho từng slot lặp lịch (loop dùng tiếp dãy sau BGM_CHAIN_TRACK_INDICES). */
+export function resolveBgmTrackIndex(slot) {
+  if (slot < BGM_CHAIN_TRACK_INDICES.length) return BGM_CHAIN_TRACK_INDICES[slot];
+  return 29 + Math.max(0, slot - 5) * 2;
+}
+
+/** id duy nhất cho từng slot — loop lặp lại file nhưng id/track phải khác nhau. */
+export function resolveBgmSegmentId(seg, slot, segmentsLength) {
+  if (slot < segmentsLength) return seg.id;
+  const cycle = Math.floor(slot / segmentsLength);
+  return `${seg.id}-loop${cycle}`;
+}
+
 /**
  * Lập lịch segment: overlap crossfadeSec giữa các bài; segment cuối cắt đúng totalVideoSec.
+ *
+ * `manifest.loop = true` → khi hết segments mà chưa phủ totalVideoSec, lặp lại từ segment
+ * đầu tiên (vẫn crossfade, id/trackIndex mới cho mỗi slot lặp). Ngược lại dừng ở đoạn
+ * cuối như cũ (render sẽ fail coverage).
  */
 export function buildScheduledChain(manifest) {
   const { segments, totalVideoSec, crossfadeSec, volume } = manifest;
+  const allowLoop = Boolean(manifest.loop);
   const scheduled = [];
   let coveredEnd = 0;
+  let loopCycles = 0;
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
+  if (segments.length === 0) {
+    throw new Error("BGM chain: segments[] rỗng");
+  }
+
+  for (let slot = 0; ; slot++) {
+    const segIndex = slot % segments.length;
+    if (slot > 0 && segIndex === 0) {
+      if (!allowLoop) break;
+      loopCycles += 1;
+      if (loopCycles > MAX_BGM_LOOP_CYCLES) {
+        throw new Error(`BGM chain: vượt ${MAX_BGM_LOOP_CYCLES} vòng loop — file quá ngắn so với video`);
+      }
+    }
+
+    const seg = segments[segIndex];
     const fileDur = seg.fileDurationSec;
     if (fileDur <= 0) {
       throw new Error(`${seg.file}: fileDurationSec=0 — chạy ffprobe hoặc ghi duration trong manifest`);
     }
 
     const startSec =
-      i === 0 ? 0 : scheduled[i - 1].startSec + scheduled[i - 1].durationSec - crossfadeSec;
+      slot === 0 ? 0 : scheduled[slot - 1].startSec + scheduled[slot - 1].durationSec - crossfadeSec;
 
     const remaining = totalVideoSec - startSec;
     if (remaining <= 0.05) break;
 
     let durationSec = Math.min(fileDur, remaining);
-    if (i === segments.length - 1 || remaining <= fileDur + 0.05) {
+    if (remaining <= fileDur + 0.05) {
       durationSec = remaining;
     }
 
     scheduled.push({
       ...seg,
+      id: resolveBgmSegmentId(seg, slot, segments.length),
+      trackIndex: resolveBgmTrackIndex(slot),
       startSec: round3(startSec),
       durationSec: round3(durationSec),
-      volume,
+      // Volume riêng từng bài; fallback volume chung của manifest.
+      volume: Number(seg.volume) > 0 ? Number(seg.volume) : volume,
     });
     coveredEnd = startSec + durationSec;
 
     if (coveredEnd >= totalVideoSec - 0.05) break;
+
+    if (!allowLoop && segIndex === segments.length - 1) break;
   }
 
   if (scheduled.length === 0) {
@@ -204,6 +244,8 @@ export function buildScheduledChain(manifest) {
     ...manifest,
     scheduled,
     coveredSec: round3(last.startSec + last.durationSec),
+    loopCycles,
+    looped: loopCycles > 0,
   };
 }
 
@@ -238,9 +280,10 @@ export function renderBgmFadeScript(scheduled, crossfadeSec, volume, timelineVar
     const prev = scheduled[i - 1];
     const curr = scheduled[i];
     const fadeAt = curr.startSec;
+    const currVol = Number(curr.volume) > 0 ? Number(curr.volume) : volume;
     lines.push(
       `  ${timelineVar}.to("#${prev.id}", { volume: 0, duration: ${crossfadeSec}, ease: "none" }, ${fadeAt.toFixed(3)});`,
-      `  ${timelineVar}.fromTo("#${curr.id}", { volume: 0 }, { volume: ${volume}, duration: ${crossfadeSec}, ease: "none" }, ${fadeAt.toFixed(3)});`,
+      `  ${timelineVar}.fromTo("#${curr.id}", { volume: 0 }, { volume: ${currVol}, duration: ${crossfadeSec}, ease: "none" }, ${fadeAt.toFixed(3)});`,
     );
   }
   lines.push("  /* bgm-chain-fades:end */");
@@ -314,7 +357,10 @@ export function writeManifest(projectDir, chain) {
     totalVideoSec: chain.totalVideoSec,
     crossfadeSec: chain.crossfadeSec,
     volume: chain.volume,
+    loop: Boolean(chain.loop),
     coveredSec: chain.coveredSec,
+    loopCycles: chain.loopCycles ?? 0,
+    looped: Boolean(chain.looped),
     segments: chain.scheduled.map((s) => ({
       id: s.id,
       file: s.file,

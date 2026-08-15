@@ -208,6 +208,7 @@ export default function ShortVideoAgentResourcesPanel({ state, embedded = false 
         bgmSegmentCount: state.bgmSegments.length,
         bgmInsufficient,
         bgmShortfallSec,
+        bgmLoop: state.bgmLoop,
         assembleOk,
         assembleStatus: state.composition?.assemble_status,
         assembleError: state.composition?.assemble_error,
@@ -320,7 +321,10 @@ export default function ShortVideoAgentResourcesPanel({ state, embedded = false 
 
                 {bgmInsufficient ? (
                     <Alert severity="warning" sx={{ mt: 1, py: 0.25 }}>
-                        BGM chưa đủ dài video.
+                        BGM chưa đủ dài video
+                        {state.bgmLoop
+                            ? ' — sẽ tự lặp lại audio nền khi render.'
+                            : ` (thiếu ~${bgmShortfallSec.toFixed(1)}s) — mở Thủ công để bật lặp lại hoặc thêm bài.`}
                     </Alert>
                 ) : null}
                 {state.bgmSegments.length > 0 && selectedBgmTotal <= 0 ? (

@@ -492,6 +492,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     videoUrl={finalPreviewVideoUrl}
                     videoRef={videoRef}
                     clipLabel={state.title || `Short video #${shortVideoId}`}
+                    agentState={state}
                     audioDurationSec={state.audioDurationSec}
                     estimatedDurationSec={state.agentVideoSummary?.estimated_duration_sec}
                     shortVideoId={shortVideoId}

@@ -103,6 +103,8 @@ import {
     resolveSaydiVoicePreviewUrl,
     transcribeAgentAudio,
     uploadAgentAudioMp3,
+    uploadAgentBgmMp3,
+    fetchBgmPromptSuggestions,
     uploadAgentVisualImage,
     type AgentRenderMode,
     type AgentVisualMode,
@@ -148,6 +150,7 @@ import {
     type GithubReadmeMediaItem,
     type ImportHtmlComposition,
     type AgentBgmSearchItem,
+    type BgmPromptSuggestionItem,
     type WhisperWord,
     type CaptionAlignOverride,
     type TtsPhoneticDictEntry,
@@ -772,6 +775,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [composition, setComposition] = React.useState<ImportHtmlComposition | null>(null);
     const [bgmTotalSec, setBgmTotalSec] = React.useState(0);
     const [bgmCoversVideo, setBgmCoversVideo] = React.useState(false);
+    const [bgmLoop, setBgmLoop] = React.useState(true);
+    const [bgmPromptSuggestions, setBgmPromptSuggestions] = React.useState<BgmPromptSuggestionItem[]>([]);
+    const [bgmPromptSuggestionsLoading, setBgmPromptSuggestionsLoading] = React.useState(false);
+    const [bgmManualUploading, setBgmManualUploading] = React.useState(false);
     const [launchingAssemble, setLaunchingAssemble] = React.useState(false);
     const [captionMismatchDialogOpen, setCaptionMismatchDialogOpen] = React.useState(false);
     const [captionMismatchDialogMessage, setCaptionMismatchDialogMessage] = React.useState('');
@@ -911,6 +918,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setBgmTotalSec(Number(summary.bgm_total_sec || 0));
         setBgmCoversVideo(Boolean(summary.bgm_covers_video));
+        if (typeof summary.bgm_loop === 'boolean') {
+            setBgmLoop(summary.bgm_loop);
+        } else if (summary.assets && typeof summary.assets.bgm_loop === 'boolean') {
+            setBgmLoop(summary.assets.bgm_loop);
+        }
         const visualCatalogRaw = summary.assets?.visual_catalog;
         const loadedVisualCatalog = Array.isArray(visualCatalogRaw) ? visualCatalogRaw : [];
         setVisualCatalog(loadedVisualCatalog);
@@ -2395,6 +2407,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     const persistImportHtmlAssets = React.useCallback(async (options?: {
         bgmSegments?: ImportHtmlBgmSegment[];
+        bgmLoop?: boolean;
         sfxBeatTransition?: boolean;
         sfxHook?: boolean;
         visualCatalog?: ImportHtmlVisualCatalogItem[];
@@ -2403,6 +2416,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         silent?: boolean;
     }) => {
         const nextBgm = options?.bgmSegments ?? bgmSegments;
+        const nextBgmLoop = options?.bgmLoop ?? bgmLoop;
         const nextSfxBeat = options?.sfxBeatTransition ?? sfxBeatTransition;
         const nextSfxHook = options?.sfxHook ?? sfxHook;
         const nextVisual = options?.visualCatalog ?? visualCatalog;
@@ -2414,6 +2428,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         try {
             const res = await saveAgentImportHtml(shortVideoId, {
                 bgmSegments: nextBgm,
+                bgmLoop: nextBgmLoop,
                 sfxBeatTransition: nextSfxBeat,
                 sfxHook: nextSfxHook,
                 visualCatalog: nextVisual,
@@ -2458,7 +2473,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } finally {
             setSavingImportAssets(false);
         }
-    }, [applyImportHtmlSummary, bgmSegments, githubImageShots, readmeMedia, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
+    }, [applyImportHtmlSummary, bgmSegments, bgmLoop, githubImageShots, readmeMedia, sfxBeatTransition, sfxHook, visualCatalog, shortVideoId, showMessage]);
 
     const handleReadmeMediaAltChange = React.useCallback((itemId: string, alt: string) => {
         setReadmeMedia((prev) => prev.map((item) => (
@@ -2754,6 +2769,114 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (nextSegments) {
             await persistImportHtmlAssets({ bgmSegments: nextSegments, silent: true });
         }
+    }, [persistImportHtmlAssets]);
+
+    /** Đổi volume riêng của 1 bài BGM (state local — persist khi thả slider). */
+    const handleUpdateBgmSegmentVolume = React.useCallback((index: number, volume: number) => {
+        const clamped = Math.min(1.5, Math.max(0.05, Number(volume) || 0.8));
+        setBgmSegments((prev) => prev.map((seg, i) => (
+            i === index ? { ...seg, volume: clamped } : seg
+        )));
+    }, []);
+
+    /** Kéo-thả sắp xếp lại thứ tự phát BGM. */
+    const handleReorderBgmSegments = React.useCallback(async (fromIndex: number, toIndex: number) => {
+        if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+            return;
+        }
+        let nextSegments: ImportHtmlBgmSegment[] | null = null;
+        setBgmSegments((prev) => {
+            if (fromIndex >= prev.length || toIndex >= prev.length) {
+                return prev;
+            }
+            const next = [...prev];
+            const [moved] = next.splice(fromIndex, 1);
+            if (!moved) {
+                return prev;
+            }
+            next.splice(toIndex, 0, moved);
+            nextSegments = next;
+            return next;
+        });
+        if (nextSegments) {
+            await persistImportHtmlAssets({ bgmSegments: nextSegments, silent: true });
+        }
+    }, [persistImportHtmlAssets]);
+
+    const handleFetchBgmPromptSuggestions = React.useCallback(async () => {
+        if (!shortVideoId) {
+            return;
+        }
+        setBgmPromptSuggestionsLoading(true);
+        try {
+            const res = await fetchBgmPromptSuggestions(shortVideoId);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không tạo được gợi ý prompt BGM', 'error');
+                setBgmPromptSuggestions([]);
+                return;
+            }
+            const items = Array.isArray(res.suggestions) ? res.suggestions : [];
+            setBgmPromptSuggestions(items.filter((item) => item?.prompt && item?.id));
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            setBgmPromptSuggestions([]);
+        } finally {
+            setBgmPromptSuggestionsLoading(false);
+        }
+    }, [shortVideoId, showMessage]);
+
+    const handleUploadBgmMp3 = React.useCallback(async (files: File[]) => {
+        if (!shortVideoId || !Array.isArray(files) || files.length === 0) {
+            return;
+        }
+        const mp3Files = files.filter((file) => /\.mp3$/i.test(String(file.name || '')));
+        if (mp3Files.length === 0) {
+            showMessage('Chỉ chấp nhận file MP3', 'warning');
+            return;
+        }
+
+        setBgmManualUploading(true);
+        try {
+            const uploaded: ImportHtmlBgmSegment[] = [];
+            for (const file of mp3Files) {
+                const res = await uploadAgentBgmMp3(shortVideoId, file);
+                if (!res?.success || !res.url) {
+                    showMessage(
+                        parseApiMessage(res?.message) || `Upload ${file.name} thất bại`,
+                        'error',
+                    );
+                    continue;
+                }
+                uploaded.push({
+                    id: String(res.s3_key || `bgm-upload-${Date.now()}-${uploaded.length + 1}`),
+                    title: String(res.title || file.name || 'BGM'),
+                    download_url: String(res.url),
+                    preview_url: String(res.url),
+                    duration_sec: Number(res.duration_sec || 0),
+                    provider: 'user_upload',
+                });
+            }
+
+            if (uploaded.length === 0) {
+                return;
+            }
+
+            const merged = [...bgmSegments, ...uploaded];
+            setBgmSegments(merged);
+            const saved = await persistImportHtmlAssets({ bgmSegments: merged, silent: true });
+            if (saved) {
+                showMessage(`Đã thêm ${uploaded.length} file audio nền`, 'success');
+            }
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setBgmManualUploading(false);
+        }
+    }, [bgmSegments, persistImportHtmlAssets, shortVideoId, showMessage]);
+
+    const handleBgmLoopChange = React.useCallback(async (checked: boolean) => {
+        setBgmLoop(checked);
+        await persistImportHtmlAssets({ bgmLoop: checked, silent: true });
     }, [persistImportHtmlAssets]);
 
     const handleSfxBeatTransitionChange = React.useCallback(async (checked: boolean) => {
@@ -7657,6 +7780,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         composition,
         bgmTotalSec,
         bgmCoversVideo,
+        bgmLoop,
+        handleBgmLoopChange,
+        bgmPromptSuggestions,
+        bgmPromptSuggestionsLoading,
+        handleFetchBgmPromptSuggestions,
+        bgmManualUploading,
+        handleUploadBgmMp3,
         launchingAssemble,
         captionMismatchDialogOpen,
         captionMismatchDialogMessage,
@@ -7693,6 +7823,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleSearchAgentBgm,
         handleAddBgmSegment,
         handleRemoveBgmSegment,
+        handleUpdateBgmSegmentVolume,
+        handleReorderBgmSegments,
         handleLaunchImportHtmlAssemble,
         handleLaunchImportHtmlAssembleAllowMismatch,
         handleDismissCaptionMismatchDialog,

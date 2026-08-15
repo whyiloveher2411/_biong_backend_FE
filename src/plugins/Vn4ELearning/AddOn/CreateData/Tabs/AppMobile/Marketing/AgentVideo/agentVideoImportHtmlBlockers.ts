@@ -13,6 +13,8 @@ export type ImportHtmlPipelineBlockersInput = {
     bgmInsufficient: boolean;
     /** Thiếu bao nhiêu giây BGM so với video (nếu biết). */
     bgmShortfallSec?: number;
+    /** Bật loop audio nền → không chặn render dù BGM thiếu thời lượng. */
+    bgmLoop?: boolean;
     assembleOk: boolean;
     assembleStatus?: string;
     assembleError?: string;
@@ -128,14 +130,14 @@ export function buildImportHtmlRenderBlockers(
             hint: 'Mục Nhạc nền phía trên → Chọn → Lưu tài nguyên',
         });
     }
-    if (input.bgmInsufficient) {
+    if (input.bgmInsufficient && input.bgmLoop !== true) {
         const shortfall = Number(input.bgmShortfallSec || 0);
         blockers.push({
             id: 'bgm_duration',
             message: shortfall > 0
                 ? `BGM thiếu ~${shortfall.toFixed(1)}s so với độ dài video`
                 : 'BGM chưa phủ đủ thời lượng video',
-            hint: 'Thêm segment BGM hoặc chọn track dài hơn → Lưu tài nguyên',
+            hint: 'Thêm segment BGM, chọn track dài hơn, hoặc bật lặp lại audio nền → Lưu tài nguyên',
         });
     }
 

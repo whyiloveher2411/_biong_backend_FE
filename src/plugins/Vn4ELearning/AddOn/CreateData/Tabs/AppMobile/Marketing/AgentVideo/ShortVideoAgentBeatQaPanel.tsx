@@ -61,6 +61,7 @@ type Props = {
         status?: string;
         video_url?: string;
         error?: string;
+        updated_at?: string;
     } | null;
     uploadingBeatVideoToCapcut?: boolean;
     beatDurationSec?: number;

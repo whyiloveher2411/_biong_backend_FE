@@ -29,6 +29,8 @@ import {
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
+import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
+import type { useAgentVideoContent } from './useAgentVideoContent';
 import type {
     BeatImageFillMode,
     FullAutoPipelineStepKey,
@@ -173,10 +175,14 @@ function AgentVideoSimpleClip({ clipLabel }: AgentVideoSimpleClipProps) {
     );
 }
 
+type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
+
 type Props = {
     videoUrl: string;
     videoRef: React.RefObject<HTMLVideoElement>;
     clipLabel?: string;
+    /** State đầy đủ của AgentVideo — dùng cho drawer audio background thủ công. */
+    agentState?: AgentVideoState;
     audioDurationSec?: number | null;
     estimatedDurationSec?: number | null;
     shortVideoId?: number;
@@ -280,6 +286,7 @@ export default function ShortVideoAgentVideoTimeline({
     videoUrl,
     videoRef,
     clipLabel = 'HyperFrames',
+    agentState,
     audioDurationSec,
     estimatedDurationSec,
     shortVideoId = 0,
@@ -376,6 +383,7 @@ export default function ShortVideoAgentVideoTimeline({
 
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
+    const [bgmManualOpen, setBgmManualOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -1067,6 +1075,11 @@ export default function ShortVideoAgentVideoTimeline({
                                             setScriptPhoneticManualOpen(true);
                                         }}
                                         manualScriptPhoneticDisabled={pipelineRunning || startingFullAuto}
+                                        onManualBgm={() => {
+                                            setRestartMenuAnchor(null);
+                                            setBgmManualOpen(true);
+                                        }}
+                                        manualBgmDisabled={pipelineRunning || startingFullAuto}
                                     />
                                 </Menu>
                                 {pipelineRunning ? (
@@ -1327,6 +1340,13 @@ export default function ShortVideoAgentVideoTimeline({
                 initialReading={audioScriptTtsReading}
                 onSave={onSaveScriptPhonetic ?? fallbackManualScriptPhoneticSave}
             />
+            {agentState ? (
+                <ShortVideoAgentBgmManualDrawer
+                    open={bgmManualOpen}
+                    onClose={() => setBgmManualOpen(false)}
+                    state={agentState}
+                />
+            ) : null}
         </Box>
     );
 }

@@ -111,7 +111,7 @@ export function mixImportHtmlAudio({
     }
     inputs.push("-i", abs);
     const delayMs = Math.max(0, Math.round(seg.startSec * 1000));
-    const vol = Number(seg.volume) > 0 ? Number(seg.volume) : 0.3;
+    const vol = Number(seg.volume) > 0 ? Number(seg.volume) : 0.8;
     const label = `bgm${i}`;
     // Trim to scheduled duration; fade in/out at segment boundaries for crossfade
     const dur = Math.max(0.05, Number(seg.durationSec));
