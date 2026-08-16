@@ -2,7 +2,7 @@
 /**
  * Wire BGM chain — ffprobe + sequential segments + crossfade volume trên main timeline.
  *
- * Usage: node wire-bgm-chain.mjs <project-dir> [--crossfade=0.5] [--volume=0.8]
+ * Usage: node wire-bgm-chain.mjs <project-dir> [--crossfade=0.5] [--volume=0.6]
  */
 import fs from "fs";
 import path from "path";
@@ -30,7 +30,7 @@ const projectDir = path.resolve(args.find((a) => !a.startsWith("-")) || "");
 
 if (!projectDir) {
   console.error(
-    "usage: node wire-bgm-chain.mjs <project-dir> [--crossfade=0.5] [--volume=0.8] [--loop|--no-loop]",
+    "usage: node wire-bgm-chain.mjs <project-dir> [--crossfade=0.5] [--volume=0.6] [--loop|--no-loop]",
   );
   process.exit(1);
 }

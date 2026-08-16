@@ -392,7 +392,7 @@ export default function ShortVideoAgentBgmManualDrawer({
                                             const previewUrl = bgmPreviewUrl(seg);
                                             const isPlaying = Boolean(previewUrl && playingUrl === previewUrl);
                                             const isUploaded = String(seg.provider || '').toLowerCase() === 'user_upload';
-                                            const segVolume = Number(seg.volume) > 0 ? Number(seg.volume) : 0.8;
+                                            const segVolume = Number(seg.volume) > 0 ? Number(seg.volume) : 0.6;
                                             return (
                                                 <Draggable
                                                     key={`${seg.download_url}-${index}`}

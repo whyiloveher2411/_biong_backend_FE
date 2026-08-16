@@ -1,0 +1,1264 @@
+import React from 'react';
+import { keyframes } from '@emotion/react';
+import {
+    Alert,
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    IconButton,
+    Stack,
+    TextField,
+    Typography,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import UndoIcon from '@mui/icons-material/Undo';
+import SaveIcon from '@mui/icons-material/Save';
+import { LoadingButton } from '@mui/lab';
+import DrawerCustom from 'components/molecules/DrawerCustom';
+import { useFloatingMessages } from 'hook/useFloatingMessages';
+import type { useAgentVideoContent } from './useAgentVideoContent';
+import type { BeatRegion } from './agentVideoApi';
+
+type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
+
+type Props = {
+    open: boolean;
+    onClose: () => void;
+    state: AgentVideoState;
+    beatId: string;
+    imageUrl: string;
+};
+
+const REGION_COLORS = [
+    '#f44336',
+    '#2196f3',
+    '#4caf50',
+    '#ff9800',
+    '#9c27b0',
+    '#00bcd4',
+    '#795548',
+    '#e91e63',
+    '#3f51b5',
+    '#8bc34a',
+];
+
+/** Ray casting — kiểm tra điểm (x,y) chuẩn hóa 0-1 có nằm trong polygon không. */
+function pointInPolygon(x: number, y: number, points: [number, number][]): boolean {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i][0];
+        const yi = points[i][1];
+        const xj = points[j][0];
+        const yj = points[j][1];
+        const intersect = ((yi > y) !== (yj > y))
+            && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+        if (intersect) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function polygonArea(points: [number, number][]): number {
+    let area = 0;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        area += points[j][0] * points[i][1] - points[i][0] * points[j][1];
+    }
+    return Math.abs(area) / 2;
+}
+
+/** Vùng cha = vùng NHỎ NHẤT chứa centroid của polygon mới (con nằm trong cha). */
+function resolveParentRegion(
+    pts: [number, number][],
+    regions: BeatRegion[],
+): string | null {
+    if (pts.length === 0 || regions.length === 0) {
+        return null;
+    }
+    const cx = pts.reduce((sum, p) => sum + p[0], 0) / pts.length;
+    const cy = pts.reduce((sum, p) => sum + p[1], 0) / pts.length;
+    let bestId: string | null = null;
+    let bestArea = Infinity;
+    for (const region of regions) {
+        if (!pointInPolygon(cx, cy, region.points)) {
+            continue;
+        }
+        const area = polygonArea(region.points);
+        if (area < bestArea) {
+            bestArea = area;
+            bestId = region.id;
+        }
+    }
+    return bestId;
+}
+
+/** Animation nhấp nháy khi vùng được chọn (bên danh sách vùng). */
+const regionActivePulse = keyframes`
+    0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.55); }
+    70% { box-shadow: 0 0 0 9px rgba(33, 150, 243, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+`;
+
+export default function ShortVideoAgentBeatRegionDrawer({
+    open,
+    onClose,
+    state,
+    beatId,
+    imageUrl,
+}: Props) {
+    const { showMessage } = useFloatingMessages();
+    const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
+    const savedRegions = Array.isArray(currentOverride.regions) ? currentOverride.regions : [];
+
+    const [regions, setRegions] = React.useState<BeatRegion[]>(savedRegions);
+    const [draftPoints, setDraftPoints] = React.useState<[number, number][]>([]);
+    const [selectedRegionId, setSelectedRegionId] = React.useState<string>('');
+    const [imgNatural, setImgNatural] = React.useState<{ w: number; h: number } | null>(null);
+    const [imageError, setImageError] = React.useState(false);
+    const [saving, setSaving] = React.useState(false);
+    const [bgSampleMode, setBgSampleMode] = React.useState(false);
+    const [bgSampleDraft, setBgSampleDraft] = React.useState<[number, number][]>([]);
+    const [deleteConfirmRegionId, setDeleteConfirmRegionId] = React.useState<string>('');
+    const [hoveredDraftPoint, setHoveredDraftPoint] = React.useState<number | null>(null);
+
+    const svgRef = React.useRef<SVGSVGElement | null>(null);
+    const imgRef = React.useRef<HTMLImageElement | null>(null);
+    const containerRef = React.useRef<HTMLDivElement | null>(null);
+    const [boxSize, setBoxSize] = React.useState<{ w: number; h: number } | null>(null);
+    const [cursorPos, setCursorPos] = React.useState<[number, number] | null>(null);
+
+    // Chỉ reset khi drawer MỞ (transition open) — tránh effect chạy lại mỗi render
+    // vì savedRegions là array mới mỗi render (reset draftPoints liên tục).
+    const savedRegionsRef = React.useRef(savedRegions);
+    savedRegionsRef.current = savedRegions;
+    const prevOpenRef = React.useRef(false);
+    React.useEffect(() => {
+        if (open && !prevOpenRef.current) {
+            const fresh = Array.isArray(savedRegionsRef.current) ? savedRegionsRef.current : [];
+            setRegions(fresh);
+            setDraftPoints([]);
+            setDraftIsDrag(false);
+            setSelectedRegionId('');
+            setImgNatural(null);
+            setImageError(false);
+            setBoxSize(null);
+            setBgSampleMode(false);
+            setBgSampleDraft([]);
+            setDeleteConfirmRegionId('');
+        }
+        prevOpenRef.current = open;
+    }, [open]);
+
+    // Đo kích thước vùng hiển thị ảnh — callback ref chạy ngay khi node có size
+    // (kể cả trước effect), kèm ResizeObserver cho thay đổi sau đó.
+    const measureBoxRef = React.useCallback((node: HTMLDivElement | null) => {
+        containerRef.current = node;
+        if (node) {
+            const rect = node.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                setBoxSize({ w: rect.width, h: rect.height });
+            }
+        }
+    }, []);
+
+    React.useEffect(() => {
+        const container = containerRef.current;
+        if (!container) {
+            return undefined;
+        }
+        const update = () => {
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                setBoxSize({ w: rect.width, h: rect.height });
+            }
+        };
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [imageUrl]);
+
+    // Ảnh cached có thể load xong trước khi React gắn onLoad → probe complete.
+    // Poll nhẹ vài lần để bắt trường hợp load chậm/treo → ép reload 1 lần.
+    React.useEffect(() => {
+        if (!imageUrl || imgNatural || imageError) {
+            return undefined;
+        }
+        const img = imgRef.current;
+        if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+            setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+            setImageError(false);
+            return undefined;
+        }
+        const timer = window.setInterval(() => {
+            const el = imgRef.current;
+            if (!el) {
+                return;
+            }
+            if (el.complete) {
+                if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                    setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
+                } else {
+                    setImageError(true);
+                }
+            }
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [imageUrl, imgNatural, imageError]);
+
+    const containRect = React.useMemo(() => {
+        if (!imgNatural || !boxSize || imgNatural.w <= 0 || imgNatural.h <= 0) {
+            return null;
+        }
+        const scale = Math.min(boxSize.w / imgNatural.w, boxSize.h / imgNatural.h);
+        const w = imgNatural.w * scale;
+        const h = imgNatural.h * scale;
+        return { x: (boxSize.w - w) / 2, y: (boxSize.h - h) / 2, w, h };
+    }, [imgNatural, boxSize]);
+
+    // SVG viewBox 1000x1000 bị kéo giãn theo box (preserveAspectRatio none) →
+    // bù scale ngược để dot/text luôn TRÒN và KHÔNG méo.
+    const svgScale = containRect
+        ? {
+            invW: 1000 / Math.max(1, containRect.w),
+            invH: 1000 / Math.max(1, containRect.h),
+        }
+        : null;
+    const svgScaleTpl = (x: number, y: number) => (
+        svgScale
+            ? `translate(${(x * 1000).toFixed(2)}, ${(y * 1000).toFixed(2)}) scale(${svgScale.invW.toFixed(6)}, ${svgScale.invH.toFixed(6)})`
+            : `translate(${(x * 1000).toFixed(2)}, ${(y * 1000).toFixed(2)})`
+    );
+
+    // Lấy từ trong phạm vi beat (window) từ whisper words toàn video.
+    const beatWords = React.useMemo(() => {
+        const all = Array.isArray(state.whisperWords)
+            ? state.whisperWords.map((w, index) => ({ ...w, index }))
+            : [];
+        if (all.length === 0) {
+            return all;
+        }
+        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const start = Number(section?.startSec ?? 0);
+        const end = Number(section?.endSec ?? section?.startSec ?? 0) + Number(section?.durationSec ?? 0);
+        if (!(end > start)) {
+            return all;
+        }
+        return all.filter((w) => Number(w.start) >= start - 0.1 && Number(w.end) <= end + 0.1);
+    }, [beatId, state.beatMap?.sections, state.whisperWords]);
+
+    // Vùng cha tự nhận biết khi đang vẽ (dựa trên centroid điểm đang vẽ).
+    const draftParentId = React.useMemo(
+        () => (draftPoints.length >= 3 ? resolveParentRegion(draftPoints, regions) : null),
+        [draftPoints, regions],
+    );
+    const draftParent = draftParentId
+        ? regions.find((region) => region.id === draftParentId) || null
+        : null;
+
+    const colorFor = (index: number) => REGION_COLORS[index % REGION_COLORS.length];
+
+    // Depth (cha→con) + sắp xếp cha trước con để hiển thị cây cha/con.
+    const regionDepth = React.useMemo(() => {
+        const depth: Record<string, number> = {};
+        const compute = (id: string, seen: Set<string>): number => {
+            if (depth[id] !== undefined) {
+                return depth[id];
+            }
+            if (seen.has(id)) {
+                return 0;
+            }
+            seen.add(id);
+            const region = regions.find((r) => r.id === id);
+            const pid = region?.parent_id || null;
+            depth[id] = pid ? 1 + compute(pid, seen) : 0;
+            return depth[id];
+        };
+        regions.forEach((r) => compute(r.id, new Set()));
+        return depth;
+    }, [regions]);
+
+    const sortedRegions = React.useMemo(() => {
+        const out: BeatRegion[] = [];
+        const visited = new Set<string>();
+        const visit = (r: BeatRegion) => {
+            if (visited.has(r.id)) {
+                return;
+            }
+            visited.add(r.id);
+            out.push(r);
+            regions
+                .filter((c) => c.parent_id === r.id)
+                .forEach(visit);
+        };
+        regions.filter((r) => !r.parent_id).forEach(visit);
+        regions.forEach(visit);
+        return out;
+    }, [regions]);
+
+    const svgPointFromEvent = (event: { clientX: number; clientY: number }): [number, number] | null => {
+        const svg = svgRef.current;
+        if (!svg) {
+            return null;
+        }
+        const rect = svg.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+            return null;
+        }
+        return [
+            Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+            Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+        ];
+    };
+
+    // Drag-draw: click giữ chuột → kéo → vùng hình thành từ điểm đầu nối với
+    // điểm hiện tại của chuột (điểm đầu luôn kết nối điểm cuối). Thả chuột = xong.
+    const [dragging, setDragging] = React.useState(false);
+    const [draftIsDrag, setDraftIsDrag] = React.useState(false);
+    const dragStartRef = React.useRef<[number, number] | null>(null);
+    const dragActiveRef = React.useRef(false);
+    const lastDragPtRef = React.useRef<[number, number] | null>(null);
+    const suppressClickRef = React.useRef(false);
+
+    const handleSvgMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (event.button !== 0) {
+            return;
+        }
+        const pt = svgPointFromEvent(event);
+        if (!pt) {
+            return;
+        }
+        dragStartRef.current = pt;
+        dragActiveRef.current = false;
+        suppressClickRef.current = false;
+        lastDragPtRef.current = pt;
+        setDragging(true);
+    };
+
+    const handleSvgMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+        const pt = svgPointFromEvent(event);
+        if (!pt) {
+            return;
+        }
+        setCursorPos(pt);
+        if (!dragging) {
+            return;
+        }
+        if (!dragActiveRef.current) {
+            const start = dragStartRef.current;
+            if (!start) {
+                return;
+            }
+            if (Math.hypot(pt[0] - start[0], pt[1] - start[1]) > 0.004) {
+                // Vượt ngưỡng → chuyển sang chế độ kéo: điểm đầu + trail điểm.
+                dragActiveRef.current = true;
+                lastDragPtRef.current = pt;
+                setDraftIsDrag(true);
+                if (bgSampleMode) {
+                    setBgSampleDraft([start, pt]);
+                } else {
+                    setDraftPoints([start, pt]);
+                }
+            }
+            return;
+        }
+        const last = lastDragPtRef.current;
+        if (last && Math.hypot(pt[0] - last[0], pt[1] - last[1]) > 0.004) {
+            lastDragPtRef.current = pt;
+            if (bgSampleMode) {
+                setBgSampleDraft((prev) => [...prev, pt]);
+            } else {
+                setDraftPoints((prev) => [...prev, pt]);
+            }
+        }
+    };
+
+    const handleSvgMouseUp = () => {
+        if (!dragging) {
+            return;
+        }
+        setDragging(false);
+        if (dragActiveRef.current) {
+            // Kéo xong → tự hoàn tất vùng; chặn onClick thừa sau mouseup.
+            suppressClickRef.current = true;
+            finishDraft();
+        }
+        dragStartRef.current = null;
+        dragActiveRef.current = false;
+        lastDragPtRef.current = null;
+    };
+
+    const handleSvgClick = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+        }
+        const pt = svgPointFromEvent(event);
+        if (!pt) {
+            return;
+        }
+        const [x, y] = pt;
+        const activeDraft = bgSampleMode ? bgSampleDraft : draftPoints;
+
+        if (activeDraft.length === 0) {
+            if (bgSampleMode) {
+                setBgSampleDraft([[x, y]]);
+            } else {
+                setDraftIsDrag(false);
+                setDraftPoints([[x, y]]);
+            }
+            return;
+        }
+        // Click gần điểm đầu (trong vòng nhắc r20 + dung sai) → đóng kín vùng.
+        const first = activeDraft[0];
+        const px = (first[0] - x) * (svgRef.current?.getBoundingClientRect().width || 1);
+        const py = (first[1] - y) * (svgRef.current?.getBoundingClientRect().height || 1);
+        if (Math.hypot(px, py) < 26) {
+            finishDraft();
+            return;
+        }
+        if (bgSampleMode) {
+            setBgSampleDraft((prev) => [...prev, [x, y]]);
+        } else {
+            setDraftIsDrag(false);
+            setDraftPoints((prev) => [...prev, [x, y]]);
+        }
+    };
+
+    const finishDraft = () => {
+        if (bgSampleMode) {
+            if (bgSampleDraft.length < 3) {
+                showMessage('Vùng background cần tối thiểu 3 điểm', 'warning');
+                return;
+            }
+            // Gán mẫu background cho vùng ĐANG CHỌN (nút Chọn background của vùng đó).
+            const targetId = selectedRegionId;
+            if (!targetId) {
+                showMessage('Hãy chọn 1 vùng trước (bấm Chọn background trên vùng đó)', 'warning');
+                return;
+            }
+            updateRegion(targetId, { bg_sample: { points: [...bgSampleDraft] } });
+            setBgSampleDraft([]);
+            setBgSampleMode(false);
+            return;
+        }
+        if (draftPoints.length < 3) {
+            showMessage('Vùng cần tối thiểu 3 điểm', 'warning');
+            return;
+        }
+        // Tự xác định vùng cha: vẽ trong vùng nào thì thuộc vùng đó (nhỏ nhất chứa centroid).
+        const parentId = resolveParentRegion(draftPoints, regions);
+        const region: BeatRegion = {
+            id: `region-${Date.now()}`,
+            name: `Vùng ${regions.length + 1}`,
+            points: [...draftPoints],
+            action: 'draw',
+            parent_id: parentId,
+            script_start_word: null,
+            script_end_word: null,
+        };
+        setRegions((prev) => [...prev, region]);
+        setSelectedRegionId(region.id);
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+    };
+
+    const handleUndoPoint = () => {
+        if (bgSampleMode) {
+            setBgSampleDraft((prev) => prev.slice(0, -1));
+        } else {
+            setDraftPoints((prev) => prev.slice(0, -1));
+            setDraftIsDrag(false);
+        }
+    };
+
+    const handleCancelDraft = () => {
+        if (bgSampleMode) {
+            setBgSampleDraft([]);
+        } else {
+            setDraftPoints([]);
+            setDraftIsDrag(false);
+        }
+    };
+
+    const updateRegion = (id: string, patch: Partial<BeatRegion>) => {
+        setRegions((prev) => prev.map((region) => (
+            region.id === id ? { ...region, ...patch } : region
+        )));
+    };
+
+    const handleDeleteRegion = (id: string) => {
+        setRegions((prev) => prev.filter((region) => region.id !== id));
+        if (selectedRegionId === id) {
+            setSelectedRegionId('');
+        }
+        setDeleteConfirmRegionId('');
+    };
+
+    const handleStartBgSampleForRegion = (regionId: string) => {
+        setSelectedRegionId(regionId);
+        setBgSampleMode(true);
+        setBgSampleDraft([]);
+    };
+
+    const handleClearRegionBgSample = (regionId: string) => {
+        updateRegion(regionId, { bg_sample: null });
+        setBgSampleDraft([]);
+        setBgSampleMode(false);
+    };
+
+    const handleSave = async () => {
+        if (saving) {
+            return;
+        }
+        // Validate: vùng con phải nằm trong vùng cha (bbox).
+        for (const region of regions) {
+            if (!region.parent_id) {
+                continue;
+            }
+            const parent = regions.find((item) => item.id === region.parent_id);
+            if (!parent) {
+                showMessage(`Vùng "${region.name}" có vùng cha không tồn tại`, 'error');
+                return;
+            }
+            const childMinX = Math.min(...region.points.map((p) => p[0]));
+            const childMaxX = Math.max(...region.points.map((p) => p[0]));
+            const childMinY = Math.min(...region.points.map((p) => p[1]));
+            const childMaxY = Math.max(...region.points.map((p) => p[1]));
+            const parentMinX = Math.min(...parent.points.map((p) => p[0]));
+            const parentMaxX = Math.max(...parent.points.map((p) => p[0]));
+            const parentMinY = Math.min(...parent.points.map((p) => p[1]));
+            const parentMaxY = Math.max(...parent.points.map((p) => p[1]));
+            const inside = childMinX >= parentMinX - 0.01
+                && childMaxX <= parentMaxX + 0.01
+                && childMinY >= parentMinY - 0.01
+                && childMaxY <= parentMaxY + 0.01;
+            if (!inside) {
+                showMessage(
+                    `Vùng con "${region.name}" phải nằm hoàn toàn trong vùng cha "${parent.name}"`,
+                    'error',
+                );
+                return;
+            }
+            if (region.bg_sample && region.bg_sample.points.length < 3) {
+                showMessage(`Background của vùng "${region.name}" cần tối thiểu 3 điểm`, 'error');
+                return;
+            }
+        }
+
+        setSaving(true);
+        try {
+            const saved = await state.handleSaveWhiteboardBeatOverride(beatId, {
+                ...currentOverride,
+                regions,
+            });
+            if (saved) {
+                showMessage(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
+                onClose();
+            }
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const svgPointsFor = (points: [number, number][]) => (
+        points.map((p) => `${(p[0] * 1000).toFixed(2)},${(p[1] * 1000).toFixed(2)}`).join(' ')
+    );
+
+    const hasRegions = regions.length > 0;
+    const totalDraftPoints = bgSampleMode ? bgSampleDraft.length : draftPoints.length;
+    const liveDraft = bgSampleMode ? bgSampleDraft : draftPoints;
+
+    return (
+        <DrawerCustom
+            open={open}
+            onClose={onClose}
+            title={`Chọn vùng ảnh beat — ${beatId}`}
+            width={1400}
+            PaperProps={{
+                sx: { width: '94vw', maxWidth: 1400 },
+            }}
+            ModalProps={{
+                sx: { zIndex: 1400 },
+            }}
+            restDialogContent={{
+                sx: {
+                    height: 'calc(100vh - 64px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    pt: 2,
+                    px: 2,
+                    pb: 2,
+                    gap: 2,
+                    overflow: 'hidden',
+                },
+            }}
+        >
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+                <strong>Vẽ nhanh:</strong> click giữ chuột tại điểm đầu rồi kéo — vùng hình thành từ điểm đầu nối
+                với điểm chuột hiện tại, thả chuột = xong. <strong>Vẽ chính xác:</strong> click từng điểm (mỗi điểm
+                mới nối vào điểm trước và điểm đầu, tô màu trong suốt), click lại điểm 1 hoặc bấm{' '}
+                <strong>Hoàn tất vùng</strong> để kết thúc. Mỗi vùng chọn hành động <strong>Vẽ tay</strong> hoặc{' '}
+                <strong>Đưa vào</strong> + chọn 1 từ trong audio script (vùng render hoàn chỉnh khi đọc đến từ đó).
+                Vẽ trong vùng nào → vùng đó tự thành vùng cha; hành động vùng con thắng vùng cha.
+            </Alert>
+
+            <Box
+                sx={{
+                    display: 'flex',
+                    gap: 2,
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'hidden',
+                }}
+            >
+                {/* Cột trái: ảnh + vẽ vùng */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        overflow: 'auto',
+                    }}
+                >
+                    <Box
+                        ref={measureBoxRef}
+                        sx={{
+                            flexShrink: 0,
+                            height: 'calc(100vh - 340px)',
+                            minHeight: 340,
+                            width: '100%',
+                            position: 'relative',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            border: 1,
+                            borderColor: 'divider',
+                            bgcolor: 'common.black',
+                        }}
+                    >
+                        {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
+                        <Box
+                            component="img"
+                            ref={imgRef}
+                            src={imageUrl}
+                            alt={`Beat ${beatId}`}
+                            onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                const img = e.currentTarget;
+                                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                                    setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+                                    setImageError(false);
+                                }
+                            }}
+                            onError={() => setImageError(true)}
+                            sx={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'contain',
+                                display: 'block',
+                                bgcolor: 'common.black',
+                            }}
+                        />
+                        {containRect && !imageError ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: containRect.x,
+                                    top: containRect.y,
+                                    width: containRect.w,
+                                    height: containRect.h,
+                                }}
+                            >
+                                <svg
+                                    ref={svgRef}
+                                    viewBox="0 0 1000 1000"
+                                    preserveAspectRatio="none"
+                                    onClick={handleSvgClick}
+                                    onMouseDown={handleSvgMouseDown}
+                                    onMouseMove={handleSvgMouseMove}
+                                    onMouseUp={handleSvgMouseUp}
+                                    onMouseLeave={() => {
+                                        setCursorPos(null);
+                                        // Rời khỏi ảnh khi đang kéo → kết thúc vùng như mouseup.
+                                        handleSvgMouseUp();
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        cursor: 'crosshair',
+                                    }}
+                                >
+                            {regions.map((region, index) => {
+                                const color = colorFor(index);
+                                const isSelected = selectedRegionId === region.id;
+                                const isChild = Boolean(region.parent_id);
+                                const first = region.points[0];
+                                return (
+                                    <g key={region.id}>
+                                        <polygon
+                                            points={svgPointsFor(region.points)}
+                                            fill={color}
+                                            fillOpacity={isSelected ? 0.45 : 0.18}
+                                            stroke={color}
+                                            strokeWidth={isSelected ? 4 : 2}
+                                            strokeDasharray={isChild ? '8 4' : undefined}
+                                            strokeLinejoin="round"
+                                            style={{ pointerEvents: 'none' }}
+                                        />
+                                        {/* Label tên vùng ngay tại điểm đầu tiên — click label để chọn vùng */}
+                                        {first ? (
+                                            <g
+                                                transform={svgScaleTpl(first[0], first[1])}
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setSelectedRegionId(region.id);
+                                                }}
+                                            >
+                                                <text
+                                                    y={-12}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="bottom"
+                                                    fontSize={isSelected ? 13 : 11.5}
+                                                    fontWeight={800}
+                                                    fill={color}
+                                                    stroke="#ffffff"
+                                                    strokeWidth={3.5}
+                                                    paintOrder="stroke"
+                                                    style={{
+                                                        userSelect: 'none',
+                                                        pointerEvents: 'visiblePainted',
+                                                    }}
+                                                >
+                                                    {region.name || `Vùng ${index + 1}`}
+                                                </text>
+                                            </g>
+                                        ) : null}
+                                        {/* Điểm đã đánh dấu (đỉnh vùng đã lưu) — dot tròn nhỏ, border mảnh.
+                                            Vùng vẽ bằng kéo (nhiều điểm trail) → bỏ dot, chỉ giữ border. */}
+                                        {region.points.length <= 12 ? region.points.map((point, pi) => (
+                                            <g
+                                                key={`${region.id}-v${pi}`}
+                                                transform={svgScaleTpl(point[0], point[1])}
+                                                style={{ pointerEvents: 'none' }}
+                                            >
+                                                <circle
+                                                    r={5}
+                                                    fill={color}
+                                                    stroke="#ffffff"
+                                                    strokeWidth={1}
+                                                />
+                                            </g>
+                                        )) : null}
+                                    </g>
+                                );
+                            })}
+                            {/* Mẫu background RIÊNG của từng vùng — lặp lại fill nền vùng khi render */}
+                            {regions.map((region, index) => {
+                                const bgSample = region.bg_sample;
+                                if (!bgSample || bgSample.points.length < 3) {
+                                    return null;
+                                }
+                                const color = colorFor(index);
+                                return (
+                                    <g key={`${region.id}-bg`} style={{ pointerEvents: 'none' }}>
+                                        <polygon
+                                            points={svgPointsFor(bgSample.points)}
+                                            fill="#9c27b0"
+                                            fillOpacity={0.24}
+                                            stroke="#9c27b0"
+                                            strokeWidth={2}
+                                            strokeDasharray="3 3"
+                                            strokeLinejoin="round"
+                                        />
+                                        <g transform={svgScaleTpl(bgSample.points[0][0], bgSample.points[0][1])}>
+                                            <text
+                                                y={-8}
+                                                textAnchor="middle"
+                                                dominantBaseline="bottom"
+                                                fontSize={10.5}
+                                                fontWeight={800}
+                                                fill={color}
+                                                stroke="#ffffff"
+                                                strokeWidth={3}
+                                                paintOrder="stroke"
+                                                style={{ userSelect: 'none' }}
+                                            >
+                                                BG
+                                            </text>
+                                        </g>
+                                    </g>
+                                );
+                            })}
+                            {liveDraft.length > 0 ? (
+                                <>
+                                    {/* Live vùng đang vẽ: nối điểm cuối về điểm 1 (đóng kín) +
+                                        theo cursor — fill màu trong suốt để thấy vùng sẽ tạo */}
+                                    <polygon
+                                        points={svgPointsFor([
+                                            ...liveDraft,
+                                            ...(cursorPos ? [cursorPos] : []),
+                                        ])}
+                                        fill={bgSampleMode ? 'rgba(156,39,176,0.25)' : 'rgba(255,235,59,0.22)'}
+                                        stroke={bgSampleMode ? '#9c27b0' : '#ffeb3b'}
+                                        strokeWidth={2}
+                                        strokeDasharray="6 4"
+                                        strokeLinejoin="round"
+                                    />
+                                    {/* Đoạn từ điểm cuối về điểm đầu khi đã đủ 2+ điểm */}
+                                    {!draftIsDrag && liveDraft.length >= 2 ? (
+                                        <line
+                                            x1={liveDraft[liveDraft.length - 1][0] * 1000}
+                                            y1={liveDraft[liveDraft.length - 1][1] * 1000}
+                                            x2={liveDraft[0][0] * 1000}
+                                            y2={liveDraft[0][1] * 1000}
+                                            stroke={bgSampleMode ? '#9c27b0' : '#ffeb3b'}
+                                            strokeWidth={2}
+                                            strokeDasharray="6 4"
+                                        />
+                                    ) : null}
+                                    {/* Chế độ kéo (drag-draw): chỉ vẽ border — KHÔNG tạo điểm đỉnh
+                                        để tránh trail điểm làm border dày */}
+                                    {!draftIsDrag ? (
+                                        <>
+                                            {/* Ghim từng điểm + số thứ tự — dot tròn, border mảnh,
+                                                hover đổi cursor pointer để nhận biết click vào điểm cũ */}
+                                            {liveDraft.map((point, index) => {
+                                                const hovered = hoveredDraftPoint === index;
+                                                return (
+                                                    <g
+                                                        key={`pt-${index}`}
+                                                        transform={svgScaleTpl(point[0], point[1])}
+                                                        style={{ cursor: 'pointer' }}
+                                                        onMouseEnter={() => setHoveredDraftPoint(index)}
+                                                        onMouseLeave={() => setHoveredDraftPoint(null)}
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            // Click điểm 1 → hoàn tất vùng; điểm khác → không tạo điểm mới.
+                                                            if (index === 0) {
+                                                                finishDraft();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <circle
+                                                            r={hovered ? 10 : 8}
+                                                            fill="#ffeb3b"
+                                                            stroke="#ffffff"
+                                                            strokeWidth={hovered ? 1.8 : 1.2}
+                                                        />
+                                                        <text
+                                                            y={0.5}
+                                                            textAnchor="middle"
+                                                            dominantBaseline="middle"
+                                                            fontSize={10}
+                                                            fontWeight={800}
+                                                            fill="#1a1a1a"
+                                                            style={{ pointerEvents: 'none', userSelect: 'none' }}
+                                                        >
+                                                            {index + 1}
+                                                        </text>
+                                                    </g>
+                                                );
+                                            })}
+                                            {/* Vòng nhắc điểm 1 — click vào đây để hoàn tất vùng */}
+                                            <g
+                                                transform={svgScaleTpl(liveDraft[0][0], liveDraft[0][1])}
+                                                style={{ pointerEvents: 'none' }}
+                                            >
+                                                <circle
+                                                    r={16}
+                                                    fill="none"
+                                                    stroke={bgSampleMode ? '#9c27b0' : '#ffeb3b'}
+                                                    strokeWidth={1.5}
+                                                    strokeDasharray="4 4"
+                                                />
+                                            </g>
+                                        </>
+                                    ) : null}
+                                </>
+                            ) : null}
+                                </svg>
+                            </Box>
+                        ) : imageError || !imageUrl ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 1,
+                                    p: 2,
+                                    textAlign: 'center',
+                                    bgcolor: 'rgba(0,0,0,0.55)',
+                                }}
+                            >
+                                <Typography variant="subtitle2" color="error">
+                                    {imageUrl ? 'Không load được ảnh beat' : 'Beat chưa có ảnh'}
+                                </Typography>
+                                {imageUrl ? (
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        component="a"
+                                        href={imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Mở ảnh trong tab mới
+                                    </Button>
+                                ) : null}
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <Typography variant="caption" color="rgba(255,255,255,0.6)">
+                                    Đang tải ảnh…
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+
+                    <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<UndoIcon />}
+                            disabled={totalDraftPoints === 0}
+                            onClick={handleUndoPoint}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Lùi điểm
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            disabled={totalDraftPoints < 3}
+                            onClick={finishDraft}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Hoàn tất vùng
+                        </Button>
+                        {totalDraftPoints > 0 ? (
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="inherit"
+                                startIcon={<CloseIcon />}
+                                onClick={handleCancelDraft}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Hủy vẽ ({totalDraftPoints} điểm)
+                            </Button>
+                        ) : null}
+                    </Stack>
+
+                    <Box sx={{ width: '100%', maxWidth: 520, mt: 1, mx: 'auto' }}>
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            sx={{ textAlign: 'center' }}
+                        >
+                            {bgSampleMode ? (
+                                <>
+                                    Đang chọn <strong>background</strong>: vẽ 1 vùng nhỏ có màu/chi tiết nền →
+                                    click điểm 1 hoặc Hoàn tất. Mẫu này sẽ lặp lại fill nền các vùng chọn (mềm biên).
+                                </>
+                            ) : (
+                                <>
+                                    Vẽ trong vùng nào → vùng đó tự thành <strong>vùng cha</strong> (vùng nhỏ nhất chứa
+                                    vùng mới). Hành động vùng con thắng vùng cha.
+                                    {draftParent ? (
+                                        <>
+                                            {' '}
+                                            Đang vẽ <strong>vùng con</strong> của: {draftParent.name}
+                                        </>
+                                    ) : null}
+                                </>
+                            )}
+                        </Typography>
+                    </Box>
+
+                    <LoadingButton
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        loading={saving}
+                        disabled={state.savingWhiteboardBeatOverride}
+                        onClick={() => { void handleSave(); }}
+                        sx={{ textTransform: 'none', width: '100%', maxWidth: 520, mx: 'auto', mt: 1 }}
+                    >
+                        Lưu vùng
+                    </LoadingButton>
+                </Box>
+
+                {/* Cột phải: danh sách vùng + cấu hình */}
+                <Box
+                    sx={{
+                        width: 340,
+                        flexShrink: 0,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
+                        overflow: 'auto',
+                        pr: 0.5,
+                    }}
+                >
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                        Các vùng ({regions.length})
+                    </Typography>
+                    {bgSampleMode ? (
+                        <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
+                            Đang chọn <strong>background</strong> cho vùng đang chọn: vẽ 1 vùng nhỏ có màu/chi
+                            tiết nền trên ảnh bên trái → click điểm 1 hoặc "Hoàn tất vùng". Mẫu này lặp lại fill
+                            nền vùng đó (mềm biên).
+                        </Typography>
+                    ) : null}
+                    {!hasRegions ? (
+                        <Typography variant="caption" color="text.secondary">
+                            Chưa có vùng nào — vẽ trên ảnh bên trái.
+                        </Typography>
+                    ) : null}
+                    {sortedRegions.map((region, index) => {
+                        const color = colorFor(index);
+                        const parent = region.parent_id
+                            ? regions.find((item) => item.id === region.parent_id)
+                            : null;
+                        const depth = regionDepth[region.id] ?? 0;
+                        const isSelected = selectedRegionId === region.id;
+                        return (
+                            <Box
+                                key={region.id}
+                                onClick={(event) => {
+                                    const target = event.target as HTMLElement;
+                                    if (target.closest('input,button,textarea')) {
+                                        return;
+                                    }
+                                    setSelectedRegionId(region.id);
+                                }}
+                                sx={{
+                                    p: 1.25,
+                                    borderRadius: 1,
+                                    border: 1,
+                                    borderColor: isSelected ? color : 'divider',
+                                    borderLeft: `4px solid ${color}`,
+                                    bgcolor: isSelected ? 'action.selected' : 'background.paper',
+                                    ml: depth > 0 ? `${Math.min(depth, 4) * 1.5}rem` : 0,
+                                    cursor: 'pointer',
+                                    ...(isSelected ? {
+                                        animation: `${regionActivePulse} 0.7s ease-out`,
+                                    } : {}),
+                                }}
+                            >
+                                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+                                    <TextField
+                                        size="small"
+                                        value={region.name}
+                                        onChange={(e) => updateRegion(region.id, { name: e.target.value })}
+                                        sx={{ flex: 1, '& .MuiInputBase-root': { fontSize: 13 } }}
+                                    />
+                                    {region.bg_sample && region.bg_sample.points.length >= 3 ? (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            onClick={() => handleClearRegionBgSample(region.id)}
+                                            title="Xóa background riêng của vùng này"
+                                            sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0 }}
+                                        >
+                                            Xóa bg
+                                        </Button>
+                                    ) : null}
+                                    <Button
+                                        size="small"
+                                        variant={bgSampleMode && isSelected ? 'contained' : 'outlined'}
+                                        color="secondary"
+                                        onClick={() => handleStartBgSampleForRegion(region.id)}
+                                        title="Chọn 1 vùng nhỏ background trên ảnh — lặp lại fill nền vùng này khi render"
+                                        sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0 }}
+                                    >
+                                        {region.bg_sample && region.bg_sample.points.length >= 3
+                                            ? 'Đổi bg'
+                                            : 'Chọn background'}
+                                    </Button>
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => setDeleteConfirmRegionId(region.id)}
+                                        title="Xóa vùng"
+                                    >
+                                        <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+
+                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                    <Button
+                                        size="small"
+                                        variant={region.action === 'draw' ? 'contained' : 'outlined'}
+                                        color="primary"
+                                        onClick={() => updateRegion(region.id, { action: 'draw' })}
+                                        sx={{ textTransform: 'none', flex: 1 }}
+                                    >
+                                        Vẽ tay
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        variant={region.action === 'place' ? 'contained' : 'outlined'}
+                                        color="secondary"
+                                        onClick={() => updateRegion(region.id, { action: 'place' })}
+                                        sx={{ textTransform: 'none', flex: 1 }}
+                                    >
+                                        Đưa vào
+                                    </Button>
+                                </Stack>
+
+                                {depth > 0 ? (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                                        ↳ Vùng con của: {parent?.name || '?'}
+                                    </Typography>
+                                ) : null}
+
+                                {/* Chọn 1 từ trong toàn bộ audio script — khi giọng đọc đến từ đó
+                                    thì vùng phải render hoàn chỉnh. Click từ → set script_end_word. */}
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                    Chọn từ trong audio script (vùng hoàn thành khi đọc đến từ này):
+                                </Typography>
+                                <Box
+                                    sx={{
+                                        maxHeight: 120,
+                                        overflow: 'auto',
+                                        border: 1,
+                                        borderColor: 'divider',
+                                        borderRadius: 1,
+                                        p: 0.75,
+                                        bgcolor: 'background.paper',
+                                        lineHeight: 1.9,
+                                    }}
+                                >
+                                    {beatWords.length === 0 ? (
+                                        <Typography variant="caption" color="text.secondary">
+                                            Chưa có whisper words cho beat này — mở bỏ trống (hoàn thành cuối beat).
+                                        </Typography>
+                                    ) : null}
+                                    {beatWords.map((word) => {
+                                        const wi = word.index ?? 0;
+                                        const selected = region.script_end_word === wi;
+                                        return (
+                                            <Box
+                                                component="span"
+                                                key={wi}
+                                                onClick={() => updateRegion(region.id, {
+                                                    script_end_word: selected ? null : wi,
+                                                })}
+                                                sx={{
+                                                    cursor: 'pointer',
+                                                    borderRadius: 0.5,
+                                                    px: 0.4,
+                                                    py: 0.15,
+                                                    fontSize: 12.5,
+                                                    fontWeight: selected ? 800 : 400,
+                                                    color: selected ? '#fff' : 'text.primary',
+                                                    bgcolor: selected ? 'primary.main' : 'transparent',
+                                                    '&:hover': {
+                                                        bgcolor: selected ? 'primary.dark' : 'primary.light',
+                                                        color: selected ? '#fff' : '#fff',
+                                                    },
+                                                }}
+                                                title={`Khi đọc từ "${word.text}" → vùng render hoàn chỉnh`}
+                                            >
+                                                {word.text}
+                                                {' '}
+                                            </Box>
+                                        );
+                                    })}
+                                </Box>
+                                {region.script_end_word != null ? (
+                                    <Typography variant="caption" color="success.main" display="block" sx={{ mt: 0.75 }}>
+                                        Hoàn thành khi đọc: «
+                                        {beatWords.find((w) => (w.index ?? 0) === region.script_end_word)?.text || ''}
+                                        » — click lại từ để bỏ chọn (hoàn thành cuối beat)
+                                    </Typography>
+                                ) : (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                                        Chưa chọn từ — vùng hoàn thành cuối beat.
+                                    </Typography>
+                                )}
+                            </Box>
+                        );
+                    })}
+
+                    <Divider sx={{ my: 0.5 }} />
+
+                    <Alert severity="info" sx={{ py: 0.5 }}>
+                        Vùng chưa chọn sẽ render theo setting toàn beat (vẽ tay / kéo vào / hiện ngay).
+                    </Alert>
+                </Box>
+            </Box>
+
+            {/* Xác nhận xóa vùng */}
+            <Dialog
+                open={Boolean(deleteConfirmRegionId)}
+                onClose={() => setDeleteConfirmRegionId('')}
+                maxWidth="xs"
+                fullWidth
+            >
+                <DialogTitle>Xóa vùng?</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">
+                        Vùng
+                        {' '}
+                        <strong>
+                            {regions.find((r) => r.id === deleteConfirmRegionId)?.name || deleteConfirmRegionId}
+                        </strong>
+                        {' '}
+                        (kể cả vùng con và background riêng) sẽ bị xóa. Bạn chắc chắn chứ?
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button
+                        onClick={() => setDeleteConfirmRegionId('')}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Hủy
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        onClick={() => {
+                            if (deleteConfirmRegionId) {
+                                handleDeleteRegion(deleteConfirmRegionId);
+                            }
+                        }}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Xóa
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </DrawerCustom>
+    );
+}

@@ -2773,7 +2773,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
 
     /** Đổi volume riêng của 1 bài BGM (state local — persist khi thả slider). */
     const handleUpdateBgmSegmentVolume = React.useCallback((index: number, volume: number) => {
-        const clamped = Math.min(1.5, Math.max(0.05, Number(volume) || 0.8));
+        const clamped = Math.min(1.5, Math.max(0.05, Number(volume) || 0.6));
         setBgmSegments((prev) => prev.map((seg, i) => (
             i === index ? { ...seg, volume: clamped } : seg
         )));
@@ -4464,6 +4464,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const focusBeatEditor = React.useCallback((beatId: string) => {
         setActiveBeatId(beatId);
         setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
+    }, []);
+
+    // Seek playback đến 1 thời điểm (dùng cho nút Prev/Next beat — timeline
+    // lắng nghe beatPlaybackSeekRequest và tự seek + cập nhật con trỏ).
+    const handleSeekBeatPlayback = React.useCallback((beatId: string, startSec: number) => {
+        setBeatPlaybackSeekRequest({
+            beatId,
+            startSec,
+            nonce: Date.now(),
+        });
     }, []);
 
     const handleOpenBeatDivisionGemini = async () => {
@@ -7746,6 +7756,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatEditorFocusRequest,
         beatPlaybackSeekRequest,
         focusBeatEditor,
+        handleSeekBeatPlayback,
         whisperStatus,
         whisperStale,
         whisperError,

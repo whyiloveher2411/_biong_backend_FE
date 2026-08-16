@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Alert,
     Box,
+    Button,
     Chip,
     CircularProgress,
     LinearProgress,
@@ -9,6 +10,12 @@ import {
     Tabs,
     Typography,
 } from '@mui/material';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import CropFreeIcon from '@mui/icons-material/CropFree';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ShortVideoAgentBeatRegionDrawer from './ShortVideoAgentBeatRegionDrawer';
+import { getBeatTimelineSegments } from './agentVideoBeatMap';
 import { resolvePreviewPlaceholder } from './agentVideoUi';
 import {
     canShowHtmlBeatPreview,
@@ -210,6 +217,11 @@ export default function ShortVideoAgentVideoPreview({
         && Boolean(currentBeatId)
         && Boolean(state.beatImage[currentBeatId || '']?.image_url);
 
+    // URL ảnh beat hiện tại — button mở tab mới để check ảnh gốc.
+    const currentBeatImageUrl = String(
+        state.beatImage[currentBeatId || '']?.image_url || '',
+    ).trim();
+
     const activeBeatIndex = React.useMemo(() => {
         if (!currentBeatId || !state.beatMap?.sections?.length) {
             return null;
@@ -243,6 +255,33 @@ export default function ShortVideoAgentVideoPreview({
         }
         return state.handleSaveBeatQa(currentBeatId, qaStatus, qaRefineNote);
     }, [currentBeatId, state.handleSaveBeatQa]);
+
+    // Prev/Next beat: seek timeline đến GIỮA beat trước/tiếp theo — giúp edit nhanh.
+    const beatSegments = React.useMemo(
+        () => getBeatTimelineSegments(state.beatMapReady ? state.beatMap : null),
+        [state.beatMapReady, state.beatMap],
+    );
+    const activeSegmentIndex = React.useMemo(() => {
+        if (!currentBeatId) {
+            return -1;
+        }
+        return beatSegments.findIndex((segment) => segment.beatId === currentBeatId);
+    }, [currentBeatId, beatSegments]);
+    const handleSeekAdjacentBeat = React.useCallback((delta: -1 | 1) => {
+        if (activeSegmentIndex < 0) {
+            return;
+        }
+        const target = beatSegments[activeSegmentIndex + delta];
+        if (!target) {
+            return;
+        }
+        const midSec = (target.startSec + target.endSec) / 2;
+        // Timeline lắng nghe beatPlaybackSeekRequest → tự seek video + cập nhật
+        // con trỏ + beat hiện tại (không phụ thuộc video element đã mount).
+        if (typeof state.handleSeekBeatPlayback === 'function') {
+            state.handleSeekBeatPlayback(target.beatId, midSec);
+        }
+    }, [activeSegmentIndex, beatSegments, state.handleSeekBeatPlayback]);
 
     const handleQuickIterateCurrentBeat = React.useCallback(async (qaRefineNote: string) => {
         if (!currentBeatId) {
@@ -305,6 +344,8 @@ export default function ShortVideoAgentVideoPreview({
         }
         return state.handleRestoreBeatVersion(currentBeatId, versionId);
     }, [currentBeatId, state.handleRestoreBeatVersion]);
+
+    const [regionDrawerOpen, setRegionDrawerOpen] = React.useState(false);
 
     return (
         <Box
@@ -531,6 +572,71 @@ export default function ShortVideoAgentVideoPreview({
                         </Typography>
                     ) : null}
 
+                    {currentBeatImageUrl ? (
+                        <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center', gap: 1 }}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                startIcon={<OpenInNewIcon />}
+                                component="a"
+                                href={currentBeatImageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Mở ảnh beat
+                            </Button>
+                            {isWhiteboardMode && currentBeatId ? (
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="secondary"
+                                    startIcon={<CropFreeIcon />}
+                                    onClick={() => setRegionDrawerOpen(true)}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Chọn vùng ảnh
+                                </Button>
+                            ) : null}
+                        </Box>
+                    ) : null}
+
+                    {beatSegments.length > 1 && activeSegmentIndex >= 0 ? (
+                        <Box
+                            sx={{
+                                mt: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1,
+                                px: 2,
+                                width: '100%',
+                            }}
+                        >
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<ChevronLeftIcon />}
+                                disabled={activeSegmentIndex <= 0}
+                                onClick={() => handleSeekAdjacentBeat(-1)}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Beat trước
+                            </Button>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                endIcon={<ChevronRightIcon />}
+                                disabled={activeSegmentIndex >= beatSegments.length - 1}
+                                onClick={() => handleSeekAdjacentBeat(1)}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Beat sau
+                            </Button>
+                        </Box>
+                    ) : null}
+
                     {placeholder?.severity === 'error' && state.lastError && activeSource !== 'html_beat' ? (
                         <Alert severity="error" sx={{ mt: 1, maxWidth: 480, mx: 'auto', width: '100%' }}>
                             {state.lastError}
@@ -625,6 +731,15 @@ export default function ShortVideoAgentVideoPreview({
                     </Box>
                 ) : null}
             </Box>
+            {currentBeatId && currentBeatImageUrl ? (
+                <ShortVideoAgentBeatRegionDrawer
+                    open={regionDrawerOpen}
+                    onClose={() => setRegionDrawerOpen(false)}
+                    state={state}
+                    beatId={currentBeatId}
+                    imageUrl={currentBeatImageUrl}
+                />
+            ) : null}
         </Box>
     );
 }

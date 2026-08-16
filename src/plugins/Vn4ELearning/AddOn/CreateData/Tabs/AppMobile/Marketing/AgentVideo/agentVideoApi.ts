@@ -68,6 +68,34 @@ export type AgentWhiteboardConfig = {
     beats_per_job?: number;
 };
 
+export type BeatRegionPoint = [number, number];
+
+/**
+ * Vùng chọn trên ảnh beat (region tool) — polygon chuẩn hóa 0-1 theo ảnh gốc.
+ * action 'draw' = vẽ tay trong vùng; 'place' = đưa ảnh trong vùng vào.
+ * script_start_word/script_end_word = index trong whisper words toàn video —
+ * vùng phải render hoàn chỉnh khi đọc đến từ script_end_word.
+ */
+/**
+ * Mẫu background của RIÊNG 1 vùng: user chọn 1 vùng nhỏ background trên ảnh —
+ * render sẽ lặp lại mẫu này để fill nền vùng đó thay cho bảng trắng.
+ */
+export type BeatBackgroundSample = {
+    points: BeatRegionPoint[];
+};
+
+export type BeatRegion = {
+    id: string;
+    name?: string;
+    points: BeatRegionPoint[];
+    action: 'draw' | 'place';
+    parent_id?: string | null;
+    script_start_word?: number | null;
+    script_end_word?: number | null;
+    /** Mẫu background riêng của vùng này — lặp lại fill nền vùng khi render. */
+    bg_sample?: BeatBackgroundSample | null;
+};
+
 export type AgentWhiteboardBeatOverride = {
     hand?: string;
     board_theme?: string;
@@ -82,6 +110,8 @@ export type AgentWhiteboardBeatOverride = {
     /** Điểm tập trung (0-1, ratio của ảnh gốc) — frame cuối đưa điểm này ra giữa màn hình. */
     focus_x?: number | null;
     focus_y?: number | null;
+    /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
+    regions?: BeatRegion[];
 };
 
 export type WhiteboardBeatRenderEntry = {
@@ -191,6 +221,8 @@ export type WhisperWord = {
     text: string;
     start: number;
     end: number;
+    /** Index trong danh sách toàn video (thêm phía FE khi cần). */
+    index?: number;
 };
 
 export type TtsPhoneticDictEntry = {

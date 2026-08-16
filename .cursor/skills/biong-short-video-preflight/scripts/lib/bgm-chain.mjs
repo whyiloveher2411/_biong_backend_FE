@@ -7,7 +7,7 @@ import { execSync } from "child_process";
 
 export const BGM_CHAIN_MANIFEST_REL = "assets/bgm-chain.json";
 export const DEFAULT_CROSSFADE_SEC = 0.5;
-export const DEFAULT_BGM_VOLUME = 0.8;
+export const DEFAULT_BGM_VOLUME = 0.6;
 export const MAX_BGM_LOOP_CYCLES = 200;
 
 /** Track 11 = segment 1; bỏ 12 (SFX hook); 13,15,17,19; sau đó 29+ tránh beat-move 14–28 */
