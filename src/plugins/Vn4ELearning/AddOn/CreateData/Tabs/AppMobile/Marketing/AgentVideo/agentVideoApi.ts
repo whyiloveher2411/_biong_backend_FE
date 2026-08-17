@@ -110,7 +110,40 @@ export type BeatRegion = {
     full_points?: BeatRegionPoint[];
     /** Chế độ chọn: 'object' = chỉ vật trong vùng; 'full' = toàn vùng (mặc định). */
     select_mode?: 'object' | 'full';
+    /**
+     * HIỆU ỨNG KHI ĐƯA VÀO (action='place'): 'loang' (mặc định — vệt phun màu/
+     * khói trắng hiện tại) hoặc 'slide_friction' (quán tính trượt — trượt tới rồi
+     * nảy lui, mỗi nhịp biên độ giảm 1/2). Khi chọn 'slide_friction', vệt loang
+     * mặc định KHÔNG chạy (thay thế hoàn toàn).
+     */
+    place_effect?: PlaceEffectKey;
 };
+
+/** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
+export type PlaceEffectKey = 'loang' | 'slide_friction';
+
+export const PLACE_EFFECT_OPTIONS: Array<{
+    value: PlaceEffectKey;
+    label: string;
+    description: string;
+}> = [
+    {
+        value: 'loang',
+        label: 'Loang',
+        description: 'Vệt phun màu/khói trắng + viền mực lan ra ngoài vùng (mặc định)',
+    },
+    {
+        value: 'slide_friction',
+        label: 'Quán tính trượt',
+        description: 'Thả tay xong ảnh trượt tới vượt đích rồi nảy lui/tới… mỗi nhịp biên độ giảm 1/2, dừng đúng đích',
+    },
+];
+
+/** Khôi phục place_effect hợp lệ (dữ liệu cũ có thể còn inertial_rotation/dynamic_shadow → về loang). */
+export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffectKey {
+    const value = String(raw || '').trim().toLowerCase();
+    return value === 'slide_friction' ? 'slide_friction' : 'loang';
+}
 
 export type AgentWhiteboardBeatOverride = {
     hand?: string;

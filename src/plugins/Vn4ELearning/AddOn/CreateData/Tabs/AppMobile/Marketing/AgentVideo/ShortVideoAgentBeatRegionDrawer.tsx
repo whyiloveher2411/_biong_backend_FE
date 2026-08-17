@@ -22,7 +22,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import type { useAgentVideoContent } from './useAgentVideoContent';
-import { autoSelectAgentWhiteboardRegion, type BeatRegion, type BeatRegionPoint } from './agentVideoApi';
+import { autoSelectAgentWhiteboardRegion, normalizePlaceEffect, PLACE_EFFECT_OPTIONS, type BeatRegion, type BeatRegionPoint } from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -1522,7 +1522,14 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                         variant="outlined"
                                         color="secondary"
                                         startIcon={region.action === 'place' ? <CheckIcon /> : null}
-                                        onClick={() => updateRegion(region.id, { action: 'place' })}
+                                        onClick={() => {
+                                            if (region.action !== 'place') {
+                                                updateRegion(region.id, {
+                                                    action: 'place',
+                                                    place_effect: normalizePlaceEffect(region.place_effect),
+                                                });
+                                            }
+                                        }}
                                         sx={{
                                             textTransform: 'none',
                                             flex: 1,
@@ -1534,6 +1541,49 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                         Đưa vào
                                     </Button>
                                 </Stack>
+
+                                {/* Hiệu ứng khi ĐƯA VÀO (chỉ hiển thị cho vùng action=place) —
+                                    thay thế hoàn toàn vệt loang mặc định */}
+                                {region.action === 'place' ? (
+                                    <Box sx={{ mb: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            display="block"
+                                            sx={{ mb: 0.5 }}
+                                        >
+                                            Hiệu ứng khi đưa vào (thay vệt loang mặc định):
+                                        </Typography>
+                                        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                                            {PLACE_EFFECT_OPTIONS.map((opt) => {
+                                                const active = normalizePlaceEffect(region.place_effect) === opt.value;
+                                                return (
+                                                    <Button
+                                                        key={opt.value}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={active ? 'warning' : 'inherit'}
+                                                        startIcon={active ? <CheckIcon /> : null}
+                                                        onClick={() => updateRegion(region.id, { place_effect: opt.value })}
+                                                        title={opt.description}
+                                                        sx={{
+                                                            textTransform: 'none',
+                                                            flex: '1 1 45%',
+                                                            fontSize: 11,
+                                                            py: 0.25,
+                                                            minHeight: 0,
+                                                            ...(active
+                                                                ? { borderColor: 'warning.main', bgcolor: 'action.selected' }
+                                                                : {}),
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </Button>
+                                                );
+                                            })}
+                                        </Stack>
+                                    </Box>
+                                ) : null}
 
                                 {/* Chỉnh vùng: Thêm vùng (nối liền) / Xóa thừa (bỏ bớt) */}
                                 <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
