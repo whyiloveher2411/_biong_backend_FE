@@ -104,6 +104,12 @@ export type BeatRegion = {
      * render hiển thị nền này cho vùng chọn thay vì tile bg_sample.
      */
     background_image?: string | null;
+    /** "Chỉ vật trong vùng": contour vật thể (GrabCut/ML) — render ưu tiên khi có. */
+    object_points?: BeatRegionPoint[];
+    /** Tọa độ TOÀN VÙNG thủ công (trước khi refine) — UI hiển thị đúng option + rollback. */
+    full_points?: BeatRegionPoint[];
+    /** Chế độ chọn: 'object' = chỉ vật trong vùng; 'full' = toàn vùng (mặc định). */
+    select_mode?: 'object' | 'full';
 };
 
 export type AgentWhiteboardBeatOverride = {

@@ -173,7 +173,22 @@ export default function ShortVideoAgentBeatRegionDrawer({
     React.useEffect(() => {
         if (open && !prevOpenRef.current) {
             const fresh = Array.isArray(savedRegionsRef.current) ? savedRegionsRef.current : [];
-            setRegions(fresh);
+            // Khôi phục trạng thái "chỉ vật trong vùng" từ dữ liệu đã lưu:
+            // object_points = contour vật (dùng làm points hiển thị), full_points
+            // = toàn vùng thủ công (giữ để option đúng + rollback).
+            const restoredOrig: Record<string, BeatRegionPoint[]> = {};
+            setRegions(
+                fresh.map((r) => {
+                    if (Array.isArray(r.object_points) && r.object_points.length >= 3) {
+                        if (Array.isArray(r.full_points) && r.full_points.length >= 3) {
+                            restoredOrig[r.id] = r.full_points;
+                        }
+                        return { ...r, points: r.object_points };
+                    }
+                    return r;
+                }),
+            );
+            setOriginalPointsByRegion(restoredOrig);
             setDraftPoints([]);
             setDraftIsDrag(false);
             setSelectedRegionId('');
@@ -187,7 +202,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
             setKeepBgBusy(null);
             setRefiningRegionId(null);
             setEraseModeRegionId('');
-            setOriginalPointsByRegion({});
             setNotice(null);
         }
         prevOpenRef.current = open;
@@ -813,9 +827,25 @@ export default function ShortVideoAgentBeatRegionDrawer({
 
         setSaving(true);
         try {
+            // "Chỉ vật trong vùng": gửi kèm full_points (toàn vùng thủ công —
+            // FE giữ trong originalPointsByRegion) + object_points (contour vật)
+            // để backend lưu riêng: UI mở lại hiển thị đúng option, render dùng
+            // vật, rollback về "toàn vùng" bất kỳ lúc nào.
+            const regionsToSave: BeatRegion[] = regions.map((r): BeatRegion => {
+                const original = originalPointsByRegion[r.id];
+                if (!original) {
+                    return r;
+                }
+                return {
+                    ...r,
+                    full_points: original,
+                    object_points: r.points,
+                    select_mode: 'object' as BeatRegion['select_mode'],
+                };
+            });
             const saved = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...currentOverride,
-                regions,
+                regions: regionsToSave,
             });
             if (saved) {
                 notify(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
