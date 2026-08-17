@@ -1694,7 +1694,7 @@ export type AutoSelectRegionResult = {
 export async function autoSelectAgentWhiteboardRegion(
     shortVideoId: number,
     beatId: string,
-    mode: 'click' | 'bbox' | 'subtract',
+    mode: 'click' | 'bbox' | 'subtract' | 'union',
     payload: {
         point?: [number, number];
         rect?: [number, number, number, number];
@@ -1721,7 +1721,7 @@ export async function autoSelectAgentWhiteboardRegion(
         body.rect = payload.rect.join(',');
     }
     const toStr = (pts: [number, number][]) => pts.map((pt) => `${pt[0]},${pt[1]}`).join(';');
-    if (mode === 'subtract' && payload.polyA && payload.polyB) {
+    if ((mode === 'subtract' || mode === 'union') && payload.polyA && payload.polyB) {
         body.poly_a = toStr(payload.polyA);
         body.poly_b = toStr(payload.polyB);
     }

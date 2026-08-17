@@ -127,6 +127,10 @@ export default function ShortVideoAgentBeatRegionDrawer({
     // Chế độ Xóa thừa: đang xóa vùng thừa cho vùng A (vẽ vùng nào → tự thành erase của A).
     const [eraseModeRegionId, setEraseModeRegionId] = React.useState<string>('');
 
+    // Chế độ Thêm vùng: ngược với Xóa thừa — đang thêm vùng cho vùng A
+    // (vẽ vùng nào → tự hợp (union) vào A).
+    const [addModeRegionId, setAddModeRegionId] = React.useState<string>('');
+
     // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
     const [refiningRegionId, setRefiningRegionId] = React.useState<string | null>(null);
     const [keepBgBusy, setKeepBgBusy] = React.useState<string | null>(null);
@@ -202,6 +206,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
             setKeepBgBusy(null);
             setRefiningRegionId(null);
             setEraseModeRegionId('');
+            setAddModeRegionId('');
             setNotice(null);
         }
         prevOpenRef.current = open;
@@ -520,53 +525,73 @@ export default function ShortVideoAgentBeatRegionDrawer({
         }
     };
 
+    // Thêm vùng / Xóa thừa: vẽ vùng B xong → áp boolean (union/subtract) vào vùng A.
+    const applyRegionBoolean = async (parentId: string, op: 'union' | 'subtract') => {
+        if (draftPoints.length < 3) {
+            notify('Vùng cần tối thiểu 3 điểm', 'warning');
+            return;
+        }
+        if (!imgNatural || shortVideoId <= 0) {
+            notify('Ảnh/shortVideoId chưa sẵn sàng — thử lại', 'warning');
+            return;
+        }
+        const parent = regions.find((r) => r.id === parentId);
+        if (!parent) {
+            if (op === 'union') {
+                setAddModeRegionId('');
+            } else {
+                setEraseModeRegionId('');
+            }
+            return;
+        }
+        const toPx = (pt: [number, number]): [number, number] => [
+            pt[0] * imgNatural.w,
+            pt[1] * imgNatural.h,
+        ];
+        try {
+            const res = await autoSelectAgentWhiteboardRegion(
+                shortVideoId,
+                beatId,
+                op,
+                {
+                    polyA: parent.points.map(toPx),
+                    polyB: draftPoints.map(toPx),
+                },
+            );
+            if (res?.success && Array.isArray(res.points) && res.points.length >= 3) {
+                updateRegion(parent.id, { points: res.points as [number, number][] });
+                notify(
+                    op === 'union'
+                        ? `Đã thêm vùng — vùng "${parent.name}" mở rộng thêm. Vẽ tiếp để thêm nữa.`
+                        : `Đã bỏ vùng thừa — vùng "${parent.name}" tự thu gọn. Vẽ tiếp để bỏ thêm.`,
+                    'success',
+                );
+            } else {
+                notify(
+                    extractMessage(
+                        res?.message,
+                        op === 'union' ? 'Không thêm được vùng — thử lại' : 'Không trừ được vùng thừa — thử lại',
+                    ),
+                    'warning',
+                );
+            }
+        } catch (error) {
+            notify(error instanceof Error ? error.message : String(error), 'error');
+        } finally {
+            setDraftPoints([]);
+            setDraftIsDrag(false);
+        }
+    };
+
     const finishDraft = () => {
         if (eraseModeRegionId) {
             // Chế độ XÓA THỪA: vẽ vùng B xong → vùng A (cha) TỰ THU GỌN (A = A - B).
-            void (async () => {
-                if (draftPoints.length < 3) {
-                    notify('Vùng cần tối thiểu 3 điểm', 'warning');
-                    return;
-                }
-                if (!imgNatural || shortVideoId <= 0) {
-                    notify('Ảnh/shortVideoId chưa sẵn sàng — thử lại', 'warning');
-                    return;
-                }
-                const parent = regions.find((r) => r.id === eraseModeRegionId);
-                if (!parent) {
-                    setEraseModeRegionId('');
-                    return;
-                }
-                const toPx = (pt: [number, number]): [number, number] => [
-                    pt[0] * imgNatural.w,
-                    pt[1] * imgNatural.h,
-                ];
-                try {
-                    const res = await autoSelectAgentWhiteboardRegion(
-                        shortVideoId,
-                        beatId,
-                        'subtract',
-                        {
-                            polyA: parent.points.map(toPx),
-                            polyB: draftPoints.map(toPx),
-                        },
-                    );
-                    if (res?.success && Array.isArray(res.points) && res.points.length >= 3) {
-                        updateRegion(parent.id, { points: res.points as [number, number][] });
-                        notify(`Đã bỏ vùng thừa — vùng "${parent.name}" tự thu gọn. Vẽ tiếp để bỏ thêm.`, 'success');
-                    } else {
-                        notify(
-                            extractMessage(res?.message, 'Không trừ được vùng thừa — thử lại'),
-                            'warning',
-                        );
-                    }
-                } catch (error) {
-                    notify(error instanceof Error ? error.message : String(error), 'error');
-                } finally {
-                    setDraftPoints([]);
-                    setDraftIsDrag(false);
-                }
-            })();
+            void applyRegionBoolean(eraseModeRegionId, 'subtract');
+            return;
+        }
+        if (addModeRegionId) {
+            // Chế độ THÊM VÙNG: vẽ vùng B xong → vùng A (cha) TỰ MỞ RỘNG (A = A ∪ B).
+            void applyRegionBoolean(addModeRegionId, 'union');
             return;
         }
         if (bgSampleMode) {
@@ -633,6 +658,12 @@ export default function ShortVideoAgentBeatRegionDrawer({
         setRegions((prev) => prev.filter((region) => region.id !== id));
         if (selectedRegionId === id) {
             setSelectedRegionId('');
+        }
+        if (eraseModeRegionId === id) {
+            setEraseModeRegionId('');
+        }
+        if (addModeRegionId === id) {
+            setAddModeRegionId('');
         }
     };
 
@@ -895,6 +926,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     flexDirection: 'column',
                     height: '100%',
                     minHeight: 0,
+                    position: 'relative',
                     overflow: 'hidden',
                     gap: 1.5,
                 }}
@@ -911,8 +943,16 @@ export default function ShortVideoAgentBeatRegionDrawer({
             {notice ? (
                 <Alert
                     severity={notice.variant}
-                    sx={{ flexShrink: 0 }}
                     onClose={() => setNotice(null)}
+                    sx={{
+                        position: 'absolute',
+                        top: 8,
+                        left: 8,
+                        right: 8,
+                        zIndex: 1300,
+                        boxShadow: 4,
+                        '& .MuiAlert-message': { maxHeight: 120, overflowY: 'auto' },
+                    }}
                 >
                     {notice.text}
                 </Alert>
@@ -1295,7 +1335,15 @@ export default function ShortVideoAgentBeatRegionDrawer({
                             display="block"
                             sx={{ textAlign: 'center' }}
                         >
-                            {eraseModeRegionId ? (
+                            {addModeRegionId ? (
+                                <>
+                                    <strong>Đang THÊM VÙNG</strong> cho{' '}
+                                    {regions.find((r) => r.id === addModeRegionId)?.name || addModeRegionId}:
+                                    vẽ các vùng cần thêm (giống chọn vùng thường) — vẽ xong vùng này{' '}
+                                    <strong>tự nối liền ngay</strong> vào vùng hiện tại (mở rộng thêm). Vẽ nhiều
+                                    lần tùy ý, click "Thêm vùng" lần nữa để thoát.
+                                </>
+                            ) : eraseModeRegionId ? (
                                 <>
                                     <strong>Đang XÓA THỪA</strong> cho{' '}
                                     {regions.find((r) => r.id === eraseModeRegionId)?.name || eraseModeRegionId}:
@@ -1451,6 +1499,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     </IconButton>
                                 </Stack>
 
+                                {/* Hành động vẽ: Vẽ tay / Đưa vào */}
                                 <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                                     <Button
                                         size="small"
@@ -1484,14 +1533,45 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     >
                                         Đưa vào
                                     </Button>
+                                </Stack>
+
+                                {/* Chỉnh vùng: Thêm vùng (nối liền) / Xóa thừa (bỏ bớt) */}
+                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="success"
+                                        startIcon={addModeRegionId === region.id ? <CheckIcon /> : null}
+                                        onClick={() => {
+                                            setAddModeRegionId(addModeRegionId === region.id ? '' : region.id);
+                                            if (addModeRegionId !== region.id) {
+                                                setEraseModeRegionId('');
+                                            }
+                                        }}
+                                        title="Thêm vùng: vào chế độ — vẽ các vùng cần thêm (ngược với Xóa thừa): phần vẽ được nối liền vào vùng hiện tại"
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(addModeRegionId === region.id
+                                                ? { borderColor: 'success.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        {addModeRegionId === region.id ? 'Đang thêm vùng' : 'Thêm vùng'}
+                                    </Button>
                                     <Button
                                         size="small"
                                         variant="outlined"
                                         color="error"
                                         startIcon={eraseModeRegionId === region.id ? <CheckIcon /> : null}
-                                        onClick={() => setEraseModeRegionId(
-                                            eraseModeRegionId === region.id ? '' : region.id,
-                                        )}
+                                        onClick={() => {
+                                            setEraseModeRegionId(
+                                                eraseModeRegionId === region.id ? '' : region.id,
+                                            );
+                                            if (eraseModeRegionId !== region.id) {
+                                                setAddModeRegionId('');
+                                            }
+                                        }}
                                         title="Xóa vùng thừa: vào chế độ — vẽ các vùng cần bỏ (phần đó hiển thị ảnh gốc, không đưa vào/vẽ)"
                                         sx={{
                                             textTransform: 'none',
