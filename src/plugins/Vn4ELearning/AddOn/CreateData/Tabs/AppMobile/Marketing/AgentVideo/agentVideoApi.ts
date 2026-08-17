@@ -111,16 +111,18 @@ export type BeatRegion = {
     /** Chế độ chọn: 'object' = chỉ vật trong vùng; 'full' = toàn vùng (mặc định). */
     select_mode?: 'object' | 'full';
     /**
-     * HIỆU ỨNG KHI ĐƯA VÀO (action='place'): 'loang' (mặc định — vệt phun màu/
-     * khói trắng hiện tại) hoặc 'slide_friction' (quán tính trượt — trượt tới rồi
-     * nảy lui, mỗi nhịp biên độ giảm 1/2). Khi chọn 'slide_friction', vệt loang
-     * mặc định KHÔNG chạy (thay thế hoàn toàn).
+     * HIỆU ỨNG KHI ĐƯA VÀO (action='place'):
+     * - 'loang' (mặc định — vệt phun màu/khói trắng hiện tại)
+     * - 'slide_friction' (quán tính trượt — trượt tới rồi nảy lui, mỗi nhịp biên độ giảm 1/2)
+     * - 'zoom_out_bounce' (thu nhỏ nảy đàn hồi — từ RẤT TO co dần về khung, quá đà nhồi nhỏ/rộng rồi khít)
+     * - 'pop_in_bounce' (phóng to nảy đàn hồi — từ điểm nhỏ phóng vọt lên, quá đà to ra rồi về vừa khung)
+     * Hiệu ứng mới THAY THẾ hoàn toàn vệt loang mặc định.
      */
     place_effect?: PlaceEffectKey;
 };
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
-export type PlaceEffectKey = 'loang' | 'slide_friction';
+export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce';
 
 export const PLACE_EFFECT_OPTIONS: Array<{
     value: PlaceEffectKey;
@@ -137,12 +139,25 @@ export const PLACE_EFFECT_OPTIONS: Array<{
         label: 'Quán tính trượt',
         description: 'Thả tay xong ảnh trượt tới vượt đích rồi nảy lui/tới… mỗi nhịp biên độ giảm 1/2, dừng đúng đích',
     },
+    {
+        value: 'zoom_out_bounce',
+        label: 'Thu nhỏ -nảy',
+        description: 'Ảnh từ RẤT TO co dần về đúng khung, quá đà nhồi nhỏ/rộng đàn hồi vài nhịp rồi khít (như ảnh rơi "bộp" xuống khung)',
+    },
+    {
+        value: 'pop_in_bounce',
+        label: 'Phóng to - nảy',
+        description: 'Ảnh từ điểm nhỏ phóng vọt lên, quá đà to hơn khung rồi co lại vừa khít (như ảnh tự "bung" từ bảng)',
+    },
 ];
 
 /** Khôi phục place_effect hợp lệ (dữ liệu cũ có thể còn inertial_rotation/dynamic_shadow → về loang). */
 export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffectKey {
     const value = String(raw || '').trim().toLowerCase();
-    return value === 'slide_friction' ? 'slide_friction' : 'loang';
+    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce') {
+        return value;
+    }
+    return 'loang';
 }
 
 export type AgentWhiteboardBeatOverride = {

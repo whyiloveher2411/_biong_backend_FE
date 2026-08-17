@@ -104,6 +104,47 @@ const regionActivePulse = keyframes`
     100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
 `;
 
+/** Nhóm thiết lập 1 vùng — tiêu đề + khung riêng để dễ phân biệt các nhóm. */
+function RegionSection({
+    title,
+    children,
+    color,
+}: {
+    title: string;
+    children: React.ReactNode;
+    color?: string;
+}) {
+    return (
+        <Box sx={{ mb: 1.25 }}>
+            <Typography
+                variant="caption"
+                display="block"
+                sx={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    color: color || 'text.secondary',
+                    mb: 0.5,
+                }}
+            >
+                {title}
+            </Typography>
+            <Box
+                sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 0.75,
+                    bgcolor: 'background.default',
+                }}
+            >
+                {children}
+            </Box>
+        </Box>
+    );
+}
+
 export default function ShortVideoAgentBeatRegionDrawer({
     open,
     onClose,
@@ -1455,37 +1496,14 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     } : {}),
                                 }}
                             >
-                                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+                                {/* Thanh tiêu đề vùng: tên + xóa */}
+                                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1 }}>
                                     <TextField
                                         size="small"
                                         value={region.name}
                                         onChange={(e) => updateRegion(region.id, { name: e.target.value })}
                                         sx={{ flex: 1, '& .MuiInputBase-root': { fontSize: 13 } }}
                                     />
-                                    {region.bg_sample && region.bg_sample.points.length >= 3 ? (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            color="secondary"
-                                            onClick={() => handleClearRegionBgSample(region.id)}
-                                            title="Xóa background riêng của vùng này"
-                                            sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0 }}
-                                        >
-                                            Xóa bg
-                                        </Button>
-                                    ) : null}
-                                    <Button
-                                        size="small"
-                                        variant={bgSampleMode && isSelected ? 'contained' : 'outlined'}
-                                        color="secondary"
-                                        onClick={() => handleStartBgSampleForRegion(region.id)}
-                                        title="Chọn 1 vùng nhỏ background trên ảnh — lặp lại fill nền vùng này khi render"
-                                        sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0 }}
-                                    >
-                                        {region.bg_sample && region.bg_sample.points.length >= 3
-                                            ? 'Đổi bg'
-                                            : 'Chọn background'}
-                                    </Button>
                                     <IconButton
                                         size="small"
                                         color="error"
@@ -1499,8 +1517,15 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     </IconButton>
                                 </Stack>
 
-                                {/* Hành động vẽ: Vẽ tay / Đưa vào */}
-                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                {depth > 0 ? (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                                        ↳ Vùng con của: {parent?.name || '?'}
+                                    </Typography>
+                                ) : null}
+
+                                {/* 1. Hành động render: Vẽ tay / Đưa vào */}
+                                <RegionSection title="Hành động với ảnh">
+                                    <Stack direction="row" spacing={1}>
                                     <Button
                                         size="small"
                                         variant="outlined"
@@ -1540,21 +1565,13 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     >
                                         Đưa vào
                                     </Button>
-                                </Stack>
+                                    </Stack>
+                                </RegionSection>
 
-                                {/* Hiệu ứng khi ĐƯA VÀO (chỉ hiển thị cho vùng action=place) —
-                                    thay thế hoàn toàn vệt loang mặc định */}
+                                {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
                                 {region.action === 'place' ? (
-                                    <Box sx={{ mb: 1 }}>
-                                        <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                            display="block"
-                                            sx={{ mb: 0.5 }}
-                                        >
-                                            Hiệu ứng khi đưa vào (thay vệt loang mặc định):
-                                        </Typography>
-                                        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                                    <RegionSection title="Hiệu ứng sau khi đưa ảnh vào">
+                                        <Stack direction="row"  sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                                             {PLACE_EFFECT_OPTIONS.map((opt) => {
                                                 const active = normalizePlaceEffect(region.place_effect) === opt.value;
                                                 return (
@@ -1571,6 +1588,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                                             flex: '1 1 45%',
                                                             fontSize: 11,
                                                             py: 0.25,
+                                                            mt: 0.5,
                                                             minHeight: 0,
                                                             ...(active
                                                                 ? { borderColor: 'warning.main', bgcolor: 'action.selected' }
@@ -1582,11 +1600,12 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                                 );
                                             })}
                                         </Stack>
-                                    </Box>
+                                    </RegionSection>
                                 ) : null}
 
-                                {/* Chỉnh vùng: Thêm vùng (nối liền) / Xóa thừa (bỏ bớt) */}
-                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                {/* 3. Tinh chỉnh vùng: Thêm vùng / Xóa thừa */}
+                                <RegionSection title="Tinh chỉnh vùng">
+                                    <Stack direction="row" spacing={1}>
                                     <Button
                                         size="small"
                                         variant="outlined"
@@ -1633,10 +1652,12 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     >
                                         {eraseModeRegionId === region.id ? 'Đang xóa thừa' : 'Xóa thừa'}
                                     </Button>
-                                </Stack>
+                                    </Stack>
+                                </RegionSection>
 
-                                {/* 2 tùy chọn vùng: toàn vùng đã vẽ / chỉ vật thể trong vùng */}
-                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                {/* 4. Phạm vi vùng: Toàn vùng / Chỉ vật trong vùng */}
+                                <RegionSection title="Phạm vi vùng">
+                                    <Stack direction="row" spacing={1}>
                                     <Button
                                         size="small"
                                         variant="outlined"
@@ -1676,48 +1697,72 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     >
                                         Chỉ vật trong vùng
                                     </LoadingButton>
-                                </Stack>
+                                    </Stack>
+                                </RegionSection>
 
-                                {depth > 0 ? (
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                                        ↳ Vùng con của: {parent?.name || '?'}
-                                    </Typography>
-                                ) : null}
-
-                                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                                    <LoadingButton
-                                        size="small"
-                                        variant={region.background_image ? 'contained' : 'outlined'}
-                                        color="success"
-                                        startIcon={<WallpaperIcon />}
-                                        loading={keepBgBusy === region.id}
-                                        onClick={() => {
-                                            void handleToggleKeepBackground(region, !region.background_image);
-                                        }}
-                                        title="Tạo ảnh nền đã vá (bỏ vật thể, nền giữ nguyên) — render hiển thị nền này cho vùng thay vì tile"
-                                        sx={{ textTransform: 'none', flex: 1, fontSize: 11, py: 0.25, minHeight: 0 }}
-                                    >
-                                        {region.background_image ? 'Đang giữ nền' : 'Giữ nền'}
-                                    </LoadingButton>
-                                    {region.background_image ? (
-                                        <Box
-                                            component="img"
-                                            src={region.background_image}
-                                            alt="nền đã vá"
-                                            sx={{
-                                                width: 44,
-                                                height: 44,
-                                                objectFit: 'cover',
-                                                borderRadius: 0.75,
-                                                border: 1,
-                                                borderColor: 'divider',
+                                {/* 5. Nền vùng: mẫu background riêng + giữ nền (inpaint) */}
+                                <RegionSection title="Nền vùng">
+                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                        <Button
+                                            size="small"
+                                            variant={bgSampleMode && isSelected ? 'contained' : 'outlined'}
+                                            color="secondary"
+                                            onClick={() => handleStartBgSampleForRegion(region.id)}
+                                            title="Chọn 1 vùng nhỏ background trên ảnh — lặp lại fill nền vùng này khi render"
+                                            sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0, flex: 1 }}
+                                        >
+                                            {region.bg_sample && region.bg_sample.points.length >= 3
+                                                ? 'Đổi bg'
+                                                : 'Chọn background'}
+                                        </Button>
+                                        {region.bg_sample && region.bg_sample.points.length >= 3 ? (
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="error"
+                                                onClick={() => handleClearRegionBgSample(region.id)}
+                                                title="Xóa background riêng của vùng này"
+                                                sx={{ textTransform: 'none', fontSize: 11, py: 0.25, minHeight: 0 }}
+                                            >
+                                                Xóa bg
+                                            </Button>
+                                        ) : null}
+                                    </Stack>
+                                    <Stack direction="row" spacing={1} sx={{ mt: 0.75, alignItems: 'center' }}>
+                                        <LoadingButton
+                                            size="small"
+                                            variant={region.background_image ? 'contained' : 'outlined'}
+                                            color="success"
+                                            startIcon={<WallpaperIcon />}
+                                            loading={keepBgBusy === region.id}
+                                            onClick={() => {
+                                                void handleToggleKeepBackground(region, !region.background_image);
                                             }}
-                                        />
-                                    ) : null}
-                                </Stack>
+                                            title="Tạo ảnh nền đã vá (bỏ vật thể, nền giữ nguyên) — render hiển thị nền này cho vùng thay vì tile"
+                                            sx={{ textTransform: 'none', flex: 1, fontSize: 11, py: 0.25, minHeight: 0 }}
+                                        >
+                                            {region.background_image ? 'Đang giữ nền' : 'Giữ nền'}
+                                        </LoadingButton>
+                                        {region.background_image ? (
+                                            <Box
+                                                component="img"
+                                                src={region.background_image}
+                                                alt="nền đã vá"
+                                                sx={{
+                                                    width: 44,
+                                                    height: 44,
+                                                    objectFit: 'cover',
+                                                    borderRadius: 0.75,
+                                                    border: 1,
+                                                    borderColor: 'divider',
+                                                }}
+                                            />
+                                        ) : null}
+                                    </Stack>
+                                </RegionSection>
 
-                                {/* Chọn 1 từ trong toàn bộ audio script — khi giọng đọc đến từ đó
-                                    thì vùng phải render hoàn chỉnh. Click từ → set script_end_word. */}
+                                {/* 6. Thời điểm hoàn thành: từ trong audio script */}
+                                <RegionSection title="Thời điểm hoàn thành">
                                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                                     Chọn từ trong audio script (vùng hoàn thành khi đọc đến từ này):
                                 </Typography>
@@ -1781,6 +1826,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                         Chưa chọn từ — vùng hoàn thành cuối beat.
                                     </Typography>
                                 )}
+                                </RegionSection>
                             </Box>
                         );
                     })}
