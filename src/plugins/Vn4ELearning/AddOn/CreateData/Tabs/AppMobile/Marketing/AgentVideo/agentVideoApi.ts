@@ -88,12 +88,22 @@ export type BeatRegion = {
     id: string;
     name?: string;
     points: BeatRegionPoint[];
-    action: 'draw' | 'place';
+    /**
+     * draw = vẽ tay trong vùng; place = đưa ảnh trong vùng vào;
+     * erase = XÓA VÙNG THỪA — phần này không được đưa vào/vẽ, hiển thị ảnh gốc
+     * (dùng để bỏ phần chọn thừa sau khi tự chọn vật thể).
+     */
+    action: 'draw' | 'place' | 'erase';
     parent_id?: string | null;
     script_start_word?: number | null;
     script_end_word?: number | null;
     /** Mẫu background riêng của vùng này — lặp lại fill nền vùng khi render. */
     bg_sample?: BeatBackgroundSample | null;
+    /**
+     * Ảnh nền ĐÃ VÁ (inpaint — bỏ vật thể, nền giữ nguyên) — công cụ "Giữ nền":
+     * render hiển thị nền này cho vùng chọn thay vì tile bg_sample.
+     */
+    background_image?: string | null;
 };
 
 export type AgentWhiteboardBeatOverride = {
@@ -1659,6 +1669,69 @@ export async function saveAgentWhiteboardBeatOverride(
         override?: AgentWhiteboardBeatOverride;
         agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
     }>;
+}
+
+export type AutoSelectRegionResult = {
+    success?: boolean;
+    points?: BeatRegionPoint[];
+    area?: number;
+    background_image_url?: string | null;
+    message?: string;
+    /** Danh sách vật thể (candidates) — user chọn 1 trong số đó. */
+    candidates?: { points: BeatRegionPoint[]; area?: number; score?: number }[];
+};
+
+/**
+ * Tự chọn vật thể trong ảnh beat (GrabCut DIP) + tạo ảnh nền đã vá (inpaint).
+ * mode 'click' → point "x,y" pixel ảnh gốc; mode 'bbox' → rect "x0,y0,x1,y1".
+ */
+export async function autoSelectAgentWhiteboardRegion(
+    shortVideoId: number,
+    beatId: string,
+    mode: 'click' | 'bbox' | 'subtract',
+    payload: {
+        point?: [number, number];
+        rect?: [number, number, number, number];
+        polyA?: [number, number][];
+        polyB?: [number, number][];
+        /** Polygon người dùng VẼ (pixel) — dùng centroid làm tâm ưu tiên chọn vật. */
+        poly?: [number, number][];
+        /** Tinh chỉnh thêm/bớt (px): >0 nới rộng, <0 thu hẹp. */
+        alpha?: number;
+        /** Chọn candidate index (khi nhiều vật). */
+        candidate?: number;
+    },
+    keepBackground = false,
+): Promise<JsonResponse & AutoSelectRegionResult> {
+    const body: Record<string, unknown> = {
+        beat_id: beatId,
+        mode,
+        keep_background: keepBackground ? '1' : '0',
+    };
+    if (mode === 'click' && payload.point) {
+        body.point = `${payload.point[0]},${payload.point[1]}`;
+    }
+    if (mode === 'bbox' && payload.rect) {
+        body.rect = payload.rect.join(',');
+    }
+    const toStr = (pts: [number, number][]) => pts.map((pt) => `${pt[0]},${pt[1]}`).join(';');
+    if (mode === 'subtract' && payload.polyA && payload.polyB) {
+        body.poly_a = toStr(payload.polyA);
+        body.poly_b = toStr(payload.polyB);
+    }
+    if (payload.poly && payload.poly.length >= 3) {
+        body.poly = toStr(payload.poly);
+    }
+    if (payload.alpha !== undefined) {
+        body.alpha = String(payload.alpha);
+    }
+    if (payload.candidate !== undefined) {
+        body.candidate = String(payload.candidate);
+    }
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/auto-select-agent-whiteboard-region',
+        shortVideoBody(shortVideoId, body),
+    ) as Promise<JsonResponse & AutoSelectRegionResult>;
 }
 
 export async function enqueueGeminiWebBeatImageFill(

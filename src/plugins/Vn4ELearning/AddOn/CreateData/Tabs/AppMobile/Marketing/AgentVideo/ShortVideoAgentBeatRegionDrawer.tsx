@@ -4,12 +4,10 @@ import {
     Alert,
     Box,
     Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
     Divider,
     IconButton,
+    Menu,
+    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -19,11 +17,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UndoIcon from '@mui/icons-material/Undo';
 import SaveIcon from '@mui/icons-material/Save';
+import WallpaperIcon from '@mui/icons-material/Wallpaper';
+import CheckIcon from '@mui/icons-material/Check';
 import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
-import { useFloatingMessages } from 'hook/useFloatingMessages';
 import type { useAgentVideoContent } from './useAgentVideoContent';
-import type { BeatRegion } from './agentVideoApi';
+import { autoSelectAgentWhiteboardRegion, type BeatRegion, type BeatRegionPoint } from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -112,7 +111,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
     beatId,
     imageUrl,
 }: Props) {
-    const { showMessage } = useFloatingMessages();
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
     const savedRegions = Array.isArray(currentOverride.regions) ? currentOverride.regions : [];
 
@@ -124,8 +122,42 @@ export default function ShortVideoAgentBeatRegionDrawer({
     const [saving, setSaving] = React.useState(false);
     const [bgSampleMode, setBgSampleMode] = React.useState(false);
     const [bgSampleDraft, setBgSampleDraft] = React.useState<[number, number][]>([]);
-    const [deleteConfirmRegionId, setDeleteConfirmRegionId] = React.useState<string>('');
+    const [deleteMenuAnchor, setDeleteMenuAnchor] = React.useState<HTMLElement | null>(null);
+    const [deleteMenuRegionId, setDeleteMenuRegionId] = React.useState<string>('');
+    // Chế độ Xóa thừa: đang xóa vùng thừa cho vùng A (vẽ vùng nào → tự thành erase của A).
+    const [eraseModeRegionId, setEraseModeRegionId] = React.useState<string>('');
+
+    // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
+    const [refiningRegionId, setRefiningRegionId] = React.useState<string | null>(null);
+    const [keepBgBusy, setKeepBgBusy] = React.useState<string | null>(null);
+    // Points GỐC của vùng trước khi refine — để revert về "toàn vùng".
+    const [originalPointsByRegion, setOriginalPointsByRegion] = React.useState<
+        Record<string, BeatRegionPoint[]>
+    >({});
+
     const [hoveredDraftPoint, setHoveredDraftPoint] = React.useState<number | null>(null);
+    // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
+    const [notice, setNotice] = React.useState<{
+        variant: 'success' | 'warning' | 'error' | 'info';
+        text: string;
+    } | null>(null);
+    const notify = React.useCallback((text: string, variant: 'success' | 'warning' | 'error' | 'info' = 'info') => {
+        setNotice({ variant, text });
+    }, []);
+
+    // apiMessage trả {content, options} — lấy text để hiển thị (không "[object Object]").
+    const extractMessage = React.useCallback((msg: unknown, fallback: string): string => {
+        if (typeof msg === 'string' && msg.trim()) {
+            return msg;
+        }
+        if (msg && typeof msg === 'object') {
+            const content = (msg as { content?: unknown }).content;
+            if (typeof content === 'string' && content.trim()) {
+                return content;
+            }
+        }
+        return fallback;
+    }, []);
 
     const svgRef = React.useRef<SVGSVGElement | null>(null);
     const imgRef = React.useRef<HTMLImageElement | null>(null);
@@ -150,7 +182,13 @@ export default function ShortVideoAgentBeatRegionDrawer({
             setBoxSize(null);
             setBgSampleMode(false);
             setBgSampleDraft([]);
-            setDeleteConfirmRegionId('');
+            setDeleteMenuAnchor(null);
+            setDeleteMenuRegionId('');
+            setKeepBgBusy(null);
+            setRefiningRegionId(null);
+            setEraseModeRegionId('');
+            setOriginalPointsByRegion({});
+            setNotice(null);
         }
         prevOpenRef.current = open;
     }, [open]);
@@ -339,6 +377,22 @@ export default function ShortVideoAgentBeatRegionDrawer({
         suppressClickRef.current = false;
         lastDragPtRef.current = pt;
         setDragging(true);
+
+        // Kéo ra NGOÀI ảnh vẫn tiếp tục vẽ: theo dõi mousemove/mouseup ở window,
+        // điểm được clamp vào giới hạn ảnh (0-1) qua svgPointFromEvent.
+        const onWindowMove = (e: MouseEvent) => {
+            const np = svgPointFromEvent(e);
+            if (np) {
+                handleSvgMouseMove(e as unknown as React.MouseEvent<SVGSVGElement>);
+            }
+        };
+        const onWindowUp = () => {
+            window.removeEventListener('mousemove', onWindowMove);
+            window.removeEventListener('mouseup', onWindowUp);
+            handleSvgMouseUp();
+        };
+        window.addEventListener('mousemove', onWindowMove);
+        window.addEventListener('mouseup', onWindowUp);
     };
 
     const handleSvgMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
@@ -404,6 +458,27 @@ export default function ShortVideoAgentBeatRegionDrawer({
             return;
         }
         const [x, y] = pt;
+        if (bgSampleMode && bgSampleDraft.length === 0) {
+            // UX đơn giản: click 1 phát → tự tạo ô vuông mẫu (0.03) quanh điểm
+            // làm bg_sample — không cần vẽ nhiều điểm.
+            const half = 0.015;
+            const pts: [number, number][] = [
+                [x - half, y - half],
+                [x + half, y - half],
+                [x + half, y + half],
+                [x - half, y + half],
+            ];
+            const targetId = selectedRegionId;
+            if (targetId) {
+                updateRegion(targetId, { bg_sample: { points: pts } });
+                notify('Đã lấy mẫu background — mẫu sẽ lặp lại fill nền vùng này', 'success');
+            } else {
+                notify('Hãy chọn 1 vùng trước (bấm Chọn background trên vùng đó)', 'warning');
+            }
+            setBgSampleDraft([]);
+            setBgSampleMode(false);
+            return;
+        }
         const activeDraft = bgSampleMode ? bgSampleDraft : draftPoints;
 
         if (activeDraft.length === 0) {
@@ -432,15 +507,63 @@ export default function ShortVideoAgentBeatRegionDrawer({
     };
 
     const finishDraft = () => {
+        if (eraseModeRegionId) {
+            // Chế độ XÓA THỪA: vẽ vùng B xong → vùng A (cha) TỰ THU GỌN (A = A - B).
+            void (async () => {
+                if (draftPoints.length < 3) {
+                    notify('Vùng cần tối thiểu 3 điểm', 'warning');
+                    return;
+                }
+                if (!imgNatural || shortVideoId <= 0) {
+                    notify('Ảnh/shortVideoId chưa sẵn sàng — thử lại', 'warning');
+                    return;
+                }
+                const parent = regions.find((r) => r.id === eraseModeRegionId);
+                if (!parent) {
+                    setEraseModeRegionId('');
+                    return;
+                }
+                const toPx = (pt: [number, number]): [number, number] => [
+                    pt[0] * imgNatural.w,
+                    pt[1] * imgNatural.h,
+                ];
+                try {
+                    const res = await autoSelectAgentWhiteboardRegion(
+                        shortVideoId,
+                        beatId,
+                        'subtract',
+                        {
+                            polyA: parent.points.map(toPx),
+                            polyB: draftPoints.map(toPx),
+                        },
+                    );
+                    if (res?.success && Array.isArray(res.points) && res.points.length >= 3) {
+                        updateRegion(parent.id, { points: res.points as [number, number][] });
+                        notify(`Đã bỏ vùng thừa — vùng "${parent.name}" tự thu gọn. Vẽ tiếp để bỏ thêm.`, 'success');
+                    } else {
+                        notify(
+                            extractMessage(res?.message, 'Không trừ được vùng thừa — thử lại'),
+                            'warning',
+                        );
+                    }
+                } catch (error) {
+                    notify(error instanceof Error ? error.message : String(error), 'error');
+                } finally {
+                    setDraftPoints([]);
+                    setDraftIsDrag(false);
+                }
+            })();
+            return;
+        }
         if (bgSampleMode) {
             if (bgSampleDraft.length < 3) {
-                showMessage('Vùng background cần tối thiểu 3 điểm', 'warning');
+                notify('Vùng background cần tối thiểu 3 điểm', 'warning');
                 return;
             }
             // Gán mẫu background cho vùng ĐANG CHỌN (nút Chọn background của vùng đó).
             const targetId = selectedRegionId;
             if (!targetId) {
-                showMessage('Hãy chọn 1 vùng trước (bấm Chọn background trên vùng đó)', 'warning');
+                notify('Hãy chọn 1 vùng trước (bấm Chọn background trên vùng đó)', 'warning');
                 return;
             }
             updateRegion(targetId, { bg_sample: { points: [...bgSampleDraft] } });
@@ -449,10 +572,9 @@ export default function ShortVideoAgentBeatRegionDrawer({
             return;
         }
         if (draftPoints.length < 3) {
-            showMessage('Vùng cần tối thiểu 3 điểm', 'warning');
+            notify('Vùng cần tối thiểu 3 điểm', 'warning');
             return;
         }
-        // Tự xác định vùng cha: vẽ trong vùng nào thì thuộc vùng đó (nhỏ nhất chứa centroid).
         const parentId = resolveParentRegion(draftPoints, regions);
         const region: BeatRegion = {
             id: `region-${Date.now()}`,
@@ -498,7 +620,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
         if (selectedRegionId === id) {
             setSelectedRegionId('');
         }
-        setDeleteConfirmRegionId('');
     };
 
     const handleStartBgSampleForRegion = (regionId: string) => {
@@ -513,6 +634,144 @@ export default function ShortVideoAgentBeatRegionDrawer({
         setBgSampleMode(false);
     };
 
+    const shortVideoId = Number(state.shortVideoId || 0);
+
+    // Bật/tắt "Giữ nền": tạo ảnh nền đã vá (inpaint) cho vùng — render hiển thị
+    // nền này thay vì tile. Giữ nguyên bg_sample cũ nếu có.
+    const handleToggleKeepBackground = async (region: BeatRegion, keep: boolean) => {
+        if (keep) {
+            if (region.background_image) {
+                return;
+            }
+            if (keepBgBusy || shortVideoId <= 0) {
+                return;
+            }
+            if (!imgNatural) {
+                notify('Ảnh chưa sẵn sàng — thử lại', 'warning');
+                return;
+            }
+            // Bbox bao vùng (tính từ points vùng × kích thước ảnh gốc) — GrabCut
+            // theo đúng vùng đã chọn → mask vật → inpaint nền.
+            const xs = region.points.map((p) => p[0]);
+            const ys = region.points.map((p) => p[1]);
+            const pad = 0.02;
+            const rect: [number, number, number, number] = [
+                Math.max(0, Math.min(...xs) - pad) * imgNatural.w,
+                Math.max(0, Math.min(...ys) - pad) * imgNatural.h,
+                Math.min(1, Math.max(...xs) + pad) * imgNatural.w,
+                Math.min(1, Math.max(...ys) + pad) * imgNatural.h,
+            ];
+            setKeepBgBusy(region.id);
+            try {
+                const res = await autoSelectAgentWhiteboardRegion(
+                    shortVideoId,
+                    beatId,
+                    'bbox',
+                    { rect },
+                    true,
+                );
+                if (res?.success && res.background_image_url) {
+                    updateRegion(region.id, { background_image: res.background_image_url });
+                    notify('Đã tạo ảnh nền đã vá cho vùng — render sẽ giữ nền thay vì tile', 'success');
+                } else {
+                    notify(extractMessage(res?.message, 'Không tạo được ảnh nền'), 'warning');
+                }
+            } finally {
+                setKeepBgBusy(null);
+            }
+        } else {
+            updateRegion(region.id, { background_image: null });
+        }
+    };
+
+    // "Chỉ vật trong vùng": thu gọn polygon vùng thành vật thể bên trong (GrabCut/ML).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dùng trong JSX buttons
+    const handleRefineRegionToObject = async (region: BeatRegion) => {
+        if (refiningRegionId) {
+            return;
+        }
+        if (shortVideoId <= 0) {
+            notify('Thiếu shortVideoId — không gọi được API', 'error');
+            return;
+        }
+        if (!imgNatural) {
+            notify('Ảnh chưa sẵn sàng — thử lại', 'warning');
+            return;
+        }
+        if (originalPointsByRegion[region.id]) {
+            return;
+        }
+        const xs = region.points.map((pt) => pt[0]);
+        const ys = region.points.map((pt) => pt[1]);
+        const pad = 0.02;
+        const rect: [number, number, number, number] = [
+            Math.max(0, Math.min(...xs) - pad) * imgNatural.w,
+            Math.max(0, Math.min(...ys) - pad) * imgNatural.h,
+            Math.min(1, Math.max(...xs) + pad) * imgNatural.w,
+            Math.min(1, Math.max(...ys) + pad) * imgNatural.h,
+        ];
+        setRefiningRegionId(region.id);
+        try {
+            const res = await autoSelectAgentWhiteboardRegion(
+                shortVideoId,
+                beatId,
+                'bbox',
+                {
+                    rect,
+                    poly: region.points.map((pt): [number, number] => [
+                        pt[0] * imgNatural.w,
+                        pt[1] * imgNatural.h,
+                    ]),
+                },
+            );
+            if (res?.success && Array.isArray(res.points) && res.points.length >= 3) {
+                const candidates = Array.isArray(res.candidates)
+                    ? res.candidates.map((c) => ({ ...c, points: (c.points || []) as [number, number][] }))
+                    : [];
+                if (candidates.length === 0) {
+                    candidates.push({
+                        points: res.points as [number, number][],
+                        area: res.area,
+                    });
+                }
+                setOriginalPointsByRegion((prev) => ({
+                    ...prev,
+                    [region.id]: region.points,
+                }));
+                updateRegion(region.id, { points: res.points as [number, number][] });
+                notify(`Đã thu gọn vùng thành vật thể (${res.points.length} điểm)`, 'success');
+                return;
+            } else {
+                notify(
+                    extractMessage(res?.message, 'Không chọn được vật trong vùng — hãy vẽ vùng sát vật thể hơn'),
+                    'warning',
+                );
+            }
+        } catch (error) {
+            notify(error instanceof Error ? error.message : String(error), 'error');
+        } finally {
+            setRefiningRegionId(null);
+        }
+    };
+
+    // Gọi lại API với candidate/alpha — cập nhật preview trong dialog.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dùng trong Dialog JSX
+    // "Toàn vùng": khôi phục polygon ban đầu trước khi refine.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dùng trong JSX buttons
+    const handleRestoreRegionPoints = (region: BeatRegion) => {
+        const original = originalPointsByRegion[region.id];
+        if (!original) {
+            return;
+        }
+        updateRegion(region.id, { points: original });
+        setOriginalPointsByRegion((prev) => {
+            const next = { ...prev };
+            delete next[region.id];
+            return next;
+        });
+        notify('Đã khôi phục vùng đã chọn (toàn vùng)', 'success');
+    };
+
     const handleSave = async () => {
         if (saving) {
             return;
@@ -524,7 +783,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
             }
             const parent = regions.find((item) => item.id === region.parent_id);
             if (!parent) {
-                showMessage(`Vùng "${region.name}" có vùng cha không tồn tại`, 'error');
+                notify(`Vùng "${region.name}" có vùng cha không tồn tại`, 'error');
                 return;
             }
             const childMinX = Math.min(...region.points.map((p) => p[0]));
@@ -540,14 +799,14 @@ export default function ShortVideoAgentBeatRegionDrawer({
                 && childMinY >= parentMinY - 0.01
                 && childMaxY <= parentMaxY + 0.01;
             if (!inside) {
-                showMessage(
+                notify(
                     `Vùng con "${region.name}" phải nằm hoàn toàn trong vùng cha "${parent.name}"`,
                     'error',
                 );
                 return;
             }
             if (region.bg_sample && region.bg_sample.points.length < 3) {
-                showMessage(`Background của vùng "${region.name}" cần tối thiểu 3 điểm`, 'error');
+                notify(`Background của vùng "${region.name}" cần tối thiểu 3 điểm`, 'error');
                 return;
             }
         }
@@ -559,7 +818,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                 regions,
             });
             if (saved) {
-                showMessage(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
+                notify(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
                 onClose();
             }
         } finally {
@@ -600,6 +859,16 @@ export default function ShortVideoAgentBeatRegionDrawer({
                 },
             }}
         >
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
+                    minHeight: 0,
+                    overflow: 'hidden',
+                    gap: 1.5,
+                }}
+            >
             <Alert severity="info" sx={{ flexShrink: 0 }}>
                 <strong>Vẽ nhanh:</strong> click giữ chuột tại điểm đầu rồi kéo — vùng hình thành từ điểm đầu nối
                 với điểm chuột hiện tại, thả chuột = xong. <strong>Vẽ chính xác:</strong> click từng điểm (mỗi điểm
@@ -609,12 +878,23 @@ export default function ShortVideoAgentBeatRegionDrawer({
                 Vẽ trong vùng nào → vùng đó tự thành vùng cha; hành động vùng con thắng vùng cha.
             </Alert>
 
+            {notice ? (
+                <Alert
+                    severity={notice.variant}
+                    sx={{ flexShrink: 0 }}
+                    onClose={() => setNotice(null)}
+                >
+                    {notice.text}
+                </Alert>
+            ) : null}
+
             <Box
                 sx={{
                     display: 'flex',
                     gap: 2,
-                    flex: 1,
+                    flex: '1 1 auto',
                     minHeight: 0,
+                    alignItems: 'stretch',
                     overflow: 'hidden',
                 }}
             >
@@ -642,6 +922,8 @@ export default function ShortVideoAgentBeatRegionDrawer({
                             border: 1,
                             borderColor: 'divider',
                             bgcolor: 'common.black',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
                         }}
                     >
                         {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
@@ -688,8 +970,8 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     onMouseUp={handleSvgMouseUp}
                                     onMouseLeave={() => {
                                         setCursorPos(null);
-                                        // Rời khỏi ảnh khi đang kéo → kết thúc vùng như mouseup.
-                                        handleSvgMouseUp();
+                                        // Không kết thúc vùng khi kéo ra ngoài ảnh —
+                                        // window mousemove tiếp tục vẽ, điểm clamp vào biên.
                                     }}
                                     style={{
                                         position: 'absolute',
@@ -700,7 +982,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     }}
                                 >
                             {regions.map((region, index) => {
-                                const color = colorFor(index);
+                                const color = region.action === 'erase' ? '#f44336' : colorFor(index);
                                 const isSelected = selectedRegionId === region.id;
                                 const isChild = Boolean(region.parent_id);
                                 const first = region.points[0];
@@ -770,7 +1052,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                 if (!bgSample || bgSample.points.length < 3) {
                                     return null;
                                 }
-                                const color = colorFor(index);
+                                const color = region.action === 'erase' ? '#f44336' : colorFor(index);
                                 return (
                                     <g key={`${region.id}-bg`} style={{ pointerEvents: 'none' }}>
                                         <polygon
@@ -983,10 +1265,19 @@ export default function ShortVideoAgentBeatRegionDrawer({
                             display="block"
                             sx={{ textAlign: 'center' }}
                         >
-                            {bgSampleMode ? (
+                            {eraseModeRegionId ? (
                                 <>
-                                    Đang chọn <strong>background</strong>: vẽ 1 vùng nhỏ có màu/chi tiết nền →
-                                    click điểm 1 hoặc Hoàn tất. Mẫu này sẽ lặp lại fill nền các vùng chọn (mềm biên).
+                                    <strong>Đang XÓA THỪA</strong> cho{' '}
+                                    {regions.find((r) => r.id === eraseModeRegionId)?.name || eraseModeRegionId}:
+                                    vẽ các vùng cần bỏ (giống chọn vùng thường) — vẽ xong vùng này{' '}
+                                    <strong>tự thu gọn ngay</strong> (phần giao nhau bị bỏ). Vẽ nhiều lần tùy ý,
+                                    click "Xóa thừa" lần nữa để thoát.
+                                </>
+                            ) : bgSampleMode ? (
+                                <>
+                                    Đang chọn <strong>background</strong>: <strong>click 1 phát</strong> vào vị trí có màu/
+                                    chi tiết nền → tự tạo ô mẫu nhỏ. Mẫu này sẽ lặp lại fill nền vùng đang chọn (thay
+                                    vì tile trắng). (Kéo chuột = vẽ vùng mẫu tay.)
                                 </>
                             ) : (
                                 <>
@@ -1021,11 +1312,23 @@ export default function ShortVideoAgentBeatRegionDrawer({
                         width: 340,
                         flexShrink: 0,
                         minHeight: 0,
+                        maxHeight: '100%',
+                        alignSelf: 'stretch',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 1,
-                        overflow: 'auto',
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
                         pr: 0.5,
+                        '&::-webkit-scrollbar': { width: 10 },
+                        '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.06)', borderRadius: 2 },
+                        '&::-webkit-scrollbar-thumb': {
+                            bgcolor: 'primary.light',
+                            borderRadius: 2,
+                            border: '2px solid transparent',
+                            backgroundClip: 'padding-box',
+                        },
+                        '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'primary.main' },
                     }}
                 >
                     <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
@@ -1033,9 +1336,9 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     </Typography>
                     {bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
-                            Đang chọn <strong>background</strong> cho vùng đang chọn: vẽ 1 vùng nhỏ có màu/chi
-                            tiết nền trên ảnh bên trái → click điểm 1 hoặc "Hoàn tất vùng". Mẫu này lặp lại fill
-                            nền vùng đó (mềm biên).
+                            Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>
+                            vào vị trí có màu/chi tiết nền trên ảnh bên trái → tự tạo ô mẫu nhỏ. Mẫu này lặp lại
+                            fill nền vùng đó (thay vì tile trắng). Kéo chuột = vẽ vùng mẫu tay.
                         </Typography>
                     ) : null}
                     {!hasRegions ? (
@@ -1044,7 +1347,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                         </Typography>
                     ) : null}
                     {sortedRegions.map((region, index) => {
-                        const color = colorFor(index);
+                        const color = region.action === 'erase' ? '#f44336' : colorFor(index);
                         const parent = region.parent_id
                             ? regions.find((item) => item.id === region.parent_id)
                             : null;
@@ -1108,7 +1411,10 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     <IconButton
                                         size="small"
                                         color="error"
-                                        onClick={() => setDeleteConfirmRegionId(region.id)}
+                                        onClick={(event) => {
+                                            setDeleteMenuRegionId(region.id);
+                                            setDeleteMenuAnchor(event.currentTarget);
+                                        }}
                                         title="Xóa vùng"
                                     >
                                         <DeleteOutlineIcon fontSize="small" />
@@ -1118,22 +1424,98 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                 <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                                     <Button
                                         size="small"
-                                        variant={region.action === 'draw' ? 'contained' : 'outlined'}
+                                        variant="outlined"
                                         color="primary"
+                                        startIcon={region.action === 'draw' ? <CheckIcon /> : null}
                                         onClick={() => updateRegion(region.id, { action: 'draw' })}
-                                        sx={{ textTransform: 'none', flex: 1 }}
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(region.action === 'draw'
+                                                ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
                                     >
                                         Vẽ tay
                                     </Button>
                                     <Button
                                         size="small"
-                                        variant={region.action === 'place' ? 'contained' : 'outlined'}
+                                        variant="outlined"
                                         color="secondary"
+                                        startIcon={region.action === 'place' ? <CheckIcon /> : null}
                                         onClick={() => updateRegion(region.id, { action: 'place' })}
-                                        sx={{ textTransform: 'none', flex: 1 }}
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(region.action === 'place'
+                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
                                     >
                                         Đưa vào
                                     </Button>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={eraseModeRegionId === region.id ? <CheckIcon /> : null}
+                                        onClick={() => setEraseModeRegionId(
+                                            eraseModeRegionId === region.id ? '' : region.id,
+                                        )}
+                                        title="Xóa vùng thừa: vào chế độ — vẽ các vùng cần bỏ (phần đó hiển thị ảnh gốc, không đưa vào/vẽ)"
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(eraseModeRegionId === region.id
+                                                ? { borderColor: 'error.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        {eraseModeRegionId === region.id ? 'Đang xóa thừa' : 'Xóa thừa'}
+                                    </Button>
+                                </Stack>
+
+                                {/* 2 tùy chọn vùng: toàn vùng đã vẽ / chỉ vật thể trong vùng */}
+                                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        startIcon={!originalPointsByRegion[region.id] ? <CheckIcon /> : null}
+                                        onClick={() => {
+                                            if (originalPointsByRegion[region.id]) {
+                                                handleRestoreRegionPoints(region);
+                                            }
+                                        }}
+                                        title="Dùng toàn bộ vùng đã vẽ (mặc định) — khôi phục nếu đang thu gọn thành vật"
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(!originalPointsByRegion[region.id]
+                                                ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        Toàn vùng
+                                    </Button>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                        loading={refiningRegionId === region.id}
+                                        startIcon={originalPointsByRegion[region.id] ? <CheckIcon /> : null}
+                                        onClick={() => { void handleRefineRegionToObject(region); }}
+                                        title="Thu gọn vùng thành đúng vật thể bên trong vùng (GrabCut/ML)"
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(originalPointsByRegion[region.id]
+                                                ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        Chỉ vật trong vùng
+                                    </LoadingButton>
                                 </Stack>
 
                                 {depth > 0 ? (
@@ -1141,6 +1523,38 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                         ↳ Vùng con của: {parent?.name || '?'}
                                     </Typography>
                                 ) : null}
+
+                                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+                                    <LoadingButton
+                                        size="small"
+                                        variant={region.background_image ? 'contained' : 'outlined'}
+                                        color="success"
+                                        startIcon={<WallpaperIcon />}
+                                        loading={keepBgBusy === region.id}
+                                        onClick={() => {
+                                            void handleToggleKeepBackground(region, !region.background_image);
+                                        }}
+                                        title="Tạo ảnh nền đã vá (bỏ vật thể, nền giữ nguyên) — render hiển thị nền này cho vùng thay vì tile"
+                                        sx={{ textTransform: 'none', flex: 1, fontSize: 11, py: 0.25, minHeight: 0 }}
+                                    >
+                                        {region.background_image ? 'Đang giữ nền' : 'Giữ nền'}
+                                    </LoadingButton>
+                                    {region.background_image ? (
+                                        <Box
+                                            component="img"
+                                            src={region.background_image}
+                                            alt="nền đã vá"
+                                            sx={{
+                                                width: 44,
+                                                height: 44,
+                                                objectFit: 'cover',
+                                                borderRadius: 0.75,
+                                                border: 1,
+                                                borderColor: 'divider',
+                                            }}
+                                        />
+                                    ) : null}
+                                </Stack>
 
                                 {/* Chọn 1 từ trong toàn bộ audio script — khi giọng đọc đến từ đó
                                     thì vùng phải render hoàn chỉnh. Click từ → set script_end_word. */}
@@ -1216,49 +1630,45 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     <Alert severity="info" sx={{ py: 0.5 }}>
                         Vùng chưa chọn sẽ render theo setting toàn beat (vẽ tay / kéo vào / hiện ngay).
                     </Alert>
+                    {regions.some((r) => r.action === 'erase') ? (
+                        <Alert severity="warning" sx={{ py: 0.5 }}>
+                            Vùng <strong>Xóa thừa</strong> (màu đỏ): phần này không được đưa vào/vẽ — luôn hiển
+                            thị ảnh gốc. Dùng để bỏ phần chọn thừa sau khi tự chọn vật thể.
+                        </Alert>
+                    ) : null}
                 </Box>
             </Box>
+            </Box>
 
-            {/* Xác nhận xóa vùng */}
-            <Dialog
-                open={Boolean(deleteConfirmRegionId)}
-                onClose={() => setDeleteConfirmRegionId('')}
-                maxWidth="xs"
-                fullWidth
+
+            {/* Dropdown xác nhận xóa vùng */}
+            <Menu
+                open={Boolean(deleteMenuAnchor)}
+                anchorEl={deleteMenuAnchor}
+                onClose={() => setDeleteMenuAnchor(null)}
+                slotProps={{
+                    root: { style: { zIndex: 1600 } },
+                    paper: { sx: { minWidth: 240, zIndex: 1600 } },
+                }}
             >
-                <DialogTitle>Xóa vùng?</DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2">
-                        Vùng
-                        {' '}
-                        <strong>
-                            {regions.find((r) => r.id === deleteConfirmRegionId)?.name || deleteConfirmRegionId}
-                        </strong>
-                        {' '}
-                        (kể cả vùng con và background riêng) sẽ bị xóa. Bạn chắc chắn chứ?
-                    </Typography>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button
-                        onClick={() => setDeleteConfirmRegionId('')}
-                        sx={{ textTransform: 'none' }}
-                    >
-                        Hủy
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="error"
-                        onClick={() => {
-                            if (deleteConfirmRegionId) {
-                                handleDeleteRegion(deleteConfirmRegionId);
-                            }
-                        }}
-                        sx={{ textTransform: 'none' }}
-                    >
-                        Xóa
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                <MenuItem onClick={() => setDeleteMenuAnchor(null)}>
+                    Hủy
+                </MenuItem>
+                <MenuItem
+                    onClick={() => {
+                        const rid = deleteMenuRegionId;
+                        setDeleteMenuAnchor(null);
+                        setDeleteMenuRegionId('');
+                        if (rid) {
+                            handleDeleteRegion(rid);
+                        }
+                    }}
+                    sx={{ color: 'error.main', fontWeight: 600 }}
+                >
+                    Xóa
+                </MenuItem>
+            </Menu>
+
         </DrawerCustom>
     );
 }
