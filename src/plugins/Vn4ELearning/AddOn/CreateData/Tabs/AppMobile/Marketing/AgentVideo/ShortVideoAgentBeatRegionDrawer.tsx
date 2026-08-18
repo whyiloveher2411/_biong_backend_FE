@@ -27,8 +27,10 @@ import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
     autoSelectAgentWhiteboardRegion,
     isPlaceHandlessEffect,
+    normalizeNeonColor,
     normalizePlaceEffect,
     normalizePlaceHand,
+    NEON_COLOR_OPTIONS,
     PLACE_EFFECT_OPTIONS,
     type BeatRegion,
     type BeatRegionPoint,
@@ -1648,6 +1650,35 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                                     >
                                                         {opt.label}
                                                     </Button>
+                                                );
+                                            })}
+                                        </Stack>
+                                    </RegionSection>
+                                ) : null}
+
+                                {/* 2a. MÀU ĐÈN NEON CHẠY VIỀN (chỉ khi chọn hiệu ứng neon_border) */}
+                                {region.action === 'place' && normalizePlaceEffect(region.place_effect) === 'neon_border' ? (
+                                    <RegionSection title="Màu đèn neon chạy viền">
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                                            {NEON_COLOR_OPTIONS.map((opt) => {
+                                                const active = normalizeNeonColor(region.place_effect_color) === opt.value;
+                                                return (
+                                                    <Box
+                                                        key={opt.value}
+                                                        onClick={() => updateRegion(region.id, { place_effect_color: opt.value })}
+                                                        title={opt.label}
+                                                        sx={{
+                                                            width: 34,
+                                                            height: 34,
+                                                            borderRadius: '50%',
+                                                            cursor: 'pointer',
+                                                            background: `linear-gradient(135deg, ${opt.swatch}, ${opt.swatch}cc)`,
+                                                            border: '2px solid',
+                                                            borderColor: active ? 'warning.main' : 'divider',
+                                                            boxShadow: active ? `0 0 8px ${opt.swatch}aa` : 'none',
+                                                            '&:hover': { borderColor: 'warning.light' },
+                                                        }}
+                                                    />
                                                 );
                                             })}
                                         </Stack>

@@ -117,9 +117,16 @@ export type BeatRegion = {
      * - 'zoom_out_bounce' (thu nhỏ nảy đàn hồi — từ RẤT TO co dần về khung, quá đà nhồi nhỏ/rộng rồi khít)
      * - 'pop_in_bounce' (phóng to nảy đàn hồi — từ điểm nhỏ phóng vọt lên, quá đà to ra rồi về vừa khung)
      * - 'mirror_sheen' (quét sáng tráng gương — vệt sáng chéo 45° quét qua ảnh vừa đặt + điểm sáng lóe ở rìa)
+     * - 'neon_border' (đèn neon chạy viền — đốm sáng màu lao 3 vòng quanh viền ảnh vừa đặt, đuôi sáng tàn dần)
      * Hiệu ứng mới THAY THẾ hoàn toàn vệt loang mặc định.
      */
     place_effect?: PlaceEffectKey;
+    /**
+     * MÀU ĐÈN NEON CHẠY VIỀN (place_effect='neon_border'): preset engine hỗ
+     * trợ — 'cyan' (mặc định), 'pink', 'yellow', 'lime', 'orange', 'purple',
+     * 'red', 'green', 'blue', 'white'. Chỉ hiển thị UI khi chọn neon_border.
+     */
+    place_effect_color?: NeonColorKey;
     /**
      * KIỂU TAY ĐƯA ẢNH VÀO (action='place'):
      * - 'ban_tay_dua_anh_vao' (mặc định — bàn tay lòng bàn tay đưa ảnh vào)
@@ -131,7 +138,7 @@ export type BeatRegion = {
 };
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
-export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen';
+export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen' | 'neon_border';
 
 export const PLACE_EFFECT_OPTIONS: Array<{
     value: PlaceEffectKey;
@@ -163,12 +170,47 @@ export const PLACE_EFFECT_OPTIONS: Array<{
         label: 'Quét sáng tráng gương',
         description: 'Sau khi đặt xong, dải ánh sáng trắng mờ nghiêng 45° quét nhanh từ góc trên-trái xuống dưới-phải ảnh + điểm sáng tròn lóe ở rìa cuối (như kính tráng gương)',
     },
+    {
+        value: 'neon_border',
+        label: 'Đèn neon chạy viền',
+        description: 'Đốm sáng neon lao 3 vòng quanh viền ảnh vừa đặt (Trái → Trên → Phải → Dưới), đuôi sáng tàn dần kiểu đom đóm, vòng phình ra rồi co về, 2 frame cuối toàn viền flash — có âm thanh đèn neon chạy',
+    },
 ];
+
+/** MÀU ĐÈN NEON CHẠY VIỀN (place_effect='neon_border') — đồng bộ preset engine. */
+export const NEON_COLOR_KEYS = ['cyan', 'pink', 'yellow', 'lime', 'orange', 'purple', 'red', 'green', 'blue', 'white'] as const;
+export type NeonColorKey = (typeof NEON_COLOR_KEYS)[number];
+
+export const NEON_COLOR_OPTIONS: Array<{
+    value: NeonColorKey;
+    label: string;
+    swatch: string;
+}> = [
+    { value: 'cyan', label: 'Xanh dương', swatch: '#00ffff' },
+    { value: 'pink', label: 'Hồng', swatch: '#ff2e88' },
+    { value: 'yellow', label: 'Vàng', swatch: '#e9ff3d' },
+    { value: 'lime', label: 'Vàng chanh', swatch: '#39ff14' },
+    { value: 'orange', label: 'Cam', swatch: '#ff7a00' },
+    { value: 'purple', label: 'Tím', swatch: '#b026ff' },
+    { value: 'red', label: 'Đỏ', swatch: '#ff1f3d' },
+    { value: 'green', label: 'Xanh lá', swatch: '#00ff88' },
+    { value: 'blue', label: 'Xanh biển', swatch: '#00a2ff' },
+    { value: 'white', label: 'Trắng', swatch: '#ffffff' },
+];
+
+/** Khôi phục màu neon hợp lệ; giá trị lạ → 'cyan' (mặc định). */
+export function normalizeNeonColor(raw: string | null | undefined): NeonColorKey {
+    const value = String(raw || '').trim().toLowerCase();
+    if ((NEON_COLOR_KEYS as readonly string[]).includes(value)) {
+        return value as NeonColorKey;
+    }
+    return 'cyan';
+}
 
 /** Khôi phục place_effect hợp lệ (dữ liệu cũ có thể còn inertial_rotation/dynamic_shadow → về loang). */
 export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffectKey {
     const value = String(raw || '').trim().toLowerCase();
-    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce' || value === 'mirror_sheen') {
+    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce' || value === 'mirror_sheen' || value === 'neon_border') {
         return value;
     }
     return 'loang';
