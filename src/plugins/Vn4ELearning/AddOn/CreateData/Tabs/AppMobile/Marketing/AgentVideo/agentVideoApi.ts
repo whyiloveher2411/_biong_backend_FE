@@ -116,13 +116,14 @@ export type BeatRegion = {
      * - 'slide_friction' (quán tính trượt — trượt tới rồi nảy lui, mỗi nhịp biên độ giảm 1/2)
      * - 'zoom_out_bounce' (thu nhỏ nảy đàn hồi — từ RẤT TO co dần về khung, quá đà nhồi nhỏ/rộng rồi khít)
      * - 'pop_in_bounce' (phóng to nảy đàn hồi — từ điểm nhỏ phóng vọt lên, quá đà to ra rồi về vừa khung)
+     * - 'mirror_sheen' (quét sáng tráng gương — vệt sáng chéo 45° quét qua ảnh vừa đặt + điểm sáng lóe ở rìa)
      * Hiệu ứng mới THAY THẾ hoàn toàn vệt loang mặc định.
      */
     place_effect?: PlaceEffectKey;
 };
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
-export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce';
+export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen';
 
 export const PLACE_EFFECT_OPTIONS: Array<{
     value: PlaceEffectKey;
@@ -149,12 +150,17 @@ export const PLACE_EFFECT_OPTIONS: Array<{
         label: 'Phóng to - nảy',
         description: 'Ảnh từ điểm nhỏ phóng vọt lên, quá đà to hơn khung rồi co lại vừa khít (như ảnh tự "bung" từ bảng)',
     },
+    {
+        value: 'mirror_sheen',
+        label: 'Quét sáng tráng gương',
+        description: 'Sau khi đặt xong, dải ánh sáng trắng mờ nghiêng 45° quét nhanh từ góc trên-trái xuống dưới-phải ảnh + điểm sáng tròn lóe ở rìa cuối (như kính tráng gương)',
+    },
 ];
 
 /** Khôi phục place_effect hợp lệ (dữ liệu cũ có thể còn inertial_rotation/dynamic_shadow → về loang). */
 export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffectKey {
     const value = String(raw || '').trim().toLowerCase();
-    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce') {
+    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce' || value === 'mirror_sheen') {
         return value;
     }
     return 'loang';
