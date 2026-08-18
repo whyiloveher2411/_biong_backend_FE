@@ -19,6 +19,7 @@ import UndoIcon from '@mui/icons-material/Undo';
 import SaveIcon from '@mui/icons-material/Save';
 import WallpaperIcon from '@mui/icons-material/Wallpaper';
 import CheckIcon from '@mui/icons-material/Check';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
@@ -191,7 +192,9 @@ export default function ShortVideoAgentBeatRegionDrawer({
 
     const [hoveredDraftPoint, setHoveredDraftPoint] = React.useState<number | null>(null);
     // Kiểu tay ĐƯA ẢNH VÀO — danh sách từ whiteboard/keo-anh/meta.json.
-    const [placeHandOptions, setPlaceHandOptions] = React.useState<{ id: string; label: string }[]>([]);
+    const [placeHandOptions, setPlaceHandOptions] = React.useState<
+        { id: string; label: string; thumb_url?: string }[]
+    >([]);
     // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
     const [notice, setNotice] = React.useState<{
         variant: 'success' | 'warning' | 'error' | 'info';
@@ -212,11 +215,20 @@ export default function ShortVideoAgentBeatRegionDrawer({
             method: 'POST',
             data: { category: 'keo-anh' },
             loading: false,
-            success: (res: { success?: boolean; hands?: Array<{ id?: string; label?: string }> }) => {
+            success: (res: {
+                success?: boolean;
+                hands?: Array<{ id?: string; label?: string; thumb_url?: string }>;
+            }) => {
                 if (cancelled || !res?.success) return;
                 setPlaceHandOptions(
                     Array.isArray(res.hands)
-                        ? res.hands.filter((h): h is { id: string; label: string } => Boolean(h?.id))
+                        ? res.hands
+                            .filter((h): h is { id: string; label: string; thumb_url?: string } => Boolean(h?.id))
+                            .map((h) => ({
+                                id: h.id,
+                                label: String(h.label || h.id),
+                                thumb_url: String(h.thumb_url || ''),
+                            }))
                         : [],
                 );
             },
@@ -1640,57 +1652,106 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                 ) : null}
 
                                 {/* 2b. KIỂU TAY ĐƯA ẢNH VÀO (chỉ vùng place có dùng tay —
-                                zoom_out_bounce/pop_in_bounce ảnh tự nảy, không cần tay). */}
+                                zoom_out_bounce/pop_in_bounce ảnh tự nảy, không cần tay).
+                                Hiển thị dạng card có ảnh xem trước để dễ phân biệt. */}
                                 {region.action === 'place' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
                                     <RegionSection title="Kiểu tay đưa ảnh vào">
-                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                color="primary"
-                                                startIcon={normalizePlaceHand(region.place_hand) === '' ? <CheckIcon /> : null}
-                                                onClick={() => updateRegion(region.id, { place_hand: null })}
-                                                title="Dùng kiểu tay mặc định (bàn tay lòng bàn tay)"
-                                                sx={{
-                                                    textTransform: 'none',
-                                                    flex: '1 1 45%',
-                                                    fontSize: 11,
-                                                    py: 0.25,
-                                                    mt: 0.5,
-                                                    minHeight: 0,
-                                                    ...(normalizePlaceHand(region.place_hand) === ''
-                                                        ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
-                                                        : {}),
-                                                }}
-                                            >
-                                                Mặc định
-                                            </Button>
-                                            {placeHandOptions.map((opt) => {
-                                                const active = normalizePlaceHand(region.place_hand) === opt.id;
-                                                return (
-                                                    <Button
-                                                        key={opt.id}
-                                                        size="small"
-                                                        variant="outlined"
-                                                        color={active ? 'secondary' : 'inherit'}
-                                                        startIcon={active ? <CheckIcon /> : null}
-                                                        onClick={() => updateRegion(region.id, { place_hand: opt.id })}
-                                                        sx={{
-                                                            textTransform: 'none',
-                                                            flex: '1 1 45%',
-                                                            fontSize: 11,
-                                                            py: 0.25,
-                                                            mt: 0.5,
-                                                            minHeight: 0,
-                                                            ...(active
-                                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
-                                                                : {}),
-                                                        }}
-                                                    >
-                                                        {opt.label}
-                                                    </Button>
-                                                );
-                                            })}
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                                            {(() => {
+                                                const cards: Array<{
+                                                    id: string;
+                                                    label: string;
+                                                    thumbUrl?: string;
+                                                    isDefault?: boolean;
+                                                }> = [
+                                                    { id: '', label: 'Mặc định', isDefault: true },
+                                                    ...placeHandOptions.map((opt) => ({
+                                                        id: opt.id,
+                                                        label: opt.label,
+                                                        thumbUrl: opt.thumb_url,
+                                                    })),
+                                                ];
+                                                return cards.map((card) => {
+                                                    const active = normalizePlaceHand(region.place_hand) === card.id;
+                                                    return (
+                                                        <Box
+                                                            key={card.id === '' ? '__default__' : card.id}
+                                                            onClick={() =>
+                                                                updateRegion(region.id, { place_hand: card.id === '' ? null : card.id })
+                                                            }
+                                                            title={card.isDefault ? 'Dùng kiểu tay mặc định (bàn tay lòng bàn tay)' : card.label}
+                                                            sx={{
+                                                                width: 96,
+                                                                border: '1px solid',
+                                                                borderColor: active ? 'secondary.main' : 'divider',
+                                                                borderRadius: 1.5,
+                                                                overflow: 'hidden',
+                                                                cursor: 'pointer',
+                                                                bgcolor: active ? 'action.selected' : 'transparent',
+                                                                '&:hover': { borderColor: 'secondary.light' },
+                                                            }}
+                                                        >
+                                                            <Box
+                                                                sx={{
+                                                                    height: 64,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    bgcolor: 'rgba(0,0,0,0.05)',
+                                                                    position: 'relative',
+                                                                }}
+                                                            >
+                                                                {card.isDefault || !card.thumbUrl ? (
+                                                                    <AutoAwesomeIcon
+                                                                        sx={{ fontSize: 30, color: active ? 'secondary.main' : 'text.disabled' }}
+                                                                    />
+                                                                ) : (
+                                                                    <Box
+                                                                        component="img"
+                                                                        src={card.thumbUrl}
+                                                                        alt={card.label}
+                                                                        draggable={false}
+                                                                        sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+                                                                    />
+                                                                )}
+                                                                {active ? (
+                                                                    <Box
+                                                                        sx={{
+                                                                            position: 'absolute',
+                                                                            top: 3,
+                                                                            right: 3,
+                                                                            width: 16,
+                                                                            height: 16,
+                                                                            borderRadius: '50%',
+                                                                            bgcolor: 'secondary.main',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                        }}
+                                                                    >
+                                                                        <CheckIcon sx={{ fontSize: 11, color: '#fff' }} />
+                                                                    </Box>
+                                                                ) : null}
+                                                            </Box>
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{
+                                                                    display: 'block',
+                                                                    textAlign: 'center',
+                                                                    px: 0.5,
+                                                                    py: 0.4,
+                                                                    fontSize: 10,
+                                                                    lineHeight: 1.25,
+                                                                    color: active ? 'secondary.main' : 'text.secondary',
+                                                                    fontWeight: active ? 700 : 400,
+                                                                }}
+                                                            >
+                                                                {card.label}
+                                                            </Typography>
+                                                        </Box>
+                                                    );
+                                                });
+                                            })()}
                                         </Stack>
                                     </RegionSection>
                                 ) : null}
