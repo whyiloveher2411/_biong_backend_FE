@@ -175,7 +175,7 @@ export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffec
 }
 
 /** KIỂU TAY ĐƯA ẢNH VÀO vùng (action='place') — đồng bộ whiteboard/keo-anh/meta.json. */
-export const PLACE_HAND_KEYS = ['ban_tay_dua_anh_vao', 'hand_move'] as const;
+export const PLACE_HAND_KEYS = ['ban_tay_dua_anh_vao', 'hand_move', 'nam_cham'] as const;
 export type PlaceHandKey = (typeof PLACE_HAND_KEYS)[number];
 
 /** Khôi phục place_hand hợp lệ; '' = dùng kiểu mặc định của engine. */
