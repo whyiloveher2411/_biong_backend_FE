@@ -120,6 +120,14 @@ export type BeatRegion = {
      * Hiệu ứng mới THAY THẾ hoàn toàn vệt loang mặc định.
      */
     place_effect?: PlaceEffectKey;
+    /**
+     * KIỂU TAY ĐƯA ẢNH VÀO (action='place'):
+     * - 'ban_tay_dua_anh_vao' (mặc định — bàn tay lòng bàn tay đưa ảnh vào)
+     * - 'hand_move' (tay kéo ảnh cũ)
+     * Bỏ trống → dùng kiểu mặc định. Hiệu ứng zoom_out_bounce/pop_in_bounce
+     * không dùng tay (không hiển thị selector).
+     */
+    place_hand?: string | null;
 };
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
@@ -164,6 +172,24 @@ export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffec
         return value;
     }
     return 'loang';
+}
+
+/** KIỂU TAY ĐƯA ẢNH VÀO vùng (action='place') — đồng bộ whiteboard/keo-anh/meta.json. */
+export const PLACE_HAND_KEYS = ['ban_tay_dua_anh_vao', 'hand_move'] as const;
+export type PlaceHandKey = (typeof PLACE_HAND_KEYS)[number];
+
+/** Khôi phục place_hand hợp lệ; '' = dùng kiểu mặc định của engine. */
+export function normalizePlaceHand(raw: string | null | undefined): PlaceHandKey | '' {
+    const value = String(raw || '').trim().toLowerCase();
+    if ((PLACE_HAND_KEYS as readonly string[]).includes(value)) {
+        return value as PlaceHandKey;
+    }
+    return '';
+}
+
+/** Hiệu ứng ĐƯA VÀO không dùng tay (ảnh tự nảy vào khung) → ẩn selector kiểu tay. */
+export function isPlaceHandlessEffect(effect: PlaceEffectKey): boolean {
+    return effect === 'zoom_out_bounce' || effect === 'pop_in_bounce';
 }
 
 export type AgentWhiteboardBeatOverride = {

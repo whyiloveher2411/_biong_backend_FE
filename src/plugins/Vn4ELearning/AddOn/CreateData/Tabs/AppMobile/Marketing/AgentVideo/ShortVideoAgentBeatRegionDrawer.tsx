@@ -21,8 +21,17 @@ import WallpaperIcon from '@mui/icons-material/Wallpaper';
 import CheckIcon from '@mui/icons-material/Check';
 import { LoadingButton } from '@mui/lab';
 import DrawerCustom from 'components/molecules/DrawerCustom';
+import useAjax from 'hook/useApi';
 import type { useAgentVideoContent } from './useAgentVideoContent';
-import { autoSelectAgentWhiteboardRegion, normalizePlaceEffect, PLACE_EFFECT_OPTIONS, type BeatRegion, type BeatRegionPoint } from './agentVideoApi';
+import {
+    autoSelectAgentWhiteboardRegion,
+    isPlaceHandlessEffect,
+    normalizePlaceEffect,
+    normalizePlaceHand,
+    PLACE_EFFECT_OPTIONS,
+    type BeatRegion,
+    type BeatRegionPoint,
+} from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -181,6 +190,8 @@ export default function ShortVideoAgentBeatRegionDrawer({
     >({});
 
     const [hoveredDraftPoint, setHoveredDraftPoint] = React.useState<number | null>(null);
+    // Kiểu tay ĐƯA ẢNH VÀO — danh sách từ whiteboard/keo-anh/meta.json.
+    const [placeHandOptions, setPlaceHandOptions] = React.useState<{ id: string; label: string }[]>([]);
     // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
     const [notice, setNotice] = React.useState<{
         variant: 'success' | 'warning' | 'error' | 'info';
@@ -188,6 +199,31 @@ export default function ShortVideoAgentBeatRegionDrawer({
     } | null>(null);
     const notify = React.useCallback((text: string, variant: 'success' | 'warning' | 'error' | 'info' = 'info') => {
         setNotice({ variant, text });
+    }, []);
+
+    // Danh sách kiểu tay ĐƯA ẢNH VÀO (whiteboard/keo-anh/meta.json).
+    const api = useAjax();
+    const apiAjaxRef = React.useRef(api.ajax);
+    apiAjaxRef.current = api.ajax;
+    React.useEffect(() => {
+        let cancelled = false;
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/whiteboard/hands',
+            method: 'POST',
+            data: { category: 'keo-anh' },
+            loading: false,
+            success: (res: { success?: boolean; hands?: Array<{ id?: string; label?: string }> }) => {
+                if (cancelled || !res?.success) return;
+                setPlaceHandOptions(
+                    Array.isArray(res.hands)
+                        ? res.hands.filter((h): h is { id: string; label: string } => Boolean(h?.id))
+                        : [],
+                );
+            },
+        });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // apiMessage trả {content, options} — lấy text để hiển thị (không "[object Object]").
@@ -1592,6 +1628,62 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                                             minHeight: 0,
                                                             ...(active
                                                                 ? { borderColor: 'warning.main', bgcolor: 'action.selected' }
+                                                                : {}),
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </Button>
+                                                );
+                                            })}
+                                        </Stack>
+                                    </RegionSection>
+                                ) : null}
+
+                                {/* 2b. KIỂU TAY ĐƯA ẢNH VÀO (chỉ vùng place có dùng tay —
+                                zoom_out_bounce/pop_in_bounce ảnh tự nảy, không cần tay). */}
+                                {region.action === 'place' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
+                                    <RegionSection title="Kiểu tay đưa ảnh vào">
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="primary"
+                                                startIcon={normalizePlaceHand(region.place_hand) === '' ? <CheckIcon /> : null}
+                                                onClick={() => updateRegion(region.id, { place_hand: null })}
+                                                title="Dùng kiểu tay mặc định (bàn tay lòng bàn tay)"
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    flex: '1 1 45%',
+                                                    fontSize: 11,
+                                                    py: 0.25,
+                                                    mt: 0.5,
+                                                    minHeight: 0,
+                                                    ...(normalizePlaceHand(region.place_hand) === ''
+                                                        ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
+                                                        : {}),
+                                                }}
+                                            >
+                                                Mặc định
+                                            </Button>
+                                            {placeHandOptions.map((opt) => {
+                                                const active = normalizePlaceHand(region.place_hand) === opt.id;
+                                                return (
+                                                    <Button
+                                                        key={opt.id}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={active ? 'secondary' : 'inherit'}
+                                                        startIcon={active ? <CheckIcon /> : null}
+                                                        onClick={() => updateRegion(region.id, { place_hand: opt.id })}
+                                                        sx={{
+                                                            textTransform: 'none',
+                                                            flex: '1 1 45%',
+                                                            fontSize: 11,
+                                                            py: 0.25,
+                                                            mt: 0.5,
+                                                            minHeight: 0,
+                                                            ...(active
+                                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
                                                                 : {}),
                                                         }}
                                                     >
