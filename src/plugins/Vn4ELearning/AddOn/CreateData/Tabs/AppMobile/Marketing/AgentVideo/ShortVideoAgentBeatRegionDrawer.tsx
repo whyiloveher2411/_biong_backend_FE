@@ -195,6 +195,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
     const [placeHandOptions, setPlaceHandOptions] = React.useState<
         { id: string; label: string; thumb_url?: string }[]
     >([]);
+    const [placeHandDefaultId, setPlaceHandDefaultId] = React.useState('');
     // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
     const [notice, setNotice] = React.useState<{
         variant: 'success' | 'warning' | 'error' | 'info';
@@ -217,9 +218,11 @@ export default function ShortVideoAgentBeatRegionDrawer({
             loading: false,
             success: (res: {
                 success?: boolean;
+                default_hand?: string;
                 hands?: Array<{ id?: string; label?: string; thumb_url?: string }>;
             }) => {
                 if (cancelled || !res?.success) return;
+                setPlaceHandDefaultId(String(res.default_hand || '').trim());
                 setPlaceHandOptions(
                     Array.isArray(res.hands)
                         ? res.hands
@@ -1653,105 +1656,120 @@ export default function ShortVideoAgentBeatRegionDrawer({
 
                                 {/* 2b. KIỂU TAY ĐƯA ẢNH VÀO (chỉ vùng place có dùng tay —
                                 zoom_out_bounce/pop_in_bounce ảnh tự nảy, không cần tay).
-                                Hiển thị dạng card có ảnh xem trước để dễ phân biệt. */}
+                                Có bao nhiêu ảnh bàn tay thì có bấy nhiêu kiểu; kiểu mặc
+                                định (meta.json 'default') có nhãn "Mặc định" và được chọn
+                                sẵn khi vùng chưa đặt kiểu. */}
                                 {region.action === 'place' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
                                     <RegionSection title="Kiểu tay đưa ảnh vào">
                                         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-                                            {(() => {
-                                                const cards: Array<{
-                                                    id: string;
-                                                    label: string;
-                                                    thumbUrl?: string;
-                                                    isDefault?: boolean;
-                                                }> = [
-                                                    { id: '', label: 'Mặc định', isDefault: true },
-                                                    ...placeHandOptions.map((opt) => ({
-                                                        id: opt.id,
-                                                        label: opt.label,
-                                                        thumbUrl: opt.thumb_url,
-                                                    })),
-                                                ];
-                                                return cards.map((card) => {
-                                                    const active = normalizePlaceHand(region.place_hand) === card.id;
-                                                    return (
+                                            {placeHandOptions.map((opt) => {
+                                                const isDefault = opt.id === placeHandDefaultId;
+                                                const current = normalizePlaceHand(region.place_hand);
+                                                const active = isDefault ? current === '' : current === opt.id;
+                                                return (
+                                                    <Box
+                                                        key={opt.id}
+                                                        onClick={() =>
+                                                            updateRegion(
+                                                                region.id,
+                                                                isDefault ? { place_hand: null } : { place_hand: opt.id },
+                                                            )
+                                                        }
+                                                        title={
+                                                            isDefault
+                                                                ? `${opt.label} (mặc định)`
+                                                                : opt.label
+                                                        }
+                                                        sx={{
+                                                            width: 96,
+                                                            border: '1px solid',
+                                                            borderColor: active ? 'secondary.main' : 'divider',
+                                                            borderRadius: 1.5,
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer',
+                                                            bgcolor: active ? 'action.selected' : 'transparent',
+                                                            '&:hover': { borderColor: 'secondary.light' },
+                                                        }}
+                                                    >
                                                         <Box
-                                                            key={card.id === '' ? '__default__' : card.id}
-                                                            onClick={() =>
-                                                                updateRegion(region.id, { place_hand: card.id === '' ? null : card.id })
-                                                            }
-                                                            title={card.isDefault ? 'Dùng kiểu tay mặc định (bàn tay lòng bàn tay)' : card.label}
                                                             sx={{
-                                                                width: 96,
-                                                                border: '1px solid',
-                                                                borderColor: active ? 'secondary.main' : 'divider',
-                                                                borderRadius: 1.5,
-                                                                overflow: 'hidden',
-                                                                cursor: 'pointer',
-                                                                bgcolor: active ? 'action.selected' : 'transparent',
-                                                                '&:hover': { borderColor: 'secondary.light' },
+                                                                height: 64,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                bgcolor: 'rgba(0,0,0,0.05)',
+                                                                position: 'relative',
                                                             }}
                                                         >
-                                                            <Box
-                                                                sx={{
-                                                                    height: 64,
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    bgcolor: 'rgba(0,0,0,0.05)',
-                                                                    position: 'relative',
-                                                                }}
-                                                            >
-                                                                {card.isDefault || !card.thumbUrl ? (
-                                                                    <AutoAwesomeIcon
-                                                                        sx={{ fontSize: 30, color: active ? 'secondary.main' : 'text.disabled' }}
-                                                                    />
-                                                                ) : (
-                                                                    <Box
-                                                                        component="img"
-                                                                        src={card.thumbUrl}
-                                                                        alt={card.label}
-                                                                        draggable={false}
-                                                                        sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
-                                                                    />
-                                                                )}
-                                                                {active ? (
-                                                                    <Box
-                                                                        sx={{
-                                                                            position: 'absolute',
-                                                                            top: 3,
-                                                                            right: 3,
-                                                                            width: 16,
-                                                                            height: 16,
-                                                                            borderRadius: '50%',
-                                                                            bgcolor: 'secondary.main',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                        }}
-                                                                    >
-                                                                        <CheckIcon sx={{ fontSize: 11, color: '#fff' }} />
-                                                                    </Box>
-                                                                ) : null}
-                                                            </Box>
-                                                            <Typography
-                                                                variant="caption"
-                                                                sx={{
-                                                                    display: 'block',
-                                                                    textAlign: 'center',
-                                                                    px: 0.5,
-                                                                    py: 0.4,
-                                                                    fontSize: 10,
-                                                                    lineHeight: 1.25,
-                                                                    color: active ? 'secondary.main' : 'text.secondary',
-                                                                    fontWeight: active ? 700 : 400,
-                                                                }}
-                                                            >
-                                                                {card.label}
-                                                            </Typography>
+                                                            {opt.thumb_url ? (
+                                                                <Box
+                                                                    component="img"
+                                                                    src={opt.thumb_url}
+                                                                    alt={opt.label}
+                                                                    draggable={false}
+                                                                    sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+                                                                />
+                                                            ) : (
+                                                                <AutoAwesomeIcon
+                                                                    sx={{ fontSize: 30, color: active ? 'secondary.main' : 'text.disabled' }}
+                                                                />
+                                                            )}
+                                                            {isDefault ? (
+                                                                <Box
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        top: 3,
+                                                                        left: 3,
+                                                                        px: 0.5,
+                                                                        py: 0.15,
+                                                                        borderRadius: 1,
+                                                                        bgcolor: 'primary.main',
+                                                                        color: '#fff',
+                                                                        fontSize: 8,
+                                                                        lineHeight: 1.2,
+                                                                        fontWeight: 700,
+                                                                    }}
+                                                                >
+                                                                    Mặc định
+                                                                </Box>
+                                                            ) : null}
+                                                            {active ? (
+                                                                <Box
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        top: 3,
+                                                                        right: 3,
+                                                                        width: 16,
+                                                                        height: 16,
+                                                                        borderRadius: '50%',
+                                                                        bgcolor: 'secondary.main',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}
+                                                                >
+                                                                    <CheckIcon sx={{ fontSize: 11, color: '#fff' }} />
+                                                                </Box>
+                                                            ) : null}
                                                         </Box>
-                                                    );
-                                                });
-                                            })()}
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                display: 'block',
+                                                                textAlign: 'center',
+                                                                px: 0.5,
+                                                                py: 0.4,
+                                                                fontSize: 10,
+                                                                lineHeight: 1.25,
+                                                                color: active ? 'secondary.main' : 'text.secondary',
+                                                                fontWeight: active ? 700 : 400,
+                                                            }}
+                                                        >
+                                                            {opt.label}
+                                                        </Typography>
+                                                    </Box>
+                                                );
+                                            })}
                                         </Stack>
                                     </RegionSection>
                                 ) : null}
