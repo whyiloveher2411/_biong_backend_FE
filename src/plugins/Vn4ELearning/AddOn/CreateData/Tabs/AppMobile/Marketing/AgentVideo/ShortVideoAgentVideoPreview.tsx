@@ -11,10 +11,8 @@ import {
     Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import CropFreeIcon from '@mui/icons-material/CropFree';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ShortVideoAgentBeatRegionDrawer from './ShortVideoAgentBeatRegionDrawer';
 import { getBeatTimelineSegments } from './agentVideoBeatMap';
 import { resolvePreviewPlaceholder } from './agentVideoUi';
 import {
@@ -345,8 +343,6 @@ export default function ShortVideoAgentVideoPreview({
         return state.handleRestoreBeatVersion(currentBeatId, versionId);
     }, [currentBeatId, state.handleRestoreBeatVersion]);
 
-    const [regionDrawerOpen, setRegionDrawerOpen] = React.useState(false);
-
     return (
         <Box
             sx={{
@@ -587,18 +583,6 @@ export default function ShortVideoAgentVideoPreview({
                             >
                                 Mở ảnh beat
                             </Button>
-                            {isWhiteboardMode && currentBeatId ? (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="secondary"
-                                    startIcon={<CropFreeIcon />}
-                                    onClick={() => setRegionDrawerOpen(true)}
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    Chọn vùng ảnh
-                                </Button>
-                            ) : null}
                         </Box>
                     ) : null}
 
@@ -731,15 +715,6 @@ export default function ShortVideoAgentVideoPreview({
                     </Box>
                 ) : null}
             </Box>
-            {currentBeatId && currentBeatImageUrl ? (
-                <ShortVideoAgentBeatRegionDrawer
-                    open={regionDrawerOpen}
-                    onClose={() => setRegionDrawerOpen(false)}
-                    state={state}
-                    beatId={currentBeatId}
-                    imageUrl={currentBeatImageUrl}
-                />
-            ) : null}
         </Box>
     );
 }

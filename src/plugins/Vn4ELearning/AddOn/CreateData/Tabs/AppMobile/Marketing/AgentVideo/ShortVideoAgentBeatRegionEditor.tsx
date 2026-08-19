@@ -4,26 +4,43 @@ import {
     Alert,
     Box,
     Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Divider,
     IconButton,
     Menu,
     MenuItem,
+    Slider,
     Stack,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import UndoIcon from '@mui/icons-material/Undo';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import SaveIcon from '@mui/icons-material/Save';
 import WallpaperIcon from '@mui/icons-material/Wallpaper';
 import CheckIcon from '@mui/icons-material/Check';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import AddCircleIcon from '@mui/icons-material/AddCircle';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
+import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { LoadingButton } from '@mui/lab';
-import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
+import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
+import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
+import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
+import { getBeatTimelineSegments } from './agentVideoBeatMap';
 import {
     autoSelectAgentWhiteboardRegion,
     isPlaceHandlessEffect,
@@ -32,6 +49,7 @@ import {
     normalizePlaceHand,
     NEON_COLOR_OPTIONS,
     PLACE_EFFECT_OPTIONS,
+    type AgentWhiteboardBeatOverride,
     type BeatRegion,
     type BeatRegionPoint,
 } from './agentVideoApi';
@@ -39,11 +57,10 @@ import {
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
 type Props = {
-    open: boolean;
-    onClose: () => void;
     state: AgentVideoState;
     beatId: string;
     imageUrl: string;
+    onOpenBeatQa?: () => void;
 };
 
 const REGION_COLORS = [
@@ -82,6 +99,11 @@ function polygonArea(points: [number, number][]): number {
         area += points[j][0] * points[i][1] - points[i][0] * points[j][1];
     }
     return Math.abs(area) / 2;
+}
+
+function parseRatio(value: unknown, fallback: number): number {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? Math.max(0, Math.min(1, num)) : fallback;
 }
 
 /** Vùng cha = vùng NHỎ NHẤT chứa centroid của polygon mới (con nằm trong cha). */
@@ -157,12 +179,11 @@ function RegionSection({
     );
 }
 
-export default function ShortVideoAgentBeatRegionDrawer({
-    open,
-    onClose,
+export default function ShortVideoAgentBeatRegionEditor({
     state,
     beatId,
     imageUrl,
+    onOpenBeatQa,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
     const savedRegions = Array.isArray(currentOverride.regions) ? currentOverride.regions : [];
@@ -183,6 +204,42 @@ export default function ShortVideoAgentBeatRegionDrawer({
     // Chế độ Thêm vùng: ngược với Xóa thừa — đang thêm vùng cho vùng A
     // (vẽ vùng nào → tự hợp (union) vào A).
     const [addModeRegionId, setAddModeRegionId] = React.useState<string>('');
+
+    // Chế độ tương tác với canvas ảnh: 'select' (mặc định — click vùng = chọn +
+    // cuộn danh sách, click ngoài vùng = đặt điểm tập trung) / 'add' (click/
+    // kéo = vẽ vùng mới). Các chế độ boolean (thêm/xóa/bg) vẫn ưu tiên hơn.
+    const [regionMode, setRegionMode] = React.useState<'select' | 'add'>('select');
+    const isAddActive = regionMode === 'add'
+        || Boolean(addModeRegionId || eraseModeRegionId || bgSampleMode);
+    const handleToggleRegionMode = React.useCallback(() => {
+        setAddModeRegionId('');
+        setEraseModeRegionId('');
+        setBgSampleMode(false);
+        setBgSampleDraft([]);
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+        setRegionMode((mode) => (mode === 'add' ? 'select' : 'add'));
+    }, []);
+
+    // Shortcut phím E: toggle nhanh Thêm vùng <-> Chọn vùng.
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'e' && event.key !== 'E') {
+                return;
+            }
+            if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            const target = event.target as HTMLElement | null;
+            if (target && isKeyboardEditableTarget(target)) {
+                return;
+            }
+            event.preventDefault();
+            handleToggleRegionMode();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [handleToggleRegionMode]);
 
     // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
     const [refiningRegionId, setRefiningRegionId] = React.useState<string | null>(null);
@@ -267,44 +324,158 @@ export default function ShortVideoAgentBeatRegionDrawer({
     // vì savedRegions là array mới mỗi render (reset draftPoints liên tục).
     const savedRegionsRef = React.useRef(savedRegions);
     savedRegionsRef.current = savedRegions;
-    const prevOpenRef = React.useRef(false);
-    React.useEffect(() => {
-        if (open && !prevOpenRef.current) {
-            const fresh = Array.isArray(savedRegionsRef.current) ? savedRegionsRef.current : [];
-            // Khôi phục trạng thái "chỉ vật trong vùng" từ dữ liệu đã lưu:
-            // object_points = contour vật (dùng làm points hiển thị), full_points
-            // = toàn vùng thủ công (giữ để option đúng + rollback).
-            const restoredOrig: Record<string, BeatRegionPoint[]> = {};
-            setRegions(
-                fresh.map((r) => {
-                    if (Array.isArray(r.object_points) && r.object_points.length >= 3) {
-                        if (Array.isArray(r.full_points) && r.full_points.length >= 3) {
-                            restoredOrig[r.id] = r.full_points;
-                        }
-                        return { ...r, points: r.object_points };
-                    }
-                    return r;
-                }),
-            );
-            setOriginalPointsByRegion(restoredOrig);
-            setDraftPoints([]);
-            setDraftIsDrag(false);
-            setSelectedRegionId('');
-            setImgNatural(null);
-            setImageError(false);
-            setBoxSize(null);
-            setBgSampleMode(false);
-            setBgSampleDraft([]);
-            setDeleteMenuAnchor(null);
-            setDeleteMenuRegionId('');
-            setKeepBgBusy(null);
-            setRefiningRegionId(null);
-            setEraseModeRegionId('');
-            setAddModeRegionId('');
-            setNotice(null);
+
+    // "Chỉ vật trong vùng": gửi kèm full_points (toàn vùng thủ công — FE giữ
+    // trong originalPointsByRegion) + object_points (contour vật) để backend
+    // lưu riêng: UI mở lại hiển thị đúng option, render dùng vật, rollback về
+    // "toàn vùng" bất kỳ lúc nào.
+    const buildRegionsToSave = React.useCallback((): BeatRegion[] => (
+        regions.map((r): BeatRegion => {
+            const original = originalPointsByRegion[r.id];
+            if (!original) {
+                return r;
+            }
+            return {
+                ...r,
+                full_points: original,
+                object_points: r.points,
+                select_mode: 'object' as BeatRegion['select_mode'],
+            };
+        })
+    ), [regions, originalPointsByRegion]);
+
+    // Prev/Next beat ngay trong drawer: seek timeline đến GIỮA beat kế/cũ —
+    // ảnh + vùng mới tự load (giống nút cột giữa của VideoPreview).
+    const beatSegments = React.useMemo(
+        () => getBeatTimelineSegments(state.beatMapReady ? state.beatMap : null),
+        [state.beatMapReady, state.beatMap],
+    );
+    const activeSegmentIndex = React.useMemo(() => {
+        if (!beatId) {
+            return -1;
         }
-        prevOpenRef.current = open;
-    }, [open]);
+        return beatSegments.findIndex((segment) => segment.beatId === beatId);
+    }, [beatId, beatSegments]);
+    const handleSeekAdjacentBeat = React.useCallback((delta: -1 | 1) => {
+        if (activeSegmentIndex < 0) {
+            return;
+        }
+        const target = beatSegments[activeSegmentIndex + delta];
+        if (!target) {
+            return;
+        }
+        const midSec = (target.startSec + target.endSec) / 2;
+        if (typeof state.handleSeekBeatPlayback === 'function') {
+            state.handleSeekBeatPlayback(target.beatId, midSec);
+        }
+    }, [activeSegmentIndex, beatSegments, state.handleSeekBeatPlayback]);
+
+    const resetDrawerState = React.useCallback(() => {
+        const fresh = Array.isArray(savedRegionsRef.current) ? savedRegionsRef.current : [];
+        // Khôi phục trạng thái "chỉ vật trong vùng" từ dữ liệu đã lưu:
+        // object_points = contour vật (dùng làm points hiển thị), full_points
+        // = toàn vùng thủ công (giữ để option đúng + rollback).
+        const restoredOrig: Record<string, BeatRegionPoint[]> = {};
+        const mapped = fresh.map((r) => {
+            if (Array.isArray(r.object_points) && r.object_points.length >= 3) {
+                if (Array.isArray(r.full_points) && r.full_points.length >= 3) {
+                    restoredOrig[r.id] = r.full_points;
+                }
+                return { ...r, points: r.object_points };
+            }
+            return r;
+        });
+        setRegions(mapped);
+        setSavedSnapshot(mapped.map((r) => ({ ...r })));
+        setOriginalPointsByRegion(restoredOrig);
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+        setSelectedRegionId('');
+        setImgNatural(null);
+        setImageError(false);
+        setBoxSize(null);
+        setBgSampleMode(false);
+        setBgSampleDraft([]);
+        setDeleteMenuAnchor(null);
+        setDeleteMenuRegionId('');
+        setKeepBgBusy(null);
+        setRefiningRegionId(null);
+        setEraseModeRegionId('');
+        setAddModeRegionId('');
+        setRegionMode('select');
+        setFocusMode(false);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        setSpaceDown(false);
+        wasBeatRenderingRef.current = false;
+        setNotice(null);
+    }, []);
+    // Editor gắn cố định trên workspace: reset khi ĐỔI BEAT (nút prev/next,
+    // seek timeline, focus beat từ timeline) — nếu không, vùng của beat cũ
+    // vẫn còn hiển thị trên ảnh beat mới. Khi CÓ thay đổi chưa lưu → hiện
+    // dialog xác nhận Lưu / Chuyển không lưu / Ở lại.
+    const prevBeatIdRef = React.useRef(beatId);
+    const [pendingSwitch, setPendingSwitch] = React.useState<{ from: string; to: string } | null>(null);
+    const [switchSaving, setSwitchSaving] = React.useState(false);
+    React.useEffect(() => {
+        if (prevBeatIdRef.current !== beatId) {
+            if (isDirtyRef.current) {
+                setPendingSwitch({ from: prevBeatIdRef.current, to: beatId });
+                return;
+            }
+            resetDrawerState();
+            prevBeatIdRef.current = beatId;
+        }
+    }, [beatId, resetDrawerState]);
+
+    // Vùng chưa lưu: đối chiếu regions hiện tại với snapshot lần lưu/reset gần
+    // nhất (+ draft đang vẽ). Snapshot cập nhật trong resetDrawerState và sau
+    // mỗi lần lưu thành công.
+    const [savedSnapshot, setSavedSnapshot] = React.useState<BeatRegion[]>(savedRegions);
+    const isDirty = React.useMemo(() => (
+        JSON.stringify(regions) !== JSON.stringify(savedSnapshot)
+        || draftPoints.length > 0
+        || bgSampleDraft.length > 0
+    ), [regions, savedSnapshot, draftPoints, bgSampleDraft]);
+    const isDirtyRef = React.useRef(isDirty);
+    isDirtyRef.current = isDirty;
+
+    const handleConfirmSwitch = React.useCallback(async (saveFirst: boolean) => {
+        if (!pendingSwitch) {
+            return;
+        }
+        if (saveFirst) {
+            setSwitchSaving(true);
+            try {
+                const ok = await state.handleSaveWhiteboardBeatOverride(pendingSwitch.from, {
+                    ...(state.agentWhiteboardBeatOverrides?.[pendingSwitch.from] || {}),
+                    regions: buildRegionsToSave(),
+                });
+                if (!ok) {
+                    notify('Lưu thất bại — vẫn đang ở beat cũ', 'error');
+                    return;
+                }
+            } finally {
+                setSwitchSaving(false);
+            }
+        }
+        savedRegionsRef.current = savedRegions;
+        resetDrawerState();
+        prevBeatIdRef.current = pendingSwitch.to;
+        setPendingSwitch(null);
+    }, [pendingSwitch, state, regions, savedRegions, resetDrawerState, buildRegionsToSave]);
+
+    const handleCancelSwitch = React.useCallback(() => {
+        if (!pendingSwitch) {
+            return;
+        }
+        // Seek ngược về beat cũ — beatId prop sẽ quay lại, effect thấy không đổi.
+        const seg = beatSegments.find((segment) => segment.beatId === pendingSwitch.from);
+        if (seg && typeof state.handleSeekBeatPlayback === 'function') {
+            state.handleSeekBeatPlayback(pendingSwitch.from, (seg.startSec + seg.endSec) / 2);
+        }
+        setPendingSwitch(null);
+    }, [pendingSwitch, beatSegments, state]);
 
     // Đo kích thước vùng hiển thị ảnh — callback ref chạy ngay khi node có size
     // (kể cả trước effect), kèm ResizeObserver cho thay đổi sau đó.
@@ -404,15 +575,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
         return all.filter((w) => Number(w.start) >= start - 0.1 && Number(w.end) <= end + 0.1);
     }, [beatId, state.beatMap?.sections, state.whisperWords]);
 
-    // Vùng cha tự nhận biết khi đang vẽ (dựa trên centroid điểm đang vẽ).
-    const draftParentId = React.useMemo(
-        () => (draftPoints.length >= 3 ? resolveParentRegion(draftPoints, regions) : null),
-        [draftPoints, regions],
-    );
-    const draftParent = draftParentId
-        ? regions.find((region) => region.id === draftParentId) || null
-        : null;
-
     const colorFor = (index: number) => REGION_COLORS[index % REGION_COLORS.length];
 
     // Depth (cha→con) + sắp xếp cha trước con để hiển thị cây cha/con.
@@ -479,6 +641,61 @@ export default function ShortVideoAgentBeatRegionDrawer({
 
     const handleSvgMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
         if (event.button !== 0) {
+            return;
+        }
+        // Space + kéo = pan ảnh (mọi chế độ, giống Photoshop).
+        if (spaceDown) {
+            panDragRef.current = {
+                sx: event.clientX,
+                sy: event.clientY,
+                px: pan.x,
+                py: pan.y,
+            };
+            suppressClickRef.current = true;
+            const onWinMove = (e: MouseEvent) => {
+                const d = panDragRef.current;
+                if (!d) {
+                    return;
+                }
+                setPan(clampPan(d.px + (e.clientX - d.sx), d.py + (e.clientY - d.sy), zoom));
+            };
+            const onWinUp = () => {
+                panDragRef.current = null;
+                window.removeEventListener('mousemove', onWinMove);
+                window.removeEventListener('mouseup', onWinUp);
+            };
+            window.addEventListener('mousemove', onWinMove);
+            window.addEventListener('mouseup', onWinUp);
+            return;
+        }
+        // Chế độ CHỌN: click-kéo TRỰC TIẾP di chuyển ảnh (không cần space);
+        // click đơn (không kéo) vẫn chọn vùng / đặt điểm tập trung.
+        if (!isAddActive) {
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const d = { sx: startX, sy: startY, px: pan.x, py: pan.y };
+            panDragRef.current = d;
+            suppressClickRef.current = false;
+            let panned = false;
+            const onWinMove = (e: MouseEvent) => {
+                const dx = e.clientX - d.sx;
+                const dy = e.clientY - d.sy;
+                if (!panned && Math.hypot(dx, dy) < 4) {
+                    return;
+                }
+                panned = true;
+                setPan(clampPan(d.px + dx, d.py + dy, zoom));
+            };
+            const onWinUp = () => {
+                if (panned) {
+                    suppressClickRef.current = true;
+                }
+                panDragRef.current = null;
+                window.removeEventListener('mousemove', onWinMove);
+                window.removeEventListener('mouseup', onWinUp);
+            };
+            window.addEventListener('mousemove', onWinMove);
+            window.addEventListener('mouseup', onWinUp);
             return;
         }
         const pt = svgPointFromEvent(event);
@@ -571,6 +788,20 @@ export default function ShortVideoAgentBeatRegionDrawer({
             return;
         }
         const [x, y] = pt;
+        // Đang bật "đặt điểm tập trung" → click chỗ nào đặt focus chỗ đó (ưu tiên
+        // mọi chế độ); ngược lại chế độ chọn: click vào vùng → chọn + cuộn danh sách.
+        if (focusMode) {
+            handleSetFocus(x, y);
+            return;
+        }
+        if (!isAddActive) {
+            const hit = [...sortedRegions].reverse().find((r) => pointInPolygon(x, y, r.points));
+            if (hit) {
+                setSelectedRegionId(hit.id);
+                scrollRegionIntoView(hit.id);
+            }
+            return;
+        }
         if (bgSampleMode && bgSampleDraft.length === 0) {
             // UX đơn giản: click 1 phát → tự tạo ô vuông mẫu (0.03) quanh điểm
             // làm bg_sample — không cần vẽ nhiều điểm.
@@ -722,15 +953,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
         setSelectedRegionId(region.id);
         setDraftPoints([]);
         setDraftIsDrag(false);
-    };
-
-    const handleUndoPoint = () => {
-        if (bgSampleMode) {
-            setBgSampleDraft((prev) => prev.slice(0, -1));
-        } else {
-            setDraftPoints((prev) => prev.slice(0, -1));
-            setDraftIsDrag(false);
-        }
     };
 
     const handleCancelDraft = () => {
@@ -952,34 +1174,202 @@ export default function ShortVideoAgentBeatRegionDrawer({
 
         setSaving(true);
         try {
-            // "Chỉ vật trong vùng": gửi kèm full_points (toàn vùng thủ công —
-            // FE giữ trong originalPointsByRegion) + object_points (contour vật)
-            // để backend lưu riêng: UI mở lại hiển thị đúng option, render dùng
-            // vật, rollback về "toàn vùng" bất kỳ lúc nào.
-            const regionsToSave: BeatRegion[] = regions.map((r): BeatRegion => {
-                const original = originalPointsByRegion[r.id];
-                if (!original) {
-                    return r;
-                }
-                return {
-                    ...r,
-                    full_points: original,
-                    object_points: r.points,
-                    select_mode: 'object' as BeatRegion['select_mode'],
-                };
-            });
             const saved = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...currentOverride,
-                regions: regionsToSave,
+                regions: buildRegionsToSave(),
             });
             if (saved) {
+                setSavedSnapshot(regions.map((r) => ({ ...r })));
                 notify(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
-                onClose();
             }
         } finally {
             setSaving(false);
         }
     };
+
+    // Lưu override KHÔNG làm mất vùng đang edit: luôn gửi kèm regions hiện tại.
+    const persistOverride = React.useCallback(async (patch: Partial<AgentWhiteboardBeatOverride>) => {
+        const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
+            ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
+            ...patch,
+            regions: buildRegionsToSave(),
+        });
+        if (ok) {
+            setSavedSnapshot(regions.map((r) => ({ ...r })));
+            return true;
+        }
+        return false;
+    }, [beatId, state, buildRegionsToSave, regions]);
+
+    const handleSetFocus = (x: number, y: number) => {
+        void persistOverride({ focus_x: x, focus_y: y });
+    };
+    const handleResetFocus = () => {
+        void persistOverride({ focus_x: 0.5, focus_y: 0.5 });
+    };
+
+    // Điểm tập trung hiện tại (0-1, ratio ảnh gốc) — hiển thị trên canvas.
+    const focusX = parseRatio(currentOverride.focus_x, 0.5);
+    const focusY = parseRatio(currentOverride.focus_y, 0.5);
+
+    // Zoom / pan ảnh (Photoshop-like): transform cùng layer chứa ảnh + SVG → vùng
+    // luôn bám đúng. Ctrl+scroll = zoom theo chuột; Space+click-drag = pan.
+    const [zoom, setZoom] = React.useState(1);
+    const [pan, setPan] = React.useState({ x: 0, y: 0 });
+    const [spaceDown, setSpaceDown] = React.useState(false);
+    // Chế độ ĐẶT ĐIỂM TẬP TRUNG: bật → click chỗ nào đặt focus chỗ đó (+ hiện
+    // nút đặt lại giữa); tắt → click không đặt focus.
+    const [focusMode, setFocusMode] = React.useState(false);
+    const panDragRef = React.useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+
+    const clampPan = React.useCallback((x: number, y: number, z: number) => {
+        const vw = boxSize?.w ?? 0;
+        const vh = boxSize?.h ?? 0;
+        if (!containRect || vw <= 0 || vh <= 0) {
+            return { x, y };
+        }
+        const cw = containRect.w * z;
+        const ch = containRect.h * z;
+        const minX = -(containRect.x + cw);
+        const maxX = vw - containRect.x;
+        const minY = -(containRect.y + ch);
+        const maxY = vh - containRect.y;
+        if (minX > maxX || minY > maxY) {
+            return { x: 0, y: 0 };
+        }
+        return {
+            x: Math.max(minX, Math.min(maxX, x)),
+            y: Math.max(minY, Math.min(maxY, y)),
+        };
+    }, [boxSize, containRect]);
+
+    const handleZoomAt = React.useCallback((nextZoom: number, cx: number, cy: number) => {
+        if (!containRect || boxSize?.w == null) {
+            return;
+        }
+        const z = Math.max(1, Math.min(8, nextZoom));
+        if (Math.abs(z - zoom) < 0.001) {
+            return;
+        }
+        const c = {
+            x: (cx - (containRect.x + pan.x)) / zoom,
+            y: (cy - (containRect.y + pan.y)) / zoom,
+        };
+        setZoom(z);
+        setPan(clampPan(cx - containRect.x - c.x * z, cy - containRect.y - c.y * z, z));
+    }, [containRect, boxSize, zoom, pan, clampPan]);
+
+    const handleResetZoom = React.useCallback(() => {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+    }, []);
+
+    // Kéo slider zoom: giữ pan hiện tại, chỉ clamp theo zoom mới.
+    const handleZoomSlider = React.useCallback((_event: Event, value: number | number[]) => {
+        const z = Array.isArray(value) ? value[0] : value;
+        setZoom(z);
+        setPan((p) => clampPan(p.x, p.y, z));
+    }, [clampPan]);
+
+    // Ctrl/Cmd + scroll = zoom theo vị trí chuột (chặn browser zoom trang).
+    React.useEffect(() => {
+        const el = containerRef.current;
+        if (!el) {
+            return undefined;
+        }
+        const onWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey && !event.metaKey) {
+                return;
+            }
+            event.preventDefault();
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) {
+                return;
+            }
+            const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+            handleZoomAt(zoom * factor, event.clientX - rect.left, event.clientY - rect.top);
+        };
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [zoom, handleZoomAt]);
+
+    // Space giữ = chế độ pan tay (giống Photoshop).
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space') {
+                return;
+            }
+            if (isKeyboardEditableTarget(event.target)) {
+                return;
+            }
+            if (event.repeat) {
+                return;
+            }
+            event.preventDefault();
+            setSpaceDown(true);
+        };
+        const onKeyUp = (event: KeyboardEvent) => {
+            if (event.code !== 'Space') {
+                return;
+            }
+            setSpaceDown(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, []);
+
+    // Cuộn danh sách vùng đến vùng được chọn trên canvas.
+    const regionItemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+    const scrollRegionIntoView = React.useCallback((id: string) => {
+        regionItemRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, []);
+
+    // Render video beat: trạng thái + báo khi xong.
+    const beatRender = state.whiteboardBeatRenders?.[beatId] || null;
+    const beatRenderStatus = String(beatRender?.status || '').trim();
+    const isBeatRendering = (state.renderingWhiteboardBeatIds || []).includes(beatId)
+        || beatRenderStatus === 'queued'
+        || beatRenderStatus === 'processing';
+    const beatVideoUrl = String(beatRender?.video_url || '').trim();
+    const [beatVideoPreviewOpen, setBeatVideoPreviewOpen] = React.useState(false);
+    // URL phát được: endpoint stream yêu cầu access_token — resolve như BeatQaPanel.
+    const beatVideoPlayUrl = React.useMemo(() => {
+        if (!beatVideoUrl) {
+            return '';
+        }
+        const resolved = resolveAgentLocalVideoOpenUrl(beatVideoUrl);
+        if (!resolved) {
+            return '';
+        }
+        const stamp = String(beatRender?.updated_at || '').trim();
+        if (!stamp) {
+            return resolved;
+        }
+        const sep = resolved.includes('?') ? '&' : '?';
+        return `${resolved}${sep}v=${encodeURIComponent(stamp)}`;
+    }, [beatVideoUrl, beatRender?.updated_at]);
+    const wasBeatRenderingRef = React.useRef(false);
+    React.useEffect(() => {
+        if (isBeatRendering) {
+            wasBeatRenderingRef.current = true;
+            return;
+        }
+        if (wasBeatRenderingRef.current) {
+            wasBeatRenderingRef.current = false;
+            if (beatRenderStatus === 'failed') {
+                notify(
+                    `Render video beat thất bại: ${String(beatRender?.error || 'thử lại').trim()}`,
+                    'error',
+                );
+            } else if (beatVideoUrl) {
+                notify('Đã render xong video beat — bấm "Mở video beat" để xem', 'success');
+            }
+        }
+    }, [isBeatRendering, beatRenderStatus, beatVideoUrl, beatRender?.error]);
 
     const svgPointsFor = (points: [number, number][]) => (
         points.map((p) => `${(p[0] * 1000).toFixed(2)},${(p[1] * 1000).toFixed(2)}`).join(' ')
@@ -990,49 +1380,85 @@ export default function ShortVideoAgentBeatRegionDrawer({
     const liveDraft = bgSampleMode ? bgSampleDraft : draftPoints;
 
     return (
-        <DrawerCustom
-            open={open}
-            onClose={onClose}
-            title={`Chọn vùng ảnh beat — ${beatId}`}
-            width={1400}
-            PaperProps={{
-                sx: { width: '94vw', maxWidth: 1400 },
-            }}
-            ModalProps={{
-                sx: { zIndex: 1400 },
-            }}
-            restDialogContent={{
-                sx: {
-                    height: 'calc(100vh - 64px)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    pt: 2,
-                    px: 2,
-                    pb: 2,
-                    gap: 2,
-                    overflow: 'hidden',
-                },
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                minHeight: 0,
+                position: 'relative',
+                overflow: 'hidden',
+                gap: 1.5,
+                px: 2,
+                pt: 2,
+                pb: 2,
             }}
         >
+            {/* Header: tên beat + mở ảnh + nút QA/Version/Video beat */}
             <Box
                 sx={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    height: '100%',
-                    minHeight: 0,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    gap: 1.5,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    flexShrink: 0,
                 }}
             >
-            <Alert severity="info" sx={{ flexShrink: 0 }}>
-                <strong>Vẽ nhanh:</strong> click giữ chuột tại điểm đầu rồi kéo — vùng hình thành từ điểm đầu nối
-                với điểm chuột hiện tại, thả chuột = xong. <strong>Vẽ chính xác:</strong> click từng điểm (mỗi điểm
-                mới nối vào điểm trước và điểm đầu, tô màu trong suốt), click lại điểm 1 hoặc bấm{' '}
-                <strong>Hoàn tất vùng</strong> để kết thúc. Mỗi vùng chọn hành động <strong>Vẽ tay</strong> hoặc{' '}
-                <strong>Đưa vào</strong> + chọn 1 từ trong audio script (vùng render hoàn chỉnh khi đọc đến từ đó).
-                Vẽ trong vùng nào → vùng đó tự thành vùng cha; hành động vùng con thắng vùng cha.
-            </Alert>
+                <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                    Chọn vùng ảnh beat — {beatId}
+                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    {imageUrl ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<OpenInNewIcon />}
+                            component="a"
+                            href={imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Mở ảnh beat
+                        </Button>
+                    ) : null}
+                    <LoadingButton
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        startIcon={<VideocamIcon />}
+                        loading={isBeatRendering}
+                        disabled={isBeatRendering || !imageUrl || Boolean(state.agentWhiteboardConfig?.assets_mode)}
+                        onClick={() => { void state.handleRenderWhiteboardBeat(beatId); }}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Render video beat
+                    </LoadingButton>
+                    <LoadingButton
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={<OpenInNewIcon />}
+                        loading={isBeatRendering}
+                        disabled={isBeatRendering || !beatVideoPlayUrl}
+                        onClick={() => setBeatVideoPreviewOpen(true)}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Mở video beat
+                    </LoadingButton>
+                    <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        startIcon={<FactCheckIcon />}
+                        onClick={() => onOpenBeatQa?.()}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        QA · Version · Video beat
+                    </Button>
+                </Stack>
+            </Box>
 
             {notice ? (
                 <Alert
@@ -1076,9 +1502,8 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     <Box
                         ref={measureBoxRef}
                         sx={{
-                            flexShrink: 0,
-                            height: 'calc(100vh - 340px)',
-                            minHeight: 340,
+                            flex: '1 1 auto',
+                            minHeight: 320,
                             width: '100%',
                             position: 'relative',
                             borderRadius: 2,
@@ -1091,65 +1516,171 @@ export default function ShortVideoAgentBeatRegionDrawer({
                         }}
                     >
                         {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
-                        <Box
-                            component="img"
-                            ref={imgRef}
-                            src={imageUrl}
-                            alt={`Beat ${beatId}`}
-                            onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                                const img = e.currentTarget;
-                                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                                    setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
-                                    setImageError(false);
-                                }
-                            }}
-                            onError={() => setImageError(true)}
-                            sx={{
-                                position: 'absolute',
-                                inset: 0,
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'contain',
-                                display: 'block',
-                                bgcolor: 'common.black',
-                            }}
-                        />
-                        {containRect && !imageError ? (
-                            <Box
+                        <Tooltip title={isAddActive
+                            ? 'Đang THÊM VÙNG — click/kéo để vẽ vùng mới (phím E để chuyển sang chọn vùng).'
+                            : 'Đang CHỌN VÙNG — click vào vùng để chọn, click ngoài vùng để đặt điểm tập trung (phím E để chuyển sang thêm vùng).'}
+                        >
+                            <IconButton
+                                size="small"
+                                onClick={handleToggleRegionMode}
                                 sx={{
                                     position: 'absolute',
-                                    left: containRect.x,
-                                    top: containRect.y,
-                                    width: containRect.w,
-                                    height: containRect.h,
+                                    top: 8,
+                                    left: 8,
+                                    zIndex: 5,
+                                    bgcolor: isAddActive ? 'primary.main' : 'rgba(0,0,0,0.55)',
+                                    color: 'common.white',
+                                    '&:hover': {
+                                        bgcolor: isAddActive ? 'primary.dark' : 'rgba(0,0,0,0.75)',
+                                    },
                                 }}
                             >
-                                <svg
-                                    ref={svgRef}
-                                    viewBox="0 0 1000 1000"
-                                    preserveAspectRatio="none"
-                                    onClick={handleSvgClick}
-                                    onMouseDown={handleSvgMouseDown}
-                                    onMouseMove={handleSvgMouseMove}
-                                    onMouseUp={handleSvgMouseUp}
-                                    onMouseLeave={() => {
-                                        setCursorPos(null);
-                                        // Không kết thúc vùng khi kéo ra ngoài ảnh —
-                                        // window mousemove tiếp tục vẽ, điểm clamp vào biên.
-                                    }}
-                                    style={{
+                                {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                        {/* Thanh zoom (slider) — góc trên PHẢI box ảnh; Ctrl+scroll / Space+kéo để pan */}
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                zIndex: 5,
+                                bgcolor: 'rgba(0,0,0,0.6)',
+                                borderRadius: 2,
+                                px: 1.25,
+                                py: 0.5,
+                                width: 220,
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'common.white',
+                                    minWidth: 40,
+                                    textAlign: 'right',
+                                    fontVariantNumeric: 'tabular-nums',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {Math.round(zoom * 100)}%
+                            </Typography>
+                            <Slider
+                                size="small"
+                                min={1}
+                                max={8}
+                                step={0.05}
+                                value={zoom}
+                                onChange={handleZoomSlider}
+                                sx={{
+                                    flex: 1,
+                                    color: 'primary.light',
+                                    '& .MuiSlider-thumb': { width: 14, height: 14 },
+                                }}
+                            />
+                            <Tooltip title="Đặt lại zoom 100%">
+                                <IconButton
+                                    size="small"
+                                    onClick={handleResetZoom}
+                                    sx={{ color: 'common.white', flexShrink: 0 }}
+                                >
+                                    <RestartAltIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+
+                        {/* Layer nội dung: ảnh + SVG cùng transform (zoom/pan) → vùng không lệch */}
+                        {imageUrl && !imageError ? (
+                            <>
+                                <Box
+                                    sx={{
                                         position: 'absolute',
-                                        inset: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        cursor: 'crosshair',
+                                        left: containRect ? containRect.x + pan.x : 0,
+                                        top: containRect ? containRect.y + pan.y : 0,
+                                        width: containRect ? containRect.w : 0,
+                                        height: containRect ? containRect.h : 0,
+                                        transform: `scale(${zoom})`,
+                                        transformOrigin: '0 0',
                                     }}
                                 >
+                                    <Box
+                                        component="img"
+                                        ref={imgRef}
+                                        src={imageUrl}
+                                        alt={`Beat ${beatId}`}
+                                        draggable={false}
+                                        onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                            const img = e.currentTarget;
+                                            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                                                setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+                                                setImageError(false);
+                                            }
+                                        }}
+                                        onError={() => setImageError(true)}
+                                        sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'fill',
+                                            display: 'block',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                            WebkitUserSelect: 'none',
+                                        }}
+                                    />
+                                    {containRect ? (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                            }}
+                                        >
+                                            <svg
+                                                ref={svgRef}
+                                                viewBox="0 0 1000 1000"
+                                                preserveAspectRatio="none"
+                                                onClick={handleSvgClick}
+                                                onMouseDown={handleSvgMouseDown}
+                                                onMouseMove={handleSvgMouseMove}
+                                                onMouseUp={handleSvgMouseUp}
+                                                onMouseLeave={() => {
+                                                    setCursorPos(null);
+                                                    // Không kết thúc vùng khi kéo ra ngoài ảnh —
+                                                    // window mousemove tiếp tục vẽ, điểm clamp vào biên.
+                                                }}
+                                                style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    cursor: spaceDown ? 'grabbing' : isAddActive ? 'crosshair' : 'grab',
+                                                }}
+                                            >
+                            {/* Điểm tập trung — click ngoài vùng (chế độ chọn) để đặt lại */}
+                            <g style={{ pointerEvents: 'none' }}>
+                                <circle
+                                    cx={focusX * 1000}
+                                    cy={focusY * 1000}
+                                    r={16}
+                                    fill="none"
+                                    stroke="#ff9800"
+                                    strokeWidth={2.5}
+                                    strokeDasharray="5 3"
+                                />
+                                <circle
+                                    cx={focusX * 1000}
+                                    cy={focusY * 1000}
+                                    r={4}
+                                    fill="#ff9800"
+                                    stroke="#ffffff"
+                                    strokeWidth={1.5}
+                                />
+                            </g>
                             {regions.map((region, index) => {
                                 const color = region.action === 'erase' ? '#f44336' : colorFor(index);
                                 const isSelected = selectedRegionId === region.id;
                                 const isChild = Boolean(region.parent_id);
-                                const first = region.points[0];
                                 return (
                                     <g key={region.id}>
                                         <polygon
@@ -1162,35 +1693,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                             strokeLinejoin="round"
                                             style={{ pointerEvents: 'none' }}
                                         />
-                                        {/* Label tên vùng ngay tại điểm đầu tiên — click label để chọn vùng */}
-                                        {first ? (
-                                            <g
-                                                transform={svgScaleTpl(first[0], first[1])}
-                                                style={{ cursor: 'pointer' }}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    setSelectedRegionId(region.id);
-                                                }}
-                                            >
-                                                <text
-                                                    y={-12}
-                                                    textAnchor="middle"
-                                                    dominantBaseline="bottom"
-                                                    fontSize={isSelected ? 13 : 11.5}
-                                                    fontWeight={800}
-                                                    fill={color}
-                                                    stroke="#ffffff"
-                                                    strokeWidth={3.5}
-                                                    paintOrder="stroke"
-                                                    style={{
-                                                        userSelect: 'none',
-                                                        pointerEvents: 'visiblePainted',
-                                                    }}
-                                                >
-                                                    {region.name || `Vùng ${index + 1}`}
-                                                </text>
-                                            </g>
-                                        ) : null}
                                         {/* Điểm đã đánh dấu (đỉnh vùng đã lưu) — dot tròn nhỏ, border mảnh.
                                             Vùng vẽ bằng kéo (nhiều điểm trail) → bỏ dot, chỉ giữ border. */}
                                         {region.points.length <= 12 ? region.points.map((point, pi) => (
@@ -1336,7 +1838,26 @@ export default function ShortVideoAgentBeatRegionDrawer({
                             ) : null}
                                 </svg>
                             </Box>
-                        ) : imageError || !imageUrl ? (
+                        ) : null}
+                        </Box>
+                        {!containRect ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <Typography variant="caption" color="rgba(255,255,255,0.6)">
+                                    Đang tải ảnh…
+                                </Typography>
+                            </Box>
+                        ) : null}
+                            </>
+                        ) : imageError ? (
                             <Box
                                 sx={{
                                     position: 'absolute',
@@ -1352,22 +1873,20 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                 }}
                             >
                                 <Typography variant="subtitle2" color="error">
-                                    {imageUrl ? 'Không load được ảnh beat' : 'Beat chưa có ảnh'}
+                                    Không load được ảnh beat
                                 </Typography>
-                                {imageUrl ? (
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="primary"
-                                        component="a"
-                                        href={imageUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        sx={{ textTransform: 'none' }}
-                                    >
-                                        Mở ảnh trong tab mới
-                                    </Button>
-                                ) : null}
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    component="a"
+                                    href={imageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Mở ảnh trong tab mới
+                                </Button>
                             </Box>
                         ) : (
                             <Box
@@ -1375,107 +1894,211 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                     position: 'absolute',
                                     inset: 0,
                                     display: 'flex',
+                                    flexDirection: 'column',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    pointerEvents: 'none',
+                                    gap: 1,
+                                    p: 2,
+                                    textAlign: 'center',
+                                    bgcolor: 'rgba(0,0,0,0.55)',
                                 }}
                             >
-                                <Typography variant="caption" color="rgba(255,255,255,0.6)">
-                                    Đang tải ảnh…
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Beat chưa có ảnh
                                 </Typography>
                             </Box>
                         )}
+
+                        {/* Box chuyển beat neo dưới PHẢI (dùng nhiều) */}
+                        {beatSegments.length > 1 && activeSegmentIndex >= 0 ? (
+                            <Stack
+                                direction="row"
+                                spacing={0.75}
+                                alignItems="center"
+                                sx={{
+                                    position: 'absolute',
+                                    right: 10,
+                                    bottom: 10,
+                                    zIndex: 5,
+                                    bgcolor: 'rgba(0,0,0,0.6)',
+                                    borderRadius: 2,
+                                    p: 0.5,
+                                }}
+                            >
+                                <Tooltip title="Beat trước">
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            disabled={activeSegmentIndex <= 0}
+                                            onClick={() => handleSeekAdjacentBeat(-1)}
+                                            sx={{ color: 'common.white' }}
+                                        >
+                                            <ChevronLeftIcon fontSize="small" />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                                <Tooltip title="Beat sau">
+                                    <IconButton
+                                        size="small"
+                                        disabled={activeSegmentIndex >= beatSegments.length - 1}
+                                        onClick={() => handleSeekAdjacentBeat(1)}
+                                        sx={{ color: 'common.white' }}
+                                    >
+                                        <ChevronRightIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                        ) : null}
+
+                        {/* Box điều khiển neo dưới TRÁI: đặt điểm tập trung / đặt lại giữa / hủy vẽ / lưu vùng */}
+                        <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                            sx={{
+                                position: 'absolute',
+                                left: 10,
+                                bottom: 10,
+                                zIndex: 5,
+                                bgcolor: 'rgba(0,0,0,0.6)',
+                                borderRadius: 2,
+                                p: 0.5,
+                            }}
+                        >
+                            <Tooltip title={focusMode
+                                ? 'Đang ĐẶT ĐIỂM TẬP TRUNG — click chỗ nào đặt focus chỗ đó (click để tắt).'
+                                : 'Bật ĐẶT ĐIỂM TẬP TRUNG — click chỗ nào đặt focus chỗ đó.'}
+                            >
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setFocusMode((mode) => !mode)}
+                                    sx={{
+                                        color: focusMode ? '#ffb74d' : 'common.white',
+                                        bgcolor: focusMode ? 'rgba(255,183,77,0.18)' : 'transparent',
+                                    }}
+                                >
+                                    <MyLocationIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            {focusMode ? (
+                                <Tooltip title="Đặt lại điểm tập trung giữa ảnh">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleResetFocus}
+                                        sx={{ color: 'common.white' }}
+                                    >
+                                        <CenterFocusStrongIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
+                            {totalDraftPoints > 0 ? (
+                                <Tooltip title="Hủy vẽ">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleCancelDraft}
+                                        sx={{ color: 'common.white' }}
+                                    >
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                startIcon={<SaveIcon />}
+                                loading={saving}
+                                disabled={state.savingWhiteboardBeatOverride}
+                                onClick={() => { void handleSave(); }}
+                                sx={{ textTransform: 'none', ml: 0.5 }}
+                            >
+                                Lưu vùng
+                            </LoadingButton>
+                        </Stack>
                     </Box>
 
-                    <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<UndoIcon />}
-                            disabled={totalDraftPoints === 0}
-                            onClick={handleUndoPoint}
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Lùi điểm
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            disabled={totalDraftPoints < 3}
-                            onClick={finishDraft}
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Hoàn tất vùng
-                        </Button>
-                        {totalDraftPoints > 0 ? (
+                    {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
+                    <Dialog
+                        open={Boolean(pendingSwitch)}
+                        onClose={handleCancelSwitch}
+                        maxWidth="xs"
+                        fullWidth
+                    >
+                        <DialogTitle>Bạn chưa lưu vùng của beat này</DialogTitle>
+                        <DialogContent>
+                            <Typography variant="body2" color="text.secondary">
+                                Vùng đang sửa chưa được lưu. Lưu trước khi chuyển beat, hoặc chuyển
+                                sang beat khác và bỏ các thay đổi này.
+                            </Typography>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button onClick={handleCancelSwitch} sx={{ textTransform: 'none' }}>
+                                Ở lại beat này
+                            </Button>
                             <Button
-                                size="small"
-                                variant="outlined"
-                                color="inherit"
-                                startIcon={<CloseIcon />}
-                                onClick={handleCancelDraft}
+                                color="error"
+                                onClick={() => { void handleConfirmSwitch(false); }}
                                 sx={{ textTransform: 'none' }}
                             >
-                                Hủy vẽ ({totalDraftPoints} điểm)
+                                Chuyển không lưu
                             </Button>
-                        ) : null}
-                    </Stack>
+                            <LoadingButton
+                                variant="contained"
+                                color="success"
+                                loading={switchSaving}
+                                onClick={() => { void handleConfirmSwitch(true); }}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Lưu rồi chuyển
+                            </LoadingButton>
+                        </DialogActions>
+                    </Dialog>
 
-                    <Box sx={{ width: '100%', maxWidth: 520, mt: 1, mx: 'auto' }}>
-                        <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            display="block"
-                            sx={{ textAlign: 'center' }}
-                        >
-                            {addModeRegionId ? (
-                                <>
-                                    <strong>Đang THÊM VÙNG</strong> cho{' '}
-                                    {regions.find((r) => r.id === addModeRegionId)?.name || addModeRegionId}:
-                                    vẽ các vùng cần thêm (giống chọn vùng thường) — vẽ xong vùng này{' '}
-                                    <strong>tự nối liền ngay</strong> vào vùng hiện tại (mở rộng thêm). Vẽ nhiều
-                                    lần tùy ý, click "Thêm vùng" lần nữa để thoát.
-                                </>
-                            ) : eraseModeRegionId ? (
-                                <>
-                                    <strong>Đang XÓA THỪA</strong> cho{' '}
-                                    {regions.find((r) => r.id === eraseModeRegionId)?.name || eraseModeRegionId}:
-                                    vẽ các vùng cần bỏ (giống chọn vùng thường) — vẽ xong vùng này{' '}
-                                    <strong>tự thu gọn ngay</strong> (phần giao nhau bị bỏ). Vẽ nhiều lần tùy ý,
-                                    click "Xóa thừa" lần nữa để thoát.
-                                </>
-                            ) : bgSampleMode ? (
-                                <>
-                                    Đang chọn <strong>background</strong>: <strong>click 1 phát</strong> vào vị trí có màu/
-                                    chi tiết nền → tự tạo ô mẫu nhỏ. Mẫu này sẽ lặp lại fill nền vùng đang chọn (thay
-                                    vì tile trắng). (Kéo chuột = vẽ vùng mẫu tay.)
-                                </>
-                            ) : (
-                                <>
-                                    Vẽ trong vùng nào → vùng đó tự thành <strong>vùng cha</strong> (vùng nhỏ nhất chứa
-                                    vùng mới). Hành động vùng con thắng vùng cha.
-                                    {draftParent ? (
-                                        <>
-                                            {' '}
-                                            Đang vẽ <strong>vùng con</strong> của: {draftParent.name}
-                                        </>
-                                    ) : null}
-                                </>
-                            )}
-                        </Typography>
-                    </Box>
-
-                    <LoadingButton
-                        variant="contained"
-                        startIcon={<SaveIcon />}
-                        loading={saving}
-                        disabled={state.savingWhiteboardBeatOverride}
-                        onClick={() => { void handleSave(); }}
-                        sx={{ textTransform: 'none', width: '100%', maxWidth: 520, mx: 'auto', mt: 1 }}
+                    {/* Popup xem video beat */}
+                    <Dialog
+                        open={beatVideoPreviewOpen}
+                        onClose={() => setBeatVideoPreviewOpen(false)}
+                        maxWidth="lg"
+                        fullWidth
                     >
-                        Lưu vùng
-                    </LoadingButton>
+                        <DialogTitle>Video beat — {beatId}</DialogTitle>
+                        <DialogContent
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: 1,
+                            }}
+                        >
+                            {beatVideoPlayUrl ? (
+                                <video
+                                    key={beatVideoPlayUrl}
+                                    controls
+                                    autoPlay
+                                    playsInline
+                                    src={beatVideoPlayUrl}
+                                    style={{
+                                        width: '100%',
+                                        maxHeight: '78vh',
+                                        borderRadius: 8,
+                                        background: '#000',
+                                        display: 'block',
+                                    }}
+                                >
+                                    <track kind="captions" />
+                                </video>
+                            ) : (
+                                <Typography color="text.secondary" sx={{ py: 2 }}>
+                                    Chưa có video beat — bấm "Render video beat" trước.
+                                </Typography>
+                            )}
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button onClick={() => setBeatVideoPreviewOpen(false)} sx={{ textTransform: 'none' }}>
+                                Đóng
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
                 </Box>
 
                 {/* Cột phải: danh sách vùng + cấu hình */}
@@ -1503,6 +2126,31 @@ export default function ShortVideoAgentBeatRegionDrawer({
                         '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'primary.main' },
                     }}
                 >
+                    <Box
+                        sx={{
+                            mb: 1.5,
+                            p: 1.25,
+                            borderRadius: 2,
+                            border: 1,
+                            borderColor: 'divider',
+                            bgcolor: 'background.default',
+                        }}
+                    >
+                        <ShortVideoAgentImageAnimationControls
+                            beatId={beatId}
+                            imageUrl={imageUrl}
+                            clipAspect={state.agentClipAspect}
+                            clipConfig={state.agentWhiteboardConfig || null}
+                            clipSaving={state.savingWhiteboardConfig}
+                            onClipConfigChange={(patch) => {
+                                state.handleAgentWhiteboardConfigChange(patch);
+                            }}
+                            savedOverride={state.agentWhiteboardBeatOverrides?.[beatId] || null}
+                            saving={state.savingWhiteboardBeatOverride}
+                            withoutImage
+                            onSave={(override) => persistOverride(override)}
+                        />
+                    </Box>
                     <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
                         Các vùng ({regions.length})
                     </Typography>
@@ -1528,6 +2176,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                         return (
                             <Box
                                 key={region.id}
+                                ref={(node) => { regionItemRefs.current[region.id] = node as HTMLDivElement | null; }}
                                 onClick={(event) => {
                                     const target = event.target as HTMLElement;
                                     if (target.closest('input,button,textarea')) {
@@ -1692,7 +2341,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                 sẵn khi vùng chưa đặt kiểu. */}
                                 {region.action === 'place' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
                                     <RegionSection title="Kiểu tay đưa ảnh vào">
-                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'space-between' }}>
                                             {placeHandOptions.map((opt) => {
                                                 const isDefault = opt.id === placeHandDefaultId;
                                                 const current = normalizePlaceHand(region.place_hand);
@@ -1712,7 +2361,7 @@ export default function ShortVideoAgentBeatRegionDrawer({
                                                                 : opt.label
                                                         }
                                                         sx={{
-                                                            width: 96,
+                                                            width: 'calc((100% / 3) - 6px)',
                                                             border: '1px solid',
                                                             borderColor: active ? 'secondary.main' : 'divider',
                                                             borderRadius: 1.5,
@@ -2046,8 +2695,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     ) : null}
                 </Box>
             </Box>
-            </Box>
-
 
             {/* Dropdown xác nhận xóa vùng */}
             <Menu
@@ -2076,7 +2723,6 @@ export default function ShortVideoAgentBeatRegionDrawer({
                     Xóa
                 </MenuItem>
             </Menu>
-
-        </DrawerCustom>
+        </Box>
     );
 }

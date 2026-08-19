@@ -5991,7 +5991,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     [id]: res.override as AgentWhiteboardBeatOverride,
                 }));
             }
-            showMessage(parseApiMessage(res?.message) || 'Đã lưu cấu hình whiteboard beat', 'success');
+            // showMessage(parseApiMessage(res?.message) || 'Đã lưu cấu hình whiteboard beat', 'success');
             return true;
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');

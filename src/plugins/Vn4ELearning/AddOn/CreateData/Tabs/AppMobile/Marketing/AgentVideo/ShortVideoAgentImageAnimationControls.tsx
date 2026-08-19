@@ -30,6 +30,8 @@ type Props = {
     savedOverride?: AgentWhiteboardBeatOverride | null;
     saving?: boolean;
     onSave: (override: AgentWhiteboardBeatOverride) => Promise<boolean>;
+    /** Ẩn ảnh + nút đặt lại giữa — điểm tập trung được đặt trên canvas vùng chính. */
+    withoutImage?: boolean;
 };
 
 function clamp01(value: number): number {
@@ -58,6 +60,7 @@ export default function ShortVideoAgentImageAnimationControls({
     savedOverride,
     saving = false,
     onSave,
+    withoutImage = false,
 }: Props) {
     // Hiệu ứng riêng: mặc định 'common' = theo tiêu chuẩn chung.
     const effect = String(savedOverride?.image_animation_effect || 'common') as AgentImageAnimationBeatValue;
@@ -165,15 +168,17 @@ export default function ShortVideoAgentImageAnimationControls({
                 <Typography variant="subtitle2" fontWeight={700}>
                     Chuyển động ảnh beat
                 </Typography>
-                <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={saving}
-                    onClick={handleResetFocus}
-                    sx={{ flexShrink: 0 }}
-                >
-                    Đặt lại giữa
-                </Button>
+                {!withoutImage ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={saving}
+                        onClick={handleResetFocus}
+                        sx={{ flexShrink: 0 }}
+                    >
+                        Đặt lại giữa
+                    </Button>
+                ) : null}
             </Box>
 
             {typeof onClipConfigChange === 'function' ? (
@@ -216,105 +221,105 @@ export default function ShortVideoAgentImageAnimationControls({
                 </Select>
             </FormControl>
 
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                Điểm tập trung: click vào ảnh — frame cuối sẽ đưa điểm này ra giữa màn hình
-            </Typography>
+            {!withoutImage ? (
+                <>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        Điểm tập trung: click vào ảnh — frame cuối sẽ đưa điểm này ra giữa màn hình
+                    </Typography>
 
-            <Box
-                ref={containerRef}
-                onClick={handleImageClick}
-                sx={{
-                    position: 'relative',
-                    width: '100%',
-                    aspectRatio: `${aspect}`,
-                    borderRadius: 1.5,
-                    overflow: 'hidden',
-                    bgcolor: 'common.black',
-                    cursor: 'crosshair',
-                    userSelect: 'none',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <img
-                    src={imageUrl}
-                    alt=""
-                    draggable={false}
-                    onLoad={(event) => {
-                        const el = event.currentTarget;
-                        setImgNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
-                    }}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        display: 'block',
-                        pointerEvents: 'none',
-                    }}
-                />
-                {containRect ? (
                     <Box
+                        ref={containerRef}
+                        onClick={handleImageClick}
                         sx={{
-                            position: 'absolute',
-                            left: containRect.x,
-                            top: containRect.y,
-                            width: containRect.w,
-                            height: containRect.h,
-                            border: '1px dashed rgba(255,255,255,0.55)',
-                            borderRadius: 0.5,
-                            pointerEvents: 'none',
-                            boxSizing: 'border-box',
-                        }}
-                    />
-                ) : null}
-                <Tooltip title={`Điểm tập trung (${(focusX * 100).toFixed(0)}%, ${(focusY * 100).toFixed(0)}%)`}>
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            left: typeof dotLeft === 'number' ? dotLeft - 12 : dotLeft,
-                            top: typeof dotTop === 'number' ? dotTop - 12 : dotTop,
-                            width: 24,
-                            height: 24,
-                            borderRadius: '50%',
-                            border: '2.5px solid #fff',
-                            boxShadow: '0 0 0 2px rgba(33,150,243,0.85), 0 2px 6px rgba(0,0,0,0.5)',
-                            bgcolor: 'rgba(33,150,243,0.35)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            pointerEvents: 'none',
-                            transform: 'translate(-50%, -50%)',
+                            position: 'relative',
+                            width: '100%',
+                            aspectRatio: `${aspect}`,
+                            borderRadius: 1.5,
+                            overflow: 'hidden',
+                            bgcolor: 'common.black',
+                            cursor: 'crosshair',
+                            userSelect: 'none',
+                            border: '1px solid',
+                            borderColor: 'divider',
                         }}
                     >
-                        <Box
-                            sx={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                bgcolor: '#fff',
+                        <img
+                            src={imageUrl}
+                            alt=""
+                            draggable={false}
+                            onLoad={(event) => {
+                                const el = event.currentTarget;
+                                setImgNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
+                            }}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'contain',
+                                display: 'block',
+                                pointerEvents: 'none',
                             }}
                         />
+                        {containRect ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: containRect.x,
+                                    top: containRect.y,
+                                    width: containRect.w,
+                                    height: containRect.h,
+                                    border: '1px dashed rgba(255,255,255,0.55)',
+                                    borderRadius: 0.5,
+                                    pointerEvents: 'none',
+                                    boxSizing: 'border-box',
+                                }}
+                            />
+                        ) : null}
+                        <Tooltip title={`Điểm tập trung (${(focusX * 100).toFixed(0)}%, ${(focusY * 100).toFixed(0)}%)`}>
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: typeof dotLeft === 'number' ? dotLeft - 12 : dotLeft,
+                                    top: typeof dotTop === 'number' ? dotTop - 12 : dotTop,
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    border: '2.5px solid #fff',
+                                    boxShadow: '0 0 0 2px rgba(33,150,243,0.85), 0 2px 6px rgba(0,0,0,0.5)',
+                                    bgcolor: 'rgba(33,150,243,0.35)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                    transform: 'translate(-50%, -50%)',
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: '50%',
+                                        bgcolor: '#fff',
+                                    }}
+                                />
+                            </Box>
+                        </Tooltip>
+                        {saving ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    bgcolor: 'rgba(0,0,0,0.35)',
+                                }}
+                            >
+                                <CircularProgress size={22} color="inherit" />
+                            </Box>
+                        ) : null}
                     </Box>
-                </Tooltip>
-                {saving ? (
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            inset: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            bgcolor: 'rgba(0,0,0,0.35)',
-                        }}
-                    >
-                        <CircularProgress size={22} color="inherit" />
-                    </Box>
-                ) : null}
-            </Box>
-
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, textAlign: 'right' }}>
-                Hiệu ứng riêng ưu tiên hơn hiệu ứng chung; random: mỗi beat khác nhau, không trùng 2 beat liền kề
-            </Typography>
+                </>
+            ) : (<></>)}
         </Box>
     );
 }
