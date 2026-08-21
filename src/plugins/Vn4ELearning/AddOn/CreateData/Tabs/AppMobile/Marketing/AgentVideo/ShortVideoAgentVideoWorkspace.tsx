@@ -10,6 +10,7 @@ import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
+import ShortVideoAgentBeatVisualPreview from './ShortVideoAgentBeatVisualPreview';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
 import ShortVideoAgentBeatHtmlEditDrawer from './ShortVideoAgentBeatHtmlEditDrawer';
 import ShortVideoAgentBeatImageEditDrawer from './ShortVideoAgentBeatImageEditDrawer';
@@ -602,6 +603,75 @@ export default function ShortVideoAgentVideoWorkspace({
                                 imageUrl={currentBeatImageUrl}
                                 onOpenBeatQa={() => setQaDrawerOpen(true)}
                             />
+                        ) : !state.isWhiteboardMode && currentBeatId ? (
+                            /* MOTION HTML: cột giữa hiển thị ĐẦY ĐỦ — preview visual
+                               của beat đang active (2 thanh mảnh 2 bên giữ nguyên). */
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    minHeight: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden',
+                                    p: 2,
+                                    gap: 1.5,
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 1,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <Typography variant="subtitle2" fontWeight={700}>
+                                        {`Preview beat ${activeBeatIndex ? `#${activeBeatIndex}` : ''} · ${currentBeatId}`}
+                                    </Typography>
+                                    <Stack direction="row" spacing={1}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => handleOpenEditBeatHtml(currentBeatId)}
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Sửa HTML
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            startIcon={<FactCheckIcon />}
+                                            onClick={() => setQaDrawerOpen(true)}
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            QA · Version
+                                        </Button>
+                                    </Stack>
+                                </Box>
+                                <Box
+                                    sx={{
+                                        flex: 1,
+                                        minHeight: 0,
+                                        overflow: 'auto',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <ShortVideoAgentBeatVisualPreview
+                                        beatId={currentBeatId}
+                                        html={String(state.beatHtml[currentBeatId]?.html || '')}
+                                        revision={String(state.beatHtml[currentBeatId]?.updated_at || '')}
+                                        audioUrl={state.audioFileUrl || ''}
+                                        startSec={Number(currentBeatSection?.startSec ?? 0)}
+                                        durationSec={Number(currentBeatSection?.durationSec ?? 1)}
+                                        clipAspect={state.agentClipAspect}
+                                    />
+                                </Box>
+                            </Box>
                         ) : (
                             <Box
                                 sx={{
