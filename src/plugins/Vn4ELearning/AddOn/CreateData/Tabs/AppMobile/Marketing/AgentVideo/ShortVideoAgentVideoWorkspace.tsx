@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Chip, Stack, Typography } from '@mui/material';
+import { Box, Chip, Typography } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
@@ -10,7 +10,7 @@ import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
-import ShortVideoAgentBeatVisualPreview from './ShortVideoAgentBeatVisualPreview';
+import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
 import ShortVideoAgentBeatHtmlEditDrawer from './ShortVideoAgentBeatHtmlEditDrawer';
 import ShortVideoAgentBeatImageEditDrawer from './ShortVideoAgentBeatImageEditDrawer';
@@ -450,6 +450,71 @@ export default function ShortVideoAgentVideoWorkspace({
 
     const useCustomHtmlPreview = activePreviewSource === 'html_beat';
 
+    // Panel QA · Version · Video beat của beat đang active — dùng CHUNG cho
+    // (1) cột phải cạnh preview (motion html, luôn hiển thị) và
+    // (2) drawer QA (whiteboard / mở từ nút).
+    const beatQaPanel = currentBeatId ? (
+        <ShortVideoAgentBeatQaPanel
+            beatId={currentBeatId}
+            beatIndex={activeBeatIndex}
+            beatHtml={state.beatHtml[currentBeatId] || null}
+            beatImage={state.beatImage[currentBeatId] || null}
+            isWhiteboardMode={state.isWhiteboardMode}
+            versions={currentBeatVersions}
+            activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
+            visualDescription={String(currentBeatSection?.visual_description || '')}
+            background={String(currentBeatSection?.background || '')}
+            phraseAnchor={String(currentBeatSection?.phrase_anchor || '')}
+            saving={state.savingImportHtml}
+            quickIterating={currentBeatQuickIterating}
+            iterateStage={currentBeatIterateStage}
+            iterateKind={currentBeatIterateKind}
+            whiteboardBeatRender={state.whiteboardBeatRenders?.[currentBeatId] || null}
+            uploadingBeatVideoToCapcut={
+                (state.uploadingBeatVideoToCapcutIds || []).includes(currentBeatId)
+            }
+            beatDurationSec={Number(currentBeatSection?.durationSec ?? 8) || 8}
+            isLastBeat={
+                activeBeatIndex != null
+                && Boolean(state.beatMap?.sections?.length)
+                && activeBeatIndex >= (state.beatMap?.sections?.length || 0) - 1
+            }
+            agentWhiteboardConfig={state.agentWhiteboardConfig || {}}
+            whiteboardBeatOverride={
+                state.agentWhiteboardBeatOverrides?.[currentBeatId] || null
+            }
+            savingWhiteboardBeatOverride={state.savingWhiteboardBeatOverride}
+            onSaveBeatQa={handleSaveCurrentBeatQa}
+            onQuickIterateBeat={handleQuickIterateCurrentBeat}
+            onEditHtmlBeat={handleEditHtmlCurrentBeat}
+            onSaveBeatVersion={handleSaveCurrentBeatVersion}
+            onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
+            onRenderWhiteboardBeat={
+                state.isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode
+                    ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
+                    : undefined
+            }
+            renderingBeatVideo={state.renderingWhiteboardBeatIds.includes(currentBeatId)}
+            onAddBeatVideoToCapcut={
+                state.isWhiteboardMode
+                    ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }
+                    : undefined
+            }
+            onSaveWhiteboardBeatOverride={
+                state.isWhiteboardMode
+                    ? (override) => state.handleSaveWhiteboardBeatOverride(
+                        currentBeatId,
+                        override,
+                    )
+                    : undefined
+            }
+        />
+    ) : (
+        <Typography sx={{ p: 3 }}>
+            Chọn 1 beat trên timeline để xem QA · Version · Video beat.
+        </Typography>
+    );
+
     const drawerTitle = state.title
         ? `Short video #${shortVideoId} — ${state.title}`
         : `Short video #${shortVideoId}`;
@@ -555,35 +620,59 @@ export default function ShortVideoAgentVideoWorkspace({
                         overflow: 'hidden',
                     }}
                 >
-                    {/* Thanh mảnh TRÁI: click mở drawer Content/Script/Render/... */}
-                    <Box
-                        onClick={() => setLeftPanelOpen(true)}
-                        sx={{
-                            width: 40,
-                            flexShrink: 0,
-                            borderRight: 1,
-                            borderColor: 'divider',
-                            bgcolor: 'background.paper',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
-                    >
-                        <Typography
-                            variant="caption"
+                    {/* MOTION HTML: cột TRÁI hiển thị TRỰC TIẾP (không qua drawer);
+                        WHITEBOARD: giữ thanh mảnh click mở drawer như cũ. */}
+                    {state.isWhiteboardMode ? (
+                        <Box
+                            onClick={() => setLeftPanelOpen(true)}
                             sx={{
-                                writingMode: 'vertical-rl',
-                                transform: 'rotate(180deg)',
-                                fontWeight: 700,
-                                color: 'text.secondary',
-                                userSelect: 'none',
+                                width: 40,
+                                flexShrink: 0,
+                                borderRight: 1,
+                                borderColor: 'divider',
+                                bgcolor: 'background.paper',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                '&:hover': { bgcolor: 'action.hover' },
                             }}
                         >
-                            Content · Script · Render · Thumbnail · Facebook
-                        </Typography>
-                    </Box>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    writingMode: 'vertical-rl',
+                                    transform: 'rotate(180deg)',
+                                    fontWeight: 700,
+                                    color: 'text.secondary',
+                                    userSelect: 'none',
+                                }}
+                            >
+                                Content · Script · Render · Thumbnail · Facebook
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                width: 500,
+                                flexShrink: 0,
+                                minWidth: 0,
+                                borderRight: 1,
+                                borderColor: 'divider',
+                                bgcolor: 'background.paper',
+                                minHeight: 0,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <ShortVideoAgentLeftPanel
+                                    state={state}
+                                    initialTab={initialTab}
+                                    onSaved={onUploaded}
+                                />
+                            </Box>
+                        </Box>
+                    )}
 
                     {/* Giữa: edit vùng ảnh beat TRỰC TIẾP (không cần mở drawer) */}
                     <Box
@@ -604,72 +693,59 @@ export default function ShortVideoAgentVideoWorkspace({
                                 onOpenBeatQa={() => setQaDrawerOpen(true)}
                             />
                         ) : !state.isWhiteboardMode && currentBeatId ? (
-                            /* MOTION HTML: cột giữa hiển thị ĐẦY ĐỦ — preview visual
-                               của beat đang active (2 thanh mảnh 2 bên giữ nguyên). */
+                            /* MOTION HTML: 2 cột — TRÁI preview HTML ĐỒNG BỘ timeline
+                               (dùng CHUNG videoRef: mediaProxy của preview được gắn vào
+                               ref mà timeline đọc/ghi currentTime → kéo/phát trên
+                               timeline là iframe animation seek theo để test animation);
+                               PHẢI panel QA · Version LUÔN hiển thị kế bên preview. */
                             <Box
                                 sx={{
                                     flex: 1,
                                     minWidth: 0,
                                     minHeight: 0,
                                     display: 'flex',
-                                    flexDirection: 'column',
-                                    overflow: 'hidden',
+                                    alignItems: 'stretch',
+                                    gap: 2,
                                     p: 2,
-                                    gap: 1.5,
+                                    overflow: 'hidden',
                                 }}
                             >
                                 <Box
                                     sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 1,
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <Typography variant="subtitle2" fontWeight={700}>
-                                        {`Preview beat ${activeBeatIndex ? `#${activeBeatIndex}` : ''} · ${currentBeatId}`}
-                                    </Typography>
-                                    <Stack direction="row" spacing={1}>
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => handleOpenEditBeatHtml(currentBeatId)}
-                                            sx={{ textTransform: 'none' }}
-                                        >
-                                            Sửa HTML
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            variant="contained"
-                                            startIcon={<FactCheckIcon />}
-                                            onClick={() => setQaDrawerOpen(true)}
-                                            sx={{ textTransform: 'none' }}
-                                        >
-                                            QA · Version
-                                        </Button>
-                                    </Stack>
-                                </Box>
-                                <Box
-                                    sx={{
                                         flex: 1,
+                                        minWidth: 0,
                                         minHeight: 0,
-                                        overflow: 'auto',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    <ShortVideoAgentBeatVisualPreview
-                                        beatId={currentBeatId}
-                                        html={String(state.beatHtml[currentBeatId]?.html || '')}
-                                        revision={String(state.beatHtml[currentBeatId]?.updated_at || '')}
+                                    <ShortVideoAgentCustomHtmlPreview
+                                        beatMap={state.beatMapReady ? state.beatMap : null}
+                                        beatHtml={state.beatHtml}
+                                        beatImage={state.beatImage}
+                                        isWhiteboardMode={false}
                                         audioUrl={state.audioFileUrl || ''}
-                                        startSec={Number(currentBeatSection?.startSec ?? 0)}
-                                        durationSec={Number(currentBeatSection?.durationSec ?? 1)}
+                                        audioDurationSec={state.audioDurationSec}
+                                        videoRef={videoRef}
                                         clipAspect={state.agentClipAspect}
                                     />
+                                </Box>
+                                <Box
+                                    sx={{
+                                        width: 380,
+                                        flexShrink: 0,
+                                        minWidth: 0,
+                                        minHeight: 0,
+                                        overflowY: 'auto',
+                                        borderLeft: 1,
+                                        borderColor: 'divider',
+                                        pl: 2,
+                                    }}
+                                >
+                                    {beatQaPanel}
                                 </Box>
                             </Box>
                         ) : (
@@ -714,35 +790,55 @@ export default function ShortVideoAgentVideoWorkspace({
                         )}
                     </Box>
 
-                    {/* Thanh mảnh PHẢI: click mở drawer Workflow */}
-                    <Box
-                        onClick={() => setRightPanelOpen(true)}
-                        sx={{
-                            width: 40,
-                            flexShrink: 0,
-                            borderLeft: 1,
-                            borderColor: 'divider',
-                            bgcolor: 'background.paper',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
-                    >
-                        <Typography
-                            variant="caption"
+                    {/* MOTION HTML: cột PHẢI (Workflow) hiển thị TRỰC TIẾP;
+                        WHITEBOARD: giữ thanh mảnh click mở drawer như cũ. */}
+                    {state.isWhiteboardMode ? (
+                        <Box
+                            onClick={() => setRightPanelOpen(true)}
                             sx={{
-                                writingMode: 'vertical-rl',
-                                transform: 'rotate(180deg)',
-                                fontWeight: 700,
-                                color: 'text.secondary',
-                                userSelect: 'none',
+                                width: 40,
+                                flexShrink: 0,
+                                borderLeft: 1,
+                                borderColor: 'divider',
+                                bgcolor: 'background.paper',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                '&:hover': { bgcolor: 'action.hover' },
                             }}
                         >
-                            Workflow
-                        </Typography>
-                    </Box>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    writingMode: 'vertical-rl',
+                                    transform: 'rotate(180deg)',
+                                    fontWeight: 700,
+                                    color: 'text.secondary',
+                                    userSelect: 'none',
+                                }}
+                            >
+                                Workflow
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                width: 400,
+                                flexShrink: 0,
+                                minWidth: 0,
+                                borderLeft: 1,
+                                borderColor: 'divider',
+                                bgcolor: 'background.paper',
+                                minHeight: 0,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <ShortVideoAgentWorkflowPanel state={state} />
+                            </Box>
+                        </Box>
+                    )}
                 </Box>
                 <ShortVideoAgentVideoTimeline
                     videoUrl={finalPreviewVideoUrl}
@@ -901,6 +997,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 onClose={() => setLeftPanelOpen(false)}
                 title="Panel"
                 width={640}
+                anchor="left"
                 restDialogContent={{
                     sx: { height: 'calc(100vh - 64px)', p: 0 },
                 }}
@@ -937,67 +1034,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     sx: { height: 'calc(100vh - 64px)', p: 0 },
                 }}
             >
-                {currentBeatId ? (
-                    <ShortVideoAgentBeatQaPanel
-                        beatId={currentBeatId}
-                        beatIndex={activeBeatIndex}
-                        beatHtml={state.beatHtml[currentBeatId] || null}
-                        beatImage={state.beatImage[currentBeatId] || null}
-                        isWhiteboardMode={state.isWhiteboardMode}
-                        versions={currentBeatVersions}
-                        activeVersionId={String(state.beatActiveVersionId?.[currentBeatId] || '')}
-                        visualDescription={String(currentBeatSection?.visual_description || '')}
-                        background={String(currentBeatSection?.background || '')}
-                        phraseAnchor={String(currentBeatSection?.phrase_anchor || '')}
-                        saving={state.savingImportHtml}
-                        quickIterating={currentBeatQuickIterating}
-                        iterateStage={currentBeatIterateStage}
-                        iterateKind={currentBeatIterateKind}
-                        whiteboardBeatRender={state.whiteboardBeatRenders?.[currentBeatId] || null}
-                        uploadingBeatVideoToCapcut={
-                            (state.uploadingBeatVideoToCapcutIds || []).includes(currentBeatId)
-                        }
-                        beatDurationSec={Number(currentBeatSection?.durationSec ?? 8) || 8}
-                        isLastBeat={
-                            activeBeatIndex != null
-                            && Boolean(state.beatMap?.sections?.length)
-                            && activeBeatIndex >= (state.beatMap?.sections?.length || 0) - 1
-                        }
-                        agentWhiteboardConfig={state.agentWhiteboardConfig || {}}
-                        whiteboardBeatOverride={
-                            state.agentWhiteboardBeatOverrides?.[currentBeatId] || null
-                        }
-                        savingWhiteboardBeatOverride={state.savingWhiteboardBeatOverride}
-                        onSaveBeatQa={handleSaveCurrentBeatQa}
-                        onQuickIterateBeat={handleQuickIterateCurrentBeat}
-                        onEditHtmlBeat={handleEditHtmlCurrentBeat}
-                        onSaveBeatVersion={handleSaveCurrentBeatVersion}
-                        onRestoreBeatVersion={handleRestoreCurrentBeatVersion}
-                        onRenderWhiteboardBeat={
-                            state.isWhiteboardMode && !state.agentWhiteboardConfig?.assets_mode
-                                ? () => { void state.handleRenderWhiteboardBeat(currentBeatId); }
-                                : undefined
-                        }
-                        renderingBeatVideo={state.renderingWhiteboardBeatIds.includes(currentBeatId)}
-                        onAddBeatVideoToCapcut={
-                            state.isWhiteboardMode
-                                ? () => { void state.handleAddBeatVideoToCapcut(currentBeatId); }
-                                : undefined
-                        }
-                        onSaveWhiteboardBeatOverride={
-                            state.isWhiteboardMode
-                                ? (override) => state.handleSaveWhiteboardBeatOverride(
-                                    currentBeatId,
-                                    override,
-                                )
-                                : undefined
-                        }
-                    />
-                ) : (
-                    <Typography sx={{ p: 3 }}>
-                        Chọn 1 beat trên timeline để xem QA · Version · Video beat.
-                    </Typography>
-                )}
+                {beatQaPanel}
             </DrawerCustom>
             <ShortVideoAgentBeatHtmlEditDrawer
                 open={Boolean(editBeatHtmlId)}

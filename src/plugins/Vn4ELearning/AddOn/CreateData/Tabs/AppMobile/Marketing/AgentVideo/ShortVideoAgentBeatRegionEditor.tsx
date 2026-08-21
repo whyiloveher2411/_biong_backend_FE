@@ -2581,7 +2581,7 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                                 {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
                                 {region.action === 'place' ? (
-                                    <RegionSection title="Hiệu ứng sau khi đưa ảnh vào">
+                                    <RegionSection title="Hiệu ứng sau khi render ảnh">
                                         <Stack direction="row"  sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                                             {PLACE_EFFECT_OPTIONS.map((opt) => {
                                                 const active = normalizePlaceEffect(region.place_effect) === opt.value;
