@@ -14,6 +14,7 @@ import {
     MenuItem,
     Slider,
     Stack,
+    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -40,9 +41,12 @@ import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
+import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
 import { getBeatTimelineSegments } from './agentVideoBeatMap';
+import { resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
 import {
     autoSelectAgentWhiteboardRegion,
+    fetchWhiteboardTransitions,
     isPlaceHandlessEffect,
     normalizeNeonColor,
     normalizePlaceEffect,
@@ -52,6 +56,7 @@ import {
     type AgentWhiteboardBeatOverride,
     type BeatRegion,
     type BeatRegionPoint,
+    type WhiteboardTransitionOption,
 } from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -131,6 +136,72 @@ function resolveParentRegion(
     return bestId;
 }
 
+/**
+ * CHA TRƯỚC CON TRONG TIMELINE: vùng con chỉ được chọn từ script SAU từ cuối
+ * của vùng cha — con không bao giờ render trước cha. Hàm này TỰ ĐIỀU CHỈNH các
+ * script word của vùng con vi phạm (nâng lên sau từ cuối cha) — đồng bộ với
+ * backend marketing_short_video_agent_enforce_region_parent_child_order.
+ * Trả danh sách MỚI (không mutate input).
+ */
+function enforceRegionChildOrder(list: BeatRegion[]): BeatRegion[] {
+    if (list.length === 0) {
+        return list;
+    }
+    const depth: Record<string, number> = {};
+    const computeDepth = (id: string, seen: Set<string>): number => {
+        if (depth[id] !== undefined) return depth[id];
+        if (seen.has(id)) return 0;
+        seen.add(id);
+        const r = list.find((x) => x.id === id);
+        const pid = r?.parent_id || null;
+        depth[id] = pid ? 1 + computeDepth(pid, seen) : 0;
+        return depth[id];
+    };
+    list.forEach((r) => computeDepth(r.id, new Set()));
+    const sorted = [...list].sort((a, b) => (depth[a.id] ?? 0) - (depth[b.id] ?? 0));
+    const byId: Record<string, BeatRegion> = {};
+    sorted.forEach((r) => { byId[r.id] = r; });
+    const fixed: BeatRegion[] = [];
+    for (const r of sorted) {
+        const next = { ...r };
+        const pid = r.parent_id || null;
+        if (pid && byId[pid]) {
+            const parent = byId[pid];
+            const pEnd = parent.script_end_word ?? -1;
+            if (pEnd >= 0) {
+                if (next.script_end_word != null && next.script_end_word <= pEnd) {
+                    next.script_end_word = pEnd + 1;
+                }
+                if (next.script_start_word != null && next.script_start_word <= pEnd) {
+                    next.script_start_word = pEnd + 1;
+                }
+            } else {
+                // Cha chưa chọn từ (hoàn thành cuối beat) → con không được có
+                // mốc riêng sớm hơn — buộc về cuối beat.
+                next.script_end_word = null;
+                next.script_start_word = null;
+            }
+            // THỜI GIAN (giây): con phải SAU cha — nếu cha có end_sec, con không
+            // được bắt đầu/xong trước mốc đó.
+            const pEndSec = parent.end_sec ?? -1;
+            if (pEndSec >= 0) {
+                if (next.end_sec != null && next.end_sec < pEndSec) {
+                    next.end_sec = pEndSec;
+                }
+                if (next.start_sec != null && next.start_sec < pEndSec) {
+                    next.start_sec = pEndSec;
+                }
+            } else if (next.end_sec != null || next.start_sec != null) {
+                next.end_sec = null;
+                next.start_sec = null;
+            }
+        }
+        fixed.push(next);
+        byId[r.id] = next;
+    }
+    return fixed;
+}
+
 /** Animation nhấp nháy khi vùng được chọn (bên danh sách vùng). */
 const regionActivePulse = keyframes`
     0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.55); }
@@ -205,9 +276,9 @@ export default function ShortVideoAgentBeatRegionEditor({
     // (vẽ vùng nào → tự hợp (union) vào A).
     const [addModeRegionId, setAddModeRegionId] = React.useState<string>('');
 
-    // Chế độ tương tác với canvas ảnh: 'select' (mặc định — click vùng = chọn +
-    // cuộn danh sách, click ngoài vùng = đặt điểm tập trung) / 'add' (click/
-    // kéo = vẽ vùng mới). Các chế độ boolean (thêm/xóa/bg) vẫn ưu tiên hơn.
+    // Chế độ tương tác với canvas ảnh: 'select' (mặc định — click vùng = chọn,
+    // setting vùng đó hiện ở cột phải; click ngoài vùng = đặt điểm tập trung) /
+    // 'add' (click/kéo = vẽ vùng mới). Các chế độ boolean (thêm/xóa/bg) vẫn ưu tiên hơn.
     const [regionMode, setRegionMode] = React.useState<'select' | 'add'>('select');
     const isAddActive = regionMode === 'add'
         || Boolean(addModeRegionId || eraseModeRegionId || bgSampleMode);
@@ -255,13 +326,18 @@ export default function ShortVideoAgentBeatRegionEditor({
         { id: string; label: string; thumb_url?: string }[]
     >([]);
     const [placeHandDefaultId, setPlaceHandDefaultId] = React.useState('');
+    // Kiểu tay VẼ (vùng action='draw') — danh sách từ whiteboard/pencil/meta.json.
+    const [drawHandOptions, setDrawHandOptions] = React.useState<
+        { id: string; label: string; thumb_url?: string }[]
+    >([]);
     // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
     const [notice, setNotice] = React.useState<{
         variant: 'success' | 'warning' | 'error' | 'info';
         text: string;
     } | null>(null);
     const notify = React.useCallback((text: string, variant: 'success' | 'warning' | 'error' | 'info' = 'info') => {
-        setNotice({ variant, text });
+        window.showMessage(text, variant);
+        // setNotice({ variant, text });
     }, []);
 
     // Danh sách kiểu tay ĐƯA ẢNH VÀO (whiteboard/keo-anh/meta.json).
@@ -283,6 +359,37 @@ export default function ShortVideoAgentBeatRegionEditor({
                 if (cancelled || !res?.success) return;
                 setPlaceHandDefaultId(String(res.default_hand || '').trim());
                 setPlaceHandOptions(
+                    Array.isArray(res.hands)
+                        ? res.hands
+                            .filter((h): h is { id: string; label: string; thumb_url?: string } => Boolean(h?.id))
+                            .map((h) => ({
+                                id: h.id,
+                                label: String(h.label || h.id),
+                                thumb_url: String(h.thumb_url || ''),
+                            }))
+                        : [],
+                );
+            },
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Danh sách kiểu tay VẼ (whiteboard/pencil/meta.json — bút chì, bút lông...).
+    React.useEffect(() => {
+        let cancelled = false;
+        apiAjaxRef.current({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/whiteboard/hands',
+            method: 'POST',
+            data: { category: 'pencil' },
+            loading: false,
+            success: (res: {
+                success?: boolean;
+                hands?: Array<{ id?: string; label?: string; thumb_url?: string }>;
+            }) => {
+                if (cancelled || !res?.success) return;
+                setDrawHandOptions(
                     Array.isArray(res.hands)
                         ? res.hands
                             .filter((h): h is { id: string; label: string; thumb_url?: string } => Boolean(h?.id))
@@ -330,7 +437,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     // lưu riêng: UI mở lại hiển thị đúng option, render dùng vật, rollback về
     // "toàn vùng" bất kỳ lúc nào.
     const buildRegionsToSave = React.useCallback((): BeatRegion[] => (
-        regions.map((r): BeatRegion => {
+        enforceRegionChildOrder(regions.map((r): BeatRegion => {
             const original = originalPointsByRegion[r.id];
             if (!original) {
                 return r;
@@ -341,7 +448,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                 object_points: r.points,
                 select_mode: 'object' as BeatRegion['select_mode'],
             };
-        })
+        }))
     ), [regions, originalPointsByRegion]);
 
     // Prev/Next beat ngay trong drawer: seek timeline đến GIỮA beat kế/cũ —
@@ -568,35 +675,76 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
         const start = Number(section?.startSec ?? 0);
-        const end = Number(section?.endSec ?? section?.startSec ?? 0) + Number(section?.durationSec ?? 0);
+        const dur = Number(section?.durationSec ?? 0);
+        const end = Number(section?.endSec ?? (start + dur));
         if (!(end > start)) {
             return all;
         }
         return all.filter((w) => Number(w.start) >= start - 0.1 && Number(w.end) <= end + 0.1);
     }, [beatId, state.beatMap?.sections, state.whisperWords]);
 
+    // Thời lượng + mốc bắt đầu của beat (scene-relative) cho thanh thời gian render.
+    // QUAN TRỌNG: beatDurationSec = ĐÚNG durationSec của beat (window audio script).
+    // KHÔNG cộng dồn endSec + durationSec (sẽ làm timeline dài gấp đôi, vượt khỏi
+    // phạm vi audio của beat).
+    const beatTimeline = React.useMemo(() => {
+        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const start = Number(section?.startSec ?? 0);
+        const dur = Number(section?.durationSec ?? 0);
+        const end = Number(section?.endSec ?? (start + dur));
+        const durationSec = dur > 0 ? dur : Math.max(0.1, end - start);
+        return {
+            beatStartSec: start,
+            beatDurationSec: durationSec,
+        };
+    }, [beatId, state.beatMap?.sections]);
+
+    // Danh mục transition (có effect_duration_sec THỰC TẾ từ asset) — dùng tính
+    // vùng đỏ cuối beat trên timeline vùng khớp thời lượng render thật.
+    const [whiteboardTransitions, setWhiteboardTransitions] = React.useState<
+        WhiteboardTransitionOption[]
+    >([]);
+    React.useEffect(() => {
+        let cancelled = false;
+        const apply = (res: { transitions: WhiteboardTransitionOption[] }) => {
+            if (!cancelled) {
+                setWhiteboardTransitions(res.transitions);
+            }
+        };
+        fetchWhiteboardTransitions().then(apply).catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Thời lượng chuyển cảnh cuối beat này (0 = beat cuối/'none' → không vẽ box
+    // đỏ) — mirror logic PHP resolve_whiteboard_scene_params_for_beat.
+    const beatTransitionDurationSec = React.useMemo(() => {
+        const sections = state.beatMap?.sections || [];
+        if (sections.length === 0) {
+            return 0;
+        }
+        const index = sections.findIndex((sec) => sec.id === beatId);
+        if (index < 0) {
+            return 0;
+        }
+        return resolveAgentVideoBeatTransitionDurationSec({
+            isLastBeat: index >= sections.length - 1,
+            config: state.agentWhiteboardConfig ?? null,
+            override: state.agentWhiteboardBeatOverrides?.[beatId] ?? null,
+            transitions: whiteboardTransitions,
+        });
+    }, [
+        beatId,
+        state.agentWhiteboardBeatOverrides,
+        state.agentWhiteboardConfig,
+        state.beatMap?.sections,
+        whiteboardTransitions,
+    ]);
+
     const colorFor = (index: number) => REGION_COLORS[index % REGION_COLORS.length];
 
-    // Depth (cha→con) + sắp xếp cha trước con để hiển thị cây cha/con.
-    const regionDepth = React.useMemo(() => {
-        const depth: Record<string, number> = {};
-        const compute = (id: string, seen: Set<string>): number => {
-            if (depth[id] !== undefined) {
-                return depth[id];
-            }
-            if (seen.has(id)) {
-                return 0;
-            }
-            seen.add(id);
-            const region = regions.find((r) => r.id === id);
-            const pid = region?.parent_id || null;
-            depth[id] = pid ? 1 + compute(pid, seen) : 0;
-            return depth[id];
-        };
-        regions.forEach((r) => compute(r.id, new Set()));
-        return depth;
-    }, [regions]);
-
+    // Sắp xếp cha trước con (dùng cho hit-test canvas + thứ tự vùng con).
     const sortedRegions = React.useMemo(() => {
         const out: BeatRegion[] = [];
         const visited = new Set<string>();
@@ -614,6 +762,25 @@ export default function ShortVideoAgentBeatRegionEditor({
         regions.forEach(visit);
         return out;
     }, [regions]);
+
+    // Cột phải chỉ hiển thị setting của vùng ĐANG CHỌN (không liệt kê hết).
+    const selectedRegion = React.useMemo(
+        () => regions.find((r) => r.id === selectedRegionId) || null,
+        [regions, selectedRegionId],
+    );
+    const parentRegion = React.useMemo(
+        () => (selectedRegion?.parent_id
+            ? regions.find((r) => r.id === selectedRegion.parent_id) || null
+            : null),
+        [regions, selectedRegion],
+    );
+    // Vùng con của vùng đang chọn — mỗi vùng 1 dòng + nút Chọn.
+    const childRegions = React.useMemo(
+        () => (selectedRegion
+            ? sortedRegions.filter((r) => r.parent_id === selectedRegion.id)
+            : []),
+        [sortedRegions, selectedRegion],
+    );
 
     const svgPointFromEvent = (event: { clientX: number; clientY: number }): [number, number] | null => {
         const svg = svgRef.current;
@@ -789,7 +956,8 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         const [x, y] = pt;
         // Đang bật "đặt điểm tập trung" → click chỗ nào đặt focus chỗ đó (ưu tiên
-        // mọi chế độ); ngược lại chế độ chọn: click vào vùng → chọn + cuộn danh sách.
+        // mọi chế độ); ngược lại chế độ chọn: click vào vùng → chọn (setting
+        // vùng đó hiện ở cột phải).
         if (focusMode) {
             handleSetFocus(x, y);
             return;
@@ -798,7 +966,6 @@ export default function ShortVideoAgentBeatRegionEditor({
             const hit = [...sortedRegions].reverse().find((r) => pointInPolygon(x, y, r.points));
             if (hit) {
                 setSelectedRegionId(hit.id);
-                scrollRegionIntoView(hit.id);
             }
             return;
         }
@@ -949,7 +1116,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             script_start_word: null,
             script_end_word: null,
         };
-        setRegions((prev) => [...prev, region]);
+        setRegions((prev) => enforceRegionChildOrder([...prev, region]));
         setSelectedRegionId(region.id);
         setDraftPoints([]);
         setDraftIsDrag(false);
@@ -965,9 +1132,14 @@ export default function ShortVideoAgentBeatRegionEditor({
     };
 
     const updateRegion = (id: string, patch: Partial<BeatRegion>) => {
-        setRegions((prev) => prev.map((region) => (
-            region.id === id ? { ...region, ...patch } : region
-        )));
+        setRegions((prev) => {
+            const next = prev.map((region) => (
+                region.id === id ? { ...region, ...patch } : region
+            ));
+            // CHA TRƯỚC CON: sau mỗi thay đổi, tự nâng script word của vùng con
+            // nếu nó SỚM HƠN từ cuối của vùng cha — con không bao giờ render trước cha.
+            return enforceRegionChildOrder(next);
+        });
     };
 
     const handleDeleteRegion = (id: string) => {
@@ -1213,7 +1385,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
 
     // Zoom / pan ảnh (Photoshop-like): transform cùng layer chứa ảnh + SVG → vùng
-    // luôn bám đúng. Ctrl+scroll = zoom theo chuột; Space+click-drag = pan.
+    // luôn bám đúng. Scroll chuột = zoom theo chuột; Space+click-drag = pan.
     const [zoom, setZoom] = React.useState(1);
     const [pan, setPan] = React.useState({ x: 0, y: 0 });
     const [spaceDown, setSpaceDown] = React.useState(false);
@@ -1271,16 +1443,14 @@ export default function ShortVideoAgentBeatRegionEditor({
         setPan((p) => clampPan(p.x, p.y, z));
     }, [clampPan]);
 
-    // Ctrl/Cmd + scroll = zoom theo vị trí chuột (chặn browser zoom trang).
+    // Scroll chuột = zoom theo vị trí chuột (không cần Ctrl/Cmd; pinch trackpad
+    // vẫn hoạt động vì gửi wheel kèm ctrlKey). preventDefault chặn scroll trang.
     React.useEffect(() => {
         const el = containerRef.current;
         if (!el) {
             return undefined;
         }
         const onWheel = (event: WheelEvent) => {
-            if (!event.ctrlKey && !event.metaKey) {
-                return;
-            }
             event.preventDefault();
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect) {
@@ -1322,11 +1492,11 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
     }, []);
 
-    // Cuộn danh sách vùng đến vùng được chọn trên canvas.
-    const regionItemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-    const scrollRegionIntoView = React.useCallback((id: string) => {
-        regionItemRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, []);
+    // Đổi vùng chọn → cuộn cột cài đặt (phải) về đầu để thấy card vùng mới.
+    const settingsScrollRef = React.useRef<HTMLDivElement | null>(null);
+    React.useEffect(() => {
+        settingsScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [selectedRegionId]);
 
     // Render video beat: trạng thái + báo khi xong.
     const beatRender = state.whiteboardBeatRenders?.[beatId] || null;
@@ -1538,7 +1708,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
                             </IconButton>
                         </Tooltip>
-                        {/* Thanh zoom (slider) — góc trên PHẢI box ảnh; Ctrl+scroll / Space+kéo để pan */}
+                        {/* Thanh zoom (slider) — góc trên PHẢI box ảnh; scroll chuột = zoom / Space+kéo để pan */}
                         <Stack
                             direction="row"
                             spacing={1}
@@ -2017,6 +2187,21 @@ export default function ShortVideoAgentBeatRegionEditor({
                         </Stack>
                     </Box>
 
+                    {/* Thanh thời gian render theo vùng (audio bar) — dưới box ảnh */}
+                    <WhiteboardRegionTimeline
+                        regions={regions}
+                        beatDurationSec={beatTimeline.beatDurationSec}
+                        beatStartSec={beatTimeline.beatStartSec}
+                        beatWords={beatWords}
+                        colorFor={colorFor}
+                        onChangeRegion={updateRegion}
+                        onSelectRegion={(id) => setSelectedRegionId(id)}
+                        selectedRegionId={selectedRegionId}
+                        audioUrl={state.audioFileUrl || ''}
+                        maxWidth={boxSize ? boxSize.w : undefined}
+                        transitionDurationSec={beatTransitionDurationSec}
+                    />
+
                     {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
                     <Dialog
                         open={Boolean(pendingSwitch)}
@@ -2101,8 +2286,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                     </Dialog>
                 </Box>
 
-                {/* Cột phải: danh sách vùng + cấu hình */}
+                {/* Cột phải: setting vùng đang chọn (không liệt kê hết các vùng) */}
                 <Box
+                    ref={settingsScrollRef}
                     sx={{
                         width: 340,
                         flexShrink: 0,
@@ -2151,9 +2337,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                             onSave={(override) => persistOverride(override)}
                         />
                     </Box>
-                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
-                        Các vùng ({regions.length})
-                    </Typography>
                     {bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
                             Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>
@@ -2165,34 +2348,49 @@ export default function ShortVideoAgentBeatRegionEditor({
                         <Typography variant="caption" color="text.secondary">
                             Chưa có vùng nào — vẽ trên ảnh bên trái.
                         </Typography>
+                    ) : !selectedRegion ? (
+                        <Typography variant="caption" color="text.secondary">
+                            Chưa chọn vùng nào — click vào vùng trên ảnh (hoặc thanh thời gian bên dưới ảnh)
+                            để hiển thị setting riêng của vùng đó.
+                        </Typography>
                     ) : null}
-                    {sortedRegions.map((region, index) => {
+
+                    {/* Đang chọn vùng con → nút quay lại setting vùng cha */}
+                    {parentRegion ? (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            startIcon={<ChevronLeftIcon />}
+                            onClick={() => setSelectedRegionId(parentRegion.id)}
+                            title={`Về setting vùng cha "${parentRegion.name}"`}
+                            sx={{
+                                textTransform: 'none',
+                                justifyContent: 'flex-start',
+                                alignSelf: 'flex-start',
+                                mb: 0.5,
+                            }}
+                        >
+                            Vùng cha: {parentRegion.name}
+                        </Button>
+                    ) : null}
+
+                    {/* CHỈ hiển thị setting của vùng đang chọn (không liệt kê các vùng khác) */}
+                    {(selectedRegion ? [selectedRegion] : []).map((region) => {
+                        const index = Math.max(0, regions.findIndex((item) => item.id === region.id));
                         const color = region.action === 'erase' ? '#f44336' : colorFor(index);
-                        const parent = region.parent_id
-                            ? regions.find((item) => item.id === region.parent_id)
-                            : null;
-                        const depth = regionDepth[region.id] ?? 0;
                         const isSelected = selectedRegionId === region.id;
+                        const childCount = childRegions.length;
                         return (
                             <Box
                                 key={region.id}
-                                ref={(node) => { regionItemRefs.current[region.id] = node as HTMLDivElement | null; }}
-                                onClick={(event) => {
-                                    const target = event.target as HTMLElement;
-                                    if (target.closest('input,button,textarea')) {
-                                        return;
-                                    }
-                                    setSelectedRegionId(region.id);
-                                }}
                                 sx={{
                                     p: 1.25,
                                     borderRadius: 1,
                                     border: 1,
-                                    borderColor: isSelected ? color : 'divider',
+                                    borderColor: color,
                                     borderLeft: `4px solid ${color}`,
-                                    bgcolor: isSelected ? 'action.selected' : 'background.paper',
-                                    ml: depth > 0 ? `${Math.min(depth, 4) * 1.5}rem` : 0,
-                                    cursor: 'pointer',
+                                    bgcolor: 'action.selected',
                                     ...(isSelected ? {
                                         animation: `${regionActivePulse} 0.7s ease-out`,
                                     } : {}),
@@ -2219,10 +2417,23 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </IconButton>
                                 </Stack>
 
-                                {depth > 0 ? (
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                                        ↳ Vùng con của: {parent?.name || '?'}
-                                    </Typography>
+                                {/* VÙNG CHA HIỆN NGAY (chỉ vùng có vùng con): phần thừa
+                                hiện nguyên ảnh từ đầu — vùng con vẫn animate. */}
+                                {childCount > 0 ? (
+                                    <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
+                                        <Switch
+                                            size="small"
+                                            checked={Boolean(region.parent_leftover_instant)}
+                                            onChange={(event) =>
+                                                updateRegion(region.id, { parent_leftover_instant: event.target.checked })
+                                            }
+                                        />
+                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            <Typography variant="caption" fontWeight={700} display="block">
+                                                Vùng cha hiện ngay từ đầu
+                                            </Typography>
+                                        </Box>
+                                    </Stack>
                                 ) : null}
 
                                 {/* 1. Hành động render: Vẽ tay / Đưa vào */}
@@ -2269,6 +2480,104 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </Button>
                                     </Stack>
                                 </RegionSection>
+
+                                {/* 1a. KIỂU TAY VẼ (chỉ vùng draw): chọn bút/tay vẽ
+                                vùng — đồng bộ whiteboard/pencil/meta.json.
+                                "Mặc định" = tay theo setting toàn beat (config.hand). */}
+                                {region.action === 'draw' && drawHandOptions.length > 0 ? (
+                                    <RegionSection title="Kiểu tay vẽ">
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'flex-start' }}>
+                                            {[
+                                                { id: '', label: 'Mặc định', thumb_url: '' },
+                                                ...drawHandOptions,
+                                            ].map((opt) => {
+                                                const isDefault = opt.id === '';
+                                                const current = String(region.draw_hand || '').trim();
+                                                const active = isDefault ? current === '' : current === opt.id;
+                                                return (
+                                                    <Box
+                                                        key={opt.id || '__default__'}
+                                                        onClick={() =>
+                                                            updateRegion(
+                                                                region.id,
+                                                                isDefault ? { draw_hand: null } : { draw_hand: opt.id },
+                                                            )
+                                                        }
+                                                        title={isDefault ? 'Tay mặc định của beat (setting toàn beat)' : opt.label}
+                                                        sx={{
+                                                            width: 'calc((100% / 3) - 6px)',
+                                                            border: '1px solid',
+                                                            borderColor: active ? 'primary.main' : 'divider',
+                                                            borderRadius: 1.5,
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer',
+                                                            bgcolor: active ? 'action.selected' : 'transparent',
+                                                            '&:hover': { borderColor: 'primary.light' },
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                height: 64,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                bgcolor: 'rgba(0,0,0,0.05)',
+                                                                position: 'relative',
+                                                            }}
+                                                        >
+                                                            {opt.thumb_url ? (
+                                                                <Box
+                                                                    component="img"
+                                                                    src={opt.thumb_url}
+                                                                    alt={opt.label}
+                                                                    draggable={false}
+                                                                    sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+                                                                />
+                                                            ) : (
+                                                                <AutoAwesomeIcon
+                                                                    sx={{ fontSize: 30, color: active ? 'primary.main' : 'text.disabled' }}
+                                                                />
+                                                            )}
+                                                            {active ? (
+                                                                <Box
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        top: 3,
+                                                                        right: 3,
+                                                                        width: 16,
+                                                                        height: 16,
+                                                                        borderRadius: '50%',
+                                                                        bgcolor: 'primary.main',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}
+                                                                >
+                                                                    <CheckIcon sx={{ fontSize: 11, color: '#fff' }} />
+                                                                </Box>
+                                                            ) : null}
+                                                        </Box>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                display: 'block',
+                                                                textAlign: 'center',
+                                                                px: 0.5,
+                                                                py: 0.4,
+                                                                fontSize: 10,
+                                                                lineHeight: 1.25,
+                                                                color: active ? 'primary.main' : 'text.secondary',
+                                                                fontWeight: active ? 700 : 400,
+                                                            }}
+                                                        >
+                                                            {opt.label}
+                                                        </Typography>
+                                                    </Box>
+                                                );
+                                            })}
+                                        </Stack>
+                                    </RegionSection>
+                                ) : null}
 
                                 {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
                                 {region.action === 'place' ? (
@@ -2611,88 +2920,75 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         ) : null}
                                     </Stack>
                                 </RegionSection>
-
-                                {/* 6. Thời điểm hoàn thành: từ trong audio script */}
-                                <RegionSection title="Thời điểm hoàn thành">
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                    Chọn từ trong audio script (vùng hoàn thành khi đọc đến từ này):
-                                </Typography>
-                                <Box
-                                    sx={{
-                                        maxHeight: 120,
-                                        overflow: 'auto',
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: 1,
-                                        p: 0.75,
-                                        bgcolor: 'background.paper',
-                                        lineHeight: 1.9,
-                                    }}
-                                >
-                                    {beatWords.length === 0 ? (
-                                        <Typography variant="caption" color="text.secondary">
-                                            Chưa có whisper words cho beat này — mở bỏ trống (hoàn thành cuối beat).
-                                        </Typography>
-                                    ) : null}
-                                    {beatWords.map((word) => {
-                                        const wi = word.index ?? 0;
-                                        const selected = region.script_end_word === wi;
-                                        return (
-                                            <Box
-                                                component="span"
-                                                key={wi}
-                                                onClick={() => updateRegion(region.id, {
-                                                    script_end_word: selected ? null : wi,
-                                                })}
-                                                sx={{
-                                                    cursor: 'pointer',
-                                                    borderRadius: 0.5,
-                                                    px: 0.4,
-                                                    py: 0.15,
-                                                    fontSize: 12.5,
-                                                    fontWeight: selected ? 800 : 400,
-                                                    color: selected ? '#fff' : 'text.primary',
-                                                    bgcolor: selected ? 'primary.main' : 'transparent',
-                                                    '&:hover': {
-                                                        bgcolor: selected ? 'primary.dark' : 'primary.light',
-                                                        color: selected ? '#fff' : '#fff',
-                                                    },
-                                                }}
-                                                title={`Khi đọc từ "${word.text}" → vùng render hoàn chỉnh`}
-                                            >
-                                                {word.text}
-                                                {' '}
-                                            </Box>
-                                        );
-                                    })}
-                                </Box>
-                                {region.script_end_word != null ? (
-                                    <Typography variant="caption" color="success.main" display="block" sx={{ mt: 0.75 }}>
-                                        Hoàn thành khi đọc: «
-                                        {beatWords.find((w) => (w.index ?? 0) === region.script_end_word)?.text || ''}
-                                        » — click lại từ để bỏ chọn (hoàn thành cuối beat)
-                                    </Typography>
-                                ) : (
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
-                                        Chưa chọn từ — vùng hoàn thành cuối beat.
-                                    </Typography>
-                                )}
-                                </RegionSection>
                             </Box>
                         );
                     })}
 
-                    <Divider sx={{ my: 0.5 }} />
-
-                    <Alert severity="info" sx={{ py: 0.5 }}>
-                        Vùng chưa chọn sẽ render theo setting toàn beat (vẽ tay / kéo vào / hiện ngay).
-                    </Alert>
-                    {regions.some((r) => r.action === 'erase') ? (
-                        <Alert severity="warning" sx={{ py: 0.5 }}>
-                            Vùng <strong>Xóa thừa</strong> (màu đỏ): phần này không được đưa vào/vẽ — luôn hiển
-                            thị ảnh gốc. Dùng để bỏ phần chọn thừa sau khi tự chọn vật thể.
-                        </Alert>
+                    {/* Vùng con của vùng đang chọn: mỗi vùng 1 dòng + nút Chọn
+                        → click chuyển setting sang vùng con đó */}
+                    {selectedRegion && childRegions.length > 0 ? (
+                        <Box sx={{ mt: 0.5 }}>
+                            <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                                Vùng con ({childRegions.length})
+                            </Typography>
+                            {childRegions.map((child) => {
+                                const childColor = child.action === 'erase'
+                                    ? '#f44336'
+                                    : colorFor(Math.max(0, regions.findIndex((item) => item.id === child.id)));
+                                return (
+                                    <Stack
+                                        key={child.id}
+                                        direction="row"
+                                        alignItems="center"
+                                        spacing={0.75}
+                                        sx={{
+                                            p: 0.5,
+                                            pl: 1,
+                                            mb: 0.5,
+                                            borderRadius: 1,
+                                            border: 1,
+                                            borderColor: 'divider',
+                                            borderLeft: `3px solid ${childColor}`,
+                                            bgcolor: 'background.paper',
+                                        }}
+                                    >
+                                        <Typography
+                                            variant="caption"
+                                            title={child.name}
+                                            sx={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {child.name}
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="primary"
+                                            onClick={() => setSelectedRegionId(child.id)}
+                                            title={`Chọn "${child.name}" — hiển thị setting của vùng con này`}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontSize: 11,
+                                                py: 0.15,
+                                                px: 1.25,
+                                                minHeight: 0,
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            Chọn
+                                        </Button>
+                                    </Stack>
+                                );
+                            })}
+                        </Box>
                     ) : null}
+
+                    <Divider sx={{ my: 0.5 }} />
                 </Box>
             </Box>
 

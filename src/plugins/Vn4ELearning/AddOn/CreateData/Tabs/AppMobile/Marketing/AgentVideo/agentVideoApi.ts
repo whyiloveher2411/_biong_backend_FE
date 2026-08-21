@@ -95,8 +95,22 @@ export type BeatRegion = {
      */
     action: 'draw' | 'place' | 'erase';
     parent_id?: string | null;
+    /**
+     * "VÙNG CHA HIỆN NGAY" (setting RIÊNG cho TỪNG vùng cha — vùng có vùng con):
+     * phần thừa của vùng cha (sau khi trừ các vùng con) hiện NGUYÊN ẢNH trong
+     * beat từ đầu — chỉ các vùng con được vẽ/đưa vào theo cài đặt. Tắt/không
+     * con: vùng vẽ/đưa vào như hiện tại (cha trước, rồi đến vùng con).
+     */
+    parent_leftover_instant?: boolean;
     script_start_word?: number | null;
     script_end_word?: number | null;
+    /**
+     * THỜI GIAN render (giây, scene-relative trong beat) — dùng thay cho chọn
+     * từ script (whisper có thể thiếu / muốn kiểm soát chính xác). start_sec =
+     * thời điểm vùng BẮT ĐẦU render, end_sec = thời điểm vùng render XONG.
+     */
+    start_sec?: number | null;
+    end_sec?: number | null;
     /** Mẫu background riêng của vùng này — lặp lại fill nền vùng khi render. */
     bg_sample?: BeatBackgroundSample | null;
     /**
@@ -113,6 +127,7 @@ export type BeatRegion = {
     /**
      * HIỆU ỨNG KHI ĐƯA VÀO (action='place'):
      * - 'loang' (mặc định — vệt phun màu/khói trắng hiện tại)
+     * - 'none' (KHÔNG hiệu ứng — chỉ đặt ảnh vào vùng, không loang/âm thanh)
      * - 'slide_friction' (quán tính trượt — trượt tới rồi nảy lui, mỗi nhịp biên độ giảm 1/2)
      * - 'zoom_out_bounce' (thu nhỏ nảy đàn hồi — từ RẤT TO co dần về khung, quá đà nhồi nhỏ/rộng rồi khít)
      * - 'pop_in_bounce' (phóng to nảy đàn hồi — từ điểm nhỏ phóng vọt lên, quá đà to ra rồi về vừa khung)
@@ -135,10 +150,16 @@ export type BeatRegion = {
      * không dùng tay (không hiển thị selector).
      */
     place_hand?: string | null;
+    /**
+     * KIỂU TAY VẼ (action='draw'): id tay/bút trong whiteboard/pencil/meta.json —
+     * 'but_chi', 'but_long_den_1', 'but_long_den_2', ... Bỏ trống → dùng tay
+     * mặc định của beat (setting toàn beat: config.hand).
+     */
+    draw_hand?: string | null;
 };
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
-export type PlaceEffectKey = 'loang' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen' | 'neon_border';
+export type PlaceEffectKey = 'loang' | 'none' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen' | 'neon_border';
 
 export const PLACE_EFFECT_OPTIONS: Array<{
     value: PlaceEffectKey;
@@ -175,7 +196,38 @@ export const PLACE_EFFECT_OPTIONS: Array<{
         label: 'Đèn neon chạy viền',
         description: 'Đốm sáng neon lao 3 vòng quanh viền ảnh vừa đặt (Trái → Trên → Phải → Dưới), đuôi sáng tàn dần kiểu đom đóm, vòng phình ra rồi co về, 2 frame cuối toàn viền flash — có âm thanh đèn neon chạy',
     },
+    {
+        value: 'none',
+        label: 'Không hiệu ứng',
+        description: 'Chỉ đặt ảnh vào vùng — KHÔNG có hiệu ứng nào (không loang, không âm thanh đặt ảnh)',
+    },
 ];
+
+/**
+ * THỜI LƯỢNG HIỆU ỨNG SAU KHI ĐƯA ẢNH VÀO (cố định theo engine frames.py):
+ * - loang          → place_fix 1.0s  (pf_frames = round(1.0 * fps))
+ * - slide_friction → chuỗi nảy quán tính ~0.35s sau khi tay thả
+ * - zoom_out_bounce / pop_in_bounce → scale đàn hồi 0.6s (scale_in_n)
+ * - mirror_sheen   → quét sáng 0.4s  (ms_frames = round(0.4 * fps))
+ * - neon_border    → đèn neon 1.2s   (nb_frames bị chặn tối đa 1.2s)
+ * - none           → 0s (không có hiệu ứng sau khi đặt ảnh)
+ * Dùng vẽ phần MỞ RỘNG sau thanh vùng trên timeline để user biết khoảng
+ * thời gian hiệu ứng chiếm thêm và điều chỉnh bar hợp lý.
+ */
+export const PLACE_EFFECT_AFTER_SEC: Record<PlaceEffectKey, number> = {
+    loang: 1.0,
+    none: 0,
+    slide_friction: 0.35,
+    zoom_out_bounce: 0.6,
+    pop_in_bounce: 0.6,
+    mirror_sheen: 0.4,
+    neon_border: 1.2,
+};
+
+/** Thời lượng hiệu ứng sau khi đặt ảnh của 1 vùng (giây). */
+export function placeEffectAfterSec(effect: string | null | undefined): number {
+    return PLACE_EFFECT_AFTER_SEC[normalizePlaceEffect(effect)] || 0;
+}
 
 /** MÀU ĐÈN NEON CHẠY VIỀN (place_effect='neon_border') — đồng bộ preset engine. */
 export const NEON_COLOR_KEYS = ['cyan', 'pink', 'yellow', 'lime', 'orange', 'purple', 'red', 'green', 'blue', 'white'] as const;
@@ -210,7 +262,7 @@ export function normalizeNeonColor(raw: string | null | undefined): NeonColorKey
 /** Khôi phục place_effect hợp lệ (dữ liệu cũ có thể còn inertial_rotation/dynamic_shadow → về loang). */
 export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffectKey {
     const value = String(raw || '').trim().toLowerCase();
-    if (value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce' || value === 'mirror_sheen' || value === 'neon_border') {
+    if (value === 'none' || value === 'slide_friction' || value === 'zoom_out_bounce' || value === 'pop_in_bounce' || value === 'mirror_sheen' || value === 'neon_border') {
         return value;
     }
     return 'loang';
