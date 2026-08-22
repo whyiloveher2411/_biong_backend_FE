@@ -49,8 +49,11 @@ import {
     fetchWhiteboardTransitions,
     isPlaceHandlessEffect,
     normalizeNeonColor,
+    normalizeDrawEffect,
     normalizePlaceEffect,
     normalizePlaceHand,
+    normalizePlaceShadow,
+    DRAW_EFFECT_OPTIONS,
     NEON_COLOR_OPTIONS,
     PLACE_EFFECT_OPTIONS,
     type AgentWhiteboardBeatOverride,
@@ -330,6 +333,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [drawHandOptions, setDrawHandOptions] = React.useState<
         { id: string; label: string; thumb_url?: string }[]
     >([]);
+    const [drawHandDefaultId, setDrawHandDefaultId] = React.useState('but_chi');
     // Notice nội bộ hiển thị TRONG drawer (floating message bị che bởi DrawerCustom).
     const [notice, setNotice] = React.useState<{
         variant: 'success' | 'warning' | 'error' | 'info';
@@ -386,9 +390,11 @@ export default function ShortVideoAgentBeatRegionEditor({
             loading: false,
             success: (res: {
                 success?: boolean;
+                default_hand?: string;
                 hands?: Array<{ id?: string; label?: string; thumb_url?: string }>;
             }) => {
                 if (cancelled || !res?.success) return;
+                setDrawHandDefaultId(String(res.default_hand || 'but_chi').trim() || 'but_chi');
                 setDrawHandOptions(
                     Array.isArray(res.hands)
                         ? res.hands
@@ -2444,7 +2450,10 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         variant="outlined"
                                         color="primary"
                                         startIcon={region.action === 'draw' ? <CheckIcon /> : null}
-                                        onClick={() => updateRegion(region.id, { action: 'draw' })}
+                                        onClick={() => updateRegion(region.id, {
+                                            action: 'draw',
+                                            place_effect: normalizeDrawEffect(region.place_effect),
+                                        })}
                                         sx={{
                                             textTransform: 'none',
                                             flex: 1,
@@ -2465,6 +2474,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 updateRegion(region.id, {
                                                     action: 'place',
                                                     place_effect: normalizePlaceEffect(region.place_effect),
+                                                    place_shadow: normalizePlaceShadow(region.place_shadow),
                                                 });
                                             }
                                         }}
@@ -2483,27 +2493,29 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                                 {/* 1a. KIỂU TAY VẼ (chỉ vùng draw): chọn bút/tay vẽ
                                 vùng — đồng bộ whiteboard/pencil/meta.json.
-                                "Mặc định" = tay theo setting toàn beat (config.hand). */}
+                                Giống kiểu tay đưa ảnh: không có ô "Mặc định" riêng;
+                                bút chì (meta default) có badge và được chọn sẵn. */}
                                 {region.action === 'draw' && drawHandOptions.length > 0 ? (
                                     <RegionSection title="Kiểu tay vẽ">
-                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'flex-start' }}>
-                                            {[
-                                                { id: '', label: 'Mặc định', thumb_url: '' },
-                                                ...drawHandOptions,
-                                            ].map((opt) => {
-                                                const isDefault = opt.id === '';
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'space-between' }}>
+                                            {drawHandOptions.map((opt) => {
+                                                const isDefault = opt.id === drawHandDefaultId;
                                                 const current = String(region.draw_hand || '').trim();
-                                                const active = isDefault ? current === '' : current === opt.id;
+                                                const active = isDefault ? current === '' || current === opt.id : current === opt.id;
                                                 return (
                                                     <Box
-                                                        key={opt.id || '__default__'}
+                                                        key={opt.id}
                                                         onClick={() =>
                                                             updateRegion(
                                                                 region.id,
                                                                 isDefault ? { draw_hand: null } : { draw_hand: opt.id },
                                                             )
                                                         }
-                                                        title={isDefault ? 'Tay mặc định của beat (setting toàn beat)' : opt.label}
+                                                        title={
+                                                            isDefault
+                                                                ? `${opt.label} (mặc định)`
+                                                                : opt.label
+                                                        }
                                                         sx={{
                                                             width: 'calc((100% / 3) - 6px)',
                                                             border: '1px solid',
@@ -2538,6 +2550,25 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                                     sx={{ fontSize: 30, color: active ? 'primary.main' : 'text.disabled' }}
                                                                 />
                                                             )}
+                                                            {isDefault ? (
+                                                                <Box
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        top: 3,
+                                                                        left: 3,
+                                                                        px: 0.5,
+                                                                        py: 0.15,
+                                                                        borderRadius: 1,
+                                                                        bgcolor: 'primary.main',
+                                                                        color: '#fff',
+                                                                        fontSize: 8,
+                                                                        lineHeight: 1.2,
+                                                                        fontWeight: 700,
+                                                                    }}
+                                                                >
+                                                                    Mặc định
+                                                                </Box>
+                                                            ) : null}
                                                             {active ? (
                                                                 <Box
                                                                     sx={{
@@ -2579,9 +2610,62 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </RegionSection>
                                 ) : null}
 
+                                {/* 1b. Hiệu ứng SAU KHI VẼ TAY (chỉ vùng draw) —
+                                subset: loang / quét sáng / neon / không (mặc định). */}
+                                {region.action === 'draw' ? (
+                                    <RegionSection title="Hiệu ứng sau khi vẽ xong">
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                            {DRAW_EFFECT_OPTIONS.map((opt) => {
+                                                const active = normalizeDrawEffect(region.place_effect) === opt.value;
+                                                return (
+                                                    <Button
+                                                        key={opt.value}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={active ? 'warning' : 'inherit'}
+                                                        startIcon={active ? <CheckIcon /> : null}
+                                                        onClick={() => updateRegion(region.id, { place_effect: opt.value })}
+                                                        title={opt.description}
+                                                        sx={{
+                                                            textTransform: 'none',
+                                                            flex: '1 1 45%',
+                                                            fontSize: 11,
+                                                            py: 0.25,
+                                                            mt: 0.5,
+                                                            minHeight: 0,
+                                                            ...(active
+                                                                ? { borderColor: 'warning.main', bgcolor: 'action.selected' }
+                                                                : {}),
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </Button>
+                                                );
+                                            })}
+                                        </Stack>
+                                    </RegionSection>
+                                ) : null}
+
                                 {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
                                 {region.action === 'place' ? (
                                     <RegionSection title="Hiệu ứng sau khi render ảnh">
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75, width: '100%' }}>
+                                            <Switch
+                                                size="small"
+                                                checked={normalizePlaceShadow(region.place_shadow)}
+                                                onChange={(event) =>
+                                                    updateRegion(region.id, { place_shadow: event.target.checked })
+                                                }
+                                            />
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="caption" fontWeight={700} display="block">
+                                                    Bóng đổ dưới ảnh
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                                    Mặc định bật — tắt khi bóng không hợp nền
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
                                         <Stack direction="row"  sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                                             {PLACE_EFFECT_OPTIONS.map((opt) => {
                                                 const active = normalizePlaceEffect(region.place_effect) === opt.value;
@@ -2614,8 +2698,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </RegionSection>
                                 ) : null}
 
-                                {/* 2a. MÀU ĐÈN NEON CHẠY VIỀN (chỉ khi chọn hiệu ứng neon_border) */}
-                                {region.action === 'place' && normalizePlaceEffect(region.place_effect) === 'neon_border' ? (
+                                {/* 2a. MÀU ĐÈN NEON CHẠY VIỀN (place hoặc draw khi chọn neon_border) */}
+                                {(region.action === 'place' || region.action === 'draw')
+                                    && (
+                                        region.action === 'place'
+                                            ? normalizePlaceEffect(region.place_effect)
+                                            : normalizeDrawEffect(region.place_effect)
+                                    ) === 'neon_border' ? (
                                     <RegionSection title="Màu đèn neon chạy viền">
                                         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                                             {NEON_COLOR_OPTIONS.map((opt) => {

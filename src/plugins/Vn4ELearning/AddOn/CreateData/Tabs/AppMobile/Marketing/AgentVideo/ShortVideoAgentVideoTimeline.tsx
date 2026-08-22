@@ -38,6 +38,7 @@ import type {
     FullAutoStepToggleKey,
     FullAutoStepToggles,
 } from './agentVideoApi';
+import { saveAgentTimelinePosition } from './agentVideoApi';
 import {
     whiteboardRenderProgressLabel,
     type WhiteboardRenderProgress,
@@ -259,6 +260,9 @@ type Props = {
     quickIterateBeatStages?: Record<string, 'queued' | 'visual' | 'html'>;
     savingImportHtml?: boolean;
     beatPlaybackSeekRequest?: { beatId: string; startSec: number; nonce: number } | null;
+    /** Vị trí timeline (giây) cần restore 1 lần sau khi video sẵn sàng. */
+    restoreTimelineSec?: number | null;
+    onRestoreTimelineApplied?: () => void;
     agentVideoStatus?: string;
     showImportAssemble?: boolean;
     hasAgentVideo?: boolean;
@@ -348,6 +352,8 @@ export default function ShortVideoAgentVideoTimeline({
     quickIterateBeatStages = {},
     savingImportHtml = false,
     beatPlaybackSeekRequest = null,
+    restoreTimelineSec = null,
+    onRestoreTimelineApplied,
     agentVideoStatus = 'none',
     showImportAssemble = false,
     hasAgentVideo = false,
@@ -390,10 +396,55 @@ export default function ShortVideoAgentVideoTimeline({
     const isPlayingRef = React.useRef(false);
     const onTimeUpdateRef = React.useRef(onTimeUpdate);
     onTimeUpdateRef.current = onTimeUpdate;
+    const persistTimelineTimerRef = React.useRef<number | null>(null);
+    const lastPersistedTimelineSecRef = React.useRef<number | null>(null);
+    const restoreAppliedRef = React.useRef(false);
+    const onRestoreTimelineAppliedRef = React.useRef(onRestoreTimelineApplied);
+    onRestoreTimelineAppliedRef.current = onRestoreTimelineApplied;
 
     React.useEffect(() => {
         onTimeUpdateRef.current?.(currentTimeSec);
     }, [currentTimeSec]);
+
+    React.useEffect(() => {
+        restoreAppliedRef.current = false;
+        lastPersistedTimelineSecRef.current = null;
+        if (persistTimelineTimerRef.current != null) {
+            window.clearTimeout(persistTimelineTimerRef.current);
+            persistTimelineTimerRef.current = null;
+        }
+    }, [shortVideoId]);
+
+    const schedulePersistTimelineSec = React.useCallback((sec: number) => {
+        if (!shortVideoId || shortVideoId <= 0) {
+            return;
+        }
+        if (persistTimelineTimerRef.current != null) {
+            window.clearTimeout(persistTimelineTimerRef.current);
+        }
+        persistTimelineTimerRef.current = window.setTimeout(() => {
+            persistTimelineTimerRef.current = null;
+            // Đang play → không lưu (theo yêu cầu).
+            if (isPlayingRef.current) {
+                return;
+            }
+            const clamped = Math.max(0, Math.round(sec * 1000) / 1000);
+            const prev = lastPersistedTimelineSecRef.current;
+            if (prev != null && Math.abs(prev - clamped) < 0.25) {
+                return;
+            }
+            lastPersistedTimelineSecRef.current = clamped;
+            void saveAgentTimelinePosition(shortVideoId, clamped).catch(() => {
+                // Im lặng — không spam toast khi debounce lưu vị trí.
+            });
+        }, 1500);
+    }, [shortVideoId]);
+
+    React.useEffect(() => () => {
+        if (persistTimelineTimerRef.current != null) {
+            window.clearTimeout(persistTimelineTimerRef.current);
+        }
+    }, []);
 
     const effectiveMissingCount = isWhiteboardMode ? missingBeatImageCount : missingBeatHtmlCount;
     // Mỗi lần click chỉ mở 10 beat thiếu ảnh — hiển thị batch + số còn lại.
@@ -525,7 +576,7 @@ export default function ShortVideoAgentVideoTimeline({
         syncingFromVideoRef.current = false;
     }, []);
 
-    const seekToTime = React.useCallback((timeSec: number, options?: { pauseVideo?: boolean }) => {
+    const seekToTime = React.useCallback((timeSec: number, options?: { pauseVideo?: boolean; persist?: boolean }) => {
         const video = videoRef.current;
         const clamped = Math.max(0, Math.min(timeSec, contentDurationSec));
         if (options?.pauseVideo !== false && video && !video.paused) {
@@ -536,7 +587,11 @@ export default function ShortVideoAgentVideoTimeline({
         }
         setCurrentTimeSec(clamped);
         syncTimelineCursor(clamped);
-    }, [contentDurationSec, syncTimelineCursor, videoRef]);
+        // Seek/scrub/pause seek → lưu; play-through không gọi seekToTime.
+        if (options?.persist !== false) {
+            schedulePersistTimelineSec(clamped);
+        }
+    }, [contentDurationSec, schedulePersistTimelineSec, syncTimelineCursor, videoRef]);
 
     React.useEffect(() => {
         if (!beatPlaybackSeekRequest) {
@@ -544,6 +599,24 @@ export default function ShortVideoAgentVideoTimeline({
         }
         seekToTime(beatPlaybackSeekRequest.startSec, { pauseVideo: true });
     }, [beatPlaybackSeekRequest, seekToTime]);
+
+    // Restore vị trí đã lưu 1 lần khi video/metadata sẵn sàng.
+    React.useEffect(() => {
+        if (restoreAppliedRef.current) {
+            return;
+        }
+        if (restoreTimelineSec == null || !(restoreTimelineSec > 0)) {
+            return;
+        }
+        if (!hasVideo || !(contentDurationSec > 0)) {
+            return;
+        }
+        restoreAppliedRef.current = true;
+        const clamped = Math.max(0, Math.min(restoreTimelineSec, contentDurationSec));
+        lastPersistedTimelineSecRef.current = clamped;
+        seekToTime(clamped, { pauseVideo: true, persist: false });
+        onRestoreTimelineAppliedRef.current?.();
+    }, [contentDurationSec, hasVideo, restoreTimelineSec, seekToTime]);
 
     React.useLayoutEffect(() => {
         if (!hasVideo) {
@@ -585,6 +658,8 @@ export default function ShortVideoAgentVideoTimeline({
             isPlayingRef.current = false;
             setIsPlaying(false);
             onTimeUpdate();
+            // Pause sau khi play → lưu vị trí hiện tại (debounce).
+            schedulePersistTimelineSec(video.currentTime || 0);
         };
         const onEnded = () => {
             isPlayingRef.current = false;
@@ -608,7 +683,7 @@ export default function ShortVideoAgentVideoTimeline({
             video.removeEventListener('pause', onPause);
             video.removeEventListener('ended', onEnded);
         };
-    }, [customHtmlPreview, hasVideo, previewSourceKey, syncTimelineCursor, videoRef, videoUrl]);
+    }, [customHtmlPreview, hasVideo, previewSourceKey, schedulePersistTimelineSec, syncTimelineCursor, videoRef, videoUrl]);
 
     React.useEffect(() => {
         if (!hasVideo) {

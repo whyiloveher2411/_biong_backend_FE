@@ -532,6 +532,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [audioScriptStyles, setAudioScriptStyles] = React.useState<AudioScriptStyleItem[]>([]);
     const [desiredScriptDurationSec, setDesiredScriptDurationSec] = React.useState<number | null>(null);
     const [desiredScriptDurationInput, setDesiredScriptDurationInput] = React.useState('');
+    /** Vị trí timeline cần restore 1 lần sau load (giây absolute). */
+    const [restoreTimelineSec, setRestoreTimelineSec] = React.useState<number | null>(null);
     const [savingDesiredScriptDuration, setSavingDesiredScriptDuration] = React.useState(false);
     const [capcutProjectName, setCapcutProjectName] = React.useState('');
     const [capcutProjectPath, setCapcutProjectPath] = React.useState('');
@@ -1015,6 +1017,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             : null;
         setDesiredScriptDurationSec(desiredResolved);
         setDesiredScriptDurationInput(desiredResolved != null ? String(desiredResolved) : '');
+        const lastTimelineRaw = res?.last_timeline_sec;
+        const lastTimelineNum = lastTimelineRaw == null ? null : Number(lastTimelineRaw);
+        setRestoreTimelineSec(
+            lastTimelineNum != null && Number.isFinite(lastTimelineNum) && lastTimelineNum > 0
+                ? lastTimelineNum
+                : null,
+        );
         const nextAvatarId = Number(res?.agent_avatar_id || res?.agent_avatar?.avatar_id || 0);
         const resolvedId = Number.isFinite(nextAvatarId) && nextAvatarId > 0 ? nextAvatarId : 0;
         const masterFromApi = String(res?.agent_avatar?.master_url || '').trim();
@@ -4476,6 +4485,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         });
     }, []);
 
+    const clearRestoreTimelineSec = React.useCallback(() => {
+        setRestoreTimelineSec(null);
+    }, []);
+
     const handleOpenBeatDivisionGemini = async () => {
         if (whisperStatus !== 'completed') {
             showMessage('Whisper chưa hoàn tất', 'warning');
@@ -7534,6 +7547,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         audioScriptStyles,
         handleAgentAudioScriptStyleChange,
         desiredScriptDurationSec,
+        restoreTimelineSec,
+        clearRestoreTimelineSec,
         desiredScriptDurationInput,
         setDesiredScriptDurationInput,
         savingDesiredScriptDuration,

@@ -125,15 +125,11 @@ export type BeatRegion = {
     /** Chế độ chọn: 'object' = chỉ vật trong vùng; 'full' = toàn vùng (mặc định). */
     select_mode?: 'object' | 'full';
     /**
-     * HIỆU ỨNG KHI ĐƯA VÀO (action='place'):
-     * - 'loang' (mặc định — vệt phun màu/khói trắng hiện tại)
-     * - 'none' (KHÔNG hiệu ứng — chỉ đặt ảnh vào vùng, không loang/âm thanh)
-     * - 'slide_friction' (quán tính trượt — trượt tới rồi nảy lui, mỗi nhịp biên độ giảm 1/2)
-     * - 'zoom_out_bounce' (thu nhỏ nảy đàn hồi — từ RẤT TO co dần về khung, quá đà nhồi nhỏ/rộng rồi khít)
-     * - 'pop_in_bounce' (phóng to nảy đàn hồi — từ điểm nhỏ phóng vọt lên, quá đà to ra rồi về vừa khung)
-     * - 'mirror_sheen' (quét sáng tráng gương — vệt sáng chéo 45° quét qua ảnh vừa đặt + điểm sáng lóe ở rìa)
-     * - 'neon_border' (đèn neon chạy viền — đốm sáng màu lao 3 vòng quanh viền ảnh vừa đặt, đuôi sáng tàn dần)
-     * Hiệu ứng mới THAY THẾ hoàn toàn vệt loang mặc định.
+     * HIỆU ỨNG SAU KHI RENDER (action='place' | 'draw'):
+     * - place: full PLACE_EFFECT_OPTIONS, mặc định 'loang'
+     * - draw: chỉ DRAW_EFFECT_OPTIONS (loang / mirror_sheen / neon_border / none),
+     *   mặc định 'none'
+     * Field dùng chung place_effect (PHP/engine đã truyền sẵn).
      */
     place_effect?: PlaceEffectKey;
     /**
@@ -151,9 +147,15 @@ export type BeatRegion = {
      */
     place_hand?: string | null;
     /**
+     * BÓNG ĐỔ khi ĐƯA VÀO (action='place'): mặc định bật — bóng mờ lệch
+     * dưới-phải dưới cutout (tay/nam châm). Tắt khi bóng không phù hợp nền.
+     * undefined / thiếu field → coi như bật (tương thích dữ liệu cũ).
+     */
+    place_shadow?: boolean;
+    /**
      * KIỂU TAY VẼ (action='draw'): id tay/bút trong whiteboard/pencil/meta.json —
-     * 'but_chi', 'but_long_den_1', 'but_long_den_2', ... Bỏ trống → dùng tay
-     * mặc định của beat (setting toàn beat: config.hand).
+     * 'but_chi' (mặc định), 'but_long_den_1', 'but_long_den_2', ...
+     * Bỏ trống / null → bút chì (meta default), không còn ô "Mặc định" riêng trên UI.
      */
     draw_hand?: string | null;
 };
@@ -229,6 +231,50 @@ export function placeEffectAfterSec(effect: string | null | undefined): number {
     return PLACE_EFFECT_AFTER_SEC[normalizePlaceEffect(effect)] || 0;
 }
 
+/** Hiệu ứng SAU KHI VẼ TAY xong — subset của PlaceEffectKey; mặc định none. */
+export type DrawEffectKey = 'loang' | 'mirror_sheen' | 'neon_border' | 'none';
+
+export const DRAW_EFFECT_OPTIONS: Array<{
+    value: DrawEffectKey;
+    label: string;
+    description: string;
+}> = [
+    {
+        value: 'loang',
+        label: 'Loang',
+        description: 'Vệt phun màu/khói trắng + viền mực lan ra ngoài vùng sau khi vẽ xong',
+    },
+    {
+        value: 'mirror_sheen',
+        label: 'Quét sáng tráng gương',
+        description: 'Vệt sáng chéo quét qua vùng vừa vẽ + điểm sáng lóe ở rìa',
+    },
+    {
+        value: 'neon_border',
+        label: 'Đèn neon chạy viền',
+        description: 'Đốm sáng neon lao quanh viền vùng vừa vẽ',
+    },
+    {
+        value: 'none',
+        label: 'Không hiệu ứng',
+        description: 'Chỉ vẽ tay — không thêm hiệu ứng sau khi vẽ xong (mặc định)',
+    },
+];
+
+/** Khôi phục hiệu ứng draw hợp lệ; giá trị lạ / thiếu → 'none'. */
+export function normalizeDrawEffect(raw: string | null | undefined): DrawEffectKey {
+    const value = String(raw || '').trim().toLowerCase();
+    if (value === 'loang' || value === 'mirror_sheen' || value === 'neon_border' || value === 'none') {
+        return value;
+    }
+    return 'none';
+}
+
+/** Thời lượng hiệu ứng sau khi vẽ tay (giây) — cùng bảng PLACE_EFFECT_AFTER_SEC. */
+export function drawEffectAfterSec(effect: string | null | undefined): number {
+    return PLACE_EFFECT_AFTER_SEC[normalizeDrawEffect(effect)] || 0;
+}
+
 /** MÀU ĐÈN NEON CHẠY VIỀN (place_effect='neon_border') — đồng bộ preset engine. */
 export const NEON_COLOR_KEYS = ['cyan', 'pink', 'yellow', 'lime', 'orange', 'purple', 'red', 'green', 'blue', 'white'] as const;
 export type NeonColorKey = (typeof NEON_COLOR_KEYS)[number];
@@ -266,6 +312,11 @@ export function normalizePlaceEffect(raw: string | null | undefined): PlaceEffec
         return value;
     }
     return 'loang';
+}
+
+/** Bóng đổ khi đưa ảnh vào — mặc định bật; chỉ tắt khi raw === false. */
+export function normalizePlaceShadow(raw: boolean | null | undefined): boolean {
+    return raw !== false;
 }
 
 /** KIỂU TAY ĐƯA ẢNH VÀO vùng (action='place') — đồng bộ whiteboard/keo-anh/meta.json. */
@@ -763,6 +814,8 @@ export type AgentVideoContentResponse = {
     agent_github_screenshot_homepage?: boolean;
     agent_introduce_app?: boolean;
     desired_script_duration_sec?: number | null;
+    /** Vị trí timeline (giây) lần cuối user seek/scrub — restore khi mở lại. */
+    last_timeline_sec?: number | null;
     audio_script_style_id?: number | null;
     agent_avatar_id?: number;
     agent_show_avatar?: boolean;
@@ -3142,6 +3195,19 @@ export async function saveAgentDesiredScriptDuration(
             desired_script_duration_sec: durationSec ?? '',
         }),
     ) as Promise<JsonResponse & { desired_script_duration_sec?: number | null }>;
+}
+
+/** Lưu vị trí timeline (giây) — không gọi khi đang play; FE debounce ~1.5s. */
+export async function saveAgentTimelinePosition(
+    shortVideoId: number,
+    timelineSec: number,
+): Promise<JsonResponse & { last_timeline_sec?: number | null }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-timeline-position',
+        shortVideoBody(shortVideoId, {
+            last_timeline_sec: timelineSec,
+        }),
+    ) as Promise<JsonResponse & { last_timeline_sec?: number | null }>;
 }
 
 export async function saveAgentCapcutConfig(

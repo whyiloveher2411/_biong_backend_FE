@@ -6,7 +6,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import type { BeatRegion } from './agentVideoApi';
-import { placeEffectAfterSec } from './agentVideoApi';
+import { drawEffectAfterSec, placeEffectAfterSec } from './agentVideoApi';
 
 /**
  * TIMELINE RENDER THEO VÙNG — layout NHIỀU DÒNG (mỗi vùng 1 dòng).
@@ -519,20 +519,22 @@ export default function WhiteboardRegionTimeline({
                                     >
                                         <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
                                     </Box>
-                                    {/* HIỆU ỨNG SAU KHI ĐƯA ẢNH VÀO (action='place'): khoảng
-                                        thời gian CỐ ĐỊNH engine chạy hiệu ứng place_effect
-                                        NGAY SAU bar vùng (loang 1s / quét sáng 0.4s / neon
-                                        1.2s / nảy 0.35-0.6s). Vẽ sọc chéo cùng màu sau thanh
-                                        để user biết và điều chỉnh timeline hợp lý — không
-                                        bắt sự kiện chuột. */}
-                                    {region.action === 'place' ? (() => {
-                                        const fxSec = placeEffectAfterSec(region.place_effect);
+                                    {/* HIỆU ỨNG SAU RENDER: place (full) hoặc draw
+                                        (subset) — khoảng cố định engine chạy
+                                        NGAY SAU bar vùng. Sọc chéo, không bắt chuột. */}
+                                    {(region.action === 'place' || region.action === 'draw') ? (() => {
+                                        const fxSec = region.action === 'draw'
+                                            ? drawEffectAfterSec(region.place_effect)
+                                            : placeEffectAfterSec(region.place_effect);
                                         if (!(fxSec > 0.01)) return null;
                                         const extStart = Math.min(end, duration);
                                         const extEnd = Math.min(duration, extStart + fxSec);
                                         const extLeft = secToPct(extStart);
                                         const extWidth = secToPct(extEnd) - extLeft;
                                         if (!(extWidth > 0)) return null;
+                                        const fxLabel = region.action === 'draw'
+                                            ? (region.place_effect || 'none')
+                                            : (region.place_effect || 'loang');
                                         return (
                                             <Box
                                                 key={`${region.id}-fx`}
@@ -546,7 +548,7 @@ export default function WhiteboardRegionTimeline({
                                                     zIndex: 1, pointerEvents: 'none',
                                                     overflow: 'hidden', boxSizing: 'border-box',
                                                 }}
-                                                title={`Hiệu ứng "${region.place_effect || 'loang'}" chạy ~${fxSec}s sau khi đặt ảnh`}
+                                                title={`Hiệu ứng "${fxLabel}" chạy ~${fxSec}s sau khi ${region.action === 'draw' ? 'vẽ' : 'đặt ảnh'} xong`}
                                             >
                                                 {extWidth >= 7 ? (
                                                     <Typography sx={{

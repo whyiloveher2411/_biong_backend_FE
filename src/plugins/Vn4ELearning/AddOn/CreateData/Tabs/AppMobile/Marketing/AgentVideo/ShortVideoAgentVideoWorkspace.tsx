@@ -943,6 +943,8 @@ export default function ShortVideoAgentVideoWorkspace({
                     quickIterateBeatStages={state.quickIterateBeatStages}
                     savingImportHtml={state.savingImportHtml}
                     beatPlaybackSeekRequest={state.beatPlaybackSeekRequest}
+                    restoreTimelineSec={state.restoreTimelineSec}
+                    onRestoreTimelineApplied={state.clearRestoreTimelineSec}
                     agentVideoStatus={state.agentVideoStatus}
                     showImportAssemble={
                         state.renderMode === 'import_html'
