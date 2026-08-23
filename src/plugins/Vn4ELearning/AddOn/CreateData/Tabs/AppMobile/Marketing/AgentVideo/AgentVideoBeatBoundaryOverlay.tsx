@@ -169,7 +169,7 @@ export default function AgentVideoBeatBoundaryOverlay({
         if (!onSaveBeatQa || !beatId || savingQaBeatId) {
             return;
         }
-        const entry = beatHtml[beatId];
+        const entry = isWhiteboardMode ? beatImage[beatId] : beatHtml[beatId];
         const current = normalizeBeatQaStatus(entry?.qa_status);
         const nextStatus: BeatQaStatus = current === 'approved' ? '' : 'approved';
         const note = String(entry?.qa_refine_note || '');
@@ -179,7 +179,7 @@ export default function AgentVideoBeatBoundaryOverlay({
         } finally {
             setSavingQaBeatId('');
         }
-    }, [beatHtml, onSaveBeatQa, savingQaBeatId]);
+    }, [beatHtml, beatImage, isWhiteboardMode, onSaveBeatQa, savingQaBeatId]);
 
     if (!beatMap?.sections?.length) {
         return null;

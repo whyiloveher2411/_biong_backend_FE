@@ -4,6 +4,7 @@ import {
     Alert,
     Box,
     Button,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
@@ -26,6 +27,8 @@ import FactCheckIcon from '@mui/icons-material/FactCheck';
 import SaveIcon from '@mui/icons-material/Save';
 import WallpaperIcon from '@mui/icons-material/Wallpaper';
 import CheckIcon from '@mui/icons-material/Check';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -42,19 +45,29 @@ import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
-import { getBeatTimelineSegments } from './agentVideoBeatMap';
+import PlaceEntryDirectionPicker from './PlaceEntryDirectionPicker';
+import { getBeatTimelineSegments, normalizeBeatQaStatus } from './agentVideoBeatMap';
 import { resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
 import {
     autoSelectAgentWhiteboardRegion,
+    buildPlaceEffectRegionUpdate,
+    buildPlaceHandRegionUpdate,
     fetchWhiteboardTransitions,
+    isPlaceEntryDirectionApplicable,
     isPlaceHandlessEffect,
     normalizeNeonColor,
     normalizeDrawEffect,
     normalizePlaceEffect,
+    normalizePlaceEntryDirection,
     normalizePlaceHand,
     normalizePlaceShadow,
+    normalizeCutoutShadow,
+    normalizePlaceBorder,
+    normalizePlaceBorderColor,
+    normalizePlaceTornPaper,
     DRAW_EFFECT_OPTIONS,
     NEON_COLOR_OPTIONS,
+    PLACE_BORDER_COLOR_OPTIONS,
     PLACE_EFFECT_OPTIONS,
     type AgentWhiteboardBeatOverride,
     type BeatRegion,
@@ -185,7 +198,9 @@ function enforceRegionChildOrder(list: BeatRegion[]): BeatRegion[] {
                 next.script_start_word = null;
             }
             // THỜI GIAN (giây): con phải SAU cha — nếu cha có end_sec, con không
-            // được bắt đầu/xong trước mốc đó.
+            // được bắt đầu/xong trước mốc đó. Cha chỉ có script_end_word (chưa
+            // kéo end_sec) vẫn GIỮ start/end giây của con — nếu xóa thì lưu mất
+            // mốc timeline user kéo → engine fallback cuối beat (vẽ sai thời gian).
             const pEndSec = parent.end_sec ?? -1;
             if (pEndSec >= 0) {
                 if (next.end_sec != null && next.end_sec < pEndSec) {
@@ -194,7 +209,7 @@ function enforceRegionChildOrder(list: BeatRegion[]): BeatRegion[] {
                 if (next.start_sec != null && next.start_sec < pEndSec) {
                     next.start_sec = pEndSec;
                 }
-            } else if (next.end_sec != null || next.start_sec != null) {
+            } else if (pEnd < 0 && (next.end_sec != null || next.start_sec != null)) {
                 next.end_sec = null;
                 next.start_sec = null;
             }
@@ -215,10 +230,12 @@ const regionActivePulse = keyframes`
 /** Nhóm thiết lập 1 vùng — tiêu đề + khung riêng để dễ phân biệt các nhóm. */
 function RegionSection({
     title,
+    subtitle,
     children,
     color,
 }: {
     title: string;
+    subtitle?: string;
     children: React.ReactNode;
     color?: string;
 }) {
@@ -233,11 +250,21 @@ function RegionSection({
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                     color: color || 'text.secondary',
-                    mb: 0.5,
+                    mb: subtitle ? 0.25 : 0.5,
                 }}
             >
                 {title}
             </Typography>
+            {subtitle ? (
+                <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ fontSize: 10, lineHeight: 1.35, mb: 0.5 }}
+                >
+                    {subtitle}
+                </Typography>
+            ) : null}
             <Box
                 sx={{
                     border: 1,
@@ -268,6 +295,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [imgNatural, setImgNatural] = React.useState<{ w: number; h: number } | null>(null);
     const [imageError, setImageError] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
+    const [savingQa, setSavingQa] = React.useState(false);
     const [bgSampleMode, setBgSampleMode] = React.useState(false);
     const [bgSampleDraft, setBgSampleDraft] = React.useState<[number, number][]>([]);
     const [deleteMenuAnchor, setDeleteMenuAnchor] = React.useState<HTMLElement | null>(null);
@@ -482,6 +510,23 @@ export default function ShortVideoAgentBeatRegionEditor({
             state.handleSeekBeatPlayback(target.beatId, midSec);
         }
     }, [activeSegmentIndex, beatSegments, state.handleSeekBeatPlayback]);
+
+    const beatQaStatus = normalizeBeatQaStatus(state.beatImage[beatId]?.qa_status);
+    const isBeatApproved = beatQaStatus === 'approved';
+    const handleToggleApproved = React.useCallback(async () => {
+        if (!beatId || savingQa || state.savingImportHtml) {
+            return;
+        }
+        const entry = state.beatImage[beatId];
+        const current = normalizeBeatQaStatus(entry?.qa_status);
+        const nextStatus = current === 'approved' ? '' : 'approved';
+        setSavingQa(true);
+        try {
+            await state.handleSaveBeatQa(beatId, nextStatus, String(entry?.qa_refine_note || ''));
+        } finally {
+            setSavingQa(false);
+        }
+    }, [beatId, savingQa, state.beatImage, state.handleSaveBeatQa, state.savingImportHtml]);
 
     const resetDrawerState = React.useCallback(() => {
         const fresh = Array.isArray(savedRegionsRef.current) ? savedRegionsRef.current : [];
@@ -1379,6 +1424,36 @@ export default function ShortVideoAgentBeatRegionEditor({
         return false;
     }, [beatId, state, buildRegionsToSave, regions]);
 
+    /** Lưu vùng nếu còn thay đổi chưa ghi DB — render luôn dùng override đã lưu. */
+    const saveRegionsIfDirty = React.useCallback(async (): Promise<boolean> => {
+        if (!isDirty) {
+            return true;
+        }
+        setSaving(true);
+        try {
+            const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
+                ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
+                regions: buildRegionsToSave(),
+            });
+            if (!ok) {
+                notify('Lưu vùng thất bại — chưa render', 'error');
+                return false;
+            }
+            setSavedSnapshot(regions.map((r) => ({ ...r })));
+            return true;
+        } finally {
+            setSaving(false);
+        }
+    }, [isDirty, beatId, state, buildRegionsToSave, regions]);
+
+    const handleRenderBeatVideo = React.useCallback(async () => {
+        const saved = await saveRegionsIfDirty();
+        if (!saved) {
+            return;
+        }
+        await state.handleRenderWhiteboardBeat(beatId);
+    }, [saveRegionsIfDirty, state, beatId]);
+
     const handleSetFocus = (x: number, y: number) => {
         void persistOverride({ focus_x: x, focus_y: y });
     };
@@ -1604,9 +1679,10 @@ export default function ShortVideoAgentBeatRegionEditor({
                         variant="outlined"
                         color="primary"
                         startIcon={<VideocamIcon />}
-                        loading={isBeatRendering}
-                        disabled={isBeatRendering || !imageUrl || Boolean(state.agentWhiteboardConfig?.assets_mode)}
-                        onClick={() => { void state.handleRenderWhiteboardBeat(beatId); }}
+                        loading={isBeatRendering || saving}
+                        disabled={isBeatRendering || saving || !imageUrl || Boolean(state.agentWhiteboardConfig?.assets_mode)}
+                        onClick={() => { void handleRenderBeatVideo(); }}
+                        title={isDirty ? 'Sẽ tự lưu vùng trước khi render' : undefined}
                         sx={{ textTransform: 'none' }}
                     >
                         Render video beat
@@ -2085,46 +2161,95 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </Box>
                         )}
 
-                        {/* Box chuyển beat neo dưới PHẢI (dùng nhiều) */}
-                        {beatSegments.length > 1 && activeSegmentIndex >= 0 ? (
-                            <Stack
-                                direction="row"
-                                spacing={0.75}
-                                alignItems="center"
+                        {/* Check đã ổn + chuyển beat neo dưới PHẢI */}
+                        <Stack
+                            direction="column"
+                            alignItems="flex-end"
+                            spacing={0.75}
+                            sx={{
+                                position: 'absolute',
+                                right: 10,
+                                bottom: 10,
+                                zIndex: 5,
+                            }}
+                        >
+                            <Button
+                                size="small"
+                                disabled={savingQa || state.savingImportHtml}
+                                onClick={() => { void handleToggleApproved(); }}
+                                startIcon={savingQa ? (
+                                    <CircularProgress size={14} sx={{ color: 'inherit' }} />
+                                ) : isBeatApproved ? (
+                                    <CheckBoxIcon sx={{ fontSize: 18 }} />
+                                ) : (
+                                    <CheckBoxOutlineBlankIcon sx={{ fontSize: 18 }} />
+                                )}
                                 sx={{
-                                    position: 'absolute',
-                                    right: 10,
-                                    bottom: 10,
-                                    zIndex: 5,
-                                    bgcolor: 'rgba(0,0,0,0.6)',
+                                    minWidth: 0,
+                                    px: 1.25,
+                                    py: 0.4,
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    color: isBeatApproved ? '#fbcfe8' : 'common.white',
+                                    bgcolor: isBeatApproved
+                                        ? 'rgba(236,72,153,0.55)'
+                                        : 'rgba(0,0,0,0.6)',
+                                    border: isBeatApproved
+                                        ? '1px solid rgba(244,114,182,0.95)'
+                                        : '1px solid rgba(255,255,255,0.22)',
                                     borderRadius: 2,
-                                    p: 0.5,
+                                    '&:hover': {
+                                        bgcolor: isBeatApproved
+                                            ? 'rgba(236,72,153,0.72)'
+                                            : 'rgba(0,0,0,0.78)',
+                                        borderColor: isBeatApproved
+                                            ? 'rgba(251,207,232,0.98)'
+                                            : 'rgba(255,255,255,0.45)',
+                                    },
+                                    '&.Mui-disabled': {
+                                        color: 'rgba(255,255,255,0.55)',
+                                        bgcolor: 'rgba(0,0,0,0.4)',
+                                    },
                                 }}
                             >
-                                <Tooltip title="Beat trước">
-                                    <span>
+                                Đã ổn
+                            </Button>
+                            {beatSegments.length > 1 && activeSegmentIndex >= 0 ? (
+                                <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    alignItems="center"
+                                    sx={{
+                                        bgcolor: 'rgba(0,0,0,0.6)',
+                                        borderRadius: 2,
+                                        p: 0.5,
+                                    }}
+                                >
+                                    <Tooltip title="Beat trước">
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                disabled={activeSegmentIndex <= 0}
+                                                onClick={() => handleSeekAdjacentBeat(-1)}
+                                                sx={{ color: 'common.white' }}
+                                            >
+                                                <ChevronLeftIcon fontSize="small" />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                    <Tooltip title="Beat sau">
                                         <IconButton
                                             size="small"
-                                            disabled={activeSegmentIndex <= 0}
-                                            onClick={() => handleSeekAdjacentBeat(-1)}
+                                            disabled={activeSegmentIndex >= beatSegments.length - 1}
+                                            onClick={() => handleSeekAdjacentBeat(1)}
                                             sx={{ color: 'common.white' }}
                                         >
-                                            <ChevronLeftIcon fontSize="small" />
+                                            <ChevronRightIcon fontSize="small" />
                                         </IconButton>
-                                    </span>
-                                </Tooltip>
-                                <Tooltip title="Beat sau">
-                                    <IconButton
-                                        size="small"
-                                        disabled={activeSegmentIndex >= beatSegments.length - 1}
-                                        onClick={() => handleSeekAdjacentBeat(1)}
-                                        sx={{ color: 'common.white' }}
-                                    >
-                                        <ChevronRightIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Stack>
-                        ) : null}
+                                    </Tooltip>
+                                </Stack>
+                            ) : null}
+                        </Stack>
 
                         {/* Box điều khiển neo dưới TRÁI: đặt điểm tập trung / đặt lại giữa / hủy vẽ / lưu vùng */}
                         <Stack
@@ -2206,6 +2331,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                         audioUrl={state.audioFileUrl || ''}
                         maxWidth={boxSize ? boxSize.w : undefined}
                         transitionDurationSec={beatTransitionDurationSec}
+                        shortVideoId={shortVideoId}
+                        beatId={beatId}
+                        onCopyError={(msg) => notify(msg, 'error')}
                     />
 
                     {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
@@ -2648,25 +2776,11 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                                 {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
                                 {region.action === 'place' ? (
-                                    <RegionSection title="Hiệu ứng sau khi render ảnh">
-                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75, width: '100%' }}>
-                                            <Switch
-                                                size="small"
-                                                checked={normalizePlaceShadow(region.place_shadow)}
-                                                onChange={(event) =>
-                                                    updateRegion(region.id, { place_shadow: event.target.checked })
-                                                }
-                                            />
-                                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Typography variant="caption" fontWeight={700} display="block">
-                                                    Bóng đổ dưới ảnh
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
-                                                    Mặc định bật — tắt khi bóng không hợp nền
-                                                </Typography>
-                                            </Box>
-                                        </Stack>
-                                        <Stack direction="row"  sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                    <RegionSection
+                                        title="Hiệu ứng sau khi render ảnh"
+                                        subtitle="Chỉ hiện tạm thời khi đặt ảnh — tắt sau animation"
+                                    >
+                                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                                             {PLACE_EFFECT_OPTIONS.map((opt) => {
                                                 const active = normalizePlaceEffect(region.place_effect) === opt.value;
                                                 return (
@@ -2676,7 +2790,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                         variant="outlined"
                                                         color={active ? 'warning' : 'inherit'}
                                                         startIcon={active ? <CheckIcon /> : null}
-                                                        onClick={() => updateRegion(region.id, { place_effect: opt.value })}
+                                                        onClick={() => updateRegion(region.id, buildPlaceEffectRegionUpdate(opt.value))}
                                                         title={opt.description}
                                                         sx={{
                                                             textTransform: 'none',
@@ -2732,6 +2846,97 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </RegionSection>
                                 ) : null}
 
+                                {/* Style cutout cố định (place + draw) — mở rộng thêm option sau */}
+                                {region.action === 'place' || region.action === 'draw' ? (
+                                    <RegionSection
+                                        title="Style cutout"
+                                        subtitle="Gắn cố định trên ảnh — giữ nguyên suốt beat, không mất sau render"
+                                    >
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75, width: '100%' }}>
+                                            <Switch
+                                                size="small"
+                                                checked={normalizeCutoutShadow(region.action, region.place_shadow)}
+                                                onChange={(event) =>
+                                                    updateRegion(region.id, { place_shadow: event.target.checked })
+                                                }
+                                            />
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="caption" fontWeight={700} display="block">
+                                                    Bóng đổ dưới ảnh
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                                    {region.action === 'draw'
+                                                        ? 'Mặc định tắt trên vùng vẽ — bật khi cần bóng'
+                                                        : 'Mặc định bật — tắt khi bóng không hợp nền'}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: normalizePlaceBorder(region.place_border) ? 0.75 : 0.75, width: '100%' }}>
+                                            <Switch
+                                                size="small"
+                                                checked={normalizePlaceBorder(region.place_border)}
+                                                onChange={(event) =>
+                                                    updateRegion(region.id, {
+                                                        place_border: event.target.checked,
+                                                        ...(event.target.checked && !region.place_border_color
+                                                            ? { place_border_color: 'white' }
+                                                            : {}),
+                                                    })
+                                                }
+                                            />
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="caption" fontWeight={700} display="block">
+                                                    Thêm viền
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                                    Viền màu quanh ảnh cutout
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                        {normalizePlaceBorder(region.place_border) ? (
+                                            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mb: 0.75 }}>
+                                                {PLACE_BORDER_COLOR_OPTIONS.map((opt) => {
+                                                    const active = normalizePlaceBorderColor(region.place_border_color) === opt.value;
+                                                    return (
+                                                        <Box
+                                                            key={opt.value}
+                                                            onClick={() => updateRegion(region.id, { place_border_color: opt.value })}
+                                                            sx={{
+                                                                width: 34,
+                                                                height: 34,
+                                                                borderRadius: '50%',
+                                                                cursor: 'pointer',
+                                                                background: `linear-gradient(135deg, ${opt.swatch}, ${opt.swatch}cc)`,
+                                                                border: '2px solid',
+                                                                borderColor: active ? 'warning.main' : 'divider',
+                                                                boxShadow: active ? `0 0 8px ${opt.swatch}aa` : 'none',
+                                                                '&:hover': { borderColor: 'warning.light' },
+                                                            }}
+                                                        />
+                                                    );
+                                                })}
+                                            </Stack>
+                                        ) : null}
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: '100%' }}>
+                                            <Switch
+                                                size="small"
+                                                checked={normalizePlaceTornPaper(region.place_torn_paper)}
+                                                onChange={(event) =>
+                                                    updateRegion(region.id, { place_torn_paper: event.target.checked })
+                                                }
+                                            />
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="caption" fontWeight={700} display="block">
+                                                    Viền giấy xé
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                                    Mép xé lồi lõm (dày/mỏng) + vân giấy + bóng mềm
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                    </RegionSection>
+                                ) : null}
+
                                 {/* 2b. KIỂU TAY ĐƯA ẢNH VÀO (chỉ vùng place có dùng tay —
                                 zoom_out_bounce/pop_in_bounce ảnh tự nảy, không cần tay).
                                 Có bao nhiêu ảnh bàn tay thì có bấy nhiêu kiểu; kiểu mặc
@@ -2750,7 +2955,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                         onClick={() =>
                                                             updateRegion(
                                                                 region.id,
-                                                                isDefault ? { place_hand: null } : { place_hand: opt.id },
+                                                                isDefault
+                                                                    ? buildPlaceHandRegionUpdate(null)
+                                                                    : buildPlaceHandRegionUpdate(opt.id),
                                                             )
                                                         }
                                                         title={
@@ -2849,6 +3056,28 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 );
                                             })}
                                         </Stack>
+                                    </RegionSection>
+                                ) : null}
+
+                                {/* 2c. HƯỚNG ĐƯA ẢNH VÀO (chỉ vùng place có tay kéo —
+                                không áp dụng thu nhỏ-nảy / phóng to-nảy / nam châm). */}
+                                {region.action === 'place'
+                                    && isPlaceEntryDirectionApplicable(
+                                        normalizePlaceEffect(region.place_effect),
+                                        region.place_hand,
+                                    ) ? (
+                                    <RegionSection
+                                        title="Hướng đưa ảnh vào"
+                                        subtitle="Chọn cạnh hoặc góc — giữa = ngẫu nhiên"
+                                    >
+                                        <PlaceEntryDirectionPicker
+                                            value={normalizePlaceEntryDirection(region.place_entry_direction)}
+                                            onChange={(dir) =>
+                                                updateRegion(region.id, {
+                                                    place_entry_direction: dir,
+                                                })
+                                            }
+                                        />
                                     </RegionSection>
                                 ) : null}
 

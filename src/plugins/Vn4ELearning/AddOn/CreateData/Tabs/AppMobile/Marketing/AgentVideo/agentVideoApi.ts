@@ -147,11 +147,25 @@ export type BeatRegion = {
      */
     place_hand?: string | null;
     /**
-     * BÓNG ĐỔ khi ĐƯA VÀO (action='place'): mặc định bật — bóng mờ lệch
-     * dưới-phải dưới cutout (tay/nam châm). Tắt khi bóng không phù hợp nền.
-     * undefined / thiếu field → coi như bật (tương thích dữ liệu cũ).
+     * HƯỚNG ĐƯA ẢNH VÀO (action='place', có tay):
+     * random | top_down | left | right | bottom_up | top_left_down | top_right_down |
+     * bottom_left_up | bottom_right_up. Không áp dụng zoom_out_bounce /
+     * pop_in_bounce / nam_cham.
      */
+    place_entry_direction?: PlaceEntryDirectionKey | null;
+    /**
+     * STYLE CUTOUT (action='place' | 'draw') — gắn cố định trên ảnh, giữ suốt beat.
+     * Khác PLACE_EFFECT_OPTIONS / DRAW_EFFECT_OPTIONS: hiệu ứng tạm, tắt sau
+     * animation. Các field dưới đây độc lập, bật kết hợp được.
+     */
+    /** Bóng đổ (place: mặc định bật; draw: chỉ khi bật/tắt rõ trên UI). */
     place_shadow?: boolean;
+    /** Viền màu quanh cutout — mặc định tắt; bật → chọn place_border_color. */
+    place_border?: boolean;
+    /** Màu viền (place_border=true) — mặc định 'white'. */
+    place_border_color?: PlaceBorderColorKey;
+    /** Viền giấy xé (mép cắt giấy cát tông + bóng) — mặc định tắt. */
+    place_torn_paper?: boolean;
     /**
      * KIỂU TAY VẼ (action='draw'): id tay/bút trong whiteboard/pencil/meta.json —
      * 'but_chi' (mặc định), 'but_long_den_1', 'but_long_den_2', ...
@@ -319,8 +333,70 @@ export function normalizePlaceShadow(raw: boolean | null | undefined): boolean {
     return raw !== false;
 }
 
+/** Bóng đổ style cutout theo action — place mặc định bật, draw mặc định tắt. */
+export function normalizeCutoutShadow(
+    action: BeatRegion['action'],
+    raw: boolean | null | undefined,
+): boolean {
+    if (action === 'draw') {
+        return raw === true;
+    }
+    return raw !== false;
+}
+
+/** Viền màu quanh cutout — mặc định tắt; chỉ bật khi raw === true. */
+export function normalizePlaceBorder(raw: boolean | null | undefined): boolean {
+    return raw === true;
+}
+
+/** Viền giấy xé — mặc định tắt; chỉ bật khi raw === true. */
+export function normalizePlaceTornPaper(raw: boolean | null | undefined): boolean {
+    return raw === true;
+}
+
+/** MÀU VIỀN cutout (place_border=true) — đồng bộ preset engine. */
+export const PLACE_BORDER_COLOR_KEYS = [
+    'white',
+    'paper',
+    'black',
+    'red',
+    'yellow',
+    'cyan',
+    'blue',
+    'green',
+    'pink',
+    'orange',
+] as const;
+export type PlaceBorderColorKey = (typeof PLACE_BORDER_COLOR_KEYS)[number];
+
+export const PLACE_BORDER_COLOR_OPTIONS: Array<{
+    value: PlaceBorderColorKey;
+    label: string;
+    swatch: string;
+}> = [
+    { value: 'white', label: 'Trắng', swatch: '#ffffff' },
+    { value: 'paper', label: 'Giấy', swatch: '#faf8f5' },
+    { value: 'black', label: 'Đen', swatch: '#111111' },
+    { value: 'red', label: 'Đỏ', swatch: '#ff1f3d' },
+    { value: 'yellow', label: 'Vàng', swatch: '#e9ff3d' },
+    { value: 'cyan', label: 'Xanh dương', swatch: '#00ffff' },
+    { value: 'blue', label: 'Xanh biển', swatch: '#00a2ff' },
+    { value: 'green', label: 'Xanh lá', swatch: '#00ff88' },
+    { value: 'pink', label: 'Hồng', swatch: '#ff2e88' },
+    { value: 'orange', label: 'Cam', swatch: '#ff7a00' },
+];
+
+/** Khôi phục màu viền hợp lệ; giá trị lạ → 'white' (mặc định). */
+export function normalizePlaceBorderColor(raw: string | null | undefined): PlaceBorderColorKey {
+    const value = String(raw || '').trim().toLowerCase();
+    if ((PLACE_BORDER_COLOR_KEYS as readonly string[]).includes(value)) {
+        return value as PlaceBorderColorKey;
+    }
+    return 'white';
+}
+
 /** KIỂU TAY ĐƯA ẢNH VÀO vùng (action='place') — đồng bộ whiteboard/keo-anh/meta.json. */
-export const PLACE_HAND_KEYS = ['ban_tay_dua_anh_vao', 'hand_move', 'nam_cham'] as const;
+export const PLACE_HAND_KEYS = ['ban_tay_dua_anh_vao', 'hand_move', 'nam_cham', 'nhay_coc'] as const;
 export type PlaceHandKey = (typeof PLACE_HAND_KEYS)[number];
 
 /** Khôi phục place_hand hợp lệ; '' = dùng kiểu mặc định của engine. */
@@ -335,6 +411,152 @@ export function normalizePlaceHand(raw: string | null | undefined): PlaceHandKey
 /** Hiệu ứng ĐƯA VÀO không dùng tay (ảnh tự nảy vào khung) → ẩn selector kiểu tay. */
 export function isPlaceHandlessEffect(effect: PlaceEffectKey): boolean {
     return effect === 'zoom_out_bounce' || effect === 'pop_in_bounce';
+}
+
+/** Hướng đưa ảnh vào — đồng bộ engine frames.py _PLACE_ENTRY_DIRECTION_ANGLES. */
+export const PLACE_ENTRY_DIRECTION_KEYS = [
+    'random',
+    'top_down',
+    'left',
+    'right',
+    'bottom_up',
+    'top_left_down',
+    'top_right_down',
+    'bottom_left_up',
+    'bottom_right_up',
+] as const;
+export type PlaceEntryDirectionKey = (typeof PLACE_ENTRY_DIRECTION_KEYS)[number];
+
+export const PLACE_ENTRY_DIRECTION_OPTIONS: Array<{
+    value: PlaceEntryDirectionKey;
+    label: string;
+    /** Nhãn ngắn trên lưới vùng chọn hướng. */
+    cellLabel: string;
+    description: string;
+}> = [
+    {
+        value: 'random',
+        label: 'Ngẫu nhiên',
+        cellLabel: '?',
+        description: 'Hướng vào tự do 360° (mặc định)',
+    },
+    {
+        value: 'top_down',
+        label: 'Trên ↓',
+        cellLabel: 'Trên',
+        description: 'Kéo từ phía trên xuống',
+    },
+    {
+        value: 'left',
+        label: '← Trái',
+        cellLabel: 'Trái',
+        description: 'Kéo từ cạnh trái vào',
+    },
+    {
+        value: 'right',
+        label: 'Phải →',
+        cellLabel: 'Phải',
+        description: 'Kéo từ cạnh phải vào',
+    },
+    {
+        value: 'bottom_up',
+        label: '↑ Dưới',
+        cellLabel: 'Dưới',
+        description: 'Kéo từ phía dưới lên',
+    },
+    {
+        value: 'top_left_down',
+        label: '↘ Góc',
+        cellLabel: '↘',
+        description: 'Kéo từ góc trái-trên chéo vào (↘)',
+    },
+    {
+        value: 'top_right_down',
+        label: '↙ Góc',
+        cellLabel: '↙',
+        description: 'Kéo từ góc phải-trên chéo vào (↙)',
+    },
+    {
+        value: 'bottom_left_up',
+        label: '↗ Góc',
+        cellLabel: '↗',
+        description: 'Kéo từ góc trái-dưới chéo vào (↗)',
+    },
+    {
+        value: 'bottom_right_up',
+        label: '↖ Góc',
+        cellLabel: '↖',
+        description: 'Kéo từ góc phải-dưới chéo vào (↖)',
+    },
+];
+
+/** Lưới 3×3: góc — cạnh — góc; giữa = ngẫu nhiên. */
+export const PLACE_ENTRY_DIRECTION_GRID: readonly PlaceEntryDirectionKey[][] = [
+    ['top_left_down', 'top_down', 'top_right_down'],
+    ['left', 'random', 'right'],
+    ['bottom_left_up', 'bottom_up', 'bottom_right_up'],
+];
+
+const PLACE_ENTRY_DIRECTION_BY_KEY = Object.fromEntries(
+    PLACE_ENTRY_DIRECTION_OPTIONS.map((opt) => [opt.value, opt]),
+) as Record<PlaceEntryDirectionKey, (typeof PLACE_ENTRY_DIRECTION_OPTIONS)[number]>;
+
+/** Nhãn ô lưới hướng đưa vào. */
+export function placeEntryDirectionCellLabel(key: PlaceEntryDirectionKey): string {
+    return PLACE_ENTRY_DIRECTION_BY_KEY[key]?.cellLabel ?? key;
+}
+
+/** Mô tả tooltip ô lưới hướng đưa vào. */
+export function placeEntryDirectionDescription(key: PlaceEntryDirectionKey): string {
+    return PLACE_ENTRY_DIRECTION_BY_KEY[key]?.description ?? key;
+}
+
+/** Khôi phục hướng đưa vào hợp lệ; giá trị lạ / thiếu → 'random'. */
+export function normalizePlaceEntryDirection(raw: string | null | undefined): PlaceEntryDirectionKey {
+    const value = String(raw || '').trim().toLowerCase();
+    if ((PLACE_ENTRY_DIRECTION_KEYS as readonly string[]).includes(value)) {
+        return value as PlaceEntryDirectionKey;
+    }
+    return 'random';
+}
+
+/** Hướng đưa vào áp dụng khi có tay kéo / nhảy cốc (không bounce / nam châm). */
+export function isPlaceEntryDirectionApplicable(
+    effect: PlaceEffectKey,
+    placeHand?: string | null,
+): boolean {
+    if (isPlaceHandlessEffect(effect)) {
+        return false;
+    }
+    const hand = normalizePlaceHand(placeHand);
+    return hand !== 'nam_cham';
+}
+
+/** Patch khi đổi place_effect — xóa place_hand / hướng nếu không dùng tay. */
+export function buildPlaceEffectRegionUpdate(
+    effect: PlaceEffectKey,
+): Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> {
+    const updates: Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> = {
+        place_effect: effect,
+    };
+    if (isPlaceHandlessEffect(effect)) {
+        updates.place_hand = null;
+        updates.place_entry_direction = null;
+    }
+    return updates;
+}
+
+/** Patch khi đổi place_hand — xóa hướng nếu chọn nam_cham. */
+export function buildPlaceHandRegionUpdate(
+    handId: string | null,
+): Pick<BeatRegion, 'place_hand' | 'place_entry_direction'> {
+    const updates: Pick<BeatRegion, 'place_hand' | 'place_entry_direction'> = {
+        place_hand: handId,
+    };
+    if (normalizePlaceHand(handId) === 'nam_cham') {
+        updates.place_entry_direction = null;
+    }
+    return updates;
 }
 
 export type AgentWhiteboardBeatOverride = {
@@ -1902,6 +2124,40 @@ export async function saveAgentWhiteboardBeatOverride(
         override?: AgentWhiteboardBeatOverride;
         agent_whiteboard_beat_overrides?: Record<string, AgentWhiteboardBeatOverride>;
     }>;
+}
+
+/** Timeline vùng whiteboard từ server — đúng payload engine render (override đã lưu). */
+export type AgentWhiteboardBeatRenderTimelineRegion = {
+    id: string;
+    name: string;
+    action: string;
+    parent_id: string | null;
+    saved_start_sec: number | null;
+    saved_end_sec: number | null;
+    script_start_word: number | null;
+    script_end_word: number | null;
+    start_sec: number | null;
+    complete_by_sec: number | null;
+    place_effect?: string | null;
+};
+
+export type AgentWhiteboardBeatRenderTimeline = {
+    source: string;
+    beat_id: string;
+    beat_start_sec: number;
+    beat_duration_sec: number;
+    note?: string;
+    regions: AgentWhiteboardBeatRenderTimelineRegion[];
+};
+
+export async function getAgentWhiteboardBeatRenderTimeline(
+    shortVideoId: number,
+    beatId: string,
+): Promise<JsonResponse & { timeline?: AgentWhiteboardBeatRenderTimeline }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-whiteboard-beat-render-timeline',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<JsonResponse & { timeline?: AgentWhiteboardBeatRenderTimeline }>;
 }
 
 export type AutoSelectRegionResult = {

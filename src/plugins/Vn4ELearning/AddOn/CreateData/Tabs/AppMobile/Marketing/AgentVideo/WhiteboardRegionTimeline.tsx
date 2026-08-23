@@ -6,7 +6,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import type { BeatRegion } from './agentVideoApi';
-import { drawEffectAfterSec, placeEffectAfterSec } from './agentVideoApi';
+import { drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, placeEffectAfterSec } from './agentVideoApi';
 
 /**
  * TIMELINE RENDER THEO VÙNG — layout NHIỀU DÒNG (mỗi vùng 1 dòng).
@@ -36,6 +36,9 @@ type Props = {
     maxWidth?: number;
     /** Thời lượng chuyển cảnh cuối beat (giây THỰC TẾ) — 0/không có = ẩn box đỏ. */
     transitionDurationSec?: number;
+    shortVideoId?: number;
+    beatId?: string;
+    onCopyError?: (message: string) => void;
 };
 
 const HANDLE_W = 12;
@@ -56,6 +59,9 @@ export default function WhiteboardRegionTimeline({
     audioUrl,
     maxWidth,
     transitionDurationSec = 0,
+    shortVideoId = 0,
+    beatId = '',
+    onCopyError,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const transitionDur = Math.max(0, Math.min(duration, Number(transitionDurationSec) || 0));
@@ -68,6 +74,7 @@ export default function WhiteboardRegionTimeline({
     const [playing, setPlaying] = React.useState(false);
     const [playhead, setPlayhead] = React.useState(0);
     const [copied, setCopied] = React.useState(false);
+    const [copying, setCopying] = React.useState(false);
     const rafRef = React.useRef<number>(0);
 
     React.useEffect(() => {
@@ -274,37 +281,49 @@ export default function WhiteboardRegionTimeline({
         ? { start: startSecOf(selectedRegionObj), end: endSecOf(selectedRegionObj) }
         : null;
 
-    // Copy JSON cấu hình timeline của từng vùng (phục vụ debug).
-    const copyTimelineJson = () => {
-        const payload = {
-            beat_start_sec: beatStartSec,
-            beat_duration_sec: beatDurationSec,
-            regions: orderedRegions.map((r) => ({
-                id: r.id,
-                name: r.name ?? '',
-                action: r.action,
-                parent_id: r.parent_id ?? null,
-                start_sec: r.start_sec != null ? r.start_sec : null,
-                end_sec: r.end_sec != null ? r.end_sec : null,
-                script_start_word: r.script_start_word != null ? r.script_start_word : null,
-                script_end_word: r.script_end_word != null ? r.script_end_word : null,
-                place_effect: r.place_effect ?? null,
-            })),
+    // Copy JSON timeline từ SERVER (override đã lưu → scene payload engine render).
+    const copyTimelineJson = async () => {
+        if (copying) return;
+        const writeClipboard = (json: string) => {
+            const done = () => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+            };
+            if (navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(json).then(done).catch(() => setCopied(false));
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = json;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); done(); } catch { /* noop */ }
+                document.body.removeChild(ta);
+            }
         };
-        const json = JSON.stringify(payload, null, 2);
-        const done = () => {
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-        };
-        if (navigator.clipboard?.writeText) {
-            void navigator.clipboard.writeText(json).then(done).catch(() => setCopied(false));
-        } else {
-            const ta = document.createElement('textarea');
-            ta.value = json;
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); done(); } catch { /* noop */ }
-            document.body.removeChild(ta);
+
+        const sid = Number(shortVideoId || 0);
+        const bid = String(beatId || '').trim();
+        if (sid <= 0 || !bid) {
+            onCopyError?.('Thiếu shortVideoId / beatId — không gọi được API server');
+            return;
+        }
+
+        setCopying(true);
+        try {
+            const res = await getAgentWhiteboardBeatRenderTimeline(sid, bid);
+            if (!res?.success || !res.timeline) {
+                onCopyError?.(
+                    typeof res?.message === 'string' && res.message
+                        ? res.message
+                        : 'Không lấy được timeline từ server',
+                );
+                return;
+            }
+            writeClipboard(JSON.stringify(res.timeline, null, 2));
+        } catch (e) {
+            onCopyError?.(e instanceof Error ? e.message : String(e));
+        } finally {
+            setCopying(false);
         }
     };
 
@@ -385,14 +404,23 @@ export default function WhiteboardRegionTimeline({
                                     <ReplayIcon sx={{ fontSize: 16 }} />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title={copied ? 'Đã copy JSON timeline!' : 'Copy JSON cấu hình timeline các vùng (debug)'}>
-                                <IconButton
-                                    size="small"
-                                    onClick={copyTimelineJson}
-                                    sx={{ p: 0.4, color: copied ? 'success.main' : 'inherit' }}
-                                >
-                                    <ContentCopyIcon sx={{ fontSize: 14 }} />
-                                </IconButton>
+                            <Tooltip title={
+                                copied
+                                    ? 'Đã copy JSON timeline server!'
+                                    : (copying
+                                        ? 'Đang lấy timeline từ server…'
+                                        : 'Copy JSON timeline server (đúng khi render)')
+                            }>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => { void copyTimelineJson(); }}
+                                        disabled={copying}
+                                        sx={{ p: 0.4, color: copied ? 'success.main' : 'inherit' }}
+                                    >
+                                        <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                </span>
                             </Tooltip>
                         </Box>
                         {/* Các dòng vùng */}
