@@ -1233,7 +1233,7 @@ export default function ShortVideoAgentVideoTimeline({
                     <IconButton
                         size="small"
                         aria-label={tracksCollapsed ? 'Mở rộng timeline video' : 'Thu nhỏ timeline video'}
-                        onClick={() => setTracksCollapsed((value) => !value)}
+                        onClick={() => setTracksCollapsed(!tracksCollapsed)}
                     >
                         {tracksCollapsed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
                     </IconButton>

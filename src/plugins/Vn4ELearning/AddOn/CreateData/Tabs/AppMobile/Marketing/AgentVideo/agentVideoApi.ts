@@ -559,6 +559,42 @@ export function buildPlaceHandRegionUpdate(
     return updates;
 }
 
+/** Loại hiệu ứng timeline trên beat — mở rộng union khi thêm loại mới. */
+export type BeatTimelineEffectType = 'zoom';
+
+export type BeatTimelineEffectBase = {
+    id: string;
+    type: BeatTimelineEffectType;
+    start_sec: number;
+    end_sec: number;
+    name?: string;
+    /** Thứ tự layer khi overlap — số lớn = áp sau (stack trên). */
+    layer: number;
+};
+
+export type BeatZoomEffect = BeatTimelineEffectBase & {
+    type: 'zoom';
+    /** Mức zoom đích (1.0 – 2.0, khớp MAX_ZOOM engine). */
+    zoom_level: number;
+    /** Điểm zoom (0–1, ratio ảnh gốc). */
+    focus_x: number;
+    focus_y: number;
+    /** Kết thúc đoạn zoom in / bắt đầu giữ zoom (scene-relative sec). */
+    zoom_in_end_sec: number;
+    /** Kết thúc đoạn giữ zoom / bắt đầu zoom out (scene-relative sec). */
+    hold_end_sec: number;
+};
+
+export type BeatTimelineEffect = BeatZoomEffect;
+
+export const BEAT_TIMELINE_EFFECT_MIN_DUR_SEC = 1.0;
+export const BEAT_TIMELINE_EFFECT_MAX_ZOOM = 2.0;
+
+export {
+    normalizeBeatTimelineEffects,
+    normalizeBeatZoomEffect,
+} from './beatTimelineEffects/normalizeTimelineEffects';
+
 export type AgentWhiteboardBeatOverride = {
     hand?: string;
     board_theme?: string;
@@ -575,6 +611,8 @@ export type AgentWhiteboardBeatOverride = {
     focus_y?: number | null;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
+    /** Hiệu ứng timeline (zoom, …) trên beat — theo khoảng thời gian scene-relative. */
+    timeline_effects?: BeatTimelineEffect[];
 };
 
 export type WhiteboardBeatRenderEntry = {

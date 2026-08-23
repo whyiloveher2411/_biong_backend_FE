@@ -19,6 +19,8 @@ import {
     TextField,
     Tooltip,
     Typography,
+    Tab,
+    Tabs,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -45,14 +47,25 @@ import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
+import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
+import { useBeatTimelineEffects } from './beatTimelineEffects/useBeatTimelineEffects';
+import { getBeatTimelineEffectDefinition } from './beatTimelineEffects/registry';
+import {
+    getZoomOverlayCropRect,
+    resolveZoomTransformAt,
+    zoomRectToSvgAttrs,
+    zoomTransformToCss,
+} from './beatTimelineEffects/resolveZoomTransform';
+import type { BeatTimelineEffectType } from './agentVideoApi';
 import {
     WhiteboardBeatVideoPreview,
     type WhiteboardBeatVideoPreviewHandle,
 } from './WhiteboardBeatTimingPreview';
 import PlaceEntryDirectionPicker from './PlaceEntryDirectionPicker';
 import { getBeatTimelineSegments, normalizeBeatQaStatus } from './agentVideoBeatMap';
-import { resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
+import { resolveAgentVideoBeatSceneBudgetSec, resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
+import { normalizeRegionTimingFields, WHITEBOARD_SCENE_INTRO_SEC } from './regionTimelineTiming';
 import {
     autoSelectAgentWhiteboardRegion,
     buildPlaceEffectRegionUpdate,
@@ -292,11 +305,16 @@ export default function ShortVideoAgentBeatRegionEditor({
     onOpenBeatQa,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
-    const savedRegions = Array.isArray(currentOverride.regions) ? currentOverride.regions : [];
+    const savedRegions = Array.isArray(currentOverride.regions)
+        ? currentOverride.regions.map(normalizeRegionTimingFields)
+        : [];
 
     const [regions, setRegions] = React.useState<BeatRegion[]>(savedRegions);
     const [draftPoints, setDraftPoints] = React.useState<[number, number][]>([]);
     const [selectedRegionId, setSelectedRegionId] = React.useState<string>('');
+    const [selectedEffectId, setSelectedEffectId] = React.useState<string>('');
+    const [rightPanelTab, setRightPanelTab] = React.useState<'edit' | 'add'>('edit');
+    const [playheadSec, setPlayheadSec] = React.useState(0);
     const [imgNatural, setImgNatural] = React.useState<{ w: number; h: number } | null>(null);
     const [imageError, setImageError] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -482,13 +500,14 @@ export default function ShortVideoAgentBeatRegionEditor({
     const buildRegionsToSave = React.useCallback((): BeatRegion[] => (
         enforceRegionChildOrder(regions.map((r): BeatRegion => {
             const original = originalPointsByRegion[r.id];
+            const base = normalizeRegionTimingFields(r);
             if (!original) {
-                return r;
+                return base;
             }
             return {
-                ...r,
+                ...base,
                 full_points: original,
-                object_points: r.points,
+                object_points: base.points,
                 select_mode: 'object' as BeatRegion['select_mode'],
             };
         }))
@@ -544,13 +563,14 @@ export default function ShortVideoAgentBeatRegionEditor({
         // = toàn vùng thủ công (giữ để option đúng + rollback).
         const restoredOrig: Record<string, BeatRegionPoint[]> = {};
         const mapped = fresh.map((r) => {
-            if (Array.isArray(r.object_points) && r.object_points.length >= 3) {
-                if (Array.isArray(r.full_points) && r.full_points.length >= 3) {
-                    restoredOrig[r.id] = r.full_points;
+            const timed = normalizeRegionTimingFields(r);
+            if (Array.isArray(timed.object_points) && timed.object_points.length >= 3) {
+                if (Array.isArray(timed.full_points) && timed.full_points.length >= 3) {
+                    restoredOrig[timed.id] = timed.full_points;
                 }
-                return { ...r, points: r.object_points };
+                return { ...timed, points: timed.object_points };
             }
-            return r;
+            return timed;
         });
         setRegions(mapped);
         setSavedSnapshot(mapped.map((r) => ({ ...r })));
@@ -558,6 +578,9 @@ export default function ShortVideoAgentBeatRegionEditor({
         setDraftPoints([]);
         setDraftIsDrag(false);
         setSelectedRegionId('');
+        setSelectedEffectId('');
+        setRightPanelTab('edit');
+        setPlayheadSec(0);
         setImgNatural(null);
         setImageError(false);
         setBoxSize(null);
@@ -760,7 +783,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, [beatId, state.beatMap?.sections]);
 
     // Danh mục transition (có effect_duration_sec THỰC TẾ từ asset) — dùng tính
-    // vùng đỏ cuối beat trên timeline vùng khớp thời lượng render thật.
+    // vùng đỏ cuối beat + scene budget cho timeline hiệu ứng.
     const [whiteboardTransitions, setWhiteboardTransitions] = React.useState<
         WhiteboardTransitionOption[]
     >([]);
@@ -777,8 +800,6 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
     }, []);
 
-    // Thời lượng chuyển cảnh cuối beat này (0 = beat cuối/'none' → không vẽ box
-    // đỏ) — mirror logic PHP resolve_whiteboard_scene_params_for_beat.
     const beatTransitionDurationSec = React.useMemo(() => {
         const sections = state.beatMap?.sections || [];
         if (sections.length === 0) {
@@ -801,6 +822,91 @@ export default function ShortVideoAgentBeatRegionEditor({
         state.beatMap?.sections,
         whiteboardTransitions,
     ]);
+
+    const sceneBudgetSec = React.useMemo(
+        () => resolveAgentVideoBeatSceneBudgetSec({
+            beatDurationSec: beatTimeline.beatDurationSec,
+            transitionDurationSec: beatTransitionDurationSec,
+        }),
+        [beatTimeline.beatDurationSec, beatTransitionDurationSec],
+    );
+
+    const savedTimelineEffects = Array.isArray(currentOverride.timeline_effects)
+        ? currentOverride.timeline_effects
+        : [];
+
+    const persistTimelineEffects = React.useCallback(async (effects: typeof savedTimelineEffects) => {
+        return state.handleSaveWhiteboardBeatOverride(beatId, {
+            ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
+            timeline_effects: effects,
+            regions: buildRegionsToSave(),
+        });
+    }, [beatId, state, buildRegionsToSave]);
+
+    const {
+        effects: timelineEffects,
+        saving: savingTimelineEffects,
+        addEffect,
+        updateEffectLocal,
+        commitEffect,
+        scheduleEffectCommit,
+        removeEffect,
+        moveLayer,
+    } = useBeatTimelineEffects({
+        beatDurationSec: sceneBudgetSec,
+        playheadSec,
+        initialEffects: savedTimelineEffects,
+        onPersist: persistTimelineEffects,
+    });
+
+    const selectedEffect = React.useMemo(
+        () => timelineEffects.find((item) => item.id === selectedEffectId) || null,
+        [timelineEffects, selectedEffectId],
+    );
+
+    const selectRegion = React.useCallback((id: string) => {
+        setSelectedEffectId('');
+        setSelectedRegionId(id);
+        setRightPanelTab('edit');
+    }, []);
+
+    const focusDragRef = React.useRef<{ moved: boolean } | null>(null);
+    const focusPendingPatchRef = React.useRef<{ focus_x: number; focus_y: number } | null>(null);
+
+    const applyZoomFocus = React.useCallback((x: number, y: number, persistNow = false) => {
+        if (selectedEffect?.type !== 'zoom') return;
+        const clamped = {
+            focus_x: Math.max(0, Math.min(1, x)),
+            focus_y: Math.max(0, Math.min(1, y)),
+        };
+        updateEffectLocal(selectedEffect.id, clamped);
+        focusPendingPatchRef.current = clamped;
+        if (persistNow) {
+            focusPendingPatchRef.current = null;
+            void commitEffect(selectedEffect.id, clamped);
+        }
+    }, [commitEffect, selectedEffect, updateEffectLocal]);
+
+    const commitPendingZoomFocus = React.useCallback(() => {
+        if (!selectedEffect || selectedEffect.type !== 'zoom' || !focusPendingPatchRef.current) return;
+        const patch = focusPendingPatchRef.current;
+        focusPendingPatchRef.current = null;
+        void commitEffect(selectedEffect.id, patch);
+    }, [commitEffect, selectedEffect]);
+
+    const selectEffect = React.useCallback((id: string) => {
+        setSelectedRegionId('');
+        setSelectedEffectId(id);
+        setRightPanelTab('edit');
+    }, []);
+
+    const handleAddTimelineEffect = React.useCallback(async (type: BeatTimelineEffectType) => {
+        const created = await addEffect(type);
+        if (created) {
+            selectEffect(created.id);
+            notify(`Đã thêm hiệu ứng ${created.name || type}`, 'success');
+        }
+    }, [addEffect, notify, selectEffect]);
 
     const colorFor = (index: number) => REGION_COLORS[index % REGION_COLORS.length];
 
@@ -857,6 +963,40 @@ export default function ShortVideoAgentBeatRegionEditor({
         ];
     };
 
+    const startZoomFocusDrag = (
+        event: { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void },
+        initialPoint?: [number, number] | null,
+    ): boolean => {
+        if (selectedEffect?.type !== 'zoom') return false;
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        focusDragRef.current = { moved: false };
+        const startPt = initialPoint ?? svgPointFromEvent(event);
+        if (startPt) {
+            applyZoomFocus(startPt[0], startPt[1], false);
+        }
+        const onWindowMove = (e: PointerEvent) => {
+            const pt = svgPointFromEvent(e);
+            if (!pt || selectedEffect?.type !== 'zoom') return;
+            focusDragRef.current = { moved: true };
+            applyZoomFocus(pt[0], pt[1], false);
+        };
+        const onWindowUp = () => {
+            window.removeEventListener('pointermove', onWindowMove);
+            window.removeEventListener('pointerup', onWindowUp);
+            if (focusDragRef.current?.moved) {
+                suppressClickRef.current = true;
+                commitPendingZoomFocus();
+            } else if (startPt) {
+                applyZoomFocus(startPt[0], startPt[1], true);
+            }
+            focusDragRef.current = null;
+        };
+        window.addEventListener('pointermove', onWindowMove);
+        window.addEventListener('pointerup', onWindowUp);
+        return true;
+    };
+
     // Drag-draw: click giữ chuột → kéo → vùng hình thành từ điểm đầu nối với
     // điểm hiện tại của chuột (điểm đầu luôn kết nối điểm cuối). Thả chuột = xong.
     const [dragging, setDragging] = React.useState(false);
@@ -894,6 +1034,12 @@ export default function ShortVideoAgentBeatRegionEditor({
             window.addEventListener('mousemove', onWinMove);
             window.addEventListener('mouseup', onWinUp);
             return;
+        }
+        // Zoom đang chọn: kéo trên ảnh để đặt / di chuyển điểm focus (mặc định giữa ảnh).
+        if (!isAddActive && selectedEffect?.type === 'zoom' && !focusMode) {
+            if (startZoomFocusDrag(event)) {
+                return;
+            }
         }
         // Chế độ CHỌN: click-kéo TRỰC TIẾP di chuyển ảnh (không cần space);
         // click đơn (không kéo) vẫn chọn vùng / đặt điểm tập trung.
@@ -1025,7 +1171,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (!isAddActive) {
             const hit = [...sortedRegions].reverse().find((r) => pointInPolygon(x, y, r.points));
             if (hit) {
-                setSelectedRegionId(hit.id);
+                selectRegion(hit.id);
             }
             return;
         }
@@ -1409,6 +1555,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             const saved = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...currentOverride,
                 regions: buildRegionsToSave(),
+                timeline_effects: timelineEffects,
             });
             if (saved) {
                 setSavedSnapshot(regions.map((r) => ({ ...r })));
@@ -1425,13 +1572,14 @@ export default function ShortVideoAgentBeatRegionEditor({
             ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
             ...patch,
             regions: buildRegionsToSave(),
+            timeline_effects: timelineEffects,
         });
         if (ok) {
             setSavedSnapshot(regions.map((r) => ({ ...r })));
             return true;
         }
         return false;
-    }, [beatId, state, buildRegionsToSave, regions]);
+    }, [beatId, state, buildRegionsToSave, regions, timelineEffects]);
 
     /** Lưu vùng nếu còn thay đổi chưa ghi DB — render luôn dùng override đã lưu. */
     const saveRegionsIfDirty = React.useCallback(async (): Promise<boolean> => {
@@ -1443,6 +1591,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
                 regions: buildRegionsToSave(),
+                timeline_effects: timelineEffects,
             });
             if (!ok) {
                 notify('Lưu vùng thất bại — chưa render', 'error');
@@ -1453,7 +1602,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         } finally {
             setSaving(false);
         }
-    }, [isDirty, beatId, state, buildRegionsToSave, regions]);
+    }, [isDirty, beatId, state, buildRegionsToSave, regions, timelineEffects]);
 
     const handleRenderBeatVideo = React.useCallback(async () => {
         const saved = await saveRegionsIfDirty();
@@ -1473,6 +1622,34 @@ export default function ShortVideoAgentBeatRegionEditor({
     // Điểm tập trung hiện tại (0-1, ratio ảnh gốc) — hiển thị trên canvas.
     const focusX = parseRatio(currentOverride.focus_x, 0.5);
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
+    const effectFocusX = selectedEffect?.type === 'zoom' ? selectedEffect.focus_x : focusX;
+    const effectFocusY = selectedEffect?.type === 'zoom' ? selectedEffect.focus_y : focusY;
+    const timelineZoomPreview = resolveZoomTransformAt(playheadSec, timelineEffects, sceneBudgetSec);
+    const timelineZoomCss = zoomTransformToCss(timelineZoomPreview);
+
+    const selectedZoomOverlay = React.useMemo(() => {
+        if (selectedEffect?.type !== 'zoom') return null;
+        const overlay = getZoomOverlayCropRect(
+            selectedEffect,
+            playheadSec,
+            sceneBudgetSec,
+        );
+        const cropSvg = zoomRectToSvgAttrs(overlay.rect);
+        const phaseLabel = overlay.inRange
+            ? (overlay.phase === 'in' ? ' · đang zoom in'
+                : overlay.phase === 'hold' ? ' · đang giữ'
+                    : overlay.phase === 'out' ? ' · đang zoom out' : '')
+            : '';
+        const label = `Phạm vi ×${overlay.scale.toFixed(2)} (${Math.round(overlay.rect.w * 100)}% ảnh)${phaseLabel}`;
+        return {
+            ...overlay,
+            cropSvg,
+            label,
+            maskId: `zoom-crop-mask-${selectedEffect.id}`,
+            dimOutside: !overlay.syncTimelinePreview,
+            borderSolid: overlay.syncTimelinePreview && overlay.phase === 'hold',
+        };
+    }, [playheadSec, sceneBudgetSec, selectedEffect]);
 
     // Zoom / pan ảnh (Photoshop-like): transform cùng layer chứa ảnh + SVG → vùng
     // luôn bám đúng. Scroll chuột = zoom theo chuột; Space+click-drag = pan.
@@ -1891,6 +2068,15 @@ export default function ShortVideoAgentBeatRegionEditor({
                     >
                         {/* img luôn mount để onLoad/onError chạy — containRect phụ thuộc imgNatural */}
                         {!previewActive ? (
+                        <Stack
+                            spacing={0.75}
+                            sx={{
+                                position: 'absolute',
+                                top: 8,
+                                left: 8,
+                                zIndex: 5,
+                            }}
+                        >
                         <Tooltip title={isAddActive
                             ? 'Đang THÊM VÙNG — click/kéo để vẽ vùng mới (phím E để chuyển sang chọn vùng).'
                             : 'Đang CHỌN VÙNG — click vào vùng để chọn, click ngoài vùng để đặt điểm tập trung (phím E để chuyển sang thêm vùng).'}
@@ -1899,10 +2085,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 size="small"
                                 onClick={handleToggleRegionMode}
                                 sx={{
-                                    position: 'absolute',
-                                    top: 8,
-                                    left: 8,
-                                    zIndex: 5,
+                                    width: 32,
+                                    height: 32,
                                     bgcolor: isAddActive ? 'primary.main' : 'rgba(0,0,0,0.55)',
                                     color: 'common.white',
                                     '&:hover': {
@@ -1913,6 +2097,22 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
                             </IconButton>
                         </Tooltip>
+                        <ShortVideoAgentImageAnimationControls
+                            variant="overlay"
+                            beatId={beatId}
+                            imageUrl={imageUrl}
+                            clipAspect={state.agentClipAspect}
+                            clipConfig={state.agentWhiteboardConfig || null}
+                            clipSaving={state.savingWhiteboardConfig}
+                            onClipConfigChange={(patch) => {
+                                state.handleAgentWhiteboardConfigChange(patch);
+                            }}
+                            savedOverride={state.agentWhiteboardBeatOverrides?.[beatId] || null}
+                            saving={state.savingWhiteboardBeatOverride}
+                            withoutImage
+                            onSave={(override) => persistOverride(override)}
+                        />
+                        </Stack>
                         ) : null}
                         {/* Thanh zoom + 1 nút icon Edit/Preview — góc trên PHẢI, nút nằm DƯỚI reset zoom */}
                         <Stack
@@ -2021,6 +2221,28 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         top: containRect ? containRect.y + pan.y : 0,
                                         width: containRect ? containRect.w : 0,
                                         height: containRect ? containRect.h : 0,
+                                        overflow: 'hidden',
+                                        zIndex: 1,
+                                    }}
+                                >
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
+                                        transformOrigin: 'center center',
+                                    }}
+                                >
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        width: '100%',
+                                        height: '100%',
                                         transform: `scale(${zoom})`,
                                         transformOrigin: '0 0',
                                     }}
@@ -2079,24 +2301,32 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                     pointerEvents: previewActive ? 'none' : 'auto',
                                                 }}
                                             >
-                            {/* Điểm tập trung — click ngoài vùng (chế độ chọn) để đặt lại */}
-                            <g style={{ pointerEvents: 'none', opacity: previewActive ? 0.15 : 1 }}>
+                            {/* Điểm tập trung zoom — kéo hoặc click để đặt vị trí */}
+                            <g style={{ opacity: previewActive ? 0.15 : 1 }}>
                                 <circle
-                                    cx={focusX * 1000}
-                                    cy={focusY * 1000}
-                                    r={16}
+                                    cx={effectFocusX * 1000}
+                                    cy={effectFocusY * 1000}
+                                    r={selectedEffect?.type === 'zoom' ? 22 : 16}
                                     fill="none"
-                                    stroke="#ff9800"
+                                    stroke={selectedEffect?.type === 'zoom' ? '#7c4dff' : '#ff9800'}
                                     strokeWidth={2.5}
                                     strokeDasharray="5 3"
+                                    style={{
+                                        pointerEvents: selectedEffect?.type === 'zoom' && !previewActive && !isAddActive
+                                            ? 'auto'
+                                            : 'none',
+                                        cursor: selectedEffect?.type === 'zoom' ? 'grab' : 'default',
+                                    }}
+                                    onPointerDown={(e) => { startZoomFocusDrag(e); }}
                                 />
                                 <circle
-                                    cx={focusX * 1000}
-                                    cy={focusY * 1000}
+                                    cx={effectFocusX * 1000}
+                                    cy={effectFocusY * 1000}
                                     r={4}
-                                    fill="#ff9800"
+                                    fill={selectedEffect?.type === 'zoom' ? '#7c4dff' : '#ff9800'}
                                     stroke="#ffffff"
                                     strokeWidth={1.5}
+                                    style={{ pointerEvents: 'none' }}
                                 />
                             </g>
                             {regions.map((region, index) => {
@@ -2263,6 +2493,98 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </Box>
                         ) : null}
                         </Box>
+                        </Box>
+                        </Box>
+                        {/* Overlay phạm vi zoom — trong clip; giữ zoom = cùng transform ảnh */}
+                        {selectedZoomOverlay && containRect && !previewActive ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: containRect.x + pan.x,
+                                    top: containRect.y + pan.y,
+                                    width: containRect.w,
+                                    height: containRect.h,
+                                    overflow: 'hidden',
+                                    pointerEvents: 'none',
+                                    zIndex: 4,
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        transform: selectedZoomOverlay.syncTimelinePreview && timelineZoomCss !== 'none'
+                                            ? timelineZoomCss
+                                            : undefined,
+                                        transformOrigin: 'center center',
+                                    }}
+                                >
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        transform: `scale(${zoom})`,
+                                        transformOrigin: '0 0',
+                                    }}
+                                >
+                                    <svg
+                                        viewBox="0 0 1000 1000"
+                                        preserveAspectRatio="none"
+                                        style={{ width: '100%', height: '100%', display: 'block' }}
+                                    >
+                                        {selectedZoomOverlay.dimOutside ? (
+                                            <>
+                                                <defs>
+                                                    <mask id={selectedZoomOverlay.maskId}>
+                                                        <rect x="0" y="0" width="1000" height="1000" fill="white" />
+                                                        <rect
+                                                            {...selectedZoomOverlay.cropSvg}
+                                                            fill="black"
+                                                            rx={8}
+                                                            ry={8}
+                                                        />
+                                                    </mask>
+                                                </defs>
+                                                <rect
+                                                    x="0"
+                                                    y="0"
+                                                    width="1000"
+                                                    height="1000"
+                                                    fill="rgba(0,0,0,0.38)"
+                                                    mask={`url(#${selectedZoomOverlay.maskId})`}
+                                                />
+                                            </>
+                                        ) : null}
+                                        <rect
+                                            {...selectedZoomOverlay.cropSvg}
+                                            fill={selectedZoomOverlay.borderSolid
+                                                ? 'rgba(124,77,255,0.06)'
+                                                : 'rgba(124,77,255,0.08)'}
+                                            stroke="#7c4dff"
+                                            strokeWidth={selectedZoomOverlay.borderSolid ? 5 : 4}
+                                            strokeDasharray={selectedZoomOverlay.borderSolid ? undefined : '16 8'}
+                                            rx={8}
+                                            ry={8}
+                                        />
+                                        {!selectedZoomOverlay.syncTimelinePreview || selectedZoomOverlay.phase !== 'hold' ? (
+                                            <text
+                                                x={selectedZoomOverlay.cropSvg.x + 10}
+                                                y={Math.max(24, selectedZoomOverlay.cropSvg.y - 10)}
+                                                fill="#ece1ff"
+                                                fontSize={24}
+                                                fontWeight={800}
+                                                stroke="#4a148c"
+                                                strokeWidth={0.5}
+                                                paintOrder="stroke"
+                                            >
+                                                {selectedZoomOverlay.label}
+                                            </text>
+                                        ) : null}
+                                    </svg>
+                                </Box>
+                                </Box>
+                            </Box>
+                        ) : null}
                         {!containRect ? (
                             <Box
                                 sx={{
@@ -2432,7 +2754,10 @@ export default function ShortVideoAgentBeatRegionEditor({
                             <WhiteboardBeatVideoPreview
                                 ref={videoPreviewRef}
                                 videoUrl={beatVideoPlayUrl}
-                                durationSec={beatTimeline.beatDurationSec}
+                                beatWindowSec={beatTimeline.beatDurationSec}
+                                videoIntroSec={regions.length > 0
+                                    ? WHITEBOARD_SCENE_INTRO_SEC.withRegions
+                                    : WHITEBOARD_SCENE_INTRO_SEC.default}
                                 initialSec={playheadRef.current.sec}
                                 initialPlaying={playheadRef.current.playing}
                             />
@@ -2515,12 +2840,19 @@ export default function ShortVideoAgentBeatRegionEditor({
                     <WhiteboardRegionTimeline
                         regions={regions}
                         beatDurationSec={beatTimeline.beatDurationSec}
+                        effectTimelineDurationSec={sceneBudgetSec}
                         beatStartSec={beatTimeline.beatStartSec}
                         beatWords={beatWords}
                         colorFor={colorFor}
                         onChangeRegion={updateRegion}
-                        onSelectRegion={(id) => setSelectedRegionId(id)}
+                        onSelectRegion={selectRegion}
                         selectedRegionId={selectedRegionId}
+                        timelineEffects={timelineEffects}
+                        selectedEffectId={selectedEffectId}
+                        onPreviewEffect={(id, patch) => { updateEffectLocal(id, patch); }}
+                        onCommitEffect={(id, patch) => { void commitEffect(id, patch); }}
+                        onSelectEffect={selectEffect}
+                        onSwitchToEditTab={() => setRightPanelTab('edit')}
                         audioUrl={state.audioFileUrl || ''}
                         maxWidth={boxSize ? boxSize.w : undefined}
                         transitionDurationSec={beatTransitionDurationSec}
@@ -2528,6 +2860,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         beatId={beatId}
                         onCopyError={(msg) => notify(msg, 'error')}
                         onPlayheadChange={(sec, isPlaying) => {
+                            setPlayheadSec(sec);
                             playheadRef.current = { sec, playing: isPlaying };
                             videoPreviewRef.current?.seekTo(sec, isPlaying);
                         }}
@@ -2643,51 +2976,77 @@ export default function ShortVideoAgentBeatRegionEditor({
                         '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'primary.main' },
                     }}
                 >
-                    <Box
-                        sx={{
-                            mb: 1.5,
-                            p: 1.25,
-                            borderRadius: 2,
-                            border: 1,
-                            borderColor: 'divider',
-                            bgcolor: 'background.default',
-                        }}
+                    <Tabs
+                        value={rightPanelTab}
+                        onChange={(_, value: 'edit' | 'add') => setRightPanelTab(value)}
+                        variant="fullWidth"
+                        sx={{ minHeight: 36, mb: 0.5, borderBottom: 1, borderColor: 'divider' }}
                     >
-                        <ShortVideoAgentImageAnimationControls
-                            beatId={beatId}
-                            imageUrl={imageUrl}
-                            clipAspect={state.agentClipAspect}
-                            clipConfig={state.agentWhiteboardConfig || null}
-                            clipSaving={state.savingWhiteboardConfig}
-                            onClipConfigChange={(patch) => {
-                                state.handleAgentWhiteboardConfigChange(patch);
-                            }}
-                            savedOverride={state.agentWhiteboardBeatOverrides?.[beatId] || null}
-                            saving={state.savingWhiteboardBeatOverride}
-                            withoutImage
-                            onSave={(override) => persistOverride(override)}
+                        <Tab value="edit" label="Chỉnh sửa" sx={{ minHeight: 36, py: 0.5, textTransform: 'none', fontWeight: 700 }} />
+                        <Tab value="add" label="Thêm" sx={{ minHeight: 36, py: 0.5, textTransform: 'none', fontWeight: 700 }} />
+                    </Tabs>
+
+                    {rightPanelTab === 'add' ? (
+                        <ShortVideoAgentBeatAddPanel
+                            onAddEffect={(type) => { void handleAddTimelineEffect(type); }}
+                            saving={savingTimelineEffects}
                         />
-                    </Box>
-                    {bgSampleMode ? (
+                    ) : (
+                    <>
+                    {selectedEffect ? (() => {
+                        const def = getBeatTimelineEffectDefinition(selectedEffect.type);
+                        const SettingsPanel = def?.SettingsPanel;
+                        if (!SettingsPanel) return null;
+                        return (
+                            <Box
+                                sx={{
+                                    mb: 1.5,
+                                    p: 1.25,
+                                    borderRadius: 2,
+                                    border: 1,
+                                    borderColor: def.timelineColor,
+                                    borderLeft: `4px solid ${def.timelineColor}`,
+                                    bgcolor: 'background.default',
+                                }}
+                            >
+                                <SettingsPanel
+                                    effect={selectedEffect}
+                                    beatDurationSec={sceneBudgetSec}
+                                    allEffects={timelineEffects}
+                                    saving={savingTimelineEffects}
+                                    onChange={(patch) => {
+                                        updateEffectLocal(selectedEffect.id, patch);
+                                        scheduleEffectCommit(selectedEffect.id, patch);
+                                    }}
+                                    onDelete={() => {
+                                        void removeEffect(selectedEffect.id).then((ok) => {
+                                            if (ok) setSelectedEffectId('');
+                                        });
+                                    }}
+                                    onMoveLayer={(direction) => { void moveLayer(selectedEffect.id, direction); }}
+                                />
+                            </Box>
+                        );
+                    })() : null}
+
+                    {!selectedEffect && bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
                             Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>
                             vào vị trí có màu/chi tiết nền trên ảnh bên trái → tự tạo ô mẫu nhỏ. Mẫu này lặp lại
                             fill nền vùng đó (thay vì tile trắng). Kéo chuột = vẽ vùng mẫu tay.
                         </Typography>
                     ) : null}
-                    {!hasRegions ? (
+                    {!selectedEffect && !hasRegions ? (
                         <Typography variant="caption" color="text.secondary">
                             Chưa có vùng nào — vẽ trên ảnh bên trái.
                         </Typography>
-                    ) : !selectedRegion ? (
+                    ) : !selectedEffect && !selectedRegion ? (
                         <Typography variant="caption" color="text.secondary">
-                            Chưa chọn vùng nào — click vào vùng trên ảnh (hoặc thanh thời gian bên dưới ảnh)
-                            để hiển thị setting riêng của vùng đó.
+                            Chưa chọn vùng hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
                         </Typography>
                     ) : null}
 
-                    {/* Đang chọn vùng con → nút quay lại setting vùng cha */}
-                    {parentRegion ? (
+                    {!selectedEffect && parentRegion ? (
                         <Button
                             size="small"
                             variant="outlined"
@@ -2706,8 +3065,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         </Button>
                     ) : null}
 
-                    {/* CHỈ hiển thị setting của vùng đang chọn (không liệt kê các vùng khác) */}
-                    {(selectedRegion ? [selectedRegion] : []).map((region) => {
+                    {!selectedEffect && (selectedRegion ? [selectedRegion] : []).map((region) => {
                         const index = Math.max(0, regions.findIndex((item) => item.id === region.id));
                         const color = region.action === 'erase' ? '#f44336' : colorFor(index);
                         const isSelected = selectedRegionId === region.id;
@@ -3441,7 +3799,7 @@ export default function ShortVideoAgentBeatRegionEditor({
 
                     {/* Vùng con của vùng đang chọn: mỗi vùng 1 dòng + nút Chọn
                         → click chuyển setting sang vùng con đó */}
-                    {selectedRegion && childRegions.length > 0 ? (
+                    {!selectedEffect && selectedRegion && childRegions.length > 0 ? (
                         <Box sx={{ mt: 0.5 }}>
                             <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
                                 Vùng con ({childRegions.length})
@@ -3484,7 +3842,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             size="small"
                                             variant="outlined"
                                             color="primary"
-                                            onClick={() => setSelectedRegionId(child.id)}
+                                            onClick={() => selectRegion(child.id)}
                                             title={`Chọn "${child.name}" — hiển thị setting của vùng con này`}
                                             sx={{
                                                 textTransform: 'none',
@@ -3504,6 +3862,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                     ) : null}
 
                     <Divider sx={{ my: 0.5 }} />
+                    </>
+                    )}
                 </Box>
             </Box>
 

@@ -56,6 +56,11 @@ type Props = {
 
 type StatusTone = 'default' | 'success' | 'info' | 'warning' | 'error';
 
+/** Bật/tắt section Pipeline A→Z trong sidebar workflow. */
+const WORKFLOW_SHOW_PIPELINE_AZ = false;
+/** Bật/tắt section Metadata script trong sidebar workflow. */
+const WORKFLOW_SHOW_METADATA_SCRIPT = false;
+
 /** Sidebar workflow — Button có whiteSpace: nowrap nên cần cho phép wrap. */
 const workflowActionButtonSx = {
     whiteSpace: 'normal',
@@ -1157,7 +1162,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                 </WorkflowSection>
                 {
                     // eslint-disable-next-line no-constant-condition
-                    false ??
+                    false &&
                     <CollapsibleWorkflowSection title="Thông tin chung" tone="info">
                         <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                         <MetaRow
@@ -1217,20 +1222,24 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </CollapsibleWorkflowSection>
                 }
 
-                {
-                // eslint-disable-next-line no-constant-condition
-                showPipeline && state.fullAutoPipeline && false? (
+                {(() => {
+                    if (!showPipeline || !state.fullAutoPipeline) return null;
+                    const pipeline = state.fullAutoPipeline;
+                    const lastError = pipeline.last_error;
+                    const errMessage = lastError?.message;
+                    if (!WORKFLOW_SHOW_PIPELINE_AZ) return null;
+                    return (
                     <CollapsibleWorkflowSection title="Pipeline A→Z" tone="pipeline">
-                        <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
-                        <PipelineScriptQaLoopMeta pipeline={state.fullAutoPipeline} />
-                        {state.fullAutoPipeline.last_error?.message ? (
+                        <MetaRow label="Status" status={pipeline.status || 'idle'} />
+                        <PipelineScriptQaLoopMeta pipeline={pipeline} />
+                        {errMessage ? (
                             <Alert severity="error" sx={{ mt: 1, py: 0.5, whiteSpace: 'pre-wrap' }}>
-                                {appendHeadlessHowtoToError(state.fullAutoPipeline.last_error.message)}
+                                {appendHeadlessHowtoToError(String(errMessage))}
                                 {Array.isArray(
-                                    (state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: unknown[] } } | undefined)?.diagnosis?.issues,
-                                ) && ((state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues?.length ?? 0) > 0 ? (
+                                    (lastError?.detail as { diagnosis?: { issues?: unknown[] } } | undefined)?.diagnosis?.issues,
+                                ) && ((lastError?.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues?.length ?? 0) > 0 ? (
                                     <Box component="ul" sx={{ mt: 0.75, mb: 0, pl: 2 }}>
-                                        {((state.fullAutoPipeline.last_error.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues ?? []).slice(0, 6).map((issue, idx) => (
+                                        {((lastError?.detail as { diagnosis?: { issues?: Array<{ code?: string; message?: string }> } }).diagnosis?.issues ?? []).slice(0, 6).map((issue, idx) => (
                                             <Typography component="li" variant="caption" key={`${issue.code || 'issue'}-${idx}`}>
                                                 [{issue.code || '?'}] {issue.message || ''}
                                             </Typography>
@@ -1240,42 +1249,47 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             </Alert>
                         ) : null}
                     </CollapsibleWorkflowSection>
-                ) : null}
+                    );
+                })()}
 
                 {
                 // eslint-disable-next-line no-constant-condition
-                false ??
+                false &&
                 <CollapsibleWorkflowSection title="Danh sách Prompt" tone="prompt">
                     <ShortVideoAgentPromptLibrary state={state} />
                 </CollapsibleWorkflowSection>
                 }
 
-                {
-                // eslint-disable-next-line no-constant-condition
-                state.agentVideoSummary && false ? (
+                {(() => {
+                    const summary = state.agentVideoSummary;
+                    if (!summary) return null;
+                    const meta = summary;
+                    if (!WORKFLOW_SHOW_METADATA_SCRIPT) return null;
+                    return (
                     <CollapsibleWorkflowSection title="Metadata script" tone="meta">
                         <MetaRow
                             label="Ước tính"
                             value={
-                                state.agentVideoSummary.estimated_duration_sec != null
-                                    ? `${state.agentVideoSummary.estimated_duration_sec}s`
+                                meta.estimated_duration_sec != null
+                                    ? `${meta.estimated_duration_sec}s`
                                     : '—'
                             }
                         />
                         <MetaRow
                             label="CTA mode"
-                            value={state.agentVideoSummary.cta_mode || '—'}
+                            value={meta.cta_mode || '—'}
                         />
                         <MetaRow
                             label="Markers"
-                            value={String(state.agentVideoSummary.marker_count ?? 0)}
+                            value={String(meta.marker_count ?? 0)}
                         />
                     </CollapsibleWorkflowSection>
-                ) : null}
+                    );
+                })()}
                 
                 {
                 // eslint-disable-next-line no-constant-condition   
-                false ??
+                false &&
                 <CollapsibleWorkflowSection title="Hành động" tone="action">
                     <Stack spacing={1}>
                         {!state.hasScript && (

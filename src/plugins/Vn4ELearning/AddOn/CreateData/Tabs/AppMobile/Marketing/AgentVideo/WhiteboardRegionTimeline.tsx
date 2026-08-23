@@ -5,8 +5,20 @@ import PauseIcon from '@mui/icons-material/Pause';
 import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
-import type { BeatRegion } from './agentVideoApi';
+import type { BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
 import { drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, placeEffectAfterSec } from './agentVideoApi';
+import {
+    regionTimingPatchFromDrag,
+    resolveRegionEndSec,
+    resolveRegionStartSec,
+} from './regionTimelineTiming';
+import { getBeatTimelineEffectDefinition } from './beatTimelineEffects/registry';
+import { isBeatZoomEffect } from './beatTimelineEffects/effects/zoom/definition';
+import {
+    getZoomPhaseBounds,
+    normalizeZoomPhaseBounds,
+    shiftZoomPhaseBounds,
+} from './beatTimelineEffects/effects/zoom/zoomPhases';
 
 /**
  * TIMELINE RENDER THEO VÙNG — layout NHIỀU DÒNG (mỗi vùng 1 dòng).
@@ -26,6 +38,8 @@ type Word = { index: number; text: string; start: number };
 type Props = {
     regions: BeatRegion[];
     beatDurationSec: number;
+    /** Trục thời gian hiệu ứng (= scene budget, beat − transition). Mặc định = beatDurationSec. */
+    effectTimelineDurationSec?: number;
     beatStartSec: number;
     beatWords: Word[];
     colorFor: (index: number) => string;
@@ -41,9 +55,32 @@ type Props = {
     onCopyError?: (message: string) => void;
     /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
     onPlayheadChange?: (sec: number, playing: boolean) => void;
+    timelineEffects?: BeatTimelineEffect[];
+    selectedEffectId?: string;
+    /** Cập nhật UI local khi kéo — không gọi API. */
+    onPreviewEffect?: (id: string, patch: Partial<BeatTimelineEffect>) => void;
+    /** Lưu effect sau khi thả chuột / kết thúc chỉnh timeline. */
+    onCommitEffect?: (id: string, patch: Partial<BeatTimelineEffect>) => void;
+    onSelectEffect?: (id: string) => void;
+    onSwitchToEditTab?: () => void;
+};
+
+type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
+
+type DragState = {
+    id: string;
+    handle: EffectDragHandle | 'start' | 'end' | 'body';
+    startX: number;
+    origStartSec: number;
+    origEndSec: number;
+    kind: 'region' | 'effect';
+    origZoomInEndSec?: number;
+    origHoldEndSec?: number;
+    pendingEffectPatch?: Partial<BeatTimelineEffect>;
 };
 
 const HANDLE_W = 12;
+const PHASE_HANDLE_W = 8;
 const ROW_H = 26;
 const AUDIO_ROW_H = 30;
 const LABEL_W = 80;
@@ -52,6 +89,7 @@ const MIN_DUR = 1.0;
 export default function WhiteboardRegionTimeline({
     regions,
     beatDurationSec,
+    effectTimelineDurationSec,
     beatStartSec,
     beatWords,
     colorFor,
@@ -65,11 +103,18 @@ export default function WhiteboardRegionTimeline({
     beatId = '',
     onCopyError,
     onPlayheadChange,
+    timelineEffects = [],
+    selectedEffectId,
+    onPreviewEffect,
+    onCommitEffect,
+    onSelectEffect,
+    onSwitchToEditTab,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
+    const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
     const transitionDur = Math.max(0, Math.min(duration, Number(transitionDurationSec) || 0));
     const trackRef = React.useRef<HTMLDivElement | null>(null);
-    const dragRef = React.useRef<{ id: string; handle: 'start' | 'end' | 'body'; startX: number; origStartSec: number; origEndSec: number } | null>(null);
+    const dragRef = React.useRef<DragState | null>(null);
     const scrubRef = React.useRef(false);
 
     // ---- Audio playback ----
@@ -170,21 +215,12 @@ export default function WhiteboardRegionTimeline({
     };
 
     // ---- Timing helpers ----
-    const wordTimeOf = (wordIndex: number | null | undefined): number | null => {
-        if (wordIndex == null) return null;
-        const w = beatWords.find((x) => x.index === wordIndex);
-        return w ? Math.max(0, Math.min(duration, w.start - beatStartSec)) : null;
-    };
-    const startSecOf = (region: BeatRegion): number => {
-        if (region.start_sec != null) return Math.max(0, Math.min(duration, region.start_sec));
-        const wt = wordTimeOf(region.script_start_word);
-        return wt != null ? wt : 0;
-    };
-    const endSecOf = (region: BeatRegion): number => {
-        if (region.end_sec != null) return Math.max(0, Math.min(duration, region.end_sec));
-        const wt = wordTimeOf(region.script_end_word);
-        return wt != null ? wt : duration;
-    };
+    const startSecOf = (region: BeatRegion): number => (
+        resolveRegionStartSec(region, beatWords, beatStartSec, duration)
+    );
+    const endSecOf = (region: BeatRegion): number => (
+        resolveRegionEndSec(region, beatWords, beatStartSec, duration)
+    );
     const ancestorEndMax = (id: string, seen = new Set<string>()): number => {
         const region = regions.find((r) => r.id === id);
         if (!region || seen.has(id)) return 0;
@@ -214,6 +250,96 @@ export default function WhiteboardRegionTimeline({
         return out;
     }, [regions]);
 
+    const orderedEffects = React.useMemo(() => (
+        [...timelineEffects].sort((a, b) => a.layer - b.layer || a.start_sec - b.start_sec)
+    ), [timelineEffects]);
+
+    const effectStartSecOf = (effect: BeatTimelineEffect) => Math.max(0, Math.min(effectDuration, effect.start_sec));
+    const effectEndSecOf = (effect: BeatTimelineEffect) => Math.max(0, Math.min(effectDuration, effect.end_sec));
+
+    const previewEffect = (id: string, patch: Partial<BeatTimelineEffect>) => {
+        onPreviewEffect?.(id, patch);
+    };
+
+    const storeEffectDragPatch = (drag: DragState, patch: Partial<BeatTimelineEffect>) => {
+        drag.pendingEffectPatch = { ...(drag.pendingEffectPatch || {}), ...patch };
+        previewEffect(drag.id, patch);
+    };
+
+    const commitEffect = (id: string, start: number, end: number) => {
+        let s = Math.max(0, Math.min(duration, start));
+        let e = Math.max(0, Math.min(duration, end));
+        if (e - s < MIN_DUR) {
+            if (start >= duration - MIN_DUR) s = Math.max(0, e - MIN_DUR);
+            else e = Math.min(duration, s + MIN_DUR);
+        }
+        if (e <= s) e = Math.min(duration, s + MIN_DUR);
+        const patch = {
+            start_sec: Math.round(s * 100) / 100,
+            end_sec: Math.round(e * 100) / 100,
+        };
+        if (dragRef.current?.kind === 'effect') {
+            storeEffectDragPatch(dragRef.current, patch);
+            return;
+        }
+        previewEffect(id, patch);
+    };
+
+    const commitZoomEffect = (
+        id: string,
+        patch: Partial<Pick<BeatZoomEffect, 'start_sec' | 'end_sec' | 'zoom_in_end_sec' | 'hold_end_sec'>>,
+    ) => {
+        const effect = timelineEffects.find((item) => item.id === id);
+        if (!effect || !isBeatZoomEffect(effect)) return;
+        const merged = { ...effect, ...patch };
+        const phases = normalizeZoomPhaseBounds(
+            merged.start_sec,
+            merged.end_sec,
+            merged.zoom_in_end_sec,
+            merged.hold_end_sec,
+            effectDuration,
+        );
+        const normalized = {
+            start_sec: phases.start,
+            end_sec: phases.end,
+            zoom_in_end_sec: phases.zoomInEnd,
+            hold_end_sec: phases.holdEnd,
+        };
+        if (dragRef.current?.kind === 'effect') {
+            storeEffectDragPatch(dragRef.current, normalized);
+            return;
+        }
+        previewEffect(id, normalized);
+    };
+
+    const handleEffectPointerDown = (
+        e: React.PointerEvent,
+        id: string,
+        handle: EffectDragHandle,
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const effect = timelineEffects.find((item) => item.id === id);
+        if (!effect) return;
+        onSelectEffect?.(id);
+        onSwitchToEditTab?.();
+        const drag: DragState = {
+            id,
+            handle,
+            kind: 'effect',
+            startX: e.clientX,
+            origStartSec: effectStartSecOf(effect),
+            origEndSec: effectEndSecOf(effect),
+        };
+        if (isBeatZoomEffect(effect)) {
+            const phases = getZoomPhaseBounds(effect, effectDuration);
+            drag.origZoomInEndSec = phases.zoomInEnd;
+            drag.origHoldEndSec = phases.holdEnd;
+        }
+        dragRef.current = drag;
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    };
+
     const secToPct = (sec: number) => (sec / duration) * 100;
     const posToSec = (clientX: number): number => {
         const el = trackRef.current;
@@ -236,10 +362,7 @@ export default function WhiteboardRegionTimeline({
         if (s < minStart) s = minStart;
         if (e < minStart) e = minStart;
         if (e <= s) e = Math.min(duration, s + MIN_DUR);
-        onChangeRegion(id, {
-            start_sec: Math.round(s * 100) / 100,
-            end_sec: Math.round(e * 100) / 100,
-        });
+        onChangeRegion(id, regionTimingPatchFromDrag(s, e));
     };
 
     const handlePointerDown = (e: React.PointerEvent, id: string, handle: 'start' | 'end' | 'body') => {
@@ -252,6 +375,7 @@ export default function WhiteboardRegionTimeline({
         if (onSelectRegion) onSelectRegion(id);
         dragRef.current = {
             id, handle,
+            kind: 'region',
             startX: e.clientX,
             origStartSec: startSecOf(region),
             origEndSec: endSecOf(region),
@@ -269,13 +393,72 @@ export default function WhiteboardRegionTimeline({
         const dx = posToSec(e.clientX) - posToSec(drag.startX);
         let s = drag.origStartSec;
         let end = drag.origEndSec;
+        if (drag.kind === 'effect' && drag.origZoomInEndSec != null && drag.origHoldEndSec != null) {
+            const origSpan = Math.max(0.001, drag.origEndSec - drag.origStartSec);
+            const relIn = (drag.origZoomInEndSec - drag.origStartSec) / origSpan;
+            const relHold = (drag.origHoldEndSec - drag.origStartSec) / origSpan;
+            if (drag.handle === 'body') {
+                const bounds = shiftZoomPhaseBounds(
+                    {
+                        start: drag.origStartSec,
+                        zoomInEnd: drag.origZoomInEndSec,
+                        holdEnd: drag.origHoldEndSec,
+                        end: drag.origEndSec,
+                    },
+                    dx,
+                    effectDuration,
+                );
+                commitZoomEffect(drag.id, {
+                    start_sec: bounds.start,
+                    end_sec: bounds.end,
+                    zoom_in_end_sec: bounds.zoomInEnd,
+                    hold_end_sec: bounds.holdEnd,
+                });
+                return;
+            }
+            if (drag.handle === 'zoom_in_end') {
+                commitZoomEffect(drag.id, { zoom_in_end_sec: drag.origZoomInEndSec + dx });
+                return;
+            }
+            if (drag.handle === 'hold_end') {
+                commitZoomEffect(drag.id, { hold_end_sec: drag.origHoldEndSec + dx });
+                return;
+            }
+            if (drag.handle === 'start') {
+                s = drag.origStartSec + dx;
+                const newSpan = drag.origEndSec - s;
+                commitZoomEffect(drag.id, {
+                    start_sec: s,
+                    end_sec: drag.origEndSec,
+                    zoom_in_end_sec: s + relIn * newSpan,
+                    hold_end_sec: s + relHold * newSpan,
+                });
+                return;
+            }
+            if (drag.handle === 'end') {
+                end = drag.origEndSec + dx;
+                const newSpan = end - drag.origStartSec;
+                commitZoomEffect(drag.id, {
+                    start_sec: drag.origStartSec,
+                    end_sec: end,
+                    zoom_in_end_sec: drag.origStartSec + relIn * newSpan,
+                    hold_end_sec: drag.origStartSec + relHold * newSpan,
+                });
+                return;
+            }
+        }
         if (drag.handle === 'body') { s = drag.origStartSec + dx; end = drag.origEndSec + dx; }
         else if (drag.handle === 'start') { s = drag.origStartSec + dx; }
         else { end = drag.origEndSec + dx; }
-        commit(drag.id, s, end);
+        if (drag.kind === 'effect') commitEffect(drag.id, s, end);
+        else commit(drag.id, s, end);
     };
 
     const endDrag = (e?: React.PointerEvent) => {
+        const drag = dragRef.current;
+        if (drag?.kind === 'effect' && drag.pendingEffectPatch && onCommitEffect) {
+            onCommitEffect(drag.id, drag.pendingEffectPatch);
+        }
         if (e) (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
         dragRef.current = null;
         scrubRef.current = false;
@@ -289,17 +472,20 @@ export default function WhiteboardRegionTimeline({
         const minStart = minStartOf(region);
         const currentStart = region.start_sec != null ? startSecOf(region) : Math.max(minStart, t - 1.0);
         const s = Math.max(minStart, Math.min(t, currentStart));
-        onChangeRegion(region.id, {
-            start_sec: Math.round(s * 100) / 100,
-            end_sec: Math.round(Math.max(s + MIN_DUR, t) * 100) / 100,
-        });
+        const e = Math.round(Math.max(s + MIN_DUR, t) * 100) / 100;
+        onChangeRegion(region.id, regionTimingPatchFromDrag(s, e));
     };
 
-    // Vùng đang chọn: khoảng render [start_sec, end_sec] để highlight audio script.
+    // Khoảng thời gian đang chọn (vùng hoặc hiệu ứng) — highlight audio script + thanh audio.
     const selectedRegionObj = selectedRegionId ? regions.find((r) => r.id === selectedRegionId) : undefined;
+    const selectedEffectObj = selectedEffectId
+        ? timelineEffects.find((item) => item.id === selectedEffectId)
+        : undefined;
     const selectedRange = selectedRegionObj
-        ? { start: startSecOf(selectedRegionObj), end: endSecOf(selectedRegionObj) }
-        : null;
+        ? { start: startSecOf(selectedRegionObj), end: endSecOf(selectedRegionObj), kind: 'region' as const }
+        : selectedEffectObj
+            ? { start: effectStartSecOf(selectedEffectObj), end: effectEndSecOf(selectedEffectObj), kind: 'effect' as const }
+            : null;
 
     // Copy JSON timeline từ SERVER (override đã lưu → scene payload engine render).
     const copyTimelineJson = async () => {
@@ -399,7 +585,7 @@ export default function WhiteboardRegionTimeline({
                                         userSelect: 'none',
                                         WebkitUserSelect: 'none',
                                     }}
-                                    title={`«${word.text}» @ ${t.toFixed(2)}s — bấm để chạy audio + gắn mốc XONG cho vùng đang chọn`}
+                                    title={`«${word.text}» @ ${t.toFixed(2)}s — bấm để chạy audio${selectedRange ? ' (trong khoảng đang chọn)' : ''}`}
                                 >
                                     {word.text}
                                 </Box>
@@ -429,7 +615,7 @@ export default function WhiteboardRegionTimeline({
                                     ? 'Đã copy JSON timeline server!'
                                     : (copying
                                         ? 'Đang lấy timeline từ server…'
-                                        : 'Copy JSON timeline server (đúng khi render)')
+                                        : 'Copy JSON timeline đầy đủ (vùng + hiệu ứng + scene params)')
                             }>
                                 <span>
                                     <IconButton
@@ -470,6 +656,43 @@ export default function WhiteboardRegionTimeline({
                                 </Box>
                             );
                         })}
+                        {orderedEffects.map((effect) => {
+                            const def = getBeatTimelineEffectDefinition(effect.type);
+                            const color = def?.timelineColor || '#7c4dff';
+                            const isSel = effect.id === selectedEffectId;
+                            return (
+                                <Box
+                                    key={effect.id}
+                                    onClick={() => {
+                                        onSelectEffect?.(effect.id);
+                                        onSwitchToEditTab?.();
+                                    }}
+                                    sx={{
+                                        height: ROW_H,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        px: 0.5,
+                                        borderTop: '1px solid',
+                                        borderColor: 'divider',
+                                        borderLeft: `3px solid ${color}`,
+                                        bgcolor: isSel ? `${color}26` : 'transparent',
+                                        cursor: 'pointer',
+                                    }}
+                                    title={`Click để chỉnh hiệu ứng ${def?.label || effect.type}`}
+                                >
+                                    <Typography variant="caption" sx={{
+                                        fontSize: 10.5,
+                                        fontWeight: 800,
+                                        color: '#111',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}>
+                                        {effect.name || def?.label || effect.type}
+                                    </Typography>
+                                </Box>
+                            );
+                        })}
                     </Box>
 
                     {/* Cột track */}
@@ -498,6 +721,27 @@ export default function WhiteboardRegionTimeline({
                             sx={{ position: 'relative', height: AUDIO_ROW_H, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.03)' }}
                             title="Kéo thanh audio để xem preview beat tại thời điểm đó"
                         >
+                            {selectedRange ? (
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        top: 2,
+                                        bottom: 2,
+                                        left: `${secToPct(selectedRange.start)}%`,
+                                        width: `${Math.max(0.01, secToPct(selectedRange.end) - secToPct(selectedRange.start))}%`,
+                                        bgcolor: selectedRange.kind === 'effect'
+                                            ? 'rgba(124,77,255,0.22)'
+                                            : 'rgba(25,118,210,0.18)',
+                                        border: '1px solid',
+                                        borderColor: selectedRange.kind === 'effect'
+                                            ? 'rgba(124,77,255,0.55)'
+                                            : 'rgba(25,118,210,0.45)',
+                                        borderRadius: 0.5,
+                                        pointerEvents: 'none',
+                                        zIndex: 0,
+                                    }}
+                                />
+                            ) : null}
                             {Array.from({ length: Math.max(1, Math.ceil(duration)) }).map((_, i) => (
                                 <React.Fragment key={i}>
                                     <Box sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 5, height: 16, width: 1, bgcolor: 'rgba(0,0,0,0.25)' }} />
@@ -618,6 +862,142 @@ export default function WhiteboardRegionTimeline({
                                             </Box>
                                         );
                                     })() : null}
+                                </Box>
+                            );
+                        })}
+
+                        {orderedEffects.map((effect) => {
+                            const def = getBeatTimelineEffectDefinition(effect.type);
+                            const color = def?.timelineColor || '#7c4dff';
+                            const isSel = effect.id === selectedEffectId;
+                            const start = effectStartSecOf(effect);
+                            const end = effectEndSecOf(effect);
+                            const left = secToPct(start);
+                            const width = Math.max(0.01, secToPct(end) - left);
+                            const isZoom = isBeatZoomEffect(effect);
+                            const phases = isZoom ? getZoomPhaseBounds(effect, effectDuration) : null;
+                            const barStart = phases?.start ?? start;
+                            const barEnd = phases?.end ?? end;
+                            const barSpan = Math.max(0.001, barEnd - barStart);
+                            const zoomInPct = phases ? ((phases.zoomInEnd - barStart) / barSpan) * 100 : 33.33;
+                            const holdPct = phases ? ((phases.holdEnd - phases.zoomInEnd) / barSpan) * 100 : 33.33;
+                            return (
+                                <Box key={effect.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
+                                    <Box
+                                        onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'body')}
+                                        onClick={() => {
+                                            onSelectEffect?.(effect.id);
+                                            onSwitchToEditTab?.();
+                                        }}
+                                        sx={{
+                                            position: 'absolute', top: 3, bottom: 3,
+                                            left: `${left}%`, width: `${width}%`,
+                                            borderRadius: 1,
+                                            bgcolor: color,
+                                            opacity: isSel ? 0.95 : 0.72,
+                                            border: `2px solid ${color}`,
+                                            cursor: 'grab',
+                                            boxSizing: 'border-box',
+                                            zIndex: 2,
+                                            overflow: 'hidden',
+                                            display: 'flex',
+                                        }}
+                                        title={`${effect.name || def?.label || 'Hiệu ứng'} — kéo để di chuyển`}
+                                    >
+                                        {isZoom && phases ? (
+                                            <>
+                                                <Box sx={{
+                                                    flex: `0 0 ${zoomInPct}%`,
+                                                    bgcolor: 'rgba(255,255,255,0.28)',
+                                                    backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.35) 0 3px, transparent 3px 6px)',
+                                                }} title="Zoom in" />
+                                                <Box sx={{
+                                                    flex: `0 0 ${holdPct}%`,
+                                                    bgcolor: 'rgba(255,255,255,0.12)',
+                                                }} title="Giữ zoom" />
+                                                <Box sx={{
+                                                    flex: 1,
+                                                    bgcolor: 'rgba(0,0,0,0.18)',
+                                                    backgroundImage: 'repeating-linear-gradient(-45deg, rgba(255,255,255,0.2) 0 3px, transparent 3px 6px)',
+                                                }} title="Zoom out" />
+                                            </>
+                                        ) : (
+                                            <Box sx={{
+                                                flex: 1,
+                                                backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.18) 0 4px, transparent 4px 8px)',
+                                            }} />
+                                        )}
+                                        {width > 6 ? (
+                                            <Typography sx={{
+                                                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', fontSize: 8.5, fontWeight: 800, color: '#fff',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.75)', overflow: 'hidden', whiteSpace: 'nowrap',
+                                                pointerEvents: 'none',
+                                            }}>
+                                                {effect.name || def?.label || effect.type}
+                                            </Typography>
+                                        ) : null}
+                                    </Box>
+                                    {isZoom && phases ? (
+                                        <>
+                                            <Box
+                                                onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'zoom_in_end')}
+                                                sx={{
+                                                    position: 'absolute', top: 5, bottom: 5,
+                                                    left: `calc(${secToPct(phases.zoomInEnd)}% - ${PHASE_HANDLE_W / 2}px)`,
+                                                    width: PHASE_HANDLE_W,
+                                                    bgcolor: '#fffde7',
+                                                    border: `1.5px solid ${color}`,
+                                                    borderRadius: 0.5,
+                                                    cursor: 'ew-resize',
+                                                    zIndex: 4,
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
+                                                }}
+                                                title="Kéo = ranh giới zoom in / giữ"
+                                            />
+                                            <Box
+                                                onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'hold_end')}
+                                                sx={{
+                                                    position: 'absolute', top: 5, bottom: 5,
+                                                    left: `calc(${secToPct(phases.holdEnd)}% - ${PHASE_HANDLE_W / 2}px)`,
+                                                    width: PHASE_HANDLE_W,
+                                                    bgcolor: '#fffde7',
+                                                    border: `1.5px solid ${color}`,
+                                                    borderRadius: 0.5,
+                                                    cursor: 'ew-resize',
+                                                    zIndex: 4,
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
+                                                }}
+                                                title="Kéo = ranh giới giữ / zoom out"
+                                            />
+                                        </>
+                                    ) : null}
+                                    <Box
+                                        onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'start')}
+                                        sx={{
+                                            position: 'absolute', top: 1, bottom: 1,
+                                            left: `calc(${left}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                                        }}
+                                        title="Kéo = bắt đầu hiệu ứng"
+                                    >
+                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                    </Box>
+                                    <Box
+                                        onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'end')}
+                                        sx={{
+                                            position: 'absolute', top: 1, bottom: 1,
+                                            left: `calc(${secToPct(end)}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                                        }}
+                                        title="Kéo = kết thúc hiệu ứng"
+                                    >
+                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                    </Box>
                                 </Box>
                             );
                         })}

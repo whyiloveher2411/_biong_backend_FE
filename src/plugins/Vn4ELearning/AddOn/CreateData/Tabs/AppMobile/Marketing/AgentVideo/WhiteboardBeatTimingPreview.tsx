@@ -1,6 +1,12 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import type { BeatRegion } from './agentVideoApi';
+import type { BeatRegion, BeatTimelineEffect } from './agentVideoApi';
+import { resolveZoomTransformAt, zoomTransformToCss } from './beatTimelineEffects/resolveZoomTransform';
+import {
+    beatPlayheadToVideoSec,
+    resolveRegionEndSec,
+    resolveRegionStartSec,
+} from './regionTimelineTiming';
 
 type Word = { index: number; text: string; start: number };
 
@@ -11,33 +17,10 @@ type Props = {
     durationSec: number;
     beatStartSec: number;
     beatWords: Word[];
+    timelineEffects?: BeatTimelineEffect[];
 };
 
 const BOARD_COLOR = '#efe6d4';
-
-function wordTimeOf(wordIndex: number | null | undefined, beatWords: Word[], beatStartSec: number, duration: number): number | null {
-    if (wordIndex == null) {
-        return null;
-    }
-    const word = beatWords.find((item) => item.index === wordIndex);
-    return word ? Math.max(0, Math.min(duration, word.start - beatStartSec)) : null;
-}
-
-function startSecOf(region: BeatRegion, beatWords: Word[], beatStartSec: number, duration: number): number {
-    if (region.start_sec != null) {
-        return Math.max(0, Math.min(duration, region.start_sec));
-    }
-    const fromWord = wordTimeOf(region.script_start_word, beatWords, beatStartSec, duration);
-    return fromWord != null ? fromWord : 0;
-}
-
-function endSecOf(region: BeatRegion, beatWords: Word[], beatStartSec: number, duration: number): number {
-    if (region.end_sec != null) {
-        return Math.max(0, Math.min(duration, region.end_sec));
-    }
-    const fromWord = wordTimeOf(region.script_end_word, beatWords, beatStartSec, duration);
-    return fromWord != null ? fromWord : duration;
-}
 
 function regionProgress(
     region: BeatRegion,
@@ -50,8 +33,8 @@ function regionProgress(
     if (region.parent_leftover_instant && hasChildren) {
         return 1;
     }
-    const start = startSecOf(region, beatWords, beatStartSec, duration);
-    const end = Math.max(start + 0.05, endSecOf(region, beatWords, beatStartSec, duration));
+    const start = resolveRegionStartSec(region, beatWords, beatStartSec, duration);
+    const end = Math.max(start + 0.05, resolveRegionEndSec(region, beatWords, beatStartSec, duration));
     if (playheadSec <= start) {
         return 0;
     }
@@ -89,8 +72,10 @@ export default function WhiteboardBeatTimingPreview({
     durationSec,
     beatStartSec,
     beatWords,
+    timelineEffects = [],
 }: Props) {
     const duration = Math.max(0.1, durationSec);
+    const timelineZoomCss = zoomTransformToCss(resolveZoomTransformAt(playheadSec, timelineEffects, durationSec));
     const ordered = React.useMemo(() => {
         const out: BeatRegion[] = [];
         const visited = new Set<string>();
@@ -117,6 +102,14 @@ export default function WhiteboardBeatTimingPreview({
                 bgcolor: BOARD_COLOR,
             }}
         >
+            <Box
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
+                    transformOrigin: 'center center',
+                }}
+            >
             {ordered.map((region) => {
                 if (!Array.isArray(region.points) || region.points.length < 3) {
                     return null;
@@ -193,13 +186,17 @@ export default function WhiteboardBeatTimingPreview({
                     </Box>
                 );
             })}
+            </Box>
         </Box>
     );
 }
 
 type VideoPreviewProps = {
     videoUrl: string;
-    durationSec: number;
+    /** Cửa sổ beat đầy đủ (scene + transition) — khớp độ dài file beat_*.mp4. */
+    beatWindowSec: number;
+    /** Intro đầu file video (0.15 khi có vùng, 0.3 mặc định). */
+    videoIntroSec?: number;
     initialSec?: number;
     initialPlaying?: boolean;
 };
@@ -218,25 +215,33 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
     VideoPreviewProps
 >(function WhiteboardBeatVideoPreview({
     videoUrl,
-    durationSec,
+    beatWindowSec,
+    videoIntroSec = 0.15,
     initialSec = 0,
     initialPlaying = false,
 }, ref) {
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
-    const pendingSecRef = React.useRef<number | null>(null);
+    const pendingBeatSecRef = React.useRef<number | null>(null);
     const seekingRef = React.useRef(false);
     const playingRef = React.useRef(initialPlaying);
-    const durationRef = React.useRef(durationSec);
-    durationRef.current = durationSec;
+    const beatWindowRef = React.useRef(beatWindowSec);
+    const introSecRef = React.useRef(videoIntroSec);
+    beatWindowRef.current = beatWindowSec;
+    introSecRef.current = videoIntroSec;
     const [labelSec, setLabelSec] = React.useState(initialSec);
     const labelRafRef = React.useRef(0);
 
-    const clampSec = React.useCallback((sec: number) => {
+    const beatToVideoSec = React.useCallback((beatSec: number) => (
+        beatPlayheadToVideoSec(beatSec, beatWindowRef.current, introSecRef.current)
+    ), []);
+
+    const clampVideoSec = React.useCallback((videoSec: number) => {
         const video = videoRef.current;
+        const fallback = Math.max(0.1, introSecRef.current + beatWindowRef.current);
         const dur = video && Number.isFinite(video.duration) && video.duration > 0
             ? video.duration
-            : Math.max(0.1, durationRef.current);
-        return Math.max(0, Math.min(Math.max(0, dur - 0.04), sec));
+            : fallback;
+        return Math.max(0, Math.min(Math.max(0, dur - 0.04), videoSec));
     }, []);
 
     const flushSeek = React.useCallback(() => {
@@ -244,11 +249,12 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
         if (!video || seekingRef.current) {
             return;
         }
-        if (pendingSecRef.current == null) {
+        if (pendingBeatSecRef.current == null) {
             return;
         }
-        const t = clampSec(pendingSecRef.current);
-        pendingSecRef.current = null;
+        const beatSec = pendingBeatSecRef.current;
+        pendingBeatSecRef.current = null;
+        const t = clampVideoSec(beatToVideoSec(beatSec));
         if (Math.abs(video.currentTime - t) < 0.012) {
             return;
         }
@@ -263,15 +269,15 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
         } catch {
             seekingRef.current = false;
         }
-    }, [clampSec]);
+    }, [beatToVideoSec, clampVideoSec]);
 
-    const seekTo = React.useCallback((sec: number, playing: boolean) => {
-        pendingSecRef.current = sec;
+    const seekTo = React.useCallback((beatSec: number, playing: boolean) => {
+        pendingBeatSecRef.current = beatSec;
         playingRef.current = playing;
         if (!labelRafRef.current) {
             labelRafRef.current = window.requestAnimationFrame(() => {
                 labelRafRef.current = 0;
-                setLabelSec(sec);
+                setLabelSec(beatSec);
             });
         }
         const video = videoRef.current;
@@ -282,7 +288,7 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
             if (video.paused) {
                 void video.play().catch(() => undefined);
             }
-            if (Math.abs(video.currentTime - clampSec(sec)) > 0.28) {
+            if (Math.abs(video.currentTime - clampVideoSec(beatToVideoSec(beatSec))) > 0.28) {
                 flushSeek();
             }
             return;
@@ -291,7 +297,7 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
             video.pause();
         }
         flushSeek();
-    }, [clampSec, flushSeek]);
+    }, [beatToVideoSec, clampVideoSec, flushSeek]);
 
     React.useImperativeHandle(ref, () => ({ seekTo }), [seekTo]);
 
@@ -306,8 +312,8 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
         };
         const onLoaded = () => {
             seekingRef.current = false;
-            if (pendingSecRef.current == null) {
-                pendingSecRef.current = initialSec;
+            if (pendingBeatSecRef.current == null) {
+                pendingBeatSecRef.current = initialSec;
             }
             flushSeek();
             if (playingRef.current && video.paused) {
@@ -315,14 +321,14 @@ export const WhiteboardBeatVideoPreview = React.forwardRef<
             }
         };
         const watchdog = window.setInterval(() => {
-            if (seekingRef.current && pendingSecRef.current != null) {
+            if (seekingRef.current && pendingBeatSecRef.current != null) {
                 seekingRef.current = false;
                 flushSeek();
             }
         }, 160);
         video.addEventListener('seeked', onSeeked);
         video.addEventListener('loadedmetadata', onLoaded);
-        pendingSecRef.current = initialSec;
+        pendingBeatSecRef.current = initialSec;
         flushSeek();
         return () => {
             window.clearInterval(watchdog);

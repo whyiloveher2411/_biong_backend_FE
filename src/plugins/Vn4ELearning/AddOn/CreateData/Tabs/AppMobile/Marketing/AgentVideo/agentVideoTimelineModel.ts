@@ -43,6 +43,19 @@ function clampTransitionDurationSec(value: number): number {
  * transition_duration_sec config > 1.2s. Beat cuối / 'none' = 0 (không có box).
  * 'random' không đoán được hiệu ứng cụ thể → dùng duration setting chung.
  */
+/**
+ * Thời lượng scene thực tế (engine cap frame) = cửa sổ beat − transition cuối.
+ * Timeline hiệu ứng zoom chạy trên trục này — KHÔNG gồm vùng đỏ transition.
+ */
+export function resolveAgentVideoBeatSceneBudgetSec(input: {
+    beatDurationSec: number;
+    transitionDurationSec: number;
+}): number {
+    const beatWindow = Math.max(0.1, Number(input.beatDurationSec) || 8);
+    const tx = Math.max(0, Number(input.transitionDurationSec) || 0);
+    return Math.max(0.1, Math.round((beatWindow - tx) * 1000) / 1000);
+}
+
 export function resolveAgentVideoBeatTransitionDurationSec(input: {
     isLastBeat: boolean;
     config?: AgentWhiteboardConfig | null;

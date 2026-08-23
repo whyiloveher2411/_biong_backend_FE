@@ -4,12 +4,19 @@ import {
     Button,
     CircularProgress,
     FormControl,
+    IconButton,
     InputLabel,
+    ListItemIcon,
+    Menu,
     MenuItem,
     Select,
+    Stack,
     Tooltip,
     Typography,
 } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
+import PublicIcon from '@mui/icons-material/Public';
+import AnimationIcon from '@mui/icons-material/Animation';
 import {
     AGENT_IMAGE_ANIMATION_OPTIONS,
     AGENT_IMAGE_ANIMATION_BEAT_OPTIONS,
@@ -32,7 +39,31 @@ type Props = {
     onSave: (override: AgentWhiteboardBeatOverride) => Promise<boolean>;
     /** Ẩn ảnh + nút đặt lại giữa — điểm tập trung được đặt trên canvas vùng chính. */
     withoutImage?: boolean;
+    /** overlay = 2 nút icon trên box ảnh; panel = form cột chỉnh sửa / preview. */
+    variant?: 'panel' | 'overlay';
 };
+
+const OVERLAY_BTN_SX = {
+    bgcolor: 'rgba(0,0,0,0.55)',
+    color: 'common.white',
+    width: 32,
+    height: 32,
+    '&:hover': {
+        bgcolor: 'rgba(0,0,0,0.75)',
+    },
+    '&.Mui-disabled': {
+        color: 'rgba(255,255,255,0.38)',
+        bgcolor: 'rgba(0,0,0,0.4)',
+    },
+} as const;
+
+const OVERLAY_BTN_ACTIVE_SX = {
+    ...OVERLAY_BTN_SX,
+    bgcolor: 'primary.main',
+    '&:hover': {
+        bgcolor: 'primary.dark',
+    },
+} as const;
 
 function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
@@ -61,11 +92,14 @@ export default function ShortVideoAgentImageAnimationControls({
     saving = false,
     onSave,
     withoutImage = false,
+    variant = 'panel',
 }: Props) {
     // Hiệu ứng riêng: mặc định 'common' = theo tiêu chuẩn chung.
     const effect = String(savedOverride?.image_animation_effect || 'common') as AgentImageAnimationBeatValue;
     // Hiệu ứng chung: mặc định 'random'.
     const clipEffect = String(clipConfig?.image_animation_effect || 'random') as AgentImageAnimationEffect;
+    const [clipMenuAnchor, setClipMenuAnchor] = React.useState<HTMLElement | null>(null);
+    const [beatMenuAnchor, setBeatMenuAnchor] = React.useState<HTMLElement | null>(null);
     const focusX = parseRatio(savedOverride?.focus_x, 0.5);
     const focusY = parseRatio(savedOverride?.focus_y, 0.5);
 
@@ -145,6 +179,127 @@ export default function ShortVideoAgentImageAnimationControls({
             focus_y: 0.5,
         });
     };
+
+    const clipLabel = AGENT_IMAGE_ANIMATION_OPTIONS.find((item) => item.value === clipEffect)?.label
+        || clipEffect;
+    const beatLabel = AGENT_IMAGE_ANIMATION_BEAT_OPTIONS.find((item) => item.value === effect)?.label
+        || effect;
+    const clipCustom = clipEffect !== 'random';
+    const beatCustom = effect !== 'common';
+    const showClipButton = typeof onClipConfigChange === 'function';
+
+    if (variant === 'overlay') {
+        return (
+            <>
+                <Stack
+                    spacing={0.75}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    {showClipButton ? (
+                        <Tooltip title={`Hiệu ứng chung (mọi beat): ${clipLabel}`}>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    aria-label={`Hiệu ứng chung (mọi beat): ${clipLabel}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={Boolean(clipMenuAnchor)}
+                                    disabled={clipSaving}
+                                    onClick={(event) => {
+                                        setBeatMenuAnchor(null);
+                                        setClipMenuAnchor(event.currentTarget);
+                                    }}
+                                    sx={clipCustom || clipMenuAnchor ? OVERLAY_BTN_ACTIVE_SX : OVERLAY_BTN_SX}
+                                >
+                                    {clipSaving
+                                        ? <CircularProgress size={16} color="inherit" />
+                                        : <PublicIcon fontSize="small" />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    ) : null}
+                    <Tooltip title={`Hiệu ứng riêng beat này: ${beatLabel}`}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                aria-label={`Hiệu ứng riêng beat này: ${beatLabel}`}
+                                aria-haspopup="menu"
+                                aria-expanded={Boolean(beatMenuAnchor)}
+                                disabled={saving}
+                                onClick={(event) => {
+                                    setClipMenuAnchor(null);
+                                    setBeatMenuAnchor(event.currentTarget);
+                                }}
+                                sx={beatCustom || beatMenuAnchor ? OVERLAY_BTN_ACTIVE_SX : OVERLAY_BTN_SX}
+                            >
+                                {saving
+                                    ? <CircularProgress size={16} color="inherit" />
+                                    : <AnimationIcon fontSize="small" />}
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                </Stack>
+                <Menu
+                    anchorEl={clipMenuAnchor}
+                    open={Boolean(clipMenuAnchor)}
+                    onClose={() => setClipMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    PaperProps={{ sx: { ml: 0.75, minWidth: 180 } }}
+                >
+                    {AGENT_IMAGE_ANIMATION_OPTIONS.map((option) => {
+                        const active = clipEffect === option.value;
+                        return (
+                            <MenuItem
+                                key={option.value}
+                                selected={active}
+                                dense
+                                disabled={clipSaving}
+                                onClick={() => {
+                                    handleClipEffectChange(option.value);
+                                    setClipMenuAnchor(null);
+                                }}
+                            >
+                                <ListItemIcon sx={{ minWidth: 28 }}>
+                                    {active ? <CheckIcon fontSize="small" color="primary" /> : null}
+                                </ListItemIcon>
+                                {option.label}
+                            </MenuItem>
+                        );
+                    })}
+                </Menu>
+                <Menu
+                    anchorEl={beatMenuAnchor}
+                    open={Boolean(beatMenuAnchor)}
+                    onClose={() => setBeatMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    PaperProps={{ sx: { ml: 0.75, minWidth: 200 } }}
+                >
+                    {AGENT_IMAGE_ANIMATION_BEAT_OPTIONS.map((option) => {
+                        const active = effect === option.value;
+                        return (
+                            <MenuItem
+                                key={option.value}
+                                selected={active}
+                                dense
+                                disabled={saving}
+                                onClick={() => {
+                                    handleEffectChange(option.value);
+                                    setBeatMenuAnchor(null);
+                                }}
+                            >
+                                <ListItemIcon sx={{ minWidth: 28 }}>
+                                    {active ? <CheckIcon fontSize="small" color="primary" /> : null}
+                                </ListItemIcon>
+                                {option.label}
+                            </MenuItem>
+                        );
+                    })}
+                </Menu>
+            </>
+        );
+    }
 
     const dotLeft = containRect ? containRect.x + focusX * containRect.w : `${focusX * 100}%`;
     const dotTop = containRect ? containRect.y + focusY * containRect.h : `${focusY * 100}%`;
