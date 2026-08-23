@@ -7,6 +7,8 @@ import StopIcon from '@mui/icons-material/Stop';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
@@ -44,8 +46,10 @@ import {
     type WhiteboardRenderProgress,
 } from './agentVideoWhiteboardRenderProgress';
 import TimelineZoomControls, {
+    SHORT_VIDEO_AGENT_TIMELINE_COLLAPSED_STORAGE_KEY,
     SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     usePersistedTimelineScaleWidth,
+    usePersistedTimelineTracksCollapsed,
 } from '../TimelineZoomControls';
 import {
     countBeatIdsWithHtml,
@@ -383,6 +387,9 @@ export default function ShortVideoAgentVideoTimeline({
     const [mediaDurationSec, setMediaDurationSec] = React.useState<number | null>(null);
     const [currentTimeSec, setCurrentTimeSec] = React.useState(0);
     const [isPlaying, setIsPlaying] = React.useState(false);
+    const [tracksCollapsed, setTracksCollapsed] = usePersistedTimelineTracksCollapsed(
+        SHORT_VIDEO_AGENT_TIMELINE_COLLAPSED_STORAGE_KEY,
+    );
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
@@ -887,7 +894,7 @@ export default function ShortVideoAgentVideoTimeline({
                     gap: 1,
                     px: 1.5,
                     py: 0.75,
-                    borderBottom: 1,
+                    borderBottom: tracksCollapsed ? 0 : 1,
                     borderColor: 'divider',
                     userSelect: 'none',
                 }}
@@ -1219,8 +1226,29 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                     </Box>
                 ) : null}
+                <Tooltip title={tracksCollapsed
+                    ? 'Mở rộng timeline video'
+                    : 'Thu nhỏ timeline video — chỉ giữ thanh điều khiển'}
+                >
+                    <IconButton
+                        size="small"
+                        aria-label={tracksCollapsed ? 'Mở rộng timeline video' : 'Thu nhỏ timeline video'}
+                        onClick={() => setTracksCollapsed((value) => !value)}
+                    >
+                        {tracksCollapsed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
+                    </IconButton>
+                </Tooltip>
             </Box>
 
+            <Box
+                sx={{
+                    maxHeight: tracksCollapsed
+                        ? 0
+                        : (hasVideo ? timelineTotalHeight : 44),
+                    overflow: 'hidden',
+                    transition: 'max-height 0.28s ease',
+                }}
+            >
             {!hasVideo ? (
                 <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1.25 }}>
                     Chưa có video trên timeline
@@ -1392,6 +1420,7 @@ export default function ShortVideoAgentVideoTimeline({
                     </Box>
                 </Box>
             )}
+            </Box>
             <ShortVideoAgentBeatDivisionManualDrawer
                 open={beatDivisionManualOpen}
                 onClose={() => setBeatDivisionManualOpen(false)}

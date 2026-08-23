@@ -39,6 +39,8 @@ type Props = {
     shortVideoId?: number;
     beatId?: string;
     onCopyError?: (message: string) => void;
+    /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
+    onPlayheadChange?: (sec: number, playing: boolean) => void;
 };
 
 const HANDLE_W = 12;
@@ -62,6 +64,7 @@ export default function WhiteboardRegionTimeline({
     shortVideoId = 0,
     beatId = '',
     onCopyError,
+    onPlayheadChange,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const transitionDur = Math.max(0, Math.min(duration, Number(transitionDurationSec) || 0));
@@ -76,6 +79,14 @@ export default function WhiteboardRegionTimeline({
     const [copied, setCopied] = React.useState(false);
     const [copying, setCopying] = React.useState(false);
     const rafRef = React.useRef<number>(0);
+    const onPlayheadChangeRef = React.useRef(onPlayheadChange);
+    onPlayheadChangeRef.current = onPlayheadChange;
+    const playingRef = React.useRef(false);
+    playingRef.current = playing;
+
+    const emitPlayhead = (sec: number, isPlaying: boolean) => {
+        onPlayheadChangeRef.current?.(sec, isPlaying);
+    };
 
     React.useEffect(() => {
         const audio = audioRef.current;
@@ -95,16 +106,20 @@ export default function WhiteboardRegionTimeline({
         if (audio) audio.pause();
         setPlaying(false);
         setPlayhead(0);
+        emitPlayhead(0, false);
     }, [beatStartSec, beatDurationSec]);
 
     const updatePlayhead = () => {
         const audio = audioRef.current;
         if (!audio) return;
         const t = Math.max(beatStartSec, Math.min(beatStartSec + duration, audio.currentTime));
-        setPlayhead(t - beatStartSec);
+        const local = t - beatStartSec;
+        setPlayhead(local);
+        emitPlayhead(local, true);
         if (t >= beatStartSec + duration - 0.02) {
             audio.pause();
             setPlaying(false);
+            emitPlayhead(local, false);
             return;
         }
         rafRef.current = requestAnimationFrame(updatePlayhead);
@@ -116,6 +131,7 @@ export default function WhiteboardRegionTimeline({
         if (playing) {
             audio.pause();
             setPlaying(false);
+            emitPlayhead(playhead, false);
             return;
         }
         const cur = audio.currentTime;
@@ -124,6 +140,7 @@ export default function WhiteboardRegionTimeline({
         }
         void audio.play().then(() => {
             setPlaying(true);
+            emitPlayhead(Math.max(0, audio.currentTime - beatStartSec), true);
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(updatePlayhead);
         }).catch(() => setPlaying(false));
@@ -131,10 +148,12 @@ export default function WhiteboardRegionTimeline({
 
     const seekToSec = (sec: number) => {
         const audio = audioRef.current;
+        const next = Math.max(0, Math.min(duration, sec));
         if (audio && audioUrl) {
-            audio.currentTime = Math.max(0, beatStartSec + sec);
+            audio.currentTime = Math.max(0, beatStartSec + next);
         }
-        setPlayhead(Math.max(0, Math.min(duration, sec)));
+        setPlayhead(next);
+        emitPlayhead(next, playingRef.current);
     };
 
     const replay = () => {
@@ -142,6 +161,7 @@ export default function WhiteboardRegionTimeline({
         if (!audio) return;
         audio.currentTime = beatStartSec;
         setPlayhead(0);
+        emitPlayhead(0, true);
         void audio.play().then(() => {
             setPlaying(true);
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -461,17 +481,23 @@ export default function WhiteboardRegionTimeline({
                             pl: 1,
                             overflow: 'hidden',
                             bgcolor: 'rgba(0,0,0,0.02)',
+                            cursor: 'ew-resize',
                         }}
                         onPointerDown={(e) => {
                             scrubRef.current = true;
                             seekToSec(posToSec(e.clientX));
+                            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                         }}
                         onPointerMove={handlePointerMove}
                         onPointerUp={endDrag}
                         onPointerCancel={endDrag}
                     >
-                        {/* Hàng 1: THANH AUDIO SẠCH — chỉ thước giây + vạch từ (không mảnh màu) */}
-                        <Box sx={{ position: 'relative', height: AUDIO_ROW_H, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.03)' }}>
+                        {/* Hàng 1: THANH AUDIO SẠCH — chỉ thước giây + vạch từ (không mảnh màu).
+                            Kéo/click trên hàng này (và khoảng trống track) = seek playhead + preview. */}
+                        <Box
+                            sx={{ position: 'relative', height: AUDIO_ROW_H, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.03)' }}
+                            title="Kéo thanh audio để xem preview beat tại thời điểm đó"
+                        >
                             {Array.from({ length: Math.max(1, Math.ceil(duration)) }).map((_, i) => (
                                 <React.Fragment key={i}>
                                     <Box sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 5, height: 16, width: 1, bgcolor: 'rgba(0,0,0,0.25)' }} />

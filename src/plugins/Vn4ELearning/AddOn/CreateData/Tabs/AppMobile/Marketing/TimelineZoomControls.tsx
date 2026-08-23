@@ -10,6 +10,7 @@ export const TIMELINE_ZOOM_STEP = 4;
 
 export const SHORT_VIDEO_EDITOR_TIMELINE_ZOOM_STORAGE_KEY = 'short_video_editor_timeline_scale_width_v1';
 export const SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY = 'short_video_agent_timeline_scale_width_v1';
+export const SHORT_VIDEO_AGENT_TIMELINE_COLLAPSED_STORAGE_KEY = 'short_video_agent_timeline_tracks_collapsed_v1';
 
 export function clampTimelineScaleWidth(value: number): number {
     return Math.max(TIMELINE_ZOOM_MIN, Math.min(TIMELINE_ZOOM_MAX, value));
@@ -47,6 +48,35 @@ export function usePersistedTimelineScaleWidth(storageKey: string): [number, (ne
     }, []);
 
     return [scaleWidth, setClampedScaleWidth];
+}
+
+export function readTimelineTracksCollapsed(storageKey: string, fallback = false): boolean {
+    if (typeof window === 'undefined') {
+        return fallback;
+    }
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw === '1' || raw === 'true') {
+        return true;
+    }
+    if (raw === '0' || raw === 'false') {
+        return false;
+    }
+    return fallback;
+}
+
+export function usePersistedTimelineTracksCollapsed(storageKey: string): [boolean, (next: boolean) => void] {
+    const [collapsed, setCollapsed] = React.useState(
+        () => readTimelineTracksCollapsed(storageKey),
+    );
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        window.localStorage.setItem(storageKey, collapsed ? '1' : '0');
+    }, [collapsed, storageKey]);
+
+    return [collapsed, setCollapsed];
 }
 
 type TimelineZoomControlsProps = {

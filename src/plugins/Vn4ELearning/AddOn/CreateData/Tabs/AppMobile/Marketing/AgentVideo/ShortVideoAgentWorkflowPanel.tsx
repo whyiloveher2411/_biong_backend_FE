@@ -1155,66 +1155,71 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         )}
                     </Stack>
                 </WorkflowSection>
-
-                <CollapsibleWorkflowSection title="Thông tin chung" tone="info">
-                    <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
-                    <MetaRow
-                        label="Workflow mode"
-                        value={state.workflowMode === 'auto_tts_full' ? 'TTS tự động' : '2 bước thủ công'}
-                    />
-                    <MetaRow label="TTS status" status={state.agentTtsStatus || '—'} />
-                    <MetaRow
-                        label="TTS job"
-                        value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
-                    />
-                    <MetaRow label="TTS chain" value={chainDisplay} />
-                    {state.selectedPlatforms.includes('omnivoice_local')
-                        || state.ttsChain.includes('omnivoice_local') ? (
+                {
+                    // eslint-disable-next-line no-constant-condition
+                    false ??
+                    <CollapsibleWorkflowSection title="Thông tin chung" tone="info">
+                        <MetaRow label="Phase" status={phaseLabel(state.workflowPhase)} />
                         <MetaRow
-                            label="Giọng OmniVoice"
-                            value={
-                                state.omnivoiceVoiceMode === 'design'
-                                    ? `Thiết kế giọng · ${formatOmnivoiceVoiceDesignVi(state.omnivoiceVoiceDesign || '') || '—'}`
-                                    : (state.omnivoiceVoice || 'minh_quân')
-                            }
+                            label="Workflow mode"
+                            value={state.workflowMode === 'auto_tts_full' ? 'TTS tự động' : '2 bước thủ công'}
                         />
-                    ) : null}
-                    {state.selectedPlatforms.includes('saydi')
-                        || state.ttsChain.includes('saydi') ? (
+                        <MetaRow label="TTS status" status={state.agentTtsStatus || '—'} />
                         <MetaRow
-                            label="Giọng Saydi"
-                            value={state.saydiVoice || 'adam-11labs-vi'}
+                            label="TTS job"
+                            value={state.agentTtsJobId != null ? `#${state.agentTtsJobId}` : '—'}
                         />
-                    ) : null}
-                    <MetaRow label="Video status" status={state.agentVideoStatus || 'none'} />
-                    <MetaRow
-                        label="Render mode"
-                        value={state.renderMode === 'import_html' ? 'HTML chatbot' : 'Agent sáng tạo'}
-                    />
-                    {state.renderMode === 'import_html' ? (
-                        <>
-                            <MetaRow label="Whisper" status={state.whisperStatus || 'none'} />
+                        <MetaRow label="TTS chain" value={chainDisplay} />
+                        {state.selectedPlatforms.includes('omnivoice_local')
+                            || state.ttsChain.includes('omnivoice_local') ? (
                             <MetaRow
-                                label="Beat map"
-                                status={state.beatMapReady ? `${state.beatMap?.sections.length ?? 0} beat` : 'Chưa chia'}
+                                label="Giọng OmniVoice"
+                                value={
+                                    state.omnivoiceVoiceMode === 'design'
+                                        ? `Thiết kế giọng · ${formatOmnivoiceVoiceDesignVi(state.omnivoiceVoiceDesign || '') || '—'}`
+                                        : (state.omnivoiceVoice || 'minh_quân')
+                                }
                             />
+                        ) : null}
+                        {state.selectedPlatforms.includes('saydi')
+                            || state.ttsChain.includes('saydi') ? (
                             <MetaRow
-                                label="HTML beats"
-                                status={`${state.beatsHtmlCompleted}/${state.beatsHtmlTotal || 0}`}
+                                label="Giọng Saydi"
+                                value={state.saydiVoice || 'adam-11labs-vi'}
                             />
-                            <MetaRow
-                                label="HTML chatbot"
-                                status={state.importHtmlReady ? 'Sẵn sàng ghép' : 'Chưa đủ'}
-                            />
-                        </>
-                    ) : null}
-                    <MetaRow
-                        label="Rendered at"
-                        value={state.agentVideoRenderedAt || '—'}
-                    />
-                </CollapsibleWorkflowSection>
+                        ) : null}
+                        <MetaRow label="Video status" status={state.agentVideoStatus || 'none'} />
+                        <MetaRow
+                            label="Render mode"
+                            value={state.renderMode === 'import_html' ? 'HTML chatbot' : 'Agent sáng tạo'}
+                        />
+                        {state.renderMode === 'import_html' ? (
+                            <>
+                                <MetaRow label="Whisper" status={state.whisperStatus || 'none'} />
+                                <MetaRow
+                                    label="Beat map"
+                                    status={state.beatMapReady ? `${state.beatMap?.sections.length ?? 0} beat` : 'Chưa chia'}
+                                />
+                                <MetaRow
+                                    label="HTML beats"
+                                    status={`${state.beatsHtmlCompleted}/${state.beatsHtmlTotal || 0}`}
+                                />
+                                <MetaRow
+                                    label="HTML chatbot"
+                                    status={state.importHtmlReady ? 'Sẵn sàng ghép' : 'Chưa đủ'}
+                                />
+                            </>
+                        ) : null}
+                        <MetaRow
+                            label="Rendered at"
+                            value={state.agentVideoRenderedAt || '—'}
+                        />
+                    </CollapsibleWorkflowSection>
+                }
 
-                {showPipeline && state.fullAutoPipeline ? (
+                {
+                // eslint-disable-next-line no-constant-condition
+                showPipeline && state.fullAutoPipeline && false? (
                     <CollapsibleWorkflowSection title="Pipeline A→Z" tone="pipeline">
                         <MetaRow label="Status" status={state.fullAutoPipeline.status || 'idle'} />
                         <PipelineScriptQaLoopMeta pipeline={state.fullAutoPipeline} />
@@ -1237,11 +1242,17 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                     </CollapsibleWorkflowSection>
                 ) : null}
 
+                {
+                // eslint-disable-next-line no-constant-condition
+                false ??
                 <CollapsibleWorkflowSection title="Danh sách Prompt" tone="prompt">
                     <ShortVideoAgentPromptLibrary state={state} />
                 </CollapsibleWorkflowSection>
+                }
 
-                {state.agentVideoSummary ? (
+                {
+                // eslint-disable-next-line no-constant-condition
+                state.agentVideoSummary && false ? (
                     <CollapsibleWorkflowSection title="Metadata script" tone="meta">
                         <MetaRow
                             label="Ước tính"
@@ -1261,7 +1272,10 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         />
                     </CollapsibleWorkflowSection>
                 ) : null}
-
+                
+                {
+                // eslint-disable-next-line no-constant-condition   
+                false ??
                 <CollapsibleWorkflowSection title="Hành động" tone="action">
                     <Stack spacing={1}>
                         {!state.hasScript && (
@@ -1400,6 +1414,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                         )}
                     </Stack>
                 </CollapsibleWorkflowSection>
+                }
 
                 <WorkflowSection title="Đăng social" tone="social">
                     <Stack spacing={0.5}>
