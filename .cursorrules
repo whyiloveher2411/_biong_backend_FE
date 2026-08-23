@@ -7,6 +7,12 @@ rules
   - Bất kể ngôn ngữ của câu hỏi là gì, câu trả lời của bạn phải LUÔN LUÔN là Tiếng Việt.
   - Commit message LUÔN LUÔN là tiếng việt
 
+## Whiteboard agent (mode Image) — bắt buộc trước task
+
+- Kiểm tra `agent_visual_mode`: nếu `whiteboard` → đọc `.cursor/skills/biong-short-video-whiteboard/SKILL.md`
+- Cấm áp dụng rule HyperFrames (GSAP beat HTML, hf-seek, visual_shot_plan) cho whiteboard
+- Sửa hiệu ứng/timing: đọc `effects-layers.md` + `timing-model.md` trong skill whiteboard trước khi sửa code
+
 ## HyperFrames agent — media MCP (bắt buộc phase render)
 
 - Đọc: `.cursor/skills/biong-short-video-hyperframes/references/media-mcp-activation.md` + `visual-shot-plan.md`

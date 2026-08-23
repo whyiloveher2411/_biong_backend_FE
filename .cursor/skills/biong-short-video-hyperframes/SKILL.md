@@ -5,6 +5,8 @@ description: Agent short video marketing — script → admin duyệt → CMS qu
 
 # Biong Short Video — HyperFrames Agent
 
+> **Visual mode routing:** Nếu `get_context` trả `agent_visual_mode=whiteboard` → chuyển sang `/biong-short-video-whiteboard`. Skill này **chỉ** cho Motion HTML (`hyperframes`).
+
 ## Luồng workflow (3 bước thực tế)
 
 | Bước | Ai làm | Hành động | Kết quả |

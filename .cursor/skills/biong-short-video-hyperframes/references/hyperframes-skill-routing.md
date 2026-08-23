@@ -6,6 +6,17 @@ Workflow **3 bước**: phase 1 `audio_script` → admin **duyệt** → phase 2
 
 ---
 
+## Routing theo visual mode (kiểm tra trước)
+
+| `agent_visual_mode` | Skill | Ghi chú |
+|---------------------|-------|---------|
+| `whiteboard` (Image) | `/biong-short-video-whiteboard` | **Dừng** — không đọc HyperFrames phase 2 |
+| `hyperframes` (Motion HTML) | Tiếp tục bảng routing bên dưới | Skill này |
+
+Lấy mode từ `short_video_get_context` hoặc CMS record trước khi chọn skill.
+
+---
+
 ## Routing theo input
 
 | Điều kiện | Skill chính | Ghi chú |
