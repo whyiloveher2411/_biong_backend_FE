@@ -50,6 +50,7 @@ Lưu trong `agent_whiteboard_beat_overrides[beatId]` qua `saveAgentWhiteboardBea
 | `image_animation_effect` | Ken Burns: `common` \| concrete \| `none` \| `random` |
 | `focus_x`, `focus_y` | Điểm tập trung frame cuối (0–1) |
 | `regions` | Mảng `BeatRegion[]` |
+| `image_overlays` | Mảng `BeatImageOverlay[]` (sticker ảnh upload) |
 | `timeline_effects` | Mảng `BeatTimelineEffect[]` (hiện chỉ zoom) |
 
 ---
@@ -96,6 +97,29 @@ Polygon chuẩn hóa **0–1** trên ảnh beat gốc.
 | `place_hand`, `place_entry_direction` | Tay + hướng đưa ảnh |
 | `place_shadow`, `place_border`, `place_border_color`, `place_torn_paper` | Cutout style |
 | `draw_hand` | Bút vẽ |
+| `entry_mode` | Cách đưa vào (chỉ `action=place`): `draw` \| `drag_in` \| `instant` — override `photo_place_mode` beat-level |
+| `attention_start_sec`, `attention_end_sec` | Cửa sổ hiệu ứng gây chú ý (Thở). `start` ≥ `end_sec` + hiệu ứng sau ảnh |
+| `attention_scale_max` | Biên scale tối đa (clamp 1.0–1.3, mặc định 1.2) |
+| `attention_cycle_sec` | Chu kỳ một nhịp thở (giây, mặc định ~1.2) |
+
+---
+
+## BeatImageOverlay (sticker ảnh upload)
+
+Rect tự do trên ảnh beat — không dùng GrabCut. Lưu trong `image_overlays[]`.
+
+| Field | Ý nghĩa |
+|-------|---------|
+| `id`, `name` | Identity |
+| `image_url` | URL ảnh upload (`uploadAgentVisualImage`) |
+| `x`, `y`, `width`, `height` | Tâm + kích thước rect normalized 0–1 |
+| `rotation_deg` | Xoay sticker |
+| `start_sec`, `end_sec` | Thời gian xuất hiện (scene-relative) |
+| `entry_mode` | `draw` \| `drag_in` \| `instant` |
+| `place_effect`, `place_hand`, … | Cùng stack hiệu ứng như vùng place |
+| `attention_*` | Cùng công thức thở như `BeatRegion` |
+
+Helpers FE: `regionAttentionTiming.ts`, `normalizeBeatImageOverlay()` trong `agentVideoApi.ts`
 
 ---
 

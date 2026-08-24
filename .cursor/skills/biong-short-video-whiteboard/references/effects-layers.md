@@ -2,20 +2,24 @@
 
 6 lớp hiệu ứng độc lập, áp dụng theo thứ tự render. Nguồn truth FE: `agentVideoApi.ts`; engine: `frames.py`, `camera_motion.py`, `timeline_effects.py`, `transitions.py`.
 
+**Mở rộng (2026):** thêm **Attention breathe** (lớp 3b) và **Image overlay** (lớp 3c) sau place/draw, trước Ken Burns.
+
 ---
 
-## Tổng quan 6 lớp
+## Tổng quan lớp hiệu ứng
 
 | # | Lớp | Field / config | Phạm vi | Engine |
 |---|-----|----------------|---------|--------|
 | 1 | Place effect | `place_effect` (action=place) | Sau khi đặt cutout | `frames.py` |
 | 2 | Draw effect | `place_effect` (action=draw) | Sau khi vẽ tay xong | `frames.py` |
 | 3 | Cutout style | `place_shadow`, `place_border`, … | Persistent suốt beat | `frames.py` |
+| 3b | Attention breathe | `attention_*` trên region/overlay | Loop scale 1.0↔max trong cửa sổ user kéo | `frames.py` |
+| 3c | Image overlay | `image_overlays[]` | Sticker upload rect + entry | `frames.py` |
 | 4 | Ken Burns | `image_animation_effect` | Toàn frame beat | `camera_motion.py` |
 | 5 | Timeline zoom | `timeline_effects[]` | Toàn frame, scene_budget | `timeline_effects.py` |
 | 6 | Transition | `transition` | Giữa beats | `transitions.py` |
 
-**Thứ tự render:** compose (1–3) → Ken Burns (4) → timeline (5) → encode SFX → transition-out (6)
+**Thứ tự render:** compose (1–3) → attention breathe trên cutout đã đặt (3b) → overlay sticker (3c) → Ken Burns (4) → timeline (5) → encode SFX → transition-out (6)
 
 ---
 
@@ -65,6 +69,42 @@ Gắn cố định suốt beat — **không phải** animation tạm:
 | `place_shadow` | Bóng đổ (place: mặc định bật) |
 | `place_border` + `place_border_color` | Viền màu quanh cutout |
 | `place_torn_paper` | Viền giấy xé |
+
+---
+
+## Lớp 3b — Attention breathe
+
+Loop scale trên **layer cutout/overlay** (không scale toàn frame — tránh hở nền bảng).
+
+| Field | Ý nghĩa |
+|-------|---------|
+| `attention_start_sec`, `attention_end_sec` | Cửa sổ thở (scene-relative, min 0.3s) |
+| `attention_scale_max` | Biên trên (1.05–1.25 UI, engine clamp 1.0–1.3) |
+| `attention_cycle_sec` | Chu kỳ sin (mặc định ~1.2s) |
+
+Công thức (FE preview + engine):
+
+```
+scale = 1 + (scaleMax - 1) * (0.5 + 0.5 * sin(2π * t_in / cycle))
+```
+
+Default khi bật lần đầu: sau `end_sec + placeEffectAfterSec(place_effect)`, duration ~2.5s (clamp `scene_budget_sec`).
+
+UI group **Hiệu ứng gây chú ý** (hiện có **Thở**): dải timeline hồng — `WhiteboardRegionTimeline.tsx`  
+Preview: `WhiteboardBeatTimingPreview.tsx` + `resolveAttentionScaleAt()`
+
+**Quy tắc:**
+- Tách khỏi `place_effect` (one-shot); thở chỉ chạy trong `[attention_start, attention_end)`.
+- `attention_start_sec` **luôn ≥** mốc ảnh render xong + hiệu ứng sau ảnh (`end_sec` + `placeEffectAfterSec` / `drawEffectAfterSec`). User không kéo qua mốc này.
+- Cửa sổ không vượt `scene_budget_sec` (trước vùng chuyển cảnh).
+
+---
+
+## Lớp 3c — Image overlay (sticker)
+
+Ảnh upload tự do — rect + transform, cùng `entry_mode` / place / cutout / thở như vùng place.
+
+Engine: `apply_image_overlays_to_frames()` sau `render_frames`, trước Ken Burns.
 
 ---
 
@@ -141,12 +181,16 @@ flowchart LR
   subgraph compose [Compose]
     Place[Place/Draw effects]
     Style[Cutout style]
+    Breathe[Attention breathe]
+    Overlay[Image overlays]
   end
   subgraph post [Post-compose]
     KenBurns[Ken Burns]
     Timeline[Timeline zoom]
   end
-  compose --> KenBurns
+  compose --> Breathe
+  Breathe --> Overlay
+  Overlay --> KenBurns
   KenBurns -->|"có timeline zoom"| Skip[SKIP Ken Burns]
   KenBurns -->|"không có zoom"| Timeline
   Skip --> Timeline

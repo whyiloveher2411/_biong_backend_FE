@@ -5,13 +5,21 @@ import PauseIcon from '@mui/icons-material/Pause';
 import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
-import type { BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
-import { drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, placeEffectAfterSec } from './agentVideoApi';
+import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
+import { drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, placeEffectAfterSec } from './agentVideoApi';
 import {
     regionTimingPatchFromDrag,
     resolveRegionEndSec,
     resolveRegionStartSec,
 } from './regionTimelineTiming';
+import {
+    attentionEarliestStartSec,
+    attentionPatchFromDrag,
+    overlayTimingPatchFromDrag,
+    resolveAttentionWindow,
+    resolveOverlayEndSec,
+    resolveOverlayStartSec,
+} from './regionAttentionTiming';
 import { getBeatTimelineEffectDefinition } from './beatTimelineEffects/registry';
 import { isBeatZoomEffect } from './beatTimelineEffects/effects/zoom/definition';
 import {
@@ -25,6 +33,8 @@ import {
  *
  * - MỖI VÙNG 1 DÒNG riêng, sắp cây (cha → các con ngay dưới → các vùng khác),
  *   kéo tay trái/phải trên dải màu để đặt bắt đầu / xong render (min 1s).
+ * - UI giới hạn tối đa 5 dòng (1 audio + 4 vùng/hiệu ứng); dòng thừa cuộn dọc
+ *   để box ảnh phía trên không bị co quá nhỏ.
  * - THANH AUDIO (hàng đầu) SẠCH — chỉ thước giây + vạch từ + playhead đỏ dọc,
  *   KHÔNG có mảnh màu vùng trên thanh audio.
  * - Click tên vùng / dải = chọn vùng (đồng bộ ảnh + scroll quản lý).
@@ -63,6 +73,12 @@ type Props = {
     onCommitEffect?: (id: string, patch: Partial<BeatTimelineEffect>) => void;
     onSelectEffect?: (id: string) => void;
     onSwitchToEditTab?: () => void;
+    /** Scene budget — clamp attention window. */
+    sceneBudgetSec?: number;
+    imageOverlays?: BeatImageOverlay[];
+    selectedOverlayId?: string;
+    onChangeOverlay?: (id: string, patch: Partial<BeatImageOverlay>) => void;
+    onSelectOverlay?: (id: string) => void;
 };
 
 type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
@@ -73,7 +89,7 @@ type DragState = {
     startX: number;
     origStartSec: number;
     origEndSec: number;
-    kind: 'region' | 'effect';
+    kind: 'region' | 'effect' | 'attention' | 'overlay' | 'overlay_attention';
     origZoomInEndSec?: number;
     origHoldEndSec?: number;
     pendingEffectPatch?: Partial<BeatTimelineEffect>;
@@ -85,6 +101,10 @@ const ROW_H = 26;
 const AUDIO_ROW_H = 30;
 const LABEL_W = 80;
 const MIN_DUR = 1.0;
+/** Tối đa số dòng hiển thị (1 hàng audio + các dòng vùng/hiệu ứng); phần dư cuộn dọc. */
+const MAX_VISIBLE_TIMELINE_ROWS = 5;
+const MAX_TRACK_ROWS_VISIBLE = MAX_VISIBLE_TIMELINE_ROWS - 1;
+const TIMELINE_SCROLL_BODY_MAX_H = MAX_TRACK_ROWS_VISIBLE * ROW_H;
 
 export default function WhiteboardRegionTimeline({
     regions,
@@ -109,9 +129,15 @@ export default function WhiteboardRegionTimeline({
     onCommitEffect,
     onSelectEffect,
     onSwitchToEditTab,
+    sceneBudgetSec: sceneBudgetSecProp,
+    imageOverlays = [],
+    selectedOverlayId,
+    onChangeOverlay,
+    onSelectOverlay,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
+    const sceneBudget = Math.max(0.1, sceneBudgetSecProp ?? effectDuration);
     const transitionDur = Math.max(0, Math.min(duration, Number(transitionDurationSec) || 0));
     const trackRef = React.useRef<HTMLDivElement | null>(null);
     const dragRef = React.useRef<DragState | null>(null);
@@ -365,6 +391,90 @@ export default function WhiteboardRegionTimeline({
         onChangeRegion(id, regionTimingPatchFromDrag(s, e));
     };
 
+    const commitAttention = (
+        id: string,
+        start: number,
+        end: number,
+        kind: 'region' | 'overlay',
+        handle: 'start' | 'end' | 'body' = 'end',
+        origSpanSec?: number,
+    ) => {
+        const source = kind === 'region'
+            ? regions.find((r) => r.id === id)
+            : imageOverlays.find((o) => o.id === id);
+        if (!source) return;
+        const minStart = attentionEarliestStartSec(source, beatWords, beatStartSec, duration);
+        let s = start;
+        let e = end;
+        if (handle === 'body' && origSpanSec != null && s < minStart) {
+            s = minStart;
+            e = s + origSpanSec;
+        }
+        const patch = attentionPatchFromDrag(s, e, sceneBudget, minStart);
+        if (kind === 'region') {
+            onChangeRegion(id, patch);
+            return;
+        }
+        onChangeOverlay?.(id, patch);
+    };
+
+    const commitOverlayTiming = (id: string, start: number, end: number) => {
+        onChangeOverlay?.(id, overlayTimingPatchFromDrag(start, end, duration));
+    };
+
+    const handleAttentionPointerDown = (
+        e: React.PointerEvent,
+        id: string,
+        handle: 'start' | 'end' | 'body',
+        kind: 'region' | 'overlay',
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const source = kind === 'region'
+            ? regions.find((r) => r.id === id)
+            : imageOverlays.find((o) => o.id === id);
+        if (!source) return;
+        if (kind === 'region') {
+            onSelectRegion?.(id);
+        } else {
+            onSelectOverlay?.(id);
+            onSwitchToEditTab?.();
+        }
+        const win = resolveAttentionWindow(source, beatWords, beatStartSec, duration, sceneBudget);
+        if (!win.enabled) return;
+        dragRef.current = {
+            id,
+            handle,
+            kind: kind === 'region' ? 'attention' : 'overlay_attention',
+            startX: e.clientX,
+            origStartSec: win.start,
+            origEndSec: win.end,
+        };
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    };
+
+    const handleOverlayPointerDown = (
+        e: React.PointerEvent,
+        id: string,
+        handle: 'start' | 'end' | 'body',
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const overlay = imageOverlays.find((o) => o.id === id);
+        if (!overlay) return;
+        onSelectOverlay?.(id);
+        onSwitchToEditTab?.();
+        dragRef.current = {
+            id,
+            handle,
+            kind: 'overlay',
+            startX: e.clientX,
+            origStartSec: resolveOverlayStartSec(overlay),
+            origEndSec: resolveOverlayEndSec(overlay, duration),
+        };
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    };
+
     const handlePointerDown = (e: React.PointerEvent, id: string, handle: 'start' | 'end' | 'body') => {
         e.preventDefault();
         e.stopPropagation();
@@ -451,6 +561,27 @@ export default function WhiteboardRegionTimeline({
         else if (drag.handle === 'start') { s = drag.origStartSec + dx; }
         else { end = drag.origEndSec + dx; }
         if (drag.kind === 'effect') commitEffect(drag.id, s, end);
+        else if (drag.kind === 'attention') {
+            commitAttention(
+                drag.id,
+                s,
+                end,
+                'region',
+                drag.handle === 'body' || drag.handle === 'start' || drag.handle === 'end' ? drag.handle : 'end',
+                drag.origEndSec - drag.origStartSec,
+            );
+        }
+        else if (drag.kind === 'overlay_attention') {
+            commitAttention(
+                drag.id,
+                s,
+                end,
+                'overlay',
+                drag.handle === 'body' || drag.handle === 'start' || drag.handle === 'end' ? drag.handle : 'end',
+                drag.origEndSec - drag.origStartSec,
+            );
+        }
+        else if (drag.kind === 'overlay') commitOverlayTiming(drag.id, s, end);
         else commit(drag.id, s, end);
     };
 
@@ -533,8 +664,12 @@ export default function WhiteboardRegionTimeline({
         }
     };
 
+    const trackRowCount = orderedRegions.length + orderedEffects.length + imageOverlays.length;
+    const scrollBodyHeight = Math.min(trackRowCount * ROW_H, TIMELINE_SCROLL_BODY_MAX_H);
+    const needsTrackScroll = trackRowCount > MAX_TRACK_ROWS_VISIBLE;
+
     return (
-        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pb: 0.5, userSelect: 'none' }}>
+        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pb: 0.5, userSelect: 'none', flexShrink: 0 }}>
             <audio ref={audioRef} src={audioUrl || undefined} preload="auto" style={{ display: 'none' }} />
             <Box sx={{ width: '100%', maxWidth: maxWidth || '100%', userSelect: 'none' }}>
                 {/* Từ như đoạn văn xuống dòng */}
@@ -594,12 +729,12 @@ export default function WhiteboardRegionTimeline({
                     )}
                 </Box>
 
-                {/* Timeline nhiều dòng (kiểu CapCut) */}
-                <Box sx={{ display: 'flex', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper' }}>
-                    {/* Cột tên vùng */}
-                    <Box sx={{ width: LABEL_W, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.04)' }}>
-                        {/* Hàng 1: điều khiển audio */}
-                        <Box sx={{ height: AUDIO_ROW_H, display: 'flex', alignItems: 'center', justifyContent: 'space-around', px: 0.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+                {/* Timeline nhiều dòng (kiểu CapCut) — tối đa 5 dòng (1 audio + 4 track), phần dư cuộn */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper', position: 'relative' }}>
+                    {/* Hàng audio cố định */}
+                    <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                        <Box sx={{ width: LABEL_W, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.04)' }}>
+                            <Box sx={{ height: AUDIO_ROW_H, display: 'flex', alignItems: 'center', justifyContent: 'space-around', px: 0.25, borderBottom: '1px solid', borderColor: 'divider' }}>
                             <Tooltip title={playing ? 'Dừng' : 'Phát audio beat'}>
                                 <IconButton size="small" onClick={togglePlay} disabled={!audioUrl} sx={{ p: 0.4 }}>
                                     {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayArrowIcon sx={{ fontSize: 18 }} />}
@@ -629,6 +764,88 @@ export default function WhiteboardRegionTimeline({
                                 </span>
                             </Tooltip>
                         </Box>
+                        </Box>
+                        <Box
+                            ref={trackRef}
+                            sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                position: 'relative',
+                                height: AUDIO_ROW_H,
+                                px: HANDLE_W / 2,
+                                pl: 1,
+                                overflow: 'hidden',
+                                bgcolor: 'rgba(0,0,0,0.03)',
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                                cursor: 'ew-resize',
+                            }}
+                            onPointerDown={(e) => {
+                                scrubRef.current = true;
+                                seekToSec(posToSec(e.clientX));
+                                (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                            }}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={endDrag}
+                            onPointerCancel={endDrag}
+                            title="Kéo thanh audio để xem preview beat tại thời điểm đó"
+                        >
+                            {selectedRange ? (
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        top: 2,
+                                        bottom: 2,
+                                        left: `${secToPct(selectedRange.start)}%`,
+                                        width: `${Math.max(0.01, secToPct(selectedRange.end) - secToPct(selectedRange.start))}%`,
+                                        bgcolor: selectedRange.kind === 'effect'
+                                            ? 'rgba(124,77,255,0.22)'
+                                            : 'rgba(25,118,210,0.18)',
+                                        border: '1px solid',
+                                        borderColor: selectedRange.kind === 'effect'
+                                            ? 'rgba(124,77,255,0.55)'
+                                            : 'rgba(25,118,210,0.45)',
+                                        borderRadius: 0.5,
+                                        pointerEvents: 'none',
+                                        zIndex: 0,
+                                    }}
+                                />
+                            ) : null}
+                            {Array.from({ length: Math.max(1, Math.ceil(duration)) }).map((_, i) => (
+                                <React.Fragment key={i}>
+                                    <Box sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 5, height: 16, width: 1, bgcolor: 'rgba(0,0,0,0.25)' }} />
+                                    <Typography sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 2, transform: 'translateX(2px)', fontSize: 9, color: 'text.secondary', fontWeight: 700 }}>
+                                        {i}s
+                                    </Typography>
+                                </React.Fragment>
+                            ))}
+                            {beatWords.map((word) => {
+                                const t = (word.start - beatStartSec) / duration;
+                                if (t < 0 || t > 1) return null;
+                                return <Box key={`tick-${word.index}`} sx={{ position: 'absolute', left: `${t * 100}%`, top: 22, height: 5, width: 1, bgcolor: 'rgba(0,0,0,0.40)' }} />;
+                            })}
+                        </Box>
+                    </Box>
+
+                    {/* Các dòng vùng / hiệu ứng — cuộn khi vượt quá 4 dòng */}
+                    {trackRowCount > 0 ? (
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            maxHeight: TIMELINE_SCROLL_BODY_MAX_H,
+                            height: scrollBodyHeight,
+                            overflowY: needsTrackScroll ? 'auto' : 'hidden',
+                            overflowX: 'hidden',
+                            '&::-webkit-scrollbar': { width: 8 },
+                            '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.04)' },
+                            '&::-webkit-scrollbar-thumb': {
+                                bgcolor: 'rgba(0,0,0,0.22)',
+                                borderRadius: 1,
+                            },
+                            '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(0,0,0,0.35)' },
+                        }}
+                    >
+                    <Box sx={{ width: LABEL_W, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.04)' }}>
                         {/* Các dòng vùng */}
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);
@@ -693,18 +910,55 @@ export default function WhiteboardRegionTimeline({
                                 </Box>
                             );
                         })}
+                        {imageOverlays.map((overlay) => {
+                            const isSel = overlay.id === selectedOverlayId;
+                            return (
+                                <Box
+                                    key={overlay.id}
+                                    onClick={() => {
+                                        onSelectOverlay?.(overlay.id);
+                                        onSwitchToEditTab?.();
+                                    }}
+                                    sx={{
+                                        height: ROW_H,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        px: 0.5,
+                                        borderTop: '1px solid',
+                                        borderColor: 'divider',
+                                        borderLeft: '3px solid #00897b',
+                                        bgcolor: isSel ? 'rgba(0,137,123,0.15)' : 'transparent',
+                                        cursor: 'pointer',
+                                    }}
+                                    title={`Sticker: ${overlay.name || overlay.id}`}
+                                >
+                                    <Typography variant="caption" sx={{
+                                        fontSize: 10.5,
+                                        fontWeight: 800,
+                                        color: '#111',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}>
+                                        {overlay.name || 'Ảnh thêm'}
+                                    </Typography>
+                                </Box>
+                            );
+                        })}
                     </Box>
 
-                    {/* Cột track */}
+                    {/* Cột track — các dòng vùng / hiệu ứng */}
                     <Box
-                        ref={trackRef}
                         sx={{
-                            flex: 1, minWidth: 0, position: 'relative',
+                            flex: 1,
+                            minWidth: 0,
+                            position: 'relative',
                             px: HANDLE_W / 2,
                             pl: 1,
                             overflow: 'hidden',
                             bgcolor: 'rgba(0,0,0,0.02)',
                             cursor: 'ew-resize',
+                            minHeight: trackRowCount * ROW_H,
                         }}
                         onPointerDown={(e) => {
                             scrubRef.current = true;
@@ -715,48 +969,6 @@ export default function WhiteboardRegionTimeline({
                         onPointerUp={endDrag}
                         onPointerCancel={endDrag}
                     >
-                        {/* Hàng 1: THANH AUDIO SẠCH — chỉ thước giây + vạch từ (không mảnh màu).
-                            Kéo/click trên hàng này (và khoảng trống track) = seek playhead + preview. */}
-                        <Box
-                            sx={{ position: 'relative', height: AUDIO_ROW_H, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.03)' }}
-                            title="Kéo thanh audio để xem preview beat tại thời điểm đó"
-                        >
-                            {selectedRange ? (
-                                <Box
-                                    sx={{
-                                        position: 'absolute',
-                                        top: 2,
-                                        bottom: 2,
-                                        left: `${secToPct(selectedRange.start)}%`,
-                                        width: `${Math.max(0.01, secToPct(selectedRange.end) - secToPct(selectedRange.start))}%`,
-                                        bgcolor: selectedRange.kind === 'effect'
-                                            ? 'rgba(124,77,255,0.22)'
-                                            : 'rgba(25,118,210,0.18)',
-                                        border: '1px solid',
-                                        borderColor: selectedRange.kind === 'effect'
-                                            ? 'rgba(124,77,255,0.55)'
-                                            : 'rgba(25,118,210,0.45)',
-                                        borderRadius: 0.5,
-                                        pointerEvents: 'none',
-                                        zIndex: 0,
-                                    }}
-                                />
-                            ) : null}
-                            {Array.from({ length: Math.max(1, Math.ceil(duration)) }).map((_, i) => (
-                                <React.Fragment key={i}>
-                                    <Box sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 5, height: 16, width: 1, bgcolor: 'rgba(0,0,0,0.25)' }} />
-                                    <Typography sx={{ position: 'absolute', left: `${(i / duration) * 100}%`, top: 2, transform: 'translateX(2px)', fontSize: 9, color: 'text.secondary', fontWeight: 700 }}>
-                                        {i}s
-                                    </Typography>
-                                </React.Fragment>
-                            ))}
-                            {beatWords.map((word) => {
-                                const t = (word.start - beatStartSec) / duration;
-                                if (t < 0 || t > 1) return null;
-                                return <Box key={`tick-${word.index}`} sx={{ position: 'absolute', left: `${t * 100}%`, top: 22, height: 5, width: 1, bgcolor: 'rgba(0,0,0,0.40)' }} />;
-                            })}
-                        </Box>
-
                         {/* Dòng từng vùng — dải màu + tay kéo */}
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);
@@ -862,6 +1074,72 @@ export default function WhiteboardRegionTimeline({
                                             </Box>
                                         );
                                     })() : null}
+                                    {(() => {
+                                        if (region.action === 'erase') return null;
+                                        if (!isRegionAttentionEnabled(region.attention_start_sec, region.attention_end_sec)) {
+                                            return null;
+                                        }
+                                        const win = resolveAttentionWindow(
+                                            region,
+                                            beatWords,
+                                            beatStartSec,
+                                            duration,
+                                            sceneBudget,
+                                        );
+                                        if (!win.enabled) return null;
+                                        const attLeft = secToPct(win.start);
+                                        const attWidth = Math.max(0.01, secToPct(win.end) - attLeft);
+                                        return (
+                                            <Box
+                                                key={`${region.id}-attention`}
+                                                onPointerDown={(e) => handleAttentionPointerDown(e, region.id, 'body', 'region')}
+                                                sx={{
+                                                    position: 'absolute', top: 3, bottom: 3,
+                                                    left: `${attLeft}%`, width: `${attWidth}%`,
+                                                    borderRadius: 1,
+                                                    background: 'repeating-linear-gradient(-45deg, rgba(236,64,122,0.35) 0 5px, rgba(236,64,122,0.12) 5px 10px)',
+                                                    border: '1.5px solid rgba(236,64,122,0.75)',
+                                                    zIndex: 2, cursor: 'grab', boxSizing: 'border-box',
+                                                }}
+                                                title="Gây chú ý · Thở — kéo giữa để dịch, kéo cạnh để đổi thời gian (không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc)"
+                                            >
+                                                {attWidth >= 8 ? (
+                                                    <Typography sx={{
+                                                        position: 'absolute', inset: 0, display: 'flex',
+                                                        alignItems: 'center', justifyContent: 'center',
+                                                        fontSize: 8, fontWeight: 800, color: '#fff',
+                                                        textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                                                    }}>
+                                                        thở
+                                                    </Typography>
+                                                ) : null}
+                                                <Box
+                                                    onPointerDown={(e) => handleAttentionPointerDown(e, region.id, 'start', 'region')}
+                                                    sx={{
+                                                        position: 'absolute', top: 1, bottom: 1,
+                                                        left: `calc(0% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                        bgcolor: '#fff', border: '2px solid #ec407a', borderRadius: 1,
+                                                        cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: '#ec407a', zIndex: 3,
+                                                    }}
+                                                >
+                                                    <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                                </Box>
+                                                <Box
+                                                    onPointerDown={(e) => handleAttentionPointerDown(e, region.id, 'end', 'region')}
+                                                    sx={{
+                                                        position: 'absolute', top: 1, bottom: 1,
+                                                        left: `calc(100% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                        bgcolor: '#fff', border: '2px solid #ec407a', borderRadius: 1,
+                                                        cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: '#ec407a', zIndex: 3,
+                                                    }}
+                                                >
+                                                    <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                                </Box>
+                                            </Box>
+                                        );
+                                    })()}
                                 </Box>
                             );
                         })}
@@ -1002,6 +1280,140 @@ export default function WhiteboardRegionTimeline({
                             );
                         })}
 
+                        {imageOverlays.map((overlay) => {
+                            const color = '#00897b';
+                            const isSel = overlay.id === selectedOverlayId;
+                            const start = resolveOverlayStartSec(overlay);
+                            const end = resolveOverlayEndSec(overlay, duration);
+                            const left = secToPct(start);
+                            const width = Math.max(0.01, secToPct(end) - left);
+                            const fxSec = placeEffectAfterSec(overlay.place_effect);
+                            return (
+                                <Box key={overlay.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
+                                    <Box
+                                        onPointerDown={(e) => handleOverlayPointerDown(e, overlay.id, 'body')}
+                                        onClick={() => {
+                                            onSelectOverlay?.(overlay.id);
+                                            onSwitchToEditTab?.();
+                                        }}
+                                        sx={{
+                                            position: 'absolute', top: 3, bottom: 3,
+                                            left: `${left}%`, width: `${width}%`,
+                                            borderRadius: 1, bgcolor: color,
+                                            opacity: isSel ? 0.9 : 0.65,
+                                            border: `2px solid ${color}`,
+                                            cursor: 'grab', boxSizing: 'border-box', zIndex: 1,
+                                        }}
+                                        title={`${overlay.name || 'Ảnh thêm'} — kéo để di chuyển thời gian`}
+                                    >
+                                        {width > 6 ? (
+                                            <Typography sx={{
+                                                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', fontSize: 8.5, fontWeight: 800, color: '#fff',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.75)', overflow: 'hidden', whiteSpace: 'nowrap',
+                                            }}>
+                                                {overlay.name || 'Ảnh'}
+                                            </Typography>
+                                        ) : null}
+                                    </Box>
+                                    <Box
+                                        onPointerDown={(e) => handleOverlayPointerDown(e, overlay.id, 'start')}
+                                        sx={{
+                                            position: 'absolute', top: 1, bottom: 1,
+                                            left: `calc(${left}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color, zIndex: 3,
+                                        }}
+                                    >
+                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                    </Box>
+                                    <Box
+                                        onPointerDown={(e) => handleOverlayPointerDown(e, overlay.id, 'end')}
+                                        sx={{
+                                            position: 'absolute', top: 1, bottom: 1,
+                                            left: `calc(${secToPct(end)}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color, zIndex: 3,
+                                        }}
+                                    >
+                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                    </Box>
+                                    {fxSec > 0.01 ? (() => {
+                                        const extStart = Math.min(end, duration);
+                                        const extEnd = Math.min(duration, extStart + fxSec);
+                                        const extLeft = secToPct(extStart);
+                                        const extWidth = secToPct(extEnd) - extLeft;
+                                        if (!(extWidth > 0)) return null;
+                                        return (
+                                            <Box
+                                                key={`${overlay.id}-fx`}
+                                                sx={{
+                                                    position: 'absolute', top: 3, bottom: 3,
+                                                    left: `${extLeft}%`, width: `${extWidth}%`,
+                                                    borderRadius: 1,
+                                                    background: `repeating-linear-gradient(45deg, ${color}59 0 6px, ${color}1f 6px 12px)`,
+                                                    border: `1.5px dashed ${color}`,
+                                                    zIndex: 1, pointerEvents: 'none',
+                                                }}
+                                            />
+                                        );
+                                    })() : null}
+                                    {isRegionAttentionEnabled(overlay.attention_start_sec, overlay.attention_end_sec) ? (() => {
+                                        const win = resolveAttentionWindow(
+                                            overlay,
+                                            beatWords,
+                                            beatStartSec,
+                                            duration,
+                                            sceneBudget,
+                                        );
+                                        if (!win.enabled) return null;
+                                        const attLeft = secToPct(win.start);
+                                        const attWidth = Math.max(0.01, secToPct(win.end) - attLeft);
+                                        return (
+                                            <Box
+                                                key={`${overlay.id}-attention`}
+                                                onPointerDown={(e) => handleAttentionPointerDown(e, overlay.id, 'body', 'overlay')}
+                                                title="Gây chú ý · Thở — không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc"
+                                                sx={{
+                                                    position: 'absolute', top: 3, bottom: 3,
+                                                    left: `${attLeft}%`, width: `${attWidth}%`,
+                                                    borderRadius: 1,
+                                                    background: 'repeating-linear-gradient(-45deg, rgba(236,64,122,0.35) 0 5px, rgba(236,64,122,0.12) 5px 10px)',
+                                                    border: '1.5px solid rgba(236,64,122,0.75)',
+                                                    zIndex: 2, cursor: 'grab',
+                                                }}
+                                            >
+                                                <Box
+                                                    onPointerDown={(e) => handleAttentionPointerDown(e, overlay.id, 'start', 'overlay')}
+                                                    sx={{
+                                                        position: 'absolute', top: 1, bottom: 1,
+                                                        left: `calc(0% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                        bgcolor: '#fff', border: '2px solid #ec407a', borderRadius: 1,
+                                                        cursor: 'ew-resize', zIndex: 3,
+                                                    }}
+                                                >
+                                                    <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                                </Box>
+                                                <Box
+                                                    onPointerDown={(e) => handleAttentionPointerDown(e, overlay.id, 'end', 'overlay')}
+                                                    sx={{
+                                                        position: 'absolute', top: 1, bottom: 1,
+                                                        left: `calc(100% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                        bgcolor: '#fff', border: '2px solid #ec407a', borderRadius: 1,
+                                                        cursor: 'ew-resize', zIndex: 3,
+                                                    }}
+                                                >
+                                                    <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                                </Box>
+                                            </Box>
+                                        );
+                                    })() : null}
+                                </Box>
+                            );
+                        })}
+
                         {/* VÙNG ĐỎ CUỐI BEAT = khoảng hiệu ứng chuyển cảnh (độ dài
                             THỰC TẾ theo transition đang chọn — mirror logic PHP).
                             Box bao trọn TẤT CẢ các dòng (từ thanh audio đến dòng vùng
@@ -1018,7 +1430,7 @@ export default function WhiteboardRegionTimeline({
                             }}>
                                 {100 - secToPct(Math.max(0, duration - transitionDur)) >= 7 ? (
                                     <Box sx={{
-                                        position: 'absolute', top: AUDIO_ROW_H, left: 0, right: 0, bottom: 0,
+                                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         <Typography sx={{
@@ -1033,12 +1445,32 @@ export default function WhiteboardRegionTimeline({
                                 ) : null}
                             </Box>
                         ) : null}
+                    </Box>
+                    </Box>
+                    ) : null}
 
-                        {/* PLAYHEAD — thanh đỏ dọc chạy qua tất cả các dòng (CapCut) */}
+                    {/* PLAYHEAD — thanh đỏ dọc qua hàng audio + các dòng track đang hiển thị */}
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: 0,
+                            bottom: 0,
+                            left: LABEL_W,
+                            right: 0,
+                            px: `${HANDLE_W / 2}px`,
+                            pl: 1,
+                            pointerEvents: 'none',
+                            zIndex: 6,
+                            boxSizing: 'border-box',
+                        }}
+                    >
                         <Box sx={{
-                            position: 'absolute', top: 0, bottom: 0,
-                            left: `${secToPct(playhead)}%`, width: 2,
-                            bgcolor: '#f50057', zIndex: 6, pointerEvents: 'none',
+                            position: 'absolute',
+                            top: 0,
+                            bottom: 0,
+                            left: `${secToPct(playhead)}%`,
+                            width: 2,
+                            bgcolor: '#f50057',
                         }}>
                             <Box sx={{ position: 'absolute', top: 0, left: -4, width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #f50057' }} />
                         </Box>

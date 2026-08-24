@@ -41,6 +41,7 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import EditIcon from '@mui/icons-material/Edit';
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import { LoadingButton } from '@mui/lab';
 import useAjax from 'hook/useApi';
 import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
@@ -58,13 +59,19 @@ import {
     zoomTransformToCss,
 } from './beatTimelineEffects/resolveZoomTransform';
 import type { BeatTimelineEffectType } from './agentVideoApi';
-import {
+import WhiteboardBeatTimingPreview, {
     WhiteboardBeatVideoPreview,
     type WhiteboardBeatVideoPreviewHandle,
 } from './WhiteboardBeatTimingPreview';
 import PlaceEntryDirectionPicker from './PlaceEntryDirectionPicker';
 import { getBeatTimelineSegments, normalizeBeatQaStatus } from './agentVideoBeatMap';
 import { resolveAgentVideoBeatSceneBudgetSec, resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
+import RegionMediaSettingsPanel from './RegionMediaSettingsPanel';
+import WhiteboardImageOverlayHandles from './WhiteboardImageOverlayHandles';
+import {
+    createDefaultBeatImageOverlay,
+    snapAttentionFieldsToConstraints,
+} from './regionAttentionTiming';
 import { normalizeRegionTimingFields, WHITEBOARD_SCENE_INTRO_SEC } from './regionTimelineTiming';
 import {
     autoSelectAgentWhiteboardRegion,
@@ -73,12 +80,20 @@ import {
     fetchWhiteboardTransitions,
     isPlaceEntryDirectionApplicable,
     isPlaceHandlessEffect,
+    buildRegionDrawActionPatch,
+    buildRegionPlaceDragInPatch,
+    buildRegionPlaceInstantEntryPatch,
+    buildOverlayDragInPatch,
+    buildOverlayInstantEntryPatch,
+    isOverlayInstantEntry,
+    resolveRegionImageActionKey,
+    resolveOverlayEntryModeFromPlaceSettings,
+    resolveRegionEntryModeFromPlaceSettings,
     normalizeNeonColor,
     normalizeDrawEffect,
     normalizePlaceEffect,
     normalizePlaceEntryDirection,
     normalizePlaceHand,
-    normalizePlaceShadow,
     normalizeCutoutShadow,
     normalizePlaceBorder,
     normalizePlaceBorderColor,
@@ -87,7 +102,11 @@ import {
     NEON_COLOR_OPTIONS,
     PLACE_BORDER_COLOR_OPTIONS,
     PLACE_EFFECT_OPTIONS,
+    normalizeBeatImageOverlays,
+    normalizeBeatRegionAttentionFields,
+    uploadAgentVisualImage,
     type AgentWhiteboardBeatOverride,
+    type BeatImageOverlay,
     type BeatRegion,
     type BeatRegionPoint,
     type WhiteboardTransitionOption,
@@ -309,7 +328,17 @@ export default function ShortVideoAgentBeatRegionEditor({
         ? currentOverride.regions.map(normalizeRegionTimingFields)
         : [];
 
+    const savedOverlays = normalizeBeatImageOverlays(currentOverride.image_overlays);
+    const savedOverlaysRef = React.useRef(savedOverlays);
+    savedOverlaysRef.current = savedOverlays;
+
     const [regions, setRegions] = React.useState<BeatRegion[]>(savedRegions);
+    const [imageOverlays, setImageOverlays] = React.useState<BeatImageOverlay[]>(savedOverlays);
+    const [savedOverlaysSnapshot, setSavedOverlaysSnapshot] = React.useState<BeatImageOverlay[]>(
+        savedOverlays.map((item) => ({ ...item })),
+    );
+    const [selectedOverlayId, setSelectedOverlayId] = React.useState<string>('');
+    const overlayUploadRef = React.useRef<HTMLInputElement | null>(null);
     const [draftPoints, setDraftPoints] = React.useState<[number, number][]>([]);
     const [selectedRegionId, setSelectedRegionId] = React.useState<string>('');
     const [selectedEffectId, setSelectedEffectId] = React.useState<string>('');
@@ -500,18 +529,46 @@ export default function ShortVideoAgentBeatRegionEditor({
     const buildRegionsToSave = React.useCallback((): BeatRegion[] => (
         enforceRegionChildOrder(regions.map((r): BeatRegion => {
             const original = originalPointsByRegion[r.id];
-            const base = normalizeRegionTimingFields(r);
+            const base = normalizeBeatRegionAttentionFields(normalizeRegionTimingFields(r));
+            const entryMode = resolveRegionEntryModeFromPlaceSettings(base);
+            const withEntry = entryMode != null ? { ...base, entry_mode: entryMode } : base;
+            const snapped = snapAttentionFieldsToConstraints(
+                withEntry,
+                beatWords,
+                beatTimeline.beatStartSec,
+                beatTimeline.beatDurationSec,
+                sceneBudgetSec,
+            );
+            const timed = snapped ? { ...withEntry, ...snapped } : withEntry;
             if (!original) {
-                return base;
+                return timed;
             }
             return {
-                ...base,
+                ...timed,
                 full_points: original,
                 object_points: base.points,
                 select_mode: 'object' as BeatRegion['select_mode'],
             };
         }))
     ), [regions, originalPointsByRegion]);
+
+    const buildOverlaysToSave = React.useCallback(
+        (): BeatImageOverlay[] => imageOverlays.map((item) => {
+            const withEntry = {
+                ...item,
+                entry_mode: resolveOverlayEntryModeFromPlaceSettings(item),
+            };
+            const snapped = snapAttentionFieldsToConstraints(
+                withEntry,
+                beatWords,
+                beatTimeline.beatStartSec,
+                beatTimeline.beatDurationSec,
+                sceneBudgetSec,
+            );
+            return snapped ? { ...withEntry, ...snapped } : withEntry;
+        }),
+        [imageOverlays],
+    );
 
     // Prev/Next beat ngay trong drawer: seek timeline đến GIỮA beat kế/cũ —
     // ảnh + vùng mới tự load (giống nút cột giữa của VideoPreview).
@@ -574,6 +631,10 @@ export default function ShortVideoAgentBeatRegionEditor({
         });
         setRegions(mapped);
         setSavedSnapshot(mapped.map((r) => ({ ...r })));
+        const freshOverlays = (savedOverlaysRef.current || []).map((item) => ({ ...item }));
+        setImageOverlays(freshOverlays);
+        setSavedOverlaysSnapshot(freshOverlays.map((item) => ({ ...item })));
+        setSelectedOverlayId('');
         setOriginalPointsByRegion(restoredOrig);
         setDraftPoints([]);
         setDraftIsDrag(false);
@@ -624,9 +685,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [savedSnapshot, setSavedSnapshot] = React.useState<BeatRegion[]>(savedRegions);
     const isDirty = React.useMemo(() => (
         JSON.stringify(regions) !== JSON.stringify(savedSnapshot)
+        || JSON.stringify(imageOverlays) !== JSON.stringify(savedOverlaysSnapshot)
         || draftPoints.length > 0
         || bgSampleDraft.length > 0
-    ), [regions, savedSnapshot, draftPoints, bgSampleDraft]);
+    ), [regions, savedSnapshot, imageOverlays, savedOverlaysSnapshot, draftPoints, bgSampleDraft]);
     const isDirtyRef = React.useRef(isDirty);
     isDirtyRef.current = isDirty;
 
@@ -640,6 +702,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                 const ok = await state.handleSaveWhiteboardBeatOverride(pendingSwitch.from, {
                     ...(state.agentWhiteboardBeatOverrides?.[pendingSwitch.from] || {}),
                     regions: buildRegionsToSave(),
+                    image_overlays: buildOverlaysToSave(),
                 });
                 if (!ok) {
                     notify('Lưu thất bại — vẫn đang ở beat cũ', 'error');
@@ -653,7 +716,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         resetDrawerState();
         prevBeatIdRef.current = pendingSwitch.to;
         setPendingSwitch(null);
-    }, [pendingSwitch, state, regions, savedRegions, resetDrawerState, buildRegionsToSave]);
+    }, [pendingSwitch, state, regions, savedRegions, resetDrawerState, buildRegionsToSave, buildOverlaysToSave]);
 
     const handleCancelSwitch = React.useCallback(() => {
         if (!pendingSwitch) {
@@ -840,8 +903,9 @@ export default function ShortVideoAgentBeatRegionEditor({
             ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
             timeline_effects: effects,
             regions: buildRegionsToSave(),
+            image_overlays: buildOverlaysToSave(),
         });
-    }, [beatId, state, buildRegionsToSave]);
+    }, [beatId, state, buildRegionsToSave, buildOverlaysToSave]);
 
     const {
         effects: timelineEffects,
@@ -864,11 +928,42 @@ export default function ShortVideoAgentBeatRegionEditor({
         [timelineEffects, selectedEffectId],
     );
 
+    const buildBeatOverridePayload = React.useCallback((): Partial<AgentWhiteboardBeatOverride> => ({
+        regions: buildRegionsToSave(),
+        image_overlays: buildOverlaysToSave(),
+        timeline_effects: timelineEffects,
+    }), [buildOverlaysToSave, buildRegionsToSave, timelineEffects]);
+
     const selectRegion = React.useCallback((id: string) => {
+        setSelectedOverlayId('');
         setSelectedEffectId('');
         setSelectedRegionId(id);
         setRightPanelTab('edit');
     }, []);
+
+    const selectOverlay = React.useCallback((id: string) => {
+        setSelectedRegionId('');
+        setSelectedEffectId('');
+        setSelectedOverlayId(id);
+        setRightPanelTab('edit');
+    }, []);
+
+    const updateOverlay = React.useCallback((id: string, patch: Partial<BeatImageOverlay>) => {
+        setImageOverlays((prev) => prev.map((item) => {
+            if (item.id !== id) {
+                return item;
+            }
+            const next = { ...item, ...patch };
+            const snapped = snapAttentionFieldsToConstraints(
+                next,
+                beatWords,
+                beatTimeline.beatStartSec,
+                beatTimeline.beatDurationSec,
+                sceneBudgetSec,
+            );
+            return snapped ? { ...next, ...snapped } : next;
+        }));
+    }, [beatTimeline.beatDurationSec, beatTimeline.beatStartSec, beatWords, sceneBudgetSec]);
 
     const focusDragRef = React.useRef<{ moved: boolean } | null>(null);
     const focusPendingPatchRef = React.useRef<{ focus_x: number; focus_y: number } | null>(null);
@@ -896,6 +991,7 @@ export default function ShortVideoAgentBeatRegionEditor({
 
     const selectEffect = React.useCallback((id: string) => {
         setSelectedRegionId('');
+        setSelectedOverlayId('');
         setSelectedEffectId(id);
         setRightPanelTab('edit');
     }, []);
@@ -933,6 +1029,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     const selectedRegion = React.useMemo(
         () => regions.find((r) => r.id === selectedRegionId) || null,
         [regions, selectedRegionId],
+    );
+    const selectedOverlay = React.useMemo(
+        () => imageOverlays.find((item) => item.id === selectedOverlayId) || null,
+        [imageOverlays, selectedOverlayId],
     );
     const parentRegion = React.useMemo(
         () => (selectedRegion?.parent_id
@@ -1339,9 +1439,20 @@ export default function ShortVideoAgentBeatRegionEditor({
 
     const updateRegion = (id: string, patch: Partial<BeatRegion>) => {
         setRegions((prev) => {
-            const next = prev.map((region) => (
-                region.id === id ? { ...region, ...patch } : region
-            ));
+            const next = prev.map((region) => {
+                if (region.id !== id) {
+                    return region;
+                }
+                const merged = { ...region, ...patch };
+                const snapped = snapAttentionFieldsToConstraints(
+                    merged,
+                    beatWords,
+                    beatTimeline.beatStartSec,
+                    beatTimeline.beatDurationSec,
+                    sceneBudgetSec,
+                );
+                return snapped ? { ...merged, ...snapped } : merged;
+            });
             // CHA TRƯỚC CON: sau mỗi thay đổi, tự nâng script word của vùng con
             // nếu nó SỚM HƠN từ cuối của vùng cha — con không bao giờ render trước cha.
             return enforceRegionChildOrder(next);
@@ -1374,6 +1485,38 @@ export default function ShortVideoAgentBeatRegionEditor({
     };
 
     const shortVideoId = Number(state.shortVideoId || 0);
+
+    const handleOverlayUpload = React.useCallback(async (file: File) => {
+        if (shortVideoId <= 0) {
+            notify('Thiếu shortVideoId — không upload được ảnh', 'error');
+            return;
+        }
+        try {
+            const res = await uploadAgentVisualImage(shortVideoId, file);
+            const url = String(res?.url || res?.preview_url || '').trim();
+            if (!res?.success || !url) {
+                notify('Upload ảnh thất bại', 'error');
+                return;
+            }
+            const overlay = createDefaultBeatImageOverlay(
+                url,
+                beatTimeline.beatDurationSec,
+                imageOverlays.length,
+            );
+            setImageOverlays((prev) => [...prev, overlay]);
+            selectOverlay(overlay.id);
+            notify('Đã thêm ảnh sticker — kéo trên canvas để đặt vị trí', 'success');
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Upload ảnh thất bại', 'error');
+        }
+    }, [beatTimeline.beatDurationSec, imageOverlays.length, notify, selectOverlay, shortVideoId]);
+
+    const handleRemoveOverlay = React.useCallback((id: string) => {
+        setImageOverlays((prev) => prev.filter((item) => item.id !== id));
+        if (selectedOverlayId === id) {
+            setSelectedOverlayId('');
+        }
+    }, [selectedOverlayId]);
 
     // Bật/tắt "Giữ nền": tạo ảnh nền đã vá (inpaint) cho vùng — render hiển thị
     // nền này thay vì tile. Giữ nguyên bg_sample cũ nếu có.
@@ -1554,11 +1697,11 @@ export default function ShortVideoAgentBeatRegionEditor({
         try {
             const saved = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...currentOverride,
-                regions: buildRegionsToSave(),
-                timeline_effects: timelineEffects,
+                ...buildBeatOverridePayload(),
             });
             if (saved) {
                 setSavedSnapshot(regions.map((r) => ({ ...r })));
+                setSavedOverlaysSnapshot(imageOverlays.map((item) => ({ ...item })));
                 notify(`Đã lưu ${regions.length} vùng cho beat ${beatId}`, 'success');
             }
         } finally {
@@ -1571,15 +1714,15 @@ export default function ShortVideoAgentBeatRegionEditor({
         const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
             ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
             ...patch,
-            regions: buildRegionsToSave(),
-            timeline_effects: timelineEffects,
+            ...buildBeatOverridePayload(),
         });
         if (ok) {
             setSavedSnapshot(regions.map((r) => ({ ...r })));
+            setSavedOverlaysSnapshot(imageOverlays.map((item) => ({ ...item })));
             return true;
         }
         return false;
-    }, [beatId, state, buildRegionsToSave, regions, timelineEffects]);
+    }, [beatId, state, buildBeatOverridePayload, regions, imageOverlays]);
 
     /** Lưu vùng nếu còn thay đổi chưa ghi DB — render luôn dùng override đã lưu. */
     const saveRegionsIfDirty = React.useCallback(async (): Promise<boolean> => {
@@ -1590,8 +1733,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         try {
             const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
                 ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
-                regions: buildRegionsToSave(),
-                timeline_effects: timelineEffects,
+                ...buildBeatOverridePayload(),
             });
             if (!ok) {
                 notify('Lưu vùng thất bại — chưa render', 'error');
@@ -2047,13 +2189,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                         display: 'flex',
                         flexDirection: 'column',
                         minHeight: 0,
-                        overflow: 'auto',
+                        overflow: 'hidden',
                     }}
                 >
                     <Box
                         ref={measureBoxRef}
                         sx={{
-                            flex: '1 1 auto',
+                            flex: '1 1 0',
                             minHeight: 320,
                             width: '100%',
                             position: 'relative',
@@ -2097,6 +2239,34 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
                             </IconButton>
                         </Tooltip>
+                        <Tooltip title="Thêm ảnh sticker từ máy">
+                            <IconButton
+                                size="small"
+                                onClick={() => overlayUploadRef.current?.click()}
+                                sx={{
+                                    width: 32,
+                                    height: 32,
+                                    bgcolor: 'rgba(0,137,123,0.85)',
+                                    color: 'common.white',
+                                    '&:hover': { bgcolor: 'rgba(0,137,123,1)' },
+                                }}
+                            >
+                                <AddPhotoAlternateIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <input
+                            ref={overlayUploadRef}
+                            type="file"
+                            accept="image/*"
+                            hidden
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                if (file) {
+                                    void handleOverlayUpload(file);
+                                }
+                            }}
+                        />
                         <ShortVideoAgentImageAnimationControls
                             variant="overlay"
                             beatId={beatId}
@@ -2750,6 +2920,46 @@ export default function ShortVideoAgentBeatRegionEditor({
                             ) : null}
                         </Stack>
 
+                        {!previewActive && containRect && boxSize ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    zIndex: 2,
+                                    opacity: playheadSec > 0.02 ? 1 : 0,
+                                    pointerEvents: 'none',
+                                    transition: 'opacity 0.12s ease',
+                                }}
+                            >
+                                <WhiteboardBeatTimingPreview
+                                    imageUrl={imageUrl}
+                                    regions={regions}
+                                    imageOverlays={imageOverlays}
+                                    playheadSec={playheadSec}
+                                    durationSec={beatTimeline.beatDurationSec}
+                                    sceneBudgetSec={sceneBudgetSec}
+                                    beatStartSec={beatTimeline.beatStartSec}
+                                    beatWords={beatWords}
+                                    timelineEffects={timelineEffects}
+                                />
+                            </Box>
+                        ) : null}
+                        {!previewActive && containRect && boxSize ? imageOverlays.map((overlay) => (
+                            <WhiteboardImageOverlayHandles
+                                key={overlay.id}
+                                overlay={overlay}
+                                containRect={{
+                                    left: containRect.x + pan.x,
+                                    top: containRect.y + pan.y,
+                                    width: containRect.w * zoom,
+                                    height: containRect.h * zoom,
+                                }}
+                                selected={selectedOverlayId === overlay.id}
+                                onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
+                                onSelect={() => selectOverlay(overlay.id)}
+                            />
+                        )) : null}
+
                         {previewActive ? (
                             <WhiteboardBeatVideoPreview
                                 ref={videoPreviewRef}
@@ -2864,6 +3074,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                             playheadRef.current = { sec, playing: isPlaying };
                             videoPreviewRef.current?.seekTo(sec, isPlaying);
                         }}
+                        sceneBudgetSec={sceneBudgetSec}
+                        imageOverlays={imageOverlays}
+                        selectedOverlayId={selectedOverlayId}
+                        onChangeOverlay={updateOverlay}
+                        onSelectOverlay={selectOverlay}
                     />
 
                     {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
@@ -3040,13 +3255,104 @@ export default function ShortVideoAgentBeatRegionEditor({
                         <Typography variant="caption" color="text.secondary">
                             Chưa có vùng nào — vẽ trên ảnh bên trái.
                         </Typography>
-                    ) : !selectedEffect && !selectedRegion ? (
+                    ) : !selectedEffect && !selectedRegion && !selectedOverlay ? (
                         <Typography variant="caption" color="text.secondary">
-                            Chưa chọn vùng hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
+                            Chưa chọn vùng, sticker ảnh hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
                         </Typography>
                     ) : null}
 
-                    {!selectedEffect && parentRegion ? (
+                    {!selectedEffect && selectedOverlay ? (
+                        <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, border: 1, borderColor: 'divider', borderLeft: '4px solid #00897b' }}>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                                <Typography variant="subtitle2" fontWeight={800}>
+                                    {selectedOverlay.name || 'Ảnh sticker'}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleRemoveOverlay(selectedOverlay.id)}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    Xóa
+                                </Button>
+                            </Stack>
+                            <RegionSection title="Hành động với ảnh">
+                                <Stack direction="row" spacing={0.75}>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="secondary"
+                                        startIcon={!isOverlayInstantEntry(selectedOverlay) ? <CheckIcon /> : null}
+                                        onClick={() => updateOverlay(
+                                            selectedOverlay.id,
+                                            buildOverlayDragInPatch(selectedOverlay),
+                                        )}
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(!isOverlayInstantEntry(selectedOverlay)
+                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        Đưa vào
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="secondary"
+                                        startIcon={isOverlayInstantEntry(selectedOverlay) ? <CheckIcon /> : null}
+                                        onClick={() => updateOverlay(
+                                            selectedOverlay.id,
+                                            buildOverlayInstantEntryPatch(),
+                                        )}
+                                        sx={{
+                                            textTransform: 'none',
+                                            flex: 1,
+                                            ...(isOverlayInstantEntry(selectedOverlay)
+                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
+                                                : {}),
+                                        }}
+                                    >
+                                        Đặt tại chỗ
+                                    </Button>
+                                </Stack>
+                            </RegionSection>
+                            <RegionMediaSettingsPanel
+                                source={selectedOverlay}
+                                beatWords={beatWords}
+                                beatStartSec={beatTimeline.beatStartSec}
+                                beatDurationSec={beatTimeline.beatDurationSec}
+                                sceneBudgetSec={sceneBudgetSec}
+                                onPatch={(patch) => updateOverlay(selectedOverlay.id, patch as Partial<BeatImageOverlay>)}
+                            />
+                            <RegionSection title="Hiệu ứng sau khi xuất hiện">
+                                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                    {PLACE_EFFECT_OPTIONS.map((opt) => {
+                                        const active = normalizePlaceEffect(selectedOverlay.place_effect) === opt.value;
+                                        return (
+                                            <Button
+                                                key={opt.value}
+                                                size="small"
+                                                variant="outlined"
+                                                color={active ? 'warning' : 'inherit'}
+                                                startIcon={active ? <CheckIcon /> : null}
+                                                onClick={() => updateOverlay(
+                                                    selectedOverlay.id,
+                                                    buildPlaceEffectRegionUpdate(opt.value) as Partial<BeatImageOverlay>,
+                                                )}
+                                                sx={{ textTransform: 'none', flex: '1 1 45%', fontSize: 11 }}
+                                            >
+                                                {opt.label}
+                                            </Button>
+                                        );
+                                    })}
+                                </Stack>
+                            </RegionSection>
+                        </Box>
+                    ) : null}
+
+                    {!selectedEffect && !selectedOverlay && parentRegion ? (
                         <Button
                             size="small"
                             variant="outlined"
@@ -3125,52 +3431,54 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </Stack>
                                 ) : null}
 
-                                {/* 1. Hành động render: Vẽ tay / Đưa vào */}
+                                {/* 1. Hành động với ảnh: Vẽ tay | Đưa vào | Đặt tại chỗ */}
                                 <RegionSection title="Hành động với ảnh">
-                                    <Stack direction="row" spacing={1}>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="primary"
-                                        startIcon={region.action === 'draw' ? <CheckIcon /> : null}
-                                        onClick={() => updateRegion(region.id, {
-                                            action: 'draw',
-                                            place_effect: normalizeDrawEffect(region.place_effect),
+                                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                                        {([
+                                            {
+                                                key: 'draw' as const,
+                                                label: 'Vẽ tay',
+                                                color: 'primary' as const,
+                                                patch: () => buildRegionDrawActionPatch(region),
+                                            },
+                                            {
+                                                key: 'drag_in' as const,
+                                                label: 'Đưa vào',
+                                                color: 'secondary' as const,
+                                                patch: () => buildRegionPlaceDragInPatch(region),
+                                            },
+                                            {
+                                                key: 'instant' as const,
+                                                label: 'Đặt tại chỗ',
+                                                color: 'secondary' as const,
+                                                patch: () => buildRegionPlaceInstantEntryPatch(),
+                                            },
+                                        ]).map((opt) => {
+                                            const active = resolveRegionImageActionKey(region) === opt.key;
+                                            return (
+                                                <Button
+                                                    key={opt.key}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color={opt.color}
+                                                    startIcon={active ? <CheckIcon /> : null}
+                                                    onClick={() => updateRegion(region.id, opt.patch())}
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        flex: '1 1 28%',
+                                                        minWidth: 88,
+                                                        ...(active
+                                                            ? {
+                                                                borderColor: `${opt.color}.main`,
+                                                                bgcolor: 'action.selected',
+                                                            }
+                                                            : {}),
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </Button>
+                                            );
                                         })}
-                                        sx={{
-                                            textTransform: 'none',
-                                            flex: 1,
-                                            ...(region.action === 'draw'
-                                                ? { borderColor: 'primary.main', bgcolor: 'action.selected' }
-                                                : {}),
-                                        }}
-                                    >
-                                        Vẽ tay
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="secondary"
-                                        startIcon={region.action === 'place' ? <CheckIcon /> : null}
-                                        onClick={() => {
-                                            if (region.action !== 'place') {
-                                                updateRegion(region.id, {
-                                                    action: 'place',
-                                                    place_effect: normalizePlaceEffect(region.place_effect),
-                                                    place_shadow: normalizePlaceShadow(region.place_shadow),
-                                                });
-                                            }
-                                        }}
-                                        sx={{
-                                            textTransform: 'none',
-                                            flex: 1,
-                                            ...(region.action === 'place'
-                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
-                                                : {}),
-                                        }}
-                                    >
-                                        Đưa vào
-                                    </Button>
                                     </Stack>
                                 </RegionSection>
 
@@ -3497,7 +3805,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 Có bao nhiêu ảnh bàn tay thì có bấy nhiêu kiểu; kiểu mặc
                                 định (meta.json 'default') có nhãn "Mặc định" và được chọn
                                 sẵn khi vùng chưa đặt kiểu. */}
-                                {region.action === 'place' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
+                                {region.action === 'place' && resolveRegionImageActionKey(region) === 'drag_in' && !isPlaceHandlessEffect(normalizePlaceEffect(region.place_effect)) ? (
                                     <RegionSection title="Kiểu tay đưa ảnh vào">
                                         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'space-between' }}>
                                             {placeHandOptions.map((opt) => {
@@ -3617,6 +3925,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {/* 2c. HƯỚNG ĐƯA ẢNH VÀO (chỉ vùng place có tay kéo —
                                 không áp dụng thu nhỏ-nảy / phóng to-nảy / nam châm). */}
                                 {region.action === 'place'
+                                    && resolveRegionImageActionKey(region) === 'drag_in'
                                     && isPlaceEntryDirectionApplicable(
                                         normalizePlaceEffect(region.place_effect),
                                         region.place_hand,
@@ -3634,6 +3943,17 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             }
                                         />
                                     </RegionSection>
+                                ) : null}
+
+                                {(region.action === 'place' || region.action === 'draw') ? (
+                                    <RegionMediaSettingsPanel
+                                        source={region}
+                                        beatWords={beatWords}
+                                        beatStartSec={beatTimeline.beatStartSec}
+                                        beatDurationSec={beatTimeline.beatDurationSec}
+                                        sceneBudgetSec={sceneBudgetSec}
+                                        onPatch={(patch) => updateRegion(region.id, patch as Partial<BeatRegion>)}
+                                    />
                                 ) : null}
 
                                 {/* 3. Tinh chỉnh vùng: Thêm vùng / Xóa thừa */}

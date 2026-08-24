@@ -172,7 +172,199 @@ export type BeatRegion = {
      * Bỏ trống / null → bút chì (meta default), không còn ô "Mặc định" riêng trên UI.
      */
     draw_hand?: string | null;
+    /**
+     * Cách đưa nội dung vào (action='place') — override beat-level photo_place_mode.
+     * draw = vẽ tay outline; drag_in = tay kéo từ ngoài; instant = đặt tại chỗ.
+     */
+    entry_mode?: RegionEntryModeKey;
+    /** Cửa sổ hiệu ứng gây chú ý (scene-relative sec). null = tắt. */
+    attention_start_sec?: number | null;
+    attention_end_sec?: number | null;
+    /** Biên scale tối đa [1.05–1.3], mặc định 1.2 — engine không scale < 1.0. */
+    attention_scale_max?: number;
+    /** Chu kỳ 1 nhịp thở (giây), mặc định 1.2. */
+    attention_cycle_sec?: number;
 };
+
+/** Cách đưa ảnh/cutout vào scene (per-region / overlay). */
+export type RegionEntryModeKey = 'draw' | 'drag_in' | 'instant';
+
+export const REGION_ENTRY_MODE_OPTIONS: Array<{
+    value: RegionEntryModeKey;
+    label: string;
+    description: string;
+}> = [
+    {
+        value: 'draw',
+        label: 'Vẽ tay',
+        description: 'Tay vẽ outline trước, rồi lộ nội dung trong vùng',
+    },
+    {
+        value: 'drag_in',
+        label: 'Đưa từ ngoài vào',
+        description: 'Tay kéo ảnh từ ngoài màn hình vào vùng',
+    },
+    {
+        value: 'instant',
+        label: 'Đặt tại chỗ',
+        description: 'Hiện ngay tại vị trí (hoặc bounce nếu chọn hiệu ứng nảy)',
+    },
+];
+
+export const ATTENTION_SCALE_MAX_DEFAULT = 1.2;
+export const ATTENTION_CYCLE_SEC_DEFAULT = 1.2;
+export const ATTENTION_DURATION_DEFAULT_SEC = 2.5;
+export const ATTENTION_MIN_WINDOW_SEC = 0.3;
+export const ATTENTION_SCALE_MAX_MIN = 1.05;
+export const ATTENTION_SCALE_MAX_LIMIT = 1.3;
+
+/** Sticker ảnh upload tự do trên canvas beat. */
+export type BeatImageOverlay = {
+    id: string;
+    name?: string;
+    image_url: string;
+    /** Tâm rect normalized 0–1 trên ảnh beat. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation_deg?: number;
+    /** Thời gian xuất hiện (bar chính timeline). */
+    start_sec: number;
+    end_sec: number;
+    entry_mode?: RegionEntryModeKey;
+    place_effect?: PlaceEffectKey;
+    place_effect_color?: NeonColorKey;
+    place_hand?: string | null;
+    place_entry_direction?: PlaceEntryDirectionKey | null;
+    place_shadow?: boolean;
+    place_border?: boolean;
+    place_border_color?: PlaceBorderColorKey;
+    place_torn_paper?: boolean;
+    attention_start_sec?: number | null;
+    attention_end_sec?: number | null;
+    attention_scale_max?: number;
+    attention_cycle_sec?: number;
+};
+
+export function normalizeRegionEntryMode(raw: string | null | undefined): RegionEntryModeKey {
+    const value = String(raw || '').trim().toLowerCase();
+    if (value === 'draw' || value === 'drag_in' || value === 'instant') {
+        return value;
+    }
+    return 'drag_in';
+}
+
+export function normalizeAttentionScaleMax(raw: unknown): number {
+    const num = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(num)) {
+        return ATTENTION_SCALE_MAX_DEFAULT;
+    }
+    return Math.max(ATTENTION_SCALE_MAX_MIN, Math.min(ATTENTION_SCALE_MAX_LIMIT, num));
+}
+
+export function normalizeAttentionCycleSec(raw: unknown): number {
+    const num = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(num) || num <= 0.1) {
+        return ATTENTION_CYCLE_SEC_DEFAULT;
+    }
+    return Math.max(0.4, Math.min(6, num));
+}
+
+export function isRegionAttentionEnabled(
+    start: number | null | undefined,
+    end: number | null | undefined,
+): boolean {
+    const s = typeof start === 'number' && Number.isFinite(start) ? start : null;
+    const e = typeof end === 'number' && Number.isFinite(end) ? end : null;
+    return s != null && e != null && e - s >= ATTENTION_MIN_WINDOW_SEC;
+}
+
+export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null {
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+    const item = raw as Record<string, unknown>;
+    const id = String(item.id || '').trim();
+    const imageUrl = String(item.image_url || '').trim();
+    if (!id || !imageUrl) {
+        return null;
+    }
+    const x = Number(item.x);
+    const y = Number(item.y);
+    const width = Number(item.width);
+    const height = Number(item.height);
+    const startSec = Number(item.start_sec);
+    const endSec = Number(item.end_sec);
+    return {
+        id,
+        name: typeof item.name === 'string' ? item.name : undefined,
+        image_url: imageUrl,
+        x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.5,
+        y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.5,
+        width: Number.isFinite(width) ? Math.max(0.02, Math.min(1, width)) : 0.2,
+        height: Number.isFinite(height) ? Math.max(0.02, Math.min(1, height)) : 0.2,
+        rotation_deg: Number.isFinite(Number(item.rotation_deg)) ? Number(item.rotation_deg) : 0,
+        start_sec: Number.isFinite(startSec) ? Math.max(0, startSec) : 0,
+        end_sec: Number.isFinite(endSec) ? Math.max(0, endSec) : 2,
+        entry_mode: normalizeRegionEntryMode(item.entry_mode as string | undefined),
+        place_effect: item.place_effect != null
+            ? normalizePlaceEffect(String(item.place_effect))
+            : 'loang',
+        place_effect_color: item.place_effect_color != null
+            ? normalizeNeonColor(String(item.place_effect_color))
+            : undefined,
+        place_hand: item.place_hand != null ? String(item.place_hand) : null,
+        place_entry_direction: item.place_entry_direction != null
+            ? normalizePlaceEntryDirection(String(item.place_entry_direction))
+            : null,
+        place_shadow: item.place_shadow != null ? Boolean(item.place_shadow) : true,
+        place_border: Boolean(item.place_border),
+        place_border_color: item.place_border_color != null
+            ? normalizePlaceBorderColor(String(item.place_border_color))
+            : undefined,
+        place_torn_paper: Boolean(item.place_torn_paper),
+        attention_start_sec: finiteSecOrNull(item.attention_start_sec),
+        attention_end_sec: finiteSecOrNull(item.attention_end_sec),
+        attention_scale_max: normalizeAttentionScaleMax(item.attention_scale_max),
+        attention_cycle_sec: normalizeAttentionCycleSec(item.attention_cycle_sec),
+    };
+}
+
+function finiteSecOrNull(value: unknown): number | null {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+export function normalizeBeatImageOverlays(raw: unknown): BeatImageOverlay[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    return raw
+        .map((item) => normalizeBeatImageOverlay(item))
+        .filter((item): item is BeatImageOverlay => item != null);
+}
+
+export function normalizeBeatRegionAttentionFields(region: BeatRegion): BeatRegion {
+    const out = { ...region };
+    if (region.entry_mode != null) {
+        out.entry_mode = normalizeRegionEntryMode(region.entry_mode);
+    }
+    if (region.attention_scale_max != null) {
+        out.attention_scale_max = normalizeAttentionScaleMax(region.attention_scale_max);
+    }
+    if (region.attention_cycle_sec != null) {
+        out.attention_cycle_sec = normalizeAttentionCycleSec(region.attention_cycle_sec);
+    }
+    if (region.attention_start_sec != null && !Number.isFinite(Number(region.attention_start_sec))) {
+        out.attention_start_sec = null;
+        out.attention_end_sec = null;
+    }
+    if (region.attention_end_sec != null && !Number.isFinite(Number(region.attention_end_sec))) {
+        out.attention_end_sec = null;
+    }
+    return out;
+}
 
 /** HIỆU ỨNG KHI ĐƯA VÀO vùng (action='place'). */
 export type PlaceEffectKey = 'loang' | 'none' | 'slide_friction' | 'zoom_out_bounce' | 'pop_in_bounce' | 'mirror_sheen' | 'neon_border';
@@ -413,6 +605,144 @@ export function isPlaceHandlessEffect(effect: PlaceEffectKey): boolean {
     return effect === 'zoom_out_bounce' || effect === 'pop_in_bounce';
 }
 
+/** Vùng place: đặt tại chỗ (instant) — không kéo tay từ ngoài màn hình. */
+export function isRegionPlaceInstantEntry(
+    source: Pick<BeatRegion, 'action' | 'place_effect' | 'entry_mode'>,
+): boolean {
+    if (String(source.action || '').trim().toLowerCase() !== 'place') {
+        return false;
+    }
+    const mode = source.entry_mode != null
+        ? normalizeRegionEntryMode(source.entry_mode)
+        : null;
+    if (mode === 'instant') {
+        return true;
+    }
+    if (mode === 'drag_in') {
+        return false;
+    }
+    const effect = normalizePlaceEffect(source.place_effect);
+    return effect === 'none' || isPlaceHandlessEffect(effect);
+}
+
+export function isOverlayInstantEntry(
+    source: Pick<BeatImageOverlay, 'place_effect' | 'entry_mode'>,
+): boolean {
+    const mode = source.entry_mode != null
+        ? normalizeRegionEntryMode(source.entry_mode)
+        : null;
+    if (mode === 'instant') {
+        return true;
+    }
+    if (mode === 'drag_in') {
+        return false;
+    }
+    const effect = normalizePlaceEffect(source.place_effect);
+    return effect === 'none' || isPlaceHandlessEffect(effect);
+}
+
+/** Patch chọn hành động Vẽ tay. */
+export function buildRegionDrawActionPatch(
+    source: Pick<BeatRegion, 'place_effect'>,
+): Pick<BeatRegion, 'action' | 'place_effect' | 'entry_mode'> {
+    return {
+        action: 'draw',
+        entry_mode: 'draw',
+        place_effect: normalizeDrawEffect(source.place_effect),
+    };
+}
+
+/** Chọn "Đặt tại chỗ" — ảnh xuất hiện ngay tại vùng, không tay kéo. */
+export function buildRegionPlaceInstantEntryPatch(): Pick<
+    BeatRegion,
+    'action' | 'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect' | 'place_shadow'
+> {
+    return {
+        action: 'place',
+        entry_mode: 'instant',
+        place_hand: null,
+        place_entry_direction: null,
+        place_effect: 'none',
+        place_shadow: true,
+    };
+}
+
+/** Chọn "Đưa vào" (kéo từ ngoài) — tay kéo + loang mặc định nếu đang đặt tại chỗ. */
+export function buildRegionPlaceDragInPatch(
+    source: Pick<BeatRegion, 'place_effect' | 'place_shadow'>,
+): Pick<BeatRegion, 'action' | 'entry_mode' | 'place_effect' | 'place_shadow'> {
+    const effect = normalizePlaceEffect(source.place_effect);
+    const nextEffect = effect === 'none' || isPlaceHandlessEffect(effect) ? 'loang' : effect;
+    return {
+        action: 'place',
+        entry_mode: 'drag_in',
+        place_effect: nextEffect,
+        place_shadow: normalizePlaceShadow(source.place_shadow),
+    };
+}
+
+/** UI: hành động đang chọn trên vùng (3 option gom 1 nhóm). */
+export function resolveRegionImageActionKey(
+    source: Pick<BeatRegion, 'action' | 'place_effect' | 'entry_mode'>,
+): 'draw' | 'drag_in' | 'instant' {
+    if (String(source.action || '').trim().toLowerCase() === 'draw') {
+        return 'draw';
+    }
+    return isRegionPlaceInstantEntry(source) ? 'instant' : 'drag_in';
+}
+
+export function buildOverlayInstantEntryPatch(): Pick<
+    BeatImageOverlay,
+    'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect'
+> {
+    return {
+        entry_mode: 'instant',
+        place_hand: null,
+        place_entry_direction: null,
+        place_effect: 'none',
+    };
+}
+
+export function buildOverlayDragInPatch(
+    source: Pick<BeatImageOverlay, 'place_effect'>,
+): Pick<BeatImageOverlay, 'entry_mode' | 'place_effect'> {
+    const effect = normalizePlaceEffect(source.place_effect);
+    const nextEffect = effect === 'none' || isPlaceHandlessEffect(effect) ? 'loang' : effect;
+    return {
+        entry_mode: 'drag_in',
+        place_effect: nextEffect,
+    };
+}
+
+/**
+ * Suy ra entry_mode khi lưu — ưu tiên entry_mode user chọn trên UI.
+ */
+export function resolveRegionEntryModeFromPlaceSettings(
+    source: Pick<BeatRegion, 'action' | 'place_effect' | 'entry_mode'>,
+): RegionEntryModeKey | undefined {
+    const action = String(source.action || '').trim().toLowerCase();
+    if (action === 'draw') {
+        return 'draw';
+    }
+    if (action !== 'place') {
+        return undefined;
+    }
+    if (source.entry_mode != null) {
+        return normalizeRegionEntryMode(source.entry_mode);
+    }
+    return isRegionPlaceInstantEntry(source) ? 'instant' : 'drag_in';
+}
+
+/** Overlay sticker: cùng quy tắc. */
+export function resolveOverlayEntryModeFromPlaceSettings(
+    source: Pick<BeatImageOverlay, 'place_effect' | 'entry_mode'>,
+): RegionEntryModeKey {
+    if (source.entry_mode != null) {
+        return normalizeRegionEntryMode(source.entry_mode);
+    }
+    return isOverlayInstantEntry(source) ? 'instant' : 'drag_in';
+}
+
 /** Hướng đưa ảnh vào — đồng bộ engine frames.py _PLACE_ENTRY_DIRECTION_ANGLES. */
 export const PLACE_ENTRY_DIRECTION_KEYS = [
     'random',
@@ -535,13 +865,16 @@ export function isPlaceEntryDirectionApplicable(
 /** Patch khi đổi place_effect — xóa place_hand / hướng nếu không dùng tay. */
 export function buildPlaceEffectRegionUpdate(
     effect: PlaceEffectKey,
-): Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> {
-    const updates: Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> = {
+): Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction' | 'entry_mode'> {
+    const updates: Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction' | 'entry_mode'> = {
         place_effect: effect,
     };
-    if (isPlaceHandlessEffect(effect)) {
+    if (isPlaceHandlessEffect(effect) || effect === 'none') {
+        updates.entry_mode = 'instant';
         updates.place_hand = null;
         updates.place_entry_direction = null;
+    } else {
+        updates.entry_mode = 'drag_in';
     }
     return updates;
 }
@@ -611,6 +944,8 @@ export type AgentWhiteboardBeatOverride = {
     focus_y?: number | null;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
+    /** Sticker ảnh upload tự do trên canvas beat. */
+    image_overlays?: BeatImageOverlay[];
     /** Hiệu ứng timeline (zoom, …) trên beat — theo khoảng thời gian scene-relative. */
     timeline_effects?: BeatTimelineEffect[];
 };

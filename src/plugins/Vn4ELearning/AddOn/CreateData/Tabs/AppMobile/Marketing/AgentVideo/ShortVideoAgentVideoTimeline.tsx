@@ -1180,7 +1180,9 @@ export default function ShortVideoAgentVideoTimeline({
                                 ) : null}
                             </>
                         ) : null}
-                        {showImportAssemble && onLaunchImportAssemble ? (
+                        {
+                        // eslint-disable-next-line no-constant-condition
+                        showImportAssemble && onLaunchImportAssemble && false ? (
                             <Tooltip
                                 title={hasAgentVideo
                                     ? 'Agent ghép lại video từ HTML beat đã lưu trên CMS'
@@ -1194,7 +1196,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         color="primary"
                                         disabled={!hasVideo || timelineActionsBusy || agentVideoStatus === 'processing'}
                                         loading={launchingImportAssemble}
-                                        onClick={() => { void onLaunchImportAssemble(); }}
+                                        onClick={() => { void onLaunchImportAssemble?.(); }}
                                         startIcon={<PlayArrowIcon fontSize="small" />}
                                         sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                                     >

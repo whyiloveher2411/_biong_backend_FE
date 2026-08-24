@@ -1,7 +1,13 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import type { BeatRegion, BeatTimelineEffect } from './agentVideoApi';
+import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect } from './agentVideoApi';
 import { resolveZoomTransformAt, zoomTransformToCss } from './beatTimelineEffects/resolveZoomTransform';
+import {
+    resolveAttentionScaleAt,
+    resolveAttentionWindow,
+    resolveOverlayEndSec,
+    resolveOverlayStartSec,
+} from './regionAttentionTiming';
 import {
     beatPlayheadToVideoSec,
     resolveRegionEndSec,
@@ -13,8 +19,10 @@ type Word = { index: number; text: string; start: number };
 type Props = {
     imageUrl: string;
     regions: BeatRegion[];
+    imageOverlays?: BeatImageOverlay[];
     playheadSec: number;
     durationSec: number;
+    sceneBudgetSec?: number;
     beatStartSec: number;
     beatWords: Word[];
     timelineEffects?: BeatTimelineEffect[];
@@ -63,18 +71,21 @@ function polygonBBox(points: [number, number][]): { minX: number; minY: number; 
 
 /**
  * Mô phỏng kết quả whiteboard theo playhead — khi CHƯA có video beat.
- * Ảnh gốc bị che bằng nền bảng; từng vùng lộ dần theo [start_sec, end_sec].
+ * Nền = ảnh gốc (instant base); chỉ che bảng trắng TRONG vùng chưa lộ.
  */
 export default function WhiteboardBeatTimingPreview({
     imageUrl,
     regions,
+    imageOverlays = [],
     playheadSec,
     durationSec,
+    sceneBudgetSec,
     beatStartSec,
     beatWords,
     timelineEffects = [],
 }: Props) {
     const duration = Math.max(0.1, durationSec);
+    const budget = Math.max(0.1, sceneBudgetSec ?? duration);
     const timelineZoomCss = zoomTransformToCss(resolveZoomTransformAt(playheadSec, timelineEffects, durationSec));
     const ordered = React.useMemo(() => {
         const out: BeatRegion[] = [];
@@ -92,6 +103,29 @@ export default function WhiteboardBeatTimingPreview({
         return out;
     }, [regions]);
 
+    const regionStates = ordered.map((region) => {
+        const hasChildren = regions.some((item) => item.parent_id === region.id);
+        const progress = regionProgress(
+            region,
+            playheadSec,
+            beatWords,
+            beatStartSec,
+            duration,
+            hasChildren,
+        );
+        const attention = resolveAttentionWindow(region, beatWords, beatStartSec, duration, budget);
+        const breatheScale = progress >= 0.995 && attention.enabled
+            ? resolveAttentionScaleAt(
+                playheadSec,
+                attention.start,
+                attention.end,
+                attention.cycleSec,
+                attention.scaleMax,
+            )
+            : 1;
+        return { region, hasChildren, progress, attention, breatheScale };
+    });
+
     return (
         <Box
             sx={{
@@ -99,7 +133,6 @@ export default function WhiteboardBeatTimingPreview({
                 inset: 0,
                 pointerEvents: 'none',
                 overflow: 'hidden',
-                bgcolor: BOARD_COLOR,
             }}
         >
             <Box
@@ -110,68 +143,77 @@ export default function WhiteboardBeatTimingPreview({
                     transformOrigin: 'center center',
                 }}
             >
-            {ordered.map((region) => {
-                if (!Array.isArray(region.points) || region.points.length < 3) {
-                    return null;
-                }
-                const hasChildren = regions.some((item) => item.parent_id === region.id);
-                const progress = regionProgress(
-                    region,
-                    playheadSec,
-                    beatWords,
-                    beatStartSec,
-                    duration,
-                    hasChildren,
-                );
-                if (region.action === 'erase') {
-                    if (progress <= 0.01) {
+                {/* Ảnh beat đầy đủ — nền ngoài vùng luôn hiện ảnh gốc (khớp engine instant base). */}
+                <Box
+                    component="img"
+                    src={imageUrl}
+                    alt=""
+                    draggable={false}
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'fill',
+                        display: 'block',
+                        pointerEvents: 'none',
+                    }}
+                />
+
+                {/* Che bảng trắng chỉ TRONG polygon chưa lộ / đang animate — không phủ toàn canvas. */}
+                {regionStates.map(({ region, progress }) => {
+                    if (!Array.isArray(region.points) || region.points.length < 3) {
                         return null;
+                    }
+                    if (region.action === 'erase') {
+                        if (progress <= 0.01) {
+                            return null;
+                        }
+                        return (
+                            <Box
+                                key={`${region.id}-erase-mask`}
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    clipPath: polygonClip(region.points),
+                                    bgcolor: BOARD_COLOR,
+                                    opacity: progress,
+                                }}
+                            />
+                        );
+                    }
+                    if (progress >= 0.995) {
+                        return null;
+                    }
+                    const bbox = polygonBBox(region.points);
+                    const isPlace = region.action === 'place';
+                    // Place: không phủ lớp trắng chồng reveal (gây "filter trắng" lúc fade-in).
+                    // Chỉ che bảng khi chưa bắt đầu lộ; khi đang đưa vào dùng opacity ở lớp reveal.
+                    if (isPlace) {
+                        if (progress > 0.01) {
+                            return null;
+                        }
+                        return (
+                            <Box
+                                key={`${region.id}-place-mask`}
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    clipPath: polygonClip(region.points),
+                                    bgcolor: BOARD_COLOR,
+                                }}
+                            />
+                        );
                     }
                     return (
                         <Box
-                            key={`${region.id}-erase`}
+                            key={`${region.id}-draw-mask`}
                             sx={{
                                 position: 'absolute',
                                 inset: 0,
                                 clipPath: polygonClip(region.points),
-                                bgcolor: BOARD_COLOR,
-                                opacity: progress,
                             }}
-                        />
-                    );
-                }
-                if (progress <= 0.01) {
-                    return null;
-                }
-                const bbox = polygonBBox(region.points);
-                const isPlace = region.action === 'place';
-                return (
-                    <Box
-                        key={region.id}
-                        sx={{
-                            position: 'absolute',
-                            inset: 0,
-                            clipPath: polygonClip(region.points),
-                            opacity: isPlace ? Math.max(0.15, progress) : 1,
-                            transform: isPlace && progress < 1 ? `scale(${0.86 + 0.14 * progress})` : undefined,
-                            transformOrigin: `${((bbox.minX + bbox.w / 2) * 100).toFixed(2)}% ${((bbox.minY + bbox.h / 2) * 100).toFixed(2)}%`,
-                        }}
-                    >
-                        <Box
-                            component="img"
-                            src={imageUrl}
-                            alt=""
-                            draggable={false}
-                            sx={{
-                                position: 'absolute',
-                                inset: 0,
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'fill',
-                                display: 'block',
-                            }}
-                        />
-                        {!isPlace && progress < 0.995 ? (
+                        >
                             <Box
                                 sx={{
                                     position: 'absolute',
@@ -182,10 +224,107 @@ export default function WhiteboardBeatTimingPreview({
                                     bgcolor: BOARD_COLOR,
                                 }}
                             />
-                        ) : null}
-                    </Box>
-                );
-            })}
+                        </Box>
+                    );
+                })}
+
+                {/* Lớp cutout đã lộ — scale thở riêng từng vùng (isolation tránh dính màu GPU). */}
+                {regionStates.map(({ region, progress, breatheScale }) => {
+                    if (!Array.isArray(region.points) || region.points.length < 3) {
+                        return null;
+                    }
+                    if (region.action === 'erase' || progress <= 0.01) {
+                        return null;
+                    }
+                    const bbox = polygonBBox(region.points);
+                    const isPlace = region.action === 'place';
+                    const placeScale = isPlace && progress < 1 ? (0.86 + 0.14 * progress) : 1;
+                    const totalScale = Math.max(1, breatheScale * placeScale);
+                    const originX = (bbox.minX + bbox.w / 2) * 100;
+                    const originY = (bbox.minY + bbox.h / 2) * 100;
+                    return (
+                        <Box
+                            key={`${region.id}-reveal`}
+                            sx={{
+                                position: 'absolute',
+                                inset: 0,
+                                clipPath: polygonClip(region.points),
+                                opacity: isPlace && progress < 1 ? progress : 1,
+                                transform: totalScale !== 1 ? `scale(${totalScale})` : undefined,
+                                transformOrigin: `${originX.toFixed(2)}% ${originY.toFixed(2)}%`,
+                                isolation: 'isolate',
+                                willChange: totalScale !== 1 ? 'transform' : undefined,
+                            }}
+                        >
+                            <Box
+                                component="img"
+                                src={imageUrl}
+                                alt=""
+                                draggable={false}
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'fill',
+                                    display: 'block',
+                                }}
+                            />
+                        </Box>
+                    );
+                })}
+
+                {imageOverlays.map((overlay) => {
+                    const start = resolveOverlayStartSec(overlay);
+                    const end = resolveOverlayEndSec(overlay, duration);
+                    if (playheadSec < start || playheadSec > end + 0.05) {
+                        return null;
+                    }
+                    const appearProgress = playheadSec <= start
+                        ? 0
+                        : (playheadSec >= end ? 1 : (playheadSec - start) / Math.max(0.05, end - start));
+                    const attention = resolveAttentionWindow(overlay, beatWords, beatStartSec, duration, budget);
+                    const breatheScale = appearProgress >= 0.995 && attention.enabled
+                        ? resolveAttentionScaleAt(
+                            playheadSec,
+                            attention.start,
+                            attention.end,
+                            attention.cycleSec,
+                            attention.scaleMax,
+                        )
+                        : 1;
+                    const entryScale = appearProgress < 1 ? (0.86 + 0.14 * appearProgress) : 1;
+                    const scale = Math.max(1, breatheScale * entryScale);
+                    return (
+                        <Box
+                            key={overlay.id}
+                            sx={{
+                                position: 'absolute',
+                                left: `${(overlay.x - overlay.width / 2) * 100}%`,
+                                top: `${(overlay.y - overlay.height / 2) * 100}%`,
+                                width: `${overlay.width * 100}%`,
+                                height: `${overlay.height * 100}%`,
+                                transform: `rotate(${overlay.rotation_deg || 0}deg) scale(${scale})`,
+                                transformOrigin: 'center center',
+                                pointerEvents: 'none',
+                                isolation: 'isolate',
+                            }}
+                        >
+                            <Box
+                                component="img"
+                                src={overlay.image_url}
+                                alt=""
+                                draggable={false}
+                                sx={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'contain',
+                                    display: 'block',
+                                }}
+                            />
+                        </Box>
+                    );
+                })}
             </Box>
         </Box>
     );

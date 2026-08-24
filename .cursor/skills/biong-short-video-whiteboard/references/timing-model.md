@@ -106,3 +106,4 @@ t_engine = frame_time - intro_sec
 2. Timeline zoom không overlap transition — chỉ trên `scene_budget_sec`
 3. Ken Burns chạy trên toàn scene; timeline zoom chạy sau intro — **không chồng** nếu có timeline zoom (Ken Burns bị tắt)
 4. SFX loang fire tại frame **place_fix** (khi visual loang bắt đầu), không phải frame settle (ảnh vừa đặt)
+5. **Hiệu ứng gây chú ý** (`attention_*`): `start` ≥ `end_sec` + thời lượng hiệu ứng sau ảnh; không kéo vào vùng transition (`scene_budget_sec`)
