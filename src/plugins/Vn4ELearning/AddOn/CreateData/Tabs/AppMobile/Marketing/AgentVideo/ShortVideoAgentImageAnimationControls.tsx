@@ -197,7 +197,7 @@ export default function ShortVideoAgentImageAnimationControls({
                     onClick={(event) => event.stopPropagation()}
                 >
                     {showClipButton ? (
-                        <Tooltip title={`Hiệu ứng chung (mọi beat): ${clipLabel}`}>
+                        <Tooltip placement="right" title={`Hiệu ứng chung (mọi beat): ${clipLabel}`}>
                             <span>
                                 <IconButton
                                     size="small"
@@ -218,7 +218,7 @@ export default function ShortVideoAgentImageAnimationControls({
                             </span>
                         </Tooltip>
                     ) : null}
-                    <Tooltip title={`Hiệu ứng riêng beat này: ${beatLabel}`}>
+                    <Tooltip placement="right" title={`Hiệu ứng riêng beat này: ${beatLabel}`}>
                         <span>
                             <IconButton
                                 size="small"

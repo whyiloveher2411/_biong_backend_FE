@@ -690,7 +690,6 @@ export default function ShortVideoAgentVideoWorkspace({
                                 state={state}
                                 beatId={currentBeatId}
                                 imageUrl={currentBeatImageUrl}
-                                onOpenBeatQa={() => setQaDrawerOpen(true)}
                             />
                         ) : !state.isWhiteboardMode && currentBeatId ? (
                             /* MOTION HTML: 2 cột — TRÁI preview HTML ĐỒNG BỘ timeline

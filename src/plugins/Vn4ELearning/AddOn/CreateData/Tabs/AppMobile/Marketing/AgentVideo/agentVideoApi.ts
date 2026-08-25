@@ -199,6 +199,11 @@ export const REGION_ENTRY_MODE_OPTIONS: Array<{
     description: string;
 }> = [
     {
+        value: 'instant',
+        label: 'Đặt tại chỗ',
+        description: 'Hiện ngay tại vị trí (hoặc bounce nếu chọn hiệu ứng nảy)',
+    },
+    {
         value: 'draw',
         label: 'Vẽ tay',
         description: 'Tay vẽ outline trước, rồi lộ nội dung trong vùng',
@@ -207,11 +212,6 @@ export const REGION_ENTRY_MODE_OPTIONS: Array<{
         value: 'drag_in',
         label: 'Đưa từ ngoài vào',
         description: 'Tay kéo ảnh từ ngoài màn hình vào vùng',
-    },
-    {
-        value: 'instant',
-        label: 'Đặt tại chỗ',
-        description: 'Hiện ngay tại vị trí (hoặc bounce nếu chọn hiệu ứng nảy)',
     },
 ];
 

@@ -25,7 +25,8 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import FactCheckIcon from '@mui/icons-material/FactCheck';
+import MovieCreationIcon from '@mui/icons-material/MovieCreation';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import WallpaperIcon from '@mui/icons-material/Wallpaper';
 import CheckIcon from '@mui/icons-material/Check';
@@ -120,7 +121,6 @@ type Props = {
     state: AgentVideoState;
     beatId: string;
     imageUrl: string;
-    onOpenBeatQa?: () => void;
 };
 
 const REGION_COLORS = [
@@ -323,7 +323,6 @@ export default function ShortVideoAgentBeatRegionEditor({
     state,
     beatId,
     imageUrl,
-    onOpenBeatQa,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
     const savedRegions = Array.isArray(currentOverride.regions)
@@ -1425,7 +1424,10 @@ export default function ShortVideoAgentBeatRegionEditor({
             id: `region-${Date.now()}`,
             name: `Vùng ${regions.length + 1}`,
             points: [...draftPoints],
-            action: 'draw',
+            action: 'place',
+            entry_mode: 'instant',
+            place_effect: 'none',
+            place_shadow: true,
             parent_id: parentId,
             script_start_word: null,
             script_end_word: null,
@@ -1945,6 +1947,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         || beatRenderStatus === 'processing';
     const beatVideoUrl = String(beatRender?.video_url || '').trim();
     const [beatVideoPreviewOpen, setBeatVideoPreviewOpen] = React.useState(false);
+    const [renderConfirmOpen, setRenderConfirmOpen] = React.useState(false);
     const videoPreviewRef = React.useRef<WhiteboardBeatVideoPreviewHandle | null>(null);
     const playheadRef = React.useRef({ sec: 0, playing: false });
     // URL phát được: endpoint stream yêu cầu access_token — resolve như BeatQaPanel.
@@ -1995,13 +1998,103 @@ export default function ShortVideoAgentBeatRegionEditor({
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [canvasMode, handleToggleCanvasMode, hasVideoPreview]);
+    const handleOpenBeatImage = React.useCallback(() => {
+        const raw = String(imageUrl || '').trim();
+        if (!raw) {
+            return;
+        }
+        // Không truyền feature `noopener` vào window.open — một số browser
+        // (Chromium) sẽ không mở tab. Set opener=null sau khi mở.
+        let openUrl = raw;
+        try {
+            const u = new URL(raw, window.location.origin);
+            u.searchParams.set('v', String(Date.now()));
+            openUrl = u.toString();
+        } catch {
+            const sep = raw.includes('?') ? '&' : '?';
+            openUrl = `${raw}${sep}v=${Date.now()}`;
+        }
+        const opened = window.open(openUrl, '_blank');
+        if (opened) {
+            try {
+                opened.opener = null;
+            } catch {
+                // ignore
+            }
+        }
+    }, [imageUrl]);
+    const canRenderBeatVideo = Boolean(imageUrl)
+        && !isBeatRendering
+        && !saving
+        && !state.agentWhiteboardConfig?.assets_mode;
+    const canOpenBeatVideo = Boolean(beatVideoPlayUrl) && !isBeatRendering;
+    const handleRequestRenderBeatVideo = React.useCallback(() => {
+        if (!canRenderBeatVideo) {
+            return;
+        }
+        setRenderConfirmOpen(true);
+    }, [canRenderBeatVideo]);
+    const handleConfirmRenderBeatVideo = React.useCallback(() => {
+        setRenderConfirmOpen(false);
+        void handleRenderBeatVideo();
+    }, [handleRenderBeatVideo]);
+    // Shortcut 1 phím: I mở ảnh beat, R render, V mở video beat.
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            if (pendingSwitch || beatVideoPreviewOpen || renderConfirmOpen) {
+                return;
+            }
+            const target = event.target as HTMLElement | null;
+            if (target && isKeyboardEditableTarget(target)) {
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if (key === 'i') {
+                if (!imageUrl) {
+                    return;
+                }
+                event.preventDefault();
+                handleOpenBeatImage();
+                return;
+            }
+            if (key === 'r') {
+                if (!canRenderBeatVideo) {
+                    return;
+                }
+                event.preventDefault();
+                handleRequestRenderBeatVideo();
+                return;
+            }
+            if (key === 'v') {
+                if (!canOpenBeatVideo) {
+                    return;
+                }
+                event.preventDefault();
+                setBeatVideoPreviewOpen(true);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [
+        beatVideoPreviewOpen,
+        canOpenBeatVideo,
+        canRenderBeatVideo,
+        handleOpenBeatImage,
+        handleRequestRenderBeatVideo,
+        imageUrl,
+        pendingSwitch,
+        renderConfirmOpen,
+    ]);
     // Shortcut: ←/→ beat trước/sau, S lưu, D đã ổn, ↑/↓ zoom.
     React.useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.ctrlKey || event.metaKey || event.altKey) {
                 return;
             }
-            if (pendingSwitch || beatVideoPreviewOpen) {
+            if (pendingSwitch || beatVideoPreviewOpen || renderConfirmOpen) {
                 return;
             }
             const target = event.target as HTMLElement | null;
@@ -2061,11 +2154,13 @@ export default function ShortVideoAgentBeatRegionEditor({
         handleToggleApproved,
         handleZoomAt,
         pendingSwitch,
+        renderConfirmOpen,
         zoom,
     ]);
     React.useEffect(() => {
         playheadRef.current = { sec: 0, playing: false };
         setCanvasMode('edit');
+        setRenderConfirmOpen(false);
     }, [beatId]);
     React.useEffect(() => {
         if (!hasVideoPreview && canvasMode === 'preview') {
@@ -2086,7 +2181,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     'error',
                 );
             } else if (beatVideoUrl) {
-                notify('Đã render xong video beat — bấm "Mở video beat" để xem', 'success');
+                notify('Đã render xong video beat — bấm V hoặc "Mở video beat" để xem', 'success');
             }
         }
     }, [isBeatRendering, beatRenderStatus, beatVideoUrl, beatRender?.error]);
@@ -2114,75 +2209,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                 pb: 2,
             }}
         >
-            {/* Header: tên beat + mở ảnh + nút QA/Version/Video beat */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 1,
-                    flexShrink: 0,
-                }}
-            >
-                <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                    {`Chọn vùng ảnh beat — ${
-                        activeSegmentIndex >= 0 ? activeSegmentIndex + 1 : '–'
-                    }/${beatSegments.length}`}
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    {imageUrl ? (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            startIcon={<OpenInNewIcon />}
-                            component="a"
-                            href={imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={{ textTransform: 'none' }}
-                        >
-                            Mở ảnh beat
-                        </Button>
-                    ) : null}
-                    <LoadingButton
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        startIcon={<VideocamIcon />}
-                        loading={isBeatRendering || saving}
-                        disabled={isBeatRendering || saving || !imageUrl || Boolean(state.agentWhiteboardConfig?.assets_mode)}
-                        onClick={() => { void handleRenderBeatVideo(); }}
-                        title={isDirty ? 'Sẽ tự lưu vùng trước khi render' : undefined}
-                        sx={{ textTransform: 'none' }}
-                    >
-                        Render video beat
-                    </LoadingButton>
-                    <LoadingButton
-                        size="small"
-                        variant="outlined"
-                        color="secondary"
-                        startIcon={<OpenInNewIcon />}
-                        loading={isBeatRendering}
-                        disabled={isBeatRendering || !beatVideoPlayUrl}
-                        onClick={() => setBeatVideoPreviewOpen(true)}
-                        sx={{ textTransform: 'none' }}
-                    >
-                        Mở video beat
-                    </LoadingButton>
-                    <Button
-                        size="small"
-                        variant="contained"
-                        color="warning"
-                        startIcon={<FactCheckIcon />}
-                        onClick={() => onOpenBeatQa?.()}
-                        sx={{ textTransform: 'none' }}
-                    >
-                        QA · Version · Video beat
-                    </Button>
-                </Stack>
-            </Box>
-
             {notice ? (
                 <Alert
                     severity={notice.variant}
@@ -2249,7 +2275,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 zIndex: 5,
                             }}
                         >
-                        <Tooltip title={isAddActive
+                        <Tooltip
+                            placement="right"
+                            title={isAddActive
                             ? 'Đang THÊM VÙNG — click/kéo để vẽ vùng mới (phím E để chuyển sang chọn vùng).'
                             : 'Đang CHỌN VÙNG — click vào vùng để chọn, click ngoài vùng để đặt điểm tập trung (phím E để chuyển sang thêm vùng).'}
                         >
@@ -2269,7 +2297,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Thêm ảnh">
+                        <Tooltip placement="right" title="Thêm ảnh">
                             <IconButton
                                 size="small"
                                 onClick={() => overlayUploadRef.current?.click()}
@@ -2325,7 +2353,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 zIndex: 5,
                             }}
                         >
-                        <Tooltip title="Phóng to (↑) / Thu nhỏ (↓)">
+                        <Tooltip placement="left" title="Phóng to (↑) / Thu nhỏ (↓)">
                         <Stack
                             direction="row"
                             spacing={1}
@@ -2364,7 +2392,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     '& .MuiSlider-thumb': { width: 14, height: 14 },
                                 }}
                             />
-                            <Tooltip title="Đặt lại zoom 100%">
+                            <Tooltip placement="left" title="Đặt lại zoom 100%">
                                 <IconButton
                                     size="small"
                                     onClick={handleResetZoom}
@@ -2376,6 +2404,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         </Stack>
                         </Tooltip>
                         <Tooltip
+                            placement="left"
                             title={canvasMode === 'preview'
                                 ? 'Chuyển sang Edit — thêm / sửa vùng (Q)'
                                 : (hasVideoPreview
@@ -2406,6 +2435,85 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     {canvasMode === 'preview'
                                         ? <EditIcon fontSize="small" />
                                         : <VideocamIcon fontSize="small" />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        {imageUrl ? (
+                            <Tooltip placement="left" title="Mở ảnh beat (I)">
+                                <IconButton
+                                    size="small"
+                                    onClick={handleOpenBeatImage}
+                                    sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: 'rgba(0,0,0,0.6)',
+                                        color: 'common.white',
+                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.78)' },
+                                    }}
+                                >
+                                    <OpenInNewIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        ) : null}
+                        <Tooltip
+                            placement="left"
+                            title={isDirty
+                                ? 'Render video beat (R) — xác nhận trước, sẽ tự lưu vùng nếu cần'
+                                : 'Render video beat (R) — xác nhận trước'}
+                        >
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    disabled={
+                                        isBeatRendering
+                                        || saving
+                                        || !imageUrl
+                                        || Boolean(state.agentWhiteboardConfig?.assets_mode)
+                                    }
+                                    onClick={handleRequestRenderBeatVideo}
+                                    sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: 'rgba(0,0,0,0.6)',
+                                        color: 'common.white',
+                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.78)' },
+                                        '&.Mui-disabled': {
+                                            color: 'rgba(255,255,255,0.38)',
+                                            bgcolor: 'rgba(0,0,0,0.4)',
+                                        },
+                                    }}
+                                >
+                                    {isBeatRendering || saving ? (
+                                        <CircularProgress size={18} sx={{ color: 'common.white' }} />
+                                    ) : (
+                                        <MovieCreationIcon fontSize="small" />
+                                    )}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        <Tooltip placement="left" title="Mở video beat (V)">
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    disabled={isBeatRendering || !beatVideoPlayUrl}
+                                    onClick={() => setBeatVideoPreviewOpen(true)}
+                                    sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: 'rgba(0,0,0,0.6)',
+                                        color: 'common.white',
+                                        '&:hover': { bgcolor: 'rgba(0,0,0,0.78)' },
+                                        '&.Mui-disabled': {
+                                            color: 'rgba(255,255,255,0.38)',
+                                            bgcolor: 'rgba(0,0,0,0.4)',
+                                        },
+                                    }}
+                                >
+                                    {isBeatRendering ? (
+                                        <CircularProgress size={18} sx={{ color: 'common.white' }} />
+                                    ) : (
+                                        <PlayCircleOutlineIcon fontSize="small" />
+                                    )}
                                 </IconButton>
                             </span>
                         </Tooltip>
@@ -2846,7 +2954,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 zIndex: 5,
                             }}
                         >
-                            <Tooltip title={isBeatApproved ? 'Bỏ đánh dấu đã ổn (D)' : 'Đánh dấu đã ổn (D)'}>
+                            <Tooltip placement="left" title={isBeatApproved ? 'Bỏ đánh dấu đã ổn (D)' : 'Đánh dấu đã ổn (D)'}>
                             <span>
                             <Button
                                 size="small"
@@ -2902,7 +3010,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         p: 0.5,
                                     }}
                                 >
-                                    <Tooltip title="Beat trước (←)">
+                                    <Tooltip placement="left" title="Beat trước (←)">
                                         <span>
                                             <IconButton
                                                 size="small"
@@ -2914,7 +3022,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             </IconButton>
                                         </span>
                                     </Tooltip>
-                                    <Tooltip title="Beat sau (→)">
+                                    <Tooltip placement="left" title="Beat sau (→)">
                                         <span>
                                             <IconButton
                                                 size="small"
@@ -3031,7 +3139,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 p: 0.5,
                             }}
                         >
-                            <Tooltip title={focusMode
+                            <Tooltip
+                                placement="right"
+                                title={focusMode
                                 ? 'Đang ĐẶT ĐIỂM TẬP TRUNG — click chỗ nào đặt focus chỗ đó (click để tắt).'
                                 : 'Bật ĐẶT ĐIỂM TẬP TRUNG — click chỗ nào đặt focus chỗ đó.'}
                             >
@@ -3047,7 +3157,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </IconButton>
                             </Tooltip>
                             {focusMode ? (
-                                <Tooltip title="Đặt lại điểm tập trung giữa ảnh">
+                                <Tooltip placement="right" title="Đặt lại điểm tập trung giữa ảnh">
                                     <IconButton
                                         size="small"
                                         onClick={handleResetFocus}
@@ -3058,7 +3168,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </Tooltip>
                             ) : null}
                             {totalDraftPoints > 0 ? (
-                                <Tooltip title="Hủy vẽ">
+                                <Tooltip placement="right" title="Hủy vẽ">
                                     <IconButton
                                         size="small"
                                         onClick={handleCancelDraft}
@@ -3068,7 +3178,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </IconButton>
                                 </Tooltip>
                             ) : null}
-                            <Tooltip title="Lưu vùng (S)">
+                            <Tooltip placement="right" title="Lưu vùng (S)">
                                 <span>
                                     <LoadingButton
                                         size="small"
@@ -3168,6 +3278,42 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 sx={{ textTransform: 'none' }}
                             >
                                 Lưu rồi chuyển
+                            </LoadingButton>
+                        </DialogActions>
+                    </Dialog>
+
+                    {/* Dialog xác nhận render video beat */}
+                    <Dialog
+                        open={renderConfirmOpen}
+                        onClose={() => setRenderConfirmOpen(false)}
+                        maxWidth="xs"
+                        fullWidth
+                    >
+                        <DialogTitle>Render video beat?</DialogTitle>
+                        <DialogContent>
+                            <Typography variant="body2" color="text.secondary">
+                                Bước này có thể mất vài phút — engine sẽ vẽ tay, ghép audio và
+                                xuất video cho beat hiện tại.
+                                {isDirty
+                                    ? ' Vùng chưa lưu sẽ được lưu tự động trước khi render.'
+                                    : ''}
+                            </Typography>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button
+                                onClick={() => setRenderConfirmOpen(false)}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Hủy
+                            </Button>
+                            <LoadingButton
+                                variant="contained"
+                                color="primary"
+                                loading={isBeatRendering || saving}
+                                onClick={handleConfirmRenderBeatVideo}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Bắt đầu render
                             </LoadingButton>
                         </DialogActions>
                     </Dialog>
@@ -3344,6 +3490,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
                                     {([
                                         {
+                                            key: 'instant' as const,
+                                            label: 'Đặt tại chỗ',
+                                            color: 'secondary' as const,
+                                            patch: () => buildOverlayInstantEntryPatch(),
+                                        },
+                                        {
                                             key: 'draw' as const,
                                             label: 'Vẽ tay',
                                             color: 'primary' as const,
@@ -3354,12 +3506,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             label: 'Đưa vào',
                                             color: 'secondary' as const,
                                             patch: () => buildOverlayDragInPatch(selectedOverlay),
-                                        },
-                                        {
-                                            key: 'instant' as const,
-                                            label: 'Đặt tại chỗ',
-                                            color: 'secondary' as const,
-                                            patch: () => buildOverlayInstantEntryPatch(),
                                         },
                                     ]).map((opt) => {
                                         const active = resolveOverlayImageActionKey(selectedOverlay) === opt.key;
@@ -3738,10 +3884,16 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </Stack>
                                 ) : null}
 
-                                {/* 1. Hành động với ảnh: Vẽ tay | Đưa vào | Đặt tại chỗ */}
+                                {/* 1. Hành động với ảnh: Đặt tại chỗ | Vẽ tay | Đưa vào */}
                                 <RegionSection title="Hành động với ảnh">
                                     <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
                                         {([
+                                            {
+                                                key: 'instant' as const,
+                                                label: 'Đặt tại chỗ',
+                                                color: 'secondary' as const,
+                                                patch: () => buildRegionPlaceInstantEntryPatch(),
+                                            },
                                             {
                                                 key: 'draw' as const,
                                                 label: 'Vẽ tay',
@@ -3753,12 +3905,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 label: 'Đưa vào',
                                                 color: 'secondary' as const,
                                                 patch: () => buildRegionPlaceDragInPatch(region),
-                                            },
-                                            {
-                                                key: 'instant' as const,
-                                                label: 'Đặt tại chỗ',
-                                                color: 'secondary' as const,
-                                                patch: () => buildRegionPlaceInstantEntryPatch(),
                                             },
                                         ]).map((opt) => {
                                             const active = resolveRegionImageActionKey(region) === opt.key;
