@@ -435,6 +435,7 @@ export function createDefaultBeatImageOverlay(
         start_sec: 0,
         end_sec: Math.round(end * 100) / 100,
         hold_to_end: false,
+        repeat: true,
         entry_mode: 'drag_in',
         place_effect: 'loang',
         place_shadow: true,

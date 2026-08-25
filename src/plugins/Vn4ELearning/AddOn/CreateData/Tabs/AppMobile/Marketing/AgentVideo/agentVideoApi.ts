@@ -338,6 +338,8 @@ export type BeatImageOverlay = {
     end_sec: number;
     /** Sau end_sec ảnh ở lại đến hết beat. Tắt = ẩn khi hết cửa sổ [start, end). */
     hold_to_end?: boolean;
+    /** GIF/animated WebP: lặp animation. Mặc định true. Tắt = phát 1 lần rồi giữ frame cuối. */
+    repeat?: boolean;
     entry_mode?: RegionEntryModeKey;
     place_effect?: PlaceEffectKey;
     place_effect_color?: NeonColorKey;
@@ -418,6 +420,10 @@ export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null
         start_sec: Number.isFinite(startSec) ? Math.max(0, startSec) : 0,
         end_sec: Number.isFinite(endSec) ? Math.max(0, endSec) : 2,
         hold_to_end: Boolean(item.hold_to_end),
+        // Mặc định lặp GIF; chỉ tắt khi client gửi false rõ ràng.
+        repeat: item.repeat === false || item.repeat === 0 || item.repeat === '0' || item.repeat === 'false'
+            ? false
+            : true,
         entry_mode: normalizeRegionEntryMode(item.entry_mode as string | undefined),
         place_effect: item.place_effect != null
             ? normalizePlaceEffect(String(item.place_effect))

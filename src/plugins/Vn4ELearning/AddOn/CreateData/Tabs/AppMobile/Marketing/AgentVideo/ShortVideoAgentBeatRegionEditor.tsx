@@ -3403,6 +3403,23 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </Typography>
                                 </Box>
                             </Stack>
+                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1, width: '100%' }}>
+                                <Switch
+                                    size="small"
+                                    checked={selectedOverlay.repeat !== false}
+                                    onChange={(event) =>
+                                        updateOverlay(selectedOverlay.id, { repeat: event.target.checked })
+                                    }
+                                />
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="caption" fontWeight={700} display="block">
+                                        Lặp GIF
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                        Bật: animation lặp liên tục. Tắt: chạy 1 lần rồi giữ frame cuối
+                                    </Typography>
+                                </Box>
+                            </Stack>
                             {resolveOverlayImageActionKey(selectedOverlay) === 'draw' && drawHandOptions.length > 0 ? (
                                 <RegionSection title="Kiểu tay vẽ">
                                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'space-between' }}>

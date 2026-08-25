@@ -127,7 +127,7 @@ Spotlight / god_rays nhiều vùng cùng lúc: **union mask focus**, dim **một
 - `[start_sec, end_sec)` = animate/đặt; mặc định **ẩn sau `end_sec`**
 - `hold_to_end` = giữ đến hết beat; place_effect + attention chạy sau `end_sec`
 
-- Engine: PHP preload `local_path` (giữ `.gif`) → contain đúng box → GIF/animated WebP decode multi-frame, chọn frame theo `(t − start_sec)` loop → viền/shadow theo silhouette → loang/sheen/neon sau settle → tay `keo-anh` khi `drag_in`
+- Engine: PHP preload `local_path` (giữ `.gif`) → contain đúng box → GIF/animated WebP decode multi-frame, chọn frame theo `(t − start_sec)`; `repeat` mặc định true (loop), false = 1 lần rồi giữ frame cuối → viền/shadow theo silhouette → loang/sheen/neon sau settle → tay `keo-anh` khi `drag_in`
 
 ---
 

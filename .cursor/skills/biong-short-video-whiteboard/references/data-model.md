@@ -118,6 +118,7 @@ Rect tự do trên ảnh beat — **không** cắt từ ảnh beat / GrabCut. L�
 | `rotation_deg` | Xoay ảnh |
 | `start_sec`, `end_sec` | Cửa sổ xuất hiện; `end_sec` = lúc animate/đặt xong |
 | `hold_to_end` | `false` = ẩn sau `end_sec`; `true` = ở lại đến hết beat |
+| `repeat` | GIF/animated WebP: `true` (mặc định) = lặp; `false` = chạy 1 lần rồi giữ frame cuối |
 | `entry_mode` | `draw` \| `drag_in` \| `instant` |
 | `draw_hand` | Bút khi `entry_mode=draw` |
 | `place_effect`, `place_hand`, cutout style | Cùng stack như vùng place/draw |
