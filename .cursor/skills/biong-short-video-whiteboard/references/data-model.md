@@ -50,7 +50,7 @@ Lưu trong `agent_whiteboard_beat_overrides[beatId]` qua `saveAgentWhiteboardBea
 | `image_animation_effect` | Ken Burns: `common` \| concrete \| `none` \| `random` |
 | `focus_x`, `focus_y` | Điểm tập trung frame cuối (0–1) |
 | `regions` | Mảng `BeatRegion[]` |
-| `image_overlays` | Mảng `BeatImageOverlay[]` (sticker ảnh upload) |
+| `image_overlays` | Mảng `BeatImageOverlay[]` (ảnh thêm upload) |
 | `timeline_effects` | Mảng `BeatTimelineEffect[]` (hiện chỉ zoom) |
 
 ---
@@ -98,26 +98,30 @@ Polygon chuẩn hóa **0–1** trên ảnh beat gốc.
 | `place_shadow`, `place_border`, `place_border_color`, `place_torn_paper` | Cutout style |
 | `draw_hand` | Bút vẽ |
 | `entry_mode` | Cách đưa vào (chỉ `action=place`): `draw` \| `drag_in` \| `instant` — override `photo_place_mode` beat-level |
-| `attention_start_sec`, `attention_end_sec` | Cửa sổ hiệu ứng gây chú ý (Thở). `start` ≥ `end_sec` + hiệu ứng sau ảnh |
-| `attention_scale_max` | Biên scale tối đa (clamp 1.0–1.3, mặc định 1.2) |
-| `attention_cycle_sec` | Chu kỳ một nhịp thở (giây, mặc định ~1.2) |
+| `attention_start_sec`, `attention_end_sec` | Cửa sổ gây chú ý. `start` ≥ `end_sec` + hiệu ứng sau ảnh |
+| `attention_type` | Một loại: `none` \| `breathe` \| `spotlight` \| `glitch` \| `ripple` \| `saber` \| `god_rays` \| `light_sweep` |
+| `attention_scale_max` | Biên scale thở (clamp 1.0–1.3, mặc định 1.2) |
+| `attention_cycle_sec` | Chu kỳ thở / sóng / quét (giây, mặc định ~1.2) |
+| `attention_intensity` | Cường độ spotlight/glitch/saber/god_rays (0.35–1, mặc định 0.75) |
 
 ---
 
-## BeatImageOverlay (sticker ảnh upload)
+## BeatImageOverlay (ảnh thêm — upload riêng)
 
-Rect tự do trên ảnh beat — không dùng GrabCut. Lưu trong `image_overlays[]`.
+Rect tự do trên ảnh beat — **không** cắt từ ảnh beat / GrabCut. Lưu trong `image_overlays[]`.
 
 | Field | Ý nghĩa |
 |-------|---------|
 | `id`, `name` | Identity |
-| `image_url` | URL ảnh upload (`uploadAgentVisualImage`) |
+| `image_url` | URL ảnh upload (`uploadAgentVisualImage`) — PNG/JPG/WebP/**GIF** (GIF animate trong render) |
 | `x`, `y`, `width`, `height` | Tâm + kích thước rect normalized 0–1 |
-| `rotation_deg` | Xoay sticker |
-| `start_sec`, `end_sec` | Thời gian xuất hiện (scene-relative) |
+| `rotation_deg` | Xoay ảnh |
+| `start_sec`, `end_sec` | Cửa sổ xuất hiện; `end_sec` = lúc animate/đặt xong |
+| `hold_to_end` | `false` = ẩn sau `end_sec`; `true` = ở lại đến hết beat |
 | `entry_mode` | `draw` \| `drag_in` \| `instant` |
-| `place_effect`, `place_hand`, … | Cùng stack hiệu ứng như vùng place |
-| `attention_*` | Cùng công thức thở như `BeatRegion` |
+| `draw_hand` | Bút khi `entry_mode=draw` |
+| `place_effect`, `place_hand`, cutout style | Cùng stack như vùng place/draw |
+| `attention_*` | Cùng catalog gây chú ý. Không hold: clamp trong `[start, end)` |
 
 Helpers FE: `regionAttentionTiming.ts`, `normalizeBeatImageOverlay()` trong `agentVideoApi.ts`
 

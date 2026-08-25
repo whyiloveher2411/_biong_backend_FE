@@ -180,10 +180,14 @@ export type BeatRegion = {
     /** Cửa sổ hiệu ứng gây chú ý (scene-relative sec). null = tắt. */
     attention_start_sec?: number | null;
     attention_end_sec?: number | null;
+    /** Loại gây chú ý — một loại / vùng. `none` hoặc thiếu + không cửa sổ = tắt. */
+    attention_type?: AttentionEffectKey;
     /** Biên scale tối đa [1.05–1.3], mặc định 1.2 — engine không scale < 1.0. */
     attention_scale_max?: number;
-    /** Chu kỳ 1 nhịp thở (giây), mặc định 1.2. */
+    /** Chu kỳ 1 nhịp thở / sóng / quét (giây), mặc định 1.2. */
     attention_cycle_sec?: number;
+    /** Cường độ spotlight / glitch / saber / god_rays [0.35–1], mặc định 0.75. */
+    attention_intensity?: number;
 };
 
 /** Cách đưa ảnh/cutout vào scene (per-region / overlay). */
@@ -217,8 +221,108 @@ export const ATTENTION_DURATION_DEFAULT_SEC = 2.5;
 export const ATTENTION_MIN_WINDOW_SEC = 0.3;
 export const ATTENTION_SCALE_MAX_MIN = 1.05;
 export const ATTENTION_SCALE_MAX_LIMIT = 1.3;
+export const ATTENTION_INTENSITY_DEFAULT = 0.75;
+export const ATTENTION_INTENSITY_MIN = 0.35;
+export const ATTENTION_INTENSITY_MAX = 1;
+export const ATTENTION_MAGENTA = '#ec407a';
 
-/** Sticker ảnh upload tự do trên canvas beat. */
+/** Một loại gây chú ý / vùng (giống place_effect). */
+export type AttentionEffectKey =
+    | 'none'
+    | 'breathe'
+    | 'spotlight'
+    | 'glitch'
+    | 'ripple'
+    | 'saber'
+    | 'god_rays'
+    | 'light_sweep';
+
+export const ATTENTION_EFFECT_OPTIONS: Array<{
+    value: AttentionEffectKey;
+    label: string;
+    timelineLabel: string;
+    description: string;
+}> = [
+    {
+        value: 'none',
+        label: 'Tắt',
+        timelineLabel: '',
+        description: 'Không hiệu ứng gây chú ý',
+    },
+    {
+        value: 'breathe',
+        label: 'Thở',
+        timelineLabel: 'thở',
+        description: 'Phóng to / thu nhỏ nhịp nhàng trên chính vùng đã đặt',
+    },
+    {
+        value: 'spotlight',
+        label: 'Tối nền',
+        timelineLabel: 'tối nền',
+        description: 'Vùng khác tối lại, vùng này sáng nhất, mép mờ dần như ánh sáng buổi tối',
+    },
+    {
+        value: 'glitch',
+        label: 'Nhiễu sóng',
+        timelineLabel: 'glitch',
+        description: 'Tách nhẹ rìa đỏ / xanh dương quanh vùng (chromatic aberration)',
+    },
+    {
+        value: 'ripple',
+        label: 'Sóng xung kích',
+        timelineLabel: 'sóng',
+        description: 'Vòng sóng lan từ tâm vùng ra ngoài, lặp theo chu kỳ',
+    },
+    {
+        value: 'saber',
+        label: 'Năng lượng viền',
+        timelineLabel: 'saber',
+        description: 'Luồng sáng nhỏ chạy vòng quanh viền vùng chú ý',
+    },
+    {
+        value: 'god_rays',
+        label: 'Tia xuyên thấu',
+        timelineLabel: 'tia sáng',
+        description: 'Tia sáng dài xuyên nền tối quanh vùng, như đèn pha trong sương',
+    },
+    {
+        value: 'light_sweep',
+        label: 'Quét sáng',
+        timelineLabel: 'quét sáng',
+        description: 'Tia sáng sắc quét ngang bề mặt vùng từ trái sang phải',
+    },
+];
+
+const ATTENTION_EFFECT_KEYS: AttentionEffectKey[] = ATTENTION_EFFECT_OPTIONS.map((opt) => opt.value);
+
+export function normalizeAttentionType(
+    raw: unknown,
+    hasWindow = false,
+): AttentionEffectKey {
+    const value = String(raw || '').trim().toLowerCase() as AttentionEffectKey;
+    if (ATTENTION_EFFECT_KEYS.includes(value) && value !== 'none') {
+        return value;
+    }
+    if (value === 'none') {
+        return hasWindow ? 'breathe' : 'none';
+    }
+    return hasWindow ? 'breathe' : 'none';
+}
+
+export function normalizeAttentionIntensity(raw: unknown): number {
+    const num = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(num)) {
+        return ATTENTION_INTENSITY_DEFAULT;
+    }
+    return Math.max(ATTENTION_INTENSITY_MIN, Math.min(ATTENTION_INTENSITY_MAX, num));
+}
+
+export function attentionEffectTimelineLabel(type: AttentionEffectKey | null | undefined): string {
+    const key = normalizeAttentionType(type, true);
+    return ATTENTION_EFFECT_OPTIONS.find((opt) => opt.value === key)?.timelineLabel || 'chú ý';
+}
+
+/** Ảnh thêm upload tự do trên canvas beat. */
 export type BeatImageOverlay = {
     id: string;
     name?: string;
@@ -229,9 +333,11 @@ export type BeatImageOverlay = {
     width: number;
     height: number;
     rotation_deg?: number;
-    /** Thời gian xuất hiện (bar chính timeline). */
+    /** Thời gian xuất hiện (bar chính timeline). end_sec = lúc animate/đặt xong. */
     start_sec: number;
     end_sec: number;
+    /** Sau end_sec ảnh ở lại đến hết beat. Tắt = ẩn khi hết cửa sổ [start, end). */
+    hold_to_end?: boolean;
     entry_mode?: RegionEntryModeKey;
     place_effect?: PlaceEffectKey;
     place_effect_color?: NeonColorKey;
@@ -241,10 +347,14 @@ export type BeatImageOverlay = {
     place_border?: boolean;
     place_border_color?: PlaceBorderColorKey;
     place_torn_paper?: boolean;
+    /** Kiểu bút khi entry_mode=draw. */
+    draw_hand?: string | null;
     attention_start_sec?: number | null;
     attention_end_sec?: number | null;
+    attention_type?: AttentionEffectKey;
     attention_scale_max?: number;
     attention_cycle_sec?: number;
+    attention_intensity?: number;
 };
 
 export function normalizeRegionEntryMode(raw: string | null | undefined): RegionEntryModeKey {
@@ -307,6 +417,7 @@ export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null
         rotation_deg: Number.isFinite(Number(item.rotation_deg)) ? Number(item.rotation_deg) : 0,
         start_sec: Number.isFinite(startSec) ? Math.max(0, startSec) : 0,
         end_sec: Number.isFinite(endSec) ? Math.max(0, endSec) : 2,
+        hold_to_end: Boolean(item.hold_to_end),
         entry_mode: normalizeRegionEntryMode(item.entry_mode as string | undefined),
         place_effect: item.place_effect != null
             ? normalizePlaceEffect(String(item.place_effect))
@@ -324,10 +435,19 @@ export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null
             ? normalizePlaceBorderColor(String(item.place_border_color))
             : undefined,
         place_torn_paper: Boolean(item.place_torn_paper),
+        draw_hand: item.draw_hand != null ? String(item.draw_hand) : null,
         attention_start_sec: finiteSecOrNull(item.attention_start_sec),
         attention_end_sec: finiteSecOrNull(item.attention_end_sec),
+        attention_type: normalizeAttentionType(
+            item.attention_type,
+            isRegionAttentionEnabled(
+                finiteSecOrNull(item.attention_start_sec),
+                finiteSecOrNull(item.attention_end_sec),
+            ),
+        ),
         attention_scale_max: normalizeAttentionScaleMax(item.attention_scale_max),
         attention_cycle_sec: normalizeAttentionCycleSec(item.attention_cycle_sec),
+        attention_intensity: normalizeAttentionIntensity(item.attention_intensity),
     };
 }
 
@@ -350,12 +470,6 @@ export function normalizeBeatRegionAttentionFields(region: BeatRegion): BeatRegi
     if (region.entry_mode != null) {
         out.entry_mode = normalizeRegionEntryMode(region.entry_mode);
     }
-    if (region.attention_scale_max != null) {
-        out.attention_scale_max = normalizeAttentionScaleMax(region.attention_scale_max);
-    }
-    if (region.attention_cycle_sec != null) {
-        out.attention_cycle_sec = normalizeAttentionCycleSec(region.attention_cycle_sec);
-    }
     if (region.attention_start_sec != null && !Number.isFinite(Number(region.attention_start_sec))) {
         out.attention_start_sec = null;
         out.attention_end_sec = null;
@@ -363,6 +477,18 @@ export function normalizeBeatRegionAttentionFields(region: BeatRegion): BeatRegi
     if (region.attention_end_sec != null && !Number.isFinite(Number(region.attention_end_sec))) {
         out.attention_end_sec = null;
     }
+    const hasWindow = isRegionAttentionEnabled(out.attention_start_sec, out.attention_end_sec);
+    out.attention_type = normalizeAttentionType(region.attention_type, hasWindow);
+    if (!hasWindow) {
+        out.attention_type = 'none';
+    }
+    if (region.attention_scale_max != null) {
+        out.attention_scale_max = normalizeAttentionScaleMax(region.attention_scale_max);
+    }
+    if (region.attention_cycle_sec != null) {
+        out.attention_cycle_sec = normalizeAttentionCycleSec(region.attention_cycle_sec);
+    }
+    out.attention_intensity = normalizeAttentionIntensity(region.attention_intensity);
     return out;
 }
 
@@ -693,25 +819,48 @@ export function resolveRegionImageActionKey(
 
 export function buildOverlayInstantEntryPatch(): Pick<
     BeatImageOverlay,
-    'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect'
+    'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect' | 'place_shadow'
 > {
     return {
         entry_mode: 'instant',
         place_hand: null,
         place_entry_direction: null,
         place_effect: 'none',
+        place_shadow: true,
     };
 }
 
 export function buildOverlayDragInPatch(
-    source: Pick<BeatImageOverlay, 'place_effect'>,
-): Pick<BeatImageOverlay, 'entry_mode' | 'place_effect'> {
+    source: Pick<BeatImageOverlay, 'place_effect' | 'place_shadow'>,
+): Pick<BeatImageOverlay, 'entry_mode' | 'place_effect' | 'place_shadow'> {
     const effect = normalizePlaceEffect(source.place_effect);
     const nextEffect = effect === 'none' || isPlaceHandlessEffect(effect) ? 'loang' : effect;
     return {
         entry_mode: 'drag_in',
         place_effect: nextEffect,
+        place_shadow: source.place_shadow != null ? Boolean(source.place_shadow) : true,
     };
+}
+
+export function buildOverlayDrawActionPatch(
+    source: Pick<BeatImageOverlay, 'place_effect'>,
+): Pick<BeatImageOverlay, 'entry_mode' | 'place_effect'> {
+    return {
+        entry_mode: 'draw',
+        place_effect: normalizeDrawEffect(source.place_effect),
+    };
+}
+
+export function resolveOverlayImageActionKey(
+    source: Pick<BeatImageOverlay, 'place_effect' | 'entry_mode'>,
+): 'draw' | 'drag_in' | 'instant' {
+    const mode = source.entry_mode != null
+        ? normalizeRegionEntryMode(source.entry_mode)
+        : null;
+    if (mode === 'draw') {
+        return 'draw';
+    }
+    return isOverlayInstantEntry(source) ? 'instant' : 'drag_in';
 }
 
 /**
@@ -733,7 +882,7 @@ export function resolveRegionEntryModeFromPlaceSettings(
     return isRegionPlaceInstantEntry(source) ? 'instant' : 'drag_in';
 }
 
-/** Overlay sticker: cùng quy tắc. */
+/** Overlay ảnh thêm: cùng quy tắc. */
 export function resolveOverlayEntryModeFromPlaceSettings(
     source: Pick<BeatImageOverlay, 'place_effect' | 'entry_mode'>,
 ): RegionEntryModeKey {
@@ -944,7 +1093,7 @@ export type AgentWhiteboardBeatOverride = {
     focus_y?: number | null;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
-    /** Sticker ảnh upload tự do trên canvas beat. */
+    /** Ảnh thêm upload tự do trên canvas beat. */
     image_overlays?: BeatImageOverlay[];
     /** Hiệu ứng timeline (zoom, …) trên beat — theo khoảng thời gian scene-relative. */
     timeline_effects?: BeatTimelineEffect[];

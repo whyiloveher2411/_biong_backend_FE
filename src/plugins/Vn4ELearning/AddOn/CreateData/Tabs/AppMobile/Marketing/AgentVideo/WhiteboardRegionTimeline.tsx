@@ -5,8 +5,9 @@ import PauseIcon from '@mui/icons-material/Pause';
 import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
-import { drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, placeEffectAfterSec } from './agentVideoApi';
+import { attentionEffectTimelineLabel, drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, placeEffectAfterSec } from './agentVideoApi';
 import {
     regionTimingPatchFromDrag,
     resolveRegionEndSec,
@@ -79,6 +80,9 @@ type Props = {
     selectedOverlayId?: string;
     onChangeOverlay?: (id: string, patch: Partial<BeatImageOverlay>) => void;
     onSelectOverlay?: (id: string) => void;
+    onRequestDeleteRegion?: (id: string, anchor: HTMLElement) => void;
+    onRequestDeleteOverlay?: (id: string, anchor: HTMLElement) => void;
+    onRequestDeleteEffect?: (id: string, anchor: HTMLElement) => void;
 };
 
 type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
@@ -134,6 +138,9 @@ export default function WhiteboardRegionTimeline({
     selectedOverlayId,
     onChangeOverlay,
     onSelectOverlay,
+    onRequestDeleteRegion,
+    onRequestDeleteOverlay,
+    onRequestDeleteEffect,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
@@ -864,6 +871,18 @@ export default function WhiteboardRegionTimeline({
                                     }}
                                     title={`Click để chọn vùng ${region.name}`}
                                 >
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        title="Xóa vùng"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onRequestDeleteRegion?.(region.id, event.currentTarget);
+                                        }}
+                                        sx={{ p: 0.15, mr: 0.25, flexShrink: 0 }}
+                                    >
+                                        <DeleteOutlineIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
                                     <Typography variant="caption" sx={{
                                         fontSize: 10.5, fontWeight: 800, color: '#111',
                                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -897,6 +916,18 @@ export default function WhiteboardRegionTimeline({
                                     }}
                                     title={`Click để chỉnh hiệu ứng ${def?.label || effect.type}`}
                                 >
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        title="Xóa hiệu ứng"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onRequestDeleteEffect?.(effect.id, event.currentTarget);
+                                        }}
+                                        sx={{ p: 0.15, mr: 0.25, flexShrink: 0 }}
+                                    >
+                                        <DeleteOutlineIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
                                     <Typography variant="caption" sx={{
                                         fontSize: 10.5,
                                         fontWeight: 800,
@@ -930,8 +961,20 @@ export default function WhiteboardRegionTimeline({
                                         bgcolor: isSel ? 'rgba(0,137,123,0.15)' : 'transparent',
                                         cursor: 'pointer',
                                     }}
-                                    title={`Sticker: ${overlay.name || overlay.id}`}
+                                    title={overlay.name || overlay.id}
                                 >
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        title="Xóa ảnh"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onRequestDeleteOverlay?.(overlay.id, event.currentTarget);
+                                        }}
+                                        sx={{ p: 0.15, mr: 0.25, flexShrink: 0 }}
+                                    >
+                                        <DeleteOutlineIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
                                     <Typography variant="caption" sx={{
                                         fontSize: 10.5,
                                         fontWeight: 800,
@@ -1089,6 +1132,7 @@ export default function WhiteboardRegionTimeline({
                                         if (!win.enabled) return null;
                                         const attLeft = secToPct(win.start);
                                         const attWidth = Math.max(0.01, secToPct(win.end) - attLeft);
+                                        const attLabel = attentionEffectTimelineLabel(win.type);
                                         return (
                                             <Box
                                                 key={`${region.id}-attention`}
@@ -1101,16 +1145,16 @@ export default function WhiteboardRegionTimeline({
                                                     border: '1.5px solid rgba(236,64,122,0.75)',
                                                     zIndex: 2, cursor: 'grab', boxSizing: 'border-box',
                                                 }}
-                                                title="Gây chú ý · Thở — kéo giữa để dịch, kéo cạnh để đổi thời gian (không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc)"
+                                                title={`Gây chú ý · ${attLabel || 'chú ý'} — kéo giữa để dịch, kéo cạnh để đổi thời gian (không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc)`}
                                             >
-                                                {attWidth >= 8 ? (
+                                                {attWidth >= 8 && attLabel ? (
                                                     <Typography sx={{
                                                         position: 'absolute', inset: 0, display: 'flex',
                                                         alignItems: 'center', justifyContent: 'center',
                                                         fontSize: 8, fontWeight: 800, color: '#fff',
                                                         textShadow: '0 1px 2px rgba(0,0,0,0.75)',
                                                     }}>
-                                                        thở
+                                                        {attLabel}
                                                     </Typography>
                                                 ) : null}
                                                 <Box
@@ -1371,11 +1415,12 @@ export default function WhiteboardRegionTimeline({
                                         if (!win.enabled) return null;
                                         const attLeft = secToPct(win.start);
                                         const attWidth = Math.max(0.01, secToPct(win.end) - attLeft);
+                                        const attLabel = attentionEffectTimelineLabel(win.type);
                                         return (
                                             <Box
                                                 key={`${overlay.id}-attention`}
                                                 onPointerDown={(e) => handleAttentionPointerDown(e, overlay.id, 'body', 'overlay')}
-                                                title="Gây chú ý · Thở — không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc"
+                                                title={`Gây chú ý · ${attLabel || 'chú ý'} — không sớm hơn lúc ảnh + hiệu ứng sau ảnh kết thúc`}
                                                 sx={{
                                                     position: 'absolute', top: 3, bottom: 3,
                                                     left: `${attLeft}%`, width: `${attWidth}%`,
@@ -1385,6 +1430,17 @@ export default function WhiteboardRegionTimeline({
                                                     zIndex: 2, cursor: 'grab',
                                                 }}
                                             >
+                                                {attWidth >= 8 && attLabel ? (
+                                                    <Typography sx={{
+                                                        position: 'absolute', inset: 0, display: 'flex',
+                                                        alignItems: 'center', justifyContent: 'center',
+                                                        fontSize: 8, fontWeight: 800, color: '#fff',
+                                                        textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                                                        pointerEvents: 'none',
+                                                    }}>
+                                                        {attLabel}
+                                                    </Typography>
+                                                ) : null}
                                                 <Box
                                                     onPointerDown={(e) => handleAttentionPointerDown(e, overlay.id, 'start', 'overlay')}
                                                     sx={{

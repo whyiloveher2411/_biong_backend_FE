@@ -12,9 +12,10 @@ Tra cứu nhanh file theo vai trò. Đường dẫn tương đối repo root tr�
 |------|---------|
 | `src/plugins/.../AgentVideo/ShortVideoAgentVideoWorkspace.tsx` | Shell workspace |
 | `src/plugins/.../AgentVideo/ShortVideoAgentBeatRegionEditor.tsx` | Region editor chính (~3900 dòng) |
-| `src/plugins/.../AgentVideo/WhiteboardRegionTimeline.tsx` | Timeline vùng + zoom bars |
+| `src/plugins/.../AgentVideo/WhiteboardRegionTimeline.tsx` | Timeline vùng + ảnh thêm + zoom; icon xóa + confirm |
 | `src/plugins/.../AgentVideo/WhiteboardBeatTimingPreview.tsx` | Preview timing beat |
-| `src/plugins/.../AgentVideo/ShortVideoAgentImageAnimationControls.tsx` | Ken Burns controls (panel/overlay) |
+| `src/plugins/.../AgentVideo/RegionMediaSettingsPanel.tsx` | Panel **Hiệu ứng gây chú ý** (magenta, grid 1 loại) |
+| `src/plugins/.../AgentVideo/regionAttentionTiming.ts` | Timing cửa sổ + `resolveAttentionFxAt` |
 | `src/plugins/.../AgentVideo/ShortVideoAgentWhiteboardBeatSettings.tsx` | Beat timing settings |
 | `src/plugins/.../AgentVideo/ShortVideoAgentWorkflowPanel.tsx` | Pipeline UI |
 | `src/plugins/.../Marketing/WhiteboardTransitionManagerDrawer.tsx` | Quản lý transition catalog |
@@ -110,6 +111,7 @@ Base: `resources/views/plugins/vn4-e-learning/services/image-to-whiteboard/white
 |------|---------|
 | `render.py` | CLI entry, scene render, transition-out, skip Ken Burns logic |
 | `frames.py` | Frame compose, place/draw effects, hands, SFX trigger frames |
+| `attention_effects.py` | Lớp 3b gây chú ý: breathe / spotlight / glitch / ripple / saber / god_rays / light_sweep |
 | `camera_motion.py` | Ken Burns (`IMAGE_ANIMATION_EFFECTS`) |
 | `timeline_effects.py` | Timeline zoom (in/hold/out) |
 | `transitions.py` | Transition registry + renderers |

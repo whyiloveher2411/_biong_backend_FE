@@ -68,6 +68,7 @@ import { getBeatTimelineSegments, normalizeBeatQaStatus } from './agentVideoBeat
 import { resolveAgentVideoBeatSceneBudgetSec, resolveAgentVideoBeatTransitionDurationSec } from './agentVideoTimelineModel';
 import RegionMediaSettingsPanel from './RegionMediaSettingsPanel';
 import WhiteboardImageOverlayHandles from './WhiteboardImageOverlayHandles';
+import WhiteboardCutoutImagePreview from './WhiteboardCutoutImagePreview';
 import {
     createDefaultBeatImageOverlay,
     snapAttentionFieldsToConstraints,
@@ -85,7 +86,8 @@ import {
     buildRegionPlaceInstantEntryPatch,
     buildOverlayDragInPatch,
     buildOverlayInstantEntryPatch,
-    isOverlayInstantEntry,
+    buildOverlayDrawActionPatch,
+    resolveOverlayImageActionKey,
     resolveRegionImageActionKey,
     resolveOverlayEntryModeFromPlaceSettings,
     resolveRegionEntryModeFromPlaceSettings,
@@ -351,7 +353,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [bgSampleMode, setBgSampleMode] = React.useState(false);
     const [bgSampleDraft, setBgSampleDraft] = React.useState<[number, number][]>([]);
     const [deleteMenuAnchor, setDeleteMenuAnchor] = React.useState<HTMLElement | null>(null);
-    const [deleteMenuRegionId, setDeleteMenuRegionId] = React.useState<string>('');
+    const [deleteMenuTarget, setDeleteMenuTarget] = React.useState<{
+        kind: 'region' | 'overlay' | 'effect';
+        id: string;
+    } | null>(null);
     // Chế độ Xóa thừa: đang xóa vùng thừa cho vùng A (vẽ vùng nào → tự thành erase của A).
     const [eraseModeRegionId, setEraseModeRegionId] = React.useState<string>('');
 
@@ -515,6 +520,9 @@ export default function ShortVideoAgentBeatRegionEditor({
     const imgRef = React.useRef<HTMLImageElement | null>(null);
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [boxSize, setBoxSize] = React.useState<{ w: number; h: number } | null>(null);
+    // Canvas zoom UI: phóng kích thước khung ảnh (không scale+clip trong box cố định).
+    const [zoom, setZoom] = React.useState(1);
+    const [pan, setPan] = React.useState({ x: 0, y: 0 });
     const [cursorPos, setCursorPos] = React.useState<[number, number] | null>(null);
 
     // Chỉ reset khi drawer MỞ (transition open) — tránh effect chạy lại mỗi render
@@ -648,7 +656,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         setBgSampleMode(false);
         setBgSampleDraft([]);
         setDeleteMenuAnchor(null);
-        setDeleteMenuRegionId('');
+        setDeleteMenuTarget(null);
         setKeepBgBusy(null);
         setRefiningRegionId(null);
         setEraseModeRegionId('');
@@ -798,11 +806,11 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, [imgNatural, boxSize]);
 
     // SVG viewBox 1000x1000 bị kéo giãn theo box (preserveAspectRatio none) →
-    // bù scale ngược để dot/text luôn TRÒN và KHÔNG méo.
+    // bù scale ngược để dot/text luôn TRÒN và KHÔNG méo (kể cả khi canvas zoom).
     const svgScale = containRect
         ? {
-            invW: 1000 / Math.max(1, containRect.w),
-            invH: 1000 / Math.max(1, containRect.h),
+            invW: 1000 / Math.max(1, containRect.w * zoom),
+            invH: 1000 / Math.max(1, containRect.h * zoom),
         }
         : null;
     const svgScaleTpl = (x: number, y: number) => (
@@ -1498,18 +1506,38 @@ export default function ShortVideoAgentBeatRegionEditor({
                 notify('Upload ảnh thất bại', 'error');
                 return;
             }
+            const probeNatural = (): Promise<{ w: number; h: number } | null> =>
+                new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        resolve(
+                            img.naturalWidth > 0 && img.naturalHeight > 0
+                                ? { w: img.naturalWidth, h: img.naturalHeight }
+                                : null,
+                        );
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = url;
+                });
+            const natural = await probeNatural();
             const overlay = createDefaultBeatImageOverlay(
                 url,
                 beatTimeline.beatDurationSec,
                 imageOverlays.length,
+                {
+                    overlayNaturalW: natural?.w,
+                    overlayNaturalH: natural?.h,
+                    beatNaturalW: imgNatural?.w,
+                    beatNaturalH: imgNatural?.h,
+                },
             );
             setImageOverlays((prev) => [...prev, overlay]);
             selectOverlay(overlay.id);
-            notify('Đã thêm ảnh sticker — kéo trên canvas để đặt vị trí', 'success');
+            notify('Đã thêm ảnh — kéo trên canvas để đặt vị trí', 'success');
         } catch (e) {
             notify(e instanceof Error ? e.message : 'Upload ảnh thất bại', 'error');
         }
-    }, [beatTimeline.beatDurationSec, imageOverlays.length, notify, selectOverlay, shortVideoId]);
+    }, [beatTimeline.beatDurationSec, imageOverlays.length, imgNatural, notify, selectOverlay, shortVideoId]);
 
     const handleRemoveOverlay = React.useCallback((id: string) => {
         setImageOverlays((prev) => prev.filter((item) => item.id !== id));
@@ -1793,10 +1821,8 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
     }, [playheadSec, sceneBudgetSec, selectedEffect]);
 
-    // Zoom / pan ảnh (Photoshop-like): transform cùng layer chứa ảnh + SVG → vùng
-    // luôn bám đúng. Scroll chuột = zoom theo chuột; Space+click-drag = pan.
-    const [zoom, setZoom] = React.useState(1);
-    const [pan, setPan] = React.useState({ x: 0, y: 0 });
+    // Zoom / pan ảnh (Photoshop-like): layer ảnh + SVG cùng kích thước contain×zoom
+    // + pan → vùng luôn bám đúng. Scroll chuột = zoom theo chuột; Space+kéo = pan.
     const [spaceDown, setSpaceDown] = React.useState(false);
     // Chế độ ĐẶT ĐIỂM TẬP TRUNG: bật → click chỗ nào đặt focus chỗ đó (+ hiện
     // nút đặt lại giữa); tắt → click không đặt focus.
@@ -1828,7 +1854,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (!containRect || boxSize?.w == null) {
             return;
         }
-        const z = Math.max(1, Math.min(8, nextZoom));
+        const z = Math.max(0.25, Math.min(8, nextZoom));
         if (Math.abs(z - zoom) < 0.001) {
             return;
         }
@@ -1845,12 +1871,16 @@ export default function ShortVideoAgentBeatRegionEditor({
         setPan({ x: 0, y: 0 });
     }, []);
 
-    // Kéo slider zoom: giữ pan hiện tại, chỉ clamp theo zoom mới.
+    // Kéo slider zoom: phóng theo tâm viewport (không chỉ phình góc trên-trái).
     const handleZoomSlider = React.useCallback((_event: Event, value: number | number[]) => {
         const z = Array.isArray(value) ? value[0] : value;
-        setZoom(z);
-        setPan((p) => clampPan(p.x, p.y, z));
-    }, [clampPan]);
+        if (!boxSize) {
+            setZoom(z);
+            setPan((p) => clampPan(p.x, p.y, z));
+            return;
+        }
+        handleZoomAt(z, boxSize.w / 2, boxSize.h / 2);
+    }, [boxSize, clampPan, handleZoomAt]);
 
     // Scroll chuột = zoom theo vị trí chuột (không cần Ctrl/Cmd; pinch trackpad
     // vẫn hoạt động vì gửi wheel kèm ctrlKey). preventDefault chặn scroll trang.
@@ -1901,11 +1931,11 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
     }, []);
 
-    // Đổi vùng chọn → cuộn cột cài đặt (phải) về đầu để thấy card vùng mới.
+    // Đổi vùng / ảnh thêm → cuộn cột cài đặt về đầu để thấy preview.
     const settingsScrollRef = React.useRef<HTMLDivElement | null>(null);
     React.useEffect(() => {
         settingsScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [selectedRegionId]);
+    }, [selectedRegionId, selectedOverlayId]);
 
     // Render video beat: trạng thái + báo khi xong.
     const beatRender = state.whiteboardBeatRenders?.[beatId] || null;
@@ -2239,7 +2269,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Thêm ảnh sticker từ máy">
+                        <Tooltip title="Thêm ảnh">
                             <IconButton
                                 size="small"
                                 onClick={() => overlayUploadRef.current?.click()}
@@ -2322,7 +2352,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </Typography>
                             <Slider
                                 size="small"
-                                min={1}
+                                min={0.25}
                                 max={8}
                                 step={0.05}
                                 value={zoom}
@@ -2381,7 +2411,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                         </Tooltip>
                         </Stack>
 
-                        {/* Layer nội dung: ảnh + SVG cùng transform (zoom/pan) → vùng không lệch */}
+                        {/* Layer nội dung: phóng THẬT kích thước khung (contain×zoom) + pan.
+                            Không dùng scale()+overflow trong box cố định — tránh crop 1 góc. */}
                         {imageUrl && !imageError ? (
                             <>
                                 <Box
@@ -2389,8 +2420,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         position: 'absolute',
                                         left: containRect ? containRect.x + pan.x : 0,
                                         top: containRect ? containRect.y + pan.y : 0,
-                                        width: containRect ? containRect.w : 0,
-                                        height: containRect ? containRect.h : 0,
+                                        width: containRect ? containRect.w * zoom : 0,
+                                        height: containRect ? containRect.h * zoom : 0,
                                         overflow: 'hidden',
                                         zIndex: 1,
                                     }}
@@ -2404,17 +2435,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         height: '100%',
                                         transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
                                         transformOrigin: 'center center',
-                                    }}
-                                >
-                                <Box
-                                    sx={{
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        transform: `scale(${zoom})`,
-                                        transformOrigin: '0 0',
                                     }}
                                 >
                                     <Box
@@ -2664,16 +2684,15 @@ export default function ShortVideoAgentBeatRegionEditor({
                         ) : null}
                         </Box>
                         </Box>
-                        </Box>
-                        {/* Overlay phạm vi zoom — trong clip; giữ zoom = cùng transform ảnh */}
+                        {/* Overlay phạm vi zoom — cùng kích thước contain×zoom như ảnh beat */}
                         {selectedZoomOverlay && containRect && !previewActive ? (
                             <Box
                                 sx={{
                                     position: 'absolute',
                                     left: containRect.x + pan.x,
                                     top: containRect.y + pan.y,
-                                    width: containRect.w,
-                                    height: containRect.h,
+                                    width: containRect.w * zoom,
+                                    height: containRect.h * zoom,
                                     overflow: 'hidden',
                                     pointerEvents: 'none',
                                     zIndex: 4,
@@ -2687,14 +2706,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             ? timelineZoomCss
                                             : undefined,
                                         transformOrigin: 'center center',
-                                    }}
-                                >
-                                <Box
-                                    sx={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        transform: `scale(${zoom})`,
-                                        transformOrigin: '0 0',
                                     }}
                                 >
                                     <svg
@@ -2751,7 +2762,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             </text>
                                         ) : null}
                                     </svg>
-                                </Box>
                                 </Box>
                             </Box>
                         ) : null}
@@ -2924,41 +2934,73 @@ export default function ShortVideoAgentBeatRegionEditor({
                             <Box
                                 sx={{
                                     position: 'absolute',
-                                    inset: 0,
+                                    left: containRect.x + pan.x,
+                                    top: containRect.y + pan.y,
+                                    width: containRect.w * zoom,
+                                    height: containRect.h * zoom,
                                     zIndex: 2,
+                                    overflow: 'hidden',
                                     opacity: playheadSec > 0.02 ? 1 : 0,
                                     pointerEvents: 'none',
                                     transition: 'opacity 0.12s ease',
                                 }}
                             >
-                                <WhiteboardBeatTimingPreview
-                                    imageUrl={imageUrl}
-                                    regions={regions}
-                                    imageOverlays={imageOverlays}
-                                    playheadSec={playheadSec}
-                                    durationSec={beatTimeline.beatDurationSec}
-                                    sceneBudgetSec={sceneBudgetSec}
-                                    beatStartSec={beatTimeline.beatStartSec}
-                                    beatWords={beatWords}
-                                    timelineEffects={timelineEffects}
-                                />
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
+                                        transformOrigin: 'center center',
+                                    }}
+                                >
+                                    <WhiteboardBeatTimingPreview
+                                        imageUrl={imageUrl}
+                                        regions={regions}
+                                        imageOverlays={imageOverlays}
+                                        playheadSec={playheadSec}
+                                        durationSec={beatTimeline.beatDurationSec}
+                                        sceneBudgetSec={sceneBudgetSec}
+                                        beatStartSec={beatTimeline.beatStartSec}
+                                        beatWords={beatWords}
+                                        timelineEffects={[]}
+                                    />
+                                </Box>
                             </Box>
                         ) : null}
-                        {!previewActive && containRect && boxSize ? imageOverlays.map((overlay) => (
-                            <WhiteboardImageOverlayHandles
-                                key={overlay.id}
-                                overlay={overlay}
-                                containRect={{
+                        {/* Ảnh upload: cùng kích thước contain×zoom + pan như ảnh beat */}
+                        {!previewActive && containRect && boxSize ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
                                     left: containRect.x + pan.x,
                                     top: containRect.y + pan.y,
                                     width: containRect.w * zoom,
                                     height: containRect.h * zoom,
+                                    overflow: 'hidden',
+                                    zIndex: 4,
+                                    pointerEvents: 'none',
                                 }}
-                                selected={selectedOverlayId === overlay.id}
-                                onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
-                                onSelect={() => selectOverlay(overlay.id)}
-                            />
-                        )) : null}
+                            >
+                                {imageOverlays.map((overlay) => (
+                                    <WhiteboardImageOverlayHandles
+                                        key={overlay.id}
+                                        overlay={overlay}
+                                        containRect={{
+                                            left: 0,
+                                            top: 0,
+                                            width: containRect.w * zoom,
+                                            height: containRect.h * zoom,
+                                        }}
+                                        selected={selectedOverlayId === overlay.id}
+                                        onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
+                                        onSelect={() => selectOverlay(overlay.id)}
+                                    />
+                                ))}
+                            </Box>
+                        ) : null}
 
                         {previewActive ? (
                             <WhiteboardBeatVideoPreview
@@ -3079,6 +3121,18 @@ export default function ShortVideoAgentBeatRegionEditor({
                         selectedOverlayId={selectedOverlayId}
                         onChangeOverlay={updateOverlay}
                         onSelectOverlay={selectOverlay}
+                        onRequestDeleteRegion={(id, el) => {
+                            setDeleteMenuTarget({ kind: 'region', id });
+                            setDeleteMenuAnchor(el);
+                        }}
+                        onRequestDeleteOverlay={(id, el) => {
+                            setDeleteMenuTarget({ kind: 'overlay', id });
+                            setDeleteMenuAnchor(el);
+                        }}
+                        onRequestDeleteEffect={(id, el) => {
+                            setDeleteMenuTarget({ kind: 'effect', id });
+                            setDeleteMenuAnchor(el);
+                        }}
                     />
 
                     {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
@@ -3234,9 +3288,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         scheduleEffectCommit(selectedEffect.id, patch);
                                     }}
                                     onDelete={() => {
-                                        void removeEffect(selectedEffect.id).then((ok) => {
-                                            if (ok) setSelectedEffectId('');
-                                        });
+                                        setDeleteMenuTarget({ kind: 'effect', id: selectedEffect.id });
+                                        setDeleteMenuAnchor(null);
                                     }}
                                     onMoveLayer={(direction) => { void moveLayer(selectedEffect.id, direction); }}
                                 />
@@ -3257,67 +3310,321 @@ export default function ShortVideoAgentBeatRegionEditor({
                         </Typography>
                     ) : !selectedEffect && !selectedRegion && !selectedOverlay ? (
                         <Typography variant="caption" color="text.secondary">
-                            Chưa chọn vùng, sticker ảnh hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
+                            Chưa chọn vùng, ảnh thêm hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
                         </Typography>
                     ) : null}
 
                     {!selectedEffect && selectedOverlay ? (
                         <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, border: 1, borderColor: 'divider', borderLeft: '4px solid #00897b' }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                                <Typography variant="subtitle2" fontWeight={800}>
-                                    {selectedOverlay.name || 'Ảnh sticker'}
-                                </Typography>
-                                <Button
+                            <WhiteboardCutoutImagePreview
+                                imageUrl={selectedOverlay.image_url}
+                                label="Ảnh thêm"
+                                onNotify={notify}
+                            />
+                            <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1 }}>
+                                <TextField
+                                    size="small"
+                                    value={selectedOverlay.name || ''}
+                                    onChange={(e) => updateOverlay(selectedOverlay.id, { name: e.target.value })}
+                                    sx={{ flex: 1, '& .MuiInputBase-root': { fontSize: 13 } }}
+                                />
+                                <IconButton
                                     size="small"
                                     color="error"
-                                    onClick={() => handleRemoveOverlay(selectedOverlay.id)}
-                                    sx={{ textTransform: 'none' }}
+                                    title="Xóa ảnh"
+                                    onClick={(event) => {
+                                        setDeleteMenuTarget({ kind: 'overlay', id: selectedOverlay.id });
+                                        setDeleteMenuAnchor(event.currentTarget);
+                                    }}
                                 >
-                                    Xóa
-                                </Button>
+                                    <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
                             </Stack>
                             <RegionSection title="Hành động với ảnh">
-                                <Stack direction="row" spacing={0.75}>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="secondary"
-                                        startIcon={!isOverlayInstantEntry(selectedOverlay) ? <CheckIcon /> : null}
-                                        onClick={() => updateOverlay(
-                                            selectedOverlay.id,
-                                            buildOverlayDragInPatch(selectedOverlay),
-                                        )}
-                                        sx={{
-                                            textTransform: 'none',
-                                            flex: 1,
-                                            ...(!isOverlayInstantEntry(selectedOverlay)
-                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
-                                                : {}),
-                                        }}
-                                    >
-                                        Đưa vào
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="secondary"
-                                        startIcon={isOverlayInstantEntry(selectedOverlay) ? <CheckIcon /> : null}
-                                        onClick={() => updateOverlay(
-                                            selectedOverlay.id,
-                                            buildOverlayInstantEntryPatch(),
-                                        )}
-                                        sx={{
-                                            textTransform: 'none',
-                                            flex: 1,
-                                            ...(isOverlayInstantEntry(selectedOverlay)
-                                                ? { borderColor: 'secondary.main', bgcolor: 'action.selected' }
-                                                : {}),
-                                        }}
-                                    >
-                                        Đặt tại chỗ
-                                    </Button>
+                                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                                    {([
+                                        {
+                                            key: 'draw' as const,
+                                            label: 'Vẽ tay',
+                                            color: 'primary' as const,
+                                            patch: () => buildOverlayDrawActionPatch(selectedOverlay),
+                                        },
+                                        {
+                                            key: 'drag_in' as const,
+                                            label: 'Đưa vào',
+                                            color: 'secondary' as const,
+                                            patch: () => buildOverlayDragInPatch(selectedOverlay),
+                                        },
+                                        {
+                                            key: 'instant' as const,
+                                            label: 'Đặt tại chỗ',
+                                            color: 'secondary' as const,
+                                            patch: () => buildOverlayInstantEntryPatch(),
+                                        },
+                                    ]).map((opt) => {
+                                        const active = resolveOverlayImageActionKey(selectedOverlay) === opt.key;
+                                        return (
+                                            <Button
+                                                key={opt.key}
+                                                size="small"
+                                                variant="outlined"
+                                                color={opt.color}
+                                                startIcon={active ? <CheckIcon /> : null}
+                                                onClick={() => updateOverlay(selectedOverlay.id, opt.patch())}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    flex: '1 1 28%',
+                                                    minWidth: 88,
+                                                    ...(active
+                                                        ? { borderColor: `${opt.color}.main`, bgcolor: 'action.selected' }
+                                                        : {}),
+                                                }}
+                                            >
+                                                {opt.label}
+                                            </Button>
+                                        );
+                                    })}
                                 </Stack>
                             </RegionSection>
+                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1, width: '100%' }}>
+                                <Switch
+                                    size="small"
+                                    checked={Boolean(selectedOverlay.hold_to_end)}
+                                    onChange={(event) =>
+                                        updateOverlay(selectedOverlay.id, { hold_to_end: event.target.checked })
+                                    }
+                                />
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="caption" fontWeight={700} display="block">
+                                        Giữ đến cuối beat
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10, lineHeight: 1.3 }}>
+                                        Tắt: ẩn khi hết thanh thời gian. Bật: ở lại sau khi đặt xong
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'draw' && drawHandOptions.length > 0 ? (
+                                <RegionSection title="Kiểu tay vẽ">
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, justifyContent: 'space-between' }}>
+                                        {drawHandOptions.map((opt) => {
+                                            const isDefault = opt.id === drawHandDefaultId;
+                                            const current = String(selectedOverlay.draw_hand || '').trim();
+                                            const active = isDefault ? current === '' || current === opt.id : current === opt.id;
+                                            return (
+                                                <Box
+                                                    key={opt.id}
+                                                    onClick={() =>
+                                                        updateOverlay(
+                                                            selectedOverlay.id,
+                                                            isDefault ? { draw_hand: null } : { draw_hand: opt.id },
+                                                        )
+                                                    }
+                                                    title={isDefault ? `${opt.label} (mặc định)` : opt.label}
+                                                    sx={{
+                                                        width: 'calc((100% / 3) - 6px)',
+                                                        border: '1px solid',
+                                                        borderColor: active ? 'primary.main' : 'divider',
+                                                        borderRadius: 1.5,
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer',
+                                                        bgcolor: active ? 'action.selected' : 'transparent',
+                                                    }}
+                                                >
+                                                    <Box sx={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.05)' }}>
+                                                        {opt.thumb_url ? (
+                                                            <Box component="img" src={opt.thumb_url} alt={opt.label} draggable={false} sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                                        ) : (
+                                                            <AutoAwesomeIcon sx={{ fontSize: 30, color: active ? 'primary.main' : 'text.disabled' }} />
+                                                        )}
+                                                    </Box>
+                                                    <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', px: 0.5, py: 0.4, fontSize: 10 }}>
+                                                        {opt.label}
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })}
+                                    </Stack>
+                                </RegionSection>
+                            ) : null}
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'draw' ? (
+                                <RegionSection title="Hiệu ứng sau khi vẽ xong">
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                        {DRAW_EFFECT_OPTIONS.map((opt) => {
+                                            const active = normalizeDrawEffect(selectedOverlay.place_effect) === opt.value;
+                                            return (
+                                                <Button
+                                                    key={opt.value}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color={active ? 'warning' : 'inherit'}
+                                                    startIcon={active ? <CheckIcon /> : null}
+                                                    onClick={() => updateOverlay(selectedOverlay.id, { place_effect: opt.value })}
+                                                    sx={{ textTransform: 'none', flex: '1 1 45%', fontSize: 11 }}
+                                                >
+                                                    {opt.label}
+                                                </Button>
+                                            );
+                                        })}
+                                    </Stack>
+                                </RegionSection>
+                            ) : null}
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'drag_in' || resolveOverlayImageActionKey(selectedOverlay) === 'instant' ? (
+                                <RegionSection title="Hiệu ứng sau khi render ảnh" subtitle="Chỉ hiện tạm thời khi đặt ảnh">
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                        {PLACE_EFFECT_OPTIONS.map((opt) => {
+                                            const active = normalizePlaceEffect(selectedOverlay.place_effect) === opt.value;
+                                            return (
+                                                <Button
+                                                    key={opt.value}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color={active ? 'warning' : 'inherit'}
+                                                    startIcon={active ? <CheckIcon /> : null}
+                                                    onClick={() => updateOverlay(
+                                                        selectedOverlay.id,
+                                                        buildPlaceEffectRegionUpdate(opt.value) as Partial<BeatImageOverlay>,
+                                                    )}
+                                                    sx={{ textTransform: 'none', flex: '1 1 45%', fontSize: 11 }}
+                                                >
+                                                    {opt.label}
+                                                </Button>
+                                            );
+                                        })}
+                                    </Stack>
+                                </RegionSection>
+                            ) : null}
+                            {(
+                                resolveOverlayImageActionKey(selectedOverlay) === 'draw'
+                                    ? normalizeDrawEffect(selectedOverlay.place_effect)
+                                    : normalizePlaceEffect(selectedOverlay.place_effect)
+                            ) === 'neon_border' ? (
+                                <RegionSection title="Màu đèn neon chạy viền">
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                                        {NEON_COLOR_OPTIONS.map((opt) => {
+                                            const active = normalizeNeonColor(selectedOverlay.place_effect_color) === opt.value;
+                                            return (
+                                                <Box
+                                                    key={opt.value}
+                                                    onClick={() => updateOverlay(selectedOverlay.id, { place_effect_color: opt.value })}
+                                                    title={opt.label}
+                                                    sx={{
+                                                        width: 34, height: 34, borderRadius: '50%', cursor: 'pointer',
+                                                        background: `linear-gradient(135deg, ${opt.swatch}, ${opt.swatch}cc)`,
+                                                        border: '2px solid',
+                                                        borderColor: active ? 'warning.main' : 'divider',
+                                                    }}
+                                                />
+                                            );
+                                        })}
+                                    </Stack>
+                                </RegionSection>
+                            ) : null}
+                            <RegionSection title="Style cutout" subtitle="Gắn cố định trên ảnh thêm">
+                                <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75, width: '100%' }}>
+                                    <Switch
+                                        size="small"
+                                        checked={normalizeCutoutShadow(
+                                            resolveOverlayImageActionKey(selectedOverlay) === 'draw' ? 'draw' : 'place',
+                                            selectedOverlay.place_shadow,
+                                        )}
+                                        onChange={(event) => updateOverlay(selectedOverlay.id, { place_shadow: event.target.checked })}
+                                    />
+                                    <Typography variant="caption" fontWeight={700}>Bóng đổ dưới ảnh</Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75, width: '100%' }}>
+                                    <Switch
+                                        size="small"
+                                        checked={normalizePlaceBorder(selectedOverlay.place_border)}
+                                        onChange={(event) => updateOverlay(selectedOverlay.id, {
+                                            place_border: event.target.checked,
+                                            ...(event.target.checked && !selectedOverlay.place_border_color
+                                                ? { place_border_color: 'white' }
+                                                : {}),
+                                        })}
+                                    />
+                                    <Typography variant="caption" fontWeight={700}>Thêm viền</Typography>
+                                </Stack>
+                                {normalizePlaceBorder(selectedOverlay.place_border) ? (
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mb: 0.75 }}>
+                                        {PLACE_BORDER_COLOR_OPTIONS.map((opt) => {
+                                            const active = normalizePlaceBorderColor(selectedOverlay.place_border_color) === opt.value;
+                                            return (
+                                                <Box
+                                                    key={opt.value}
+                                                    onClick={() => updateOverlay(selectedOverlay.id, { place_border_color: opt.value })}
+                                                    sx={{
+                                                        width: 34, height: 34, borderRadius: '50%', cursor: 'pointer',
+                                                        background: `linear-gradient(135deg, ${opt.swatch}, ${opt.swatch}cc)`,
+                                                        border: '2px solid',
+                                                        borderColor: active ? 'warning.main' : 'divider',
+                                                    }}
+                                                />
+                                            );
+                                        })}
+                                    </Stack>
+                                ) : null}
+                                <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: '100%' }}>
+                                    <Switch
+                                        size="small"
+                                        checked={normalizePlaceTornPaper(selectedOverlay.place_torn_paper)}
+                                        onChange={(event) => updateOverlay(selectedOverlay.id, { place_torn_paper: event.target.checked })}
+                                    />
+                                    <Typography variant="caption" fontWeight={700}>Viền giấy xé</Typography>
+                                </Stack>
+                            </RegionSection>
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'drag_in'
+                                && !isPlaceHandlessEffect(normalizePlaceEffect(selectedOverlay.place_effect))
+                                && placeHandOptions.length > 0 ? (
+                                <RegionSection title="Kiểu tay đưa ảnh vào">
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                                        {placeHandOptions.map((opt) => {
+                                            const isDefault = opt.id === placeHandDefaultId;
+                                            const current = normalizePlaceHand(selectedOverlay.place_hand);
+                                            const active = isDefault ? current === '' : current === opt.id;
+                                            return (
+                                                <Box
+                                                    key={opt.id}
+                                                    onClick={() => updateOverlay(
+                                                        selectedOverlay.id,
+                                                        isDefault
+                                                            ? { place_hand: null }
+                                                            : { place_hand: opt.id },
+                                                    )}
+                                                    sx={{
+                                                        width: 'calc((100% / 3) - 6px)',
+                                                        border: '1px solid',
+                                                        borderColor: active ? 'secondary.main' : 'divider',
+                                                        borderRadius: 1.5,
+                                                        cursor: 'pointer',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    <Box sx={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.05)' }}>
+                                                        {opt.thumb_url ? (
+                                                            <Box component="img" src={opt.thumb_url} alt={opt.label} draggable={false} sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                                        ) : null}
+                                                    </Box>
+                                                    <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', fontSize: 10, py: 0.3 }}>
+                                                        {opt.label}
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })}
+                                    </Stack>
+                                </RegionSection>
+                            ) : null}
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'drag_in'
+                                && isPlaceEntryDirectionApplicable(
+                                    normalizePlaceEffect(selectedOverlay.place_effect),
+                                    selectedOverlay.place_hand,
+                                ) ? (
+                                <RegionSection title="Hướng đưa ảnh vào">
+                                    <PlaceEntryDirectionPicker
+                                        value={normalizePlaceEntryDirection(selectedOverlay.place_entry_direction)}
+                                        onChange={(dir) => updateOverlay(selectedOverlay.id, { place_entry_direction: dir })}
+                                    />
+                                </RegionSection>
+                            ) : null}
                             <RegionMediaSettingsPanel
                                 source={selectedOverlay}
                                 beatWords={beatWords}
@@ -3326,29 +3633,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 sceneBudgetSec={sceneBudgetSec}
                                 onPatch={(patch) => updateOverlay(selectedOverlay.id, patch as Partial<BeatImageOverlay>)}
                             />
-                            <RegionSection title="Hiệu ứng sau khi xuất hiện">
-                                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                                    {PLACE_EFFECT_OPTIONS.map((opt) => {
-                                        const active = normalizePlaceEffect(selectedOverlay.place_effect) === opt.value;
-                                        return (
-                                            <Button
-                                                key={opt.value}
-                                                size="small"
-                                                variant="outlined"
-                                                color={active ? 'warning' : 'inherit'}
-                                                startIcon={active ? <CheckIcon /> : null}
-                                                onClick={() => updateOverlay(
-                                                    selectedOverlay.id,
-                                                    buildPlaceEffectRegionUpdate(opt.value) as Partial<BeatImageOverlay>,
-                                                )}
-                                                sx={{ textTransform: 'none', flex: '1 1 45%', fontSize: 11 }}
-                                            >
-                                                {opt.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </Stack>
-                            </RegionSection>
                         </Box>
                     ) : null}
 
@@ -3391,6 +3675,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     } : {}),
                                 }}
                             >
+                                <WhiteboardCutoutImagePreview
+                                    beatImageUrl={imageUrl}
+                                    regionPoints={region.points}
+                                    label="Ảnh vùng"
+                                    onNotify={notify}
+                                />
                                 {/* Thanh tiêu đề vùng: tên + xóa */}
                                 <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1 }}>
                                     <TextField
@@ -3403,7 +3693,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         size="small"
                                         color="error"
                                         onClick={(event) => {
-                                            setDeleteMenuRegionId(region.id);
+                                            setDeleteMenuTarget({ kind: 'region', id: region.id });
                                             setDeleteMenuAnchor(event.currentTarget);
                                         }}
                                         title="Xóa vùng"
@@ -4187,26 +4477,47 @@ export default function ShortVideoAgentBeatRegionEditor({
                 </Box>
             </Box>
 
-            {/* Dropdown xác nhận xóa vùng */}
+            {/* Dropdown xác nhận xóa vùng / ảnh / hiệu ứng */}
             <Menu
-                open={Boolean(deleteMenuAnchor)}
+                open={Boolean(deleteMenuTarget)}
                 anchorEl={deleteMenuAnchor}
-                onClose={() => setDeleteMenuAnchor(null)}
+                anchorReference={deleteMenuAnchor ? 'anchorEl' : 'anchorPosition'}
+                anchorPosition={{ top: 96, left: typeof window !== 'undefined' ? window.innerWidth - 280 : 400 }}
+                onClose={() => {
+                    setDeleteMenuAnchor(null);
+                    setDeleteMenuTarget(null);
+                }}
                 slotProps={{
                     root: { style: { zIndex: 1600 } },
                     paper: { sx: { minWidth: 240, zIndex: 1600 } },
                 }}
             >
-                <MenuItem onClick={() => setDeleteMenuAnchor(null)}>
+                <MenuItem
+                    onClick={() => {
+                        setDeleteMenuAnchor(null);
+                        setDeleteMenuTarget(null);
+                    }}
+                >
                     Hủy
                 </MenuItem>
                 <MenuItem
                     onClick={() => {
-                        const rid = deleteMenuRegionId;
+                        const target = deleteMenuTarget;
                         setDeleteMenuAnchor(null);
-                        setDeleteMenuRegionId('');
-                        if (rid) {
-                            handleDeleteRegion(rid);
+                        setDeleteMenuTarget(null);
+                        if (!target) {
+                            return;
+                        }
+                        if (target.kind === 'region') {
+                            handleDeleteRegion(target.id);
+                        } else if (target.kind === 'overlay') {
+                            handleRemoveOverlay(target.id);
+                        } else {
+                            void removeEffect(target.id).then((ok) => {
+                                if (ok) {
+                                    setSelectedEffectId('');
+                                }
+                            });
                         }
                     }}
                     sx={{ color: 'error.main', fontWeight: 600 }}

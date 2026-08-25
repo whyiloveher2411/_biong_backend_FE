@@ -3,7 +3,7 @@ import { Box, Typography } from '@mui/material';
 import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect } from './agentVideoApi';
 import { resolveZoomTransformAt, zoomTransformToCss } from './beatTimelineEffects/resolveZoomTransform';
 import {
-    resolveAttentionScaleAt,
+    resolveAttentionFxAt,
     resolveAttentionWindow,
     resolveOverlayEndSec,
     resolveOverlayStartSec,
@@ -54,6 +54,192 @@ function regionProgress(
 
 function polygonClip(points: [number, number][]): string {
     return `polygon(${points.map((point) => `${(point[0] * 100).toFixed(3)}% ${(point[1] * 100).toFixed(3)}%`).join(', ')})`;
+}
+
+function polygonCentroid(points: [number, number][]): { x: number; y: number } {
+    const bbox = polygonBBox(points);
+    return { x: bbox.minX + bbox.w / 2, y: bbox.minY + bbox.h / 2 };
+}
+
+function polygonSvgPoints(points: [number, number][]): string {
+    return points.map((point) => `${(point[0] * 100).toFixed(3)},${(point[1] * 100).toFixed(3)}`).join(' ');
+}
+
+function AttentionLocalFx({
+    clip,
+    fx,
+    imageUrl,
+    originX,
+    originY,
+    bboxW,
+    bboxH,
+}: {
+    clip: string;
+    fx: ReturnType<typeof resolveAttentionFxAt>;
+    imageUrl: string;
+    originX: number;
+    originY: number;
+    bboxW: number;
+    bboxH: number;
+}) {
+    if (!fx.enabled || fx.type === 'none' || fx.type === 'breathe' || fx.type === 'spotlight' || fx.type === 'god_rays') {
+        return null;
+    }
+    const env = fx.envelope;
+    const strength = fx.intensity * env;
+    const shift = (0.35 + fx.intensity * 0.9) * env;
+    if (fx.type === 'glitch') {
+        return (
+            <>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        clipPath: clip,
+                        transform: `translate(${shift}%, 0)`,
+                        mixBlendMode: 'screen',
+                        opacity: (0.55 + fx.intensity * 0.25) * env,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src={imageUrl}
+                        alt=""
+                        draggable={false}
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'fill',
+                            filter: 'url(#att-glitch-red)',
+                        }}
+                    />
+                </Box>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        clipPath: clip,
+                        transform: `translate(${-shift}%, 0)`,
+                        mixBlendMode: 'screen',
+                        opacity: (0.55 + fx.intensity * 0.25) * env,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src={imageUrl}
+                        alt=""
+                        draggable={false}
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'fill',
+                            filter: 'hue-rotate(200deg) saturate(2)',
+                        }}
+                    />
+                </Box>
+            </>
+        );
+    }
+    if (fx.type === 'ripple') {
+        const maxSide = Math.max(bboxW, bboxH);
+        const grow = 0.22 + fx.cyclePhase * 0.90;
+        const sizePct = maxSide * 1.12 * grow * 100;
+        return (
+            <Box
+                sx={{
+                    position: 'absolute',
+                    left: `${originX}%`,
+                    top: `${originY}%`,
+                    width: `${sizePct}%`,
+                    aspectRatio: '1',
+                    height: 'auto',
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.55)',
+                    boxShadow: `0 0 ${8 + strength * 18}px rgba(255,255,255,0.35)`,
+                    opacity: Math.max(0, (0.85 - fx.cyclePhase * 0.75) * env),
+                    pointerEvents: 'none',
+                }}
+            />
+        );
+    }
+    if (fx.type === 'light_sweep') {
+        return (
+            <Box
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    clipPath: clip,
+                    overflow: 'hidden',
+                    pointerEvents: 'none',
+                }}
+            >
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: '-10%',
+                        bottom: '-10%',
+                        left: `${fx.cyclePhase * 120 - 20}%`,
+                        width: '18%',
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.0), rgba(255,255,255,0.55), rgba(255,255,255,0.0), transparent)',
+                        mixBlendMode: 'screen',
+                        opacity: (0.5 + fx.intensity * 0.35) * env,
+                    }}
+                />
+            </Box>
+        );
+    }
+    return null;
+}
+
+function AttentionSaberSvg({
+    points,
+    fx,
+}: {
+    points: [number, number][];
+    fx: ReturnType<typeof resolveAttentionFxAt>;
+}) {
+    if (!fx.enabled || fx.type !== 'saber' || points.length < 3) {
+        return null;
+    }
+    const dash = 14;
+    const gap = 86;
+    const offset = (1 - fx.cyclePhase) * (dash + gap) * 3;
+    const env = fx.envelope;
+    return (
+        <Box
+            component="svg"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        >
+            <polyline
+                points={polygonSvgPoints(points)}
+                fill="none"
+                stroke={`rgba(80,220,255,${(0.35 + fx.intensity * 0.55) * env})`}
+                strokeWidth={1.2}
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${gap}`}
+                strokeDashoffset={offset}
+                style={{ filter: `drop-shadow(0 0 ${4 + fx.intensity * 8}px rgba(80,220,255,${0.9 * env}))` }}
+            />
+            <polyline
+                points={polygonSvgPoints(points)}
+                fill="none"
+                stroke={`rgba(255,255,255,${(0.25 + fx.intensity * 0.4) * env})`}
+                strokeWidth={0.55}
+                strokeLinecap="round"
+                strokeDasharray={`${dash * 0.4} ${gap + dash * 0.6}`}
+                strokeDashoffset={offset + dash}
+            />
+        </Box>
+    );
 }
 
 function polygonBBox(points: [number, number][]): { minX: number; minY: number; w: number; h: number } {
@@ -114,17 +300,33 @@ export default function WhiteboardBeatTimingPreview({
             hasChildren,
         );
         const attention = resolveAttentionWindow(region, beatWords, beatStartSec, duration, budget);
-        const breatheScale = progress >= 0.995 && attention.enabled
-            ? resolveAttentionScaleAt(
+        const fx = progress >= 0.995 && attention.enabled
+            ? resolveAttentionFxAt(
                 playheadSec,
                 attention.start,
                 attention.end,
+                attention.type,
                 attention.cycleSec,
                 attention.scaleMax,
+                attention.intensity,
             )
-            : 1;
-        return { region, hasChildren, progress, attention, breatheScale };
+            : resolveAttentionFxAt(0, 0, 0, 'none', 1.2, 1.2, 0.75);
+        const breatheScale = fx.type === 'breathe' ? fx.scale : 1;
+        return { region, hasChildren, progress, attention, fx, breatheScale };
     });
+
+    const dimFocusRegions = regionStates.filter(({ progress, fx, region }) => (
+        progress >= 0.995
+        && fx.enabled
+        && (fx.type === 'spotlight' || fx.type === 'god_rays')
+        && Array.isArray(region.points)
+        && region.points.length >= 3
+        && region.action !== 'erase'
+    ));
+    const maxDimOpacity = dimFocusRegions.reduce(
+        (acc, item) => Math.max(acc, (0.58 + item.fx.intensity * 0.36) * item.fx.envelope),
+        0,
+    );
 
     return (
         <Box
@@ -229,7 +431,7 @@ export default function WhiteboardBeatTimingPreview({
                 })}
 
                 {/* Lớp cutout đã lộ — scale thở riêng từng vùng (isolation tránh dính màu GPU). */}
-                {regionStates.map(({ region, progress, breatheScale }) => {
+                {regionStates.map(({ region, progress, breatheScale, fx }) => {
                     if (!Array.isArray(region.points) || region.points.length < 3) {
                         return null;
                     }
@@ -242,87 +444,265 @@ export default function WhiteboardBeatTimingPreview({
                     const totalScale = Math.max(1, breatheScale * placeScale);
                     const originX = (bbox.minX + bbox.w / 2) * 100;
                     const originY = (bbox.minY + bbox.h / 2) * 100;
+                    const clip = polygonClip(region.points);
                     return (
-                        <Box
-                            key={`${region.id}-reveal`}
-                            sx={{
-                                position: 'absolute',
-                                inset: 0,
-                                clipPath: polygonClip(region.points),
-                                opacity: isPlace && progress < 1 ? progress : 1,
-                                transform: totalScale !== 1 ? `scale(${totalScale})` : undefined,
-                                transformOrigin: `${originX.toFixed(2)}% ${originY.toFixed(2)}%`,
-                                isolation: 'isolate',
-                                willChange: totalScale !== 1 ? 'transform' : undefined,
-                            }}
-                        >
+                        <React.Fragment key={`${region.id}-reveal-wrap`}>
                             <Box
-                                component="img"
-                                src={imageUrl}
-                                alt=""
-                                draggable={false}
+                                key={`${region.id}-reveal`}
                                 sx={{
                                     position: 'absolute',
                                     inset: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'fill',
-                                    display: 'block',
+                                    clipPath: clip,
+                                    opacity: isPlace && progress < 1 ? progress : 1,
+                                    transform: totalScale !== 1 ? `scale(${totalScale})` : undefined,
+                                    transformOrigin: `${originX.toFixed(2)}% ${originY.toFixed(2)}%`,
+                                    isolation: 'isolate',
+                                    willChange: totalScale !== 1 ? 'transform' : undefined,
                                 }}
-                            />
-                        </Box>
+                            >
+                                <Box
+                                    component="img"
+                                    src={imageUrl}
+                                    alt=""
+                                    draggable={false}
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'fill',
+                                        display: 'block',
+                                    }}
+                                />
+                            </Box>
+                            {progress >= 0.995 ? (
+                                <>
+                                    <AttentionLocalFx
+                                        clip={clip}
+                                        fx={fx}
+                                        imageUrl={imageUrl}
+                                        originX={originX}
+                                        originY={originY}
+                                        bboxW={bbox.w}
+                                        bboxH={bbox.h}
+                                    />
+                                    <AttentionSaberSvg points={region.points} fx={fx} />
+                                </>
+                            ) : null}
+                        </React.Fragment>
                     );
                 })}
+
+                {/* Spotlight / god rays: dim một lần + punch focus sáng. */}
+                {dimFocusRegions.length > 0 ? (
+                    <>
+                        <Box
+                            sx={{
+                                position: 'absolute',
+                                inset: 0,
+                                bgcolor: '#000',
+                                opacity: maxDimOpacity,
+                                pointerEvents: 'none',
+                            }}
+                        />
+                        {dimFocusRegions.map(({ region, fx }) => {
+                            const centroid = polygonCentroid(region.points);
+                            return (
+                                <React.Fragment key={`${region.id}-dim-focus`}>
+                                    {fx.type === 'god_rays' ? (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                background: `repeating-conic-gradient(from ${fx.cyclePhase * 40}deg at ${centroid.x * 100}% ${centroid.y * 100}%, rgba(255,240,200,0.22) 0deg 6deg, transparent 6deg 18deg)`,
+                                                mixBlendMode: 'screen',
+                                                opacity: (0.35 + fx.intensity * 0.45) * fx.envelope,
+                                                pointerEvents: 'none',
+                                            }}
+                                        />
+                                    ) : null}
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            clipPath: polygonClip(region.points),
+                                            filter: 'drop-shadow(0 0 18px rgba(255,255,255,0.35))',
+                                            pointerEvents: 'none',
+                                        }}
+                                    >
+                                        <Box
+                                            component="img"
+                                            src={imageUrl}
+                                            alt=""
+                                            draggable={false}
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'fill',
+                                                display: 'block',
+                                            }}
+                                        />
+                                    </Box>
+                                </React.Fragment>
+                            );
+                        })}
+                    </>
+                ) : null}
 
                 {imageOverlays.map((overlay) => {
                     const start = resolveOverlayStartSec(overlay);
                     const end = resolveOverlayEndSec(overlay, duration);
-                    if (playheadSec < start || playheadSec > end + 0.05) {
+                    const visEnd = overlay.hold_to_end ? duration : end;
+                    if (playheadSec < start || playheadSec > visEnd + 0.05) {
                         return null;
                     }
                     const appearProgress = playheadSec <= start
                         ? 0
                         : (playheadSec >= end ? 1 : (playheadSec - start) / Math.max(0.05, end - start));
                     const attention = resolveAttentionWindow(overlay, beatWords, beatStartSec, duration, budget);
-                    const breatheScale = appearProgress >= 0.995 && attention.enabled
-                        ? resolveAttentionScaleAt(
+                    const fx = appearProgress >= 0.995 && attention.enabled
+                        ? resolveAttentionFxAt(
                             playheadSec,
                             attention.start,
                             attention.end,
+                            attention.type,
                             attention.cycleSec,
                             attention.scaleMax,
+                            attention.intensity,
                         )
-                        : 1;
+                        : resolveAttentionFxAt(0, 0, 0, 'none', 1.2, 1.2, 0.75);
+                    const breatheScale = fx.type === 'breathe' ? fx.scale : 1;
                     const entryScale = appearProgress < 1 ? (0.86 + 0.14 * appearProgress) : 1;
                     const scale = Math.max(1, breatheScale * entryScale);
+                    const isDim = fx.enabled && (fx.type === 'spotlight' || fx.type === 'god_rays');
                     return (
-                        <Box
-                            key={overlay.id}
-                            sx={{
-                                position: 'absolute',
-                                left: `${(overlay.x - overlay.width / 2) * 100}%`,
-                                top: `${(overlay.y - overlay.height / 2) * 100}%`,
-                                width: `${overlay.width * 100}%`,
-                                height: `${overlay.height * 100}%`,
-                                transform: `rotate(${overlay.rotation_deg || 0}deg) scale(${scale})`,
-                                transformOrigin: 'center center',
-                                pointerEvents: 'none',
-                                isolation: 'isolate',
-                            }}
-                        >
+                        <React.Fragment key={overlay.id}>
+                            {isDim ? (
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        bgcolor: '#000',
+                                        opacity: (0.52 + fx.intensity * 0.42) * fx.envelope,
+                                        pointerEvents: 'none',
+                                    }}
+                                />
+                            ) : null}
                             <Box
-                                component="img"
-                                src={overlay.image_url}
-                                alt=""
-                                draggable={false}
                                 sx={{
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'contain',
-                                    display: 'block',
+                                    position: 'absolute',
+                                    left: `${(overlay.x - overlay.width / 2) * 100}%`,
+                                    top: `${(overlay.y - overlay.height / 2) * 100}%`,
+                                    width: `${overlay.width * 100}%`,
+                                    height: `${overlay.height * 100}%`,
+                                    transform: `rotate(${overlay.rotation_deg || 0}deg) scale(${scale})`,
+                                    transformOrigin: 'center center',
+                                    pointerEvents: 'none',
+                                    isolation: 'isolate',
+                                    filter: isDim ? 'drop-shadow(0 0 14px rgba(255,255,255,0.4))' : undefined,
                                 }}
-                            />
-                        </Box>
+                            >
+                                <Box
+                                    component="img"
+                                    src={overlay.image_url}
+                                    alt=""
+                                    draggable={false}
+                                    sx={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'contain',
+                                        display: 'block',
+                                    }}
+                                />
+                                {fx.enabled && fx.type === 'light_sweep' ? (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            overflow: 'hidden',
+                                            pointerEvents: 'none',
+                                        }}
+                                    >
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                bottom: 0,
+                                                left: `${fx.cyclePhase * 120 - 20}%`,
+                                                width: '22%',
+                                                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+                                                mixBlendMode: 'screen',
+                                                opacity: fx.envelope,
+                                            }}
+                                        />
+                                    </Box>
+                                ) : null}
+                                {fx.enabled && fx.type === 'glitch' ? (
+                                    <>
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                transform: `translate(${8 * fx.intensity * fx.envelope}px, 0)`,
+                                                opacity: 0.5 * fx.envelope,
+                                                mixBlendMode: 'screen',
+                                                background: 'rgba(255,40,40,0.35)',
+                                            }}
+                                        />
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                transform: `translate(${-(8 * fx.intensity * fx.envelope)}px, 0)`,
+                                                opacity: 0.5 * fx.envelope,
+                                                mixBlendMode: 'screen',
+                                                background: 'rgba(40,80,255,0.35)',
+                                            }}
+                                        />
+                                    </>
+                                ) : null}
+                                {fx.enabled && fx.type === 'ripple' ? (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            left: '50%',
+                                            top: '50%',
+                                            width: `${28 + fx.cyclePhase * 84}%`,
+                                            aspectRatio: '1',
+                                            height: 'auto',
+                                            transform: 'translate(-50%, -50%)',
+                                            borderRadius: '50%',
+                                            border: '2px solid rgba(255,255,255,0.5)',
+                                            opacity: Math.max(0, (0.8 - fx.cyclePhase * 0.7) * fx.envelope),
+                                        }}
+                                    />
+                                ) : null}
+                                {fx.enabled && fx.type === 'saber' ? (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            borderRadius: 1,
+                                            boxShadow: `inset 0 0 0 2px rgba(80,220,255,${(0.35 + fx.intensity * 0.45) * fx.envelope}), 0 0 12px rgba(80,220,255,${0.55 * fx.envelope})`,
+                                            background: `linear-gradient(${fx.cyclePhase * 360}deg, transparent 40%, rgba(80,220,255,${0.35 * fx.envelope}) 50%, transparent 60%)`,
+                                        }}
+                                    />
+                                ) : null}
+                                {fx.enabled && fx.type === 'god_rays' ? (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            inset: '-40%',
+                                            background: `repeating-conic-gradient(from ${fx.cyclePhase * 30}deg, rgba(255,240,200,0.2) 0deg 8deg, transparent 8deg 20deg)`,
+                                            mixBlendMode: 'screen',
+                                            opacity: (0.4 + fx.intensity * 0.35) * fx.envelope,
+                                        }}
+                                    />
+                                ) : null}
+                            </Box>
+                        </React.Fragment>
                     );
                 })}
             </Box>

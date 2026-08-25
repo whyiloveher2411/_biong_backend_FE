@@ -13,13 +13,13 @@
 | 1 | Place effect | `place_effect` (action=place) | Sau khi đặt cutout | `frames.py` |
 | 2 | Draw effect | `place_effect` (action=draw) | Sau khi vẽ tay xong | `frames.py` |
 | 3 | Cutout style | `place_shadow`, `place_border`, … | Persistent suốt beat | `frames.py` |
-| 3b | Attention breathe | `attention_*` trên region/overlay | Loop scale 1.0↔max trong cửa sổ user kéo | `frames.py` |
-| 3c | Image overlay | `image_overlays[]` | Sticker upload rect + entry | `frames.py` |
+| 3b | Attention FX | `attention_type` + `attention_*` trên region/overlay | Một loại / vùng trong cửa sổ user kéo | `attention_effects.py` (+ dispatch `frames.py`) |
+| 3c | Image overlay | `image_overlays[]` | Ảnh thêm upload rect + entry | `frames.py` |
 | 4 | Ken Burns | `image_animation_effect` | Toàn frame beat | `camera_motion.py` |
 | 5 | Timeline zoom | `timeline_effects[]` | Toàn frame, scene_budget | `timeline_effects.py` |
 | 6 | Transition | `transition` | Giữa beats | `transitions.py` |
 
-**Thứ tự render:** compose (1–3) → attention breathe trên cutout đã đặt (3b) → overlay sticker (3c) → Ken Burns (4) → timeline (5) → encode SFX → transition-out (6)
+**Thứ tự render:** compose (1–3) → attention FX trên cutout đã đặt (3b) → ảnh thêm (3c, cùng attention) → Ken Burns (4) → timeline (5) → encode SFX → transition-out (6)
 
 ---
 
@@ -72,39 +72,62 @@ Gắn cố định suốt beat — **không phải** animation tạm:
 
 ---
 
-## Lớp 3b — Attention breathe
+## Lớp 3b — Attention FX (gây chú ý)
 
-Loop scale trên **layer cutout/overlay** (không scale toàn frame — tránh hở nền bảng).
+**Một loại / vùng** (giống `place_effect`) trong cửa sổ `[attention_start, attention_end)`. Legacy: có cửa sổ, thiếu `attention_type` → `breathe`.
 
 | Field | Ý nghĩa |
 |-------|---------|
-| `attention_start_sec`, `attention_end_sec` | Cửa sổ thở (scene-relative, min 0.3s) |
-| `attention_scale_max` | Biên trên (1.05–1.25 UI, engine clamp 1.0–1.3) |
-| `attention_cycle_sec` | Chu kỳ sin (mặc định ~1.2s) |
+| `attention_start_sec`, `attention_end_sec` | Cửa sổ (scene-relative, min 0.3s). null = tắt |
+| `attention_type` | `none` \| `breathe` \| `spotlight` \| `glitch` \| `ripple` \| `saber` \| `god_rays` \| `light_sweep` |
+| `attention_scale_max` | Chỉ `breathe` — biên scale (UI 1.05–1.3, engine 1.0–1.3) |
+| `attention_cycle_sec` | Chu kỳ thở / sóng / quét (mặc định ~1.2s) |
+| `attention_intensity` | Cường độ spotlight / glitch / saber / god_rays (0.35–1, mặc định 0.75) |
 
-Công thức (FE preview + engine):
+| Type | Hành vi |
+|------|---------|
+| `breathe` | Loop scale 1.0↔max trên layer cutout (không scale toàn frame) |
+| `spotlight` | Dim nền ngoài focus, soft falloff mép (tối nền — không blur nội dung) |
+| `glitch` | Chromatic aberration R/B lệch trên mask |
+| `ripple` | Vòng sóng nhỏ từ tâm, bán kính ~1.12× vùng chọn, lặp theo `attention_cycle_sec` |
+| `saber` | Luồng sáng chạy dọc contour |
+| `god_rays` | Dim + tia radial xuyên `~focus` |
+| `light_sweep` | Band sáng quét L→R trong mask, loop |
+
+Mọi type dùng **envelope** trong cửa sổ: fade-in nhẹ→mạnh (~0.12–0.45s), giữ, fade-out mạnh→nhẹ. Spotlight tối từ từ / sáng từ từ khi hết.
+
+Công thức thở (FE + engine), đã nhân envelope:
 
 ```
-scale = 1 + (scaleMax - 1) * (0.5 + 0.5 * sin(2π * t_in / cycle))
+env = smoothstep fade-in × fade-out
+scale = 1 + (scaleMax - 1) * (0.5 + 0.5 * sin(2π * t_in / cycle)) * env
 ```
 
 Default khi bật lần đầu: sau `end_sec + placeEffectAfterSec(place_effect)`, duration ~2.5s (clamp `scene_budget_sec`).
 
-UI group **Hiệu ứng gây chú ý** (hiện có **Thở**): dải timeline hồng — `WhiteboardRegionTimeline.tsx`  
-Preview: `WhiteboardBeatTimingPreview.tsx` + `resolveAttentionScaleAt()`
+UI group **Hiệu ứng gây chú ý** (panel magenta `#ec407a`, tách place warning/cam): `RegionMediaSettingsPanel.tsx`  
+Timeline dải hồng + label type: `WhiteboardRegionTimeline.tsx`  
+Preview: `WhiteboardBeatTimingPreview.tsx` + `resolveAttentionFxAt()`  
+Engine: `attention_effects.py`
+
+Spotlight / god_rays nhiều vùng cùng lúc: **union mask focus**, dim **một lần**.
 
 **Quy tắc:**
-- Tách khỏi `place_effect` (one-shot); thở chỉ chạy trong `[attention_start, attention_end)`.
-- `attention_start_sec` **luôn ≥** mốc ảnh render xong + hiệu ứng sau ảnh (`end_sec` + `placeEffectAfterSec` / `drawEffectAfterSec`). User không kéo qua mốc này.
+- Tách khỏi `place_effect` (one-shot); chỉ chạy trong `[attention_start, attention_end)`.
+- `attention_start_sec` **luôn ≥** mốc ảnh render xong + hiệu ứng sau ảnh (`end_sec` + `placeEffectAfterSec` / `drawEffectAfterSec`).
 - Cửa sổ không vượt `scene_budget_sec` (trước vùng chuyển cảnh).
 
+**Tương lai (chưa làm):** pulse glow, desaturate others, shake, particle burst, outline chase, kính lúp.
 ---
 
-## Lớp 3c — Image overlay (sticker)
+## Lớp 3c — Ảnh thêm (`image_overlays[]`)
 
-Ảnh upload tự do — rect + transform, cùng `entry_mode` / place / cutout / thở như vùng place.
+Ảnh upload riêng (không cắt từ beat) — rect + xoay. Cùng `entry_mode` (Vẽ tay / Đưa vào / Đặt tại chỗ), cutout style, tay, hiệu ứng sau, attention.
 
-Engine: `apply_image_overlays_to_frames()` sau `render_frames`, trước Ken Burns.
+- `[start_sec, end_sec)` = animate/đặt; mặc định **ẩn sau `end_sec`**
+- `hold_to_end` = giữ đến hết beat; place_effect + attention chạy sau `end_sec`
+
+- Engine: PHP preload `local_path` (giữ `.gif`) → contain đúng box → GIF/animated WebP decode multi-frame, chọn frame theo `(t − start_sec)` loop → viền/shadow theo silhouette → loang/sheen/neon sau settle → tay `keo-anh` khi `drag_in`
 
 ---
 
@@ -181,7 +204,7 @@ flowchart LR
   subgraph compose [Compose]
     Place[Place/Draw effects]
     Style[Cutout style]
-    Breathe[Attention breathe]
+    Breathe[Attention FX]
     Overlay[Image overlays]
   end
   subgraph post [Post-compose]
@@ -200,7 +223,7 @@ flowchart LR
 2. **Place SFX loang** fire tại `place_fix` (visual loang), không tại settle
 3. **Timeline zoom** tính sau `intro_sec` — `start_sec=0` ≠ frame đầu file đã zoom
 4. **Cutout style** persistent — không conflict với place/draw animation
-
+5. **Attention** một loại / vùng — không stack nhiều type trên cùng region
 ---
 
 ## SFX (encode.py)

@@ -4,7 +4,10 @@ import type { BeatImageOverlay } from './agentVideoApi';
 
 type Props = {
     overlay: BeatImageOverlay;
+    /** Rect unscaled trong layer đã `scale(zoom)` — left/top thường 0. */
     containRect: { left: number; top: number; width: number; height: number };
+    /** Canvas zoom UI (1–8). Drag delta chia theo pixel *trên màn hình* = width * zoom. */
+    zoom?: number;
     selected: boolean;
     onChange: (patch: Partial<BeatImageOverlay>) => void;
     onSelect: () => void;
@@ -15,10 +18,12 @@ type DragKind = 'move' | 'resize-se' | 'rotate';
 export default function WhiteboardImageOverlayHandles({
     overlay,
     containRect,
+    zoom = 1,
     selected,
     onChange,
     onSelect,
 }: Props) {
+    const boxRef = React.useRef<HTMLDivElement | null>(null);
     const dragRef = React.useRef<{
         kind: DragKind;
         startX: number;
@@ -26,6 +31,7 @@ export default function WhiteboardImageOverlayHandles({
         orig: BeatImageOverlay;
     } | null>(null);
 
+    const z = Math.max(0.001, zoom);
     const rectPx = {
         left: containRect.left + (overlay.x - overlay.width / 2) * containRect.width,
         top: containRect.top + (overlay.y - overlay.height / 2) * containRect.height,
@@ -49,8 +55,11 @@ export default function WhiteboardImageOverlayHandles({
     const onPointerMove = (e: React.PointerEvent) => {
         const drag = dragRef.current;
         if (!drag) return;
-        const dx = (e.clientX - drag.startX) / Math.max(1, containRect.width);
-        const dy = (e.clientY - drag.startY) / Math.max(1, containRect.height);
+        // Client px ÷ (layout width × CSS zoom) = normalized trên ảnh beat.
+        const screenW = Math.max(1, containRect.width * z);
+        const screenH = Math.max(1, containRect.height * z);
+        const dx = (e.clientX - drag.startX) / screenW;
+        const dy = (e.clientY - drag.startY) / screenH;
         const orig = drag.orig;
         if (drag.kind === 'move') {
             onChange({
@@ -60,15 +69,22 @@ export default function WhiteboardImageOverlayHandles({
             return;
         }
         if (drag.kind === 'resize-se') {
-            onChange({
-                width: Math.max(0.04, Math.min(1, orig.width + dx * 2)),
-                height: Math.max(0.04, Math.min(1, orig.height + dy * 2)),
-            });
+            // Khóa tỉ lệ khung — tránh bóp méo; delta theo cạnh dài hơn.
+            const ar = Math.max(0.05, orig.width) / Math.max(0.05, orig.height);
+            const delta = Math.abs(dx) >= Math.abs(dy) ? dx * 2 : dy * 2 * ar;
+            const width = Math.max(0.04, Math.min(1, orig.width + delta));
+            const height = Math.max(0.04, Math.min(1, width / ar));
+            onChange({ width, height });
             return;
         }
         if (drag.kind === 'rotate') {
-            const centerX = containRect.left + orig.x * containRect.width;
-            const centerY = containRect.top + orig.y * containRect.height;
+            const box = boxRef.current?.getBoundingClientRect();
+            const centerX = box
+                ? box.left + box.width / 2
+                : containRect.left + orig.x * containRect.width;
+            const centerY = box
+                ? box.top + box.height / 2
+                : containRect.top + orig.y * containRect.height;
             const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
             onChange({ rotation_deg: (angle * 180) / Math.PI + 90 });
         }
@@ -81,6 +97,7 @@ export default function WhiteboardImageOverlayHandles({
 
     return (
         <Box
+            ref={boxRef}
             sx={{
                 position: 'absolute',
                 left: rectPx.left,
@@ -89,8 +106,11 @@ export default function WhiteboardImageOverlayHandles({
                 height: rectPx.height,
                 transform: `rotate(${overlay.rotation_deg || 0}deg)`,
                 transformOrigin: 'center center',
-                border: selected ? '2px solid #00897b' : '1px dashed rgba(0,137,123,0.55)',
+                // Outline / box-shadow — KHÔNG dùng border (border làm co nội dung khi chọn).
+                outline: selected ? '2px solid #00897b' : '1px dashed rgba(0,137,123,0.55)',
+                outlineOffset: 0,
                 boxShadow: selected ? '0 0 0 2px rgba(0,137,123,0.25)' : 'none',
+                boxSizing: 'border-box',
                 zIndex: 4,
                 pointerEvents: 'auto',
                 cursor: 'move',
