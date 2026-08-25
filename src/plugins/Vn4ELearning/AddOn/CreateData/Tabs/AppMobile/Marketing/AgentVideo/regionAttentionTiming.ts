@@ -5,15 +5,12 @@ import {
     ATTENTION_INTENSITY_DEFAULT,
     ATTENTION_MIN_WINDOW_SEC,
     ATTENTION_SCALE_MAX_DEFAULT,
-    drawEffectAfterSec,
     isRegionAttentionEnabled,
     normalizeAttentionCycleSec,
     normalizeAttentionIntensity,
     normalizeAttentionScaleMax,
     normalizeAttentionType,
-    normalizeDrawEffect,
-    normalizePlaceEffect,
-    placeEffectAfterSec,
+    renderPlaceEffectAfterSec,
     type AttentionEffectKey,
 } from './agentVideoApi';
 import {
@@ -29,20 +26,7 @@ function overlayHoldsToEnd(source: AttentionTimingSource): boolean {
 }
 
 function placeTailSec(source: AttentionTimingSource): number {
-    if ('action' in source) {
-        if (source.action === 'draw') {
-            return drawEffectAfterSec(normalizeDrawEffect(source.place_effect));
-        }
-        if (source.action === 'place') {
-            return placeEffectAfterSec(normalizePlaceEffect(source.place_effect));
-        }
-        return 0;
-    }
-    const mode = String(source.entry_mode || '').trim().toLowerCase();
-    if (mode === 'draw') {
-        return drawEffectAfterSec(normalizeDrawEffect(source.place_effect));
-    }
-    return placeEffectAfterSec(normalizePlaceEffect(source.place_effect));
+    return renderPlaceEffectAfterSec(source);
 }
 
 function resolveAppearEndSec(

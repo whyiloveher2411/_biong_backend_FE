@@ -7,7 +7,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
-import { attentionEffectTimelineLabel, drawEffectAfterSec, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, placeEffectAfterSec } from './agentVideoApi';
+import { attentionEffectTimelineLabel, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, isOverlayInstantEntry, isRegionPlaceInstantEntry, renderPlaceEffectAfterSec } from './agentVideoApi';
 import {
     regionTimingPatchFromDrag,
     resolveRegionEndSec,
@@ -1074,11 +1074,12 @@ export default function WhiteboardRegionTimeline({
                                     </Box>
                                     {/* HIỆU ỨNG SAU RENDER: place (full) hoặc draw
                                         (subset) — khoảng cố định engine chạy
-                                        NGAY SAU bar vùng. Sọc chéo, không bắt chuột. */}
-                                    {(region.action === 'place' || region.action === 'draw') ? (() => {
-                                        const fxSec = region.action === 'draw'
-                                            ? drawEffectAfterSec(region.place_effect)
-                                            : placeEffectAfterSec(region.place_effect);
+                                        NGAY SAU bar vùng. Instant: không stripe
+                                        (render ép none dù data còn place_effect). */}
+                                    {(region.action === 'place' || region.action === 'draw')
+                                        && !(region.action === 'place' && isRegionPlaceInstantEntry(region))
+                                        ? (() => {
+                                        const fxSec = renderPlaceEffectAfterSec(region);
                                         if (!(fxSec > 0.01)) return null;
                                         const extStart = Math.min(end, duration);
                                         const extEnd = Math.min(duration, extStart + fxSec);
@@ -1331,7 +1332,9 @@ export default function WhiteboardRegionTimeline({
                             const end = resolveOverlayEndSec(overlay, duration);
                             const left = secToPct(start);
                             const width = Math.max(0.01, secToPct(end) - left);
-                            const fxSec = placeEffectAfterSec(overlay.place_effect);
+                            const fxSec = isOverlayInstantEntry(overlay)
+                                ? 0
+                                : renderPlaceEffectAfterSec(overlay);
                             return (
                                 <Box key={overlay.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
                                     <Box

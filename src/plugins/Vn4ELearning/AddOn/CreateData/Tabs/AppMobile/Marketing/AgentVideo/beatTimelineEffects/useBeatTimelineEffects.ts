@@ -23,6 +23,14 @@ function normalizeAll(effects: BeatTimelineEffect[], beatDurationSec: number): B
     return normalizeBeatTimelineEffects(effects, beatDurationSec);
 }
 
+function effectsSignature(effects: BeatTimelineEffect[]): string {
+    try {
+        return JSON.stringify(effects);
+    } catch {
+        return String(effects.length);
+    }
+}
+
 export function useBeatTimelineEffects({
     beatDurationSec,
     playheadSec,
@@ -35,15 +43,23 @@ export function useBeatTimelineEffects({
     const beatDurationRef = React.useRef(beatDurationSec);
     const effectsRef = React.useRef(effects);
     const commitTimerRef = React.useRef<number | null>(null);
+    const syncedSigRef = React.useRef(effectsSignature(normalizeAll(initialEffects, beatDurationSec)));
     beatDurationRef.current = beatDurationSec;
     effectsRef.current = effects;
 
     React.useEffect(() => {
-        setEffects(normalizeAll(initialEffects, beatDurationSec));
+        const next = normalizeAll(initialEffects, beatDurationSec);
+        const sig = effectsSignature(next);
+        if (sig === syncedSigRef.current) {
+            return;
+        }
+        syncedSigRef.current = sig;
+        setEffects(next);
     }, [initialEffects, beatDurationSec]);
 
     const persist = React.useCallback(async (next: BeatTimelineEffect[]) => {
         const normalized = normalizeAll(next, beatDurationRef.current);
+        syncedSigRef.current = effectsSignature(normalized);
         setEffects(normalized);
         setSaving(true);
         try {

@@ -36,7 +36,6 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
-import TouchAppIcon from '@mui/icons-material/TouchApp';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -112,10 +111,13 @@ import {
     type BeatImageOverlay,
     type BeatRegion,
     type BeatRegionPoint,
+    type BeatTimelineEffect,
     type WhiteboardTransitionOption,
 } from './agentVideoApi';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
+
+const EMPTY_BEAT_TIMELINE_EFFECTS: BeatTimelineEffect[] = [];
 
 type Props = {
     state: AgentVideoState;
@@ -363,29 +365,49 @@ export default function ShortVideoAgentBeatRegionEditor({
     // (vẽ vùng nào → tự hợp (union) vào A).
     const [addModeRegionId, setAddModeRegionId] = React.useState<string>('');
 
-    // Chế độ tương tác với canvas ảnh: 'select' (mặc định — click vùng = chọn,
-    // setting vùng đó hiện ở cột phải; click ngoài vùng = đặt điểm tập trung) /
-    // 'add' (click/kéo = vẽ vùng mới). Các chế độ boolean (thêm/xóa/bg) vẫn ưu tiên hơn.
+    // Chế độ tương tác với canvas ảnh: 'select' (mặc định — click vùng = chọn) /
+    // 'add' (one-shot: click nút → vẽ 1 vùng → tự về select). Boolean (thêm/xóa/bg) ưu tiên hơn.
     const [regionMode, setRegionMode] = React.useState<'select' | 'add'>('select');
     const [canvasMode, setCanvasMode] = React.useState<'edit' | 'preview'>('edit');
-    const isAddActive = regionMode === 'add'
+    const isDrawingNewRegion = regionMode === 'add';
+    const isAddActive = isDrawingNewRegion
         || Boolean(addModeRegionId || eraseModeRegionId || bgSampleMode);
-    const handleToggleRegionMode = React.useCallback(() => {
+
+    const clearBooleanCanvasModes = React.useCallback(() => {
         setAddModeRegionId('');
         setEraseModeRegionId('');
         setBgSampleMode(false);
         setBgSampleDraft([]);
-        setDraftPoints([]);
-        setDraftIsDrag(false);
-        setRegionMode((mode) => (mode === 'add' ? 'select' : 'add'));
     }, []);
 
-    // Shortcut phím E: toggle nhanh Thêm vùng <-> Chọn vùng.
+    /** Bắt đầu phiên vẽ vùng mới (one-shot). */
+    const handleStartAddRegion = React.useCallback(() => {
+        clearBooleanCanvasModes();
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+        setRegionMode('add');
+    }, [clearBooleanCanvasModes]);
+
+    /** Hủy phiên thêm vùng → về chọn. */
+    const handleCancelAddRegionSession = React.useCallback(() => {
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+        setRegionMode('select');
+    }, []);
+
+    /** Nút Thêm vùng: chưa add → bắt đầu; đang add → hủy về select. */
+    const handleAddRegionButtonClick = React.useCallback(() => {
+        if (regionMode === 'add') {
+            handleCancelAddRegionSession();
+            return;
+        }
+        handleStartAddRegion();
+    }, [handleCancelAddRegionSession, handleStartAddRegion, regionMode]);
+
+    // Phím E: select → bắt đầu thêm vùng; đang add → hủy về select.
+    // Esc: đang add (hoặc có draft vẽ vùng mới) → hủy về select.
     React.useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'e' && event.key !== 'E') {
-                return;
-            }
             if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
                 return;
             }
@@ -396,12 +418,39 @@ export default function ShortVideoAgentBeatRegionEditor({
             if (canvasMode === 'preview') {
                 return;
             }
+            if (event.key === 'Escape') {
+                if (regionMode !== 'add' && draftPoints.length === 0) {
+                    return;
+                }
+                if (addModeRegionId || eraseModeRegionId || bgSampleMode) {
+                    return;
+                }
+                event.preventDefault();
+                handleCancelAddRegionSession();
+                return;
+            }
+            if (event.key !== 'e' && event.key !== 'E') {
+                return;
+            }
             event.preventDefault();
-            handleToggleRegionMode();
+            if (regionMode === 'add') {
+                handleCancelAddRegionSession();
+            } else {
+                handleStartAddRegion();
+            }
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [canvasMode, handleToggleRegionMode]);
+    }, [
+        addModeRegionId,
+        bgSampleMode,
+        canvasMode,
+        draftPoints.length,
+        eraseModeRegionId,
+        handleCancelAddRegionSession,
+        handleStartAddRegion,
+        regionMode,
+    ]);
 
     // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
     const [refiningRegionId, setRefiningRegionId] = React.useState<string | null>(null);
@@ -901,9 +950,14 @@ export default function ShortVideoAgentBeatRegionEditor({
         [beatTimeline.beatDurationSec, beatTransitionDurationSec],
     );
 
-    const savedTimelineEffects = Array.isArray(currentOverride.timeline_effects)
-        ? currentOverride.timeline_effects
-        : [];
+    const savedTimelineEffects = React.useMemo(
+        () => (
+            Array.isArray(currentOverride.timeline_effects)
+                ? currentOverride.timeline_effects
+                : EMPTY_BEAT_TIMELINE_EFFECTS
+        ),
+        [currentOverride.timeline_effects],
+    );
 
     const persistTimelineEffects = React.useCallback(async (effects: typeof savedTimelineEffects) => {
         return state.handleSaveWhiteboardBeatOverride(beatId, {
@@ -1428,6 +1482,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             entry_mode: 'instant',
             place_effect: 'none',
             place_shadow: true,
+            start_sec: 0,
             parent_id: parentId,
             script_start_word: null,
             script_end_word: null,
@@ -1436,14 +1491,20 @@ export default function ShortVideoAgentBeatRegionEditor({
         setSelectedRegionId(region.id);
         setDraftPoints([]);
         setDraftIsDrag(false);
+        // One-shot: lưu vùng xong → về chế độ chọn.
+        setRegionMode('select');
     };
 
     const handleCancelDraft = () => {
         if (bgSampleMode) {
             setBgSampleDraft([]);
-        } else {
-            setDraftPoints([]);
-            setDraftIsDrag(false);
+            return;
+        }
+        setDraftPoints([]);
+        setDraftIsDrag(false);
+        // One-shot: hủy vẽ vùng mới → về chọn.
+        if (regionMode === 'add') {
+            setRegionMode('select');
         }
     };
 
@@ -2003,8 +2064,6 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (!raw) {
             return;
         }
-        // Không truyền feature `noopener` vào window.open — một số browser
-        // (Chromium) sẽ không mở tab. Set opener=null sau khi mở.
         let openUrl = raw;
         try {
             const u = new URL(raw, window.location.origin);
@@ -2014,14 +2073,14 @@ export default function ShortVideoAgentBeatRegionEditor({
             const sep = raw.includes('?') ? '&' : '?';
             openUrl = `${raw}${sep}v=${Date.now()}`;
         }
-        const opened = window.open(openUrl, '_blank');
-        if (opened) {
-            try {
-                opened.opener = null;
-            } catch {
-                // ignore
-            }
-        }
+        // Dùng <a>.click() — ổn định hơn window.open (popup blocker / Electron).
+        const anchor = document.createElement('a');
+        anchor.href = openUrl;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
     }, [imageUrl]);
     const canRenderBeatVideo = Boolean(imageUrl)
         && !isBeatRendering
@@ -2277,24 +2336,24 @@ export default function ShortVideoAgentBeatRegionEditor({
                         >
                         <Tooltip
                             placement="right"
-                            title={isAddActive
-                            ? 'Đang THÊM VÙNG — click/kéo để vẽ vùng mới (phím E để chuyển sang chọn vùng).'
-                            : 'Đang CHỌN VÙNG — click vào vùng để chọn, click ngoài vùng để đặt điểm tập trung (phím E để chuyển sang thêm vùng).'}
+                            title={isDrawingNewRegion
+                                ? 'Đang vẽ vùng — lưu vùng hoặc Esc / E để hủy'
+                                : 'Thêm vùng — click rồi vẽ trên ảnh (phím E)'}
                         >
                             <IconButton
                                 size="small"
-                                onClick={handleToggleRegionMode}
+                                onClick={handleAddRegionButtonClick}
                                 sx={{
                                     width: 32,
                                     height: 32,
-                                    bgcolor: isAddActive ? 'primary.main' : 'rgba(0,0,0,0.55)',
+                                    bgcolor: isDrawingNewRegion ? 'primary.main' : 'rgba(0,0,0,0.55)',
                                     color: 'common.white',
                                     '&:hover': {
-                                        bgcolor: isAddActive ? 'primary.dark' : 'rgba(0,0,0,0.75)',
+                                        bgcolor: isDrawingNewRegion ? 'primary.dark' : 'rgba(0,0,0,0.75)',
                                     },
                                 }}
                             >
-                                {isAddActive ? <AddCircleIcon fontSize="small" /> : <TouchAppIcon fontSize="small" />}
+                                <AddCircleIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                         <Tooltip placement="right" title="Thêm ảnh">
@@ -3631,7 +3690,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </Stack>
                                 </RegionSection>
                             ) : null}
-                            {resolveOverlayImageActionKey(selectedOverlay) === 'drag_in' || resolveOverlayImageActionKey(selectedOverlay) === 'instant' ? (
+                            {resolveOverlayImageActionKey(selectedOverlay) === 'drag_in' ? (
                                 <RegionSection title="Hiệu ứng sau khi render ảnh" subtitle="Chỉ hiện tạm thời khi đặt ảnh">
                                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                                         {PLACE_EFFECT_OPTIONS.map((opt) => {
@@ -3659,7 +3718,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                             {(
                                 resolveOverlayImageActionKey(selectedOverlay) === 'draw'
                                     ? normalizeDrawEffect(selectedOverlay.place_effect)
-                                    : normalizePlaceEffect(selectedOverlay.place_effect)
+                                    : resolveOverlayImageActionKey(selectedOverlay) === 'drag_in'
+                                        ? normalizePlaceEffect(selectedOverlay.place_effect)
+                                        : 'none'
                             ) === 'neon_border' ? (
                                 <RegionSection title="Màu đèn neon chạy viền">
                                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
@@ -4090,8 +4151,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </RegionSection>
                                 ) : null}
 
-                                {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ vùng place) */}
-                                {region.action === 'place' ? (
+                                {/* 2. Hiệu ứng khi ĐƯA VÀO (chỉ drag_in) — instant chỉ dùng gây chú ý */}
+                                {region.action === 'place' && resolveRegionImageActionKey(region) === 'drag_in' ? (
                                     <RegionSection
                                         title="Hiệu ứng sau khi render ảnh"
                                         subtitle="Chỉ hiện tạm thời khi đặt ảnh — tắt sau animation"
@@ -4128,8 +4189,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </RegionSection>
                                 ) : null}
 
-                                {/* 2a. MÀU ĐÈN NEON CHẠY VIỀN (place hoặc draw khi chọn neon_border) */}
-                                {(region.action === 'place' || region.action === 'draw')
+                                {/* 2a. MÀU ĐÈN NEON CHẠY VIỀN (draw hoặc drag_in khi chọn neon_border) */}
+                                {(region.action === 'draw'
+                                    || (region.action === 'place' && resolveRegionImageActionKey(region) === 'drag_in'))
                                     && (
                                         region.action === 'place'
                                             ? normalizePlaceEffect(region.place_effect)
@@ -4418,9 +4480,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         color="success"
                                         startIcon={addModeRegionId === region.id ? <CheckIcon /> : null}
                                         onClick={() => {
-                                            setAddModeRegionId(addModeRegionId === region.id ? '' : region.id);
-                                            if (addModeRegionId !== region.id) {
+                                            const next = addModeRegionId === region.id ? '' : region.id;
+                                            setAddModeRegionId(next);
+                                            if (next) {
                                                 setEraseModeRegionId('');
+                                                setRegionMode('select');
+                                                setDraftPoints([]);
+                                                setDraftIsDrag(false);
                                             }
                                         }}
                                         title="Thêm vùng: vào chế độ — vẽ các vùng cần thêm (ngược với Xóa thừa): phần vẽ được nối liền vào vùng hiện tại"
@@ -4440,11 +4506,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         color="error"
                                         startIcon={eraseModeRegionId === region.id ? <CheckIcon /> : null}
                                         onClick={() => {
-                                            setEraseModeRegionId(
-                                                eraseModeRegionId === region.id ? '' : region.id,
-                                            );
-                                            if (eraseModeRegionId !== region.id) {
+                                            const next = eraseModeRegionId === region.id ? '' : region.id;
+                                            setEraseModeRegionId(next);
+                                            if (next) {
                                                 setAddModeRegionId('');
+                                                setRegionMode('select');
+                                                setDraftPoints([]);
+                                                setDraftIsDrag(false);
                                             }
                                         }}
                                         title="Xóa vùng thừa: vào chế độ — vẽ các vùng cần bỏ (phần đó hiển thị ảnh gốc, không đưa vào/vẽ)"

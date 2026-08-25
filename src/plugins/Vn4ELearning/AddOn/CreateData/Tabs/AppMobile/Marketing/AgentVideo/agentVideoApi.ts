@@ -773,6 +773,40 @@ export function isOverlayInstantEntry(
     return effect === 'none' || isPlaceHandlessEffect(effect);
 }
 
+/**
+ * Thời lượng hiệu ứng sau ảnh dùng cho timeline / attention / preview render.
+ * Đặt tại chỗ (`instant`): luôn 0 dù `place_effect` còn trong data (giữ để user chọn lại Đưa vào).
+ */
+export function renderPlaceEffectAfterSec(
+    source:
+        | Pick<BeatRegion, 'action' | 'entry_mode' | 'place_effect'>
+        | Pick<BeatImageOverlay, 'entry_mode' | 'place_effect'>,
+): number {
+    if ('action' in source) {
+        const action = String(source.action || '').trim().toLowerCase();
+        if (action === 'draw') {
+            return drawEffectAfterSec(normalizeDrawEffect(source.place_effect));
+        }
+        if (action !== 'place') {
+            return 0;
+        }
+        if (isRegionPlaceInstantEntry(source)) {
+            return 0;
+        }
+        return placeEffectAfterSec(source.place_effect);
+    }
+    const mode = source.entry_mode != null
+        ? normalizeRegionEntryMode(source.entry_mode)
+        : null;
+    if (mode === 'draw') {
+        return drawEffectAfterSec(normalizeDrawEffect(source.place_effect));
+    }
+    if (isOverlayInstantEntry(source)) {
+        return 0;
+    }
+    return placeEffectAfterSec(source.place_effect);
+}
+
 /** Patch chọn hành động Vẽ tay. */
 export function buildRegionDrawActionPatch(
     source: Pick<BeatRegion, 'place_effect'>,
@@ -784,18 +818,28 @@ export function buildRegionDrawActionPatch(
     };
 }
 
-/** Chọn "Đặt tại chỗ" — ảnh xuất hiện ngay tại vùng, không tay kéo. */
+/** Chọn "Đặt tại chỗ" — ảnh xuất hiện ngay tại vùng, không tay kéo.
+ * Giữ `place_effect` trong data (user chọn lại Đưa vào còn hiệu ứng cũ);
+ * render ép none. `start_sec=0` vì ảnh luôn đặt đúng chỗ từ đầu beat.
+ */
 export function buildRegionPlaceInstantEntryPatch(): Pick<
     BeatRegion,
-    'action' | 'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect' | 'place_shadow'
+    | 'action'
+    | 'entry_mode'
+    | 'place_hand'
+    | 'place_entry_direction'
+    | 'place_shadow'
+    | 'start_sec'
+    | 'script_start_word'
 > {
     return {
         action: 'place',
         entry_mode: 'instant',
         place_hand: null,
         place_entry_direction: null,
-        place_effect: 'none',
         place_shadow: true,
+        start_sec: 0,
+        script_start_word: null,
     };
 }
 
@@ -823,16 +867,17 @@ export function resolveRegionImageActionKey(
     return isRegionPlaceInstantEntry(source) ? 'instant' : 'drag_in';
 }
 
+/** Overlay «Đặt tại chỗ» — giữ place_effect trong data; render ép none; start=0. */
 export function buildOverlayInstantEntryPatch(): Pick<
     BeatImageOverlay,
-    'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_effect' | 'place_shadow'
+    'entry_mode' | 'place_hand' | 'place_entry_direction' | 'place_shadow' | 'start_sec'
 > {
     return {
         entry_mode: 'instant',
         place_hand: null,
         place_entry_direction: null,
-        place_effect: 'none',
         place_shadow: true,
+        start_sec: 0,
     };
 }
 
@@ -1017,19 +1062,18 @@ export function isPlaceEntryDirectionApplicable(
     return hand !== 'nam_cham';
 }
 
-/** Patch khi đổi place_effect — xóa place_hand / hướng nếu không dùng tay. */
+/** Patch khi đổi place_effect — xóa place_hand / hướng nếu không dùng tay.
+ * Không đổi entry_mode (Đặt tại chỗ / Đưa vào do nhóm nút hành động quyết định).
+ */
 export function buildPlaceEffectRegionUpdate(
     effect: PlaceEffectKey,
-): Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction' | 'entry_mode'> {
-    const updates: Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction' | 'entry_mode'> = {
+): Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> {
+    const updates: Pick<BeatRegion, 'place_effect' | 'place_hand' | 'place_entry_direction'> = {
         place_effect: effect,
     };
     if (isPlaceHandlessEffect(effect) || effect === 'none') {
-        updates.entry_mode = 'instant';
         updates.place_hand = null;
         updates.place_entry_direction = null;
-    } else {
-        updates.entry_mode = 'drag_in';
     }
     return updates;
 }
