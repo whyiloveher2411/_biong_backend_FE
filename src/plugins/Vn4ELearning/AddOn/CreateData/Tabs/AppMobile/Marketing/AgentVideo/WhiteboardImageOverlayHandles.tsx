@@ -21,7 +21,7 @@ type Props = {
      */
     layer?: 'media' | 'controls' | 'all';
     onChange: (patch: Partial<BeatImageOverlay>) => void;
-    onSelect: () => void;
+    onSelect: (meta?: { shiftKey?: boolean }) => void;
     /**
      * Chỉ khi CHƯA chọn: kéo trên thân ảnh (vượt ngưỡng click) → pan canvas.
      * Khi ĐÃ chọn: kéo thân = di chuyển ảnh upload.
@@ -64,7 +64,7 @@ export default function WhiteboardImageOverlayHandles({
         e.preventDefault();
         e.stopPropagation();
         if (!selected) {
-            onSelect();
+            onSelect({ shiftKey: e.shiftKey });
         }
         dragRef.current = {
             kind,
@@ -127,6 +127,7 @@ export default function WhiteboardImageOverlayHandles({
         e.stopPropagation();
         const sx = e.clientX;
         const sy = e.clientY;
+        const shiftKey = e.shiftKey;
         let moved = false;
         const onMove = (ev: PointerEvent) => {
             if (moved) {
@@ -146,7 +147,7 @@ export default function WhiteboardImageOverlayHandles({
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onUp);
             if (!moved) {
-                onSelect();
+                onSelect({ shiftKey });
             }
         };
         window.addEventListener('pointermove', onMove);

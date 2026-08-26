@@ -74,6 +74,7 @@ import WhiteboardRegionPathHandles from './WhiteboardRegionPathHandles';
 import WhiteboardCutoutImagePreview from './WhiteboardCutoutImagePreview';
 import {
     createDefaultBeatImageOverlay,
+    resolveOverlayEndSec,
     snapAttentionFieldsToConstraints,
 } from './regionAttentionTiming';
 import { normalizeRegionTimingFields, WHITEBOARD_SCENE_INTRO_SEC } from './regionTimelineTiming';
@@ -110,6 +111,8 @@ import {
     PLACE_EFFECT_OPTIONS,
     normalizeBeatImageOverlays,
     normalizeBeatRegionAttentionFields,
+    renderPlaceEffectAfterSec,
+    isRegionAttentionEnabled,
     uploadAgentVisualImage,
     type AgentWhiteboardBeatOverride,
     type BeatImageOverlay,
@@ -122,6 +125,90 @@ import {
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
 const EMPTY_BEAT_TIMELINE_EFFECTS: BeatTimelineEffect[] = [];
+const SYNTHETIC_GROUP_ID_PREFIX = '__group__:';
+
+type TimelineViewMode = 'main' | 'group';
+type GroupItemType = 'region' | 'overlay' | 'effect';
+type GroupSelectionKey = `${GroupItemType}:${string}`;
+
+function makeGroupSelectionKey(type: GroupItemType, id: string): GroupSelectionKey {
+    return `${type}:${id}`;
+}
+
+function parseGroupSelectionKey(key: string): { type: GroupItemType; id: string } | null {
+    const [type, ...rest] = String(key || '').split(':');
+    const id = rest.join(':').trim();
+    if (!id) return null;
+    if (type === 'region' || type === 'overlay' || type === 'effect') {
+        return { type, id };
+    }
+    return null;
+}
+
+function parseSyntheticGroupId(id: string): string | null {
+    const text = String(id || '');
+    if (!text.startsWith(SYNTHETIC_GROUP_ID_PREFIX)) {
+        return null;
+    }
+    const groupId = text.slice(SYNTHETIC_GROUP_ID_PREFIX.length).trim();
+    return groupId || null;
+}
+
+function makeSyntheticGroupRegionId(groupId: string): string {
+    return `${SYNTHETIC_GROUP_ID_PREFIX}${groupId}`;
+}
+
+/** Tên mặc định Group 1, Group 2… tránh trùng tên đã có. */
+function nextDefaultGroupName(existingNames: string[]): string {
+    const used = new Set(
+        existingNames
+            .map((name) => String(name || '').trim().toLowerCase())
+            .filter(Boolean),
+    );
+    let n = 1;
+    while (used.has(`group ${n}`)) {
+        n += 1;
+    }
+    return `Group ${n}`;
+}
+
+/**
+ * Mở rộng vùng đã chọn thành cả cây cha–con:
+ * chọn con → thêm cha gốc + mọi anh chị em / cháu;
+ * chọn cha → thêm mọi con cháu.
+ */
+function expandRegionFamilyIds(regions: BeatRegion[], seedIds: string[]): string[] {
+    const byId = new Map(regions.map((region) => [region.id, region]));
+    const roots: string[] = [];
+    const seenRoots = new Set<string>();
+    seedIds.forEach((id) => {
+        let cur = byId.get(id);
+        if (!cur) return;
+        while (cur.parent_id) {
+            const parent = byId.get(String(cur.parent_id));
+            if (!parent) break;
+            cur = parent;
+        }
+        if (!seenRoots.has(cur.id)) {
+            seenRoots.add(cur.id);
+            roots.push(cur.id);
+        }
+    });
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const addTree = (id: string) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        out.push(id);
+        regions.forEach((region) => {
+            if (String(region.parent_id || '') === id) {
+                addTree(region.id);
+            }
+        });
+    };
+    roots.forEach((rootId) => addTree(rootId));
+    return out;
+}
 
 type Props = {
     state: AgentVideoState;
@@ -349,6 +436,11 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [draftPoints, setDraftPoints] = React.useState<[number, number][]>([]);
     const [selectedRegionId, setSelectedRegionId] = React.useState<string>('');
     const [selectedEffectId, setSelectedEffectId] = React.useState<string>('');
+    const [timelineViewMode, setTimelineViewMode] = React.useState<TimelineViewMode>('main');
+    const [activeGroupId, setActiveGroupId] = React.useState<string | null>(null);
+    const [multiSelectedKeys, setMultiSelectedKeys] = React.useState<GroupSelectionKey[]>([]);
+    const [groupDialogOpen, setGroupDialogOpen] = React.useState(false);
+    const [groupDialogName, setGroupDialogName] = React.useState('');
     const [rightPanelTab, setRightPanelTab] = React.useState<'edit' | 'add'>('edit');
     const [playheadSec, setPlayheadSec] = React.useState(0);
     const [imgNatural, setImgNatural] = React.useState<{ w: number; h: number } | null>(null);
@@ -377,6 +469,13 @@ export default function ShortVideoAgentBeatRegionEditor({
     const runBirefnetRefineOnRegionRef = React.useRef<(region: BeatRegion) => void>(() => {
         // 
     });
+    const enqueueBirefnetRefineOnRegionRef = React.useRef<(region: BeatRegion) => void>(() => {
+        // 
+    });
+    const finishDraftRef = React.useRef<() => void>(() => {
+        // 
+    });
+    const imgNaturalRef = React.useRef<{ w: number; h: number } | null>(null);
     const isDrawingNewRegion = regionMode === 'add';
     const isBooleanRegionEdit = Boolean(addModeRegionId || eraseModeRegionId);
     const isAddActive = isDrawingNewRegion || bgSampleMode || isBooleanRegionEdit;
@@ -419,55 +518,14 @@ export default function ShortVideoAgentBeatRegionEditor({
         handleStartAddRegion();
     }, [handleCancelAddRegionSession, handleStartAddRegion, regionMode]);
 
-    // Phím E: select → bắt đầu thêm vùng; đang add → hủy về select.
-    // Esc: đang add (hoặc có draft vẽ vùng mới) → hủy về select.
-    React.useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
-                return;
-            }
-            const target = event.target as HTMLElement | null;
-            if (target && isKeyboardEditableTarget(target)) {
-                return;
-            }
-            if (canvasMode === 'preview') {
-                return;
-            }
-            if (event.key === 'Escape') {
-                if (regionMode !== 'add' && draftPoints.length === 0) {
-                    return;
-                }
-                if (bgSampleMode) {
-                    return;
-                }
-                event.preventDefault();
-                handleCancelAddRegionSession();
-                return;
-            }
-            if (event.key !== 'e' && event.key !== 'E') {
-                return;
-            }
-            event.preventDefault();
-            if (regionMode === 'add') {
-                handleCancelAddRegionSession();
-            } else {
-                handleStartAddRegion();
-            }
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [
-        bgSampleMode,
-        canvasMode,
-        draftPoints.length,
-        handleCancelAddRegionSession,
-        handleStartAddRegion,
-        regionMode,
-    ]);
-
     // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
     const [keepBgBusy, setKeepBgBusy] = React.useState<string | null>(null);
-    const [sam2Busy, setSam2Busy] = React.useState(false);
+    /** Region ids đang chờ / đang chạy BiRefNet (scan overlay + spinner nút). */
+    const [sam2BusyRegionIds, setSam2BusyRegionIds] = React.useState<string[]>([]);
+    const sam2Busy = sam2BusyRegionIds.length > 0;
+    type BirefnetQueueJob = { id: string; points: BeatRegionPoint[] };
+    const birefnetQueueRef = React.useRef<BirefnetQueueJob[]>([]);
+    const birefnetRunningRef = React.useRef(false);
     // Points GỐC của vùng trước khi refine — để revert về "toàn vùng".
     const [originalPointsByRegion, setOriginalPointsByRegion] = React.useState<
         Record<string, BeatRegionPoint[]>
@@ -986,6 +1044,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         removeEffect,
         clearEffects,
         moveLayer,
+        setEffectsLocal,
     } = useBeatTimelineEffects({
         beatDurationSec: sceneBudgetSec,
         playheadSec,
@@ -999,6 +1058,51 @@ export default function ShortVideoAgentBeatRegionEditor({
     );
 
     const handleClearAllTimelineItems = React.useCallback(() => {
+        if (timelineViewMode === 'group' && activeGroupId) {
+            const gid = activeGroupId;
+            const groupRegions = regions.filter((region) => String(region.group_id || '').trim() === gid);
+            const groupOverlays = imageOverlays.filter((overlay) => String(overlay.group_id || '').trim() === gid);
+            const groupEffects = timelineEffects.filter((effect) => String(effect.group_id || '').trim() === gid);
+            const total = groupRegions.length + groupOverlays.length + groupEffects.length;
+            if (total <= 0) {
+                notify('Group không còn item nào', 'info');
+                setTimelineViewMode('main');
+                setActiveGroupId(null);
+                setMultiSelectedKeys([]);
+                return;
+            }
+            if (!window.confirm(
+                `Xóa tất cả ${total} mục trong group đang xem?\nVùng/ảnh thêm cần bấm "Lưu vùng" để ghi DB.`,
+            )) {
+                return;
+            }
+            const regionIds = new Set(groupRegions.map((item) => item.id));
+            const overlayIds = new Set(groupOverlays.map((item) => item.id));
+            birefnetQueueRef.current = birefnetQueueRef.current.filter((job) => !regionIds.has(job.id));
+            setSam2BusyRegionIds((prev) => prev.filter((id) => !regionIds.has(id)));
+            setRegions((prev) => prev.filter((region) => !regionIds.has(region.id)));
+            setImageOverlays((prev) => prev.filter((overlay) => !overlayIds.has(overlay.id)));
+            setSelectedRegionId('');
+            setSelectedOverlayId('');
+            setSelectedEffectId('');
+            setMultiSelectedKeys([]);
+            setOriginalPointsByRegion((prev) => {
+                const next = { ...prev };
+                regionIds.forEach((id) => { delete next[id]; });
+                return next;
+            });
+            setTimelineViewMode('main');
+            setActiveGroupId(null);
+            void Promise.all(groupEffects.map((effect) => removeEffect(effect.id))).then((results) => {
+                const ok = results.every(Boolean);
+                if (ok) {
+                    notify(`Đã xóa ${total} mục trong group`, 'success');
+                } else {
+                    notify('Đã xóa vùng/ảnh thêm — một số hiệu ứng xóa thất bại', 'warning');
+                }
+            });
+            return;
+        }
         const total = regions.length + imageOverlays.length + timelineEffects.length;
         if (total <= 0) {
             notify('Timeline đã trống', 'info');
@@ -1014,7 +1118,12 @@ export default function ShortVideoAgentBeatRegionEditor({
         setSelectedRegionId('');
         setSelectedOverlayId('');
         setSelectedEffectId('');
+        setTimelineViewMode('main');
+        setActiveGroupId(null);
+        setMultiSelectedKeys([]);
         setOriginalPointsByRegion({});
+        birefnetQueueRef.current = [];
+        setSam2BusyRegionIds([]);
         setDraftPoints([]);
         setRegionMode('select');
         void clearEffects().then((ok) => {
@@ -1025,12 +1134,273 @@ export default function ShortVideoAgentBeatRegionEditor({
             }
         });
     }, [
+        activeGroupId,
         clearEffects,
-        imageOverlays.length,
+        imageOverlays,
         notify,
-        regions.length,
-        timelineEffects.length,
+        regions,
+        removeEffect,
+        timelineEffects,
+        timelineViewMode,
     ]);
+
+    const enterGroupView = React.useCallback((groupId: string) => {
+        const gid = String(groupId || '').trim();
+        if (!gid) return;
+        setTimelineViewMode('group');
+        setActiveGroupId(gid);
+        setMultiSelectedKeys([]);
+    }, []);
+
+    const exitGroupView = React.useCallback(() => {
+        setTimelineViewMode('main');
+        setActiveGroupId(null);
+        setMultiSelectedKeys([]);
+    }, []);
+
+    const allGroupMemberById = React.useMemo(() => {
+        const map: Record<string, GroupSelectionKey[]> = {};
+        regions.forEach((region) => {
+            const gid = String(region.group_id || '').trim();
+            if (!gid) return;
+            map[gid] = map[gid] || [];
+            map[gid].push(makeGroupSelectionKey('region', region.id));
+        });
+        imageOverlays.forEach((overlay) => {
+            const gid = String(overlay.group_id || '').trim();
+            if (!gid) return;
+            map[gid] = map[gid] || [];
+            map[gid].push(makeGroupSelectionKey('overlay', overlay.id));
+        });
+        timelineEffects.forEach((effect) => {
+            const gid = String(effect.group_id || '').trim();
+            if (!gid) return;
+            map[gid] = map[gid] || [];
+            map[gid].push(makeGroupSelectionKey('effect', effect.id));
+        });
+        return map;
+    }, [regions, imageOverlays, timelineEffects]);
+
+    /** Tách group đang xem: mọi member mất group_id / group_order / group_name → về timeline chính. */
+    const ungroupActiveGroup = React.useCallback(() => {
+        const gid = String(activeGroupId || '').trim();
+        if (!gid || timelineViewMode !== 'group') {
+            return;
+        }
+        const memberKeys = allGroupMemberById[gid] || [];
+        const count = memberKeys.length;
+        setRegions((prev) => prev.map((region) => {
+            if (String(region.group_id || '').trim() !== gid) {
+                return region;
+            }
+            return {
+                ...region,
+                group_id: undefined,
+                group_order: undefined,
+                group_name: undefined,
+            };
+        }));
+        setImageOverlays((prev) => prev.map((overlay) => {
+            if (String(overlay.group_id || '').trim() !== gid) {
+                return overlay;
+            }
+            return {
+                ...overlay,
+                group_id: undefined,
+                group_order: undefined,
+                group_name: undefined,
+            };
+        }));
+        setEffectsLocal((prev) => prev.map((effect) => {
+            if (String(effect.group_id || '').trim() !== gid) {
+                return effect;
+            }
+            return {
+                ...effect,
+                group_id: undefined,
+                group_order: undefined,
+                group_name: undefined,
+            };
+        }));
+        exitGroupView();
+        notify(
+            count > 0
+                ? `Đã tách group (${count} item về timeline chính)`
+                : 'Đã tách group',
+            'success',
+        );
+    }, [
+        activeGroupId,
+        allGroupMemberById,
+        exitGroupView,
+        notify,
+        setEffectsLocal,
+        timelineViewMode,
+    ]);
+
+    const activeGroupMemberSet = React.useMemo(() => {
+        if (timelineViewMode !== 'group' || !activeGroupId) {
+            return null;
+        }
+        return new Set(allGroupMemberById[activeGroupId] || []);
+    }, [timelineViewMode, activeGroupId, allGroupMemberById]);
+
+    const syntheticGroupRegions = React.useMemo((): BeatRegion[] => {
+        if (timelineViewMode !== 'main') return [];
+        const duration = Math.max(0.1, beatTimeline.beatDurationSec);
+        const effectDur = Math.max(0.1, sceneBudgetSec);
+        return Object.entries(allGroupMemberById).map(([groupId, members]) => {
+            let minStart = duration;
+            let maxEnd = 0;
+            members.forEach((key) => {
+                const parsed = parseGroupSelectionKey(key);
+                if (!parsed) return;
+                if (parsed.type === 'region') {
+                    const region = regions.find((item) => item.id === parsed.id);
+                    if (!region) return;
+                    const s = Number.isFinite(Number(region.start_sec)) ? Math.max(0, Number(region.start_sec)) : 0;
+                    let e = Number.isFinite(Number(region.end_sec)) ? Math.max(s + 0.1, Number(region.end_sec)) : duration;
+                    // Envelope gồm stripe hiệu ứng sau render (+loang…) tới hết visual.
+                    e += Math.max(0, renderPlaceEffectAfterSec(region));
+                    if (isRegionAttentionEnabled(region.attention_start_sec, region.attention_end_sec)) {
+                        const attStart = Number(region.attention_start_sec);
+                        const attEnd = Number(region.attention_end_sec);
+                        if (Number.isFinite(attStart)) {
+                            minStart = Math.min(minStart, Math.max(0, attStart));
+                        }
+                        if (Number.isFinite(attEnd)) {
+                            e = Math.max(e, attEnd);
+                        }
+                    }
+                    minStart = Math.min(minStart, s);
+                    maxEnd = Math.max(maxEnd, e);
+                    return;
+                }
+                if (parsed.type === 'overlay') {
+                    const overlay = imageOverlays.find((item) => item.id === parsed.id);
+                    if (!overlay) return;
+                    const s = Math.max(0, Number(overlay.start_sec) || 0);
+                    const barEnd = resolveOverlayEndSec(overlay, duration);
+                    // hold_to_end → ảnh ở lại hết frame; cộng thêm stripe hiệu ứng sau end.
+                    let e = overlay.hold_to_end ? duration : barEnd;
+                    e = Math.max(e, barEnd + Math.max(0, renderPlaceEffectAfterSec(overlay)));
+                    if (isRegionAttentionEnabled(overlay.attention_start_sec, overlay.attention_end_sec)) {
+                        const attStart = Number(overlay.attention_start_sec);
+                        const attEnd = Number(overlay.attention_end_sec);
+                        if (Number.isFinite(attStart)) {
+                            minStart = Math.min(minStart, Math.max(0, attStart));
+                        }
+                        if (Number.isFinite(attEnd)) {
+                            e = Math.max(e, attEnd);
+                        }
+                    }
+                    minStart = Math.min(minStart, s);
+                    maxEnd = Math.max(maxEnd, e);
+                    return;
+                }
+                const effect = timelineEffects.find((item) => item.id === parsed.id);
+                if (!effect) return;
+                // Hiệu ứng timeline (zoom…) — span trên trục scene budget, map sang beat track.
+                const s = Math.max(0, Math.min(effectDur, Number(effect.start_sec) || 0));
+                const e = Math.max(s + 0.1, Math.min(effectDur, Number(effect.end_sec) || s + 0.1));
+                minStart = Math.min(minStart, s);
+                maxEnd = Math.max(maxEnd, e);
+            });
+            if (!(maxEnd > minStart)) {
+                minStart = 0;
+                maxEnd = Math.min(duration, 1.5);
+            }
+            let groupName = '';
+            for (const key of members) {
+                const parsed = parseGroupSelectionKey(key);
+                if (!parsed) continue;
+                if (parsed.type === 'region') {
+                    groupName = String(regions.find((item) => item.id === parsed.id)?.group_name || '').trim();
+                } else if (parsed.type === 'overlay') {
+                    groupName = String(imageOverlays.find((item) => item.id === parsed.id)?.group_name || '').trim();
+                } else {
+                    groupName = String(timelineEffects.find((item) => item.id === parsed.id)?.group_name || '').trim();
+                }
+                if (groupName) break;
+            }
+            return {
+                id: makeSyntheticGroupRegionId(groupId),
+                name: groupName || `Group (${members.length})`,
+                points: [[0.02, 0.02], [0.03, 0.02], [0.025, 0.03]],
+                action: 'draw' as const,
+                start_sec: Math.max(0, Math.min(duration, minStart)),
+                end_sec: Math.max(0.1, Math.min(duration, maxEnd)),
+                group_id: groupId,
+                group_order: 0,
+                group_name: groupName || null,
+            };
+        });
+    }, [
+        timelineViewMode,
+        beatTimeline.beatDurationSec,
+        sceneBudgetSec,
+        allGroupMemberById,
+        regions,
+        imageOverlays,
+        timelineEffects,
+    ]);
+
+    const displayRegions = React.useMemo(() => {
+        if (timelineViewMode === 'group' && activeGroupMemberSet) {
+            return regions.filter((region) => activeGroupMemberSet.has(makeGroupSelectionKey('region', region.id)));
+        }
+        if (timelineViewMode === 'main') {
+            const ungrouped = regions.filter((region) => !String(region.group_id || '').trim());
+            // Vùng lẻ (kể cả mới tạo) nằm DƯỚI các group trên timeline.
+            return [...syntheticGroupRegions, ...ungrouped];
+        }
+        return regions;
+    }, [timelineViewMode, activeGroupMemberSet, regions, syntheticGroupRegions]);
+
+    const displayOverlays = React.useMemo(() => {
+        if (timelineViewMode === 'group' && activeGroupMemberSet) {
+            return imageOverlays.filter((overlay) => activeGroupMemberSet.has(makeGroupSelectionKey('overlay', overlay.id)));
+        }
+        if (timelineViewMode === 'main') {
+            return imageOverlays.filter((overlay) => !String(overlay.group_id || '').trim());
+        }
+        return imageOverlays;
+    }, [timelineViewMode, activeGroupMemberSet, imageOverlays]);
+
+    const displayTimelineEffects = React.useMemo(() => {
+        if (timelineViewMode === 'group' && activeGroupMemberSet) {
+            return timelineEffects.filter((effect) => activeGroupMemberSet.has(makeGroupSelectionKey('effect', effect.id)));
+        }
+        if (timelineViewMode === 'main') {
+            return timelineEffects.filter((effect) => !String(effect.group_id || '').trim());
+        }
+        return timelineEffects;
+    }, [timelineViewMode, activeGroupMemberSet, timelineEffects]);
+
+    const canvasRegions = React.useMemo(() => {
+        if (timelineViewMode === 'group' && activeGroupMemberSet) {
+            return regions.filter((region) => activeGroupMemberSet.has(makeGroupSelectionKey('region', region.id)));
+        }
+        return regions;
+    }, [timelineViewMode, activeGroupMemberSet, regions]);
+
+    const canvasOverlays = React.useMemo(() => {
+        if (timelineViewMode === 'group' && activeGroupMemberSet) {
+            return imageOverlays.filter((overlay) => activeGroupMemberSet.has(makeGroupSelectionKey('overlay', overlay.id)));
+        }
+        return imageOverlays;
+    }, [timelineViewMode, activeGroupMemberSet, imageOverlays]);
+
+    React.useEffect(() => {
+        if (timelineViewMode !== 'group' || !activeGroupId) {
+            return;
+        }
+        if ((allGroupMemberById[activeGroupId] || []).length <= 0) {
+            setTimelineViewMode('main');
+            setActiveGroupId(null);
+            setMultiSelectedKeys([]);
+        }
+    }, [timelineViewMode, activeGroupId, allGroupMemberById]);
 
     const buildBeatOverridePayload = React.useCallback((): Partial<AgentWhiteboardBeatOverride> => ({
         regions: buildRegionsToSave(),
@@ -1039,6 +1409,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     }), [buildOverlaysToSave, buildRegionsToSave, timelineEffects]);
 
     const selectRegion = React.useCallback((id: string) => {
+        const groupId = parseSyntheticGroupId(id);
+        if (groupId) {
+            return;
+        }
         setSelectedOverlayId('');
         setSelectedEffectId('');
         setSelectedRegionId(id);
@@ -1119,6 +1493,431 @@ export default function ShortVideoAgentBeatRegionEditor({
         setSelectedEffectId(id);
         setRightPanelTab('edit');
     }, []);
+
+    const clearTimelineSelection = React.useCallback(() => {
+        setSelectedRegionId('');
+        setSelectedOverlayId('');
+        setSelectedEffectId('');
+        setMultiSelectedKeys([]);
+    }, []);
+
+    const resolveMemberGroupId = React.useCallback((type: GroupItemType, id: string): string | null => {
+        if (type === 'region') {
+            const syn = parseSyntheticGroupId(id);
+            if (syn) return syn;
+            return String(regions.find((item) => item.id === id)?.group_id || '').trim() || null;
+        }
+        if (type === 'overlay') {
+            return String(imageOverlays.find((item) => item.id === id)?.group_id || '').trim() || null;
+        }
+        return String(timelineEffects.find((item) => item.id === id)?.group_id || '').trim() || null;
+    }, [regions, imageOverlays, timelineEffects]);
+
+    /** Click 1 item thuộc group (chỉ timeline tổng) → active toàn bộ member + thanh group. */
+    const selectExistingGroup = React.useCallback((
+        groupId: string,
+        primary: { type: GroupItemType; id: string },
+    ) => {
+        const gid = String(groupId || '').trim();
+        if (!gid) return false;
+        const members = allGroupMemberById[gid] || [];
+        if (members.length === 0) return false;
+        const keys: GroupSelectionKey[] = [
+            ...members,
+            makeGroupSelectionKey('region', makeSyntheticGroupRegionId(gid)),
+        ];
+        setMultiSelectedKeys(keys);
+        if (primary.type === 'region') {
+            if (parseSyntheticGroupId(primary.id)) {
+                setSelectedRegionId(primary.id);
+                setSelectedOverlayId('');
+                setSelectedEffectId('');
+            } else {
+                selectRegion(primary.id);
+            }
+            return true;
+        }
+        if (primary.type === 'overlay') {
+            selectOverlay(primary.id);
+            return true;
+        }
+        selectEffect(primary.id);
+        return true;
+    }, [allGroupMemberById, selectEffect, selectOverlay, selectRegion]);
+
+    const updateMultiSelection = React.useCallback((key: GroupSelectionKey, shiftKey?: boolean) => {
+        if (!shiftKey) {
+            setMultiSelectedKeys([key]);
+            return;
+        }
+        setMultiSelectedKeys((prev) => {
+            if (prev.includes(key)) {
+                return prev.filter((item) => item !== key);
+            }
+            return [...prev, key];
+        });
+    }, []);
+
+    /** Trong group view: luôn chọn đúng 1 item, bỏ qua Shift. */
+    const selectSingleInGroupView = React.useCallback((
+        type: GroupItemType,
+        id: string,
+    ) => {
+        if (type === 'region') {
+            selectRegion(id);
+        } else if (type === 'overlay') {
+            selectOverlay(id);
+        } else {
+            selectEffect(id);
+        }
+        setMultiSelectedKeys([makeGroupSelectionKey(type, id)]);
+    }, [selectEffect, selectOverlay, selectRegion]);
+
+    const selectRegionFromTimeline = React.useCallback((id: string, meta?: { shiftKey?: boolean; doubleClick?: boolean }) => {
+        const synGroupId = parseSyntheticGroupId(id);
+        const inGroupView = timelineViewMode === 'group';
+
+        if (inGroupView) {
+            // Group view: không enter lại; không multi; không select-cả-group.
+            if (meta?.doubleClick) return;
+            if (synGroupId) return;
+            selectSingleInGroupView('region', id);
+            return;
+        }
+
+        // --- Main timeline ---
+        if (synGroupId) {
+            if (meta?.doubleClick) {
+                enterGroupView(synGroupId);
+                return;
+            }
+            if (!meta?.shiftKey) {
+                selectExistingGroup(synGroupId, { type: 'region', id });
+                return;
+            }
+            // Shift: toggle đúng 1 key (synthetic) — dùng khi tạo group mới.
+            updateMultiSelection(makeGroupSelectionKey('region', id), true);
+            setSelectedOverlayId('');
+            setSelectedEffectId('');
+            setSelectedRegionId(id);
+            return;
+        }
+        const memberGroupId = resolveMemberGroupId('region', id);
+        if (meta?.doubleClick) {
+            if (memberGroupId) {
+                enterGroupView(memberGroupId);
+            }
+            return;
+        }
+        if (!meta?.shiftKey && memberGroupId) {
+            selectExistingGroup(memberGroupId, { type: 'region', id });
+            return;
+        }
+        selectRegion(id);
+        updateMultiSelection(makeGroupSelectionKey('region', id), meta?.shiftKey);
+    }, [
+        enterGroupView,
+        resolveMemberGroupId,
+        selectExistingGroup,
+        selectRegion,
+        selectSingleInGroupView,
+        timelineViewMode,
+        updateMultiSelection,
+    ]);
+
+    const selectOverlayFromTimeline = React.useCallback((id: string, meta?: { shiftKey?: boolean; doubleClick?: boolean }) => {
+        if (timelineViewMode === 'group') {
+            if (meta?.doubleClick) return;
+            selectSingleInGroupView('overlay', id);
+            return;
+        }
+        const memberGroupId = resolveMemberGroupId('overlay', id);
+        if (meta?.doubleClick) {
+            if (memberGroupId) {
+                enterGroupView(memberGroupId);
+            }
+            return;
+        }
+        if (!meta?.shiftKey && memberGroupId) {
+            selectExistingGroup(memberGroupId, { type: 'overlay', id });
+            return;
+        }
+        selectOverlay(id);
+        updateMultiSelection(makeGroupSelectionKey('overlay', id), meta?.shiftKey);
+    }, [
+        enterGroupView,
+        resolveMemberGroupId,
+        selectExistingGroup,
+        selectOverlay,
+        selectSingleInGroupView,
+        timelineViewMode,
+        updateMultiSelection,
+    ]);
+
+    const selectEffectFromTimeline = React.useCallback((id: string, meta?: { shiftKey?: boolean; doubleClick?: boolean }) => {
+        if (timelineViewMode === 'group') {
+            if (meta?.doubleClick) return;
+            selectSingleInGroupView('effect', id);
+            return;
+        }
+        const memberGroupId = resolveMemberGroupId('effect', id);
+        if (meta?.doubleClick) {
+            if (memberGroupId) {
+                enterGroupView(memberGroupId);
+            }
+            return;
+        }
+        if (!meta?.shiftKey && memberGroupId) {
+            selectExistingGroup(memberGroupId, { type: 'effect', id });
+            return;
+        }
+        selectEffect(id);
+        updateMultiSelection(makeGroupSelectionKey('effect', id), meta?.shiftKey);
+    }, [
+        enterGroupView,
+        resolveMemberGroupId,
+        selectExistingGroup,
+        selectEffect,
+        selectSingleInGroupView,
+        timelineViewMode,
+        updateMultiSelection,
+    ]);
+
+    const existingGroupNames = React.useMemo(() => {
+        const names: string[] = [];
+        const seen = new Set<string>();
+        const pushName = (groupId: string | null | undefined, groupName: string | null | undefined) => {
+            const gid = String(groupId || '').trim();
+            if (!gid || seen.has(gid)) return;
+            seen.add(gid);
+            const name = String(groupName || '').trim();
+            if (name) names.push(name);
+        };
+        regions.forEach((item) => pushName(item.group_id, item.group_name));
+        imageOverlays.forEach((item) => pushName(item.group_id, item.group_name));
+        timelineEffects.forEach((item) => pushName(item.group_id, item.group_name));
+        return names;
+    }, [regions, imageOverlays, timelineEffects]);
+
+    const groupableSelectionCount = React.useMemo(() => (
+        multiSelectedKeys.filter((key) => {
+            const parsed = parseGroupSelectionKey(key);
+            return Boolean(parsed && !parseSyntheticGroupId(parsed.id));
+        }).length
+    ), [multiSelectedKeys]);
+
+    /** Đang chọn 1 group có sẵn (mọi member cùng group_id) — không phải multi-select để tạo group mới. */
+    const selectedSharedGroupId = React.useMemo(() => {
+        const items = multiSelectedKeys
+            .map((key) => parseGroupSelectionKey(key))
+            .filter((item): item is { type: GroupItemType; id: string } => Boolean(item))
+            .filter((item) => !parseSyntheticGroupId(item.id));
+        if (items.length === 0) return null;
+        let shared: string | null = null;
+        for (const item of items) {
+            const gid = resolveMemberGroupId(item.type, item.id);
+            if (!gid) return null;
+            if (shared == null) shared = gid;
+            else if (shared !== gid) return null;
+        }
+        return shared;
+    }, [multiSelectedKeys, resolveMemberGroupId]);
+
+    /** Main + đang chọn cả group (có key synthetic) → panel tên group, khóa edit item. */
+    const isGroupSelectedOnMain = React.useMemo(() => {
+        if (timelineViewMode !== 'main' || !selectedSharedGroupId) return false;
+        const synKey = makeGroupSelectionKey('region', makeSyntheticGroupRegionId(selectedSharedGroupId));
+        return multiSelectedKeys.includes(synKey);
+    }, [timelineViewMode, selectedSharedGroupId, multiSelectedKeys]);
+
+    const isMultiSelecting = groupableSelectionCount > 1 && !isGroupSelectedOnMain;
+
+    const isSelectionKeyActive = React.useCallback((type: GroupItemType, id: string) => (
+        multiSelectedKeys.includes(makeGroupSelectionKey(type, id))
+    ), [multiSelectedKeys]);
+
+    const selectedGroupDisplayName = React.useMemo(() => {
+        if (!selectedSharedGroupId) return '';
+        const gid = selectedSharedGroupId;
+        for (const region of regions) {
+            if (String(region.group_id || '').trim() === gid) {
+                return String(region.group_name ?? '');
+            }
+        }
+        for (const overlay of imageOverlays) {
+            if (String(overlay.group_id || '').trim() === gid) {
+                return String(overlay.group_name ?? '');
+            }
+        }
+        for (const effect of timelineEffects) {
+            if (String(effect.group_id || '').trim() === gid) {
+                return String(effect.group_name ?? '');
+            }
+        }
+        return '';
+    }, [selectedSharedGroupId, regions, imageOverlays, timelineEffects]);
+
+    const renameSelectedGroup = React.useCallback((nextName: string) => {
+        const gid = selectedSharedGroupId;
+        if (!gid || timelineViewMode !== 'main') return;
+        const name = String(nextName || '');
+        setRegions((prev) => prev.map((region) => (
+            String(region.group_id || '').trim() === gid
+                ? { ...region, group_name: name }
+                : region
+        )));
+        setImageOverlays((prev) => prev.map((overlay) => (
+            String(overlay.group_id || '').trim() === gid
+                ? { ...overlay, group_name: name }
+                : overlay
+        )));
+        setEffectsLocal((prev) => prev.map((effect) => (
+            String(effect.group_id || '').trim() === gid
+                ? { ...effect, group_name: name }
+                : effect
+        )));
+    }, [selectedSharedGroupId, timelineViewMode, setEffectsLocal]);
+
+    const commitSelectedGroupName = React.useCallback(() => {
+        const gid = selectedSharedGroupId;
+        if (!gid || timelineViewMode !== 'main') return;
+        const current = selectedGroupDisplayName.trim();
+        if (current) return;
+        const fallback = nextDefaultGroupName(existingGroupNames);
+        renameSelectedGroup(fallback);
+    }, [
+        selectedSharedGroupId,
+        timelineViewMode,
+        selectedGroupDisplayName,
+        existingGroupNames,
+        renameSelectedGroup,
+    ]);
+
+    const openCreateGroupDialog = React.useCallback(() => {
+        if (groupableSelectionCount < 2) {
+            notify('Cần chọn ít nhất 2 item để tạo group', 'warning');
+            return;
+        }
+        setGroupDialogName(nextDefaultGroupName(existingGroupNames));
+        setGroupDialogOpen(true);
+    }, [existingGroupNames, groupableSelectionCount, notify]);
+
+    const groupSelectedItems = React.useCallback((rawName?: string) => {
+        const selected = multiSelectedKeys
+            .map((key) => parseGroupSelectionKey(key))
+            .filter((item): item is { type: GroupItemType; id: string } => Boolean(item))
+            .filter((item) => !parseSyntheticGroupId(item.id));
+        if (selected.length < 2) {
+            notify('Cần chọn ít nhất 2 item để tạo group', 'warning');
+            return;
+        }
+        const seedRegionIds = selected
+            .filter((item) => item.type === 'region')
+            .map((item) => item.id);
+        const familyRegionList = expandRegionFamilyIds(regions, seedRegionIds);
+        const familyRegionIds = new Set(familyRegionList);
+        const expanded: { type: GroupItemType; id: string }[] = [
+            ...selected.filter((item) => item.type !== 'region'),
+            ...familyRegionList.map((id) => ({ type: 'region' as const, id })),
+        ];
+        // Deduplicate by type:id
+        const seen = new Set<string>();
+        const members = expanded.filter((item) => {
+            const key = `${item.type}:${item.id}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        const groupId = `grp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        const groupName = String(rawName || '').trim() || nextDefaultGroupName(existingGroupNames);
+        const orderByType: Record<GroupItemType, number> = { region: 0, overlay: 0, effect: 0 };
+        setRegions((prev) => prev.map((region) => {
+            if (!familyRegionIds.has(region.id)) return region;
+            return {
+                ...region,
+                group_id: groupId,
+                group_order: orderByType.region++,
+                group_name: groupName,
+            };
+        }));
+        setImageOverlays((prev) => prev.map((overlay) => {
+            const idx = members.findIndex((item) => item.type === 'overlay' && item.id === overlay.id);
+            if (idx < 0) return overlay;
+            return {
+                ...overlay,
+                group_id: groupId,
+                group_order: orderByType.overlay++,
+                group_name: groupName,
+            };
+        }));
+        setEffectsLocal((prev) => prev.map((effect) => {
+            const idx = members.findIndex((item) => item.type === 'effect' && item.id === effect.id);
+            if (idx < 0) return effect;
+            return {
+                ...effect,
+                group_id: groupId,
+                group_order: orderByType.effect++,
+                group_name: groupName,
+            };
+        }));
+        setGroupDialogOpen(false);
+        setMultiSelectedKeys([]);
+        const seedSet = new Set(seedRegionIds);
+        const autoAdded = familyRegionList.filter((id) => !seedSet.has(id)).length;
+        notify(
+            autoAdded > 0
+                ? `Đã tạo group "${groupName}" (${members.length} item, +${autoAdded} vùng cha/con)`
+                : `Đã tạo group "${groupName}" (${members.length} item)`,
+            'success',
+        );
+        enterGroupView(groupId);
+    }, [multiSelectedKeys, notify, enterGroupView, setEffectsLocal, existingGroupNames, regions]);
+
+    const shiftSyntheticGroupTiming = React.useCallback((syntheticId: string, patch: Partial<BeatRegion>) => {
+        const groupId = parseSyntheticGroupId(syntheticId);
+        if (!groupId) return false;
+        const members = allGroupMemberById[groupId] || [];
+        if (members.length === 0) return false;
+        const synthetic = syntheticGroupRegions.find((item) => item.id === syntheticId);
+        if (!synthetic) return false;
+        const baseStart = Number(synthetic.start_sec || 0);
+        const nextStart = Number(patch.start_sec);
+        const delta = Number.isFinite(nextStart) ? nextStart - baseStart : 0;
+        if (Math.abs(delta) < 0.0001) return true;
+        setRegions((prev) => prev.map((region) => {
+            if (!members.includes(makeGroupSelectionKey('region', region.id))) return region;
+            const s = Number.isFinite(Number(region.start_sec)) ? Number(region.start_sec) : 0;
+            const e = Number.isFinite(Number(region.end_sec)) ? Number(region.end_sec) : Math.max(0.1, s + 1);
+            return {
+                ...region,
+                start_sec: Math.max(0, s + delta),
+                end_sec: Math.max(0.1, e + delta),
+            };
+        }));
+        setImageOverlays((prev) => prev.map((overlay) => {
+            if (!members.includes(makeGroupSelectionKey('overlay', overlay.id))) return overlay;
+            return {
+                ...overlay,
+                start_sec: Math.max(0, overlay.start_sec + delta),
+                end_sec: Math.max(0.1, overlay.end_sec + delta),
+            };
+        }));
+        setEffectsLocal((prev) => prev.map((effect) => {
+            if (!members.includes(makeGroupSelectionKey('effect', effect.id))) return effect;
+            return {
+                ...effect,
+                start_sec: Math.max(0, effect.start_sec + delta),
+                end_sec: Math.max(0.1, effect.end_sec + delta),
+                ...(effect.type === 'zoom'
+                    ? {
+                        zoom_in_end_sec: Math.max(0, effect.zoom_in_end_sec + delta),
+                        hold_end_sec: Math.max(0, effect.hold_end_sec + delta),
+                    }
+                    : {}),
+            };
+        }));
+        return true;
+    }, [allGroupMemberById, syntheticGroupRegions, setEffectsLocal]);
 
     const handleAddTimelineEffect = React.useCallback(async (type: BeatTimelineEffectType) => {
         const created = await addEffect(type);
@@ -1228,6 +2027,8 @@ export default function ShortVideoAgentBeatRegionEditor({
     const dragStartRef = React.useRef<[number, number] | null>(null);
     const dragActiveRef = React.useRef(false);
     const lastDragPtRef = React.useRef<[number, number] | null>(null);
+    /** Đã bắt đầu kéo HCN (giữ B) — giữ chế độ HCN đến khi thả chuột dù đã nhả B. */
+    const rectDragLockedRef = React.useRef(false);
     const suppressClickRef = React.useRef(false);
 
     const handleSvgMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
@@ -1301,6 +2102,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         dragStartRef.current = pt;
         dragActiveRef.current = false;
+        rectDragLockedRef.current = false;
         suppressClickRef.current = false;
         lastDragPtRef.current = pt;
         setDragging(true);
@@ -1337,12 +2139,20 @@ export default function ShortVideoAgentBeatRegionEditor({
                 return;
             }
             if (Math.hypot(pt[0] - start[0], pt[1] - start[1]) > 0.004) {
-                // Vượt ngưỡng → chuyển sang chế độ kéo: điểm đầu + trail điểm.
+                // Vượt ngưỡng → chuyển sang chế độ kéo.
                 dragActiveRef.current = true;
                 lastDragPtRef.current = pt;
                 setDraftIsDrag(true);
                 if (bgSampleMode) {
                     setBgSampleDraft([start, pt]);
+                } else if (bKeyHeldRef.current || rectDragLockedRef.current) {
+                    // Giữ B (hoặc đang kéo HCN): đường chéo → 4 đỉnh hình chữ nhật.
+                    rectDragLockedRef.current = true;
+                    const x0 = Math.min(start[0], pt[0]);
+                    const x1 = Math.max(start[0], pt[0]);
+                    const y0 = Math.min(start[1], pt[1]);
+                    const y1 = Math.max(start[1], pt[1]);
+                    setDraftPoints([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
                 } else {
                     setDraftPoints([start, pt]);
                 }
@@ -1350,6 +2160,19 @@ export default function ShortVideoAgentBeatRegionEditor({
             return;
         }
         const last = lastDragPtRef.current;
+        if (rectDragLockedRef.current && !bgSampleMode) {
+            const start = dragStartRef.current;
+            if (!start) {
+                return;
+            }
+            lastDragPtRef.current = pt;
+            const x0 = Math.min(start[0], pt[0]);
+            const x1 = Math.max(start[0], pt[0]);
+            const y0 = Math.min(start[1], pt[1]);
+            const y1 = Math.max(start[1], pt[1]);
+            setDraftPoints([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+            return;
+        }
         if (last && Math.hypot(pt[0] - last[0], pt[1] - last[1]) > 0.004) {
             lastDragPtRef.current = pt;
             if (bgSampleMode) {
@@ -1372,6 +2195,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         dragStartRef.current = null;
         dragActiveRef.current = false;
+        rectDragLockedRef.current = false;
         lastDragPtRef.current = null;
     };
 
@@ -1395,7 +2219,9 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (!isAddActive) {
             const hit = [...sortedRegions].reverse().find((r) => pointInPolygon(x, y, r.points));
             if (hit) {
-                selectRegion(hit.id);
+                selectRegionFromTimeline(hit.id, { shiftKey: event.shiftKey });
+            } else {
+                clearTimelineSelection();
             }
             return;
         }
@@ -1445,6 +2271,17 @@ export default function ShortVideoAgentBeatRegionEditor({
             setDraftIsDrag(false);
             setDraftPoints((prev) => [...prev, [x, y]]);
         }
+    };
+
+    /** Double-click vùng đã thuộc group → vào group view; vùng ngoài group → không làm gì. */
+    const handleSvgDoubleClick = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (focusMode || isAddActive) return;
+        const pt = svgPointFromEvent(event);
+        if (!pt) return;
+        const [x, y] = pt;
+        const hit = [...sortedRegions].reverse().find((r) => pointInPolygon(x, y, r.points));
+        if (!hit) return;
+        selectRegionFromTimeline(hit.id, { doubleClick: true });
     };
 
     // Thêm vùng (union) / Xóa thừa (subtract) trên vùng đang chọn.
@@ -1510,6 +2347,12 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
     };
 
+    const regionsRef = React.useRef(regions);
+    regionsRef.current = regions;
+    const originalPointsByRegionRef = React.useRef(originalPointsByRegion);
+    originalPointsByRegionRef.current = originalPointsByRegion;
+    imgNaturalRef.current = imgNatural;
+
     const finishDraft = () => {
         if (eraseModeRegionId) {
             void applyRegionBoolean(eraseModeRegionId, 'subtract');
@@ -1524,7 +2367,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                 notify('Vùng background cần tối thiểu 3 điểm', 'warning');
                 return;
             }
-            // Gán mẫu background cho vùng ĐANG CHỌN (nút Chọn background của vùng đó).
+            // Gán mẫu background cho vùng ĐANG CHỌN (bấm Chọn background trên vùng đó).
             const targetId = selectedRegionId;
             if (!targetId) {
                 notify('Hãy chọn 1 vùng trước (bấm Chọn background trên vùng đó)', 'warning');
@@ -1540,8 +2383,10 @@ export default function ShortVideoAgentBeatRegionEditor({
             return;
         }
         const parentId = resolveParentRegion(draftPoints, regions);
+        const beatDur = Math.max(0.1, beatTimeline.beatDurationSec);
+        const defaultEndSec = Math.min(1, beatDur);
         const region: BeatRegion = {
-            id: `region-${Date.now()}`,
+            id: `region-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             name: `Vùng ${regions.length + 1}`,
             points: [...draftPoints],
             action: 'place',
@@ -1549,103 +2394,182 @@ export default function ShortVideoAgentBeatRegionEditor({
             place_effect: 'none',
             place_shadow: true,
             start_sec: 0,
+            end_sec: defaultEndSec,
             parent_id: parentId,
             script_start_word: null,
             script_end_word: null,
         };
         const shouldRunBirefnet = birefnetDrawMode;
-        setRegions((prev) => enforceRegionChildOrder([...prev, region]));
+        // Ref phải cập nhật ĐỒNG BỘ — React 18 batch khiến updater setRegions
+        // có thể chạy sau khi queue đã check stillExists → job bị bỏ, không gọi API.
+        const withoutDup = regionsRef.current.filter((r) => r.id !== region.id);
+        const ordered = enforceRegionChildOrder([...withoutDup, region]);
+        // Vùng mới luôn ở CUỐI mảng → dòng timeline dưới cùng (không bị sort depth đẩy lên trên).
+        const nextRegions = [...ordered.filter((r) => r.id !== region.id), region];
+        regionsRef.current = nextRegions;
+        setRegions(nextRegions);
         setSelectedRegionId(region.id);
         setDraftPoints([]);
         setDraftIsDrag(false);
-        setBirefnetDrawMode(false);
-        // One-shot: lưu vùng xong → về chế độ chọn.
-        setRegionMode('select');
         if (shouldRunBirefnet) {
-            runBirefnetRefineOnRegionRef.current(region);
+            // Giữ chế độ BiRefNet để vẽ tiếp vùng kế — không chờ API.
+            setBirefnetDrawMode(true);
+            setRegionMode('add');
+            enqueueBirefnetRefineOnRegionRef.current(region);
+        } else {
+            setBirefnetDrawMode(false);
+            setRegionMode('select');
         }
     };
+    finishDraftRef.current = finishDraft;
 
-    const runBirefnetRefineOnRegion = React.useCallback(async (region: BeatRegion) => {
-        if (sam2Busy) {
+    const removeSam2BusyRegionId = React.useCallback((regionId: string) => {
+        setSam2BusyRegionIds((prev) => prev.filter((id) => id !== regionId));
+    }, []);
+
+    const addSam2BusyRegionId = React.useCallback((regionId: string) => {
+        setSam2BusyRegionIds((prev) => (prev.includes(regionId) ? prev : [...prev, regionId]));
+    }, []);
+
+    const processBirefnetQueue = React.useCallback(async () => {
+        if (birefnetRunningRef.current) {
             return;
         }
-        const sid = Number(state.shortVideoId || 0);
-        if (sid <= 0 || !beatId || !imgNatural) {
-            notify('Ảnh / shortVideoId chưa sẵn sàng', 'warning');
-            return;
-        }
-        if (originalPointsByRegion[region.id]) {
-            return;
-        }
-        const xs = region.points.map((pt) => pt[0]);
-        const ys = region.points.map((pt) => pt[1]);
-        const pad = 0.02;
-        const rect: [number, number, number, number] = [
-            Math.max(0, Math.min(...xs) - pad) * imgNatural.w,
-            Math.max(0, Math.min(...ys) - pad) * imgNatural.h,
-            Math.min(1, Math.max(...xs) + pad) * imgNatural.w,
-            Math.min(1, Math.max(...ys) + pad) * imgNatural.h,
-        ];
-        setSam2Busy(true);
-        notify('Đang tách vật lớn nhất trong vùng vừa vẽ (BiRefNet)…', 'info');
+        birefnetRunningRef.current = true;
         try {
-            const res = await sam2AutoRegionsAgentWhiteboard(sid, beatId, {
-                engine: 'birefnet',
-                rect,
-                poly: region.points.map((pt): [number, number] => [
-                    pt[0] * imgNatural.w,
-                    pt[1] * imgNatural.h,
-                ]),
-            });
-            const pts = (Array.isArray(res?.points) && res.points.length >= 3)
-                ? res.points
-                : (res?.regions?.[0]?.points || []);
-            if (!res?.success || !Array.isArray(pts) || pts.length < 3) {
-                notify(extractMessage(res?.message, 'BiRefNet không chọn được vật trong vùng'), 'warning');
-                return;
-            }
-            const nextPts = pts.map((pt): BeatRegionPoint => [Number(pt[0]), Number(pt[1])]);
-            setOriginalPointsByRegion((prev) => ({
-                ...prev,
-                [region.id]: region.points,
-            }));
-            setRegions((prev) => enforceRegionChildOrder(prev.map((r) => {
-                if (r.id !== region.id) {
-                    return r;
+            while (birefnetQueueRef.current.length > 0) {
+                const job = birefnetQueueRef.current.shift();
+                if (!job) {
+                    break;
                 }
-                return {
-                    ...r,
-                    points: nextPts,
-                    full_points: region.points,
-                    object_points: nextPts,
-                    select_mode: 'object' as const,
-                };
-            })));
-            notify(`BiRefNet đã thu gọn vùng (${res.model || 'birefnet'})`, 'success');
-        } catch (err) {
-            notify(err instanceof Error ? err.message : 'BiRefNet gọi API thất bại', 'error');
+                if (originalPointsByRegionRef.current[job.id]) {
+                    removeSam2BusyRegionId(job.id);
+                    continue;
+                }
+                if (!regionsRef.current.some((r) => r.id === job.id)) {
+                    removeSam2BusyRegionId(job.id);
+                    continue;
+                }
+                const sid = Number(state.shortVideoId || 0);
+                const natural = imgNaturalRef.current;
+                if (sid <= 0 || !beatId || !natural) {
+                    notify('Ảnh / shortVideoId chưa sẵn sàng', 'warning');
+                    removeSam2BusyRegionId(job.id);
+                    continue;
+                }
+                const xs = job.points.map((pt) => pt[0]);
+                const ys = job.points.map((pt) => pt[1]);
+                const pad = 0.02;
+                const rect: [number, number, number, number] = [
+                    Math.max(0, Math.min(...xs) - pad) * natural.w,
+                    Math.max(0, Math.min(...ys) - pad) * natural.h,
+                    Math.min(1, Math.max(...xs) + pad) * natural.w,
+                    Math.min(1, Math.max(...ys) + pad) * natural.h,
+                ];
+                try {
+                    const res = await sam2AutoRegionsAgentWhiteboard(sid, beatId, {
+                        engine: 'birefnet',
+                        rect,
+                        poly: job.points.map((pt): [number, number] => [
+                            pt[0] * natural.w,
+                            pt[1] * natural.h,
+                        ]),
+                    });
+                    if (!regionsRef.current.some((r) => r.id === job.id)) {
+                        continue;
+                    }
+                    const pts = (Array.isArray(res?.points) && res.points.length >= 3)
+                        ? res.points
+                        : (res?.regions?.[0]?.points || []);
+                    if (!res?.success || !Array.isArray(pts) || pts.length < 3) {
+                        notify(
+                            extractMessage(res?.message, 'BiRefNet không chọn được vật trong vùng'),
+                            'warning',
+                        );
+                        continue;
+                    }
+                    const nextPts = pts.map((pt): BeatRegionPoint => [Number(pt[0]), Number(pt[1])]);
+                    setOriginalPointsByRegion((prev) => ({
+                        ...prev,
+                        [job.id]: job.points,
+                    }));
+                    setRegions((prev) => {
+                        const mapped = enforceRegionChildOrder(prev.map((r) => {
+                            if (r.id !== job.id) {
+                                return r;
+                            }
+                            return {
+                                ...r,
+                                points: nextPts,
+                                full_points: job.points,
+                                object_points: nextPts,
+                                select_mode: 'object' as const,
+                            };
+                        }));
+                        regionsRef.current = mapped;
+                        return mapped;
+                    });
+                    notify(`BiRefNet đã thu gọn vùng (${res.model || 'birefnet'})`, 'success');
+                } catch (err) {
+                    notify(err instanceof Error ? err.message : 'BiRefNet gọi API thất bại', 'error');
+                } finally {
+                    removeSam2BusyRegionId(job.id);
+                }
+            }
         } finally {
-            setSam2Busy(false);
+            birefnetRunningRef.current = false;
+            if (birefnetQueueRef.current.length > 0) {
+                void processBirefnetQueue();
+            }
         }
     }, [
         beatId,
         extractMessage,
-        imgNatural,
         notify,
-        originalPointsByRegion,
-        sam2Busy,
+        removeSam2BusyRegionId,
         state.shortVideoId,
     ]);
-    runBirefnetRefineOnRegionRef.current = (region) => {
-        void runBirefnetRefineOnRegion(region);
-    };
+
+    const enqueueBirefnetRefineOnRegion = React.useCallback((region: BeatRegion) => {
+        const sid = Number(state.shortVideoId || 0);
+        const natural = imgNaturalRef.current;
+        if (sid <= 0 || !beatId || !natural) {
+            notify('Ảnh / shortVideoId chưa sẵn sàng', 'warning');
+            return;
+        }
+        if (originalPointsByRegionRef.current[region.id]) {
+            return;
+        }
+        if (birefnetQueueRef.current.some((queued) => queued.id === region.id)) {
+            return;
+        }
+        const job: BirefnetQueueJob = {
+            id: region.id,
+            points: region.points.map((pt): BeatRegionPoint => [pt[0], pt[1]]),
+        };
+        birefnetQueueRef.current.push(job);
+        addSam2BusyRegionId(region.id);
+        const pendingCount = birefnetQueueRef.current.length
+            + (birefnetRunningRef.current ? 1 : 0);
+        notify(
+            pendingCount > 1
+                ? `Đã xếp hàng tách BiRefNet (${pendingCount} vùng)…`
+                : 'Đang tách vật lớn nhất trong vùng vừa vẽ (BiRefNet)…',
+            'info',
+        );
+        void processBirefnetQueue();
+    }, [
+        addSam2BusyRegionId,
+        beatId,
+        notify,
+        processBirefnetQueue,
+        state.shortVideoId,
+    ]);
+    enqueueBirefnetRefineOnRegionRef.current = enqueueBirefnetRefineOnRegion;
+    runBirefnetRefineOnRegionRef.current = enqueueBirefnetRefineOnRegion;
 
     /** Nút BiRefNet: bật chế độ vẽ vùng → khi đóng vùng sẽ auto tách lớp. */
     const handleBirefnetButtonClick = React.useCallback(() => {
-        if (sam2Busy) {
-            return;
-        }
         if (regionMode === 'add' && birefnetDrawMode) {
             handleCancelAddRegionSession();
             return;
@@ -1656,18 +2580,15 @@ export default function ShortVideoAgentBeatRegionEditor({
         setDraftIsDrag(false);
         setBirefnetDrawMode(true);
         setRegionMode('add');
-        notify('Vẽ vùng bao quanh vật — khi xong sẽ tự tách bằng BiRefNet', 'info');
     }, [
         birefnetDrawMode,
         clearBgSampleCanvasMode,
         clearBooleanRegionModes,
         handleCancelAddRegionSession,
-        notify,
         regionMode,
-        sam2Busy,
     ]);
 
-    const handleCancelDraft = () => {
+    const handleCancelDraft = React.useCallback(() => {
         if (bgSampleMode) {
             setBgSampleDraft([]);
             return;
@@ -1680,7 +2601,68 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (regionMode === 'add') {
             setRegionMode('select');
         }
-    };
+    }, [bgSampleMode, clearBooleanRegionModes, regionMode]);
+
+    // Phím E: select → bắt đầu thêm vùng; đang add → hủy về select.
+    // Phím B: toggle vẽ vùng BiRefNet (giống nút Layers).
+    // Esc: đang add → hủy vẽ (giống nút Hủy vẽ); capture + stopPropagation để không đóng drawer.
+    // Enter: đang add → hoàn tất vùng (finishDraft), kể cả chưa click đỉnh #1.
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            const target = event.target as HTMLElement | null;
+            if (target && isKeyboardEditableTarget(target)) {
+                return;
+            }
+            if (canvasMode === 'preview') {
+                return;
+            }
+            if (event.key === 'Escape') {
+                if (regionMode !== 'add' || bgSampleMode) {
+                    return;
+                }
+                // Chặn MUI Drawer (activeOnClose) đóng workspace khi đang hủy vẽ vùng.
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                handleCancelDraft();
+                return;
+            }
+            if (event.key === 'Enter') {
+                if (regionMode !== 'add' || bgSampleMode || groupDialogOpen) {
+                    return;
+                }
+                event.preventDefault();
+                finishDraftRef.current();
+                return;
+            }
+            // Phím B giữ = vẽ HCN (xử lý ở effect riêng). Không toggle ở đây.
+            if (event.key === 'b' || event.key === 'B') {
+                return;
+            }
+            if (event.key !== 'e' && event.key !== 'E') {
+                return;
+            }
+            event.preventDefault();
+            if (regionMode === 'add') {
+                handleCancelAddRegionSession();
+            } else {
+                handleStartAddRegion();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => window.removeEventListener('keydown', onKeyDown, true);
+    }, [
+        bgSampleMode,
+        canvasMode,
+        groupDialogOpen,
+        handleCancelAddRegionSession,
+        handleCancelDraft,
+        handleStartAddRegion,
+        regionMode,
+    ]);
 
     const handleToggleUnionOnSelected = React.useCallback(() => {
         if (!selectedRegionId) {
@@ -1731,6 +2713,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, [addModeRegionId, eraseModeRegionId, selectedRegionId]);
 
     const updateRegion = (id: string, patch: Partial<BeatRegion>) => {
+        if (parseSyntheticGroupId(id)) {
+            shiftSyntheticGroupTiming(id, patch);
+            return;
+        }
         setRegions((prev) => {
             const next = prev.map((region) => {
                 if (region.id !== id) {
@@ -1753,7 +2739,13 @@ export default function ShortVideoAgentBeatRegionEditor({
     };
 
     const handleDeleteRegion = (id: string) => {
-        setRegions((prev) => prev.filter((region) => region.id !== id));
+        birefnetQueueRef.current = birefnetQueueRef.current.filter((job) => job.id !== id);
+        removeSam2BusyRegionId(id);
+        setRegions((prev) => {
+            const next = prev.filter((region) => region.id !== id);
+            regionsRef.current = next;
+            return next;
+        });
         if (selectedRegionId === id) {
             setSelectedRegionId('');
         }
@@ -2015,6 +3007,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     // Zoom / pan ảnh (Photoshop-like): layer ảnh + SVG cùng kích thước contain×zoom
     // + pan → vùng luôn bám đúng. Scroll chuột = zoom theo chuột; Space+kéo = pan.
     const [spaceDown, setSpaceDown] = React.useState(false);
+    /** Giữ phím B: kéo đường chéo → vùng hình chữ nhật (BiRefNet). */
+    const [bKeyHeld, setBKeyHeld] = React.useState(false);
+    const bKeyHeldRef = React.useRef(false);
+    bKeyHeldRef.current = bKeyHeld;
     // Chế độ ĐẶT ĐIỂM TẬP TRUNG: bật → click chỗ nào đặt focus chỗ đó (+ hiện
     // nút đặt lại giữa); tắt → click không đặt focus.
     const [focusMode, setFocusMode] = React.useState(false);
@@ -2139,6 +3135,48 @@ export default function ShortVideoAgentBeatRegionEditor({
             window.removeEventListener('keyup', onKeyUp);
         };
     }, []);
+
+    // Giữ B = BiRefNet + kéo đường chéo tạo hình chữ nhật (thả phím chỉ tắt chế độ HCN).
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'b' && event.key !== 'B') {
+                return;
+            }
+            if (event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            if (isKeyboardEditableTarget(event.target)) {
+                return;
+            }
+            if (canvasMode === 'preview' || !imageUrl) {
+                return;
+            }
+            if (event.repeat) {
+                return;
+            }
+            event.preventDefault();
+            bKeyHeldRef.current = true;
+            setBKeyHeld(true);
+            // Bật chế độ BiRefNet nếu chưa — giữ B không toggle tắt.
+            clearBgSampleCanvasMode();
+            clearBooleanRegionModes();
+            setBirefnetDrawMode(true);
+            setRegionMode('add');
+        };
+        const onKeyUp = (event: KeyboardEvent) => {
+            if (event.key !== 'b' && event.key !== 'B') {
+                return;
+            }
+            bKeyHeldRef.current = false;
+            setBKeyHeld(false);
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+            window.removeEventListener('keyup', onKeyUp, true);
+        };
+    }, [canvasMode, clearBgSampleCanvasMode, clearBooleanRegionModes, imageUrl]);
 
     // Đổi vùng / ảnh thêm → cuộn cột cài đặt về đầu để thấy preview.
     const settingsScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -2482,9 +3520,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                         >
                         <Stack direction="row" spacing={0.75} alignItems="center">
                         <Tooltip
-                            placement="right"
+                            placement="top"
                             title={isDrawingNewRegion
-                                ? 'Đang vẽ vùng — lưu vùng hoặc Esc / E để hủy'
+                                ? 'Đang vẽ vùng — Enter để xong, Esc / E để hủy'
                                 : 'Thêm vùng — click rồi vẽ trên ảnh (phím E)'}
                         >
                             <IconButton
@@ -2504,22 +3542,24 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </IconButton>
                         </Tooltip>
                         <Tooltip
-                            placement="right"
+                            placement="top"
                             title={birefnetDrawMode
-                                ? 'Đang vẽ vùng BiRefNet — đóng vùng để tách lớp, hoặc bấm lại để hủy'
+                                ? (bKeyHeld
+                                    ? 'Đang giữ B — click-kéo đường chéo để vẽ hình chữ nhật quanh vật'
+                                    : 'Đang vẽ BiRefNet — Enter/đóng vùng để tách; giữ B + kéo chéo = HCN; Esc / nút để hủy')
                                 : (sam2Busy
-                                    ? 'Đang chạy BiRefNet…'
-                                    : 'BiRefNet — bấm rồi vẽ vùng bao vật; khi xong tự tách vật lớn nhất')}
+                                    ? `Đang tách ${sam2BusyRegionIds.length} vùng BiRefNet… — vẫn có thể bấm / giữ B để vẽ tiếp`
+                                    : 'BiRefNet — bấm để vẽ vùng; giữ B + kéo đường chéo = hình chữ nhật (dễ hơn)')}
                         >
                             <span>
                                 <IconButton
                                     size="small"
-                                    disabled={!imageUrl || sam2Busy}
+                                    disabled={!imageUrl}
                                     onClick={handleBirefnetButtonClick}
                                     sx={{
                                         width: 32,
                                         height: 32,
-                                        bgcolor: birefnetDrawMode
+                                        bgcolor: birefnetDrawMode || bKeyHeld
                                             ? 'secondary.main'
                                             : (sam2Busy ? 'secondary.dark' : 'rgba(103,58,183,0.85)'),
                                         color: 'common.white',
@@ -2530,7 +3570,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         },
                                     }}
                                 >
-                                    {sam2Busy ? (
+                                    {sam2Busy && !birefnetDrawMode && !bKeyHeld ? (
                                         <CircularProgress size={18} sx={{ color: 'common.white' }} />
                                     ) : (
                                         <LayersIcon fontSize="small" />
@@ -2541,7 +3581,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         {selectedRegionId ? (
                             <>
                                 <Tooltip
-                                    placement="right"
+                                    placement="top"
                                     title={addModeRegionId === selectedRegionId
                                         ? 'Đang thêm vùng — vẽ 1 phần rồi tự về chọn (bấm lại để hủy)'
                                         : 'Thêm vùng vào vùng đang chọn (1 lần)'}
@@ -2563,7 +3603,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip
-                                    placement="right"
+                                    placement="top"
                                     title={eraseModeRegionId === selectedRegionId
                                         ? 'Đang xóa thừa — vẽ 1 phần rồi tự về chọn (bấm lại để hủy)'
                                         : 'Xóa thừa khỏi vùng đang chọn (1 lần)'}
@@ -2587,7 +3627,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             </>
                         ) : null}
                         </Stack>
-                        <Tooltip placement="right" title="Thêm ảnh">
+                        <Tooltip placement="top" title="Thêm ảnh">
                             <IconButton
                                 size="small"
                                 onClick={() => overlayUploadRef.current?.click()}
@@ -2859,7 +3899,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 pointerEvents: 'none',
                                             }}
                                         >
-                                            {imageOverlays.map((overlay) => (
+                                            {canvasOverlays.map((overlay) => (
                                                 <WhiteboardImageOverlayHandles
                                                     key={`media-${overlay.id}`}
                                                     overlay={overlay}
@@ -2870,10 +3910,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                         width: containRect.w * zoom,
                                                         height: containRect.h * zoom,
                                                     }}
-                                                    selected={selectedOverlayId === overlay.id}
+                                                    selected={selectedOverlayId === overlay.id
+                                                        || isSelectionKeyActive('overlay', overlay.id)}
                                                     interactive={false}
                                                     onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
-                                                    onSelect={() => selectOverlay(overlay.id)}
+                                                    onSelect={(meta) => selectOverlayFromTimeline(overlay.id, meta)}
                                                 />
                                             ))}
                                         </Box>
@@ -2891,6 +3932,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 viewBox="0 0 1000 1000"
                                                 preserveAspectRatio="none"
                                                 onClick={handleSvgClick}
+                                                onDoubleClick={handleSvgDoubleClick}
                                                 onMouseDown={handleSvgMouseDown}
                                                 onMouseMove={handleSvgMouseMove}
                                                 onMouseUp={handleSvgMouseUp}
@@ -2936,29 +3978,89 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     style={{ pointerEvents: 'none' }}
                                 />
                             </g>
-                            {regions.map((region, index) => {
+                            {canvasRegions.map((region, index) => {
                                 const color = region.action === 'erase' ? '#f44336' : colorFor(index);
-                                const isSelected = selectedRegionId === region.id;
+                                const isSelected = selectedRegionId === region.id
+                                    || isSelectionKeyActive('region', region.id);
                                 const isChild = Boolean(region.parent_id);
+                                const isBirefnetBusy = sam2BusyRegionIds.includes(region.id);
+                                // Hiện đỉnh mọi vùng đang chọn (kể cả khi chọn cả group trên main).
                                 const showPathEdit = isSelected
                                     && !previewActive
                                     && !isAddActive
+                                    && !isBirefnetBusy
                                     && Boolean(containRect);
+                                const polyPoints = svgPointsFor(region.points);
+                                const clipId = `birefnet-scan-clip-${region.id}`;
+                                const gradId = `birefnet-scan-grad-${region.id}`;
                                 return (
                                     <g key={region.id}>
                                         <polygon
-                                            points={svgPointsFor(region.points)}
+                                            points={polyPoints}
                                             fill={color}
-                                            fillOpacity={previewActive ? 0 : (isSelected ? 0.28 : 0.12)}
+                                            fillOpacity={previewActive
+                                                ? 0
+                                                : (isBirefnetBusy
+                                                    ? 0.5
+                                                    : (isSelected ? 0.28 : 0.12))}
                                             stroke={color}
-                                            strokeWidth={isSelected ? 2 : 1.25}
+                                            strokeWidth={isSelected || isBirefnetBusy ? 2 : 1.25}
                                             strokeDasharray={isChild ? '6 3' : undefined}
                                             strokeLinejoin="round"
                                             style={{ pointerEvents: 'none' }}
                                             opacity={previewActive ? 0.55 : 1}
                                         />
+                                        {isBirefnetBusy && !previewActive ? (
+                                            <>
+                                                <defs>
+                                                    <clipPath id={clipId}>
+                                                        <polygon points={polyPoints} />
+                                                    </clipPath>
+                                                    <linearGradient
+                                                        id={gradId}
+                                                        x1="0%"
+                                                        y1="0%"
+                                                        x2="100%"
+                                                        y2="0%"
+                                                    >
+                                                        <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+                                                        <stop offset="40%" stopColor="rgba(255,255,255,0)" />
+                                                        <stop offset="50%" stopColor="rgba(255,255,255,0.85)" />
+                                                        <stop offset="60%" stopColor="rgba(255,255,255,0)" />
+                                                        <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                                                    </linearGradient>
+                                                </defs>
+                                                <g
+                                                    clipPath={`url(#${clipId})`}
+                                                    style={{ pointerEvents: 'none' }}
+                                                >
+                                                    <rect
+                                                        x={0}
+                                                        y={0}
+                                                        width={1000}
+                                                        height={1000}
+                                                        fill="rgba(0,0,0,0.42)"
+                                                    />
+                                                    <rect
+                                                        x={-420}
+                                                        y={0}
+                                                        width={420}
+                                                        height={1000}
+                                                        fill={`url(#${gradId})`}
+                                                    >
+                                                        <animate
+                                                            attributeName="x"
+                                                            from="-420"
+                                                            to="1000"
+                                                            dur="1.35s"
+                                                            repeatCount="indefinite"
+                                                        />
+                                                    </rect>
+                                                </g>
+                                            </>
+                                        ) : null}
                                         {/* Unselected: dot xem nếu ít đỉnh. Selected: path handles (kéo đỉnh/cạnh). */}
-                                        {!previewActive && !isSelected && region.points.length <= 12
+                                        {!previewActive && !isSelected && !isBirefnetBusy && region.points.length <= 12
                                             ? region.points.map((point, pi) => (
                                                 <g
                                                     key={`${region.id}-v${pi}`}
@@ -2983,14 +4085,14 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 containSize={{ w: containRect.w, h: containRect.h }}
                                                 svgScale={svgScale}
                                                 onChangePoints={(next) => updateRegion(region.id, { points: next })}
-                                                onInteract={() => selectRegion(region.id)}
+                                                onInteract={() => selectRegionFromTimeline(region.id)}
                                             />
                                         ) : null}
                                     </g>
                                 );
                             })}
                             {/* Mẫu background RIÊNG của từng vùng — lặp lại fill nền vùng khi render */}
-                            {!previewActive ? regions.map((region, index) => {
+                            {!previewActive ? canvasRegions.map((region, index) => {
                                 const bgSample = region.bg_sample;
                                 if (!bgSample || bgSample.points.length < 3) {
                                     return null;
@@ -3028,12 +4130,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                             }) : null}
                             {liveDraft.length > 0 ? (
                                 <>
-                                    {/* Live vùng đang vẽ: nối điểm cuối về điểm 1 (đóng kín) +
-                                        theo cursor — fill màu trong suốt để thấy vùng sẽ tạo */}
+                                    {/* Live vùng đang vẽ. Click từng điểm: nối thêm cursor.
+                                        Đang kéo (freehand / HCN giữ B): draft đã có điểm cuối — không
+                                        append cursor kẻo thành đường chéo / cạnh thừa. */}
                                     <polygon
                                         points={svgPointsFor([
                                             ...liveDraft,
-                                            ...(cursorPos ? [cursorPos] : []),
+                                            ...(!draftIsDrag && cursorPos ? [cursorPos] : []),
                                         ])}
                                         fill={bgSampleMode ? 'rgba(156,39,176,0.25)' : 'rgba(255,235,59,0.22)'}
                                         stroke={bgSampleMode ? '#9c27b0' : '#ffeb3b'}
@@ -3127,7 +4230,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                 pointerEvents: 'none',
                                             }}
                                         >
-                                            {imageOverlays.map((overlay) => (
+                                            {canvasOverlays.map((overlay) => (
                                                 <WhiteboardImageOverlayHandles
                                                     key={`controls-${overlay.id}`}
                                                     overlay={overlay}
@@ -3138,10 +4241,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                                                         width: containRect.w * zoom,
                                                         height: containRect.h * zoom,
                                                     }}
-                                                    selected={selectedOverlayId === overlay.id}
-                                                    interactive={!isAddActive && !spaceDown}
+                                                    selected={selectedOverlayId === overlay.id
+                                                        || isSelectionKeyActive('overlay', overlay.id)}
+                                                    interactive={!isAddActive && !spaceDown && !isGroupSelectedOnMain}
                                                     onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
-                                                    onSelect={() => selectOverlay(overlay.id)}
+                                                    onSelect={(meta) => selectOverlayFromTimeline(overlay.id, meta)}
                                                     onPanDragStart={startCanvasPan}
                                                 />
                                             ))}
@@ -3423,8 +4527,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 >
                                     <WhiteboardBeatTimingPreview
                                         imageUrl={imageUrl}
-                                        regions={regions}
-                                        imageOverlays={imageOverlays}
+                                        regions={canvasRegions}
+                                        imageOverlays={canvasOverlays}
                                         playheadSec={playheadSec}
                                         durationSec={beatTimeline.beatDurationSec}
                                         sceneBudgetSec={sceneBudgetSec}
@@ -3448,17 +4552,40 @@ export default function ShortVideoAgentBeatRegionEditor({
                             />
                         ) : null}
 
-                        {/* Box điều khiển neo dưới TRÁI: đặt điểm tập trung / đặt lại giữa / hủy vẽ / lưu vùng */}
+                        {/* Box điều khiển neo dưới TRÁI: tạo group / đặt điểm tập trung / đặt lại giữa / hủy vẽ / lưu vùng */}
                         {!previewActive ? (
                         <Stack
-                            direction="row"
+                            direction="column"
                             spacing={0.75}
-                            alignItems="center"
+                            alignItems="flex-start"
                             sx={{
                                 position: 'absolute',
                                 left: 10,
                                 bottom: 10,
                                 zIndex: 5,
+                            }}
+                        >
+                            {isMultiSelecting ? (
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={openCreateGroupDialog}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 800,
+                                        bgcolor: 'rgba(25,118,210,0.92)',
+                                        '&:hover': { bgcolor: 'rgba(25,118,210,1)' },
+                                    }}
+                                >
+                                    Tạo group ({groupableSelectionCount})
+                                </Button>
+                            ) : null}
+                        <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                            sx={{
                                 bgcolor: 'rgba(0,0,0,0.6)',
                                 borderRadius: 2,
                                 p: 0.5,
@@ -3493,7 +4620,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </Tooltip>
                             ) : null}
                             {totalDraftPoints > 0 ? (
-                                <Tooltip placement="right" title="Hủy vẽ">
+                                <Tooltip placement="right" title="Hủy vẽ (Esc)">
                                     <IconButton
                                         size="small"
                                         onClick={handleCancelDraft}
@@ -3520,25 +4647,27 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </span>
                             </Tooltip>
                         </Stack>
+                        </Stack>
                         ) : null}
                     </Box>
 
                     {/* Thanh thời gian render theo vùng (audio bar) — dưới box ảnh */}
                     <WhiteboardRegionTimeline
-                        regions={regions}
+                        regions={displayRegions}
                         beatDurationSec={beatTimeline.beatDurationSec}
                         effectTimelineDurationSec={sceneBudgetSec}
                         beatStartSec={beatTimeline.beatStartSec}
                         beatWords={beatWords}
                         colorFor={colorFor}
                         onChangeRegion={updateRegion}
-                        onSelectRegion={selectRegion}
+                        onSelectRegion={selectRegionFromTimeline}
                         selectedRegionId={selectedRegionId}
-                        timelineEffects={timelineEffects}
+                        multiSelectedKeys={multiSelectedKeys}
+                        timelineEffects={displayTimelineEffects}
                         selectedEffectId={selectedEffectId}
                         onPreviewEffect={(id, patch) => { updateEffectLocal(id, patch); }}
                         onCommitEffect={(id, patch) => { void commitEffect(id, patch); }}
-                        onSelectEffect={selectEffect}
+                        onSelectEffect={selectEffectFromTimeline}
                         onSwitchToEditTab={() => setRightPanelTab('edit')}
                         audioUrl={state.audioFileUrl || ''}
                         maxWidth={boxSize ? boxSize.w : undefined}
@@ -3553,10 +4682,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                         }}
                         seekRequest={timelineSeekRequest}
                         sceneBudgetSec={sceneBudgetSec}
-                        imageOverlays={imageOverlays}
+                        imageOverlays={displayOverlays}
                         selectedOverlayId={selectedOverlayId}
                         onChangeOverlay={updateOverlay}
-                        onSelectOverlay={selectOverlay}
+                        onSelectOverlay={selectOverlayFromTimeline}
+                        timelineViewMode={timelineViewMode}
+                        onExitGroupView={exitGroupView}
+                        onUngroupActiveGroup={ungroupActiveGroup}
                         onRequestDeleteRegion={(id, el) => {
                             setDeleteMenuTarget({ kind: 'region', id });
                             setDeleteMenuAnchor(el);
@@ -3571,6 +4703,49 @@ export default function ShortVideoAgentBeatRegionEditor({
                         }}
                         onRequestDeleteAllTimelineItems={handleClearAllTimelineItems}
                     />
+
+                    {/* Dialog tạo group */}
+                    <Dialog
+                        open={groupDialogOpen}
+                        onClose={() => setGroupDialogOpen(false)}
+                        maxWidth="xs"
+                        fullWidth
+                    >
+                        <DialogTitle>Tạo group</DialogTitle>
+                        <DialogContent>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                size="small"
+                                label="Tên group"
+                                value={groupDialogName}
+                                onChange={(e) => setGroupDialogName(e.target.value)}
+                                placeholder="Group 1"
+                                sx={{ mt: 1 }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        groupSelectedItems(groupDialogName);
+                                    }
+                                }}
+                            />
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                                Để trống sẽ dùng tên mặc định ({nextDefaultGroupName(existingGroupNames)}).
+                            </Typography>
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button onClick={() => setGroupDialogOpen(false)} sx={{ textTransform: 'none' }}>
+                                Hủy
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={() => groupSelectedItems(groupDialogName)}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Tạo group
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
 
                     {/* Dialog xác nhận đổi beat khi có vùng chưa lưu */}
                     <Dialog
@@ -3733,6 +4908,49 @@ export default function ShortVideoAgentBeatRegionEditor({
                             onAddEffect={(type) => { void handleAddTimelineEffect(type); }}
                             saving={savingTimelineEffects}
                         />
+                    ) : isGroupSelectedOnMain && selectedSharedGroupId ? (
+                        <Box
+                            sx={{
+                                p: 1.25,
+                                borderRadius: 1,
+                                border: 1,
+                                borderColor: 'primary.main',
+                                borderLeft: '4px solid',
+                                borderLeftColor: 'primary.main',
+                                bgcolor: 'action.selected',
+                            }}
+                        >
+                            <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+                                Group
+                            </Typography>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Tên group"
+                                value={selectedGroupDisplayName}
+                                onChange={(e) => renameSelectedGroup(e.target.value)}
+                                onBlur={commitSelectedGroupName}
+                                sx={{ mb: 1.25, '& .MuiInputBase-root': { fontSize: 13 } }}
+                            />
+                            <Button
+                                size="small"
+                                variant="contained"
+                                fullWidth
+                                onClick={() => enterGroupView(selectedSharedGroupId)}
+                                sx={{ textTransform: 'none', fontWeight: 700 }}
+                            >
+                                Vào group
+                            </Button>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                                Double-click item/group trên timeline hoặc ảnh cũng vào được group.
+                                Đổi tên cần bấm Lưu vùng để ghi DB.
+                            </Typography>
+                        </Box>
+                    ) : isMultiSelecting ? (
+                        <Alert severity="info" sx={{ mt: 0.5 }}>
+                            Đã chọn {groupableSelectionCount} mục. Bấm <strong>Tạo group</strong> trên ảnh
+                            để gộp, hoặc click chỗ trống để bỏ chọn.
+                        </Alert>
                     ) : (
                     <>
                     {selectedEffect ? (() => {

@@ -87,6 +87,12 @@ export type BeatBackgroundSample = {
 export type BeatRegion = {
     id: string;
     name?: string;
+    /** Group timeline UI (không ảnh hưởng logic render mask). */
+    group_id?: string | null;
+    /** Thứ tự hiển thị trong group (tùy chọn). */
+    group_order?: number | null;
+    /** Tên hiển thị của group (đồng bộ trên mọi member). */
+    group_name?: string | null;
     points: BeatRegionPoint[];
     /**
      * draw = vẽ tay trong vùng; place = đưa ảnh trong vùng vào;
@@ -326,6 +332,12 @@ export function attentionEffectTimelineLabel(type: AttentionEffectKey | null | u
 export type BeatImageOverlay = {
     id: string;
     name?: string;
+    /** Group timeline UI (không ảnh hưởng logic render). */
+    group_id?: string | null;
+    /** Thứ tự hiển thị trong group (tùy chọn). */
+    group_order?: number | null;
+    /** Tên hiển thị của group (đồng bộ trên mọi member). */
+    group_name?: string | null;
     image_url: string;
     /** Tâm rect normalized 0–1 trên ảnh beat. */
     x: number;
@@ -411,6 +423,15 @@ export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null
     return {
         id,
         name: typeof item.name === 'string' ? item.name : undefined,
+        group_id: typeof item.group_id === 'string' && item.group_id.trim()
+            ? item.group_id.trim()
+            : null,
+        group_order: Number.isFinite(Number(item.group_order))
+            ? Math.max(0, Math.floor(Number(item.group_order)))
+            : null,
+        group_name: typeof item.group_name === 'string' && item.group_name.trim()
+            ? item.group_name.trim()
+            : null,
         image_url: imageUrl,
         x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.5,
         y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.5,
@@ -1097,6 +1118,12 @@ export type BeatTimelineEffectType = 'zoom';
 export type BeatTimelineEffectBase = {
     id: string;
     type: BeatTimelineEffectType;
+    /** Group timeline UI (không ảnh hưởng engine effect). */
+    group_id?: string | null;
+    /** Thứ tự hiển thị trong group (tùy chọn). */
+    group_order?: number | null;
+    /** Tên hiển thị của group (đồng bộ trên mọi member). */
+    group_name?: string | null;
     start_sec: number;
     end_sec: number;
     name?: string;

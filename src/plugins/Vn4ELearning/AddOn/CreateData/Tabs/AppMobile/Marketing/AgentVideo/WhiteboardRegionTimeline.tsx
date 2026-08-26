@@ -1,9 +1,22 @@
 import React from 'react';
-import { Box, Typography, IconButton, Tooltip } from '@mui/material';
+import {
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Typography,
+    IconButton,
+    Tooltip,
+} from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ReplayIcon from '@mui/icons-material/Replay';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CallSplitIcon from '@mui/icons-material/CallSplit';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
@@ -47,6 +60,10 @@ import {
  */
 
 type Word = { index: number; text: string; start: number };
+type TimelineSelectMeta = {
+    shiftKey?: boolean;
+    doubleClick?: boolean;
+};
 
 type Props = {
     regions: BeatRegion[];
@@ -57,8 +74,10 @@ type Props = {
     beatWords: Word[];
     colorFor: (index: number) => string;
     onChangeRegion: (id: string, patch: Partial<BeatRegion>) => void;
-    onSelectRegion?: (id: string) => void;
+    onSelectRegion?: (id: string, meta?: TimelineSelectMeta) => void;
     selectedRegionId?: string;
+    /** Multi-select (Shift+click) — highlight thêm các item đang chọn để Group. */
+    multiSelectedKeys?: string[];
     audioUrl?: string;
     maxWidth?: number;
     /** Thời lượng chuyển cảnh cuối beat (giây THỰC TẾ) — 0/không có = ẩn box đỏ. */
@@ -79,19 +98,24 @@ type Props = {
     onPreviewEffect?: (id: string, patch: Partial<BeatTimelineEffect>) => void;
     /** Lưu effect sau khi thả chuột / kết thúc chỉnh timeline. */
     onCommitEffect?: (id: string, patch: Partial<BeatTimelineEffect>) => void;
-    onSelectEffect?: (id: string) => void;
+    onSelectEffect?: (id: string, meta?: TimelineSelectMeta) => void;
     onSwitchToEditTab?: () => void;
     /** Scene budget — clamp attention window. */
     sceneBudgetSec?: number;
     imageOverlays?: BeatImageOverlay[];
     selectedOverlayId?: string;
     onChangeOverlay?: (id: string, patch: Partial<BeatImageOverlay>) => void;
-    onSelectOverlay?: (id: string) => void;
+    onSelectOverlay?: (id: string, meta?: TimelineSelectMeta) => void;
     onRequestDeleteRegion?: (id: string, anchor: HTMLElement) => void;
     onRequestDeleteOverlay?: (id: string, anchor: HTMLElement) => void;
     onRequestDeleteEffect?: (id: string, anchor: HTMLElement) => void;
     /** Xóa tất cả item trên timeline (vùng + ảnh thêm + hiệu ứng). */
     onRequestDeleteAllTimelineItems?: () => void;
+    /** Đang xem bên trong 1 group — thay Replay bằng Quay lại. */
+    timelineViewMode?: 'main' | 'group';
+    onExitGroupView?: () => void;
+    /** Tách group đang xem — mọi member mất group_id, về timeline chính. */
+    onUngroupActiveGroup?: () => void;
 };
 
 type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
@@ -118,6 +142,16 @@ const MIN_DUR = 1.0;
 const MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED = 5;
 const MAX_VISIBLE_TIMELINE_ROWS_EXPANDED = 10;
 const TIMELINE_EXPANDED_STORAGE_KEY = 'biong.whiteboard.regionTimeline.expanded';
+const SYNTHETIC_GROUP_ID_PREFIX = '__group__:';
+
+function parseSyntheticGroupId(id: string): string | null {
+    const text = String(id || '');
+    if (!text.startsWith(SYNTHETIC_GROUP_ID_PREFIX)) {
+        return null;
+    }
+    const groupId = text.slice(SYNTHETIC_GROUP_ID_PREFIX.length).trim();
+    return groupId || null;
+}
 
 function readStoredTimelineExpanded(): boolean {
     if (typeof window === 'undefined') {
@@ -170,10 +204,14 @@ export default function WhiteboardRegionTimeline({
     selectedOverlayId,
     onChangeOverlay,
     onSelectOverlay,
+    multiSelectedKeys = [],
     onRequestDeleteRegion,
     onRequestDeleteOverlay,
     onRequestDeleteEffect,
     onRequestDeleteAllTimelineItems,
+    timelineViewMode = 'main',
+    onExitGroupView,
+    onUngroupActiveGroup,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
@@ -189,8 +227,15 @@ export default function WhiteboardRegionTimeline({
     const [playhead, setPlayhead] = React.useState(0);
     const [copied, setCopied] = React.useState(false);
     const [copying, setCopying] = React.useState(false);
+    const [ungroupConfirmOpen, setUngroupConfirmOpen] = React.useState(false);
     /** false = thu gọn (max 5 dòng), true = mở rộng (max 10 dòng). Persist localStorage. */
     const [timelineExpanded, setTimelineExpanded] = React.useState(readStoredTimelineExpanded);
+
+    React.useEffect(() => {
+        if (timelineViewMode !== 'group') {
+            setUngroupConfirmOpen(false);
+        }
+    }, [timelineViewMode]);
     const rafRef = React.useRef<number>(0);
     const onPlayheadChangeRef = React.useRef(onPlayheadChange);
     onPlayheadChangeRef.current = onPlayheadChange;
@@ -394,6 +439,11 @@ export default function WhiteboardRegionTimeline({
         previewEffect(id, normalized);
     };
 
+    const multiSelectedSet = React.useMemo(() => new Set(multiSelectedKeys), [multiSelectedKeys]);
+    const isItemMultiSelected = (kind: 'region' | 'overlay' | 'effect', id: string) => (
+        multiSelectedSet.has(`${kind}:${id}`)
+    );
+
     const handleEffectPointerDown = (
         e: React.PointerEvent,
         id: string,
@@ -403,7 +453,7 @@ export default function WhiteboardRegionTimeline({
         e.stopPropagation();
         const effect = timelineEffects.find((item) => item.id === id);
         if (!effect) return;
-        onSelectEffect?.(id);
+        onSelectEffect?.(id, { shiftKey: e.shiftKey });
         onSwitchToEditTab?.();
         const drag: DragState = {
             id,
@@ -491,9 +541,9 @@ export default function WhiteboardRegionTimeline({
             : imageOverlays.find((o) => o.id === id);
         if (!source) return;
         if (kind === 'region') {
-            onSelectRegion?.(id);
+            onSelectRegion?.(id, { shiftKey: e.shiftKey });
         } else {
-            onSelectOverlay?.(id);
+            onSelectOverlay?.(id, { shiftKey: e.shiftKey });
             onSwitchToEditTab?.();
         }
         const win = resolveAttentionWindow(source, beatWords, beatStartSec, duration, sceneBudget);
@@ -518,7 +568,7 @@ export default function WhiteboardRegionTimeline({
         e.stopPropagation();
         const overlay = imageOverlays.find((o) => o.id === id);
         if (!overlay) return;
-        onSelectOverlay?.(id);
+        onSelectOverlay?.(id, { shiftKey: e.shiftKey });
         onSwitchToEditTab?.();
         dragRef.current = {
             id,
@@ -538,7 +588,9 @@ export default function WhiteboardRegionTimeline({
         if (!region) return;
         // UX: click-giữ + kéo vùng nào → TỰ ĐỘNG chọn vùng đó (không cần thả chuột
         // rồi bấm lại) — vùng đang kéo luôn là vùng đang quản lý.
-        if (onSelectRegion) onSelectRegion(id);
+        // Phải truyền shiftKey ở đây: pointerdown chạy trước click; nếu bỏ sót thì
+        // multi-select bị reset trước khi click kịp gửi shift.
+        if (onSelectRegion) onSelectRegion(id, { shiftKey: e.shiftKey });
         dragRef.current = {
             id, handle,
             kind: 'region',
@@ -730,6 +782,7 @@ export default function WhiteboardRegionTimeline({
     const needsTrackScroll = trackRowCount > maxTrackRowsVisible;
 
     return (
+        <>
         <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pb: 0.5, userSelect: 'none', flexShrink: 0 }}>
             <audio ref={audioRef} src={audioUrl || undefined} preload="auto" style={{ display: 'none' }} />
             <Box sx={{ width: '100%', maxWidth: maxWidth || '100%', userSelect: 'none' }}>
@@ -796,34 +849,65 @@ export default function WhiteboardRegionTimeline({
                     <Box sx={{ display: 'flex', flexShrink: 0 }}>
                         <Box sx={{ width: LABEL_W, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.04)' }}>
                             <Box sx={{ height: AUDIO_ROW_H, display: 'flex', alignItems: 'center', justifyContent: 'space-around', px: 0.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+                            {timelineViewMode === 'group' ? (
+                                <Tooltip title="Quay lại timeline chính">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => onExitGroupView?.()}
+                                        sx={{ p: 0.4 }}
+                                        aria-label="Quay lại timeline chính"
+                                    >
+                                        <ArrowBackIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
+                            {timelineViewMode === 'group' ? (
+                                <Tooltip title="Tách group — mọi item về timeline chính, không còn thuộc group">
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => setUngroupConfirmOpen(true)}
+                                            disabled={!onUngroupActiveGroup}
+                                            sx={{ p: 0.4 }}
+                                            aria-label="Tách group"
+                                        >
+                                            <CallSplitIcon sx={{ fontSize: 15 }} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            ) : null}
                             <Tooltip title={playing ? 'Dừng' : 'Phát audio beat'}>
                                 <IconButton size="small" onClick={togglePlay} disabled={!audioUrl} sx={{ p: 0.4 }}>
                                     {playing ? <PauseIcon sx={{ fontSize: 18 }} /> : <PlayArrowIcon sx={{ fontSize: 18 }} />}
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Phát lại từ đầu beat">
-                                <IconButton size="small" onClick={replay} disabled={!audioUrl} sx={{ p: 0.4 }}>
-                                    <ReplayIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title={
-                                copied
-                                    ? 'Đã copy JSON timeline server!'
-                                    : (copying
-                                        ? 'Đang lấy timeline từ server…'
-                                        : 'Copy JSON timeline đầy đủ (vùng + hiệu ứng + scene params)')
-                            }>
-                                <span>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => { void copyTimelineJson(); }}
-                                        disabled={copying}
-                                        sx={{ p: 0.4, color: copied ? 'success.main' : 'inherit' }}
-                                    >
-                                        <ContentCopyIcon sx={{ fontSize: 14 }} />
+                            {timelineViewMode !== 'group' ? (
+                                <Tooltip title="Phát lại từ đầu beat">
+                                    <IconButton size="small" onClick={replay} disabled={!audioUrl} sx={{ p: 0.4 }}>
+                                        <ReplayIcon sx={{ fontSize: 16 }} />
                                     </IconButton>
-                                </span>
-                            </Tooltip>
+                                </Tooltip>
+                            ) : null}
+                            {timelineViewMode !== 'group' ? (
+                                <Tooltip title={
+                                    copied
+                                        ? 'Đã copy JSON timeline server!'
+                                        : (copying
+                                            ? 'Đang lấy timeline từ server…'
+                                            : 'Copy JSON timeline đầy đủ (vùng + hiệu ứng + scene params)')
+                                }>
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => { void copyTimelineJson(); }}
+                                            disabled={copying}
+                                            sx={{ p: 0.4, color: copied ? 'success.main' : 'inherit' }}
+                                        >
+                                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            ) : null}
                             <Tooltip title={timelineExpanded
                                 ? 'Thu gọn timeline (tối đa 5 dòng)'
                                 : 'Mở rộng timeline (tối đa 10 dòng)'}
@@ -851,7 +935,9 @@ export default function WhiteboardRegionTimeline({
                             </Tooltip>
                             {onRequestDeleteAllTimelineItems ? (
                                 <Tooltip title={trackRowCount > 0
-                                    ? 'Xóa tất cả vùng / ảnh thêm / hiệu ứng trên timeline'
+                                    ? (timelineViewMode === 'group'
+                                        ? 'Xóa tất cả item trong group đang xem'
+                                        : 'Xóa tất cả vùng / ảnh thêm / hiệu ứng trên timeline')
                                     : 'Timeline trống'}
                                 >
                                     <span>
@@ -868,7 +954,7 @@ export default function WhiteboardRegionTimeline({
                                     </span>
                                 </Tooltip>
                             ) : null}
-                        </Box>
+                            </Box>
                         </Box>
                         <Box
                             ref={trackRef}
@@ -955,37 +1041,48 @@ export default function WhiteboardRegionTimeline({
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);
                             const color = region.action === 'erase' ? '#f44336' : colorFor(index);
-                            const isSel = region.id === selectedRegionId;
+                            const isSel = region.id === selectedRegionId || isItemMultiSelected('region', region.id);
+                            const syntheticGroupId = parseSyntheticGroupId(region.id);
+                            const isSyntheticGroup = Boolean(syntheticGroupId);
                             return (
                                 <Box
                                     key={region.id}
-                                    onClick={() => onSelectRegion?.(region.id)}
+                                    onClick={(event) => onSelectRegion?.(region.id, { shiftKey: event.shiftKey })}
+                                    onDoubleClick={() => {
+                                        onSelectRegion?.(region.id, { doubleClick: true });
+                                    }}
                                     sx={{
                                         height: ROW_H, display: 'flex', alignItems: 'center', px: 0.5,
                                         borderTop: '1px solid', borderColor: 'divider',
                                         borderLeft: `3px solid ${color}`,
                                         bgcolor: isSel ? `${color}26` : 'transparent',
                                         cursor: 'pointer',
+                                        // Vùng con: thụt cả hàng (icon xóa + tên) để phân biệt.
+                                        pl: (!isSyntheticGroup && region.parent_id) ? 1.75 : 0.5,
                                     }}
-                                    title={`Click để chọn vùng ${region.name}`}
+                                    title={isSyntheticGroup
+                                        ? `Group — click chọn cả group, double-click để vào group`
+                                        : `Click chọn · Shift+click chọn nhiều · Double-click vào group (nếu có)`}
                                 >
-                                    <IconButton
-                                        size="small"
-                                        color="error"
-                                        title="Xóa vùng"
-                                        onClick={(event) => {
-                                            event.stopPropagation();
-                                            onRequestDeleteRegion?.(region.id, event.currentTarget);
-                                        }}
-                                        sx={{ p: 0.15, mr: 0.25, flexShrink: 0 }}
-                                    >
-                                        <DeleteOutlineIcon sx={{ fontSize: 14 }} />
-                                    </IconButton>
+                                    {!isSyntheticGroup ? (
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            title="Xóa vùng"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onRequestDeleteRegion?.(region.id, event.currentTarget);
+                                            }}
+                                            sx={{ p: 0.15, mr: 0.25, flexShrink: 0 }}
+                                        >
+                                            <DeleteOutlineIcon sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                    ) : null}
                                     <Typography variant="caption" sx={{
                                         fontSize: 10.5, fontWeight: 800, color: '#111',
                                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                     }}>
-                                        {region.name}{region.parent_id ? ' (con)' : ' (cha)'}
+                                        {region.name || 'Vùng'}
                                     </Typography>
                                 </Box>
                             );
@@ -993,13 +1090,16 @@ export default function WhiteboardRegionTimeline({
                         {orderedEffects.map((effect) => {
                             const def = getBeatTimelineEffectDefinition(effect.type);
                             const color = def?.timelineColor || '#7c4dff';
-                            const isSel = effect.id === selectedEffectId;
+                            const isSel = effect.id === selectedEffectId || isItemMultiSelected('effect', effect.id);
                             return (
                                 <Box
                                     key={effect.id}
-                                    onClick={() => {
-                                        onSelectEffect?.(effect.id);
+                                    onClick={(event) => {
+                                        onSelectEffect?.(effect.id, { shiftKey: event.shiftKey });
                                         onSwitchToEditTab?.();
+                                    }}
+                                    onDoubleClick={() => {
+                                        onSelectEffect?.(effect.id, { doubleClick: true });
                                     }}
                                     sx={{
                                         height: ROW_H,
@@ -1012,7 +1112,7 @@ export default function WhiteboardRegionTimeline({
                                         bgcolor: isSel ? `${color}26` : 'transparent',
                                         cursor: 'pointer',
                                     }}
-                                    title={`Click để chỉnh hiệu ứng ${def?.label || effect.type}`}
+                                    title={`Click chọn · Shift+click chọn nhiều · Double-click vào group (nếu có) — ${def?.label || effect.type}`}
                                 >
                                     <IconButton
                                         size="small"
@@ -1040,13 +1140,16 @@ export default function WhiteboardRegionTimeline({
                             );
                         })}
                         {imageOverlays.map((overlay) => {
-                            const isSel = overlay.id === selectedOverlayId;
+                            const isSel = overlay.id === selectedOverlayId || isItemMultiSelected('overlay', overlay.id);
                             return (
                                 <Box
                                     key={overlay.id}
-                                    onClick={() => {
-                                        onSelectOverlay?.(overlay.id);
+                                    onClick={(event) => {
+                                        onSelectOverlay?.(overlay.id, { shiftKey: event.shiftKey });
                                         onSwitchToEditTab?.();
+                                    }}
+                                    onDoubleClick={() => {
+                                        onSelectOverlay?.(overlay.id, { doubleClick: true });
                                     }}
                                     sx={{
                                         height: ROW_H,
@@ -1059,7 +1162,7 @@ export default function WhiteboardRegionTimeline({
                                         bgcolor: isSel ? 'rgba(0,137,123,0.15)' : 'transparent',
                                         cursor: 'pointer',
                                     }}
-                                    title={overlay.name || overlay.id}
+                                    title={`${overlay.name || overlay.id} — Click chọn · Shift+click chọn nhiều · Double-click vào group (nếu có)`}
                                 >
                                     <IconButton
                                         size="small"
@@ -1114,7 +1217,9 @@ export default function WhiteboardRegionTimeline({
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);
                             const color = region.action === 'erase' ? '#f44336' : colorFor(index);
-                            const isSel = region.id === selectedRegionId;
+                            const isSel = region.id === selectedRegionId || isItemMultiSelected('region', region.id);
+                            const syntheticGroupId = parseSyntheticGroupId(region.id);
+                            const isSyntheticGroup = Boolean(syntheticGroupId);
                             const start = startSecOf(region);
                             const end = endSecOf(region);
                             const left = secToPct(start);
@@ -1123,16 +1228,22 @@ export default function WhiteboardRegionTimeline({
                                 <Box key={region.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
                                     <Box
                                         onPointerDown={(e) => handlePointerDown(e, region.id, 'body')}
-                                        onClick={() => onSelectRegion?.(region.id)}
+                                        onDoubleClick={() => {
+                                            onSelectRegion?.(region.id, { doubleClick: true });
+                                        }}
                                         sx={{
                                             position: 'absolute', top: 3, bottom: 3,
                                             left: `${left}%`, width: `${width}%`,
                                             borderRadius: 1, bgcolor: color,
                                             opacity: isSel ? 0.9 : 0.6,
                                             border: `2px solid ${color}`,
+                                            outline: isSel ? '2px solid rgba(25,118,210,0.85)' : 'none',
+                                            outlineOffset: 1,
                                             cursor: 'grab', boxSizing: 'border-box', zIndex: 1,
                                         }}
-                                        title={`${region.name} — kéo giữa để di chuyển, click để chọn`}
+                                        title={isSyntheticGroup
+                                            ? `${region.name} — kéo để dịch cả group, double-click để vào group`
+                                            : `${region.name} — kéo giữa để di chuyển · Shift+click chọn nhiều · Double-click vào group (nếu có)`}
                                     >
                                         {width > 6 ? (
                                             <Typography sx={{
@@ -1144,37 +1255,41 @@ export default function WhiteboardRegionTimeline({
                                             </Typography>
                                         ) : null}
                                     </Box>
-                                    <Box
-                                        onPointerDown={(e) => handlePointerDown(e, region.id, 'start')}
-                                        sx={{
-                                            position: 'absolute', top: 1, bottom: 1,
-                                            left: `calc(${left}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
-                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
-                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-                                        }}
-                                        title="Kéo = thời điểm BẮT ĐẦU render"
-                                    >
-                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
-                                    </Box>
-                                    <Box
-                                        onPointerDown={(e) => handlePointerDown(e, region.id, 'end')}
-                                        sx={{
-                                            position: 'absolute', top: 1, bottom: 1,
-                                            left: `calc(${secToPct(end)}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
-                                            bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
-                                            cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-                                        }}
-                                        title="Kéo = thời điểm render XONG"
-                                    >
-                                        <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
-                                    </Box>
+                                    {!isSyntheticGroup ? (
+                                        <>
+                                            <Box
+                                                onPointerDown={(e) => handlePointerDown(e, region.id, 'start')}
+                                                sx={{
+                                                    position: 'absolute', top: 1, bottom: 1,
+                                                    left: `calc(${left}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                    bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                                    cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                                                }}
+                                                title="Kéo = thời điểm BẮT ĐẦU render"
+                                            >
+                                                <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                            </Box>
+                                            <Box
+                                                onPointerDown={(e) => handlePointerDown(e, region.id, 'end')}
+                                                sx={{
+                                                    position: 'absolute', top: 1, bottom: 1,
+                                                    left: `calc(${secToPct(end)}% - ${HANDLE_W / 2}px)`, width: HANDLE_W,
+                                                    bgcolor: '#fff', border: `2px solid ${color}`, borderRadius: 1,
+                                                    cursor: 'ew-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    color, zIndex: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                                                }}
+                                                title="Kéo = thời điểm render XONG"
+                                            >
+                                                <DragHandleIcon sx={{ fontSize: 9, pointerEvents: 'none' }} />
+                                            </Box>
+                                        </>
+                                    ) : null}
                                     {/* HIỆU ỨNG SAU RENDER: place (full) hoặc draw
                                         (subset) — khoảng cố định engine chạy
                                         NGAY SAU bar vùng. Instant: không stripe
                                         (render ép none dù data còn place_effect). */}
-                                    {(region.action === 'place' || region.action === 'draw')
+                                    {!isSyntheticGroup && (region.action === 'place' || region.action === 'draw')
                                         && !(region.action === 'place' && isRegionPlaceInstantEntry(region))
                                         ? (() => {
                                         const fxSec = renderPlaceEffectAfterSec(region);
@@ -1216,7 +1331,7 @@ export default function WhiteboardRegionTimeline({
                                             </Box>
                                         );
                                     })() : null}
-                                    {(() => {
+                                    {!isSyntheticGroup && (() => {
                                         if (region.action === 'erase') return null;
                                         if (!isRegionAttentionEnabled(region.attention_start_sec, region.attention_end_sec)) {
                                             return null;
@@ -1290,7 +1405,7 @@ export default function WhiteboardRegionTimeline({
                         {orderedEffects.map((effect) => {
                             const def = getBeatTimelineEffectDefinition(effect.type);
                             const color = def?.timelineColor || '#7c4dff';
-                            const isSel = effect.id === selectedEffectId;
+                            const isSel = effect.id === selectedEffectId || isItemMultiSelected('effect', effect.id);
                             const start = effectStartSecOf(effect);
                             const end = effectEndSecOf(effect);
                             const left = secToPct(start);
@@ -1306,9 +1421,8 @@ export default function WhiteboardRegionTimeline({
                                 <Box key={effect.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
                                     <Box
                                         onPointerDown={(e) => handleEffectPointerDown(e, effect.id, 'body')}
-                                        onClick={() => {
-                                            onSelectEffect?.(effect.id);
-                                            onSwitchToEditTab?.();
+                                        onDoubleClick={() => {
+                                            onSelectEffect?.(effect.id, { doubleClick: true });
                                         }}
                                         sx={{
                                             position: 'absolute', top: 3, bottom: 3,
@@ -1317,6 +1431,8 @@ export default function WhiteboardRegionTimeline({
                                             bgcolor: color,
                                             opacity: isSel ? 0.95 : 0.72,
                                             border: `2px solid ${color}`,
+                                            outline: isSel ? '2px solid rgba(25,118,210,0.85)' : 'none',
+                                            outlineOffset: 1,
                                             cursor: 'grab',
                                             boxSizing: 'border-box',
                                             zIndex: 2,
@@ -1425,7 +1541,7 @@ export default function WhiteboardRegionTimeline({
 
                         {imageOverlays.map((overlay) => {
                             const color = '#00897b';
-                            const isSel = overlay.id === selectedOverlayId;
+                            const isSel = overlay.id === selectedOverlayId || isItemMultiSelected('overlay', overlay.id);
                             const start = resolveOverlayStartSec(overlay);
                             const end = resolveOverlayEndSec(overlay, duration);
                             const left = secToPct(start);
@@ -1437,9 +1553,8 @@ export default function WhiteboardRegionTimeline({
                                 <Box key={overlay.id} sx={{ position: 'relative', height: ROW_H, borderTop: '1px solid', borderColor: 'divider' }}>
                                     <Box
                                         onPointerDown={(e) => handleOverlayPointerDown(e, overlay.id, 'body')}
-                                        onClick={() => {
-                                            onSelectOverlay?.(overlay.id);
-                                            onSwitchToEditTab?.();
+                                        onDoubleClick={() => {
+                                            onSelectOverlay?.(overlay.id, { doubleClick: true });
                                         }}
                                         sx={{
                                             position: 'absolute', top: 3, bottom: 3,
@@ -1447,9 +1562,11 @@ export default function WhiteboardRegionTimeline({
                                             borderRadius: 1, bgcolor: color,
                                             opacity: isSel ? 0.9 : 0.65,
                                             border: `2px solid ${color}`,
+                                            outline: isSel ? '2px solid rgba(25,118,210,0.85)' : 'none',
+                                            outlineOffset: 1,
                                             cursor: 'grab', boxSizing: 'border-box', zIndex: 1,
                                         }}
-                                        title={`${overlay.name || 'Ảnh thêm'} — kéo để di chuyển thời gian`}
+                                        title={`${overlay.name || 'Ảnh thêm'} — kéo để di chuyển · Shift+click chọn nhiều · Double-click vào group (nếu có)`}
                                     >
                                         {width > 6 ? (
                                             <Typography sx={{
@@ -1635,5 +1752,38 @@ export default function WhiteboardRegionTimeline({
                 </Box>
             </Box>
         </Box>
+        <Dialog
+            open={ungroupConfirmOpen}
+            onClose={() => setUngroupConfirmOpen(false)}
+            maxWidth="xs"
+            fullWidth
+        >
+            <DialogTitle>Tách group?</DialogTitle>
+            <DialogContent>
+                <DialogContentText>
+                    Tất cả item trong group sẽ về timeline chính và không còn thuộc group nào. Bạn chắc chứ?
+                </DialogContentText>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button
+                    onClick={() => setUngroupConfirmOpen(false)}
+                    sx={{ textTransform: 'none' }}
+                >
+                    Hủy
+                </Button>
+                <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => {
+                        setUngroupConfirmOpen(false);
+                        onUngroupActiveGroup?.();
+                    }}
+                    sx={{ textTransform: 'none' }}
+                >
+                    Tách group
+                </Button>
+            </DialogActions>
+        </Dialog>
+        </>
     );
 }

@@ -46,6 +46,15 @@ export function normalizeBeatZoomEffect(
     return {
         id,
         type: 'zoom',
+        group_id: typeof item.group_id === 'string' && item.group_id.trim()
+            ? item.group_id.trim()
+            : null,
+        group_order: Number.isFinite(Number(item.group_order))
+            ? Math.max(0, Math.floor(Number(item.group_order)))
+            : null,
+        group_name: typeof item.group_name === 'string' && item.group_name.trim()
+            ? item.group_name.trim()
+            : null,
         start_sec: phases.start,
         end_sec: phases.end,
         zoom_in_end_sec: phases.zoomInEnd,
