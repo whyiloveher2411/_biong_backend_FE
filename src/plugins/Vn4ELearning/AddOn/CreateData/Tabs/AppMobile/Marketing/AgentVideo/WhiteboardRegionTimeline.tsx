@@ -66,6 +66,11 @@ type Props = {
     onCopyError?: (message: string) => void;
     /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
     onPlayheadChange?: (sec: number, playing: boolean) => void;
+    /**
+     * Khi `token` đổi — timeline seek tới `sec` (vd chọn vùng → về 0).
+     * Parent tăng token mỗi lần cần seek.
+     */
+    seekRequest?: { sec: number; token: number } | null;
     timelineEffects?: BeatTimelineEffect[];
     selectedEffectId?: string;
     /** Cập nhật UI local khi kéo — không gọi API. */
@@ -83,6 +88,8 @@ type Props = {
     onRequestDeleteRegion?: (id: string, anchor: HTMLElement) => void;
     onRequestDeleteOverlay?: (id: string, anchor: HTMLElement) => void;
     onRequestDeleteEffect?: (id: string, anchor: HTMLElement) => void;
+    /** Xóa tất cả item trên timeline (vùng + ảnh thêm + hiệu ứng). */
+    onRequestDeleteAllTimelineItems?: () => void;
 };
 
 type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
@@ -103,7 +110,7 @@ const HANDLE_W = 12;
 const PHASE_HANDLE_W = 8;
 const ROW_H = 26;
 const AUDIO_ROW_H = 30;
-const LABEL_W = 80;
+const LABEL_W = 96;
 const MIN_DUR = 1.0;
 /** Tối đa số dòng hiển thị (1 hàng audio + các dòng vùng/hiệu ứng); phần dư cuộn dọc. */
 const MAX_VISIBLE_TIMELINE_ROWS = 5;
@@ -127,6 +134,7 @@ export default function WhiteboardRegionTimeline({
     beatId = '',
     onCopyError,
     onPlayheadChange,
+    seekRequest = null,
     timelineEffects = [],
     selectedEffectId,
     onPreviewEffect,
@@ -141,6 +149,7 @@ export default function WhiteboardRegionTimeline({
     onRequestDeleteRegion,
     onRequestDeleteOverlay,
     onRequestDeleteEffect,
+    onRequestDeleteAllTimelineItems,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
@@ -233,6 +242,21 @@ export default function WhiteboardRegionTimeline({
         setPlayhead(next);
         emitPlayhead(next, playingRef.current);
     };
+
+    React.useEffect(() => {
+        if (!seekRequest || seekRequest.token <= 0) {
+            return;
+        }
+        const audio = audioRef.current;
+        if (audio) {
+            audio.pause();
+        }
+        setPlaying(false);
+        seekToSec(seekRequest.sec);
+        emitPlayhead(Math.max(0, Math.min(duration, seekRequest.sec)), false);
+        // Chỉ theo token — tránh loop khi seekRequest object đổi reference.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seekRequest?.token]);
 
     const replay = () => {
         const audio = audioRef.current;
@@ -770,6 +794,25 @@ export default function WhiteboardRegionTimeline({
                                     </IconButton>
                                 </span>
                             </Tooltip>
+                            {onRequestDeleteAllTimelineItems ? (
+                                <Tooltip title={trackRowCount > 0
+                                    ? 'Xóa tất cả vùng / ảnh thêm / hiệu ứng trên timeline'
+                                    : 'Timeline trống'}
+                                >
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            disabled={trackRowCount <= 0}
+                                            onClick={onRequestDeleteAllTimelineItems}
+                                            sx={{ p: 0.4 }}
+                                            aria-label="Xóa tất cả timeline"
+                                        >
+                                            <DeleteOutlineIcon sx={{ fontSize: 15 }} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            ) : null}
                         </Box>
                         </Box>
                         <Box

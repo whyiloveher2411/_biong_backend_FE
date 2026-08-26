@@ -123,6 +123,13 @@ export function useBeatTimelineEffects({
         return persist(next);
     }, [effects, persist]);
 
+    const clearEffects = React.useCallback(async () => {
+        if (effects.length === 0) {
+            return true;
+        }
+        return persist([]);
+    }, [effects.length, persist]);
+
     const moveLayer = React.useCallback(async (id: string, direction: 'up' | 'down') => {
         const sorted = [...effects].sort((a, b) => a.layer - b.layer || a.start_sec - b.start_sec);
         const index = sorted.findIndex((item) => item.id === id);
@@ -168,6 +175,7 @@ export function useBeatTimelineEffects({
         commitEffect,
         scheduleEffectCommit,
         removeEffect,
+        clearEffects,
         moveLayer,
         validateEffect,
         getEffectStartSec,

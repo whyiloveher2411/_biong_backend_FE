@@ -2795,6 +2795,89 @@ export async function autoSelectAgentWhiteboardRegion(
     ) as Promise<JsonResponse & AutoSelectRegionResult>;
 }
 
+export type Sam2AutoRegionItem = {
+    points: BeatRegionPoint[];
+    area?: number;
+    score?: number;
+};
+
+export type AutoRegionsEngine = 'sam2' | 'birefnet';
+
+export type Sam2AutoRegionsResult = {
+    success?: boolean;
+    engine?: AutoRegionsEngine | string;
+    model?: string;
+    /** BiRefNet refine: polygon 0–1 của vật lớn nhất trong vùng. */
+    points?: BeatRegionPoint[];
+    area?: number;
+    regions?: Sam2AutoRegionItem[];
+    message?: ApiMessage;
+    debug?: string;
+};
+
+/**
+ * BiRefNet — thu gọn vùng đã chọn thành vật lớn nhất (giống “Chỉ vật trong vùng”).
+ * AbortSignal 5 phút (lần đầu tải weights).
+ */
+export async function sam2AutoRegionsAgentWhiteboard(
+    shortVideoId: number,
+    beatId: string,
+    options: {
+        rect: [number, number, number, number];
+        poly?: [number, number][];
+        engine?: AutoRegionsEngine;
+    },
+): Promise<JsonResponse & Sam2AutoRegionsResult> {
+    const engine: AutoRegionsEngine = options.engine === 'sam2' ? 'sam2' : 'birefnet';
+    const token = getAccessToken() ?? '';
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutMs = 300_000;
+    const timer = controller
+        ? window.setTimeout(() => controller.abort(), timeoutMs)
+        : 0;
+    const label = engine === 'birefnet' ? 'BiRefNet' : 'SAM 2';
+    try {
+        const body: Record<string, unknown> = {
+            beat_id: beatId,
+            engine,
+            rect: options.rect.join(','),
+            access_token: token,
+        };
+        if (options.poly && options.poly.length >= 3) {
+            body.poly = options.poly.map((pt) => `${pt[0]},${pt[1]}`).join(';');
+        }
+        const response = await fetch(
+            convertToURL(
+                getAdminApiPrefix(),
+                'plugin/vn4-e-learning/app-mobile/marketing/short-video/sam2-auto-regions-agent-whiteboard',
+            ),
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: authHeaders(),
+                body: JSON.stringify(shortVideoBody(shortVideoId, body)),
+                signal: controller?.signal,
+            },
+        );
+        return response.json() as Promise<JsonResponse & Sam2AutoRegionsResult>;
+    } catch (err) {
+        const aborted = err instanceof DOMException && err.name === 'AbortError';
+        return {
+            success: false,
+            engine,
+            message: aborted
+                ? `${label} quá thời gian chờ (5 phút) — thử lại khi model đã cache`
+                : (err instanceof Error ? err.message : `${label} gọi API thất bại`),
+            points: [],
+            regions: [],
+        };
+    } finally {
+        if (timer) {
+            window.clearTimeout(timer);
+        }
+    }
+}
+
 export async function enqueueGeminiWebBeatImageFill(
     shortVideoId: number,
     beatIds?: string[],
