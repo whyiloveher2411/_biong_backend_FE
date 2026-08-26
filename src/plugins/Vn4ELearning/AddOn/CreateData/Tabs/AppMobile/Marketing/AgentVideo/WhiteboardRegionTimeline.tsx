@@ -6,6 +6,8 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
 import { attentionEffectTimelineLabel, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, isOverlayInstantEntry, isRegionPlaceInstantEntry, renderPlaceEffectAfterSec } from './agentVideoApi';
 import {
@@ -34,8 +36,8 @@ import {
  *
  * - MỖI VÙNG 1 DÒNG riêng, sắp cây (cha → các con ngay dưới → các vùng khác),
  *   kéo tay trái/phải trên dải màu để đặt bắt đầu / xong render (min 1s).
- * - UI giới hạn tối đa 5 dòng (1 audio + 4 vùng/hiệu ứng); dòng thừa cuộn dọc
- *   để box ảnh phía trên không bị co quá nhỏ.
+ * - UI giới hạn chiều cao: thu gọn = 5 dòng (1 audio + 4 track), mở rộng = 10 dòng
+ *   (1 audio + 9 track); dòng thừa cuộn dọc để box ảnh phía trên không bị co quá nhỏ.
  * - THANH AUDIO (hàng đầu) SẠCH — chỉ thước giây + vạch từ + playhead đỏ dọc,
  *   KHÔNG có mảnh màu vùng trên thanh audio.
  * - Click tên vùng / dải = chọn vùng (đồng bộ ảnh + scroll quản lý).
@@ -110,12 +112,34 @@ const HANDLE_W = 12;
 const PHASE_HANDLE_W = 8;
 const ROW_H = 26;
 const AUDIO_ROW_H = 30;
-const LABEL_W = 96;
+const LABEL_W = 118;
 const MIN_DUR = 1.0;
-/** Tối đa số dòng hiển thị (1 hàng audio + các dòng vùng/hiệu ứng); phần dư cuộn dọc. */
-const MAX_VISIBLE_TIMELINE_ROWS = 5;
-const MAX_TRACK_ROWS_VISIBLE = MAX_VISIBLE_TIMELINE_ROWS - 1;
-const TIMELINE_SCROLL_BODY_MAX_H = MAX_TRACK_ROWS_VISIBLE * ROW_H;
+/** Thu gọn: 5 dòng (1 audio + 4 track). Mở rộng: 10 dòng (1 audio + 9 track). */
+const MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED = 5;
+const MAX_VISIBLE_TIMELINE_ROWS_EXPANDED = 10;
+const TIMELINE_EXPANDED_STORAGE_KEY = 'biong.whiteboard.regionTimeline.expanded';
+
+function readStoredTimelineExpanded(): boolean {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    try {
+        return window.localStorage.getItem(TIMELINE_EXPANDED_STORAGE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function writeStoredTimelineExpanded(expanded: boolean): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        window.localStorage.setItem(TIMELINE_EXPANDED_STORAGE_KEY, expanded ? '1' : '0');
+    } catch {
+        // Timeline vẫn hoạt động khi trình duyệt chặn localStorage.
+    }
+}
 
 export default function WhiteboardRegionTimeline({
     regions,
@@ -165,6 +189,8 @@ export default function WhiteboardRegionTimeline({
     const [playhead, setPlayhead] = React.useState(0);
     const [copied, setCopied] = React.useState(false);
     const [copying, setCopying] = React.useState(false);
+    /** false = thu gọn (max 5 dòng), true = mở rộng (max 10 dòng). Persist localStorage. */
+    const [timelineExpanded, setTimelineExpanded] = React.useState(readStoredTimelineExpanded);
     const rafRef = React.useRef<number>(0);
     const onPlayheadChangeRef = React.useRef(onPlayheadChange);
     onPlayheadChangeRef.current = onPlayheadChange;
@@ -255,7 +281,6 @@ export default function WhiteboardRegionTimeline({
         seekToSec(seekRequest.sec);
         emitPlayhead(Math.max(0, Math.min(duration, seekRequest.sec)), false);
         // Chỉ theo token — tránh loop khi seekRequest object đổi reference.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seekRequest?.token]);
 
     const replay = () => {
@@ -696,8 +721,13 @@ export default function WhiteboardRegionTimeline({
     };
 
     const trackRowCount = orderedRegions.length + orderedEffects.length + imageOverlays.length;
-    const scrollBodyHeight = Math.min(trackRowCount * ROW_H, TIMELINE_SCROLL_BODY_MAX_H);
-    const needsTrackScroll = trackRowCount > MAX_TRACK_ROWS_VISIBLE;
+    const maxVisibleRows = timelineExpanded
+        ? MAX_VISIBLE_TIMELINE_ROWS_EXPANDED
+        : MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED;
+    const maxTrackRowsVisible = maxVisibleRows - 1;
+    const timelineScrollBodyMaxH = maxTrackRowsVisible * ROW_H;
+    const scrollBodyHeight = Math.min(trackRowCount * ROW_H, timelineScrollBodyMaxH);
+    const needsTrackScroll = trackRowCount > maxTrackRowsVisible;
 
     return (
         <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pb: 0.5, userSelect: 'none', flexShrink: 0 }}>
@@ -760,7 +790,7 @@ export default function WhiteboardRegionTimeline({
                     )}
                 </Box>
 
-                {/* Timeline nhiều dòng (kiểu CapCut) — tối đa 5 dòng (1 audio + 4 track), phần dư cuộn */}
+                {/* Timeline nhiều dòng (kiểu CapCut) — thu gọn 5 / mở rộng 10 dòng, phần dư cuộn */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper', position: 'relative' }}>
                     {/* Hàng audio cố định */}
                     <Box sx={{ display: 'flex', flexShrink: 0 }}>
@@ -793,6 +823,31 @@ export default function WhiteboardRegionTimeline({
                                         <ContentCopyIcon sx={{ fontSize: 14 }} />
                                     </IconButton>
                                 </span>
+                            </Tooltip>
+                            <Tooltip title={timelineExpanded
+                                ? 'Thu gọn timeline (tối đa 5 dòng)'
+                                : 'Mở rộng timeline (tối đa 10 dòng)'}
+                            >
+                                <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                        setTimelineExpanded((v) => {
+                                            const next = !v;
+                                            writeStoredTimelineExpanded(next);
+                                            return next;
+                                        });
+                                    }}
+                                    sx={{
+                                        p: 0.4,
+                                        color: timelineExpanded ? 'primary.main' : 'inherit',
+                                    }}
+                                    aria-label={timelineExpanded ? 'Thu gọn timeline' : 'Mở rộng timeline'}
+                                    aria-pressed={timelineExpanded}
+                                >
+                                    {timelineExpanded
+                                        ? <UnfoldLessIcon sx={{ fontSize: 16 }} />
+                                        : <UnfoldMoreIcon sx={{ fontSize: 16 }} />}
+                                </IconButton>
                             </Tooltip>
                             {onRequestDeleteAllTimelineItems ? (
                                 <Tooltip title={trackRowCount > 0
@@ -877,12 +932,12 @@ export default function WhiteboardRegionTimeline({
                         </Box>
                     </Box>
 
-                    {/* Các dòng vùng / hiệu ứng — cuộn khi vượt quá 4 dòng */}
+                    {/* Các dòng vùng / hiệu ứng — cuộn khi vượt quá số dòng track cho phép */}
                     {trackRowCount > 0 ? (
                     <Box
                         sx={{
                             display: 'flex',
-                            maxHeight: TIMELINE_SCROLL_BODY_MAX_H,
+                            maxHeight: timelineScrollBodyMaxH,
                             height: scrollBodyHeight,
                             overflowY: needsTrackScroll ? 'auto' : 'hidden',
                             overflowX: 'hidden',

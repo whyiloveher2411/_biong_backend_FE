@@ -7,7 +7,6 @@ import {
     insertPointOnEdge,
     moveVertex,
     removeVertex,
-    translatePolygon,
 } from './regionPathEdit';
 
 type Props = {
@@ -27,19 +26,12 @@ type Props = {
     onInteract?: () => void;
 };
 
-type DragKind = 'vertex' | 'move';
-
 type DragState = {
-    kind: DragKind;
     startX: number;
     startY: number;
     origPoints: BeatRegionPoint[];
     vertexIndex: number;
 };
-
-function svgPointsAttr(points: BeatRegionPoint[]): string {
-    return points.map((p) => `${(p[0] * 1000).toFixed(2)},${(p[1] * 1000).toFixed(2)}`).join(' ');
-}
 
 function scaleTpl(
     x: number,
@@ -109,7 +101,6 @@ export default function WhiteboardRegionPathHandles({
 
     const beginWindowDrag = React.useCallback((
         e: React.PointerEvent | React.MouseEvent,
-        kind: DragKind,
         vertexIndex: number,
         origPoints: BeatRegionPoint[],
     ) => {
@@ -117,7 +108,6 @@ export default function WhiteboardRegionPathHandles({
         e.stopPropagation();
         onInteract?.();
         dragRef.current = {
-            kind,
             startX: e.clientX,
             startY: e.clientY,
             origPoints,
@@ -130,10 +120,6 @@ export default function WhiteboardRegionPathHandles({
             }
             const dx = (ev.clientX - drag.startX) / screenW;
             const dy = (ev.clientY - drag.startY) / screenH;
-            if (drag.kind === 'move') {
-                onChangeRef.current(translatePolygon(drag.origPoints, dx, dy));
-                return;
-            }
             const orig = drag.origPoints[drag.vertexIndex];
             if (!orig) {
                 return;
@@ -174,7 +160,7 @@ export default function WhiteboardRegionPathHandles({
         }
         onChangePoints(inserted.points);
         setActiveVertex(inserted.insertedIndex);
-        beginWindowDrag(e, 'vertex', inserted.insertedIndex, inserted.points);
+        beginWindowDrag(e, inserted.insertedIndex, inserted.points);
     };
 
     return (
@@ -184,21 +170,6 @@ export default function WhiteboardRegionPathHandles({
             onClick={stopBubble}
             style={{ pointerEvents: 'auto' }}
         >
-            <polygon
-                points={svgPointsAttr(points)}
-                fill={color}
-                fillOpacity={0.01}
-                stroke="none"
-                style={{ cursor: 'move', pointerEvents: 'fill' }}
-                onPointerDown={(e) => {
-                    if (e.button !== 0) {
-                        return;
-                    }
-                    setActiveVertex(null);
-                    beginWindowDrag(e, 'move', -1, points.slice());
-                }}
-            />
-
             {points.map((p, i) => {
                 const next = points[(i + 1) % points.length];
                 const mid = edgeMidpoint(points, i);
@@ -249,7 +220,7 @@ export default function WhiteboardRegionPathHandles({
                                 return;
                             }
                             setActiveVertex(i);
-                            beginWindowDrag(e, 'vertex', i, points.slice());
+                            beginWindowDrag(e, i, points.slice());
                         }}
                         onDoubleClick={(e) => {
                             e.preventDefault();

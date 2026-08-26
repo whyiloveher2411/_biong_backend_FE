@@ -1060,7 +1060,17 @@ export default function ShortVideoAgentBeatRegionEditor({
         setSelectedEffectId('');
         setSelectedOverlayId(id);
         setRightPanelTab('edit');
-    }, []);
+        // Giống chọn vùng: về đầu timeline để thấy ảnh upload rõ (chưa bị che theo playhead).
+        if (canvasMode === 'edit') {
+            setPlayheadSec(0);
+            playheadRef.current = { sec: 0, playing: false };
+            videoPreviewRef.current?.seekTo(0, false);
+            setTimelineSeekRequest((prev) => ({
+                sec: 0,
+                token: (prev?.token || 0) + 1,
+            }));
+        }
+    }, [canvasMode]);
 
     const updateOverlay = React.useCallback((id: string, patch: Partial<BeatImageOverlay>) => {
         setImageOverlays((prev) => prev.map((item) => {
@@ -2031,6 +2041,35 @@ export default function ShortVideoAgentBeatRegionEditor({
         };
     }, [boxSize, containRect]);
 
+    /** Pan canvas khi kéo trên ảnh upload — dùng pointer events (không dùng mouse:
+     * preventDefault trên pointerdown sẽ chặn mouseup → pan bị “dính” sau khi thả). */
+    const overlayPanCleanupRef = React.useRef<(() => void) | null>(null);
+    const startCanvasPan = React.useCallback((
+        startX: number,
+        startY: number,
+        currentX: number = startX,
+        currentY: number = startY,
+    ) => {
+        overlayPanCleanupRef.current?.();
+        const d = { sx: startX, sy: startY, px: pan.x, py: pan.y };
+        panDragRef.current = d;
+        setPan(clampPan(d.px + (currentX - d.sx), d.py + (currentY - d.sy), zoom));
+        const onWinMove = (e: PointerEvent) => {
+            setPan(clampPan(d.px + (e.clientX - d.sx), d.py + (e.clientY - d.sy), zoom));
+        };
+        const onWinUp = () => {
+            panDragRef.current = null;
+            window.removeEventListener('pointermove', onWinMove);
+            window.removeEventListener('pointerup', onWinUp);
+            window.removeEventListener('pointercancel', onWinUp);
+            overlayPanCleanupRef.current = null;
+        };
+        overlayPanCleanupRef.current = onWinUp;
+        window.addEventListener('pointermove', onWinMove);
+        window.addEventListener('pointerup', onWinUp);
+        window.addEventListener('pointercancel', onWinUp);
+    }, [clampPan, pan.x, pan.y, zoom]);
+
     const handleZoomAt = React.useCallback((nextZoom: number, cx: number, cy: number) => {
         if (!containRect || boxSize?.w == null) {
             return;
@@ -2809,11 +2848,42 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             opacity: previewActive ? 0 : 1,
                                         }}
                                     />
+                                    {/* Ảnh upload (media) dưới vùng chọn — SVG region luôn vẽ phía trên */}
+                                    {!previewActive && containRect ? (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                zIndex: 1,
+                                                overflow: 'hidden',
+                                                pointerEvents: 'none',
+                                            }}
+                                        >
+                                            {imageOverlays.map((overlay) => (
+                                                <WhiteboardImageOverlayHandles
+                                                    key={`media-${overlay.id}`}
+                                                    overlay={overlay}
+                                                    layer="media"
+                                                    containRect={{
+                                                        left: 0,
+                                                        top: 0,
+                                                        width: containRect.w * zoom,
+                                                        height: containRect.h * zoom,
+                                                    }}
+                                                    selected={selectedOverlayId === overlay.id}
+                                                    interactive={false}
+                                                    onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
+                                                    onSelect={() => selectOverlay(overlay.id)}
+                                                />
+                                            ))}
+                                        </Box>
+                                    ) : null}
                                     {containRect ? (
                                         <Box
                                             sx={{
                                                 position: 'absolute',
                                                 inset: 0,
+                                                zIndex: 2,
                                             }}
                                         >
                                             <svg
@@ -3046,6 +3116,37 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </svg>
                             </Box>
                         ) : null}
+                                    {/* Handle ảnh upload trên vùng chọn — chỉnh khi đã chọn từ timeline */}
+                                    {!previewActive && containRect ? (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                zIndex: 3,
+                                                overflow: 'visible',
+                                                pointerEvents: 'none',
+                                            }}
+                                        >
+                                            {imageOverlays.map((overlay) => (
+                                                <WhiteboardImageOverlayHandles
+                                                    key={`controls-${overlay.id}`}
+                                                    overlay={overlay}
+                                                    layer="controls"
+                                                    containRect={{
+                                                        left: 0,
+                                                        top: 0,
+                                                        width: containRect.w * zoom,
+                                                        height: containRect.h * zoom,
+                                                    }}
+                                                    selected={selectedOverlayId === overlay.id}
+                                                    interactive={!isAddActive && !spaceDown}
+                                                    onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
+                                                    onSelect={() => selectOverlay(overlay.id)}
+                                                    onPanDragStart={startCanvasPan}
+                                                />
+                                            ))}
+                                        </Box>
+                                    ) : null}
                         </Box>
                         </Box>
                         {/* Overlay phạm vi zoom — cùng kích thước contain×zoom như ảnh beat */}
@@ -3334,38 +3435,6 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </Box>
                             </Box>
                         ) : null}
-                        {/* Ảnh upload: cùng kích thước contain×zoom + pan như ảnh beat */}
-                        {!previewActive && containRect && boxSize ? (
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    left: containRect.x + pan.x,
-                                    top: containRect.y + pan.y,
-                                    width: containRect.w * zoom,
-                                    height: containRect.h * zoom,
-                                    overflow: 'hidden',
-                                    zIndex: 4,
-                                    pointerEvents: 'none',
-                                }}
-                            >
-                                {imageOverlays.map((overlay) => (
-                                    <WhiteboardImageOverlayHandles
-                                        key={overlay.id}
-                                        overlay={overlay}
-                                        containRect={{
-                                            left: 0,
-                                            top: 0,
-                                            width: containRect.w * zoom,
-                                            height: containRect.h * zoom,
-                                        }}
-                                        selected={selectedOverlayId === overlay.id}
-                                        onChange={(patch: Partial<BeatImageOverlay>) => updateOverlay(overlay.id, patch)}
-                                        onSelect={() => selectOverlay(overlay.id)}
-                                    />
-                                ))}
-                            </Box>
-                        ) : null}
-
                         {previewActive ? (
                             <WhiteboardBeatVideoPreview
                                 ref={videoPreviewRef}

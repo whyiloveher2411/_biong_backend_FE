@@ -9,19 +9,40 @@ type Props = {
     /** Canvas zoom UI (1–8). Drag delta chia theo pixel *trên màn hình* = width * zoom. */
     zoom?: number;
     selected: boolean;
+    /**
+     * false khi đang thêm/vẽ vùng hoặc Space — không bắt pointer,
+     * để click/kéo xuyên xuống SVG (vẽ vùng / pan ảnh).
+     */
+    interactive?: boolean;
+    /**
+     * media = chỉ ảnh (dưới vùng chọn);
+     * controls = hit/outline/handle (trên vùng chọn);
+     * all = cả hai (mặc định).
+     */
+    layer?: 'media' | 'controls' | 'all';
     onChange: (patch: Partial<BeatImageOverlay>) => void;
     onSelect: () => void;
+    /**
+     * Chỉ khi CHƯA chọn: kéo trên thân ảnh (vượt ngưỡng click) → pan canvas.
+     * Khi ĐÃ chọn: kéo thân = di chuyển ảnh upload.
+     */
+    onPanDragStart?: (startX: number, startY: number, currentX: number, currentY: number) => void;
 };
 
 type DragKind = 'move' | 'resize-se' | 'rotate';
+
+const CLICK_MOVE_THRESHOLD_PX = 4;
 
 export default function WhiteboardImageOverlayHandles({
     overlay,
     containRect,
     zoom = 1,
     selected,
+    interactive = true,
+    layer = 'all',
     onChange,
     onSelect,
+    onPanDragStart,
 }: Props) {
     const boxRef = React.useRef<HTMLDivElement | null>(null);
     const dragRef = React.useRef<{
@@ -39,10 +60,12 @@ export default function WhiteboardImageOverlayHandles({
         height: overlay.height * containRect.height,
     };
 
-    const onPointerDown = (e: React.PointerEvent, kind: DragKind) => {
+    const beginTransformDrag = (e: React.PointerEvent, kind: DragKind) => {
         e.preventDefault();
         e.stopPropagation();
-        onSelect();
+        if (!selected) {
+            onSelect();
+        }
         dragRef.current = {
             kind,
             startX: e.clientX,
@@ -95,6 +118,62 @@ export default function WhiteboardImageOverlayHandles({
         (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     };
 
+    /** Chưa chọn: click = chọn, kéo = pan canvas. */
+    const onUnselectedBodyPointerDown = (e: React.PointerEvent) => {
+        if (e.button !== 0) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const sx = e.clientX;
+        const sy = e.clientY;
+        let moved = false;
+        const onMove = (ev: PointerEvent) => {
+            if (moved) {
+                return;
+            }
+            if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < CLICK_MOVE_THRESHOLD_PX) {
+                return;
+            }
+            moved = true;
+            onPanDragStart?.(sx, sy, ev.clientX, ev.clientY);
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            if (!moved) {
+                onSelect();
+            }
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    };
+
+    const showMedia = layer === 'media' || layer === 'all';
+    const showControls = layer === 'controls' || layer === 'all';
+    const showHit = showControls && interactive;
+    const showHandles = showControls && selected && interactive;
+    // media: viền nét đứt; controls (khi chọn): viền đậm trên vùng chọn.
+    const outline = (() => {
+        if (layer === 'media') {
+            return selected ? 'none' : '1px dashed rgba(0,137,123,0.55)';
+        }
+        if (layer === 'controls') {
+            return selected ? '2px solid #00897b' : 'none';
+        }
+        return selected ? '2px solid #00897b' : '1px dashed rgba(0,137,123,0.55)';
+    })();
+    const selectedGlow = (layer === 'controls' || layer === 'all') && selected;
+
+    if (layer === 'controls' && !interactive && !selected) {
+        return null;
+    }
+
     return (
         <Box
             ref={boxRef}
@@ -107,40 +186,51 @@ export default function WhiteboardImageOverlayHandles({
                 transform: `rotate(${overlay.rotation_deg || 0}deg)`,
                 transformOrigin: 'center center',
                 // Outline / box-shadow — KHÔNG dùng border (border làm co nội dung khi chọn).
-                outline: selected ? '2px solid #00897b' : '1px dashed rgba(0,137,123,0.55)',
+                outline,
                 outlineOffset: 0,
-                boxShadow: selected ? '0 0 0 2px rgba(0,137,123,0.25)' : 'none',
+                boxShadow: selectedGlow ? '0 0 0 2px rgba(0,137,123,0.25)' : 'none',
                 boxSizing: 'border-box',
-                zIndex: 4,
-                pointerEvents: 'auto',
-                cursor: 'move',
-            }}
-            onPointerDown={(e) => onPointerDown(e, 'move')}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onClick={(e) => {
-                e.stopPropagation();
-                onSelect();
+                pointerEvents: 'none',
             }}
         >
-            <Box
-                component="img"
-                src={overlay.image_url}
-                alt=""
-                draggable={false}
-                sx={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    display: 'block',
-                    pointerEvents: 'none',
-                }}
-            />
-            {selected ? (
+            {showMedia ? (
+                <Box
+                    component="img"
+                    src={overlay.image_url}
+                    alt=""
+                    draggable={false}
+                    sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        display: 'block',
+                        pointerEvents: 'none',
+                    }}
+                />
+            ) : null}
+            {showHit ? (
+                <Box
+                    onPointerDown={selected
+                        ? (e) => beginTransformDrag(e, 'move')
+                        : onUnselectedBodyPointerDown}
+                    onPointerMove={selected ? onPointerMove : undefined}
+                    onPointerUp={selected ? onPointerUp : undefined}
+                    onPointerCancel={selected ? onPointerUp : undefined}
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        pointerEvents: 'auto',
+                        cursor: selected ? 'move' : 'pointer',
+                    }}
+                />
+            ) : null}
+            {showHandles ? (
                 <>
                     <Box
-                        onPointerDown={(e) => onPointerDown(e, 'resize-se')}
+                        onPointerDown={(e) => beginTransformDrag(e, 'resize-se')}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={onPointerUp}
                         sx={{
                             position: 'absolute',
                             right: -6,
@@ -150,10 +240,14 @@ export default function WhiteboardImageOverlayHandles({
                             bgcolor: '#00897b',
                             borderRadius: '50%',
                             cursor: 'nwse-resize',
+                            pointerEvents: 'auto',
                         }}
                     />
                     <Box
-                        onPointerDown={(e) => onPointerDown(e, 'rotate')}
+                        onPointerDown={(e) => beginTransformDrag(e, 'rotate')}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={onPointerUp}
                         sx={{
                             position: 'absolute',
                             left: '50%',
@@ -164,6 +258,7 @@ export default function WhiteboardImageOverlayHandles({
                             bgcolor: '#26a69a',
                             borderRadius: '50%',
                             cursor: 'grab',
+                            pointerEvents: 'auto',
                         }}
                     />
                 </>

@@ -10,15 +10,6 @@ export function clampPoint01(point: BeatRegionPoint): BeatRegionPoint {
     return [clamp01(point[0]), clamp01(point[1])];
 }
 
-/** Dịch toàn polygon; clamp từng điểm vào [0,1]. */
-export function translatePolygon(
-    points: BeatRegionPoint[],
-    dx: number,
-    dy: number,
-): BeatRegionPoint[] {
-    return points.map((p) => clampPoint01([p[0] + dx, p[1] + dy]));
-}
-
 /** Cập nhật 1 đỉnh theo index; clamp 0–1. */
 export function moveVertex(
     points: BeatRegionPoint[],
