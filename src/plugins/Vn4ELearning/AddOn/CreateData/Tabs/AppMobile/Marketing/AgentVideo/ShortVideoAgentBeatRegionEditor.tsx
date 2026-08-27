@@ -4417,23 +4417,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                         >
                             <Tooltip placement="left" title={isBeatApproved ? 'Bỏ đánh dấu đã ổn (D)' : 'Đánh dấu đã ổn (D)'}>
                             <span>
-                            <Button
+                            <IconButton
                                 size="small"
                                 disabled={savingQa || state.savingImportHtml}
                                 onClick={() => { void handleToggleApproved(); }}
-                                startIcon={savingQa ? (
-                                    <CircularProgress size={14} sx={{ color: 'inherit' }} />
-                                ) : isBeatApproved ? (
-                                    <CheckBoxIcon sx={{ fontSize: 18 }} />
-                                ) : (
-                                    <CheckBoxOutlineBlankIcon sx={{ fontSize: 18 }} />
-                                )}
+                                aria-label={isBeatApproved ? 'Bỏ đánh dấu đã ổn' : 'Đánh dấu đã ổn'}
                                 sx={{
-                                    minWidth: 0,
-                                    px: 1.25,
-                                    py: 0.4,
-                                    textTransform: 'none',
-                                    fontWeight: 700,
                                     color: isBeatApproved ? '#fbcfe8' : 'common.white',
                                     bgcolor: isBeatApproved
                                         ? 'rgba(236,72,153,0.55)'
@@ -4456,8 +4445,14 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     },
                                 }}
                             >
-                                Đã ổn
-                            </Button>
+                                {savingQa ? (
+                                    <CircularProgress size={16} sx={{ color: 'inherit' }} />
+                                ) : isBeatApproved ? (
+                                    <CheckBoxIcon sx={{ fontSize: 18 }} />
+                                ) : (
+                                    <CheckBoxOutlineBlankIcon sx={{ fontSize: 18 }} />
+                                )}
+                            </IconButton>
                             </span>
                             </Tooltip>
                             {beatSegments.length > 1 && activeSegmentIndex >= 0 ? (
@@ -4636,13 +4631,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         size="small"
                                         variant="contained"
                                         color="success"
-                                        startIcon={<SaveIcon />}
                                         loading={saving}
                                         disabled={state.savingWhiteboardBeatOverride}
                                         onClick={() => { void handleSave(); }}
-                                        sx={{ textTransform: 'none', ml: 0.5 }}
+                                        aria-label="Lưu vùng"
+                                        sx={{ minWidth: 32, px: 0.75, ml: 0.5 }}
                                     >
-                                        Lưu vùng
+                                        <SaveIcon fontSize="small" />
                                     </LoadingButton>
                                 </span>
                             </Tooltip>
@@ -4674,6 +4669,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                         transitionDurationSec={beatTransitionDurationSec}
                         shortVideoId={shortVideoId}
                         beatId={beatId}
+                        beatCurrent={activeSegmentIndex >= 0 ? activeSegmentIndex + 1 : 0}
+                        beatTotal={beatSegments.length}
                         onCopyError={(msg) => notify(msg, 'error')}
                         onPlayheadChange={(sec, isPlaying) => {
                             setPlayheadSec(sec);

@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Box,
     Button,
+    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -84,6 +85,10 @@ type Props = {
     transitionDurationSec?: number;
     shortVideoId?: number;
     beatId?: string;
+    /** Beat hiện tại (1-based) — hiển thị trên audio script. */
+    beatCurrent?: number;
+    /** Tổng số beat — hiển thị cùng beatCurrent dạng current/total. */
+    beatTotal?: number;
     onCopyError?: (message: string) => void;
     /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
     onPlayheadChange?: (sec: number, playing: boolean) => void;
@@ -190,6 +195,8 @@ export default function WhiteboardRegionTimeline({
     transitionDurationSec = 0,
     shortVideoId = 0,
     beatId = '',
+    beatCurrent = 0,
+    beatTotal = 0,
     onCopyError,
     onPlayheadChange,
     seekRequest = null,
@@ -800,8 +807,28 @@ export default function WhiteboardRegionTimeline({
                         lineHeight: 1.9,
                         userSelect: 'none',
                         WebkitUserSelect: 'none',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 0.75,
                     }}
                 >
+                    {beatCurrent > 0 && beatTotal > 0 ? (
+                        <Chip
+                            size="small"
+                            label={`${beatCurrent}/${beatTotal}`}
+                            title={`Beat ${beatCurrent} / ${beatTotal}`}
+                            sx={{
+                                height: 20,
+                                flexShrink: 0,
+                                mt: '2px',
+                                fontWeight: 800,
+                                fontSize: 11,
+                                fontVariantNumeric: 'tabular-nums',
+                                '& .MuiChip-label': { px: 0.75 },
+                            }}
+                        />
+                    ) : null}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
                     {beatWords.length === 0 ? (
                         <Typography variant="caption" color="text.secondary">
                             Chưa có whisper — kéo các điểm trên thanh để đặt thời gian render theo giây.
@@ -841,6 +868,7 @@ export default function WhiteboardRegionTimeline({
                             );
                         })
                     )}
+                    </Box>
                 </Box>
 
                 {/* Timeline nhiều dòng (kiểu CapCut) — thu gọn 5 / mở rộng 10 dòng, phần dư cuộn */}
@@ -1747,6 +1775,32 @@ export default function WhiteboardRegionTimeline({
                             bgcolor: '#f50057',
                         }}>
                             <Box sx={{ position: 'absolute', top: 0, left: -4, width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #f50057' }} />
+                            {/* Thời gian chính xác tại playhead — tránh ước lượng từ thước giây. */}
+                            <Typography
+                                component="span"
+                                sx={{
+                                    position: 'absolute',
+                                    top: 8,
+                                    left: '50%',
+                                    transform: playhead / Math.max(duration, 0.001) > 0.92
+                                        ? 'translateX(calc(-100% - 4px))'
+                                        : 'translateX(6px)',
+                                    fontSize: 10,
+                                    lineHeight: 1,
+                                    fontWeight: 700,
+                                    fontVariantNumeric: 'tabular-nums',
+                                    color: '#f50057',
+                                    bgcolor: 'rgba(255,255,255,0.92)',
+                                    px: '3px',
+                                    py: '1px',
+                                    borderRadius: 0.5,
+                                    whiteSpace: 'nowrap',
+                                    pointerEvents: 'none',
+                                    boxShadow: '0 0 0 1px rgba(245,0,87,0.18)',
+                                }}
+                            >
+                                {playhead.toFixed(2)}s
+                            </Typography>
                         </Box>
                     </Box>
                 </Box>
