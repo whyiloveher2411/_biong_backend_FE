@@ -51,6 +51,7 @@ import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
+import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
 import { useBeatTimelineEffects } from './beatTimelineEffects/useBeatTimelineEffects';
 import { getBeatTimelineEffectDefinition } from './beatTimelineEffects/registry';
@@ -2975,6 +2976,8 @@ export default function ShortVideoAgentBeatRegionEditor({
     // Điểm tập trung hiện tại (0-1, ratio ảnh gốc) — hiển thị trên canvas.
     const focusX = parseRatio(currentOverride.focus_x, 0.5);
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
+    const customBgUrl = String(currentOverride.custom_background_url || '').trim();
+    const useCustomBg = customBgUrl !== '' && !currentOverride.custom_background_hidden;
     const effectFocusX = selectedEffect?.type === 'zoom' ? selectedEffect.focus_x : focusX;
     const effectFocusY = selectedEffect?.type === 'zoom' ? selectedEffect.focus_y : focusY;
     const timelineZoomPreview = resolveZoomTransformAt(playheadSec, timelineEffects, sceneBudgetSec);
@@ -3511,6 +3514,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         {!previewActive ? (
                         <Stack
                             spacing={0.75}
+                            alignItems="flex-start"
                             sx={{
                                 position: 'absolute',
                                 top: 8,
@@ -3669,6 +3673,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                             saving={state.savingWhiteboardBeatOverride}
                             withoutImage
                             onSave={(override) => persistOverride(override)}
+                        />
+                        <WhiteboardCustomBackgroundControl
+                            shortVideoId={shortVideoId}
+                            url={currentOverride.custom_background_url}
+                            hidden={Boolean(currentOverride.custom_background_hidden)}
+                            saving={state.savingWhiteboardBeatOverride}
+                            onChange={(patch) => persistOverride(patch)}
                         />
                         </Stack>
                         ) : null}
@@ -3885,9 +3896,78 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             pointerEvents: 'none',
                                             userSelect: 'none',
                                             WebkitUserSelect: 'none',
-                                            opacity: previewActive ? 0 : 1,
+                                            // Custom bg active: ẩn ảnh beat full — chỉ hiện cutout vùng (layer dưới).
+                                            opacity: previewActive || useCustomBg ? 0 : 1,
                                         }}
                                     />
+                                    {useCustomBg && !previewActive ? (
+                                        <Box
+                                            component="img"
+                                            src={customBgUrl}
+                                            alt="Custom background"
+                                            draggable={false}
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'fill',
+                                                display: 'block',
+                                                pointerEvents: 'none',
+                                                zIndex: 0,
+                                            }}
+                                        />
+                                    ) : null}
+                                    {useCustomBg && !previewActive ? (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                zIndex: 1,
+                                                overflow: 'hidden',
+                                                pointerEvents: 'none',
+                                            }}
+                                        >
+                                            {canvasRegions.map((region) => {
+                                                if (region.action === 'erase') {
+                                                    return null;
+                                                }
+                                                const pts = Array.isArray(region.points) ? region.points : [];
+                                                if (pts.length < 3) {
+                                                    return null;
+                                                }
+                                                const clip = `polygon(${pts.map(
+                                                    (p) => `${(p[0] * 100).toFixed(3)}% ${(p[1] * 100).toFixed(3)}%`,
+                                                ).join(', ')})`;
+                                                return (
+                                                    <Box
+                                                        key={`custom-bg-cutout-${region.id}`}
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            inset: 0,
+                                                            clipPath: clip,
+                                                            WebkitClipPath: clip,
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            component="img"
+                                                            src={imageUrl}
+                                                            alt=""
+                                                            draggable={false}
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                inset: 0,
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'fill',
+                                                                display: 'block',
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                );
+                                            })}
+                                        </Box>
+                                    ) : null}
                                     {/* Ảnh upload (media) dưới vùng chọn — SVG region luôn vẽ phía trên */}
                                     {!previewActive && containRect ? (
                                         <Box
@@ -4522,6 +4602,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 >
                                     <WhiteboardBeatTimingPreview
                                         imageUrl={imageUrl}
+                                        customBackgroundUrl={useCustomBg ? customBgUrl : undefined}
                                         regions={canvasRegions}
                                         imageOverlays={canvasOverlays}
                                         playheadSec={playheadSec}

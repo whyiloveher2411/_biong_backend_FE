@@ -193,6 +193,7 @@ export default function ShortVideoAgentImageAnimationControls({
             <>
                 <Stack
                     spacing={0.75}
+                    alignItems="flex-start"
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                 >

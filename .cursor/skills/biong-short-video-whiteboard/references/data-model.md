@@ -49,6 +49,8 @@ Lưu trong `agent_whiteboard_beat_overrides[beatId]` qua `saveAgentWhiteboardBea
 | `transition_duration_sec` | Override transition beat này |
 | `image_animation_effect` | Ken Burns: `common` \| concrete \| `none` \| `random` |
 | `focus_x`, `focus_y` | Điểm tập trung frame cuối (0–1) |
+| `custom_background_url` | Nền custom per-beat (upload); rỗng = dùng ảnh beat |
+| `custom_background_hidden` | `true` = tạm ẩn (preview + render dùng ảnh beat; giữ URL) |
 | `regions` | Mảng `BeatRegion[]` |
 | `image_overlays` | Mảng `BeatImageOverlay[]` (ảnh thêm upload) |
 | `timeline_effects` | Mảng `BeatTimelineEffect[]` (hiện chỉ zoom) |

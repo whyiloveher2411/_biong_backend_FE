@@ -18,6 +18,8 @@ type Word = { index: number; text: string; start: number };
 
 type Props = {
     imageUrl: string;
+    /** Khi có: nền = custom bg; chỉ vùng cắt hiện từ ảnh beat; lỗ chưa lộ không phủ BOARD_COLOR. */
+    customBackgroundUrl?: string;
     regions: BeatRegion[];
     imageOverlays?: BeatImageOverlay[];
     playheadSec: number;
@@ -39,7 +41,11 @@ function regionProgress(
     hasChildren: boolean,
 ): number {
     if (region.parent_leftover_instant && hasChildren) {
-        return 1;
+        const start = resolveRegionStartSec(region, beatWords, beatStartSec, duration);
+        // start_sec>0: vẫn chờ mốc rồi mới hiện (khớp engine) — không ép progress=1 từ đầu beat.
+        if (!(Number.isFinite(start) && start > 1e-6)) {
+            return 1;
+        }
     }
     const start = resolveRegionStartSec(region, beatWords, beatStartSec, duration);
     const end = Math.max(start + 0.05, resolveRegionEndSec(region, beatWords, beatStartSec, duration));
@@ -258,9 +264,11 @@ function polygonBBox(points: [number, number][]): { minX: number; minY: number; 
 /**
  * Mô phỏng kết quả whiteboard theo playhead — khi CHƯA có video beat.
  * Nền = ảnh gốc (instant base); chỉ che bảng trắng TRONG vùng chưa lộ.
+ * Có customBackgroundUrl → nền custom; lỗ chưa lộ để lộ custom bg (không phủ BOARD_COLOR).
  */
 export default function WhiteboardBeatTimingPreview({
     imageUrl,
+    customBackgroundUrl,
     regions,
     imageOverlays = [],
     playheadSec,
@@ -272,6 +280,8 @@ export default function WhiteboardBeatTimingPreview({
 }: Props) {
     const duration = Math.max(0.1, durationSec);
     const budget = Math.max(0.1, sceneBudgetSec ?? duration);
+    const customBg = String(customBackgroundUrl || '').trim();
+    const useCustomBg = customBg !== '';
     const timelineZoomCss = zoomTransformToCss(resolveZoomTransformAt(playheadSec, timelineEffects, durationSec));
     const ordered = React.useMemo(() => {
         const out: BeatRegion[] = [];
@@ -345,10 +355,10 @@ export default function WhiteboardBeatTimingPreview({
                     transformOrigin: 'center center',
                 }}
             >
-                {/* Ảnh beat đầy đủ — nền ngoài vùng luôn hiện ảnh gốc (khớp engine instant base). */}
+                {/* Nền: custom bg HOẶC ảnh beat đầy đủ (instant base). */}
                 <Box
                     component="img"
-                    src={imageUrl}
+                    src={useCustomBg ? customBg : imageUrl}
                     alt=""
                     draggable={false}
                     sx={{
@@ -362,8 +372,9 @@ export default function WhiteboardBeatTimingPreview({
                     }}
                 />
 
-                {/* Che bảng trắng chỉ TRONG polygon chưa lộ / đang animate — không phủ toàn canvas. */}
-                {regionStates.map(({ region, progress }) => {
+                {/* Che bảng trắng chỉ TRONG polygon chưa lộ / đang animate — không phủ toàn canvas.
+                    Custom bg: bỏ phủ BOARD_COLOR để lộ nền custom. */}
+                {!useCustomBg ? regionStates.map(({ region, progress }) => {
                     if (!Array.isArray(region.points) || region.points.length < 3) {
                         return null;
                     }
@@ -428,9 +439,10 @@ export default function WhiteboardBeatTimingPreview({
                             />
                         </Box>
                     );
-                })}
+                }) : null}
 
-                {/* Lớp cutout đã lộ — scale thở riêng từng vùng (isolation tránh dính màu GPU). */}
+                {/* Lớp cutout đã lộ — scale thở riêng từng vùng (isolation tránh dính màu GPU).
+                    Custom bg + draw đang lộ: cửa sổ từ trên xuống (không BOARD_COLOR). */}
                 {regionStates.map(({ region, progress, breatheScale, fx }) => {
                     if (!Array.isArray(region.points) || region.points.length < 3) {
                         return null;
@@ -445,36 +457,77 @@ export default function WhiteboardBeatTimingPreview({
                     const originX = (bbox.minX + bbox.w / 2) * 100;
                     const originY = (bbox.minY + bbox.h / 2) * 100;
                     const clip = polygonClip(region.points);
+                    const drawWindow = useCustomBg && !isPlace && progress < 0.995;
                     return (
                         <React.Fragment key={`${region.id}-reveal-wrap`}>
-                            <Box
-                                key={`${region.id}-reveal`}
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    clipPath: clip,
-                                    opacity: isPlace && progress < 1 ? progress : 1,
-                                    transform: totalScale !== 1 ? `scale(${totalScale})` : undefined,
-                                    transformOrigin: `${originX.toFixed(2)}% ${originY.toFixed(2)}%`,
-                                    isolation: 'isolate',
-                                    willChange: totalScale !== 1 ? 'transform' : undefined,
-                                }}
-                            >
+                            {drawWindow ? (
                                 <Box
-                                    component="img"
-                                    src={imageUrl}
-                                    alt=""
-                                    draggable={false}
+                                    sx={{
+                                        position: 'absolute',
+                                        left: `${bbox.minX * 100}%`,
+                                        top: `${bbox.minY * 100}%`,
+                                        width: `${bbox.w * 100}%`,
+                                        height: `${bbox.h * progress * 100}%`,
+                                        overflow: 'hidden',
+                                        pointerEvents: 'none',
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            left: `${(-bbox.minX / bbox.w) * 100}%`,
+                                            top: `${(-bbox.minY / bbox.h) * 100}%`,
+                                            width: `${(1 / bbox.w) * 100}%`,
+                                            height: `${(1 / bbox.h) * 100}%`,
+                                            clipPath: clip,
+                                        }}
+                                    >
+                                        <Box
+                                            component="img"
+                                            src={imageUrl}
+                                            alt=""
+                                            draggable={false}
+                                            sx={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'fill',
+                                                display: 'block',
+                                            }}
+                                        />
+                                    </Box>
+                                </Box>
+                            ) : (
+                                <Box
+                                    key={`${region.id}-reveal`}
                                     sx={{
                                         position: 'absolute',
                                         inset: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'fill',
-                                        display: 'block',
+                                        clipPath: clip,
+                                        opacity: isPlace && progress < 1 ? progress : 1,
+                                        transform: totalScale !== 1 ? `scale(${totalScale})` : undefined,
+                                        transformOrigin: `${originX.toFixed(2)}% ${originY.toFixed(2)}%`,
+                                        isolation: 'isolate',
+                                        willChange: totalScale !== 1 ? 'transform' : undefined,
                                     }}
-                                />
-                            </Box>
+                                >
+                                    <Box
+                                        component="img"
+                                        src={imageUrl}
+                                        alt=""
+                                        draggable={false}
+                                        sx={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'fill',
+                                            display: 'block',
+                                        }}
+                                    />
+                                </Box>
+                            )}
                             {progress >= 0.995 ? (
                                 <>
                                     <AttentionLocalFx

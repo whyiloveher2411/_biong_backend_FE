@@ -1168,6 +1168,13 @@ export type AgentWhiteboardBeatOverride = {
     /** Điểm tập trung (0-1, ratio của ảnh gốc) — frame cuối đưa điểm này ra giữa màn hình. */
     focus_x?: number | null;
     focus_y?: number | null;
+    /**
+     * Nền custom per-beat — khi có URL và không hidden, render chỉ hiện vùng cắt
+     * (đúng tọa độ ảnh beat) trên nền này thay vì ảnh beat ngoài vùng.
+     */
+    custom_background_url?: string | null;
+    /** Tạm ẩn custom background (preview + render dùng ảnh beat; giữ URL). */
+    custom_background_hidden?: boolean;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
     /** Ảnh thêm upload tự do trên canvas beat. */

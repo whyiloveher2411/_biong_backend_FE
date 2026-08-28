@@ -12,6 +12,7 @@ Tra cứu nhanh file theo vai trò. Đường dẫn tương đối repo root tr�
 |------|---------|
 | `src/plugins/.../AgentVideo/ShortVideoAgentVideoWorkspace.tsx` | Shell workspace |
 | `src/plugins/.../AgentVideo/ShortVideoAgentBeatRegionEditor.tsx` | Region editor chính (~3900 dòng) |
+| `src/plugins/.../AgentVideo/WhiteboardCustomBackgroundControl.tsx` | Upload / ẩn / xóa custom background per-beat |
 | `src/plugins/.../AgentVideo/WhiteboardRegionTimeline.tsx` | Timeline vùng + ảnh thêm + zoom; icon xóa + confirm |
 | `src/plugins/.../AgentVideo/WhiteboardBeatTimingPreview.tsx` | Preview timing beat |
 | `src/plugins/.../AgentVideo/RegionMediaSettingsPanel.tsx` | Panel **Hiệu ứng gây chú ý** (magenta, grid 1 loại) |
