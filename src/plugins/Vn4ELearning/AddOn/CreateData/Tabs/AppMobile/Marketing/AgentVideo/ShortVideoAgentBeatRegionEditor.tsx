@@ -51,6 +51,7 @@ import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
+import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
 import { useBeatTimelineEffects } from './beatTimelineEffects/useBeatTimelineEffects';
@@ -518,6 +519,9 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         handleStartAddRegion();
     }, [handleCancelAddRegionSession, handleStartAddRegion, regionMode]);
+
+    // Đang upload + thay ảnh beat (chặn double-click, hiện spinner).
+    const [replacingBeatImage, setReplacingBeatImage] = React.useState(false);
 
     // Refine vùng thành vật thể (GrabCut/ML) + giữ nền.
     const [keepBgBusy, setKeepBgBusy] = React.useState<string | null>(null);
@@ -2958,6 +2962,82 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
     }, [isDirty, beatId, state, buildRegionsToSave, regions, timelineEffects]);
 
+    /**
+     * Đổi ảnh beat: upload ảnh mới rồi xóa sạch vùng / ảnh thêm / hiệu ứng của
+     * beat, vì mọi toạ độ đều gắn với ảnh cũ.
+     */
+    const handleReplaceBeatImage = React.useCallback(async (file: File) => {
+        if (replacingBeatImage) {
+            return;
+        }
+        const total = regions.length + imageOverlays.length + timelineEffects.length;
+        if (!window.confirm(
+            `Đổi ảnh beat sẽ xóa toàn bộ ${total} mục trên timeline (vùng, ảnh thêm, hiệu ứng) của beat này.\nTiếp tục?`,
+        )) {
+            return;
+        }
+        const hadCustomBg = String(
+            state.agentWhiteboardBeatOverrides?.[beatId]?.custom_background_url || '',
+        ).trim() !== '';
+        setReplacingBeatImage(true);
+        try {
+            const nextUrl = await state.handleUploadBeatImageFromFile(beatId, file);
+            if (!nextUrl) {
+                notify('Đổi ảnh beat thất bại — timeline giữ nguyên', 'error');
+                return;
+            }
+            setRegions([]);
+            setImageOverlays([]);
+            setSelectedRegionId('');
+            setSelectedOverlayId('');
+            setSelectedEffectId('');
+            setMultiSelectedKeys([]);
+            setOriginalPointsByRegion({});
+            setDraftPoints([]);
+            setBgSampleDraft([]);
+            setRegionMode('select');
+            setTimelineViewMode('main');
+            setActiveGroupId(null);
+            birefnetQueueRef.current = [];
+            setSam2BusyRegionIds([]);
+            setSavedSnapshot([]);
+            setSavedOverlaysSnapshot([]);
+            setEffectsLocal([]);
+
+            // Một lần lưu duy nhất: clearEffects() sẽ ghi lại regions/overlays cũ
+            // từ closure chưa re-render. Custom bg che kín ảnh beat khi không còn
+            // vùng cutout → ẩn nó đi, vẫn giữ URL để user bật lại sau.
+            const savedOk = await state.handleSaveWhiteboardBeatOverride(beatId, {
+                ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
+                regions: [],
+                image_overlays: [],
+                timeline_effects: [],
+                custom_background_hidden: true,
+            });
+            if (savedOk) {
+                notify(
+                    hadCustomBg
+                        ? 'Đã đổi ảnh beat, xóa timeline và ẩn custom background'
+                        : 'Đã đổi ảnh beat và xóa timeline',
+                    'success',
+                );
+            } else {
+                notify('Đã đổi ảnh beat — xóa timeline chưa ghi được vào DB', 'warning');
+            }
+        } finally {
+            setReplacingBeatImage(false);
+        }
+    }, [
+        beatId,
+        setEffectsLocal,
+        imageOverlays,
+        notify,
+        regions,
+        replacingBeatImage,
+        state,
+        timelineEffects,
+    ]);
+
     const handleRenderBeatVideo = React.useCallback(async () => {
         const saved = await saveRegionsIfDirty();
         if (!saved) {
@@ -2978,6 +3058,9 @@ export default function ShortVideoAgentBeatRegionEditor({
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
     const customBgUrl = String(currentOverride.custom_background_url || '').trim();
     const useCustomBg = customBgUrl !== '' && !currentOverride.custom_background_hidden;
+    // Dán toàn bộ ảnh beat lên custom bg (ảnh beat là PNG nền trong suốt) —
+    // không cần vùng cutout để thấy nội dung ảnh.
+    const beatImageOverBg = useCustomBg && Boolean(currentOverride.beat_image_over_background);
     const effectFocusX = selectedEffect?.type === 'zoom' ? selectedEffect.focus_x : focusX;
     const effectFocusY = selectedEffect?.type === 'zoom' ? selectedEffect.focus_y : focusY;
     const timelineZoomPreview = resolveZoomTransformAt(playheadSec, timelineEffects, sceneBudgetSec);
@@ -3674,6 +3757,16 @@ export default function ShortVideoAgentBeatRegionEditor({
                             withoutImage
                             onSave={(override) => persistOverride(override)}
                         />
+                        <WhiteboardBeatImageReplaceControl
+                            imageUrl={imageUrl}
+                            saving={replacingBeatImage}
+                            onPickFile={handleReplaceBeatImage}
+                            showOverBackground={useCustomBg}
+                            overBackground={beatImageOverBg}
+                            onOverBackgroundChange={(next) => {
+                                void persistOverride({ beat_image_over_background: next });
+                            }}
+                        />
                         <WhiteboardCustomBackgroundControl
                             shortVideoId={shortVideoId}
                             url={currentOverride.custom_background_url}
@@ -3896,8 +3989,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             pointerEvents: 'none',
                                             userSelect: 'none',
                                             WebkitUserSelect: 'none',
-                                            // Custom bg active: ẩn ảnh beat full — chỉ hiện cutout vùng (layer dưới).
-                                            opacity: previewActive || useCustomBg ? 0 : 1,
+                                            // Custom bg active: ẩn ảnh beat full — chỉ hiện cutout vùng
+                                            // (layer dưới), trừ khi dán cả ảnh beat lên background.
+                                            opacity: previewActive || (useCustomBg && !beatImageOverBg) ? 0 : 1,
+                                            // Nằm trên layer custom bg (zIndex 0) khi được dán full.
+                                            position: beatImageOverBg ? 'relative' : undefined,
+                                            zIndex: beatImageOverBg ? 2 : undefined,
                                         }}
                                     />
                                     {useCustomBg && !previewActive ? (
@@ -3918,7 +4015,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             }}
                                         />
                                     ) : null}
-                                    {useCustomBg && !previewActive ? (
+                                    {useCustomBg && !beatImageOverBg && !previewActive ? (
                                         <Box
                                             sx={{
                                                 position: 'absolute',
@@ -4603,6 +4700,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     <WhiteboardBeatTimingPreview
                                         imageUrl={imageUrl}
                                         customBackgroundUrl={useCustomBg ? customBgUrl : undefined}
+                                        beatImageOverBackground={beatImageOverBg}
                                         regions={canvasRegions}
                                         imageOverlays={canvasOverlays}
                                         playheadSec={playheadSec}

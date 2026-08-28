@@ -1175,6 +1175,11 @@ export type AgentWhiteboardBeatOverride = {
     custom_background_url?: string | null;
     /** Tạm ẩn custom background (preview + render dùng ảnh beat; giữ URL). */
     custom_background_hidden?: boolean;
+    /**
+     * Dán toàn bộ ảnh beat (PNG nền trong suốt) lên trên custom background thay
+     * vì chỉ lộ vùng cắt. Vùng vẫn chỉ cắt trên ảnh beat.
+     */
+    beat_image_over_background?: boolean;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
     /** Ảnh thêm upload tự do trên canvas beat. */

@@ -20,6 +20,8 @@ type Props = {
     imageUrl: string;
     /** Khi có: nền = custom bg; chỉ vùng cắt hiện từ ảnh beat; lỗ chưa lộ không phủ BOARD_COLOR. */
     customBackgroundUrl?: string;
+    /** Dán toàn bộ ảnh beat lên custom bg — vùng chưa lộ được che lại bằng custom bg. */
+    beatImageOverBackground?: boolean;
     regions: BeatRegion[];
     imageOverlays?: BeatImageOverlay[];
     playheadSec: number;
@@ -31,6 +33,70 @@ type Props = {
 };
 
 const BOARD_COLOR = '#efe6d4';
+
+type MaskRect = { left: number; top: number; w: number; h: number };
+
+/**
+ * Lớp che vùng chưa lộ: bảng trắng (mặc định) hoặc chính custom bg khi ảnh beat
+ * được dán full lên background. `rect` (ratio canvas) giới hạn phần bị che.
+ */
+function RegionMaskFill({
+    clip,
+    rect,
+    opacity,
+    backgroundUrl,
+}: {
+    clip: string;
+    rect?: MaskRect;
+    opacity?: number;
+    backgroundUrl?: string;
+}) {
+    const src = String(backgroundUrl || '').trim();
+    const area: MaskRect = rect || { left: 0, top: 0, w: 1, h: 1 };
+    const fill = src !== '' ? (
+        <Box
+            component="img"
+            src={src}
+            alt=""
+            draggable={false}
+            sx={{
+                position: 'absolute',
+                left: `${(-area.left / area.w) * 100}%`,
+                top: `${(-area.top / area.h) * 100}%`,
+                width: `${(1 / area.w) * 100}%`,
+                height: `${(1 / area.h) * 100}%`,
+                objectFit: 'fill',
+                display: 'block',
+            }}
+        />
+    ) : (
+        <Box sx={{ position: 'absolute', inset: 0, bgcolor: BOARD_COLOR }} />
+    );
+    return (
+        <Box
+            sx={{
+                position: 'absolute',
+                inset: 0,
+                clipPath: clip,
+                WebkitClipPath: clip,
+                opacity,
+            }}
+        >
+            <Box
+                sx={{
+                    position: 'absolute',
+                    left: `${area.left * 100}%`,
+                    top: `${area.top * 100}%`,
+                    width: `${area.w * 100}%`,
+                    height: `${area.h * 100}%`,
+                    overflow: 'hidden',
+                }}
+            >
+                {fill}
+            </Box>
+        </Box>
+    );
+}
 
 function regionProgress(
     region: BeatRegion,
@@ -269,6 +335,7 @@ function polygonBBox(points: [number, number][]): { minX: number; minY: number; 
 export default function WhiteboardBeatTimingPreview({
     imageUrl,
     customBackgroundUrl,
+    beatImageOverBackground = false,
     regions,
     imageOverlays = [],
     playheadSec,
@@ -282,6 +349,9 @@ export default function WhiteboardBeatTimingPreview({
     const budget = Math.max(0.1, sceneBudgetSec ?? duration);
     const customBg = String(customBackgroundUrl || '').trim();
     const useCustomBg = customBg !== '';
+    // Ảnh beat dán full lên custom bg: vùng chưa lộ che lại bằng chính custom bg
+    // (thay cho lớp BOARD_COLOR của chế độ bảng trắng).
+    const overBg = useCustomBg && beatImageOverBackground;
     const timelineZoomCss = zoomTransformToCss(resolveZoomTransformAt(playheadSec, timelineEffects, durationSec));
     const ordered = React.useMemo(() => {
         const out: BeatRegion[] = [];
@@ -372,26 +442,43 @@ export default function WhiteboardBeatTimingPreview({
                     }}
                 />
 
-                {/* Che bảng trắng chỉ TRONG polygon chưa lộ / đang animate — không phủ toàn canvas.
-                    Custom bg: bỏ phủ BOARD_COLOR để lộ nền custom. */}
-                {!useCustomBg ? regionStates.map(({ region, progress }) => {
+                {/* Ảnh beat dán full lên custom bg (PNG nền trong suốt). */}
+                {overBg ? (
+                    <Box
+                        component="img"
+                        src={imageUrl}
+                        alt=""
+                        draggable={false}
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'fill',
+                            display: 'block',
+                            pointerEvents: 'none',
+                        }}
+                    />
+                ) : null}
+
+                {/* Che vùng chưa lộ / đang animate — không phủ toàn canvas.
+                    Custom bg thuần: bỏ phủ để lộ nền custom.
+                    Dán ảnh beat lên bg: che bằng chính custom bg. */}
+                {!useCustomBg || overBg ? regionStates.map(({ region, progress }) => {
                     if (!Array.isArray(region.points) || region.points.length < 3) {
                         return null;
                     }
+                    const maskBg = overBg ? customBg : undefined;
                     if (region.action === 'erase') {
                         if (progress <= 0.01) {
                             return null;
                         }
                         return (
-                            <Box
+                            <RegionMaskFill
                                 key={`${region.id}-erase-mask`}
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    clipPath: polygonClip(region.points),
-                                    bgcolor: BOARD_COLOR,
-                                    opacity: progress,
-                                }}
+                                clip={polygonClip(region.points)}
+                                opacity={progress}
+                                backgroundUrl={maskBg}
                             />
                         );
                     }
@@ -407,37 +494,25 @@ export default function WhiteboardBeatTimingPreview({
                             return null;
                         }
                         return (
-                            <Box
+                            <RegionMaskFill
                                 key={`${region.id}-place-mask`}
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    clipPath: polygonClip(region.points),
-                                    bgcolor: BOARD_COLOR,
-                                }}
+                                clip={polygonClip(region.points)}
+                                backgroundUrl={maskBg}
                             />
                         );
                     }
                     return (
-                        <Box
+                        <RegionMaskFill
                             key={`${region.id}-draw-mask`}
-                            sx={{
-                                position: 'absolute',
-                                inset: 0,
-                                clipPath: polygonClip(region.points),
+                            clip={polygonClip(region.points)}
+                            rect={{
+                                left: bbox.minX,
+                                top: bbox.minY + bbox.h * progress,
+                                w: bbox.w,
+                                h: Math.max(0.0001, bbox.h * (1 - progress)),
                             }}
-                        >
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    left: `${bbox.minX * 100}%`,
-                                    top: `${(bbox.minY + bbox.h * progress) * 100}%`,
-                                    width: `${bbox.w * 100}%`,
-                                    height: `${bbox.h * (1 - progress) * 100}%`,
-                                    bgcolor: BOARD_COLOR,
-                                }}
-                            />
-                        </Box>
+                            backgroundUrl={maskBg}
+                        />
                     );
                 }) : null}
 
@@ -457,7 +532,7 @@ export default function WhiteboardBeatTimingPreview({
                     const originX = (bbox.minX + bbox.w / 2) * 100;
                     const originY = (bbox.minY + bbox.h / 2) * 100;
                     const clip = polygonClip(region.points);
-                    const drawWindow = useCustomBg && !isPlace && progress < 0.995;
+                    const drawWindow = useCustomBg && !overBg && !isPlace && progress < 0.995;
                     return (
                         <React.Fragment key={`${region.id}-reveal-wrap`}>
                             {drawWindow ? (
