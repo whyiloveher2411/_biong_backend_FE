@@ -136,12 +136,12 @@ CLI wrapper: `_biong_backend/image-to-whiteboard.sh`
 
 ---
 
-## Skills & docs (FE)
+## Docs (FE)
 
 | File | Vai trò |
 |------|---------|
-| `.cursor/skills/biong-short-video-whiteboard/SKILL.md` | Entry point mode Image |
-| `.cursor/skills/biong-short-video-whiteboard/references/*` | Chi tiết pipeline/timing/effects |
+| `.cursor/docs/whiteboard/README.md` | Mục lục mode Image |
+| `.cursor/docs/whiteboard/*` | Chi tiết pipeline/timing/effects |
 | `.cursor/skills/biong-short-video-hyperframes/` | **Không dùng** cho whiteboard |
 
 ---

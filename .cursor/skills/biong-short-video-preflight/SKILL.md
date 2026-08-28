@@ -5,7 +5,7 @@ description: Kiểm tra bắt buộc trước render final short video — trans
 
 # Biong Short Video — Preflight
 
-> **Whiteboard (mode Image):** Preflight scripts trong skill này (`check-hf-seek-beat`, import HTML normalize, visual-density, …) **chỉ** cho `agent_visual_mode=hyperframes`. Mode whiteboard render qua CMS queue PHP + Python `whiteboard_engine` — không qua preflight HyperFrames. Xem `/biong-short-video-whiteboard`.
+> **Whiteboard (mode Image):** Preflight scripts trong skill này (`check-hf-seek-beat`, import HTML normalize, visual-density, …) **chỉ** cho `agent_visual_mode=hyperframes`. Mode whiteboard render qua CMS queue PHP + Python `whiteboard_engine` — không qua preflight HyperFrames. Docs: `.cursor/docs/whiteboard/`.
 
 **Chạy bắt buộc** trước mọi `hyperframes render --quality high`. Fail → **sửa code**, không render final.
 

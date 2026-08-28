@@ -108,7 +108,7 @@ Pitfall thường gặp khi debug mode Image. Đọc [timing-model.md](timing-mo
 |---|-------------|------------|
 | Ken Burns | GSAP/CSS trong beat HTML | `camera_motion.py` |
 | Timeline zoom | Không có | `timeline_effects.py` |
-| Skill | `biong-short-video-hyperframes` | `biong-short-video-whiteboard` |
+| Tài liệu | skill `biong-short-video-hyperframes` | docs `.cursor/docs/whiteboard/` |
 
 ---
 
