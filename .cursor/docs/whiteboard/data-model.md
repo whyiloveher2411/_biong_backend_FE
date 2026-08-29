@@ -49,9 +49,9 @@ Lưu trong `agent_whiteboard_beat_overrides[beatId]` qua `saveAgentWhiteboardBea
 | `transition_duration_sec` | Override transition beat này |
 | `image_animation_effect` | Ken Burns: `common` \| concrete \| `none` \| `random` |
 | `focus_x`, `focus_y` | Điểm tập trung frame cuối (0–1) |
-| `custom_background_url` | Nền custom per-beat (upload); rỗng = dùng ảnh beat |
+| `custom_background_url` | Nền custom per-beat — upload thủ công **hoặc IMAGE 2 do AI sinh** (dual-layer beat); rỗng = dùng ảnh beat |
 | `custom_background_hidden` | `true` = tạm ẩn (preview + render dùng ảnh beat; giữ URL) |
-| `beat_image_over_background` | `true` = dán toàn bộ ảnh beat (PNG nền trong suốt) lên custom bg; vùng vẫn chỉ cắt trên ảnh beat |
+| `beat_image_over_background` | `true` = dán toàn bộ ảnh beat (PNG nền trong suốt) lên custom bg; vùng vẫn chỉ cắt trên ảnh beat. Beat dual-layer được set `true` tự động khi lưu IMAGE 2 |
 | `regions` | Mảng `BeatRegion[]` |
 | `image_overlays` | Mảng `BeatImageOverlay[]` (ảnh thêm upload) |
 | `timeline_effects` | Mảng `BeatTimelineEffect[]` (hiện chỉ zoom) |

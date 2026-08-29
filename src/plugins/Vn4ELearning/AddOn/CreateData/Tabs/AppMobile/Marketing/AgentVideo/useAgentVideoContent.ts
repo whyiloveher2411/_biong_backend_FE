@@ -180,6 +180,7 @@ import {
     countMissingBeatHtml,
     countMissingBeatImage,
     listMissingBeatImageIds,
+    isBeatImageMissing,
     listBeatIdsWithHtml,
     listMissingBeatIds,
     listBeatRenderErrorIds,
@@ -578,6 +579,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         Record<string, AgentWhiteboardBeatOverride>
     >({});
     const [savingWhiteboardBeatOverride, setSavingWhiteboardBeatOverride] = React.useState(false);
+    /** beatId → ảnh lớp 2 (background plate) lưu ở beat override; beat dual-layer cần đủ 2 ảnh. */
+    const beatBackgroundImageUrls = React.useMemo(() => {
+        const out: Record<string, string> = {};
+        Object.entries(agentWhiteboardBeatOverrides || {}).forEach(([beatId, override]) => {
+            const url = String(override?.custom_background_url || '').trim();
+            if (url) {
+                out[beatId] = url;
+            }
+        });
+        return out;
+    }, [agentWhiteboardBeatOverrides]);
     const [whiteboardBeatRenders, setWhiteboardBeatRenders] = React.useState<
         Record<string, WhiteboardBeatRenderEntry>
     >({});
@@ -3464,7 +3476,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: promptValue,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
-                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                        backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                        missingImage: isBeatImageMissing(beatImage, id, {
+                            section,
+                            backgroundUrl: beatBackgroundImageUrls[id],
+                        }),
                         imageVoiceContent: resolveBeatVoice(id),
                     });
                     return acc;
@@ -3476,6 +3492,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
                     imagePrompt: prompt,
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    backgroundImageUrl: beatBackgroundImageUrls[beatId] || '',
                     title,
                     autoSubmit: true,
                     imageStyleSuffix: whiteboardImageStyleSuffix,
@@ -3550,7 +3567,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: promptValue,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
-                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                        backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                        missingImage: isBeatImageMissing(beatImage, id, {
+                            section,
+                            backgroundUrl: beatBackgroundImageUrls[id],
+                        }),
                         imageVoiceContent: resolveBeatVoice(id),
                     });
                     return acc;
@@ -3562,6 +3583,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
                     imagePrompt: prompt,
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    backgroundImageUrl: beatBackgroundImageUrls[beatId] || '',
                     title,
                     autoSubmit: true,
                     imageStyleSuffix: whiteboardImageStyleSuffix,
@@ -4849,7 +4871,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         const isWhiteboard = isAgentWhiteboardMode(agentVisualMode);
         const missingBeatIds = isWhiteboard
-            ? listMissingBeatImageIds(beatMap, beatImage)
+            ? listMissingBeatImageIds(beatMap, beatImage, beatBackgroundImageUrls)
             : listMissingBeatIds(beatMap, beatHtml);
         if (!missingBeatIds.length) {
             showMessage(
@@ -4881,7 +4903,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             beatIndex: index + 1,
                             imagePrompt: prompt,
                             imageUrl: String(beatImage[id]?.image_url || '').trim(),
-                            missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                            backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                            missingImage: isBeatImageMissing(beatImage, id, {
+                                section,
+                                backgroundUrl: beatBackgroundImageUrls[id],
+                            }),
                             imageVoiceContent: resolveBeatVoice(id),
                         };
                     }).filter((item) => item.beatId && item.imagePrompt && batchIds.includes(item.beatId))
@@ -4932,7 +4958,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Meta.ai chỉ dùng cho ảnh beat (mode Image)', 'info');
             return;
         }
-        const missingBeatIds = listMissingBeatImageIds(beatMap, beatImage);
+        const missingBeatIds = listMissingBeatImageIds(beatMap, beatImage, beatBackgroundImageUrls);
         if (!missingBeatIds.length) {
             showMessage('Không có beat thiếu ảnh', 'info');
             return;
@@ -4964,7 +4990,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: prompt,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
-                        missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                        backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                        missingImage: isBeatImageMissing(beatImage, id, {
+                            section,
+                            backgroundUrl: beatBackgroundImageUrls[id],
+                        }),
                         imageVoiceContent: resolveBeatVoice(id),
                     };
                 }).filter((item) => item.beatId && item.imagePrompt && batchIds.includes(item.beatId));
@@ -5006,7 +5036,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         const isWhiteboard = isAgentWhiteboardMode(agentVisualMode);
         const missingBeatIds = isWhiteboard
-            ? listMissingBeatImageIds(beatMap, beatImage)
+            ? listMissingBeatImageIds(beatMap, beatImage, beatBackgroundImageUrls)
             : listMissingBeatIds(beatMap, beatHtml);
         if (!missingBeatIds.length) {
             showMessage(
@@ -5036,7 +5066,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             beatIndex: index + 1,
                             imagePrompt: prompt,
                             imageUrl: String(beatImage[id]?.image_url || '').trim(),
-                            missingImage: !String(beatImage[id]?.image_url || '').trim(),
+                            backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                            missingImage: isBeatImageMissing(beatImage, id, {
+                                section,
+                                backgroundUrl: beatBackgroundImageUrls[id],
+                            }),
                         };
                     }).filter((item) => item.beatId && item.imagePrompt)
                     : [];
@@ -7479,8 +7513,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     );
 
     const missingBeatImageCount = React.useMemo(
-        () => countMissingBeatImage(beatMap, beatImage),
-        [beatMap, beatImage],
+        () => countMissingBeatImage(beatMap, beatImage, beatBackgroundImageUrls),
+        [beatMap, beatImage, beatBackgroundImageUrls],
     );
 
     const beatRenderErrorIds = React.useMemo(

@@ -3,6 +3,10 @@ import { getApiHost } from 'helpers/apiHost';
 import { convertToURL } from 'helpers/url';
 import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
 import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
+import {
+    WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
+    WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
+} from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/AgentVideo/agentVideoBeatDivisionWhiteboard';
 
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
 
@@ -50,7 +54,7 @@ export type ImportHtmlWorkflowStatus = {
 
 /** Nối dòng phong cách image vào prompt trước khi dispatch mở tab. Prompt JSON → thêm key `style` vào trong JSON. */
 /** Rule an toàn mép ảnh — luôn tự động thêm vào MỌI prompt sinh ảnh (không cần chia beat lại). */
-const IMAGE_SAFE_AREA_SUFFIX = 'keep all important content, subjects and text away from the edges with a comfortable margin (safe area), nothing critical within the outer 10% of the frame';
+const IMAGE_SAFE_AREA_SUFFIX = WHITEBOARD_CENTRAL_SAFE_AREA_RULE;
 
 function withImageStyleSuffix(
     prompt: string,
@@ -75,6 +79,7 @@ function withImageStyleSuffix(
                 next.voice_content = voiceContent;
             }
             if (!String(next.safe_area || '').trim()) next.safe_area = IMAGE_SAFE_AREA_SUFFIX;
+            next.output_images = WHITEBOARD_DUAL_LAYER_OUTPUT_RULE;
             return JSON.stringify(next, null, 2);
         }
     } catch {
@@ -85,7 +90,7 @@ function withImageStyleSuffix(
     if (voiceContent) {
         out += `, the voiceover for this beat says: "${voiceContent}"`;
     }
-    return out;
+    return `${out}\n\n${WHITEBOARD_DUAL_LAYER_OUTPUT_RULE}`;
 }
 
 function apiHost(): string {
@@ -471,6 +476,8 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
     beatIndex?: number;
     title?: string;
     imageUrl?: string;
+    /** Ảnh lớp 2 đã có (background plate) — panel dùng để biết còn thiếu ảnh nào. */
+    backgroundImageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
     imageAspectSuffix?: string;
@@ -510,6 +517,7 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
         beat_index: Number.isFinite(Number(options.beatIndex)) ? Number(options.beatIndex) : 0,
         image_prompt: imagePrompt,
         image_url: String(options.imageUrl || '').trim(),
+        background_image_url: String(options.backgroundImageUrl || '').trim(),
         title: String(options.title || '').trim(),
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
@@ -526,6 +534,8 @@ export type DuckAiWorkspaceBeat = {
     beatIndex: number;
     imagePrompt: string;
     imageUrl?: string;
+    /** Ảnh lớp 2 (background plate) — beat chỉ đủ khi có cả 2 ảnh. */
+    backgroundImageUrl?: string;
     missingImage?: boolean;
     imageVoiceContent?: string;
 };
@@ -551,6 +561,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
             }))
             .filter((item) => item.beatId && item.imagePrompt)
@@ -566,6 +577,7 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
         beatIndex: target.beatIndex,
         imagePrompt: target.imagePrompt,
         imageUrl: target.imageUrl,
+        backgroundImageUrl: target.backgroundImageUrl,
         title: options.title,
         autoSubmit: options.autoSubmit,
         imageStyleSuffix: options.imageStyleSuffix,
@@ -591,6 +603,7 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
             }))
@@ -622,6 +635,7 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 beatIndex: beat.beatIndex,
                 imagePrompt: beat.imagePrompt,
                 imageUrl: beat.imageUrl,
+                backgroundImageUrl: beat.backgroundImageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
                 imageStyleSuffix: options.imageStyleSuffix,
@@ -650,6 +664,8 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     beatIndex?: number;
     title?: string;
     imageUrl?: string;
+    /** Ảnh lớp 2 đã có (background plate) — panel dùng để biết còn thiếu ảnh nào. */
+    backgroundImageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
     imageAspectSuffix?: string;
@@ -689,6 +705,7 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         beat_index: Number.isFinite(Number(options.beatIndex)) ? Number(options.beatIndex) : 0,
         image_prompt: imagePrompt,
         image_url: String(options.imageUrl || '').trim(),
+        background_image_url: String(options.backgroundImageUrl || '').trim(),
         title: String(options.title || '').trim(),
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
@@ -720,6 +737,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
             }))
@@ -751,6 +769,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 beatIndex: beat.beatIndex,
                 imagePrompt: beat.imagePrompt,
                 imageUrl: beat.imageUrl,
+                backgroundImageUrl: beat.backgroundImageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
                 imageStyleSuffix: options.imageStyleSuffix,

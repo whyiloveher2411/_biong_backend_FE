@@ -51,6 +51,19 @@ flowchart TB
 
 Ảnh beat mặc định style **hybrid** (cutout photoreal + marker annotations trên nền trắng). Engine passthrough: không convert lineart, hiển thị ảnh gốc + tay vẽ/đưa vào vùng.
 
+### Dual-layer beat image (2 ảnh mỗi beat)
+
+Bước chia beat sinh `image_prompt` **7 key** — key thứ 7 `background_prompt` mô tả background plate **có trang trí** đúng chất liệu style (không phải nền trống). Khi gửi prompt sinh ảnh, engine tự chèn `output_images` (`WHITEBOARD_DUAL_LAYER_OUTPUT_RULE` / `marketing_short_video_agent_whiteboard_dual_layer_output_rule()`) buộc AI trả **đúng 2 ảnh**:
+
+| Ảnh | Nội dung | Lưu vào |
+|-----|----------|---------|
+| IMAGE 1 | Object layer — subject + cluster vật thể + **3–6 label chữ**, nền trong suốt 100% (PNG alpha, cấm glow/haze/gradient/vignette), các cluster tách nhau bằng khoảng trống lớn | `import_html.beat_image[beatId].image_url` |
+| IMAGE 2 | Background plate — chất liệu style + **motif trang trí ở 4 góc và dọc viền**, trung tâm low-contrast; cấm subject/chữ/số và cấm nền phẳng trống | beat override `custom_background_url` + `beat_image_over_background = true` |
+
+Panel Duck.ai / Meta.ai đếm `Ảnh x/2`: chỉ POST `save-agent-import-html` (kèm `beat_background_image_url`) khi đủ 2/2; thiếu 1 ảnh = AI trả sai → nút **Làm lại beat** gửi lại prompt. Beat có `background_prompt` mà thiếu `custom_background_url` bị tính là **thiếu ảnh** (`missing_beat_image_ids`); beat-map cũ 6 key vẫn chỉ cần 1 ảnh.
+
+Style suffix luôn kèm `WHITEBOARD_SEPARATED_LAYOUT_SUFFIX` (editorial infographic layout, independent object clusters, large negative space) — append sau style nên không đổi phong cách, chỉ tách vật thể để crop vùng chính xác.
+
 ---
 
 ## Phase 2 — Editor UI
@@ -114,7 +127,7 @@ Steps riêng mode Image (ẩn các bước HyperFrames):
 
 | Step key | Label UI |
 |----------|----------|
-| `beat_image_fill` | Ảnh beat |
+| `beat_image_fill` | Ảnh beat (2 lớp: object layer + background plate) |
 | `whiteboard_render` | Render ảnh beat |
 | `whiteboard_mux` | Ghép video + audio |
 | `upload` | Upload |

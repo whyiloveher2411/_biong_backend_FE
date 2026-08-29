@@ -12,7 +12,63 @@ export const WHITEBOARD_VOX_STYLE_SUFFIX =
 export const WHITEBOARD_COURTROOM_STYLE_SUFFIX =
     'sketch style, hand-drawn reportage illustration in colored pencil soft pastel light watercolor on textured rough paper, quick loose dramatic strokes, muted low-saturation colors, gritty authentic atmosphere energy, focal subject caught mid-expression, visible paper grain and sketchy hatching, candid news framing, no watermark';
 
-/** 6 key bắt buộc của image_prompt JSON — đồng bộ validation agentVideoBeatMap + PHP import-html-helper. */
+/**
+ * Layout tách rời vật thể — append SAU style suffix (không thay phong cách, chỉ tách cluster để crop vùng chính xác).
+ * Mirror DUCKAI_HAND_DRAWN_SUFFIX / METAAI_HAND_DRAWN_SUFFIX (extension) + PHP whiteboard_separated_layout_suffix().
+ */
+export const WHITEBOARD_SEPARATED_LAYOUT_SUFFIX =
+    'editorial infographic layout, multiple separated visual elements, clear visual hierarchy, explainer composition, independent object clusters, large negative space between elements, designed for sequential reveal animation, visual journalism aesthetic, documentary infographic design';
+
+/**
+ * Gom nội dung về vùng trung tâm khi SINH ẢNH (không dùng ở bước chia beat) — chống việc cluster
+ * bị dàn ra sát viền rồi đè lên motif trang trí của background khi ghép 2 lớp.
+ * Mirror marketing_short_video_agent_whiteboard_central_safe_area_rule() (PHP) + extension.
+ */
+export const WHITEBOARD_CENTRAL_SAFE_AREA_RULE =
+    'CENTRAL SAFE AREA (applies to BOTH images): compose everything inside the central 80% of the frame — ' +
+    'leave a completely empty margin of at least 10% of the frame width and height on all four sides. ' +
+    'In IMAGE 1 every object cluster and every text label MUST sit inside that central safe area, ' +
+    'grouped toward the middle as one balanced centered composition; ' +
+    'do NOT push clusters into the corners, do NOT spread them out to the borders, ' +
+    'nothing may touch, overlap or cross the frame edges. ' +
+    'Keep the gaps between clusters moderate — just wide enough to crop each cluster separately — ' +
+    'instead of maximizing distance between them. ' +
+    'In IMAGE 2 the decorative motifs stay in that outer margin and the corners, ' +
+    'so they remain visible around the object layer and are never covered by IMAGE 1.';
+
+/**
+ * Bắt buộc AI trả ĐÚNG 2 ảnh mỗi beat: IMAGE 1 = object layer PNG alpha, IMAGE 2 = background plate.
+ * Mirror DUCKAI_DUAL_LAYER_OUTPUT_RULE / METAAI_DUAL_LAYER_OUTPUT_RULE (extension)
+ * + marketing_short_video_agent_whiteboard_dual_layer_output_rule() (PHP).
+ */
+export const WHITEBOARD_DUAL_LAYER_OUTPUT_RULE =
+    'OUTPUT EXACTLY 2 SEPARATE IMAGES for this beat, in this order. ' +
+    'IMAGE 1 (object layer): only the subject, the object clusters and the text labels described above, ' +
+    'fully isolated on a TRANSPARENT background — export as PNG with a real alpha channel; ' +
+    'if transparency is impossible, use pure solid white #FFFFFF instead; ' +
+    'the area between and around the clusters must be 100% fully transparent alpha (or pure #FFFFFF), ' +
+    'with NO partial or semi-transparent film at all: no glow, no halo, no rim light, no colored haze, ' +
+    'no mist, no fog, no atmospheric tint, no gradient wash, no vignette, no soft light spill, ' +
+    'no colored overlay, no drop shadow, no paper texture, no scenery, no environment, ' +
+    'no background plate baked into this image; ' +
+    'every cluster must have hard clean cut edges directly against transparency, ' +
+    'each cluster separated by clear gaps but kept close to the middle, nothing bleeding to the frame edges. ' +
+    'ALL on-screen text from "text_overlay" MUST be rendered inside IMAGE 1 only — split the labels apart, ' +
+    'each label is its own independent cluster placed in a different area of the frame; ' +
+    'IMAGE 2 must contain no text, no letters and no numbers at all. ' +
+    'IMAGE 2 (background layer): a fully designed background plate in the exact style of this clip, ' +
+    'following "background_prompt" — decorative motifs at the four CORNERS and along the EDGES and BORDERS ' +
+    '(torn paper shreds, tape strips, halftone patches, ruled or graph lines, stamps, ink smudges, ' +
+    'pencil hatching, frame borders — whichever fits the style), plus rich material texture across the whole frame; ' +
+    'the CENTER stays low-contrast and calm (texture and faint motifs only) so the object layer above stays readable; ' +
+    'a plain blank canvas or a flat empty color is an INVALID IMAGE 2; ' +
+    'still NO subject, no hero, no organ, no molecule, no person, no meaningful icon, no arrow, no callout, ' +
+    'no text, no letters, no numbers. ' +
+    'Both images MUST share the exact same aspect ratio and framing so IMAGE 1 can be layered over IMAGE 2. ' +
+    `${WHITEBOARD_CENTRAL_SAFE_AREA_RULE} ` +
+    'Returning only 1 image is an INVALID response — regenerate until both images are provided.';
+
+/** 7 key bắt buộc của image_prompt JSON — đồng bộ validation agentVideoBeatMap + PHP import-html-helper. */
 export const WHITEBOARD_IMAGE_PROMPT_JSON_KEYS = [
     'subject',
     'action',
@@ -20,9 +76,18 @@ export const WHITEBOARD_IMAGE_PROMPT_JSON_KEYS = [
     'text_overlay',
     'composition',
     'must_avoid',
+    'background_prompt',
 ] as const;
 
 export type WhiteboardImagePromptJsonKey = (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number];
+
+/**
+ * Key bắt buộc khi ĐỌC beat-map — `background_prompt` optional để beat-map cũ (6 key) vẫn render được
+ * (engine fallback derive nền từ `scene`). Beat-map mới do AI trả phải đủ 7 key.
+ */
+export const WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS = WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.filter(
+    (key) => key !== 'background_prompt',
+);
 
 /** Nguồn duy nhất của ví dụ image_prompt (mỗi style) — dẫn xuất cả 2 bản: escaped (block text) + raw JSON (schema example). */
 const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record<WhiteboardImagePromptJsonKey, string>> = {
@@ -33,6 +98,8 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
         text_overlay: 'GAN NHIỄM MỠ',
         composition: 'One clear left-to-right flow, strong hierarchy, bright red accents on 1-2 keywords only',
         must_avoid: 'watermark, logo, dense text blocks, generic placeholders, neon glow UI',
+        background_prompt:
+            'Designed whiteboard background plate: off-white board with paper grain, marker-drawn frame border and corner scribble motifs, faint grid patch and tape strips at the corners, calm low-contrast center, no objects, no text',
     },
     collage_art: {
         subject: 'Liver as a large magazine-cutout with torn deckled paper edges beside an ethanol molecule cutout',
@@ -41,6 +108,8 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
         text_overlay: 'GAN NHIỄM MỠ',
         composition: 'Strong hierarchy, one clear visual flow, selective bright red accents on 1-2 keywords, paper grain',
         must_avoid: 'watermark, logo, neon glow UI, clean digital white-edge cutout, dense text',
+        background_prompt:
+            'Designed analog collage background plate: warm cream kraft paper, torn paper shreds and washi tape strips at the corners and edges, faded halftone patches along the border, heavy paper grain, calm low-contrast center, no cutouts, no text',
     },
     vox: {
         subject: 'Photorealistic cutout of a human liver surrounded by layered documentary photo fragments',
@@ -50,6 +119,8 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
         composition:
             'Editorial layered composition, strong hierarchy, scale contrast, cropped photo fragments, magazine-cream texture, depth',
         must_avoid: 'watermark, logo, dense text, grid, chart, question marks, circled emphasis, blood, gore, corpse, injury, accident, whiteboard, classroom board, sketchnote, presentation slide, isolated sticker cutout',
+        background_prompt:
+            'Designed editorial documentary background plate: magazine-cream textured paper, blurred cropped photographic strips along the edges, halftone corner patches and thin rule lines framing the frame, subtle vignette, calm low-contrast center, no objects, no text',
     },
     courtroom_sketch: {
         subject: 'Human liver caught mid-degeneration beside floating fat cells and DNA strands',
@@ -58,6 +129,8 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
         text_overlay: 'GAN NHIỄM MỠ',
         composition: 'Focal subject central or off-center dramatic, visible paper grain and sketchy hatching',
         must_avoid: 'clean digital render, photorealistic, neon saturated colors, flat vector cartoon, watermark',
+        background_prompt:
+            'Designed hand-drawn background plate: rough textured paper with visible tooth, loose pencil hatching and muted watercolor washes bleeding in from the corners and edges, sketchy border strokes, calm low-contrast center, no characters, no objects, no text',
     },
 };
 
@@ -82,16 +155,19 @@ export function imageTextLangRuleBlock(imageTextLang = 'vi'): string[] {
     const lang = normalizeImageTextLang(imageTextLang);
     const lines = [
         '## TEXT OVERLAY (source of truth duy nhất)',
-        '- Default = `""` — chỉ dùng khi giúp hiểu rõ đáng kể (significantly improves comprehension).',
+        '- **BẮT BUỘC nhiều chữ (TEXT-RICH)**: mỗi beat phải có **3–6 label** nối bằng `|` — mục tiêu để người xem **vừa xem vừa đọc**; `""` chỉ dùng khi beat thực sự không có nội dung đọc được (vd beat chỉ có tiếng động).',
         lang === 'en'
-            ? '- Tối đa 6 từ; nhiều label nối `|` (vd `"FATTY LIVER | CIRRHOSIS"`), bold hand-lettered, viết bằng tiếng Anh.'
-            : '- Tối đa 6 từ; nhiều label nối `|` (vd `"GAN NHIỄM MỠ | XƠ GAN"`), in đậm viết tay, viết đúng tiếng Việt có dấu.',
-        '- Ưu tiên keyword chính xác từ `phrase_anchor`; fallback tóm tắt 1–3 từ **CHỈ từ current beat**; adjacent beat chỉ làm context — **MUST NOT introduce new nouns / entities / diseases / organs / mechanisms** (vd beat "Điều này làm mọi thứ trở nên tệ hơn", adjacent "Cancer develops" → KHÔNG được sinh "UNG THƯ" cho beat này).',
-        '- Transition beats (vd "Nói cách khác") → tóm tắt core idea.',
-        '- CTA beat cuối: chỉ bookmark / save keyword.',
-        '- Cấm lặp text_overlay giống hệt giữa 2 beat liền kề (vd "DNA damage" → beat sau "DNA mutation") trừ khi thật sự cần thiết.',
-        '- Statistical beats: **prefer outcome keyword over raw numbers** — vd "31% higher breast cancer risk" → VALID: "UNG THƯ VÚ" / "NGUY CƠ CAO HƠN"; **INVALID**: "31%", "740000", "1 IN 8" (con số đã thể hiện bằng subject population cluster).',
-        '- Cấm `\n`, dấu phẩy, list, subtitle/câu dài, `1/2/3`, chữ lặp lại toàn bộ lời thoại.',
+            ? '- Mỗi label **1–5 từ**, tổng khoảng **8–20 từ** (vd `"FATTY LIVER | FAT BUILD-UP | INFLAMMATION | SCAR TISSUE"`), bold hand-lettered, viết bằng tiếng Anh.'
+            : '- Mỗi label **1–5 từ**, tổng khoảng **8–20 từ** (vd `"GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"`), in đậm viết tay, viết đúng tiếng Việt có dấu.',
+        '- **Label 1** = keyword chính trích từ `phrase_anchor`. **Các label sau ĐƯỢC LÀM GIÀU**: tên cơ chế, thuật ngữ chuyên môn, giai đoạn, hệ quả, đối tượng bị ảnh hưởng — miễn là **liên quan trực tiếp** nội dung beat và **làm rõ thêm** điều lời thoại đang nói.',
+        '- **CẤM BỊA SỐ LIỆU**: chỉ được viết số / phần trăm / đơn vị khi con số đó **có mặt trong `phrase_anchor`** (vd anchor nói "740,000 ca" → được dùng "740.000 CA"); anchor không có số → **cấm** tự sinh số, tỉ lệ, năm, liều lượng.',
+        '- Không được thêm **entity mới không liên quan** (bệnh / cơ quan / cơ chế của beat khác); adjacent beat chỉ làm context — vd beat "Điều này làm mọi thứ trở nên tệ hơn", adjacent "Cancer develops" → KHÔNG được sinh "UNG THƯ" cho beat này.',
+        '- Transition beats (vd "Nói cách khác") → label tóm tắt core idea + các label làm rõ ý đang chuyển sang.',
+        '- CTA beat cuối: chỉ bookmark / save keyword (giữ ngắn, không cần đủ 3 label).',
+        '- Cấm lặp **nguyên khối** text_overlay giữa 2 beat liền kề; label trùng lẻ được phép nếu phần còn lại khác nhau.',
+        '- Cấm lặp lại **nguyên văn cả câu thoại** (label là từ khóa, không phải phụ đề).',
+        '- Cấm `\n`, dấu phẩy **bên trong 1 label**, list đánh số `1/2/3`, câu dài kiểu subtitle.',
+        '- **Mỗi label là 1 cluster chữ riêng** trong IMAGE 1, đặt ở vùng khác nhau của khung, tách rời nhau bằng khoảng trống (khớp OBJECT SEPARATION) — cấm dồn hết chữ thành một khối.',
     ];
     return lines;
 }
@@ -127,8 +203,8 @@ export function applyImageTextLang(text: string, imageTextLang = 'vi'): string {
 /** Rule ngôn ngữ cho bản gửi đi sinh ảnh — mirror backend text_language trong append_beat_image_style_suffix. */
 export function imageTextLangSuffixRule(imageTextLang = 'vi'): string {
     return normalizeImageTextLang(imageTextLang) === 'en'
-        ? 'on-screen text must be English only, at most 1-2 short labels of 1-3 keyword words extracted verbatim from the beat voiceover, directly related to the beat content, no gibberish letter sequences'
-        : 'chữ trên ảnh phải đúng tiếng Việt có dấu, text_overlay = string duy nhất tối đa 6 từ (nhiều label dùng |), keyword trích từ lời thoại beat, liên quan trực tiếp nội dung beat, cấm chuỗi ký tự vô nghĩa';
+        ? 'on-screen text must be English only, render 3-6 separate short labels of 1-5 keyword words each, spread apart as independent text clusters, all directly related to the beat voiceover, no gibberish letter sequences, no invented numbers'
+        : 'chữ trên ảnh phải đúng tiếng Việt có dấu, text_overlay = 3–6 label ngắn (mỗi label 1–5 từ, nối bằng |) vẽ thành các cụm chữ tách rời nhau, keyword và thuật ngữ làm rõ lời thoại beat, cấm chuỗi ký tự vô nghĩa, cấm bịa số liệu';
 }
 
 const WHITEBOARD_COMMON_TAIL = (styleSuffix: string): string[] => [
@@ -150,6 +226,9 @@ const WHITEBOARD_COMMON_TAIL = (styleSuffix: string): string[] => [
     '  - **Title context rule**: title CHỈ dùng để **giải quyết sự mơ hồ** — **KHÔNG BAO GIỜ** thay subject của beat bằng subject của title (vd title "Alcohol is AMAZING", beat "740,000 cancer cases" → subject = số liệu/crowd, không phải "cancer patients" chung chung); title cung cấp causal context, không quyết định subject. **The title must NEVER introduce visual entities** — title "Alcohol is AMAZING" không được kéo chai rượu / ly bia / người uống vào beat nào; **CHỈ nội dung beat hiện tại quyết định subject selection**.',
     '  - **Action relevance**: `action` = sự kiện/quá trình/thay đổi chính; **cấm** generic (placed on board, displayed, shown, floating, standing, pinned). **Nếu beat không ngầm chứa action** (vd beat chỉ có "Gan." / "Não.") → `action` MAY mô tả **current visible state của subject** (vd "liver with normal lobular structure"), **cấm bịa quá trình không có trong beat** (vd "liver undergoing metabolic stress" khi beat không nói).',
     '  - **Scene relevance rule**: `scene` **MUST directly support the subject** — nếu subject là DNA/neuron/liver/cell → scene **KHÔNG được** là hospital, doctor office, patient room, hoặc generic healthcare environment; **prefer editorial documentary composition** (layered cutout scene với hierarchy + depth, KHÔNG bảng trắng thuần). **Statistical beats**: scene MUST remain **editorial documentary environment** — hospitals, clinics, doctor offices, waiting rooms và patient rooms là **INVALID** trừ khi được nhắc rõ trong `phrase_anchor`.',
+    '  - **DUAL LAYER SCOPE (BẮT BUỘC — đọc TRƯỚC mọi rule composition)**: mỗi beat được sinh thành **2 ảnh**: **IMAGE 1** = object layer (chỉ subject + object clusters + label chữ, nền TRONG SUỐT) và **IMAGE 2** = background plate (mô tả trong `background_prompt`) — **IMAGE 2 KHÔNG phải nền trống**: phải có **motif trang trí ở 4 góc + dọc viền** và chất liệu texture đúng phong cách clip, riêng **vùng trung tâm giữ nhạt/low-contrast** để object layer đè lên vẫn đọc được. Mọi rule về `scene`, EDITORIAL SCENE PRECEDENCE, COMPOSITION HIERARCHY, CUTOUT INTEGRATION đều áp cho **ẢNH GHÉP CUỐI (IMAGE 1 đè lên IMAGE 2)** — **KHÔNG** áp cho từng ảnh rời; vì vậy IMAGE 1 là các cutout rời trên nền trong suốt vẫn **HỢP LỆ**, và IMAGE 2 không có hero vẫn **HỢP LỆ**.',
+    '  - **IMAGE 1 ALPHA PURITY (BẮT BUỘC — engine cắt vùng theo alpha)**: vùng giữa và quanh các cluster của IMAGE 1 phải **trong suốt 100%** (hoặc trắng tinh #FFFFFF) — **cấm** mọi lớp màu mờ bán trong suốt: glow, halo, rim light, colored haze/mist/fog, atmospheric tint, gradient wash, vignette, soft light spill, colored overlay, drop shadow, paper texture, background plate bị nướng sẵn vào ảnh; mép mỗi cluster phải **cắt sắc nét** trực tiếp trên nền trong suốt.',
+    '  - **OBJECT SEPARATION (BẮT BUỘC — để engine crop từng vùng chính xác)**: trong IMAGE 1 các cluster vật thể/label **phải tách rời nhau bằng khoảng trống lớn** — cấm chồng lấn, cấm dính liền, cấm chạm biên frame; mỗi cluster là một khối độc lập có thể reveal tuần tự; **mỗi label chữ cũng là một cluster riêng**, đặt ở vùng khác nhau của khung.',
     '  - **EDITORIAL SCENE PRECEDENCE (BẮT BUỘC)**: mỗi `scene` MUST chứa **ít nhất HAI** trong ba lớp sau: ① **documentary environment HOẶC contextual imagery**; ② **layered photographic fragments**; ③ **textured magazine background**; **pure white empty background là INVALID**; **floating object trên blank canvas là INVALID** (scene chỉ ghi "textured magazine background" đơn lẻ là CHƯA ĐỦ).',
     '  - **COMPOSITION HIERARCHY RULE**: hero subject nên chiếm **khoảng 50–70% visual attention**; **tránh centered symmetry** — ưu tiên **asymmetrical editorial layout** với một dominant focal area (hero lệch tâm, context bao quanh).',
     '  - **CUTOUT INTEGRATION RULE**: hero cutout **MUST visually interact** với background layers, contextual fragments hoặc supporting elements (đè lên mảnh ảnh, xuyên qua layer, nối với context) — **isolated floating stickers là INVALID**.',
@@ -166,9 +245,9 @@ const WHITEBOARD_COMMON_TAIL = (styleSuffix: string): string[] => [
     '- **Nội dung phải khớp CHÍNH XÁC với beat**: `subject`, `action`, `scene`, `text_overlay`, `composition` đều bắt nguồn từ ý trong `phrase_anchor`/lời thoại của beat này — **cấm** tự bịa chủ thể, cảnh, số liệu hoặc ví dụ không có trong beat.',
     '- **Ví dụ JSON trong prompt CHỈ demo schema** — **CẤM** reuse `subject`, `action`, `scene`, `text_overlay` từ ví dụ **trừ khi beat của bạn thực sự nói về đúng nội dung đó**; mỗi beat phải có visual riêng theo đúng nội dung của nó.',
     '- **Hình ảnh thân thiện mọi lứa tuổi (người xem 12+) — CẤM TUYỆT ĐỐI hình ảnh thực rùng rợn**: máu, thi thể / xác chết, tai nạn thảm khốc, vết thương hở, bạo lực đẫm máu, tự hại. Nếu ý beat cần diễn tả hậu quả nghiêm trọng / nguy hiểm / mất mát → dùng **hình tượng trưng**: biểu tượng cảnh báo (màu đỏ), mây đen u ám, ly / đồng hồ vỡ tan, nhân vật buồn gục đầu, vật thể vỡ vụn, tông màu tối trầm — **không bao giờ** máu / thương tích / thi thể thực.',
-    '- **TEXT OVERLAY** — tuân thủ block `## TEXT OVERLAY (source of truth duy nhất)` bên trên: Default `""`, ≤6 từ, keyword từ `phrase_anchor`, không lặp giống hệt beat liền kề, statistical → outcome keyword (không phải số).',
+    '- **TEXT OVERLAY** — tuân thủ block `## TEXT OVERLAY (source of truth duy nhất)` bên trên: **3–6 label** nối `|` (mỗi label 1–5 từ), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/cơ chế/hệ quả, **cấm bịa số liệu** (chỉ dùng số có trong `phrase_anchor`), không lặp nguyên khối với beat liền kề.',
     '  - **Beat CTA cuối — CTA lockdown**: bookmark/notebook/save symbol/community illustration; **cấm** YouTube/TikTok logo, Subscribe/Like button, platform branding; kế thừa motif beat trước.',
-    '- **Primary subject: 1, Supporting element: max 1, Contextual elements: 1–3 (Vox feel)** — **Beat complexity scaling**: **≤2s** → hero + 0–1 contextual element, annotation tối thiểu, 0–1 label, action ≤12 từ; **2–5s** → hero + 1–2 contextual elements, tối đa 1 supporting element, 0–1 arrow, 1 label; **>5s** → hero + 2–3 contextual elements, 1 supporting element, 0–1 arrow, 1–2 labels.',
+    '- **Primary subject: 1, Supporting element: max 1, Contextual elements: 1–3 (Vox feel)** — **Beat complexity scaling**: **≤2s** → hero + 0–1 contextual element, annotation tối thiểu, **2–3 label**, action ≤12 từ; **2–5s** → hero + 1–2 contextual elements, tối đa 1 supporting element, 0–1 arrow, **3–4 label**; **>5s** → hero + 2–3 contextual elements, 1 supporting element, 0–1 arrow, **4–6 label**.',
     '- `composition` ưu tiên bố cục đơn giản, một luồng nhìn rõ, nhiều khoảng trống; loại bỏ chi tiết thừa trước khi render.',
     '- **`must_avoid` MUST include đầy đủ danh sách dưới, nên bắt đầu bằng đúng danh sách** (mỗi item cách nhau `, ` — dấu phẩy + space): `watermark, logo, dense text, grid, chart, question marks, circled emphasis, blood, gore, corpse, injury, accident` — sau đó append thêm nếu cần; **cấm** bỏ sót item, **cấm** bọc "avoid" (vd `"avoid gore"`), **cấm** viết lệch chữ, **cấm** dùng separator khác (vd `;`, dấu phẩy không space).',
     '- **Cấm** logo thương mại, watermark, chữ dày đặc / đoạn dài khó đọc / placeholder generic.',
@@ -192,15 +271,16 @@ const IMAGE_PROMPT_JSON_FIELD_LINES = [
     '- **`subject`**: nhân vật / vật thể chính — đủ cụ thể để nhận diện (English, ~5–25 từ).',
     '- **`action`**: hành động / trạng thái của chủ thể (English, ~5–25 từ).',
     '- **`scene`**: bối cảnh / nền (English, ~5–25 từ).',
-    '- **`text_overlay`** — **empty string `""` HOẶC single string ≤6 từ**; nếu nhiều label nối bằng `|` (vd `"UNG THƯ"`, `"DNA HỎNG"`, `"GAN NHIỄM MỠ | XƠ GAN"`); **cấm** `\n`, dấu phẩy, list; nếu dùng: ưu tiên keyword chính xác từ `phrase_anchor`; nếu `phrase_anchor` không có keyword hữu ích → tóm tắt 1–3 từ (xem "TEXT OVERLAY" bên dưới).',
+    '- **`text_overlay`** — **3–6 label nối bằng `|`, mỗi label 1–5 từ** (vd `"GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"`); label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/cơ chế/hệ quả; **cấm** `\n`, dấu phẩy bên trong 1 label, list, câu dài kiểu phụ đề, **cấm bịa số liệu** (xem "TEXT OVERLAY" bên dưới).',
     '- **`composition`**: bố cục + tông màu/cảm xúc (English, ~5–25 từ).',
     '- **`must_avoid`**: điều cấm — liệt kê ngắn (watermark, logo, chữ dày đặc, …).',
+    '- **`background_prompt`**: mô tả **background plate CÓ TRANG TRÍ** cho IMAGE 2 (English, ~10–30 từ) — **đúng chất liệu/bản sắc của style clip** + **motif trang trí ở 4 góc và dọc viền** (mảnh giấy xé, washi tape, halftone patch, đường kẻ, stamp, vệt mực, nét hatching, khung viền) + texture phủ toàn khung; **vùng trung tâm giữ nhạt/low-contrast** để object layer đè lên vẫn đọc được; **cấm nền trắng trơn / nền phẳng trống**; **cấm** subject/hero, cơ quan, phân tử, nhân vật, icon có nghĩa, mũi tên, callout, chữ, số.',
 ];
 
 const buildImagePromptJsonRules = (example: string): string[] => [
-    '- **`image_prompt` = JSON object THẬT** trong beat-map (KHÔNG phải string escape) — bắt buộc đủ **6 key** dưới đây (không thêm bớt, không đổi tên):',
+    '- **`image_prompt` = JSON object THẬT** trong beat-map (KHÔNG phải string escape) — bắt buộc đủ **7 key** dưới đây (không thêm bớt, không đổi tên):',
     ...IMAGE_PROMPT_JSON_FIELD_LINES.map((line) => `  ${line}`),
-    '- **Cấm** thêm các key khác (purpose/context/mood/style/aspect/text_language/voice_content/safe_area/policy_safe) — engine tự chèn style, tỉ lệ khung hình, rule ngôn ngữ, lời thoại beat (voice_content) và safe-area khi gửi sinh ảnh; AI chỉ viết 6 key trên.',
+    '- **Cấm** thêm các key khác (purpose/context/mood/style/aspect/text_language/voice_content/safe_area/policy_safe/output_images) — engine tự chèn style, tỉ lệ khung hình, rule ngôn ngữ, lời thoại beat (voice_content), safe-area và rule xuất 2 ảnh (output_images) khi gửi sinh ảnh; AI chỉ viết 7 key trên.',
     '- **CẤM placeholder viết tắt**: mỗi field phải là câu/cụm mô tả đầy đủ (tối thiểu ~2–3 từ, không phải 1 chữ cái như `D`, `C`, `M`, `B`); `text_overlay` phải là label trọn cụm từ trong `phrase_anchor`, **cấm** cắt cụt 1 từ (vd `Mục`), **cấm** 1 ký tự.',
     '- Ví dụ JSON image_prompt (object thật — KHÔNG escape, KHÔNG bọc trong string):',
     '```json',
@@ -216,7 +296,7 @@ const STYLE_SPEC: Record<WhiteboardGenStyle, { header: string; intro: string; ru
         spec: [
             '  - Hero = photorealistic cutout (person/object) with clean white edge — **editorial focal** trong layered composition có depth (drop shadows, cropped fragments), không vật thể trôi trên nền trắng.',
             '  - Annotations = thick expressive black marker (secondary — xem Subtle annotation layer bên dưới): arrows, scribbles, underlines, emphasis marks, icons.',
-            '  - Typography = bold hand-lettered, **1–2 label, mỗi label 1–3 từ khóa**; **1–2 keywords in bright red** only; rest black.',
+            '  - Typography = bold hand-lettered, **3–6 label, mỗi label 1–5 từ**, đặt tách rời nhau quanh khung; **1–2 keywords in bright red** only; rest black.',
             '  - Composition = **editorial documentary layout**: strong hierarchy, scale contrast, layered collage, one clear visual flow (e.g. left-to-right), compact density — editorial YouTube-thumbnail energy, not a calm textbook diagram.',
             '  - Solid black graphic props OK (clock, brush bars, stamps) when they support the hook.',
         ],
@@ -231,7 +311,7 @@ const STYLE_SPEC: Record<WhiteboardGenStyle, { header: string; intro: string; ru
             '  - Hero = **cutout từ tạp chí** (person/object) với **mép giấy xé / deckled** — to, trung tâm, tương phản cao; đặt chồng trên các mảnh ảnh khác.',
             '  - Layering = **fragment ảnh xếp chồng** (overlapping photo fragments), halftone dots, washi tape — cảm giác ghép tay, không ghép kỹ thuật số sạch.',
             '  - Annotations = thick expressive black marker: arrows, scribbles, underlines, emphasis marks, icons (không outline-only diagram mảnh).',
-            '  - Typography = **bold vintage magazine headline** tiếng Việt + short labels; **1–2 keywords trong bright red** còn lại đen.',
+            '  - Typography = **bold vintage magazine headline** tiếng Việt + **3–6 short label tách rời** (mỗi label 1–5 từ); **1–2 keywords trong bright red** còn lại đen.',
             '  - Composition = một luồng visual rõ (vd trái → phải), hierarchy mạnh, mật độ gọn — editorial thumbnail energy, không textbook tĩnh.',
             '  - Solid black graphic props OK (clock, brush bars, stamps) khi hỗ trợ hook.',
             '  - Palette = muted retro (cream, kraft, đen, accent đỏ), paper grain; **cấm** màu neon, vector phẳng nhiều màu.',
@@ -246,7 +326,7 @@ const STYLE_SPEC: Record<WhiteboardGenStyle, { header: string; intro: string; ru
             '  - Hero = **1** photorealistic cutout subject — **editorial focal**: đặt trong layered composition có depth (subtle drop shadows, cropped photo fragments), KHÔNG phải vật thể trôi trên nền trắng.',
             '  - **Editorial composition (PRIMARY)**: strong visual hierarchy — hero lớn nổi bật, contextual elements nhỏ xung quanh (scale contrast); layered collage (photo fragments, cropped imagery, background shapes); storytelling layout kiểu news magazine; large negative space.',
                         '  - Nền = editorial documentary scene: magazine-cream/giấy ngà texture + photographic background shapes + depth — **không** lưới tọa độ (grid), biểu đồ, chart, số liệu trang trí; **không** bối cảnh cảnh sát/tòa án/phòng điều tra.',
-            '  - Typography = **OPTIONAL — default KHÔNG có text overlay**; chỉ dùng khi comprehension giảm đáng kể nếu không có (xem TEXT OVERLAY block); nếu dùng: tối đa **1–2 label** bold hand-lettered, mỗi label **1–3 từ khóa** (trích nguyên văn `phrase_anchor`); **1–2 từ duy nhất màu đỏ tươi**; còn lại đen; cấm đoạn chữ dài.',
+            '  - Typography = **BẮT BUỘC text-rich** (xem TEXT OVERLAY block): **3–6 label** bold hand-lettered đặt tách rời nhau quanh khung, mỗi label **1–5 từ** (label đầu trích từ `phrase_anchor`, các label sau làm rõ thuật ngữ/cơ chế/hệ quả); **1–2 từ duy nhất màu đỏ tươi**; còn lại đen; cấm đoạn chữ dài kiểu phụ đề.',
             '  - Composition = bố cục editorial, một luồng nhìn rõ, hierarchy mạnh, nhiều khoảng trống; loại bỏ chi tiết thừa trước khi render.',
         ],
         banned: '- **Cấm** flat colorful vector fills, neon glow UI, cluttered rainbow icons, watermark, logo, blurry, full-bleed photorealistic scene without cutouts, thin outline-only diagram, cartoon, cảnh điều tra/phá án/tòa án/cảnh sát (không liên quan chủ đề).',
@@ -260,7 +340,7 @@ const STYLE_SPEC: Record<WhiteboardGenStyle, { header: string; intro: string; ru
             '  - Nét vẽ = nhanh, thô mộc, loose — bắt trọn khoảnh khắc và biểu cảm của nhân vật chính, không trau chuốt, mang tính phóng sự.',
             '  - Màu = trầm, bão hòa thấp (muted) — **cấm** màu neon, bảng màu rực rỡ.',
             '  - Bối cảnh = khung hình candid kiểu ký họa báo chí (reportage) — bối cảnh lấy theo **chủ đề của beat** (vd. giấc ngủ, đồng hồ báo thức, tờ nhiệm vụ).',
-            '  - Typography = label tiếng Việt ngắn viết tay; 1–2 từ đậm nếu cần nhấn; giữ phong cách vẽ tay, không font máy.',
+            '  - Typography = **3–6 label tiếng Việt ngắn viết tay** (mỗi label 1–5 từ) đặt tách rời nhau; 1–2 từ đậm nếu cần nhấn; giữ phong cách vẽ tay, không font máy.',
             '  - Composition = hierarchy rõ, focal character trung tâm hoặc lệch tâm kịch tính, mật độ phóng sự, không layout trang trí cầu kỳ.',
         ],
         banned: '- **Cấm** clean digital render, photorealistic, nét vẽ trau chuốt mượt, màu bão hòa neon, flat vector cartoon, watermark, logo, blurry, bố cục đối xứng hoàn hảo kiểu poster.',
@@ -283,7 +363,8 @@ const IMAGE_PROMPT_EXAMPLE: Record<WhiteboardGenStyle, string> = {
 
 /** Dòng phong cách image theo gen_style — append khi DÙNG prompt (mở Duck.ai/Meta.ai), không lưu. */
 export function beatImageStyleSuffix(genStyle = 'hybrid', imageTextLang = 'vi'): string {
-    return applyImageTextLang(STYLE_SUFFIX[resolveWhiteboardGenStyle(genStyle)], imageTextLang);
+    const style = `${STYLE_SUFFIX[resolveWhiteboardGenStyle(genStyle)]}, ${WHITEBOARD_SEPARATED_LAYOUT_SUFFIX}`;
+    return applyImageTextLang(style, imageTextLang);
 }
 
 /** Dòng tỉ lệ ảnh theo clip aspect user chọn — append khi DÙNG prompt (mở Duck.ai/Meta.ai), không lưu. */
@@ -336,7 +417,13 @@ export function appendBeatImageStyleSuffix(
     try {
         const parsed = JSON.parse(trimmed);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            const next: Record<string, unknown> = { ...parsed, style: suffix, text_language: textLangRule };
+            const next: Record<string, unknown> = {
+                ...parsed,
+                style: suffix,
+                text_language: textLangRule,
+                safe_area: WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
+                output_images: WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
+            };
             if (voice) {
                 next.voice_content = voice;
             }
@@ -345,11 +432,11 @@ export function appendBeatImageStyleSuffix(
     } catch {
         // Không phải JSON → fallback nối suffix sau dấu phẩy như cũ.
     }
-    let appended = `${trimmed.replace(/[, ]+$/u, '')}, ${suffix}, ${textLangRule}`;
+    let appended = `${trimmed.replace(/[, ]+$/u, '')}, ${suffix}, ${textLangRule}, ${WHITEBOARD_CENTRAL_SAFE_AREA_RULE}`;
     if (voice) {
         appended += `, the voiceover for this beat says: "${voice}"`;
     }
-    return appended;
+    return `${appended}\n\n${WHITEBOARD_DUAL_LAYER_OUTPUT_RULE}`;
 }
 
 export function buildBeatDivisionWhiteboardImagePromptBlock(
@@ -395,14 +482,15 @@ export function buildBeatDivisionWhiteboardOutputRules(
 ): string[] {
     const style = resolveWhiteboardGenStyle(genStyle);
     const outputRule: Record<WhiteboardGenStyle, string> = {
-        hybrid: '- `image_prompt`: **JSON object đủ 6 key** theo **Visual mode — image_prompt** above; scene/subject theo hybrid editorial collage (photorealistic cutout hero + layered fragments + thick marker annotations, selective red accents); **text_overlay: string duy nhất ≤6 từ, nhiều label dùng `|`** (vd "GAN NHIỄM MỠ | XƠ GAN"), keyword từ `phrase_anchor`; tổng ≤ ~400 từ; no watermark.',
-        collage_art: '- `image_prompt`: **JSON object đủ 6 key** theo **Visual mode — image_prompt** above; scene/subject theo collage art (magazine-cutout hero torn/deckled on cream paper, layered fragments); **text_overlay: string duy nhất ≤6 từ, nhiều label dùng `|`** (vd "GAN NHIỄM MỠ | XƠ GAN"), keyword từ `phrase_anchor`; tổng ≤ ~400 từ; no watermark.',
-        vox: '- `image_prompt`: **JSON object đủ 6 key** theo **Visual mode — image_prompt** above; scene/subject theo vox-style editorial documentary (1 hero cutout + layered editorial composition + scale contrast; annotation theo Subtle annotation layer; **cấm** grid/chart/question marks/circled emphasis/whiteboard; **cấm** cảnh điều tra/tòa án); **text_overlay: string duy nhất ≤6 từ, nhiều label dùng `|`** (vd "GAN NHIỄM MỠ | XƠ GAN"), keyword từ `phrase_anchor`; tổng ≤ ~400 từ; no watermark.',
-        courtroom_sketch: '- `image_prompt`: **JSON object đủ 6 key** theo **Visual mode — image_prompt** above; scene/subject theo courtroom sketch (**colored pencil/pastel/watercolor on rough paper** + loose strokes + muted colors + dramatic moment); **text_overlay: string duy nhất ≤6 từ, nhiều label dùng `|`** (vd "GAN NHIỄM MỠ | XƠ GAN"), keyword từ `phrase_anchor`; tổng ≤ ~400 từ; no watermark.',
+        hybrid: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo hybrid editorial collage (photorealistic cutout hero + layered fragments + thick marker annotations, selective red accents); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        collage_art: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo collage art (magazine-cutout hero torn/deckled on cream paper, layered fragments); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        vox: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo vox-style editorial documentary (1 hero cutout + layered editorial composition + scale contrast; annotation theo Subtle annotation layer; **cấm** grid/chart/question marks/circled emphasis/whiteboard; **cấm** cảnh điều tra/tòa án); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        courtroom_sketch: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo courtroom sketch (**colored pencil/pastel/watercolor on rough paper** + loose strokes + muted colors + dramatic moment); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
     };
     return [
         '- **RELEVANCE PRIORITY (cao nhất)**: mỗi `image_prompt` minh họa trực tiếp **`phrase_anchor` của beat này** + nhất quán **Title video** — ưu tiên `phrase_anchor`; có thể dùng **1–2 beat lân cận** làm ngữ cảnh, **không lấy nội dung xa hơn**. Ảnh chung chung/trang trí hoặc minh họa chủ đề khác là **sai**.',
         '- **Unique**: không lặp nguyên tổ hợp `subject + action + scene`; **cho phép tái dùng chủ thể** nếu đổi hành động/góc nhìn.',
+        '- **`background_prompt` (BẮT BUỘC mỗi beat)**: mô tả background plate **có trang trí** cho IMAGE 2 — đúng chất liệu style clip, motif ở 4 góc + dọc viền, trung tâm nhạt; **cấm** nền trắng trơn / nền phẳng trống, **cấm** mọi subject/vật thể có nghĩa/nhân vật/chữ/số; **được phép giống nhau giữa các beat cùng scene** (giữ nhất quán nền cả clip).',
         applyImageTextLang(outputRule[style], imageTextLang),
     ];
 }

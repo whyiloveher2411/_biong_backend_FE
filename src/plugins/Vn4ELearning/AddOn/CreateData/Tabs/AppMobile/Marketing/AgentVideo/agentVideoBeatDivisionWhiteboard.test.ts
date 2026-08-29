@@ -5,6 +5,7 @@ import {
     buildBeatDivisionWhiteboardImagePromptBlock,
     buildBeatDivisionWhiteboardOutputRules,
     imageTextLangRuleBlock,
+    imageTextLangSuffixRule,
     normalizeImageTextLang,
     resolveBeatVoiceContent,
     stripVoiceMarkers,
@@ -59,11 +60,11 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
     it('imageTextLangRuleBlock trả rule tiếng Anh khi lang=en', () => {
         const vi = imageTextLangRuleBlock('vi').join('\n');
         expect(vi).toContain('tiếng Việt');
-        expect(vi).toContain('GAN NHIỄM MỠ | XƠ GAN');
+        expect(vi).toContain('GAN NHIỄM MỠ | MỠ TÍCH TỤ');
         const en = imageTextLangRuleBlock('en').join('\n');
         expect(en).toContain('tiếng Anh');
-        expect(en).toContain('FATTY LIVER | CIRRHOSIS');
-        expect(en).toContain('Tối đa 6 từ');
+        expect(en).toContain('FATTY LIVER | FAT BUILD-UP');
+        expect(en).toContain('3–6 label');
     });
 
     it('buildBeatDivisionWhiteboardImagePromptBlock(en) không còn rule chữ tiếng Việt', () => {
@@ -72,7 +73,7 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
         expect(vi).toContain('GAN NHIỄM MỠ');
         const en = buildBeatDivisionWhiteboardImagePromptBlock('vox', 'en');
         expect(en).toContain('English');
-        expect(en).toContain('Tối đa 6 từ');
+        expect(en).toContain('3–6 label');
         expect(en).not.toContain('3 NGUYÊN LIỆU');
     });
 
@@ -99,8 +100,8 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
 
     it('appendBeatImageStyleSuffix trim dấu phẩy cuối prompt cũ trước khi nối', () => {
         const result = appendBeatImageStyleSuffix('some scene description,  ', 'collage_art');
-        expect(result).toBe(
-            `some scene description, ${beatImageStyleSuffix('collage_art')}, chữ trên ảnh phải đúng tiếng Việt có dấu, text_overlay = string duy nhất tối đa 6 từ (nhiều label dùng |), keyword trích từ lời thoại beat, liên quan trực tiếp nội dung beat, cấm chuỗi ký tự vô nghĩa`,
+        expect(result).toContain(
+            `some scene description, ${beatImageStyleSuffix('collage_art')}, ${imageTextLangSuffixRule('vi')}`,
         );
     });
 
@@ -147,7 +148,7 @@ describe('agentVideoBeatDivisionWhiteboard style suffix', () => {
             must_avoid: 'm',
         });
         const parsed = JSON.parse(appendBeatImageStyleSuffix(jsonPrompt, 'vox', 'en'));
-        expect(parsed.text_language).toContain('at most 1-2 short labels');
+        expect(parsed.text_language).toContain('3-6 separate short labels');
         expect(parsed.style).toMatch(/vox-style/i);
     });
 

@@ -964,7 +964,7 @@ export default function ShortVideoAgentVideoTimeline({
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
                             <Tooltip
                                 title={isWhiteboardMode
-                                    ? `Mở Duck.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Duck.ai → tự lưu beat.`
+                                    ? `Mở Duck.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Duck.ai → tự lưu beat.`
                                     : 'Extension tự điền prompt và bấm Gửi trên mỗi tab — kiểm tra kết quả rồi Lưu HTML từng tab'}
                                 placement="top"
                             >
@@ -982,7 +982,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         {isWhiteboardMode
                                             ? (imageRemaining > 0
                                                 ? `Mở Duck.ai 10 beat (còn ${imageRemaining})`
-                                                : `Mở Duck.ai ${imageBatchSize} beat thiếu ảnh`)
+                                                : `Mở Duck.ai ${imageBatchSize} beat thiếu ảnh (đủ 2 lớp)`)
                                             : `Mở Gemini tất cả beat thiếu (${effectiveMissingCount})`}
                                     </LoadingButton>
                                 </span>
@@ -990,7 +990,7 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                         {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
                             <Tooltip
-                                title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Download ảnh trên Meta.ai → tự lưu beat.`}
+                                title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Meta.ai → tự lưu beat.`}
                                 placement="top"
                             >
                                 <span>
@@ -1006,7 +1006,7 @@ export default function ShortVideoAgentVideoTimeline({
                                     >
                                         {imageRemaining > 0
                                             ? `Mở Meta.ai 10 beat (còn ${imageRemaining})`
-                                            : `Mở Meta.ai ${imageBatchSize} beat thiếu ảnh`}
+                                            : `Mở Meta.ai ${imageBatchSize} beat thiếu ảnh (đủ 2 lớp)`}
                                     </LoadingButton>
                                 </span>
                             </Tooltip>

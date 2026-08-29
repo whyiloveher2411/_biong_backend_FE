@@ -1,5 +1,8 @@
 import { formatDurationSec } from './agentVideoHfPromptDuration';
-import { WHITEBOARD_IMAGE_PROMPT_JSON_KEYS } from './agentVideoBeatDivisionWhiteboard';
+import {
+    WHITEBOARD_IMAGE_PROMPT_JSON_KEYS,
+    WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS,
+} from './agentVideoBeatDivisionWhiteboard';
 
 export type BeatMapSection = {
     id: string;
@@ -456,10 +459,10 @@ export function parseBeatVisualChunkJson(
         }
         const imagePrompt = normalizeBeatImagePrompt(obj.image_prompt);
         if (!imagePrompt) {
-            errors.push(`${id}: thiếu image_prompt object (6 key)`);
+            errors.push(`${id}: thiếu image_prompt object (7 key)`);
             return;
         }
-        // Validate đủ 6 key + không key thừa + field ≥2 ký tự — mirror validateBeatImagePrompt.
+        // Validate đủ 7 key + không key thừa + field ≥2 ký tự — mirror validateBeatImagePrompt.
         const validated = validateBeatImagePrompt(imagePrompt);
         if (!validated) {
             const details = describeBeatImagePromptErrors(imagePrompt);
@@ -519,16 +522,17 @@ export function validateBeatImagePrompt(value: unknown): string | null {
     if (!record) {
         return null;
     }
-    // Bắt buộc JSON object đủ 6 key — image_prompt không còn chấp nhận text thuần.
+    // Bắt buộc JSON object theo whitelist 7 key — image_prompt không còn chấp nhận text thuần.
+    // `background_prompt` optional khi đọc để beat-map cũ (6 key) vẫn dùng được.
     const keys = Object.keys(record);
-    if (keys.length !== WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.length) {
+    if (keys.some((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number]))) {
         return null;
     }
-    if (WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.some((key) => !keys.includes(key))) {
+    if (WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS.some((key) => !keys.includes(key))) {
         return null;
     }
     // text_overlay được phép rỗng "" (một số trường hợp AI bỏ trống) nhưng ưu tiên có
-    // 1–2 label từ khóa liên quan nội dung beat; các key khác bắt buộc non-empty.
+    // 3–6 label từ khóa liên quan nội dung beat; các key khác bắt buộc non-empty.
     const nonEmptyOk = WHITEBOARD_IMAGE_PROMPT_JSON_KEYS
         .filter((key) => key !== 'text_overlay')
         .every((key) => !keys.includes(key) || String(record[key] ?? '').trim() !== '');
@@ -554,6 +558,12 @@ export function imagePromptFieldsQualityOk(record: Record<string, unknown>): boo
     if (textOverlay !== '' && textOverlay.length < 2) {
         return false;
     }
+    // background_prompt optional (beat-map cũ) — có thì phải là mô tả thật.
+    if (Object.prototype.hasOwnProperty.call(record, 'background_prompt')) {
+        if (String(record.background_prompt ?? '').trim().length < 2) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -577,15 +587,21 @@ export function describeBeatImagePromptErrors(value: unknown): string[] {
     }
     const errors: string[] = [];
     const keys = Object.keys(record);
-    const missing = WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.filter((key) => !keys.includes(key));
+    const missing = WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS.filter((key) => !keys.includes(key));
     if (missing.length > 0) {
         errors.push(`thiếu key: ${missing.join(', ')}`);
+    }
+    if (!keys.includes('background_prompt')) {
+        errors.push('thiếu background_prompt (beat-map cũ — cần chia beat lại để sinh nền riêng cho IMAGE 2)');
     }
     const extra = keys.filter((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number]));
     if (extra.length > 0) {
         errors.push(`key thừa (cấm): ${extra.join(', ')}`);
     }
     for (const key of WHITEBOARD_IMAGE_PROMPT_JSON_KEYS) {
+        if (!keys.includes(key)) {
+            continue;
+        }
         const valueText = String(record[key] ?? '').trim();
         if (key === 'text_overlay') {
             if (valueText !== '' && valueText.length < 2) {
@@ -762,7 +778,7 @@ export function parseBeatMapJson(
         if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${id || `Section #${index + 1}`}: thiếu image_prompt cho whiteboard`);
         } else if (hasImagePromptRaw && !imagePrompt) {
-            errors.push(`${id || `Section #${index + 1}`}: image_prompt không hợp lệ — phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)`);
+            errors.push(`${id || `Section #${index + 1}`}: image_prompt không hợp lệ — phải là JSON đủ 7 field (subject, action, scene, text_overlay, composition, must_avoid, background_prompt)`);
         }
 
         sections.push({
@@ -840,7 +856,7 @@ export function validateBeatMap(
         if (options?.requireImagePrompt && !hasImagePromptRaw) {
             errors.push(`${label}: thiếu image_prompt cho whiteboard`);
         } else if (hasImagePromptRaw && !validateBeatImagePrompt(section.image_prompt)) {
-            errors.push(`${label}: image_prompt không hợp lệ — phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)`);
+            errors.push(`${label}: image_prompt không hợp lệ — phải là JSON đủ 7 field (subject, action, scene, text_overlay, composition, must_avoid, background_prompt)`);
         }
         // Soft 8–30s / cắt hết ý: chỉ khuyến nghị trong prompt chia beat — code không tách/gộp beat-map.
         expectedStart = section.endSec;
@@ -967,29 +983,52 @@ export function countMissingBeatHtml(map: BeatMap | null, beatHtml: Record<strin
     return map.sections.filter((section) => isBeatHtmlMissing(beatHtml, section.id)).length;
 }
 
-export function isBeatImageMissing(beatImage: Record<string, BeatImageEntry>, beatId: string): boolean {
-    return !String(beatImage[beatId]?.image_url || '').trim();
+/**
+ * Beat có `image_prompt.background_prompt` → cần đủ 2 ảnh (object layer + background plate).
+ * Beat-map cũ 6 key → chỉ cần 1 ảnh như trước.
+ * Mirror marketing_short_video_agent_beat_needs_background_layer (PHP).
+ */
+export function beatSectionNeedsBackgroundLayer(section: BeatMapSection | null | undefined): boolean {
+    const record = normalizeBeatImagePrompt(section?.image_prompt);
+    return !!record && String(record.background_prompt ?? '').trim() !== '';
+}
+
+export function isBeatImageMissing(
+    beatImage: Record<string, BeatImageEntry>,
+    beatId: string,
+    dualLayer?: { section?: BeatMapSection | null; backgroundUrl?: string },
+): boolean {
+    if (!String(beatImage[beatId]?.image_url || '').trim()) {
+        return true;
+    }
+    if (dualLayer && beatSectionNeedsBackgroundLayer(dualLayer.section)) {
+        return !String(dualLayer.backgroundUrl || '').trim();
+    }
+    return false;
 }
 
 export function countMissingBeatImage(
     map: BeatMap | null,
     beatImage: Record<string, BeatImageEntry>,
+    backgroundUrls?: Record<string, string>,
 ): number {
-    if (!map?.sections?.length) {
-        return 0;
-    }
-    return map.sections.filter((section) => isBeatImageMissing(beatImage, section.id)).length;
+    return listMissingBeatImageIds(map, beatImage, backgroundUrls).length;
 }
 
 export function listMissingBeatImageIds(
     map: BeatMap | null,
     beatImage: Record<string, BeatImageEntry>,
+    backgroundUrls?: Record<string, string>,
 ): string[] {
     if (!map?.sections?.length) {
         return [];
     }
     return map.sections
-        .filter((section) => isBeatImageMissing(beatImage, section.id))
+        .filter((section) => isBeatImageMissing(
+            beatImage,
+            section.id,
+            backgroundUrls ? { section, backgroundUrl: backgroundUrls[section.id] } : undefined,
+        ))
         .map((section) => section.id);
 }
 

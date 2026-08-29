@@ -165,7 +165,7 @@ export function buildBeatDivisionSingleOutputRulesBlock(options?: {
         '  5. `image_prompt` **không có key thừa** (cấm purpose/context/mood/style/…).',
         '  6. Mỗi `phrase_anchor` thuộc **đúng 1 beat** (không trùng, không bỏ sót dòng độc lập).',
         '  7. `schema_version` = **2**.',
-        '  8. `text_overlay` tuân thủ format (**empty string `""` hoặc string duy nhất ≤6 từ**, nhiều label dùng `|`; không lặp giống hệt beat liền kề; beat ngắn tối giản hơn).',
+        '  8. `text_overlay` tuân thủ format (**3–6 label nối `|`, mỗi label 1–5 từ**; không lặp nguyên khối với beat liền kề; beat ngắn tối giản hơn).',
         '  9. **Với mỗi beat: `subject` phải trực tiếp liên quan `phrase_anchor`** — không chỉ thuộc chủ đề video chung.',
         '  10. Nếu `phrase_anchor` nhắc entity cụ thể (brain, liver, DNA, acetaldehyde…) → `subject` phải **chứa entity đó hoặc biểu diễn trực tiếp entity đó** (không thay bằng người uống rượu/người bệnh).',
         '  11. **Subject Substitution Check**: nếu `phrase_anchor` **nêu tên entity rõ ràng** (DNA, neuron, liver, heart, acetaldehyde…) → `subject` **MUST directly represent entity đó** (không nhất thiết lặp đúng từ — "chromosome segment containing DNA mutations" hợp lệ cho "DNA mutations accumulate"); thay thế bằng human / patient / drinker / body silhouette / **cơ quan khác** là **INVALID** — **NGOẠI TRỪ** bước 0 STATISTICAL PRECEDENCE áp dụng (subject = affected population cluster).',
