@@ -193,6 +193,8 @@ type Props = {
     shortVideoId?: number;
     agentSourceFormat?: string;
     onSaveBeatMapManual?: (map: BeatMap, options?: { limitBeats?: number }) => Promise<boolean>;
+    /** Chia beat từ JSON user có sẵn — timing khớp bằng Whisper ở backend. */
+    onImportBeatMapJson?: (jsonText: string) => Promise<{ ok: boolean; errors: string[]; warnings: string[] }>;
     /** Audio script hiện tại — prefill drawer tạo script thủ công. */
     audioScript?: string;
     /** Lưu script thủ công → mark script_create done. */
@@ -300,6 +302,7 @@ export default function ShortVideoAgentVideoTimeline({
     shortVideoId = 0,
     agentSourceFormat = '',
     onSaveBeatMapManual,
+    onImportBeatMapJson,
     audioScript = '',
     onSaveScriptManual,
     audioScriptTtsReading = '',
@@ -1431,6 +1434,7 @@ export default function ShortVideoAgentVideoTimeline({
                 agentSourceFormat={agentSourceFormat}
                 isWhiteboard={isWhiteboardMode}
                 onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSaveWithOptions}
+                onImportJson={onImportBeatMapJson}
             />
             <ShortVideoAgentScriptManualDrawer
                 open={scriptManualOpen}

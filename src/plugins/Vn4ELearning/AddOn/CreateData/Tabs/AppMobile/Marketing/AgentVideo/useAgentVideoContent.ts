@@ -89,6 +89,7 @@ import {
     startFullAutoPipeline,
     cancelFullAutoPipeline,
     markBeatDivisionDone,
+    createBeatMapFromJson,
     markScriptCreateDone,
     markScriptPhoneticDone,
     requestAgentHeadlessNewChat,
@@ -103,6 +104,8 @@ import {
     resolveSaydiVoicePreviewUrl,
     transcribeAgentAudio,
     uploadAgentAudioMp3,
+    saveManualAudioSegments,
+    finalizeManualAgentAudio,
     uploadAgentBgmMp3,
     fetchBgmPromptSuggestions,
     uploadAgentVisualImage,
@@ -114,6 +117,7 @@ import {
     type AudioScriptStyleItem,
     type AgentVideoContentResponse,
     type NarrationSegment,
+    type ManualAudioState,
     type AgentSourceFormatCatalogItem,
     type FullAutoPipelineSummary,
     type FullAutoStepToggleKey,
@@ -508,6 +512,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [audioFileUrl, setAudioFileUrl] = React.useState('');
     const [audioDurationSec, setAudioDurationSec] = React.useState<number | null>(null);
     const [narrationSegments, setNarrationSegments] = React.useState<NarrationSegment[]>([]);
+    const [manualAudioState, setManualAudioState] = React.useState<ManualAudioState>({
+        manual_segment_count: 0,
+        finalized_at: '',
+        dirty: false,
+    });
+    const [savingManualAudioOrder, setSavingManualAudioOrder] = React.useState(false);
+    const [finalizingManualAudio, setFinalizingManualAudio] = React.useState(false);
     const [agentTtsAuto, setAgentTtsAuto] = React.useState(true);
     const [agentAutoFillBeatHtml, setAgentAutoFillBeatHtml] = React.useState(false);
     const [savingAutoFillBeatHtml, setSavingAutoFillBeatHtml] = React.useState(false);
@@ -999,6 +1010,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             ? res.narration_segments
                 .filter((seg): seg is NarrationSegment => Boolean(seg && String(seg.url || '').trim()))
                 .map((seg, idx) => ({
+                    id: String(seg.id || '').trim() || `seg_${idx}`,
                     index: Number(seg.index ?? idx),
                     text: String(seg.text || ''),
                     word_count: Number(seg.word_count || 0),
@@ -1007,9 +1019,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     duration_sec: Number(seg.duration_sec || 0),
                     tts_engine: String(seg.tts_engine || '').trim(),
                     status: String(seg.status || 'ready').trim() || 'ready',
+                    source: String(seg.source || 'tts').trim() || 'tts',
+                    filename: String(seg.filename || '').trim(),
                 }))
             : [];
         setNarrationSegments(nextSegments);
+        setManualAudioState({
+            manual_segment_count: Number(res?.manual_audio?.manual_segment_count || 0),
+            finalized_at: String(res?.manual_audio?.finalized_at || '').trim(),
+            dirty: Boolean(res?.manual_audio?.dirty),
+        });
         setAgentTtsAuto(Boolean(res?.agent_tts_auto));
         setAgentAutoFillBeatHtml(Boolean(res?.agent_auto_fill_beat_html));
         setFullAutoStepToggles(normalizeFullAutoStepToggles(res?.full_auto_step_toggles));
@@ -3266,6 +3285,42 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         return saved;
     }, [applyBeatMapDraft, beatMap, persistImportHtml, shortVideoId, showMessage]);
+
+    /**
+     * Chia beat từ JSON user đã có sẵn — backend tự khớp timing bằng Whisper rồi lưu beat map.
+     * Trả về danh sách lỗi để drawer hiển thị chi tiết thay vì chỉ 1 dòng snackbar.
+     */
+    const handleImportBeatMapJson = React.useCallback(async (
+        jsonText: string,
+    ): Promise<{ ok: boolean; errors: string[]; warnings: string[] }> => {
+        const text = String(jsonText || '').trim();
+        if (!text) {
+            return { ok: false, errors: ['JSON trống'], warnings: [] };
+        }
+        try {
+            const res = await createBeatMapFromJson(shortVideoId, text);
+            const errors = Array.isArray(res?.errors)
+                ? res.errors.map((err) => String(err))
+                : [];
+            if (!res?.success) {
+                const message = parseApiMessage(res?.message) || 'Không tạo được beat map từ JSON';
+                return { ok: false, errors: errors.length > 0 ? errors : [message], warnings: [] };
+            }
+            setRenderMode('import_html');
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline as FullAutoPipelineSummary);
+            }
+            loadRow();
+            const warnings = Array.isArray(res?.warnings) ? res.warnings.map((w) => String(w)) : [];
+            showMessage(
+                parseApiMessage(res?.message) || `Đã tạo ${Number(res.beat_count) || 0} beat từ JSON`,
+                warnings.length > 0 ? 'warning' : 'success',
+            );
+            return { ok: true, errors: [], warnings };
+        } catch (e) {
+            return { ok: false, errors: [e instanceof Error ? e.message : String(e)], warnings: [] };
+        }
+    }, [loadRow, shortVideoId, showMessage]);
 
     const handleManualScriptCreateSave = React.useCallback(async (text: string): Promise<boolean> => {
         const trimmed = String(text || '').trim();
@@ -7485,27 +7540,153 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
-    const handleUploadMp3 = async (file: File) => {
-        if (!/\.mp3$/i.test(file.name)) {
-            showMessage('Chỉ chấp nhận file MP3', 'error');
+    /**
+     * Upload lần lượt từng file MP3 — mỗi file thành 1 đoạn riêng, chưa ghép.
+     * Gửi tuần tự để tránh vượt post_max_size khi audio dài.
+     */
+    const handleUploadMp3 = async (files: File | File[]) => {
+        const list = Array.isArray(files) ? files : [files];
+        const mp3Files = list.filter((file) => /\.mp3$/i.test(file.name));
+        if (mp3Files.length !== list.length) {
+            showMessage('Chỉ chấp nhận file MP3 — đã bỏ qua file không hợp lệ', 'warning');
+        }
+        if (mp3Files.length === 0) {
             return;
         }
+
         setUploading(true);
         try {
-            const res = await uploadAgentAudioMp3(shortVideoId, file);
-            if (!res?.success) {
-                showMessage(parseApiMessage(res?.message) || 'Upload thất bại', 'error');
-                return;
+            let uploaded = 0;
+            for (const file of mp3Files) {
+                // eslint-disable-next-line no-await-in-loop
+                const res = await uploadAgentAudioMp3(shortVideoId, file);
+                if (!res?.success) {
+                    showMessage(
+                        `${file.name}: ${parseApiMessage(res?.message) || 'Upload thất bại'}`,
+                        'error',
+                    );
+                    break;
+                }
+                uploaded += 1;
             }
-            showMessage(parseApiMessage(res?.message) || 'Đã upload MP3', 'success');
-            loadRow();
-            onUploaded?.();
+            if (uploaded > 0) {
+                showMessage(`Đã upload ${uploaded} file MP3`, 'success');
+                loadRow();
+                onUploaded?.();
+            }
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setUploading(false);
         }
     };
+
+    const applyManualAudioResponse = React.useCallback((res: {
+        narration_segments?: NarrationSegment[];
+        manual_audio?: ManualAudioState;
+    }) => {
+        if (Array.isArray(res?.narration_segments)) {
+            setNarrationSegments(res.narration_segments.map((seg, idx) => ({
+                id: String(seg.id || '').trim() || `seg_${idx}`,
+                index: Number(seg.index ?? idx),
+                text: String(seg.text || ''),
+                word_count: Number(seg.word_count || 0),
+                url: String(seg.url || '').trim(),
+                s3_key: String(seg.s3_key || '').trim(),
+                duration_sec: Number(seg.duration_sec || 0),
+                tts_engine: String(seg.tts_engine || '').trim(),
+                status: String(seg.status || 'ready').trim() || 'ready',
+                source: String(seg.source || 'tts').trim() || 'tts',
+                filename: String(seg.filename || '').trim(),
+            })));
+        }
+        if (res?.manual_audio) {
+            setManualAudioState({
+                manual_segment_count: Number(res.manual_audio.manual_segment_count || 0),
+                finalized_at: String(res.manual_audio.finalized_at || '').trim(),
+                dirty: Boolean(res.manual_audio.dirty),
+            });
+        }
+    }, []);
+
+    /** Lưu danh sách đoạn upload thủ công còn lại (sau khi xóa / sắp xếp). */
+    const persistManualAudioSegments = React.useCallback(async (
+        segments: NarrationSegment[],
+    ): Promise<boolean> => {
+        const ids = segments
+            .filter((seg) => seg.source === 'manual')
+            .map((seg) => String(seg.id || '').trim())
+            .filter((id) => id.length > 0);
+
+        setSavingManualAudioOrder(true);
+        try {
+            const res = await saveManualAudioSegments(shortVideoId, ids);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được danh sách đoạn MP3', 'error');
+                loadRow();
+                return false;
+            }
+            applyManualAudioResponse(res);
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            loadRow();
+            return false;
+        } finally {
+            setSavingManualAudioOrder(false);
+        }
+    }, [applyManualAudioResponse, loadRow, shortVideoId, showMessage]);
+
+    const handleRemoveManualAudioSegment = React.useCallback(async (segmentId: string) => {
+        const next = narrationSegments.filter((seg) => seg.id !== segmentId);
+        setNarrationSegments(next);
+        await persistManualAudioSegments(next);
+    }, [narrationSegments, persistManualAudioSegments]);
+
+    const handleReorderManualAudioSegments = React.useCallback(async (
+        fromIndex: number,
+        toIndex: number,
+    ) => {
+        if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+            return;
+        }
+        if (fromIndex >= narrationSegments.length || toIndex >= narrationSegments.length) {
+            return;
+        }
+        const next = [...narrationSegments];
+        const [moved] = next.splice(fromIndex, 1);
+        if (!moved) {
+            return;
+        }
+        next.splice(toIndex, 0, moved);
+        setNarrationSegments(next.map((seg, idx) => ({ ...seg, index: idx })));
+        await persistManualAudioSegments(next);
+    }, [narrationSegments, persistManualAudioSegments]);
+
+    /** Ghép các đoạn upload thủ công + đánh dấu bước Duyệt / TTS hoàn tất. */
+    const handleFinalizeManualAudio = React.useCallback(async (): Promise<boolean> => {
+        setFinalizingManualAudio(true);
+        try {
+            const res = await finalizeManualAgentAudio(shortVideoId);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Ghép MP3 thất bại', 'error');
+                return false;
+            }
+            applyManualAudioResponse(res);
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã hoàn thành bước Duyệt / TTS', 'success');
+            loadRow();
+            onUploaded?.();
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setFinalizingManualAudio(false);
+        }
+    }, [applyManualAudioResponse, loadRow, onUploaded, setFullAutoPipeline, shortVideoId, showMessage]);
 
     const missingBeatHtmlCount = React.useMemo(
         () => countMissingBeatHtml(beatMap, beatHtml),
@@ -7558,6 +7739,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         audioFileUrl,
         audioDurationSec,
         narrationSegments,
+        manualAudioState,
+        savingManualAudioOrder,
+        finalizingManualAudio,
         agentTtsAuto,
         agentAutoFillBeatHtml,
         savingAutoFillBeatHtml,
@@ -7978,6 +8162,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRenderModeChange,
         handleBeatMapJsonChange,
         handleManualBeatDivisionSave,
+        handleImportBeatMapJson,
         handleManualScriptCreateSave,
         handleBeatVisualDescriptionChange,
         handleSaveBeatQa,
@@ -8023,6 +8208,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRegenerateTts,
         handleRetryTts,
         handleUploadMp3,
+        handleRemoveManualAudioSegment,
+        handleReorderManualAudioSegments,
+        handleFinalizeManualAudio,
         showMessage,
     };
 }

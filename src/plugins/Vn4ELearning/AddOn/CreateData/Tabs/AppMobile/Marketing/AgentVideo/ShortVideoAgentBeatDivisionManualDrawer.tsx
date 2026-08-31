@@ -15,6 +15,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ErrorIcon from '@mui/icons-material/Error';
 import SaveIcon from '@mui/icons-material/Save';
 import DrawerCustom from 'components/molecules/DrawerCustom';
@@ -42,7 +43,48 @@ type Props = {
     isWhiteboard: boolean;
     /** limitBeats > 0 → chế độ test: chỉ cập nhật N beat đầu của beat map hiện tại. */
     onSave: (map: BeatMap, options?: { limitBeats?: number }) => Promise<boolean>;
+    /** Chia beat từ JSON user có sẵn — backend khớp content với audio script, timing lấy từ Whisper. */
+    onImportJson?: (jsonText: string) => Promise<{ ok: boolean; errors: string[]; warnings: string[] }>;
 };
+
+type ImportJsonPreview = {
+    beatCount: number;
+    errors: string[];
+};
+
+/** Kiểm tra sơ bộ phía client trước khi gửi lên server. */
+function analyzeImportJson(text: string): ImportJsonPreview {
+    const trimmed = text.trim();
+    if (!trimmed) {
+        return { beatCount: 0, errors: ['Chưa có JSON'] };
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(trimmed.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+    } catch (e) {
+        return { beatCount: 0, errors: [`JSON không parse được: ${e instanceof Error ? e.message : String(e)}`] };
+    }
+    let list: unknown = parsed;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const record = parsed as Record<string, unknown>;
+        list = Array.isArray(record.beats) ? record.beats : record.sections;
+    }
+    if (!Array.isArray(list) || list.length === 0) {
+        return { beatCount: 0, errors: ['JSON phải là mảng beat (hoặc object có khoá "beats"), không được rỗng'] };
+    }
+    const errors: string[] = [];
+    list.forEach((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            errors.push(`Beat #${index + 1}: phần tử không phải object`);
+            return;
+        }
+        const record = item as Record<string, unknown>;
+        if (!String(record.content || '').trim()) {
+            errors.push(`Beat #${index + 1}: thiếu content`);
+        }
+    });
+    return { beatCount: list.length, errors };
+}
 
 /** Số beat mặc định cho chế độ test nhanh. */
 const TEST_LIMIT_BEATS = 3;
@@ -144,8 +186,9 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
     agentSourceFormat = '',
     isWhiteboard,
     onSave,
+    onImportJson,
 }: Props) {
-    const [phaseMode, setPhaseMode] = React.useState<'single' | 'two_phase'>('single');
+    const [phaseMode, setPhaseMode] = React.useState<'single' | 'two_phase' | 'import_json'>('single');
     const [prompt, setPrompt] = React.useState('');
     const [contentMode, setContentMode] = React.useState<'text' | 'file'>('file');
     const [testMode, setTestMode] = React.useState(false);
@@ -175,11 +218,24 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
     const [savingPhase2, setSavingPhase2] = React.useState(false);
     const [savingFinal, setSavingFinal] = React.useState(false);
 
+    // ---- JSON có sẵn ----
+    const [importJsonText, setImportJsonText] = React.useState('');
+    const [importJsonFileName, setImportJsonFileName] = React.useState('');
+    const [importJsonErrors, setImportJsonErrors] = React.useState<string[]>([]);
+    const [importJsonWarnings, setImportJsonWarnings] = React.useState<string[]>([]);
+    const [importingJson, setImportingJson] = React.useState(false);
+    const importJsonInputRef = React.useRef<HTMLInputElement | null>(null);
+
     const relaxDurationBounds = ['github_top', 'github_top_daily', 'github_top_weekly', 'github_top_monthly'].includes(
         String(agentSourceFormat || ''),
     );
 
     const isTwoPhase = phaseMode === 'two_phase';
+    const isImportJson = phaseMode === 'import_json';
+    const importJsonPreview = React.useMemo(
+        () => (isImportJson ? analyzeImportJson(importJsonText) : null),
+        [isImportJson, importJsonText],
+    );
 
     // Load prompt + draft khi mở drawer.
     React.useEffect(() => {
@@ -204,6 +260,17 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         setPhase2Errors([]);
         setCopied1(false);
         setCopied2(false);
+        setImportJsonErrors([]);
+        setImportJsonWarnings([]);
+
+        // Chế độ JSON có sẵn không cần prompt chia beat.
+        if (isImportJson) {
+            setLoadingPrompt(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
         setLoadingPrompt(true);
 
         const divisionPhase = isTwoPhase ? 'segmentation' : 'full';
@@ -273,7 +340,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         return () => {
             cancelled = true;
         };
-    }, [open, shortVideoId, contentMode, testMode, isTwoPhase]);
+    }, [open, shortVideoId, contentMode, testMode, isTwoPhase, isImportJson]);
 
     const handleCopyPrompt = async () => {
         const ok = await copyText(prompt);
@@ -516,6 +583,57 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
         }
     };
 
+    // ---- JSON có sẵn ----
+    const handlePickImportJsonFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            setImportJsonText(String(reader.result || ''));
+            setImportJsonFileName(file.name);
+            setImportJsonErrors([]);
+        };
+        reader.onerror = () => {
+            setImportJsonErrors(['Không đọc được file JSON']);
+        };
+        reader.readAsText(file);
+    };
+
+    const handleSubmitImportJson = async () => {
+        if (!onImportJson) {
+            setImportJsonErrors(['Chức năng chưa sẵn sàng']);
+            return;
+        }
+        setImportingJson(true);
+        setImportJsonErrors([]);
+        setImportJsonWarnings([]);
+        try {
+            const result = await onImportJson(importJsonText);
+            if (!result.ok) {
+                setImportJsonErrors(result.errors.length > 0 ? result.errors : ['Tạo beat map thất bại']);
+            } else if (result.warnings.length > 0) {
+                // Đã lưu nhưng có beat phải ước lượng timing — giữ drawer để user đọc cảnh báo.
+                setImportJsonWarnings(result.warnings);
+            } else {
+                onClose();
+            }
+        } catch (e) {
+            setImportJsonErrors([e instanceof Error ? e.message : String(e)]);
+        } finally {
+            setImportingJson(false);
+        }
+    };
+
+    const canSubmitImportJson = Boolean(
+        onImportJson
+        && importJsonPreview
+        && importJsonPreview.beatCount > 0
+        && importJsonPreview.errors.length === 0,
+    );
+
     const canSave = Boolean(analysis?.valid && analysis?.map);
 
     return (
@@ -542,7 +660,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                             exclusive
                             size="small"
                             value={phaseMode}
-                            onChange={(_event, value: 'single' | 'two_phase' | null) => {
+                            onChange={(_event, value: 'single' | 'two_phase' | 'import_json' | null) => {
                                 if (value) {
                                     setPhaseMode(value);
                                 }
@@ -555,16 +673,158 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                             <ToggleButton value="two_phase" aria-label="2 giai đoạn">
                                 2 giai đoạn
                             </ToggleButton>
+                            <ToggleButton value="import_json" aria-label="JSON có sẵn">
+                                JSON có sẵn
+                            </ToggleButton>
                         </ToggleButtonGroup>
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                        {isTwoPhase
-                            ? 'Giai đoạn 1: chia beat (script + whisper). Giai đoạn 2: sinh image_prompt — 2 prompt riêng, model không quên rule với video dài. JSON đã lưu sẽ giữ lại khi refresh, bạn có thể sửa thủ công.'
-                            : '1 prompt duy nhất: chia beat + image_prompt trong cùng 1 lần gửi — chỉ phù hợp script ngắn (test 3 beat).'}
+                        {isImportJson
+                            ? 'JSON có sẵn: bạn đã có content + image_prompt + background_prompt cho từng beat. Hệ thống tự khớp timing bằng Whisper word timing, không cần mốc thời gian trong JSON.'
+                            : isTwoPhase
+                                ? 'Giai đoạn 1: chia beat (script + whisper). Giai đoạn 2: sinh image_prompt — 2 prompt riêng, model không quên rule với video dài. JSON đã lưu sẽ giữ lại khi refresh, bạn có thể sửa thủ công.'
+                                : '1 prompt duy nhất: chia beat + image_prompt trong cùng 1 lần gửi — chỉ phù hợp script ngắn (test 3 beat).'}
                     </Typography>
                 </Box>
 
-                {!isTwoPhase ? (
+                {isImportJson ? (
+                    <Box>
+                        <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }}>
+                            <Typography variant="body2" component="div">
+                                Mỗi phần tử cần <b>content</b> (nguyên văn một đoạn của audio script),{' '}
+                                <b>image_prompt</b> và <b>background_prompt</b>. Hệ thống khớp content với{' '}
+                                <b>audio script</b> (nguồn text chuẩn), còn Whisper chỉ cấp mốc thời gian —{' '}
+                                <b>phải chạy transcribe xong trước</b>. Whisper sai chính tả hoặc thiếu dấu
+                                vẫn chấp nhận được vì so khớp bỏ dấu và tự nội suy phần không neo được.
+                            </Typography>
+                        </Alert>
+                        <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
+                            Tạo beat map mới sẽ <b>xoá toàn bộ HTML / ảnh beat và version cũ</b>.
+                        </Alert>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Typography variant="subtitle1" fontWeight={700} flex={1}>
+                                JSON beat
+                            </Typography>
+                            {importJsonFileName ? (
+                                <Chip size="small" variant="outlined" label={importJsonFileName} />
+                            ) : null}
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<UploadFileIcon />}
+                                onClick={() => importJsonInputRef.current?.click()}
+                            >
+                                Chọn file .json
+                            </Button>
+                            <input
+                                ref={importJsonInputRef}
+                                type="file"
+                                accept="application/json,.json"
+                                hidden
+                                onChange={handlePickImportJsonFile}
+                            />
+                        </Stack>
+                        <TextField
+                            fullWidth
+                            multiline
+                            minRows={12}
+                            maxRows={22}
+                            size="small"
+                            placeholder={'[\n  {\n    "content": "...",\n    "image_prompt": "...",\n    "background_prompt": "..."\n  }\n]'}
+                            value={importJsonText}
+                            onChange={(e) => {
+                                setImportJsonText(e.target.value);
+                                setImportJsonFileName('');
+                                setImportJsonErrors([]);
+                                setImportJsonWarnings([]);
+                            }}
+                            inputProps={{ style: { fontSize: 12, fontFamily: 'monospace' } }}
+                        />
+                        {importJsonPreview && importJsonText.trim() ? (
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                                {importJsonPreview.errors.length === 0 ? (
+                                    <Chip
+                                        size="small"
+                                        color="success"
+                                        icon={<CheckCircleIcon />}
+                                        label={`Đọc được ${importJsonPreview.beatCount} beat`}
+                                    />
+                                ) : (
+                                    <Chip
+                                        size="small"
+                                        color="error"
+                                        icon={<ErrorIcon />}
+                                        label={`${importJsonPreview.errors.length} lỗi trong JSON`}
+                                    />
+                                )}
+                            </Stack>
+                        ) : null}
+                        {[...(importJsonPreview?.errors ?? []), ...importJsonErrors].length > 0 ? (
+                            <Box
+                                sx={{
+                                    mt: 1,
+                                    maxHeight: 160,
+                                    overflow: 'auto',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 1,
+                                    p: 1,
+                                }}
+                            >
+                                {[...(importJsonPreview?.errors ?? []), ...importJsonErrors]
+                                    .slice(0, 15)
+                                    .map((err, idx) => (
+                                        <Typography
+                                            key={`import-json-err-${idx}`}
+                                            variant="caption"
+                                            color="error"
+                                            display="block"
+                                            sx={{ lineHeight: 1.4 }}
+                                        >
+                                            • {err}
+                                        </Typography>
+                                    ))}
+                            </Box>
+                        ) : null}
+                        {importJsonWarnings.length > 0 ? (
+                            <Alert severity="warning" sx={{ mt: 1.5 }}>
+                                <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+                                    Đã lưu beat map, nhưng có {importJsonWarnings.length} cảnh báo về timing
+                                </Typography>
+                                {importJsonWarnings.slice(0, 15).map((warning, idx) => (
+                                    <Typography
+                                        key={`import-json-warn-${idx}`}
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ lineHeight: 1.4 }}
+                                    >
+                                        • {warning}
+                                    </Typography>
+                                ))}
+                            </Alert>
+                        ) : null}
+                        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                            {importJsonWarnings.length > 0 ? (
+                                <Button size="small" variant="outlined" onClick={onClose}>
+                                    Đóng
+                                </Button>
+                            ) : null}
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                startIcon={<SaveIcon />}
+                                loading={importingJson}
+                                disabled={!canSubmitImportJson}
+                                onClick={() => { void handleSubmitImportJson(); }}
+                            >
+                                Tạo beat map ({importJsonPreview?.beatCount ?? 0} beat)
+                            </LoadingButton>
+                        </Stack>
+                    </Box>
+                ) : null}
+
+                {!isTwoPhase && !isImportJson ? (
                     <Box>
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                             <Typography variant="subtitle1" fontWeight={700} flex={1}>
@@ -927,7 +1187,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                     <Alert severity="error">{saveError}</Alert>
                 ) : null}
 
-                {!isTwoPhase ? (
+                {!isTwoPhase && !isImportJson ? (
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                         <Button
                             size="small"

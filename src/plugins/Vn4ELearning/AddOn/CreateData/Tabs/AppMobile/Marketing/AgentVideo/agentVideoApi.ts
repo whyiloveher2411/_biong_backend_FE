@@ -1586,6 +1586,7 @@ export type AvatarPipAnchor =
     | 'center';
 
 export type NarrationSegment = {
+    id?: string;
     index: number;
     text: string;
     word_count: number;
@@ -1594,6 +1595,17 @@ export type NarrationSegment = {
     duration_sec: number;
     tts_engine?: string;
     status?: string;
+    /** 'manual' = file admin upload thủ công, 'tts' = đoạn do TTS sinh. */
+    source?: string;
+    filename?: string;
+};
+
+/** Trạng thái ghép các file MP3 upload thủ công. */
+export type ManualAudioState = {
+    manual_segment_count: number;
+    finalized_at: string;
+    /** Danh sách đoạn đã đổi sau lần ghép gần nhất — cần ghép lại. */
+    dirty: boolean;
 };
 
 /** Mode bước Ảnh beat — sibling agent_video_json.beat_image_fill_mode. */
@@ -1641,6 +1653,7 @@ export type AgentVideoContentResponse = {
     capcut_project_path?: string;
     capcut_last_sync_json?: Record<string, unknown>;
     narration_segments?: NarrationSegment[];
+    manual_audio?: ManualAudioState;
     agent_tts_auto?: boolean;
     agent_auto_fill_beat_html?: boolean;
     agent_gemini_open_browser?: boolean;
@@ -2224,6 +2237,42 @@ export async function uploadAgentAudioMp3(shortVideoId: number, file: File): Pro
         throw new Error(response.statusText || 'Upload thất bại');
     }
     return result;
+}
+
+export type ManualAudioSegmentsResponse = JsonResponse & {
+    narration_segments?: NarrationSegment[];
+    manual_audio?: ManualAudioState;
+};
+
+/** Lưu thứ tự / xóa đoạn MP3 upload thủ công — gửi danh sách id còn lại theo thứ tự. */
+export async function saveManualAudioSegments(
+    shortVideoId: number,
+    segmentIds: string[],
+): Promise<ManualAudioSegmentsResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-manual-audio-segments',
+        shortVideoBody(shortVideoId, { segment_ids: segmentIds }),
+    ) as Promise<ManualAudioSegmentsResponse>;
+}
+
+/** Ghép các đoạn MP3 thủ công (0,3s giữa 2 đoạn) và hoàn thành bước Duyệt / TTS. */
+export async function finalizeManualAgentAudio(
+    shortVideoId: number,
+): Promise<ManualAudioSegmentsResponse & {
+    segment_count?: number;
+    duration_sec?: number;
+    url?: string;
+    full_auto_pipeline?: FullAutoPipelineSummary;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/finalize-manual-agent-audio',
+        shortVideoBody(shortVideoId),
+    ) as Promise<ManualAudioSegmentsResponse & {
+        segment_count?: number;
+        duration_sec?: number;
+        url?: string;
+        full_auto_pipeline?: FullAutoPipelineSummary;
+    }>;
 }
 
 export async function uploadAgentVisualImage(shortVideoId: number, file: File): Promise<JsonResponse & {
@@ -3293,6 +3342,38 @@ export async function fetchBeatVisualPrompt(
         beat_total?: number;
         expected_ids?: string[];
         all?: boolean;
+    }>;
+}
+
+/**
+ * Chia beat từ JSON user đã có sẵn (content + image_prompt + background_prompt).
+ * Timing lấy từ Whisper word timing ở backend — JSON không cần mốc thời gian.
+ */
+export async function createBeatMapFromJson(
+    shortVideoId: number,
+    jsonText: string,
+): Promise<JsonResponse & {
+    beat_count?: number;
+    errors?: string[];
+    warnings?: string[];
+    matched_beats?: number;
+    anchor_ratio?: number;
+    beat_map?: unknown;
+    full_auto_pipeline?: unknown;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/import-html-workflow/create-beat-map-from-json',
+        shortVideoBody(shortVideoId, {
+            beats_json: jsonText,
+        }),
+    ) as Promise<JsonResponse & {
+        beat_count?: number;
+        errors?: string[];
+        warnings?: string[];
+        matched_beats?: number;
+        anchor_ratio?: number;
+        beat_map?: unknown;
+        full_auto_pipeline?: unknown;
     }>;
 }
 

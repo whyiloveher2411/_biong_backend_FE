@@ -849,6 +849,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     shortVideoId={shortVideoId}
                     agentSourceFormat={state.agentSourceFormat}
                     onSaveBeatMapManual={state.handleManualBeatDivisionSave}
+                    onImportBeatMapJson={state.handleImportBeatMapJson}
                     audioScript={state.audioScript}
                     onSaveScriptManual={state.handleManualScriptCreateSave}
                     audioScriptTtsReading={state.audioScriptTtsReading}
