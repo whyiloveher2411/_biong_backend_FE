@@ -87,6 +87,11 @@ export type BeatBackgroundSample = {
 export type BeatRegion = {
     id: string;
     name?: string;
+    /**
+     * Lớp ảnh (BeatImageLayer.id) mà vùng này được vẽ trên. Rỗng/thiếu = lớp
+     * ảnh đầu tiên của beat (beat cũ chỉ có 1 ảnh → không cần field này).
+     */
+    layer_id?: string | null;
     /** Group timeline UI (không ảnh hưởng logic render mask). */
     group_id?: string | null;
     /** Thứ tự hiển thị trong group (tùy chọn). */
@@ -328,10 +333,31 @@ export function attentionEffectTimelineLabel(type: AttentionEffectKey | null | u
     return ATTENTION_EFFECT_OPTIONS.find((opt) => opt.value === key)?.timelineLabel || 'chú ý';
 }
 
+/**
+ * LỚP ẢNH NGUỒN trong 1 beat — mỗi lớp là 1 ảnh full-frame cùng canvas, vẽ vùng
+ * (region) được trên chính ảnh đó. Các lớp THAY NHAU theo slot thời gian, trong
+ * khi custom background của beat giữ nguyên xuyên suốt (không nháy nền).
+ * Beat cũ (1 ảnh) được resolve lazy thành đúng 1 lớp — dữ liệu đã lưu không đổi.
+ */
+export type BeatImageLayer = {
+    id: string;
+    name?: string;
+    image_url: string;
+    /** Slot thời gian trên timeline beat (scene-relative sec). */
+    start_sec: number;
+    end_sec: number;
+    /** Thứ tự hiển thị (nhỏ = trước). */
+    order?: number;
+    /** Override cách đưa nội dung vào cho riêng lớp này ('' = theo beat). */
+    photo_place_mode?: 'draw' | 'drag' | 'instant' | string;
+};
+
 /** Ảnh thêm upload tự do trên canvas beat. */
 export type BeatImageOverlay = {
     id: string;
     name?: string;
+    /** Lớp ảnh chứa overlay này. Rỗng = lớp ảnh đầu tiên. */
+    layer_id?: string | null;
     /** Group timeline UI (không ảnh hưởng logic render). */
     group_id?: string | null;
     /** Thứ tự hiển thị trong group (tùy chọn). */
@@ -423,6 +449,9 @@ export function normalizeBeatImageOverlay(raw: unknown): BeatImageOverlay | null
     return {
         id,
         name: typeof item.name === 'string' ? item.name : undefined,
+        layer_id: typeof item.layer_id === 'string' && item.layer_id.trim()
+            ? item.layer_id.trim()
+            : null,
         group_id: typeof item.group_id === 'string' && item.group_id.trim()
             ? item.group_id.trim()
             : null,
@@ -1180,6 +1209,18 @@ export type AgentWhiteboardBeatOverride = {
      * vì chỉ lộ vùng cắt. Vùng vẫn chỉ cắt trên ảnh beat.
      */
     beat_image_over_background?: boolean;
+    /**
+     * NHIỀU LỚP ẢNH trong beat — các ảnh thay nhau theo slot thời gian, dùng
+     * chung 1 custom background. Rỗng/thiếu = beat 1 ảnh như trước (resolve
+     * lazy thành 1 lớp qua `resolveBeatImageLayers`).
+     */
+    image_layers?: BeatImageLayer[];
+    /**
+     * Kế hoạch slot lớp ảnh (beat-relative) do bước chia beat theo JSON sinh từ
+     * timing lời thoại con — tồn tại TRƯỚC khi có ảnh, dùng thay việc chia đều
+     * khi ảnh được lưu về sau.
+     */
+    image_layer_slots?: Array<{ start_sec: number; end_sec: number }>;
     /** Vùng chọn hành động (region tool) — mỗi vùng vẽ tay hoặc đưa vào theo script. */
     regions?: BeatRegion[];
     /** Ảnh thêm upload tự do trên canvas beat. */
@@ -2849,6 +2890,8 @@ export async function autoSelectAgentWhiteboardRegion(
         alpha?: number;
         /** Chọn candidate index (khi nhiều vật). */
         candidate?: number;
+        /** Lớp ảnh đang mở (beat nhiều lớp ảnh) — chọn vật trên đúng ảnh lớp đó. */
+        layerId?: string;
     },
     keepBackground = false,
 ): Promise<JsonResponse & AutoSelectRegionResult> {
@@ -2857,6 +2900,9 @@ export async function autoSelectAgentWhiteboardRegion(
         mode,
         keep_background: keepBackground ? '1' : '0',
     };
+    if (payload.layerId) {
+        body.layer_id = payload.layerId;
+    }
     if (mode === 'click' && payload.point) {
         body.point = `${payload.point[0]},${payload.point[1]}`;
     }
@@ -2914,6 +2960,8 @@ export async function sam2AutoRegionsAgentWhiteboard(
         rect: [number, number, number, number];
         poly?: [number, number][];
         engine?: AutoRegionsEngine;
+        /** Lớp ảnh đang mở (beat nhiều lớp ảnh). */
+        layerId?: string;
     },
 ): Promise<JsonResponse & Sam2AutoRegionsResult> {
     const engine: AutoRegionsEngine = options.engine === 'sam2' ? 'sam2' : 'birefnet';
@@ -2931,6 +2979,9 @@ export async function sam2AutoRegionsAgentWhiteboard(
             rect: options.rect.join(','),
             access_token: token,
         };
+        if (options.layerId) {
+            body.layer_id = options.layerId;
+        }
         if (options.poly && options.poly.length >= 3) {
             body.poly = options.poly.map((pt) => `${pt[0]},${pt[1]}`).join(';');
         }

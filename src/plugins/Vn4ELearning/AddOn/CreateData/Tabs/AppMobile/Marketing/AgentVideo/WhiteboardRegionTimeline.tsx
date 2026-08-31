@@ -22,7 +22,8 @@ import DragHandleIcon from '@mui/icons-material/DragHandle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
-import type { BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
+import type { BeatImageLayer, BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
+import { WHITEBOARD_MIN_LAYER_SLOT_SEC } from './whiteboardImageLayers';
 import { attentionEffectTimelineLabel, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, isOverlayInstantEntry, isRegionPlaceInstantEntry, renderPlaceEffectAfterSec } from './agentVideoApi';
 import {
     regionTimingPatchFromDrag,
@@ -117,6 +118,15 @@ type Props = {
     /** Xóa tất cả item trên timeline (vùng + ảnh thêm + hiệu ứng). */
     onRequestDeleteAllTimelineItems?: () => void;
     /** Đang xem bên trong 1 group — thay Replay bằng Quay lại. */
+    /**
+     * Lớp ảnh của beat (multi-image per beat) — hiện thành hàng slot trên cùng.
+     * <= 1 lớp: không hiện hàng nào (beat 1 ảnh như trước).
+     */
+    imageLayers?: BeatImageLayer[];
+    activeLayerId?: string;
+    onSelectLayer?: (layerId: string) => void;
+    /** Commit slot sau khi thả chuột (kéo liên tục chỉ preview trong timeline). */
+    onCommitLayerSlots?: (layers: BeatImageLayer[]) => void;
     timelineViewMode?: 'main' | 'group';
     onExitGroupView?: () => void;
     /** Tách group đang xem — mọi member mất group_id, về timeline chính. */
@@ -131,7 +141,7 @@ type DragState = {
     startX: number;
     origStartSec: number;
     origEndSec: number;
-    kind: 'region' | 'effect' | 'attention' | 'overlay' | 'overlay_attention';
+    kind: 'region' | 'effect' | 'attention' | 'overlay' | 'overlay_attention' | 'layer';
     origZoomInEndSec?: number;
     origHoldEndSec?: number;
     pendingEffectPatch?: Partial<BeatTimelineEffect>;
@@ -143,6 +153,8 @@ const ROW_H = 26;
 const AUDIO_ROW_H = 30;
 const LABEL_W = 118;
 const MIN_DUR = 1.0;
+/** Màu hàng slot lớp ảnh (multi-image per beat). */
+const LAYER_ROW_COLOR = '#ffb300';
 /** Thu gọn: 5 dòng (1 audio + 4 track). Mở rộng: 10 dòng (1 audio + 9 track). */
 const MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED = 5;
 const MAX_VISIBLE_TIMELINE_ROWS_EXPANDED = 10;
@@ -212,6 +224,10 @@ export default function WhiteboardRegionTimeline({
     onChangeOverlay,
     onSelectOverlay,
     multiSelectedKeys = [],
+    imageLayers = [],
+    activeLayerId = '',
+    onSelectLayer,
+    onCommitLayerSlots,
     onRequestDeleteRegion,
     onRequestDeleteOverlay,
     onRequestDeleteEffect,
@@ -237,6 +253,8 @@ export default function WhiteboardRegionTimeline({
     const [ungroupConfirmOpen, setUngroupConfirmOpen] = React.useState(false);
     /** false = thu gọn (max 5 dòng), true = mở rộng (max 10 dòng). Persist localStorage. */
     const [timelineExpanded, setTimelineExpanded] = React.useState(readStoredTimelineExpanded);
+    /** Slot lớp ảnh đang kéo (preview) — commit khi thả chuột. */
+    const [layerSlotDraft, setLayerSlotDraft] = React.useState<BeatImageLayer[] | null>(null);
 
     React.useEffect(() => {
         if (timelineViewMode !== 'group') {
@@ -501,6 +519,17 @@ export default function WhiteboardRegionTimeline({
         if (s < minStart) s = minStart;
         if (e < minStart) e = minStart;
         if (e <= s) e = Math.min(duration, s + MIN_DUR);
+        // Beat nhiều lớp ảnh: vùng chỉ tồn tại trong slot của lớp chứa nó.
+        if (hasLayerRows) {
+            const slot = effectiveLayers.find((layer) => layer.id === activeLayerId);
+            if (slot && slot.end_sec > slot.start_sec) {
+                s = Math.max(slot.start_sec, Math.min(slot.end_sec, s));
+                e = Math.max(slot.start_sec, Math.min(slot.end_sec, e));
+                if (e <= s) {
+                    e = Math.min(slot.end_sec, s + MIN_DUR);
+                }
+            }
+        }
         onChangeRegion(id, regionTimingPatchFromDrag(s, e));
     };
 
@@ -533,6 +562,74 @@ export default function WhiteboardRegionTimeline({
 
     const commitOverlayTiming = (id: string, start: number, end: number) => {
         onChangeOverlay?.(id, overlayTimingPatchFromDrag(start, end, duration));
+    };
+
+    /**
+     * SLOT LỚP ẢNH: các slot lấp kín beat window liên tiếp, không chồng nhau —
+     * kéo mốc của lớp nào thì lớp kề bị đẩy theo để giữ liền mạch.
+     */
+    const effectiveLayers = layerSlotDraft || imageLayers;
+    const hasLayerRows = effectiveLayers.length > 1;
+
+    const computeLayerSlots = (
+        layerId: string,
+        handle: 'start' | 'end' | 'body',
+        start: number,
+        end: number,
+    ): BeatImageLayer[] | null => {
+        const index = imageLayers.findIndex((layer) => layer.id === layerId);
+        if (index < 0) {
+            return null;
+        }
+        const next = imageLayers.map((layer) => ({ ...layer }));
+        const min = WHITEBOARD_MIN_LAYER_SLOT_SEC;
+        if (handle === 'start' || handle === 'body') {
+            if (index === 0) {
+                next[0].start_sec = 0;
+            } else {
+                const lower = next[index - 1].start_sec + min;
+                const upper = next[index].end_sec - min;
+                const value = Math.max(lower, Math.min(upper, start));
+                next[index].start_sec = value;
+                next[index - 1].end_sec = value;
+            }
+        }
+        if (handle === 'end' || handle === 'body') {
+            if (index === next.length - 1) {
+                next[index].end_sec = duration;
+            } else {
+                const lower = next[index].start_sec + min;
+                const upper = next[index + 1].end_sec - min;
+                const value = Math.max(lower, Math.min(upper, end));
+                next[index].end_sec = value;
+                next[index + 1].start_sec = value;
+            }
+        }
+        return next;
+    };
+
+    const handleLayerPointerDown = (
+        e: React.PointerEvent,
+        layerId: string,
+        handle: 'start' | 'end' | 'body',
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const layer = imageLayers.find((item) => item.id === layerId);
+        if (!layer) return;
+        onSelectLayer?.(layerId);
+        if (handle === 'body') {
+            return;
+        }
+        dragRef.current = {
+            id: layerId,
+            handle,
+            kind: 'layer',
+            startX: e.clientX,
+            origStartSec: layer.start_sec,
+            origEndSec: layer.end_sec,
+        };
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     };
 
     const handleAttentionPointerDown = (
@@ -697,6 +794,13 @@ export default function WhiteboardRegionTimeline({
             );
         }
         else if (drag.kind === 'overlay') commitOverlayTiming(drag.id, s, end);
+        else if (drag.kind === 'layer') {
+            const handle = drag.handle === 'start' || drag.handle === 'end' ? drag.handle : 'body';
+            const next = computeLayerSlots(drag.id, handle, s, end);
+            if (next) {
+                setLayerSlotDraft(next);
+            }
+        }
         else commit(drag.id, s, end);
     };
 
@@ -704,6 +808,12 @@ export default function WhiteboardRegionTimeline({
         const drag = dragRef.current;
         if (drag?.kind === 'effect' && drag.pendingEffectPatch && onCommitEffect) {
             onCommitEffect(drag.id, drag.pendingEffectPatch);
+        }
+        if (drag?.kind === 'layer') {
+            if (layerSlotDraft) {
+                onCommitLayerSlots?.(layerSlotDraft);
+            }
+            setLayerSlotDraft(null);
         }
         if (e) (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
         dragRef.current = null;
@@ -779,7 +889,11 @@ export default function WhiteboardRegionTimeline({
         }
     };
 
-    const trackRowCount = orderedRegions.length + orderedEffects.length + imageOverlays.length;
+    const layerRowCount = hasLayerRows ? effectiveLayers.length : 0;
+    const trackRowCount = layerRowCount
+        + orderedRegions.length
+        + orderedEffects.length
+        + imageOverlays.length;
     const maxVisibleRows = timelineExpanded
         ? MAX_VISIBLE_TIMELINE_ROWS_EXPANDED
         : MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED;
@@ -1065,6 +1179,39 @@ export default function WhiteboardRegionTimeline({
                         }}
                     >
                     <Box sx={{ width: LABEL_W, flexShrink: 0, borderRight: '1px solid', borderColor: 'divider', bgcolor: 'rgba(0,0,0,0.04)' }}>
+                        {/* Slot lớp ảnh — chỉ hiện khi beat có nhiều lớp */}
+                        {hasLayerRows ? effectiveLayers.map((layer, index) => {
+                            const isActive = layer.id === activeLayerId;
+                            return (
+                                <Box
+                                    key={`layer_label_${layer.id}`}
+                                    onClick={() => onSelectLayer?.(layer.id)}
+                                    sx={{
+                                        height: ROW_H,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        px: 0.5,
+                                        borderTop: '1px solid',
+                                        borderColor: 'divider',
+                                        borderLeft: `3px solid ${LAYER_ROW_COLOR}`,
+                                        bgcolor: isActive ? `${LAYER_ROW_COLOR}26` : 'transparent',
+                                        cursor: 'pointer',
+                                    }}
+                                    title={`Lớp ảnh ${index + 1} — click để mở lớp này trên canvas`}
+                                >
+                                    <Typography variant="caption" sx={{
+                                        fontSize: 10.5,
+                                        fontWeight: 800,
+                                        color: '#111',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}>
+                                        {layer.name || `Lớp ảnh ${index + 1}`}
+                                    </Typography>
+                                </Box>
+                            );
+                        }) : null}
                         {/* Các dòng vùng */}
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);
@@ -1241,6 +1388,82 @@ export default function WhiteboardRegionTimeline({
                         onPointerUp={endDrag}
                         onPointerCancel={endDrag}
                     >
+                        {/* Dòng slot lớp ảnh — kéo mốc để đổi lúc ảnh xuất hiện */}
+                        {hasLayerRows ? effectiveLayers.map((layer, index) => {
+                            const isActive = layer.id === activeLayerId;
+                            const left = secToPct(layer.start_sec);
+                            const width = Math.max(0.01, secToPct(layer.end_sec) - left);
+                            return (
+                                <Box
+                                    key={`layer_row_${layer.id}`}
+                                    sx={{
+                                        position: 'relative',
+                                        height: ROW_H,
+                                        borderTop: '1px solid',
+                                        borderColor: 'divider',
+                                    }}
+                                >
+                                    <Box
+                                        onPointerDown={(e) => handleLayerPointerDown(e, layer.id, 'body')}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 4,
+                                            bottom: 4,
+                                            left: `${left}%`,
+                                            width: `${width}%`,
+                                            borderRadius: 0.75,
+                                            bgcolor: isActive ? `${LAYER_ROW_COLOR}66` : `${LAYER_ROW_COLOR}33`,
+                                            border: '1px solid',
+                                            borderColor: LAYER_ROW_COLOR,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            px: 0.5,
+                                            cursor: 'pointer',
+                                            overflow: 'hidden',
+                                        }}
+                                        title={`Lớp ảnh ${index + 1}: ${layer.start_sec.toFixed(2)}s → ${layer.end_sec.toFixed(2)}s`}
+                                    >
+                                        <Typography variant="caption" sx={{ fontSize: 9.5, fontWeight: 700, color: '#111', whiteSpace: 'nowrap' }}>
+                                            {`Ảnh ${index + 1} · ${layer.start_sec.toFixed(1)}–${layer.end_sec.toFixed(1)}s`}
+                                        </Typography>
+                                    </Box>
+                                    {index > 0 ? (
+                                        <Box
+                                            onPointerDown={(e) => handleLayerPointerDown(e, layer.id, 'start')}
+                                            sx={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                bottom: 2,
+                                                left: `calc(${left}% - ${HANDLE_W / 2}px)`,
+                                                width: HANDLE_W,
+                                                cursor: 'col-resize',
+                                                bgcolor: LAYER_ROW_COLOR,
+                                                borderRadius: 0.5,
+                                                opacity: 0.9,
+                                            }}
+                                            title="Kéo để đổi thời điểm ảnh này xuất hiện"
+                                        />
+                                    ) : null}
+                                    {index < effectiveLayers.length - 1 ? (
+                                        <Box
+                                            onPointerDown={(e) => handleLayerPointerDown(e, layer.id, 'end')}
+                                            sx={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                bottom: 2,
+                                                left: `calc(${left + width}% - ${HANDLE_W / 2}px)`,
+                                                width: HANDLE_W,
+                                                cursor: 'col-resize',
+                                                bgcolor: LAYER_ROW_COLOR,
+                                                borderRadius: 0.5,
+                                                opacity: 0.9,
+                                            }}
+                                            title="Kéo để đổi thời điểm ảnh kế tiếp xuất hiện"
+                                        />
+                                    ) : null}
+                                </Box>
+                            );
+                        }) : null}
                         {/* Dòng từng vùng — dải màu + tay kéo */}
                         {orderedRegions.map((region) => {
                             const index = regions.findIndex((r) => r.id === region.id);

@@ -91,6 +91,104 @@ export const WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS = WHITEBOARD_IMAGE_PRO
     (key) => key !== 'background_prompt',
 );
 
+/**
+ * Key TÙY CHỌN cho beat nhiều lớp ảnh: `object_prompt_2`, `object_prompt_3`, …
+ * mỗi key mô tả 1 object layer THÊM, dùng chung `background_prompt`. Beat chỉ 1
+ * ảnh thì không có key nào — beat-map cũ không đổi. Số lớp KHÔNG giới hạn.
+ */
+
+/** Key prompt của object layer thứ `layerIndex` (0-based) — lớp 0 dùng `subject`. */
+export function whiteboardObjectLayerPromptKey(layerIndex: number): string {
+    return `object_prompt_${Math.max(1, Math.floor(layerIndex)) + 1}`;
+}
+
+/** `object_prompt_N` (N >= 2) — số lớp ảnh mỗi beat KHÔNG giới hạn. */
+export function isWhiteboardObjectLayerPromptKey(key: string): boolean {
+    const matched = /^object_prompt_(\d+)$/.exec(key);
+    return matched != null && Number(matched[1]) >= 2;
+}
+
+/** Số object layer mà prompt yêu cầu = 1 (subject) + số `object_prompt_N` non-empty. */
+export function whiteboardObjectLayerCountFromPrompt(record: Record<string, unknown> | null | undefined): number {
+    if (!record) {
+        return 1;
+    }
+    const extra = Object.keys(record).filter(
+        (key) => isWhiteboardObjectLayerPromptKey(key) && String(record[key] ?? '').trim() !== '',
+    ).length;
+    return 1 + extra;
+}
+
+/**
+ * Safe-area cho beat NHIỀU lớp ảnh: cùng ràng buộc nhưng nói đúng "mọi ảnh object
+ * IMAGE 1…N" và "ảnh background IMAGE N+1" thay vì IMAGE 1 / IMAGE 2.
+ */
+export function whiteboardMultiLayerSafeAreaRule(objectLayerCount: number): string {
+    const count = Math.max(2, Math.floor(objectLayerCount));
+    const total = count + 1;
+    return (
+        `CENTRAL SAFE AREA (applies to ALL ${total} images): compose everything inside the central 80% of the frame — ` +
+        'leave a completely empty margin of at least 10% of the frame width and height on all four sides. ' +
+        `In every object-layer image (IMAGE 1…${count}) every object cluster and every text label MUST sit inside ` +
+        'that central safe area, grouped toward the middle as one balanced centered composition; ' +
+        'do NOT push clusters into the corners, do NOT spread them out to the borders, ' +
+        'nothing may touch, overlap or cross the frame edges. ' +
+        'Keep the gaps between clusters moderate — just wide enough to crop each cluster separately — ' +
+        'instead of maximizing distance between them. ' +
+        `In the background image (IMAGE ${total}) the decorative motifs stay in that outer margin and the corners, ` +
+        'so they remain visible around every object layer and are never covered by them.'
+    );
+}
+
+/** Safe-area đúng cho prompt: beat nhiều lớp dùng bản N ảnh, beat 1 ảnh giữ bản cũ. */
+export function whiteboardSafeAreaRuleForPrompt(
+    record: Record<string, unknown> | null | undefined,
+): string {
+    const objectLayers = whiteboardObjectLayerCountFromPrompt(record);
+    return objectLayers > 1
+        ? whiteboardMultiLayerSafeAreaRule(objectLayers)
+        : WHITEBOARD_CENTRAL_SAFE_AREA_RULE;
+}
+
+/**
+ * Rule output đúng cho prompt: beat có `object_prompt_N` → N object + 1 background,
+ * beat 1 ảnh → rule 2 ảnh. Mirror ..._whiteboard_output_rule_for_prompt() (PHP).
+ */
+export function whiteboardOutputRuleForPrompt(
+    record: Record<string, unknown> | null | undefined,
+): string {
+    const objectLayers = whiteboardObjectLayerCountFromPrompt(record);
+    return objectLayers > 1
+        ? whiteboardMultiLayerOutputRule(objectLayers)
+        : WHITEBOARD_DUAL_LAYER_OUTPUT_RULE;
+}
+
+/** Rule output khi beat cần N object layer + 1 background (N >= 2). */
+export function whiteboardMultiLayerOutputRule(objectLayerCount: number): string {
+    const count = Math.max(2, Math.floor(objectLayerCount));
+    const total = count + 1;
+    const objectList = Array.from({ length: count }, (_, i) => `IMAGE ${i + 1}`).join(', ');
+    const mapping = Array.from({ length: count - 1 }, (_, i) => `IMAGE ${i + 2} follows "object_prompt_${i + 2}"`)
+        .join(', ');
+    return (
+        `OUTPUT EXACTLY ${total} SEPARATE IMAGES for this beat, in this order. ` +
+        `${objectList} (object layers): ${count} DIFFERENT object layers of the same beat — ` +
+        `IMAGE 1 follows "subject"/"action"/"text_overlay", ${mapping}. ` +
+        'They are shown one after another over the SAME background, ' +
+        'so they must share the exact same style, palette, scale and framing, and each must be a real PNG ' +
+        'with a working alpha channel (RGBA), 100% fully transparent between and around the clusters — ' +
+        'no glow, no haze, no gradient, no vignette, no background plate baked in. ' +
+        'ALL on-screen text from "text_overlay" belongs to the object layers only — ' +
+        `IMAGE ${total} must contain no text, no letters and no numbers at all. ` +
+        `IMAGE ${total} (background layer): a single fully designed background plate following ` +
+        '"background_prompt", shared by every object layer above — decorative motifs at the four CORNERS ' +
+        'and along the EDGES, calm low-contrast center, and NO subject, no text, no letters, no numbers. ' +
+        `All ${total} images MUST share the exact same aspect ratio and framing. ` +
+        `${whiteboardMultiLayerSafeAreaRule(count)} ` +
+        `Returning fewer than ${total} images is an INVALID response — regenerate until all are provided.`
+    );
+}
+
 /** Nguồn duy nhất của ví dụ image_prompt (mỗi style) — dẫn xuất cả 2 bản: escaped (block text) + raw JSON (schema example). */
 const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record<WhiteboardImagePromptJsonKey, string>> = {
     hybrid: {
@@ -136,9 +234,17 @@ const WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS: Record<WhiteboardGenStyle, Record
     },
 };
 
+/** Ví dụ 2 lớp object thêm — đưa vào schema mẫu để AI luôn trả beat nhiều ảnh. */
+export const WHITEBOARD_MULTI_LAYER_EXAMPLE_LAYERS: Record<string, string> = {
+    object_prompt_2:
+        'Same style and scale: the fatty liver now shows inflamed red patches spreading through the tissue, isolated clusters on transparent background, label "VIÊM GAN"',
+    object_prompt_3:
+        'Same style and scale: the liver hardens into pale fibrous scar tissue while damaged cells break apart, isolated clusters on transparent background, label "MÔ XƠ HÓA"',
+};
+
 /** Bản escaped `\"` — dùng trong block text (LLM copy thẳng vào beat-map JSON). */
 const escapeJsonQuotesForPrompt = (obj: Record<string, string>): string =>
-    JSON.stringify(obj, null, 2).replace(/"/g, '\\"');
+    JSON.stringify({ ...obj, ...WHITEBOARD_MULTI_LAYER_EXAMPLE_LAYERS }, null, 2).replace(/"/g, '\\"');
 
 export const WHITEBOARD_HYBRID_IMAGE_PROMPT_EXAMPLE = escapeJsonQuotesForPrompt(WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS.hybrid);
 
@@ -279,10 +385,24 @@ const IMAGE_PROMPT_JSON_FIELD_LINES = [
     '- **`background_prompt`**: mô tả **background plate CÓ TRANG TRÍ** cho IMAGE 2 (English, ~10–30 từ) — **đúng chất liệu/bản sắc của style clip** + **motif trang trí ở 4 góc và dọc viền** (mảnh giấy xé, washi tape, halftone patch, đường kẻ, stamp, vệt mực, nét hatching, khung viền) + texture phủ toàn khung; **vùng trung tâm giữ nhạt/low-contrast** để object layer đè lên vẫn đọc được; **cấm nền trắng trơn / nền phẳng trống**; **cấm** subject/hero, cơ quan, phân tử, nhân vật, icon có nghĩa, mũi tên, callout, chữ, số.',
 ];
 
+/**
+ * Rule key `object_prompt_N` cho beat nhiều lớp ảnh — mirror
+ * marketing_short_video_import_html_beat_division_whiteboard_image_prompt_json_rules (PHP).
+ */
+export const WHITEBOARD_MULTI_LAYER_PROMPT_KEY_RULES = [
+    '- **`object_prompt_2`, `object_prompt_3`, … — BẮT BUỘC (beat NHIỀU LỚP ẢNH, mặc định của clip này)**: mỗi beat phải có **NHIỀU ảnh object hiện lần lượt trên CÙNG 1 background** để video sinh động — **beat chỉ 1 ảnh là INVALID** (ngoại lệ duy nhất: beat **< 2s**). Lớp 1 = `subject` + `action` + `text_overlay`; mỗi lớp thêm = 1 key `object_prompt_N` (N đếm từ 2, **liên tục, không nhảy số**).',
+    '  - **Số lớp (công thức bắt buộc)**: `layers = clamp(round(durationSec / 2.5), 2, 6)` — vd beat 5s → 2 lớp, 7,5s → 3 lớp, 10s → 4 lớp, 15s+ → 6 lớp. Beat có nhiều câu hơn số này → gộp câu gần nhau; ít câu hơn → tách theo **mệnh đề / bước diễn tiến** của câu (cấm giảm số lớp xuống 1).',
+    '  - Mỗi `object_prompt_N` là **string** (English, ~15–45 từ): chủ thể + hành động + label chữ của **đúng đoạn lời thoại tương ứng** (đọc theo thứ tự trong `phrase_anchor`), **cùng style/palette/scale/framing** với lớp 1, nền trong suốt, các cluster tách rời.',
+    '  - **Chỉ 1 `background_prompt` dùng chung cho mọi lớp** — **cấm** `background_prompt_2`, cấm mô tả nền riêng trong `object_prompt_N`.',
+    '  - Các lớp phải **kể tiếp nhau theo mạch lời thoại** (bước 1 → bước 2 → hệ quả…): **cấm** lớp trùng lặp/đổi vài chữ; label chữ chia theo lớp — mỗi lớp lấy 1–2 label của `text_overlay`, **cấm** nhồi toàn bộ label vào 1 lớp.',
+    '  - **timing từng lớp do engine tự chia** đều theo lời thoại beat — **cấm** ghi giây/thời lượng/thứ tự thời gian vào prompt.',
+];
+
 const buildImagePromptJsonRules = (example: string): string[] => [
     '- **`image_prompt` = JSON object THẬT** trong beat-map (KHÔNG phải string escape) — bắt buộc đủ **7 key** dưới đây (không thêm bớt, không đổi tên):',
     ...IMAGE_PROMPT_JSON_FIELD_LINES.map((line) => `  ${line}`),
-    '- **Cấm** thêm các key khác (purpose/context/mood/style/aspect/text_language/voice_content/safe_area/policy_safe/output_images) — engine tự chèn style, tỉ lệ khung hình, rule ngôn ngữ, lời thoại beat (voice_content), safe-area và rule xuất 2 ảnh (output_images) khi gửi sinh ảnh; AI chỉ viết 7 key trên.',
+    ...WHITEBOARD_MULTI_LAYER_PROMPT_KEY_RULES,
+    '- **Cấm** thêm các key khác (purpose/context/mood/style/aspect/text_language/voice_content/safe_area/policy_safe/output_images) — engine tự chèn style, tỉ lệ khung hình, rule ngôn ngữ, lời thoại beat (voice_content), safe-area và rule số ảnh phải xuất (output_images) khi gửi sinh ảnh; AI chỉ viết 7 key trên (+ `object_prompt_N` khi beat nhiều lớp).',
     '- **CẤM placeholder viết tắt**: mỗi field phải là câu/cụm mô tả đầy đủ (tối thiểu ~2–3 từ, không phải 1 chữ cái như `D`, `C`, `M`, `B`); `text_overlay` phải là label trọn cụm từ trong `phrase_anchor`, **cấm** cắt cụt 1 từ (vd `Mục`), **cấm** 1 ký tự.',
     '- Ví dụ JSON image_prompt (object thật — KHÔNG escape, KHÔNG bọc trong string):',
     '```json',
@@ -423,8 +543,8 @@ export function appendBeatImageStyleSuffix(
                 ...parsed,
                 style: suffix,
                 text_language: textLangRule,
-                safe_area: WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
-                output_images: WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
+                safe_area: whiteboardSafeAreaRuleForPrompt(parsed),
+                output_images: whiteboardOutputRuleForPrompt(parsed),
             };
             if (voice) {
                 next.voice_content = voice;
@@ -484,15 +604,16 @@ export function buildBeatDivisionWhiteboardOutputRules(
 ): string[] {
     const style = resolveWhiteboardGenStyle(genStyle);
     const outputRule: Record<WhiteboardGenStyle, string> = {
-        hybrid: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo hybrid editorial collage (photorealistic cutout hero + layered fragments + thick marker annotations, selective red accents); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
-        collage_art: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo collage art (magazine-cutout hero torn/deckled on cream paper, layered fragments); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
-        vox: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo vox-style editorial documentary (1 hero cutout + layered editorial composition + scale contrast; annotation theo Subtle annotation layer; **cấm** grid/chart/question marks/circled emphasis/whiteboard; **cấm** cảnh điều tra/tòa án); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
-        courtroom_sketch: '- `image_prompt`: **JSON object đủ 7 key** theo **Visual mode — image_prompt** above; scene/subject theo courtroom sketch (**colored pencil/pastel/watercolor on rough paper** + loose strokes + muted colors + dramatic moment); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        hybrid: '- `image_prompt`: **JSON object đủ 7 key + `object_prompt_2..N` (bắt buộc nhiều lớp ảnh, beat <2s mới được 1 ảnh)** theo **Visual mode — image_prompt** above; scene/subject theo hybrid editorial collage (photorealistic cutout hero + layered fragments + thick marker annotations, selective red accents); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        collage_art: '- `image_prompt`: **JSON object đủ 7 key + `object_prompt_2..N` (bắt buộc nhiều lớp ảnh, beat <2s mới được 1 ảnh)** theo **Visual mode — image_prompt** above; scene/subject theo collage art (magazine-cutout hero torn/deckled on cream paper, layered fragments); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        vox: '- `image_prompt`: **JSON object đủ 7 key + `object_prompt_2..N` (bắt buộc nhiều lớp ảnh, beat <2s mới được 1 ảnh)** theo **Visual mode — image_prompt** above; scene/subject theo vox-style editorial documentary (1 hero cutout + layered editorial composition + scale contrast; annotation theo Subtle annotation layer; **cấm** grid/chart/question marks/circled emphasis/whiteboard; **cấm** cảnh điều tra/tòa án); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
+        courtroom_sketch: '- `image_prompt`: **JSON object đủ 7 key + `object_prompt_2..N` (bắt buộc nhiều lớp ảnh, beat <2s mới được 1 ảnh)** theo **Visual mode — image_prompt** above; scene/subject theo courtroom sketch (**colored pencil/pastel/watercolor on rough paper** + loose strokes + muted colors + dramatic moment); **text_overlay: 3–6 label nối `|`, mỗi label 1–5 từ** (vd "GAN NHIỄM MỠ | MỠ TÍCH TỤ | VIÊM GAN | MÔ XƠ HÓA"), label đầu là keyword từ `phrase_anchor`, các label sau làm rõ thuật ngữ/hệ quả, cấm bịa số liệu; tổng ≤ ~400 từ; no watermark.',
     };
     return [
         '- **RELEVANCE PRIORITY (cao nhất)**: mỗi `image_prompt` minh họa trực tiếp **`phrase_anchor` của beat này** + nhất quán **Title video** — ưu tiên `phrase_anchor`; có thể dùng **1–2 beat lân cận** làm ngữ cảnh, **không lấy nội dung xa hơn**. Ảnh chung chung/trang trí hoặc minh họa chủ đề khác là **sai**.',
         '- **Unique**: không lặp nguyên tổ hợp `subject + action + scene`; **cho phép tái dùng chủ thể** nếu đổi hành động/góc nhìn.',
-        '- **`background_prompt` (BẮT BUỘC mỗi beat)**: mô tả background plate **có trang trí** cho IMAGE 2 — đúng chất liệu style clip, motif ở 4 góc + dọc viền, trung tâm nhạt; **cấm** nền trắng trơn / nền phẳng trống, **cấm** mọi subject/vật thể có nghĩa/nhân vật/chữ/số; **được phép giống nhau giữa các beat cùng scene** (giữ nhất quán nền cả clip).',
+        '- **`background_prompt` (BẮT BUỘC mỗi beat)**: mô tả background plate **có trang trí** cho ảnh nền — đúng chất liệu style clip, motif ở 4 góc + dọc viền, trung tâm nhạt; **cấm** nền trắng trơn / nền phẳng trống, **cấm** mọi subject/vật thể có nghĩa/nhân vật/chữ/số; **1 background dùng chung cho mọi lớp object của beat**; **được phép giống nhau giữa các beat cùng scene** (giữ nhất quán nền cả clip).',
+        '- **Beat NHIỀU LỚP ẢNH (`object_prompt_2..N`) — BẮT BUỘC**: mỗi beat ≥2s phải có **nhiều lớp object hiện lần lượt trên cùng 1 background**; số lớp = `clamp(round(durationSec / 2.5), 2, 6)` (5s → 2 lớp, 10s → 4 lớp, 15s+ → 6 lớp). Lớp 1 = `subject`/`action`/`text_overlay`, mỗi lớp thêm là 1 string `object_prompt_N` (N liên tục từ 2) cùng style/scale/framing, kể tiếp mạch lời thoại, chia label chữ theo lớp; **cấm** lặp lớp giống hệt, **cấm** ghi thời gian (engine tự chia timing). **Beat chỉ 1 ảnh là INVALID** trừ beat <2s.',
         applyImageTextLang(outputRule[style], imageTextLang),
     ];
 }
@@ -508,8 +629,12 @@ export function buildBeatDivisionWhiteboardSchemaExtra(
     // image_prompt = JSON object THẬT trong beat-map (mới) — không phải string escape.
     const example = WHITEBOARD_IMAGE_PROMPT_EXAMPLE_OBJECTS[resolveWhiteboardGenStyle(genStyle)];
     return {
-        image_prompt: Object.fromEntries(
-            Object.entries(example).map(([key, value]) => [key, applyImageTextLang(value, imageTextLang)]),
-        ),
+        image_prompt: {
+            ...Object.fromEntries(
+                Object.entries(example).map(([key, value]) => [key, applyImageTextLang(value, imageTextLang)]),
+            ),
+            // Beat nhiều lớp ảnh — số key object_prompt_N thay đổi theo durationSec của beat.
+            ...WHITEBOARD_MULTI_LAYER_EXAMPLE_LAYERS,
+        },
     };
 }

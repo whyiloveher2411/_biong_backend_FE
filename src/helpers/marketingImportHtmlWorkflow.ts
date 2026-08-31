@@ -6,6 +6,8 @@ import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
 import {
     WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
     WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
+    whiteboardOutputRuleForPrompt,
+    whiteboardSafeAreaRuleForPrompt,
 } from 'plugins/Vn4ELearning/AddOn/CreateData/Tabs/AppMobile/Marketing/AgentVideo/agentVideoBeatDivisionWhiteboard';
 
 const GEMINI_WEB_APP_URL = 'https://gemini.google.com/u/0/app?pageId=none';
@@ -78,8 +80,10 @@ function withImageStyleSuffix(
             if (voiceContent && !String(next.voice_content || '').trim()) {
                 next.voice_content = voiceContent;
             }
-            if (!String(next.safe_area || '').trim()) next.safe_area = IMAGE_SAFE_AREA_SUFFIX;
-            next.output_images = WHITEBOARD_DUAL_LAYER_OUTPUT_RULE;
+            // Beat nhiều lớp ảnh (`object_prompt_N`) cần rule N object + 1 background
+            // và safe-area nói đúng IMAGE 1…N; beat 1 ảnh giữ rule 2 ảnh.
+            next.safe_area = whiteboardSafeAreaRuleForPrompt(next);
+            next.output_images = whiteboardOutputRuleForPrompt(next);
             return JSON.stringify(next, null, 2);
         }
     } catch {
@@ -476,7 +480,11 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
     beatIndex?: number;
     title?: string;
     imageUrl?: string;
-    /** Ảnh lớp 2 đã có (background plate) — panel dùng để biết còn thiếu ảnh nào. */
+    /** Ảnh object 1..N đã có (beat nhiều lớp ảnh) — panel dùng để biết ô nào còn trống. */
+    imageUrls?: string[];
+    /** Số lớp ảnh object beat cần (từ `object_prompt_N` trong image_prompt). */
+    objectLayerCount?: number;
+    /** Ảnh background plate đã có — panel dùng để biết còn thiếu ảnh nào. */
     backgroundImageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
@@ -517,6 +525,8 @@ export async function openImportHtmlBeatDuckAiFillOnly(options: {
         beat_index: Number.isFinite(Number(options.beatIndex)) ? Number(options.beatIndex) : 0,
         image_prompt: imagePrompt,
         image_url: String(options.imageUrl || '').trim(),
+        image_urls: (options.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+        object_layer_count: Math.max(1, Number(options.objectLayerCount || 0) || 1),
         background_image_url: String(options.backgroundImageUrl || '').trim(),
         title: String(options.title || '').trim(),
         access_token: accessToken,
@@ -534,7 +544,11 @@ export type DuckAiWorkspaceBeat = {
     beatIndex: number;
     imagePrompt: string;
     imageUrl?: string;
-    /** Ảnh lớp 2 (background plate) — beat chỉ đủ khi có cả 2 ảnh. */
+    /** Ảnh object 1..N đã có (beat nhiều lớp ảnh). */
+    imageUrls?: string[];
+    /** Số lớp ảnh object beat cần. */
+    objectLayerCount?: number;
+    /** Ảnh background plate — beat chỉ đủ khi có đủ N ảnh object + background. */
     backgroundImageUrl?: string;
     missingImage?: boolean;
     imageVoiceContent?: string;
@@ -561,6 +575,8 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                imageUrls: (item?.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+                objectLayerCount: Math.max(1, Number(item?.objectLayerCount || 0) || 1),
                 backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
             }))
@@ -577,6 +593,8 @@ export async function openImportHtmlBeatDuckAiWorkspace(options: {
         beatIndex: target.beatIndex,
         imagePrompt: target.imagePrompt,
         imageUrl: target.imageUrl,
+        imageUrls: target.imageUrls,
+        objectLayerCount: target.objectLayerCount,
         backgroundImageUrl: target.backgroundImageUrl,
         title: options.title,
         autoSubmit: options.autoSubmit,
@@ -603,6 +621,8 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                imageUrls: (item?.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+                objectLayerCount: Math.max(1, Number(item?.objectLayerCount || 0) || 1),
                 backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
@@ -635,6 +655,8 @@ export async function openImportHtmlBeatDuckAiForMissingBeats(options: {
                 beatIndex: beat.beatIndex,
                 imagePrompt: beat.imagePrompt,
                 imageUrl: beat.imageUrl,
+                imageUrls: beat.imageUrls,
+                objectLayerCount: beat.objectLayerCount,
                 backgroundImageUrl: beat.backgroundImageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,
@@ -664,7 +686,11 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     beatIndex?: number;
     title?: string;
     imageUrl?: string;
-    /** Ảnh lớp 2 đã có (background plate) — panel dùng để biết còn thiếu ảnh nào. */
+    /** Ảnh object 1..N đã có (beat nhiều lớp ảnh) — panel dùng để biết ô nào còn trống. */
+    imageUrls?: string[];
+    /** Số lớp ảnh object beat cần (từ `object_prompt_N` trong image_prompt). */
+    objectLayerCount?: number;
+    /** Ảnh background plate đã có — panel dùng để biết còn thiếu ảnh nào. */
     backgroundImageUrl?: string;
     autoSubmit?: boolean;
     imageStyleSuffix?: string;
@@ -705,6 +731,8 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         beat_index: Number.isFinite(Number(options.beatIndex)) ? Number(options.beatIndex) : 0,
         image_prompt: imagePrompt,
         image_url: String(options.imageUrl || '').trim(),
+        image_urls: (options.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+        object_layer_count: Math.max(1, Number(options.objectLayerCount || 0) || 1),
         background_image_url: String(options.backgroundImageUrl || '').trim(),
         title: String(options.title || '').trim(),
         access_token: accessToken,
@@ -737,6 +765,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 beatIndex: Number.isFinite(Number(item?.beatIndex)) ? Number(item.beatIndex) : 0,
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
+                imageUrls: (item?.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+                objectLayerCount: Math.max(1, Number(item?.objectLayerCount || 0) || 1),
                 backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
@@ -769,6 +799,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 beatIndex: beat.beatIndex,
                 imagePrompt: beat.imagePrompt,
                 imageUrl: beat.imageUrl,
+                imageUrls: beat.imageUrls,
+                objectLayerCount: beat.objectLayerCount,
                 backgroundImageUrl: beat.backgroundImageUrl,
                 title: options.title,
                 autoSubmit: options.autoSubmit !== false,

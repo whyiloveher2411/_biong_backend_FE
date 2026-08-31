@@ -49,20 +49,31 @@ type Props = {
 
 type ImportJsonPreview = {
     beatCount: number;
+    /** Tổng số lớp ảnh của mọi beat = tổng số phần tử image_prompts[]. */
+    imageCount: number;
     errors: string[];
 };
 
-/** Kiểm tra sơ bộ phía client trước khi gửi lên server. */
-function analyzeImportJson(text: string): ImportJsonPreview {
+/**
+ * Kiểm tra sơ bộ phía client trước khi gửi lên server.
+ * Cấu trúc bắt buộc mỗi beat: `content`, `image_prompts[]` (mỗi phần tử gồm
+ * `content` là đoạn lời thoại con + `image_prompt`) và `background_prompt` dùng
+ * chung. Dạng cũ (`image_prompt` phẳng) không còn được nhận.
+ */
+export function analyzeImportJson(text: string): ImportJsonPreview {
     const trimmed = text.trim();
     if (!trimmed) {
-        return { beatCount: 0, errors: ['Chưa có JSON'] };
+        return { beatCount: 0, imageCount: 0, errors: ['Chưa có JSON'] };
     }
     let parsed: unknown;
     try {
         parsed = JSON.parse(trimmed.replace(/^```(?:json)?\s*|\s*```$/g, ''));
     } catch (e) {
-        return { beatCount: 0, errors: [`JSON không parse được: ${e instanceof Error ? e.message : String(e)}`] };
+        return {
+            beatCount: 0,
+            imageCount: 0,
+            errors: [`JSON không parse được: ${e instanceof Error ? e.message : String(e)}`],
+        };
     }
     let list: unknown = parsed;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -70,20 +81,49 @@ function analyzeImportJson(text: string): ImportJsonPreview {
         list = Array.isArray(record.beats) ? record.beats : record.sections;
     }
     if (!Array.isArray(list) || list.length === 0) {
-        return { beatCount: 0, errors: ['JSON phải là mảng beat (hoặc object có khoá "beats"), không được rỗng'] };
+        return {
+            beatCount: 0,
+            imageCount: 0,
+            errors: ['JSON phải là mảng beat (hoặc object có khoá "beats"), không được rỗng'],
+        };
     }
     const errors: string[] = [];
+    let imageCount = 0;
     list.forEach((item, index) => {
+        const label = `Beat #${index + 1}`;
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
-            errors.push(`Beat #${index + 1}: phần tử không phải object`);
+            errors.push(`${label}: phần tử không phải object`);
             return;
         }
         const record = item as Record<string, unknown>;
         if (!String(record.content || '').trim()) {
-            errors.push(`Beat #${index + 1}: thiếu content`);
+            errors.push(`${label}: thiếu content`);
         }
+        if (!String(record.background_prompt || '').trim()) {
+            errors.push(`${label}: thiếu background_prompt (1 background dùng chung cho cả beat)`);
+        }
+        const layers = record.image_prompts;
+        if (!Array.isArray(layers) || layers.length === 0) {
+            errors.push(`${label}: thiếu image_prompts[] (mỗi phần tử gồm content + image_prompt)`);
+            return;
+        }
+        imageCount += layers.length;
+        layers.forEach((rawLayer, layerIndex) => {
+            const layerLabel = `${label} ảnh #${layerIndex + 1}`;
+            if (!rawLayer || typeof rawLayer !== 'object' || Array.isArray(rawLayer)) {
+                errors.push(`${layerLabel}: phần tử image_prompts không phải object`);
+                return;
+            }
+            const layer = rawLayer as Record<string, unknown>;
+            if (!String(layer.content || '').trim()) {
+                errors.push(`${layerLabel}: thiếu content`);
+            }
+            if (!String(layer.image_prompt || '').trim()) {
+                errors.push(`${layerLabel}: thiếu image_prompt`);
+            }
+        });
     });
-    return { beatCount: list.length, errors };
+    return { beatCount: list.length, imageCount, errors };
 }
 
 /** Số beat mặc định cho chế độ test nhanh. */
@@ -680,7 +720,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                         {isImportJson
-                            ? 'JSON có sẵn: bạn đã có content + image_prompt + background_prompt cho từng beat. Hệ thống tự khớp timing bằng Whisper word timing, không cần mốc thời gian trong JSON.'
+                            ? 'JSON có sẵn: mỗi beat gồm content + image_prompts[] (nhiều ảnh lần lượt hiện) + 1 background_prompt dùng chung. Hệ thống tự khớp timing bằng Whisper word timing, không cần mốc thời gian trong JSON.'
                             : isTwoPhase
                                 ? 'Giai đoạn 1: chia beat (script + whisper). Giai đoạn 2: sinh image_prompt — 2 prompt riêng, model không quên rule với video dài. JSON đã lưu sẽ giữ lại khi refresh, bạn có thể sửa thủ công.'
                                 : '1 prompt duy nhất: chia beat + image_prompt trong cùng 1 lần gửi — chỉ phù hợp script ngắn (test 3 beat).'}
@@ -691,8 +731,11 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                     <Box>
                         <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }}>
                             <Typography variant="body2" component="div">
-                                Mỗi phần tử cần <b>content</b> (nguyên văn một đoạn của audio script),{' '}
-                                <b>image_prompt</b> và <b>background_prompt</b>. Hệ thống khớp content với{' '}
+                                Mỗi beat cần <b>content</b> (nguyên văn cả đoạn của audio script),{' '}
+                                <b>image_prompts[]</b> — mỗi phần tử là <b>một ảnh</b> gồm <b>content</b> (đoạn
+                                lời thoại con) + <b>image_prompt</b> — và <b>background_prompt</b> dùng chung
+                                cho mọi ảnh trong beat. Các ảnh sẽ lần lượt hiện đúng lúc đoạn lời thoại con
+                                của nó vang lên, background giữ nguyên suốt beat. Hệ thống khớp content với{' '}
                                 <b>audio script</b> (nguồn text chuẩn), còn Whisper chỉ cấp mốc thời gian —{' '}
                                 <b>phải chạy transcribe xong trước</b>. Whisper sai chính tả hoặc thiếu dấu
                                 vẫn chấp nhận được vì so khớp bỏ dấu và tự nội suy phần không neo được.
@@ -730,7 +773,13 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                             minRows={12}
                             maxRows={22}
                             size="small"
-                            placeholder={'[\n  {\n    "content": "...",\n    "image_prompt": "...",\n    "background_prompt": "..."\n  }\n]'}
+                            placeholder={
+                                '[\n  {\n    "content": "cả đoạn lời thoại của beat",\n'
+                                + '    "image_prompts": [\n'
+                                + '      { "content": "câu 1", "image_prompt": "mô tả ảnh 1" },\n'
+                                + '      { "content": "câu 2", "image_prompt": "mô tả ảnh 2" }\n'
+                                + '    ],\n    "background_prompt": "nền dùng chung cho cả beat"\n  }\n]'
+                            }
                             value={importJsonText}
                             onChange={(e) => {
                                 setImportJsonText(e.target.value);
@@ -747,7 +796,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                                         size="small"
                                         color="success"
                                         icon={<CheckCircleIcon />}
-                                        label={`Đọc được ${importJsonPreview.beatCount} beat`}
+                                        label={`Đọc được ${importJsonPreview.beatCount} beat / ${importJsonPreview.imageCount} ảnh`}
                                     />
                                 ) : (
                                     <Chip
@@ -818,7 +867,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
                                 disabled={!canSubmitImportJson}
                                 onClick={() => { void handleSubmitImportJson(); }}
                             >
-                                Tạo beat map ({importJsonPreview?.beatCount ?? 0} beat)
+                                Tạo beat map ({importJsonPreview?.beatCount ?? 0} beat / {importJsonPreview?.imageCount ?? 0} ảnh)
                             </LoadingButton>
                         </Stack>
                     </Box>

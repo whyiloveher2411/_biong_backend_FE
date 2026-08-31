@@ -2,6 +2,8 @@ import { formatDurationSec } from './agentVideoHfPromptDuration';
 import {
     WHITEBOARD_IMAGE_PROMPT_JSON_KEYS,
     WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS,
+    isWhiteboardObjectLayerPromptKey,
+    whiteboardObjectLayerCountFromPrompt,
 } from './agentVideoBeatDivisionWhiteboard';
 
 export type BeatMapSection = {
@@ -46,6 +48,11 @@ export type BeatHtmlEntry = {
 
 export type BeatImageEntry = {
     image_url: string;
+    /**
+     * Ảnh object layer thứ 2..N của beat (multi-image per beat) — ảnh 1 vẫn ở
+     * `image_url` để beat cũ và mọi đường render legacy không đổi.
+     */
+    extra_image_urls?: string[];
     image_prompt?: string;
     updated_at?: string;
     creative_prompt?: string;
@@ -503,7 +510,9 @@ export function normalizeBeatImagePrompt(value: unknown): Record<string, unknown
         return value as Record<string, unknown>;
     }
     const raw = String(value).trim();
-    if (!raw || raw.length > 2000) {
+    // Beat nhiều lớp ảnh (object_prompt_2..N) dài hơn beat 1 ảnh — trần cũ 2000 làm
+    // prompt multi-layer parse fail và bị coi như beat 1 ảnh.
+    if (!raw || raw.length > 20000) {
         return null;
     }
     try {
@@ -517,6 +526,30 @@ export function normalizeBeatImagePrompt(value: unknown): Record<string, unknown
     return null;
 }
 
+/** Key hợp lệ của image_prompt: 7 key chuẩn + `object_prompt_N` (lớp ảnh thêm). */
+export function isAllowedBeatImagePromptKey(key: string): boolean {
+    return (
+        WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number])
+        || isWhiteboardObjectLayerPromptKey(key)
+    );
+}
+
+/**
+ * Số object layer beat này cần: 1 (subject chính) + số `object_prompt_*` non-empty.
+ * Mirror marketing_short_video_agent_beat_object_layer_count (PHP).
+ */
+export function beatSectionObjectLayerCount(section: BeatMapSection | null | undefined): number {
+    return whiteboardObjectLayerCountFromPrompt(normalizeBeatImagePrompt(section?.image_prompt));
+}
+
+/**
+ * Số object layer theo ĐÚNG prompt sẽ gửi đi sinh ảnh (beat_image override ưu tiên
+ * hơn section) — tránh lệch giữa số ô upload và số ảnh AI được yêu cầu.
+ */
+export function beatImagePromptObjectLayerCount(prompt: unknown): number {
+    return whiteboardObjectLayerCountFromPrompt(normalizeBeatImagePrompt(prompt));
+}
+
 export function validateBeatImagePrompt(value: unknown): string | null {
     const record = normalizeBeatImagePrompt(value);
     if (!record) {
@@ -525,7 +558,7 @@ export function validateBeatImagePrompt(value: unknown): string | null {
     // Bắt buộc JSON object theo whitelist 7 key — image_prompt không còn chấp nhận text thuần.
     // `background_prompt` optional khi đọc để beat-map cũ (6 key) vẫn dùng được.
     const keys = Object.keys(record);
-    if (keys.some((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number]))) {
+    if (keys.some((key) => !isAllowedBeatImagePromptKey(key))) {
         return null;
     }
     if (WHITEBOARD_IMAGE_PROMPT_LEGACY_REQUIRED_KEYS.some((key) => !keys.includes(key))) {
@@ -594,7 +627,7 @@ export function describeBeatImagePromptErrors(value: unknown): string[] {
     if (!keys.includes('background_prompt')) {
         errors.push('thiếu background_prompt (beat-map cũ — cần chia beat lại để sinh nền riêng cho IMAGE 2)');
     }
-    const extra = keys.filter((key) => !WHITEBOARD_IMAGE_PROMPT_JSON_KEYS.includes(key as (typeof WHITEBOARD_IMAGE_PROMPT_JSON_KEYS)[number]));
+    const extra = keys.filter((key) => !isAllowedBeatImagePromptKey(key));
     if (extra.length > 0) {
         errors.push(`key thừa (cấm): ${extra.join(', ')}`);
     }
@@ -628,8 +661,14 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
         return null;
     }
     const qaStatus = raw.qa_status != null ? normalizeBeatQaStatus(raw.qa_status) : undefined;
+    const extraUrls = Array.isArray(raw.extra_image_urls)
+        ? raw.extra_image_urls
+            .map((item) => String(item || '').trim())
+            .filter((item, index, list) => item !== '' && list.indexOf(item) === index)
+        : [];
     return {
         image_url: imageUrl,
+        extra_image_urls: extraUrls.length ? extraUrls : undefined,
         image_prompt: raw.image_prompt != null ? String(raw.image_prompt) : undefined,
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
@@ -1001,8 +1040,19 @@ export function isBeatImageMissing(
     if (!String(beatImage[beatId]?.image_url || '').trim()) {
         return true;
     }
-    if (dualLayer && beatSectionNeedsBackgroundLayer(dualLayer.section)) {
-        return !String(dualLayer.backgroundUrl || '').trim();
+    if (dualLayer) {
+        // Beat nhiều lớp ảnh: cần đủ số object layer AI được yêu cầu sinh.
+        const expected = beatSectionObjectLayerCount(dualLayer.section);
+        if (expected > 1) {
+            const have = 1 + (beatImage[beatId]?.extra_image_urls || [])
+                .filter((url) => String(url || '').trim() !== '').length;
+            if (have < expected) {
+                return true;
+            }
+        }
+        if (beatSectionNeedsBackgroundLayer(dualLayer.section)) {
+            return !String(dualLayer.backgroundUrl || '').trim();
+        }
     }
     return false;
 }

@@ -1,4 +1,5 @@
 import {
+    beatSectionObjectLayerCount,
     parseBeatMapJson,
     parseBeatVisualChunkJson,
     validateBeatImagePrompt,
@@ -112,15 +113,22 @@ describe('beat map whiteboard image_prompt', () => {
         expect(validateBeatImagePrompt(emptyValue)).toBeNull();
     });
 
-    it('validateBeatImagePrompt rejects over-2000-char prompt', () => {
-        const tooLong = JSON.stringify({
+    it('prompt beat nhiều lớp ảnh (>2000 ký tự) vẫn parse được, chỉ bỏ qua khi quá 20000', () => {
+        const multiLayer = JSON.stringify({
             subject: 'x'.repeat(400),
             action: 'x'.repeat(400),
             scene: 'x'.repeat(400),
             text_overlay: 'x'.repeat(400),
             composition: 'x'.repeat(400),
             must_avoid: 'x'.repeat(400),
+            background_prompt: 'x'.repeat(400),
+            object_prompt_2: 'x'.repeat(400),
+            object_prompt_3: 'x'.repeat(400),
         });
+        expect(validateBeatImagePrompt(multiLayer)).not.toBeNull();
+        expect(beatSectionObjectLayerCount({ image_prompt: multiLayer } as never)).toBe(3);
+
+        const tooLong = JSON.stringify({ subject: 'x'.repeat(21000) });
         expect(validateBeatImagePrompt(tooLong)).toBeNull();
     });
 

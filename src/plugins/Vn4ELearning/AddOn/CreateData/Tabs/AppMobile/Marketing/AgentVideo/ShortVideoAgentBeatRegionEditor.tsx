@@ -117,12 +117,27 @@ import {
     isRegionAttentionEnabled,
     uploadAgentVisualImage,
     type AgentWhiteboardBeatOverride,
+    type BeatImageLayer,
     type BeatImageOverlay,
     type BeatRegion,
     type BeatRegionPoint,
     type BeatTimelineEffect,
     type WhiteboardTransitionOption,
 } from './agentVideoApi';
+import WhiteboardBeatImageLayerTabs from './WhiteboardBeatImageLayerTabs';
+import {
+    WHITEBOARD_MAX_IMAGE_LAYERS,
+    WHITEBOARD_PRIMARY_LAYER_ID,
+    activeLayerAt,
+    clampRegionToLayerSlot,
+    layerSlotBounds,
+    normalizeLayerSlotChain,
+    overlaysForLayer,
+    redistributeLayerSlots,
+    regionsForLayer,
+    requiresSharedBackground,
+    resolveBeatImageLayers,
+} from './whiteboardImageLayers';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 
@@ -417,14 +432,53 @@ function RegionSection({
 export default function ShortVideoAgentBeatRegionEditor({
     state,
     beatId,
-    imageUrl,
+    imageUrl: primaryImageUrl,
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
-    const savedRegions = Array.isArray(currentOverride.regions)
+
+    // NHIỀU LỚP ẢNH / BEAT: các lớp thay nhau theo slot, dùng chung 1 custom
+    // background. Editor luôn làm việc trên ĐÚNG 1 lớp (activeLayerId) —
+    // vùng/ảnh thêm của các lớp khác được giữ nguyên và merge lại khi lưu.
+    const beatWindowSec = React.useMemo(() => {
+        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const dur = Number(section?.durationSec ?? 0);
+        if (dur > 0) {
+            return dur;
+        }
+        const start = Number(section?.startSec ?? 0);
+        const end = Number(section?.endSec ?? start);
+        return Math.max(0.1, end - start);
+    }, [beatId, state.beatMap?.sections]);
+
+    const imageLayers = React.useMemo(
+        () => resolveBeatImageLayers({
+            override: currentOverride,
+            beatImageEntry: state.beatImage?.[beatId] || null,
+            beatWindowSec,
+        }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [beatId, beatWindowSec, currentOverride.image_layers, state.beatImage],
+    );
+    const [activeLayerIdRaw, setActiveLayerIdRaw] = React.useState('');
+    const activeLayerId = imageLayers.some((layer) => layer.id === activeLayerIdRaw)
+        ? activeLayerIdRaw
+        : (imageLayers[0]?.id || WHITEBOARD_PRIMARY_LAYER_ID);
+    const activeLayer = imageLayers.find((layer) => layer.id === activeLayerId) || null;
+    const activeLayerIndex = Math.max(0, imageLayers.findIndex((layer) => layer.id === activeLayerId));
+    const isMultiLayerBeat = imageLayers.length > 1;
+    /** Ảnh đang mở trên canvas = ảnh của lớp đang chọn (beat 1 ảnh: y như trước). */
+    const imageUrl = activeLayer?.image_url || primaryImageUrl;
+
+    const savedRegionsAllLayers = Array.isArray(currentOverride.regions)
         ? currentOverride.regions.map(normalizeRegionTimingFields)
         : [];
-
-    const savedOverlays = normalizeBeatImageOverlays(currentOverride.image_overlays);
+    const savedOverlaysAllLayers = normalizeBeatImageOverlays(currentOverride.image_overlays);
+    const savedRegions = isMultiLayerBeat
+        ? regionsForLayer(savedRegionsAllLayers, activeLayerId, imageLayers)
+        : savedRegionsAllLayers;
+    const savedOverlays = isMultiLayerBeat
+        ? overlaysForLayer(savedOverlaysAllLayers, activeLayerId, imageLayers)
+        : savedOverlaysAllLayers;
     const savedOverlaysRef = React.useRef(savedOverlays);
     savedOverlaysRef.current = savedOverlays;
 
@@ -654,9 +708,46 @@ export default function ShortVideoAgentBeatRegionEditor({
     const savedRegionsRef = React.useRef(savedRegions);
     savedRegionsRef.current = savedRegions;
 
+    /**
+     * Vùng / ảnh thêm của CÁC LỚP KHÁC (chưa lưu) — đổi lớp không mất chỉnh sửa.
+     * Key = layer id; chỉ chứa lớp đã từng mở trong phiên này.
+     */
+    const pendingByLayerRef = React.useRef<Record<string, {
+        regions: BeatRegion[];
+        overlays: BeatImageOverlay[];
+    }>>({});
+    React.useEffect(() => {
+        pendingByLayerRef.current = {};
+    }, [beatId]);
+
+    /** Item của các lớp khác lớp đang mở — ưu tiên bản đang chỉnh trong phiên. */
+    const collectOtherLayerItems = React.useCallback(() => {
+        if (!isMultiLayerBeat) {
+            return { regions: [] as BeatRegion[], overlays: [] as BeatImageOverlay[] };
+        }
+        const outRegions: BeatRegion[] = [];
+        const outOverlays: BeatImageOverlay[] = [];
+        imageLayers.forEach((layer) => {
+            if (layer.id === activeLayerId) {
+                return;
+            }
+            const pending = pendingByLayerRef.current[layer.id];
+            const layerRegions = pending
+                ? pending.regions
+                : regionsForLayer(savedRegionsAllLayers, layer.id, imageLayers);
+            const layerOverlays = pending
+                ? pending.overlays
+                : overlaysForLayer(savedOverlaysAllLayers, layer.id, imageLayers);
+            layerRegions.forEach((region) => outRegions.push({ ...region, layer_id: layer.id }));
+            layerOverlays.forEach((overlay) => outOverlays.push({ ...overlay, layer_id: layer.id }));
+        });
+        return { regions: outRegions, overlays: outOverlays };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeLayerId, imageLayers, isMultiLayerBeat, savedRegionsAllLayers, savedOverlaysAllLayers]);
+
     // BiRefNet (vẽ vùng → auto refine): gửi kèm full_points (polygon trước refine)
     // + object_points (contour vật) để backend lưu riêng; render dùng vật.
-    const buildRegionsToSave = React.useCallback((): BeatRegion[] => (
+    const buildActiveLayerRegionsToSave = React.useCallback((): BeatRegion[] => (
         enforceRegionChildOrder(regions.map((r): BeatRegion => {
             const original = originalPointsByRegion[r.id];
             const base = normalizeBeatRegionAttentionFields(normalizeRegionTimingFields(r));
@@ -682,7 +773,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         }))
     ), [regions, originalPointsByRegion]);
 
-    const buildOverlaysToSave = React.useCallback(
+    const buildActiveLayerOverlaysToSave = React.useCallback(
         (): BeatImageOverlay[] => imageOverlays.map((item) => {
             const withEntry = {
                 ...item,
@@ -699,6 +790,52 @@ export default function ShortVideoAgentBeatRegionEditor({
         }),
         [imageOverlays],
     );
+
+    /**
+     * Payload lưu = lớp đang mở (gắn layer_id) + nguyên vẹn các lớp khác.
+     * Beat 1 lớp: không gắn layer_id → dữ liệu giống hệt trước khi có multi-image.
+     */
+    const buildRegionsToSave = React.useCallback((): BeatRegion[] => {
+        const active = buildActiveLayerRegionsToSave();
+        if (!isMultiLayerBeat) {
+            return active;
+        }
+        const clampedActive = active.map((region) => clampRegionToLayerSlot(
+            { ...region, layer_id: activeLayerId },
+            activeLayer,
+            beatWindowSec,
+        ));
+        return [...collectOtherLayerItems().regions, ...clampedActive];
+    }, [
+        activeLayer,
+        activeLayerId,
+        beatWindowSec,
+        buildActiveLayerRegionsToSave,
+        collectOtherLayerItems,
+        isMultiLayerBeat,
+    ]);
+
+    const buildOverlaysToSave = React.useCallback((): BeatImageOverlay[] => {
+        const active = buildActiveLayerOverlaysToSave();
+        if (!isMultiLayerBeat) {
+            return active;
+        }
+        const bounds = layerSlotBounds(activeLayer, beatWindowSec);
+        const clampedActive = active.map((overlay) => ({
+            ...overlay,
+            layer_id: activeLayerId,
+            start_sec: Math.max(bounds.start, Math.min(bounds.end, overlay.start_sec)),
+            end_sec: Math.max(bounds.start, Math.min(bounds.end, overlay.end_sec)),
+        }));
+        return [...collectOtherLayerItems().overlays, ...clampedActive];
+    }, [
+        activeLayer,
+        activeLayerId,
+        beatWindowSec,
+        buildActiveLayerOverlaysToSave,
+        collectOtherLayerItems,
+        isMultiLayerBeat,
+    ]);
 
     // Prev/Next beat ngay trong drawer: seek timeline đến GIỮA beat kế/cũ —
     // ảnh + vùng mới tự load (giống nút cột giữa của VideoPreview).
@@ -2321,6 +2458,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                 {
                     polyA: parent.points.map(toPx),
                     polyB: draftPoints.map(toPx),
+                    layerId: activeLayerId,
                 },
             );
             if (res?.success && Array.isArray(res.points) && res.points.length >= 3) {
@@ -2479,6 +2617,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                             pt[0] * natural.w,
                             pt[1] * natural.h,
                         ]),
+                        layerId: activeLayerId,
                     });
                     if (!regionsRef.current.some((r) => r.id === job.id)) {
                         continue;
@@ -2853,7 +2992,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                     shortVideoId,
                     beatId,
                     'bbox',
-                    { rect },
+                    { rect, layerId: activeLayerId },
                     true,
                 );
                 if (res?.success && res.background_image_url) {
@@ -3037,6 +3176,351 @@ export default function ShortVideoAgentBeatRegionEditor({
         state,
         timelineEffects,
     ]);
+
+    // ===== NHIỀU LỚP ẢNH TRONG BEAT =====
+
+    const [layerBusy, setLayerBusy] = React.useState(false);
+
+    /** Vùng + ảnh thêm của TẤT CẢ lớp (đã gắn layer_id tường minh). */
+    const buildAllLayerItems = React.useCallback(() => {
+        const other = collectOtherLayerItems();
+        return {
+            regions: [
+                ...other.regions,
+                ...buildActiveLayerRegionsToSave().map((region) => ({
+                    ...region,
+                    layer_id: activeLayerId,
+                })),
+            ],
+            overlays: [
+                ...other.overlays,
+                ...buildActiveLayerOverlaysToSave().map((overlay) => ({
+                    ...overlay,
+                    layer_id: activeLayerId,
+                })),
+            ],
+        };
+    }, [
+        activeLayerId,
+        buildActiveLayerOverlaysToSave,
+        buildActiveLayerRegionsToSave,
+        collectOtherLayerItems,
+    ]);
+
+    /**
+     * Ghi danh sách lớp ảnh + vùng/ảnh thêm đã gắn layer_id. `removedLayerIds`
+     * = lớp bị xóa (vùng/ảnh thêm của lớp đó bị bỏ luôn vì toạ độ gắn ảnh cũ).
+     */
+    const persistImageLayers = React.useCallback(async (
+        nextLayers: BeatImageLayer[],
+        removedLayerIds: string[] = [],
+        options?: { keepSlots?: boolean },
+    ): Promise<boolean> => {
+        const layers = options?.keepSlots
+            ? normalizeLayerSlotChain(nextLayers, beatWindowSec)
+            : redistributeLayerSlots(nextLayers, beatWindowSec);
+        const layerById = new Map(layers.map((layer) => [layer.id, layer]));
+        const removed = new Set(removedLayerIds);
+        const items = buildAllLayerItems();
+        const keepRegions = items.regions
+            .filter((region) => !removed.has(String(region.layer_id || '')))
+            .map((region) => clampRegionToLayerSlot(
+                region,
+                layerById.get(String(region.layer_id || '')) || null,
+                beatWindowSec,
+            ));
+        const keepOverlays = items.overlays
+            .filter((overlay) => !removed.has(String(overlay.layer_id || '')))
+            .map((overlay) => {
+                const bounds = layerSlotBounds(
+                    layerById.get(String(overlay.layer_id || '')) || null,
+                    beatWindowSec,
+                );
+                return {
+                    ...overlay,
+                    start_sec: Math.max(bounds.start, Math.min(bounds.end, overlay.start_sec)),
+                    end_sec: Math.max(bounds.start, Math.min(bounds.end, overlay.end_sec)),
+                };
+            });
+        const patch: Partial<AgentWhiteboardBeatOverride> = {
+            image_layers: layers,
+            regions: keepRegions,
+            image_overlays: keepOverlays,
+            timeline_effects: timelineEffects,
+        };
+        // Nhiều lớp thay nhau: ảnh beat phải nằm TRÊN background dùng chung,
+        // nếu không nền sẽ nháy trắng mỗi lần đổi ảnh.
+        if (requiresSharedBackground(layers)) {
+            patch.beat_image_over_background = true;
+            patch.custom_background_hidden = false;
+        }
+        const ok = await state.handleSaveWhiteboardBeatOverride(beatId, {
+            ...(state.agentWhiteboardBeatOverrides?.[beatId] || {}),
+            ...patch,
+        });
+        if (ok) {
+            pendingByLayerRef.current = {};
+        }
+        return ok;
+    }, [
+        beatId,
+        beatWindowSec,
+        buildAllLayerItems,
+        state,
+        timelineEffects,
+    ]);
+
+    /** Đổi lớp đang mở — giữ chỉnh sửa chưa lưu của lớp cũ trong phiên. */
+    const handleSelectLayer = React.useCallback((nextLayerId: string) => {
+        if (!nextLayerId || nextLayerId === activeLayerId) {
+            return;
+        }
+        pendingByLayerRef.current[activeLayerId] = {
+            regions: buildActiveLayerRegionsToSave().map((region) => ({
+                ...region,
+                layer_id: activeLayerId,
+            })),
+            overlays: buildActiveLayerOverlaysToSave().map((overlay) => ({
+                ...overlay,
+                layer_id: activeLayerId,
+            })),
+        };
+        const pending = pendingByLayerRef.current[nextLayerId];
+        const nextRegions = (pending
+            ? pending.regions
+            : regionsForLayer(savedRegionsAllLayers, nextLayerId, imageLayers)
+        ).map((region) => ({ ...region }));
+        const nextOverlays = (pending
+            ? pending.overlays
+            : overlaysForLayer(savedOverlaysAllLayers, nextLayerId, imageLayers)
+        ).map((overlay) => ({ ...overlay }));
+        setActiveLayerIdRaw(nextLayerId);
+        setRegions(nextRegions);
+        setImageOverlays(nextOverlays);
+        setSavedSnapshot(nextRegions.map((region) => ({ ...region })));
+        setSavedOverlaysSnapshot(nextOverlays.map((overlay) => ({ ...overlay })));
+        setSelectedRegionId('');
+        setSelectedOverlayId('');
+        setSelectedEffectId('');
+        setMultiSelectedKeys([]);
+        setOriginalPointsByRegion({});
+        setDraftPoints([]);
+        setBgSampleDraft([]);
+        setRegionMode('select');
+        setTimelineViewMode('main');
+        setActiveGroupId(null);
+        setImgNatural(null);
+        setImageError(false);
+    }, [
+        activeLayerId,
+        buildActiveLayerOverlaysToSave,
+        buildActiveLayerRegionsToSave,
+        imageLayers,
+        savedOverlaysAllLayers,
+        savedRegionsAllLayers,
+    ]);
+
+    /** Thêm 1 lớp ảnh mới vào beat (upload ảnh full-frame cùng canvas). */
+    const handleAddImageLayer = React.useCallback(async (file: File) => {
+        if (layerBusy) {
+            return;
+        }
+        if (imageLayers.length >= WHITEBOARD_MAX_IMAGE_LAYERS) {
+            notify(`Tối đa ${WHITEBOARD_MAX_IMAGE_LAYERS} lớp ảnh mỗi beat`, 'warning');
+            return;
+        }
+        if (shortVideoId <= 0) {
+            notify('Thiếu shortVideoId — không upload được ảnh', 'error');
+            return;
+        }
+        setLayerBusy(true);
+        try {
+            const res = await uploadAgentVisualImage(shortVideoId, file);
+            const url = String(res?.url || res?.preview_url || '').trim();
+            if (!res?.success || !url) {
+                notify('Upload ảnh lớp mới thất bại', 'error');
+                return;
+            }
+            const nextIndex = imageLayers.length;
+            const nextLayers: BeatImageLayer[] = [
+                ...imageLayers,
+                {
+                    id: `layer_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                    image_url: url,
+                    start_sec: 0,
+                    end_sec: 0,
+                    order: nextIndex,
+                },
+            ];
+            const ok = await persistImageLayers(nextLayers);
+            if (!ok) {
+                notify('Lưu lớp ảnh mới thất bại', 'error');
+                return;
+            }
+            const hasBackground = String(
+                state.agentWhiteboardBeatOverrides?.[beatId]?.custom_background_url || '',
+            ).trim() !== '';
+            notify(
+                hasBackground
+                    ? 'Đã thêm lớp ảnh — slot thời gian chia đều, kéo lại trên timeline'
+                    : 'Đã thêm lớp ảnh. Beat chưa có background dùng chung — nền sẽ trắng khi đổi ảnh',
+                hasBackground ? 'success' : 'warning',
+            );
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Upload ảnh lớp mới thất bại', 'error');
+        } finally {
+            setLayerBusy(false);
+        }
+    }, [
+        beatId,
+        imageLayers,
+        layerBusy,
+        notify,
+        persistImageLayers,
+        shortVideoId,
+        state.agentWhiteboardBeatOverrides,
+    ]);
+
+    /** Xóa 1 lớp ảnh + toàn bộ vùng / ảnh thêm của lớp đó. */
+    const handleRemoveImageLayer = React.useCallback(async (layerId: string) => {
+        if (layerBusy || imageLayers.length <= 1) {
+            return;
+        }
+        const index = imageLayers.findIndex((layer) => layer.id === layerId);
+        if (index < 0) {
+            return;
+        }
+        const items = buildAllLayerItems();
+        const lostRegions = items.regions.filter((r) => String(r.layer_id || '') === layerId).length;
+        const lostOverlays = items.overlays.filter((o) => String(o.layer_id || '') === layerId).length;
+        if (!window.confirm(
+            `Xóa lớp ảnh ${index + 1} và ${lostRegions} vùng + ${lostOverlays} ảnh thêm của lớp này?`,
+        )) {
+            return;
+        }
+        setLayerBusy(true);
+        try {
+            const nextLayers = imageLayers.filter((layer) => layer.id !== layerId);
+            const ok = await persistImageLayers(nextLayers, [layerId]);
+            if (!ok) {
+                notify('Xóa lớp ảnh thất bại', 'error');
+                return;
+            }
+            if (layerId === activeLayerId) {
+                setActiveLayerIdRaw(nextLayers[0]?.id || '');
+                setRegions([]);
+                setImageOverlays([]);
+                setSavedSnapshot([]);
+                setSavedOverlaysSnapshot([]);
+                setSelectedRegionId('');
+                setSelectedOverlayId('');
+            }
+            notify('Đã xóa lớp ảnh', 'success');
+        } finally {
+            setLayerBusy(false);
+        }
+    }, [
+        activeLayerId,
+        buildAllLayerItems,
+        imageLayers,
+        layerBusy,
+        notify,
+        persistImageLayers,
+    ]);
+
+    /** Đổi thứ tự lớp (slot chia lại đều theo thứ tự mới). */
+    const handleMoveImageLayer = React.useCallback(async (layerId: string, delta: number) => {
+        if (layerBusy) {
+            return;
+        }
+        const index = imageLayers.findIndex((layer) => layer.id === layerId);
+        const target = index + delta;
+        if (index < 0 || target < 0 || target >= imageLayers.length) {
+            return;
+        }
+        setLayerBusy(true);
+        try {
+            const nextLayers = [...imageLayers];
+            const [moved] = nextLayers.splice(index, 1);
+            nextLayers.splice(target, 0, moved);
+            const ok = await persistImageLayers(nextLayers);
+            if (!ok) {
+                notify('Đổi thứ tự lớp ảnh thất bại', 'error');
+            }
+        } finally {
+            setLayerBusy(false);
+        }
+    }, [imageLayers, layerBusy, notify, persistImageLayers]);
+
+    /**
+     * Đổi ảnh của LỚP PHỤ (lớp 2..N) — xóa vùng / ảnh thêm của chính lớp đó vì
+     * toạ độ gắn với ảnh cũ; các lớp khác giữ nguyên.
+     */
+    const handleReplaceLayerImage = React.useCallback(async (file: File) => {
+        if (layerBusy || !activeLayer) {
+            return;
+        }
+        const total = regions.length + imageOverlays.length;
+        if (total > 0 && !window.confirm(
+            `Đổi ảnh lớp ${activeLayerIndex + 1} sẽ xóa ${total} vùng / ảnh thêm của lớp này.\nTiếp tục?`,
+        )) {
+            return;
+        }
+        if (shortVideoId <= 0) {
+            notify('Thiếu shortVideoId — không upload được ảnh', 'error');
+            return;
+        }
+        setLayerBusy(true);
+        try {
+            const res = await uploadAgentVisualImage(shortVideoId, file);
+            const url = String(res?.url || res?.preview_url || '').trim();
+            if (!res?.success || !url) {
+                notify('Upload ảnh thất bại', 'error');
+                return;
+            }
+            setRegions([]);
+            setImageOverlays([]);
+            setSavedSnapshot([]);
+            setSavedOverlaysSnapshot([]);
+            setSelectedRegionId('');
+            setSelectedOverlayId('');
+            setOriginalPointsByRegion({});
+            setDraftPoints([]);
+            setImgNatural(null);
+            setImageError(false);
+            pendingByLayerRef.current[activeLayerId] = { regions: [], overlays: [] };
+            const nextLayers = imageLayers.map((layer) => (
+                layer.id === activeLayerId ? { ...layer, image_url: url } : layer
+            ));
+            const ok = await persistImageLayers(nextLayers);
+            notify(
+                ok ? 'Đã đổi ảnh lớp này' : 'Đổi ảnh lớp thất bại',
+                ok ? 'success' : 'error',
+            );
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Upload ảnh thất bại', 'error');
+        } finally {
+            setLayerBusy(false);
+        }
+    }, [
+        activeLayer,
+        activeLayerId,
+        activeLayerIndex,
+        imageLayers,
+        imageOverlays.length,
+        layerBusy,
+        notify,
+        persistImageLayers,
+        regions.length,
+        shortVideoId,
+    ]);
+
+    /** Lớp 1 = ảnh beat gốc (giữ đường cũ); lớp 2..N = ảnh riêng của lớp. */
+    const handlePickBeatImageFile = React.useCallback((file: File) => (
+        activeLayerIndex > 0
+            ? handleReplaceLayerImage(file)
+            : handleReplaceBeatImage(file)
+    ), [activeLayerIndex, handleReplaceBeatImage, handleReplaceLayerImage]);
 
     const handleRenderBeatVideo = React.useCallback(async () => {
         const saved = await saveRegionsIfDirty();
@@ -3520,6 +4004,57 @@ export default function ShortVideoAgentBeatRegionEditor({
     );
 
     const hasRegions = regions.length > 0;
+    /** Badge số vùng + ảnh thêm mỗi lớp ảnh (lớp đang mở lấy từ state hiện tại). */
+    const layerItemCounts = React.useMemo(() => {
+        const counts: Record<string, number> = {};
+        imageLayers.forEach((layer) => {
+            if (layer.id === activeLayerId) {
+                counts[layer.id] = regions.length + imageOverlays.length;
+                return;
+            }
+            const pending = pendingByLayerRef.current[layer.id];
+            counts[layer.id] = pending
+                ? pending.regions.length + pending.overlays.length
+                : regionsForLayer(savedRegionsAllLayers, layer.id, imageLayers).length
+                    + overlaysForLayer(savedOverlaysAllLayers, layer.id, imageLayers).length;
+        });
+        return counts;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        activeLayerId,
+        imageLayers,
+        imageOverlays.length,
+        regions.length,
+        savedOverlaysAllLayers,
+        savedRegionsAllLayers,
+    ]);
+    /**
+     * PREVIEW TIMING theo playhead: khi playhead nằm trong slot của lớp khác,
+     * preview hiện ảnh + vùng của lớp đó (background dùng chung giữ nguyên) —
+     * canvas edit vẫn ở lớp đang chọn.
+     */
+    const previewLayer = isMultiLayerBeat ? activeLayerAt(imageLayers, playheadSec) : null;
+    const previewOtherLayer = previewLayer && previewLayer.id !== activeLayerId
+        ? previewLayer
+        : null;
+    const previewLayerItems = React.useMemo(() => {
+        if (!previewOtherLayer) {
+            return null;
+        }
+        const pending = pendingByLayerRef.current[previewOtherLayer.id];
+        return {
+            regions: pending
+                ? pending.regions
+                : regionsForLayer(savedRegionsAllLayers, previewOtherLayer.id, imageLayers),
+            overlays: pending
+                ? pending.overlays
+                : overlaysForLayer(savedOverlaysAllLayers, previewOtherLayer.id, imageLayers),
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [previewOtherLayer?.id, imageLayers, savedOverlaysAllLayers, savedRegionsAllLayers]);
+    const previewImageUrl = previewOtherLayer?.image_url || imageUrl;
+    const previewRegions = previewLayerItems?.regions || canvasRegions;
+    const previewOverlays = previewLayerItems?.overlays || canvasOverlays;
     const totalDraftPoints = bgSampleMode ? bgSampleDraft.length : draftPoints.length;
     const liveDraft = bgSampleMode ? bgSampleDraft : draftPoints;
 
@@ -3577,6 +4112,19 @@ export default function ShortVideoAgentBeatRegionEditor({
                         overflow: 'hidden',
                     }}
                 >
+                    {imageLayers.length > 0 ? (
+                        <WhiteboardBeatImageLayerTabs
+                            layers={imageLayers}
+                            activeLayerId={activeLayerId}
+                            itemCountByLayerId={layerItemCounts}
+                            busy={layerBusy || state.savingWhiteboardBeatOverride}
+                            missingSharedBackground={!useCustomBg}
+                            onSelect={handleSelectLayer}
+                            onAdd={handleAddImageLayer}
+                            onRemove={handleRemoveImageLayer}
+                            onMove={handleMoveImageLayer}
+                        />
+                    ) : null}
                     <Box
                         ref={measureBoxRef}
                         sx={{
@@ -3759,8 +4307,8 @@ export default function ShortVideoAgentBeatRegionEditor({
                         />
                         <WhiteboardBeatImageReplaceControl
                             imageUrl={imageUrl}
-                            saving={replacingBeatImage}
-                            onPickFile={handleReplaceBeatImage}
+                            saving={replacingBeatImage || layerBusy}
+                            onPickFile={handlePickBeatImageFile}
                             showOverBackground={useCustomBg}
                             overBackground={beatImageOverBg}
                             onOverBackgroundChange={(next) => {
@@ -4698,11 +5246,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     }}
                                 >
                                     <WhiteboardBeatTimingPreview
-                                        imageUrl={imageUrl}
+                                        imageUrl={previewImageUrl}
                                         customBackgroundUrl={useCustomBg ? customBgUrl : undefined}
                                         beatImageOverBackground={beatImageOverBg}
-                                        regions={canvasRegions}
-                                        imageOverlays={canvasOverlays}
+                                        regions={previewRegions}
+                                        imageOverlays={previewOverlays}
                                         playheadSec={playheadSec}
                                         durationSec={beatTimeline.beatDurationSec}
                                         sceneBudgetSec={sceneBudgetSec}
@@ -4862,6 +5410,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                         selectedOverlayId={selectedOverlayId}
                         onChangeOverlay={updateOverlay}
                         onSelectOverlay={selectOverlayFromTimeline}
+                        imageLayers={imageLayers}
+                        activeLayerId={activeLayerId}
+                        onSelectLayer={handleSelectLayer}
+                        onCommitLayerSlots={(layers) => {
+                            void persistImageLayers(layers, [], { keepSlots: true });
+                        }}
                         timelineViewMode={timelineViewMode}
                         onExitGroupView={exitGroupView}
                         onUngroupActiveGroup={ungroupActiveGroup}

@@ -199,11 +199,14 @@ import {
     beatImagePromptToText,
     describeBeatImagePromptErrors,
     validateBeatImagePrompt,
+    beatSectionObjectLayerCount,
+    beatImagePromptObjectLayerCount,
     type BeatMap,
     type BeatHtmlEntry,
     type BeatImageEntry,
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
+import { beatImageEntryUrls } from './whiteboardImageLayers';
 import { isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
 import {
     deriveWhiteboardRenderProgress,
@@ -3531,6 +3534,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: promptValue,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        imageUrls: beatImageEntryUrls(beatImage[id]),
+                        objectLayerCount: Math.max(
+                            beatSectionObjectLayerCount(section),
+                            beatImagePromptObjectLayerCount(
+                                beatImage[id]?.image_prompt || section?.image_prompt,
+                            ),
+                        ),
                         backgroundImageUrl: beatBackgroundImageUrls[id] || '',
                         missingImage: isBeatImageMissing(beatImage, id, {
                             section,
@@ -3547,6 +3557,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
                     imagePrompt: prompt,
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    imageUrls: beatImageEntryUrls(beatImage[beatId]),
+                    objectLayerCount: workspaceBeats.find((b) => b.beatId === beatId)?.objectLayerCount || 1,
                     backgroundImageUrl: beatBackgroundImageUrls[beatId] || '',
                     title,
                     autoSubmit: true,
@@ -3622,6 +3634,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: promptValue,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        imageUrls: beatImageEntryUrls(beatImage[id]),
+                        objectLayerCount: Math.max(
+                            beatSectionObjectLayerCount(section),
+                            beatImagePromptObjectLayerCount(
+                                beatImage[id]?.image_prompt || section?.image_prompt,
+                            ),
+                        ),
                         backgroundImageUrl: beatBackgroundImageUrls[id] || '',
                         missingImage: isBeatImageMissing(beatImage, id, {
                             section,
@@ -3638,6 +3657,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beatIndex: workspaceBeats.find((b) => b.beatId === beatId)?.beatIndex || 0,
                     imagePrompt: prompt,
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    imageUrls: beatImageEntryUrls(beatImage[beatId]),
+                    objectLayerCount: workspaceBeats.find((b) => b.beatId === beatId)?.objectLayerCount || 1,
                     backgroundImageUrl: beatBackgroundImageUrls[beatId] || '',
                     title,
                     autoSubmit: true,
@@ -4958,6 +4979,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             beatIndex: index + 1,
                             imagePrompt: prompt,
                             imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                            imageUrls: beatImageEntryUrls(beatImage[id]),
+                            objectLayerCount: Math.max(
+                            beatSectionObjectLayerCount(section),
+                            beatImagePromptObjectLayerCount(
+                                beatImage[id]?.image_prompt || section?.image_prompt,
+                            ),
+                        ),
                             backgroundImageUrl: beatBackgroundImageUrls[id] || '',
                             missingImage: isBeatImageMissing(beatImage, id, {
                                 section,
@@ -5045,6 +5073,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                         beatIndex: index + 1,
                         imagePrompt: prompt,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                        imageUrls: beatImageEntryUrls(beatImage[id]),
+                        objectLayerCount: Math.max(
+                            beatSectionObjectLayerCount(section),
+                            beatImagePromptObjectLayerCount(
+                                beatImage[id]?.image_prompt || section?.image_prompt,
+                            ),
+                        ),
                         backgroundImageUrl: beatBackgroundImageUrls[id] || '',
                         missingImage: isBeatImageMissing(beatImage, id, {
                             section,
@@ -5121,6 +5156,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             beatIndex: index + 1,
                             imagePrompt: prompt,
                             imageUrl: String(beatImage[id]?.image_url || '').trim(),
+                            imageUrls: beatImageEntryUrls(beatImage[id]),
+                            objectLayerCount: Math.max(
+                            beatSectionObjectLayerCount(section),
+                            beatImagePromptObjectLayerCount(
+                                beatImage[id]?.image_prompt || section?.image_prompt,
+                            ),
+                        ),
                             backgroundImageUrl: beatBackgroundImageUrls[id] || '',
                             missingImage: isBeatImageMissing(beatImage, id, {
                                 section,
