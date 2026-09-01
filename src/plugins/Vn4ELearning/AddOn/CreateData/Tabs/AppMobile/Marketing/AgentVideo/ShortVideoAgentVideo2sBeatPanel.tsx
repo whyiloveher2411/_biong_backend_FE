@@ -1,18 +1,43 @@
 import React from 'react';
-import { Alert, Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import {
+    Alert,
+    Box,
+    Button,
+    Chip,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    Stack,
+    Tooltip,
+    Typography,
+} from '@mui/material';
+import MergeIcon from '@mui/icons-material/Merge';
 import UndoIcon from '@mui/icons-material/Undo';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import AutoAwesomeMotionIcon from '@mui/icons-material/AutoAwesomeMotion';
 import ImageSearchIcon from '@mui/icons-material/ImageSearch';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ShortVideoAgentWhisperCompareText, {
+    type ManualBeatCursorClickPayload,
     type ManualBeatMarkClickPayload,
     type ManualBeatSelectionPayload,
 } from './ShortVideoAgentWhisperCompareText';
 import ShortVideoAgentManualBeatQuickMenu, {
     type ManualBeatQuickMenuAnchor,
 } from './ShortVideoAgentManualBeatQuickMenu';
-import { buildSentenceBeatMarks, manualBeatColor, manualBeatCoverageRatio } from './agentVideoManualBeats';
+import {
+    buildManualBeatRangeFromCursor,
+    buildSentenceBeatMarks,
+    isManualBeatTooShort,
+    manualBeatColor,
+    manualBeatCoverageRatio,
+    type ManualBeatTokenRange,
+} from './agentVideoManualBeats';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type Props = {
@@ -21,6 +46,10 @@ type Props = {
 
 export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     const [anchor, setAnchor] = React.useState<ManualBeatQuickMenuAnchor | null>(null);
+    const [pendingBeatRange, setPendingBeatRange] = React.useState<ManualBeatTokenRange | null>(null);
+    const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
+    const [aiOutputText, setAiOutputText] = React.useState('');
+    const [selectedBeatIds, setSelectedBeatIds] = React.useState<string[]>([]);
 
     const tokens = state.whisperScriptAlign?.tokens ?? [];
     const marks = state.manualBeatMarks;
@@ -33,10 +62,14 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
         [marks, tokens],
     );
 
-    const closeMenu = React.useCallback(() => setAnchor(null), []);
+    const closeMenu = React.useCallback(() => {
+        setAnchor(null);
+        setPendingBeatRange(null);
+    }, []);
 
     const handleSelection = React.useCallback((payload: ManualBeatSelectionPayload) => {
         const blockedReason = state.manualBeatBlockedReason(payload);
+        setPendingBeatRange(null);
         setAnchor({
             clientX: payload.clientX,
             clientY: payload.clientY,
@@ -46,8 +79,63 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     }, [state]);
 
     const handleMarkClick = React.useCallback((payload: ManualBeatMarkClickPayload) => {
+        setPendingBeatRange(null);
         setAnchor({ clientX: payload.clientX, clientY: payload.clientY, target: payload.mark });
     }, []);
+
+    const handleCursorClick = React.useCallback((payload: ManualBeatCursorClickPayload) => {
+        const result = buildManualBeatRangeFromCursor(payload.tokenIndex, tokens, marks);
+        if (result.blockedReason || !result.range) {
+            setPendingBeatRange(null);
+            setAnchor({
+                clientX: payload.clientX,
+                clientY: payload.clientY,
+                draft: null,
+                blockedReason: result.blockedReason ?? 'Không tạo được beat tại vị trí này',
+            });
+            return;
+        }
+        setPendingBeatRange(result.range);
+        const draft = state.buildManualBeatDraft(result.range);
+        setAnchor({
+            clientX: payload.clientX,
+            clientY: payload.clientY,
+            draft,
+            blockedReason: draft ? undefined : 'Không xác định được timing whisper của đoạn này',
+        });
+    }, [marks, state, tokens]);
+
+    const submitAiResult = React.useCallback(() => {
+        const text = aiOutputText.trim();
+        if (!text) {
+            return;
+        }
+        setAiDialogOpen(false);
+        setAiOutputText('');
+        void state.handleImportAiBeatDivision(text);
+    }, [aiOutputText, state]);
+
+    const handleBeatSelect = React.useCallback((markId: string, markOrder: number) => {
+        setSelectedBeatIds((current) => {
+            const selectedIndex = current.indexOf(markId);
+            if (selectedIndex !== -1) {
+                return current.filter((id) => id !== markId);
+            }
+            // Yêu cầu chọn các beat LIÊN TỤC: nếu id mới không nằm sát 1 trong 2 đầu
+            // của vùng đang chọn thì bỏ chọn hết, chọn lại từ mark này.
+            const bySelectedOrder = marks.filter((mark) => current.includes(mark.id));
+            if (current.length === 0 || bySelectedOrder.length === 0) {
+                return [markId];
+            }
+            const first = bySelectedOrder[0].order;
+            const last = bySelectedOrder[bySelectedOrder.length - 1].order;
+            const contiguous = markOrder === last + 1 || markOrder === first - 1;
+            if (contiguous) {
+                return [...current, markId];
+            }
+            return [markId];
+        });
+    }, [marks]);
 
     if (state.whisperStatus !== 'completed' || tokens.length === 0) {
         return (
@@ -60,8 +148,9 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     return (
         <Stack spacing={1.5}>
             <Alert severity="info" sx={{ py: 0.5 }}>
-                Bôi đen đoạn kịch bản rồi bấm <b>Tạo beat</b>. Beat chỉ lưu <b>content</b> (đoạn text đã bôi
-                đen), <b>image prompt để trống</b> — sinh sau bằng Meta.ai. Đoạn đã chia beat bị khóa, click
+                <b>Click</b> vào một từ để tự động tạo beat từ beat cuối cùng đến đó; hoặc <b>bôi đen</b> một
+                đoạn để chọn chính xác, rồi bấm <b>Tạo beat</b>. Beat chỉ lưu <b>content</b> (đoạn text đã
+                chọn), <b>image prompt để trống</b> — sinh sau bằng Meta.ai. Đoạn đã chia beat bị khóa, click
                 vào để xóa. Dấu kết câu được bọc trong{' '}
                 <Box
                     component="span"
@@ -97,6 +186,27 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
                     Phủ {coveragePercent}% số từ
                 </Typography>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={state.copyingBeatDivisionPrompt
+                        ? <CircularProgress size={14} color="inherit" />
+                        : <ContentCopyIcon />}
+                    disabled={state.copyingBeatDivisionPrompt}
+                    onClick={() => { void state.handleCopyBeatDivisionPrompt(); }}
+                >
+                    Copy prompt chia beat
+                </Button>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<SmartToyIcon />}
+                    disabled={state.importingAiBeatDivision}
+                    onClick={() => { setAiOutputText(''); setAiDialogOpen(true); }}
+                >
+                    Dán kết quả AI
+                </Button>
                 <Button
                     size="small"
                     variant="contained"
@@ -174,6 +284,8 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                     manualBeatMarks={marks}
                     onManualBeatSelection={handleSelection}
                     onManualBeatMarkClick={handleMarkClick}
+                    onManualBeatCursorClick={handleCursorClick}
+                    pendingBeatRange={pendingBeatRange}
                     plainScript
                     maxHeight={420}
                 />
@@ -182,10 +294,43 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
             {marks.length > 0 ? (
                 <Stack spacing={0.5}>
                     <Typography variant="subtitle2">Beat đã chia</Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        {selectedBeatIds.length > 0 ? (
+                            <Chip
+                                size="small"
+                                color="secondary"
+                                variant="filled"
+                                onDelete={() => setSelectedBeatIds([])}
+                                label={`Đang chọn ${selectedBeatIds.length} beat`}
+                            />
+                        ) : (
+                            <Typography variant="caption" color="text.secondary">
+                                Click 1 beat để chọn; click các beat <b>gần nhau</b> để gộp.
+                            </Typography>
+                        )}
+                        <Button
+                            size="small"
+                            variant="contained"
+                            color="secondary"
+                            startIcon={state.mergingManualBeat
+                                ? <CircularProgress size={14} color="inherit" />
+                                : <MergeIcon />}
+                            disabled={state.mergingManualBeat || selectedBeatIds.length < 2}
+                            onClick={() => {
+                                const ids = [...selectedBeatIds];
+                                setSelectedBeatIds([]);
+                                void state.handleMergeManualBeats(ids);
+                            }}
+                        >
+                            Gộp {selectedBeatIds.length} beat
+                        </Button>
+                    </Stack>
                     <Box sx={{ maxHeight: 320, overflowY: 'auto', pr: 0.5 }}>
                         <Stack spacing={0.5}>
                             {marks.map((mark) => {
                                 const color = manualBeatColor(mark.order);
+                                const isSelected = selectedBeatIds.includes(mark.id);
+                                const tooShort = isManualBeatTooShort(mark.durationSec);
                                 return (
                                     <Stack
                                         key={mark.id}
@@ -196,9 +341,20 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                                             px: 1,
                                             py: 0.5,
                                             borderRadius: 1,
-                                            bgcolor: mark.imagePrompt ? color.bg : 'rgba(255, 152, 0, 0.14)',
+                                            cursor: 'pointer',
+                                            outline: isSelected ? '2px solid' : 'none',
+                                            outlineColor: isSelected ? 'secondary.main' : 'transparent',
+                                            bgcolor: isSelected
+                                                ? 'secondary.main'
+                                                : tooShort
+                                                    ? 'rgba(255, 152, 0, 0.3)'
+                                                    : mark.imagePrompt
+                                                        ? color.bg
+                                                        : 'rgba(255, 152, 0, 0.14)',
                                             borderLeft: `3px solid ${mark.imagePrompt ? color.border : '#ff9800'}`,
+                                            '&:hover': { filter: isSelected ? 'none' : 'brightness(0.97)' },
                                         }}
+                                        onClick={() => handleBeatSelect(mark.id, mark.order)}
                                     >
                                         <Typography variant="caption" fontWeight={700} sx={{ color: color.label }}>
                                             #{mark.order}
@@ -214,21 +370,44 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                                         <Typography variant="caption" sx={{ flex: 1 }}>
                                             {mark.content}
                                         </Typography>
+                                        {tooShort ? (
+                                            <Chip size="small" color="warning" label="<2s" />
+                                        ) : null}
                                         <Chip
                                             size="small"
                                             variant="outlined"
                                             color={mark.imagePrompt ? 'success' : 'warning'}
                                             label={mark.imagePrompt ? 'có prompt' : 'chưa prompt'}
                                         />
-                                        <IconButton
-                                            size="small"
-                                            color="error"
-                                            aria-label={`Xóa beat ${mark.order}`}
-                                            disabled={state.savingManualBeat}
-                                            onClick={() => { void state.handleDeleteManualBeat(mark.id); }}
-                                        >
-                                            <DeleteOutlineOutlinedIcon fontSize="small" />
-                                        </IconButton>
+                                        {isSelected ? (
+                                            <IconButton
+                                                size="small"
+                                                color="inherit"
+                                                aria-label={`Gộp beat ${mark.order}`}
+                                                disabled={state.mergingManualBeat}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    const ids = [...selectedBeatIds];
+                                                    setSelectedBeatIds([]);
+                                                    void state.handleMergeManualBeats(ids);
+                                                }}
+                                            >
+                                                <MergeIcon fontSize="small" />
+                                            </IconButton>
+                                        ) : (
+                                            <IconButton
+                                                size="small"
+                                                color="error"
+                                                aria-label={`Xóa beat ${mark.order}`}
+                                                disabled={state.savingManualBeat}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    void state.handleDeleteManualBeat(mark.id);
+                                                }}
+                                            >
+                                                <DeleteOutlineOutlinedIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
                                     </Stack>
                                 );
                             })}
@@ -250,6 +429,67 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                 }}
                 onClose={closeMenu}
             />
+
+            <Dialog
+                open={aiDialogOpen}
+                onClose={() => {
+                    if (!state.importingAiBeatDivision) {
+                        setAiDialogOpen(false);
+                    }
+                }}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Dán kết quả AI chia beat</DialogTitle>
+                <DialogContent dividers>
+                    <Alert severity="warning" sx={{ mb: 1.5 }}>
+                        Thao tác này sẽ <b>thay toàn bộ</b> beat hiện tại. AI chỉ cần trả{' '}
+                        <b>content nguyên văn</b> — backend tự tính start/end dựa trên audio script + whisper
+                        timing.
+                    </Alert>
+                    <Box
+                        component="textarea"
+                        value={aiOutputText}
+                        onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
+                            setAiOutputText(event.target.value);
+                        }}
+                        placeholder={'1. content beat 1\n2. content beat 2\n...\n\n(Mỗi beat 1 dòng; hỗ trợ cả "Beat N:", bullet, hay JSON list)'}
+                        sx={{
+                            width: '100%',
+                            minHeight: 180,
+                            p: 1,
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            bgcolor: 'background.paper',
+                            color: 'text.primary',
+                            resize: 'vertical',
+                        }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        size="small"
+                        disabled={state.importingAiBeatDivision}
+                        onClick={() => { setAiDialogOpen(false); }}
+                    >
+                        Hủy
+                    </Button>
+                    <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={state.importingAiBeatDivision
+                            ? <CircularProgress size={14} color="inherit" />
+                            : <SmartToyIcon />}
+                        disabled={!aiOutputText.trim() || state.importingAiBeatDivision}
+                        onClick={submitAiResult}
+                    >
+                        {state.importingAiBeatDivision ? 'Đang nhập...' : 'Nhập beat AI'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Stack>
     );
 }

@@ -3,6 +3,7 @@ import useAjax from 'hook/useApi';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
     copyShortVideoAgentPromptToClipboard,
+    writePromptTextToClipboard,
     type ShortVideoAgentPromptPhase,
 } from 'helpers/marketingShortVideoAgentPrompt';
 import { launchShortVideoAgent, launchShortVideoAgentContinue, launchShortVideoAgentImportAssemble, launchShortVideoAgentImportHtmlFull, launchShortVideoAgentRender, launchImportHtmlAssemble, launchImportHtmlPreview, launchImportHtmlRender } from 'helpers/marketingShortVideoAgentLaunch';
@@ -27,8 +28,11 @@ import {
     addManualBeatMark,
     approveAudioScript,
     deleteManualBeatMark,
+    mergeManualBeatMarks as apiMergeManualBeatMarks,
+    fetchManualBeatDivisionPrompt,
     fetchManualBeatImagePromptMaster,
     fetchManualBeatMarks,
+    importManualBeatAiDivision,
     saveManualBeatMarks,
     fetchImportHtmlContext,
     normalizePlatforms,
@@ -220,6 +224,7 @@ import {
     buildSentenceBeatMarks,
     findManualBeatOverlap,
     manualBeatMarksToPayload,
+    mergeManualBeatMarks,
     normalizeManualBeatMarks,
     type ManualBeatMark,
     type ManualBeatTokenRange,
@@ -6383,6 +6388,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [manualBeatMarks, setManualBeatMarks] = React.useState<ManualBeatMark[]>([]);
     const [savingManualBeat, setSavingManualBeat] = React.useState(false);
     const [openingVideo2sMetaAi, setOpeningVideo2sMetaAi] = React.useState(false);
+    const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
+    const [importingAiBeatDivision, setImportingAiBeatDivision] = React.useState(false);
+    const [mergingManualBeat, setMergingManualBeat] = React.useState(false);
 
     React.useEffect(() => {
         if (!shortVideoId || !isVideo2sMode) {
@@ -6468,6 +6476,32 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setSavingManualBeat(false);
         }
     }, [manualBeatMarks, savingManualBeat, shortVideoId, showMessage]);
+
+    /** Gộp các beat đã chọn (liên tục) thành 1. */
+    const handleMergeManualBeats = React.useCallback(async (ids: string[]) => {
+        if (!shortVideoId || mergingManualBeat || ids.length < 2) {
+            return;
+        }
+        const previous = manualBeatMarks;
+        const next = mergeManualBeatMarks(manualBeatMarks, ids);
+        setMergingManualBeat(true);
+        setManualBeatMarks(next);
+        try {
+            const res = await apiMergeManualBeatMarks(shortVideoId, ids);
+            if (!res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res?.manual_beat_marks ?? previous));
+                showMessage(parseApiMessage(res?.message) || 'Không gộp được beat', 'error');
+                return;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            showMessage(`Đã gộp ${ids.length} beat thành 1`, 'success');
+        } catch (e) {
+            setManualBeatMarks(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setMergingManualBeat(false);
+        }
+    }, [manualBeatMarks, mergingManualBeat, shortVideoId, showMessage]);
 
     /** Chia beat tự động theo dấu "." kết câu — chỉ trên vùng chưa thuộc beat nào. */
     const handleAutoSplitManualBeats = React.useCallback(async () => {
@@ -6556,6 +6590,65 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             // bỏ qua — user có thể bấm lại
         }
     }, [loadRow, shortVideoId]);
+
+    /** Copy prompt chia beat AI (prompt-chia-beat.md + script + whisper timing) vào clipboard. */
+    const handleCopyBeatDivisionPrompt = React.useCallback(async () => {
+        if (!shortVideoId || copyingBeatDivisionPrompt) {
+            return;
+        }
+        setCopyingBeatDivisionPrompt(true);
+        try {
+            const res = await fetchManualBeatDivisionPrompt(shortVideoId);
+            if (!res?.success || !String(res.full_prompt || '').trim()) {
+                showMessage(parseApiMessage(res?.message) || 'Không đọc được prompt chia beat', 'error');
+                return;
+            }
+            const ok = await writePromptTextToClipboard(String(res.full_prompt));
+            if (!ok) {
+                showMessage('Không copy được — hãy chọn và copy thủ công', 'error');
+                return;
+            }
+            showMessage('Đã copy prompt chia beat vào clipboard — dán vào AI để chia beat', 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setCopyingBeatDivisionPrompt(false);
+        }
+    }, [copyingBeatDivisionPrompt, shortVideoId, showMessage]);
+
+    /** Nhập kết quả AI: backend tự tính timing theo content + audio script, THAY toàn bộ beat. */
+    const handleImportAiBeatDivision = React.useCallback(async (aiOutput: string) => {
+        if (!shortVideoId || importingAiBeatDivision) {
+            return;
+        }
+        const previous = manualBeatMarks;
+        setImportingAiBeatDivision(true);
+        try {
+            const res = await importManualBeatAiDivision(shortVideoId, aiOutput);
+            if (!res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res?.manual_beat_marks ?? previous));
+                showMessage(parseApiMessage(res?.message) || 'Không nhập được kết quả AI', 'error');
+                return;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            loadRow();
+            const warnings = Array.isArray(res.warnings) ? res.warnings : [];
+            const baseMsg = parseApiMessage(res?.message) || `Đã nhập ${res.total ?? 0} beat từ kết quả AI`;
+            if (warnings.length > 0) {
+                showMessage(`${baseMsg}\n${warnings.join('\n')}`, 'warning');
+            } else {
+                showMessage(baseMsg, 'success');
+            }
+        } catch (e) {
+            setManualBeatMarks(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setImportingAiBeatDivision(false);
+        }
+    }, [importingAiBeatDivision, loadRow, manualBeatMarks, shortVideoId, showMessage]);
 
     /** Video 2s: beat thủ công là nguồn truth — luôn derive beat_map cho preview/timeline/render UI. */
     const effectiveBeatMap = React.useMemo(() => {
@@ -8002,6 +8095,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleDeleteManualBeat,
         handleAutoSplitManualBeats,
         handleOpenVideo2sMetaAi,
+        copyingBeatDivisionPrompt,
+        importingAiBeatDivision,
+        handleCopyBeatDivisionPrompt,
+        handleImportAiBeatDivision,
+        mergingManualBeat,
+        handleMergeManualBeats,
         reloadManualBeatMarks,
         title,
         shortVideoId,
@@ -8457,8 +8556,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRefineBeatHtmlViaGemini,
         handleOpenBeatDivisionGemini,
         handleEnqueueBeatDivisionGeminiHeadless,
-        /** @deprecated Alias cho bundle cũ — dùng handleOpenBeatDivisionGemini */
-        handleCopyBeatDivisionPrompt: handleOpenBeatDivisionGemini,
         handleCopyBeatHtmlPrompt,
         handlePasteBeatHtml,
         handleDeleteBeatHtml,

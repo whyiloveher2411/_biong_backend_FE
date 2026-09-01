@@ -130,6 +130,66 @@ export function isManualBeatRangeFree(range: ManualBeatTokenRange, marks: Manual
     return findManualBeatOverlap(range, marks) === null;
 }
 
+export type ManualBeatCursorDraft = {
+    range?: ManualBeatTokenRange;
+    /** Vị trí con trỏ (token user vừa click) — dùng để đánh dấu caret nổi bật */
+    cursorTokenIndex: number;
+    /** Lý do không tạo được beat từ con trỏ này */
+    blockedReason?: string;
+};
+
+/**
+ * Click con trỏ vào một từ → dựng beat từ token ngay sau beat cuối cùng đến con trỏ.
+ * Luôn phủ đầy tuần tự (full coverage): nếu click vào vùng đã có beat hoặc trước
+ * điểm kết thúc của beat cuối cùng → chặn kèm lý do. Nếu chưa có beat nào thì
+ * bắt đầu từ token đầu tiên của kịch bản.
+ */
+export function buildManualBeatRangeFromCursor(
+    cursorTokenIndex: number,
+    tokens: CaptionAlignToken[],
+    marks: ManualBeatMark[],
+): ManualBeatCursorDraft {
+    const cursor = Number(cursorTokenIndex);
+    if (!Number.isFinite(cursor) || tokens.length === 0) {
+        return { cursorTokenIndex: cursor, blockedReason: 'Không có dữ liệu whisper để chia beat' };
+    }
+
+    if (marks.length === 0) {
+        const firstIndex = tokens[0].index;
+        if (cursor < firstIndex) {
+            return { cursorTokenIndex: cursor, blockedReason: 'Vị trí con trỏ không hợp lệ' };
+        }
+        return { range: { startTokenIndex: firstIndex, endTokenIndex: cursor }, cursorTokenIndex: cursor };
+    }
+
+    const lastBeat = [...marks].sort((a, b) => a.endTokenIndex - b.endTokenIndex)[marks.length - 1];
+    const nextStart = lastBeat.endTokenIndex + 1;
+
+    if (cursor < nextStart) {
+        return {
+            cursorTokenIndex: cursor,
+            blockedReason: `Đặt sau beat cuối cùng (#${lastBeat.order}) để tạo beat mới`,
+        };
+    }
+
+    // Kiểm tra vùng từ sau beat cuối đến con trỏ có đè lên beat khác không
+    const covered = buildManualBeatTokenMap(marks);
+    for (let index = nextStart; index <= cursor; index += 1) {
+        const conflict = covered.get(index);
+        if (conflict && conflict.id !== lastBeat.id) {
+            return {
+                cursorTokenIndex: cursor,
+                blockedReason: `Đoạn từ beat ${lastBeat.order} đến đây đè lên beat ${conflict.order}`,
+            };
+        }
+    }
+
+    return {
+        range: { startTokenIndex: nextStart, endTokenIndex: cursor },
+        cursorTokenIndex: cursor,
+    };
+}
+
 function tokenIndexFromNode(node: Node | null, root: HTMLElement): number | null {
     let current: Node | null = node;
     while (current && current !== root) {
@@ -334,6 +394,49 @@ export function buildSentenceBeatMarks(
     flush();
 
     return added;
+}
+
+/**
+ * Gộp các beat (theo id, đã chọn liên tục) thành 1. Giữ mốc thời gian bao trùm,
+ * nối content cách 1 dấu cách; giữ image_prompt nếu TẤT CẢ đều có prompt.
+ * Trả về danh sách mark mới đã normalize + re-order.
+ */
+export function mergeManualBeatMarks(marks: ManualBeatMark[], ids: string[]): ManualBeatMark[] {
+    const idSet = new Set(ids);
+    const selected = marks.filter((mark) => idSet.has(mark.id));
+    if (selected.length < 2) {
+        return marks;
+    }
+    const selectedByStart = [...selected].sort((a, b) => a.startTokenIndex - b.startTokenIndex);
+    const merged: ManualBeatMark = {
+        id: `merged_${Date.now()}`,
+        order: 0,
+        startTokenIndex: Math.min(...selectedByStart.map((mark) => mark.startTokenIndex)),
+        endTokenIndex: Math.max(...selectedByStart.map((mark) => mark.endTokenIndex)),
+        content: selectedByStart
+            .map((mark) => mark.content.trim())
+            .filter((text) => text !== '')
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        imagePrompt: selectedByStart.every((mark) => mark.imagePrompt.trim() !== '')
+            ? selectedByStart[0].imagePrompt
+            : '',
+        startSec: Math.min(...selectedByStart.map((mark) => mark.startSec)),
+        endSec: Math.max(...selectedByStart.map((mark) => mark.endSec)),
+        durationSec: 0,
+    };
+    merged.durationSec = Math.max(0, merged.endSec - merged.startSec);
+
+    const next = marks
+        .filter((mark) => !idSet.has(mark.id))
+        .concat(merged);
+    return normalizeManualBeatMarks(next);
+}
+
+/** Beat nào < 2s → cần gộp để dựng ảnh (1 ảnh/beat): tô đậm background. */
+export function isManualBeatTooShort(durationSec: number): boolean {
+    return Number(durationSec) > 0 && Number(durationSec) < MANUAL_BEAT_TARGET_SEC;
 }
 
 export function manualBeatDurationWarning(durationSec: number): string | null {

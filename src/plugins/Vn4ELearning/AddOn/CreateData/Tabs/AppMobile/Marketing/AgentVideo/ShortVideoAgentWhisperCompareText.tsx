@@ -29,6 +29,12 @@ export type ManualBeatMarkClickPayload = {
     clientY: number;
 };
 
+export type ManualBeatCursorClickPayload = {
+    tokenIndex: number;
+    clientX: number;
+    clientY: number;
+};
+
 type Props = {
     audioScript: string;
     tokens: CaptionAlignToken[];
@@ -49,8 +55,12 @@ type Props = {
     manualBeatMarks?: ManualBeatMark[];
     /** Bôi đen vùng chưa có beat → mở menu "Tạo beat" */
     onManualBeatSelection?: (payload: ManualBeatSelectionPayload) => void;
+    /** Click vào từ chưa thuộc beat → dựng beat từ beat cuối đến vị trí con trỏ */
+    onManualBeatCursorClick?: (payload: ManualBeatCursorClickPayload) => void;
     /** Click vào từ đã thuộc beat → mở menu xóa beat */
     onManualBeatMarkClick?: (payload: ManualBeatMarkClickPayload) => void;
+    /** Vùng beat đang được preview (từ beat cuối đến con trỏ) sau khi click */
+    pendingBeatRange?: ManualBeatTokenRange | null;
     /** Chỉ hiện audio script thuần (bỏ màu tier + nhãn whisper), tô dấu kết câu */
     plainScript?: boolean;
     compact?: boolean;
@@ -126,6 +136,9 @@ function CompareWord({
     beatMarkIsStart,
     beatMarkIsEnd,
     onBeatMarkClick,
+    onCursorClick,
+    inPendingRange,
+    isPendingCaret,
     plainScript,
 }: {
     token: CaptionAlignToken;
@@ -147,6 +160,9 @@ function CompareWord({
     beatMarkIsStart?: boolean;
     beatMarkIsEnd?: boolean;
     onBeatMarkClick?: (payload: ManualBeatMarkClickPayload) => void;
+    onCursorClick?: (payload: ManualBeatCursorClickPayload) => void;
+    inPendingRange?: boolean;
+    isPendingCaret?: boolean;
     plainScript?: boolean;
 }) {
     const style = WHISPER_TIER_STYLES[token.tier];
@@ -176,6 +192,16 @@ function CompareWord({
         if (sel && !sel.isCollapsed && String(sel.toString() || '').trim()) {
             event.preventDefault();
             event.stopPropagation();
+            return;
+        }
+        if (onCursorClick) {
+            event.preventDefault();
+            event.stopPropagation();
+            onCursorClick({
+                tokenIndex: token.index,
+                clientX: event.clientX,
+                clientY: event.clientY,
+            });
             return;
         }
         if (canEditPhonetic && onPhoneticSelection) {
@@ -216,50 +242,81 @@ function CompareWord({
             title={
                 beatMark
                     ? `Đã thuộc beat ${beatMark.order} (${beatMark.durationSec.toFixed(2)}s) — click để xóa beat`
-                    : canEditPhonetic
-                        ? 'Click để sửa phiên âm · Click phải cũng mở menu'
-                        : (canSeek ? 'Click để nghe đoạn audio' : undefined)
+                    : onCursorClick
+                        ? 'Click để tạo beat từ beat cuối cùng đến đây'
+                        : canEditPhonetic
+                            ? 'Click để sửa phiên âm · Click phải cũng mở menu'
+                            : (canSeek ? 'Click để nghe đoạn audio' : undefined)
             }
             sx={{
                 color: isPlayingActive
                     ? WHISPER_KARAOKE_ACTIVE_STYLE.color
                     : plainScript ? 'text.primary' : style.color,
                 opacity: dimmed && !isPlayingActive ? 0.35 : 1,
-                fontWeight: !plainScript && (token.tier !== 'green' || isPlayingActive) ? 600 : 400,
+                fontWeight: !plainScript && (token.tier !== 'green' || isPlayingActive)
+                    || isPendingCaret ? 700 : 400,
                 cursor: beatMark
                     ? 'pointer'
-                    : (canSeek || canEditPhonetic || onPhoneticSelection) ? 'pointer' : 'default',
+                    : onCursorClick || canSeek || canEditPhonetic || onPhoneticSelection ? 'pointer' : 'default',
                 userSelect: beatMark ? 'none' : undefined,
                 textDecoration: 'none',
                 bgcolor: isPlayingActive
                     ? WHISPER_KARAOKE_ACTIVE_STYLE.bgcolor
-                    : beatColor
-                        ? beatColor.bg
-                        : selected && !plainScript
-                            ? style.bg
-                            : 'transparent',
-                borderTop: beatColor ? `1px solid ${beatColor.border}` : undefined,
-                borderBottom: beatColor ? `1px solid ${beatColor.border}` : undefined,
-                borderLeft: beatColor && beatMarkIsStart ? `1px solid ${beatColor.border}` : undefined,
-                borderRight: beatColor && beatMarkIsEnd ? `1px solid ${beatColor.border}` : undefined,
+                    : inPendingRange
+                        ? (isPendingCaret ? 'rgba(25, 118, 210, 0.32)' : 'rgba(25, 118, 210, 0.16)')
+                        : beatColor
+                            ? beatColor.bg
+                            : selected && !plainScript
+                                ? style.bg
+                                : 'transparent',
+                borderTop: inPendingRange ? '1px dashed rgba(25, 118, 210, 0.7)' : (beatColor ? `1px solid ${beatColor.border}` : undefined),
+                borderBottom: inPendingRange ? '1px dashed rgba(25, 118, 210, 0.7)' : (beatColor ? `1px solid ${beatColor.border}` : undefined),
+                borderLeft: inPendingRange ? '1px solid rgba(25, 118, 210, 0.9)' : (beatColor && beatMarkIsStart ? `1px solid ${beatColor.border}` : undefined),
+                borderRight: inPendingRange ? '1px solid rgba(25, 118, 210, 0.9)' : (beatColor && beatMarkIsEnd ? `1px solid ${beatColor.border}` : undefined),
+                boxShadow: isPendingCaret
+                    ? '0 0 0 1.5px #1976d2, 0 0 10px rgba(25, 118, 210, 0.55)'
+                    : undefined,
                 borderRadius: beatMark
                     ? `${beatMarkIsStart ? '4px' : '0'} ${beatMarkIsEnd ? '4px' : '0'} ${beatMarkIsEnd ? '4px' : '0'} ${beatMarkIsStart ? '4px' : '0'}`
-                    : isPlayingActive || selected ? '3px' : 0,
-                px: beatMark || isPlayingActive || selected ? 0.25 : 0,
-                transition: 'background-color 0.12s ease, color 0.12s ease',
+                    : isPlayingActive || selected || inPendingRange ? '3px' : 0,
+                px: beatMark || isPlayingActive || selected || inPendingRange ? 0.25 : 0,
+                transition: 'background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease',
                 outline: !plainScript && !isPlayingActive && token.hasTimingGap
                     ? WHISPER_GAP_OUTLINE
                     : 'none',
                 outlineOffset: 1,
-                '&:hover': (canSeek || canEditPhonetic || beatMark) && !isPlayingActive
+                '&:hover': (canSeek || canEditPhonetic || beatMark || inPendingRange) && !isPlayingActive
                     ? {
-                        bgcolor: beatColor
-                            ? beatColor.hover
-                            : plainScript ? 'action.hover' : (style.bg || 'action.hover'),
+                        bgcolor: inPendingRange
+                            ? (isPendingCaret ? 'rgba(25, 118, 210, 0.42)' : 'rgba(25, 118, 210, 0.24)')
+                            : beatColor
+                                ? beatColor.hover
+                                : plainScript ? 'action.hover' : (style.bg || 'action.hover'),
                     }
                     : undefined,
             }}
         >
+            {isPendingCaret ? (
+                <Box
+                    component="span"
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 3,
+                        height: '1.1em',
+                        mr: 0.35,
+                        verticalAlign: 'middle',
+                        borderRadius: '2px',
+                        bgcolor: '#1976d2',
+                        animation: 'beatCaretBlink 1.1s ease-in-out infinite',
+                        '@keyframes beatCaretBlink': {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0.3 },
+                        },
+                    }}
+                />
+            ) : null}
             {beatMark && beatMarkIsStart ? (
                 <Typography
                     component="span"
@@ -302,6 +359,8 @@ function renderLineTokens({
     suppressNextClickRef,
     beatMarkByTokenIndex,
     onManualBeatMarkClick,
+    onManualBeatCursorClick,
+    pendingBeatRange,
     plainScript,
 }: {
     lineTokens: CaptionAlignToken[];
@@ -320,6 +379,8 @@ function renderLineTokens({
     suppressNextClickRef?: React.MutableRefObject<boolean>;
     beatMarkByTokenIndex: Map<number, ManualBeatMark>;
     onManualBeatMarkClick?: (payload: ManualBeatMarkClickPayload) => void;
+    onManualBeatCursorClick?: (payload: ManualBeatCursorClickPayload) => void;
+    pendingBeatRange?: ManualBeatTokenRange | null;
     plainScript?: boolean;
 }) {
     const nodes: React.ReactNode[] = [];
@@ -328,11 +389,17 @@ function renderLineTokens({
 
     const beatWordProps = (token: CaptionAlignToken) => {
         const mark = beatMarkByTokenIndex.get(token.index) ?? null;
+        const inPending = Boolean(pendingBeatRange
+            && token.index >= pendingBeatRange.startTokenIndex
+            && token.index <= pendingBeatRange.endTokenIndex);
         return {
             beatMark: mark,
             beatMarkIsStart: mark ? mark.startTokenIndex === token.index : false,
             beatMarkIsEnd: mark ? mark.endTokenIndex === token.index : false,
             onBeatMarkClick: onManualBeatMarkClick,
+            onCursorClick: onManualBeatCursorClick,
+            inPendingRange: inPending,
+            isPendingCaret: inPending && pendingBeatRange ? token.index === pendingBeatRange.endTokenIndex : false,
             plainScript,
         };
     };
@@ -424,6 +491,8 @@ export default function ShortVideoAgentWhisperCompareText({
     manualBeatMarks = [],
     onManualBeatSelection,
     onManualBeatMarkClick,
+    onManualBeatCursorClick,
+    pendingBeatRange = null,
     plainScript = false,
     compact = false,
     maxHeight,
@@ -555,6 +624,8 @@ export default function ShortVideoAgentWhisperCompareText({
                             suppressNextClickRef,
                             beatMarkByTokenIndex,
                             onManualBeatMarkClick,
+                            onManualBeatCursorClick,
+                            pendingBeatRange,
                             plainScript,
                         })}
                     </Typography>

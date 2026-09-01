@@ -3535,6 +3535,16 @@ export async function deleteManualBeatMark(
     ) as Promise<ManualBeatResponse>;
 }
 
+export async function mergeManualBeatMarks(
+    shortVideoId: number,
+    markIds: string[],
+): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/merge-marks',
+        shortVideoBody(shortVideoId, { mark_ids: markIds }),
+    ) as Promise<ManualBeatResponse>;
+}
+
 /** System prompt art-director video 2s (prompts/video-2s/prompt-sinh-image.md). */
 export async function fetchManualBeatImagePromptMaster(): Promise<JsonResponse & {
     prompt?: string;
@@ -3544,6 +3554,41 @@ export async function fetchManualBeatImagePromptMaster(): Promise<JsonResponse &
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-image-prompt-master',
         {},
     ) as Promise<JsonResponse & { prompt?: string; length?: number }>;
+}
+
+/** Copy prompt chia beat AI video 2s (prompts/video-2s/prompt-chia-beat.md + script + whisper). */
+export async function fetchManualBeatDivisionPrompt(shortVideoId: number): Promise<JsonResponse & {
+    full_prompt?: string;
+    prompt?: string;
+    content_block?: string;
+    title?: string;
+    language?: string;
+    duration_sec?: number;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-beat-division-prompt',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<JsonResponse & {
+        full_prompt?: string;
+        prompt?: string;
+        content_block?: string;
+        title?: string;
+        language?: string;
+        duration_sec?: number;
+    }>;
+}
+
+/** Nhập kết quả chia beat AI: backend tự tính timing, THAY toàn bộ beat hiện tại. */
+export async function importManualBeatAiDivision(
+    shortVideoId: number,
+    aiOutput: string,
+): Promise<ManualBeatResponse & {
+    warnings?: string[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/import-ai-division',
+        shortVideoBody(shortVideoId, { ai_output: aiOutput }),
+    ) as Promise<ManualBeatResponse & { warnings?: string[] }>;
 }
 
 export async function saveManualBeatMarkPrompt(
