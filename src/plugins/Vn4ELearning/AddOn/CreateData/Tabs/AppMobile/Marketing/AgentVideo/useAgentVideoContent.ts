@@ -21,9 +21,15 @@ import {
     openImportHtmlBeatDuckAiForMissingBeats,
     openImportHtmlBeatMetaAiFillOnly,
     openImportHtmlBeatMetaAiForMissingBeats,
+    openVideo2sBeatPromptMetaAi,
 } from 'helpers/marketingImportHtmlWorkflow';
 import {
+    addManualBeatMark,
     approveAudioScript,
+    deleteManualBeatMark,
+    fetchManualBeatImagePromptMaster,
+    fetchManualBeatMarks,
+    saveManualBeatMarks,
     fetchImportHtmlContext,
     normalizePlatforms,
     parseApiMessage,
@@ -207,7 +213,16 @@ import {
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
 import { beatImageEntryUrls } from './whiteboardImageLayers';
-import { isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
+import { isAgentVideo2sMode, isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
+import {
+    buildManualBeatMark,
+    buildSentenceBeatMarks,
+    findManualBeatOverlap,
+    manualBeatMarksToPayload,
+    normalizeManualBeatMarks,
+    type ManualBeatMark,
+    type ManualBeatTokenRange,
+} from './agentVideoManualBeats';
 import {
     deriveWhiteboardRenderProgress,
     type WhiteboardRenderProgress,
@@ -6359,6 +6374,181 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         phoneticDict: ttsPhoneticDict,
     });
 
+    // Clip video 2s — beat thủ công: bôi đen audio script rồi bấm "Tạo beat"
+    const isVideo2sMode = isAgentVideo2sMode(agentVisualMode);
+    const [manualBeatMarks, setManualBeatMarks] = React.useState<ManualBeatMark[]>([]);
+    const [savingManualBeat, setSavingManualBeat] = React.useState(false);
+    const [openingVideo2sMetaAi, setOpeningVideo2sMetaAi] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!shortVideoId || !isVideo2sMode) {
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetchManualBeatMarks(shortVideoId);
+                if (!cancelled && res?.success) {
+                    setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                }
+            } catch {
+                // im lặng — panel vẫn dùng được, user tạo beat sẽ tự sync lại
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isVideo2sMode, shortVideoId]);
+
+    const buildManualBeatDraft = React.useCallback((range: ManualBeatTokenRange): ManualBeatMark | null => {
+        if (!whisperScriptAlign) {
+            return null;
+        }
+        return buildManualBeatMark(range, whisperScriptAlign.tokens, manualBeatMarks);
+    }, [manualBeatMarks, whisperScriptAlign]);
+
+    const manualBeatBlockedReason = React.useCallback((range: ManualBeatTokenRange): string => {
+        const overlap = findManualBeatOverlap(range, manualBeatMarks);
+        return overlap ? `Đoạn này đã thuộc beat ${overlap.order}` : '';
+    }, [manualBeatMarks]);
+
+    const handleCreateManualBeat = React.useCallback(async (draft: ManualBeatMark) => {
+        if (!shortVideoId || savingManualBeat) {
+            return;
+        }
+        const previous = manualBeatMarks;
+        setSavingManualBeat(true);
+        setManualBeatMarks(normalizeManualBeatMarks([...previous, draft]));
+        try {
+            const res = await addManualBeatMark(shortVideoId, {
+                startTokenIndex: draft.startTokenIndex,
+                endTokenIndex: draft.endTokenIndex,
+                content: draft.content,
+                image_prompt: '',
+                startSec: draft.startSec,
+                endSec: draft.endSec,
+            });
+            if (!res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res?.manual_beat_marks ?? previous));
+                showMessage(parseApiMessage(res?.message) || 'Không tạo được beat', 'error');
+                return;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+        } catch (e) {
+            setManualBeatMarks(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingManualBeat(false);
+        }
+    }, [manualBeatMarks, savingManualBeat, shortVideoId, showMessage]);
+
+    const handleDeleteManualBeat = React.useCallback(async (markId: string) => {
+        if (!shortVideoId || savingManualBeat) {
+            return;
+        }
+        const previous = manualBeatMarks;
+        setSavingManualBeat(true);
+        setManualBeatMarks(normalizeManualBeatMarks(previous.filter((mark) => mark.id !== markId)));
+        try {
+            const res = await deleteManualBeatMark(shortVideoId, markId);
+            if (!res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res?.manual_beat_marks ?? previous));
+                showMessage(parseApiMessage(res?.message) || 'Không xóa được beat', 'error');
+                return;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+        } catch (e) {
+            setManualBeatMarks(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingManualBeat(false);
+        }
+    }, [manualBeatMarks, savingManualBeat, shortVideoId, showMessage]);
+
+    /** Chia beat tự động theo dấu "." kết câu — chỉ trên vùng chưa thuộc beat nào. */
+    const handleAutoSplitManualBeats = React.useCallback(async () => {
+        if (!shortVideoId || savingManualBeat || !whisperScriptAlign) {
+            return;
+        }
+        const added = buildSentenceBeatMarks(whisperScriptAlign.tokens, manualBeatMarks);
+        if (added.length === 0) {
+            showMessage('Không tìm thấy câu nào chưa chia beat', 'info');
+            return;
+        }
+
+        const previous = manualBeatMarks;
+        const next = normalizeManualBeatMarks([...previous, ...added]);
+        setSavingManualBeat(true);
+        setManualBeatMarks(next);
+        try {
+            const res = await saveManualBeatMarks(shortVideoId, manualBeatMarksToPayload(next));
+            if (!res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res?.manual_beat_marks ?? previous));
+                showMessage(parseApiMessage(res?.message) || 'Không chia được beat', 'error');
+                return;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            showMessage(`Đã chia thêm ${added.length} beat theo dấu "."`, 'success');
+        } catch (e) {
+            setManualBeatMarks(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingManualBeat(false);
+        }
+    }, [manualBeatMarks, savingManualBeat, shortVideoId, showMessage, whisperScriptAlign]);
+
+    /** Mở workspace Meta.ai: panel extension dán master prompt rồi hiện list beat. */
+    const handleOpenVideo2sMetaAi = React.useCallback(async () => {
+        if (!shortVideoId || openingVideo2sMetaAi) {
+            return;
+        }
+        if (manualBeatMarks.length === 0) {
+            showMessage('Chưa có beat nào', 'warning');
+            return;
+        }
+        setOpeningVideo2sMetaAi(true);
+        try {
+            const master = await fetchManualBeatImagePromptMaster();
+            if (!master?.success || !String(master.prompt || '').trim()) {
+                showMessage(parseApiMessage(master?.message) || 'Không đọc được prompt sinh ảnh', 'error');
+                return;
+            }
+            await openVideo2sBeatPromptMetaAi({
+                shortVideoId,
+                masterPrompt: String(master.prompt),
+                title,
+                beats: manualBeatMarks.map((mark) => ({
+                    markId: mark.id,
+                    order: mark.order,
+                    content: mark.content,
+                    imagePrompt: mark.imagePrompt,
+                    startSec: mark.startSec,
+                    endSec: mark.endSec,
+                })),
+            });
+            showMessage('Đã mở tab Meta.ai — chờ panel dán prompt xong rồi bấm từng beat', 'success');
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setOpeningVideo2sMetaAi(false);
+        }
+    }, [manualBeatMarks, openingVideo2sMetaAi, shortVideoId, showMessage, title]);
+
+    /** Panel Meta.ai lưu prompt xong → CMS đọc lại danh sách beat. */
+    const reloadManualBeatMarks = React.useCallback(async () => {
+        if (!shortVideoId) {
+            return;
+        }
+        try {
+            const res = await fetchManualBeatMarks(shortVideoId);
+            if (res?.success) {
+                setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            }
+        } catch {
+            // bỏ qua — user có thể bấm lại
+        }
+    }, [shortVideoId]);
+
     const whisperAlignKeyRef = React.useRef('');
     React.useEffect(() => {
         const nextKey = `${audioScript}::${whisperWords.map((w) => `${w.text}:${w.start}`).join('|')}`;
@@ -7772,6 +7962,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     ]);
 
     return {
+        isVideo2sMode,
+        manualBeatMarks,
+        savingManualBeat,
+        openingVideo2sMetaAi,
+        buildManualBeatDraft,
+        manualBeatBlockedReason,
+        handleCreateManualBeat,
+        handleDeleteManualBeat,
+        handleAutoSplitManualBeats,
+        handleOpenVideo2sMetaAi,
+        reloadManualBeatMarks,
         title,
         shortVideoId,
         audioScript,

@@ -33,6 +33,8 @@ import {
     validateBeatMap,
     type BeatMap,
 } from './agentVideoBeatMap';
+import ShortVideoAgentVideo2sBeatPanel from './ShortVideoAgentVideo2sBeatPanel';
+import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type Props = {
     open: boolean;
@@ -41,6 +43,8 @@ type Props = {
     audioDurationSec?: number | null;
     agentSourceFormat?: string;
     isWhiteboard: boolean;
+    /** Clip video 2s — chỉ có 1 cách chia beat: bôi đen kịch bản trong box Whisper. */
+    video2sState?: ReturnType<typeof useAgentVideoContent> | null;
     /** limitBeats > 0 → chế độ test: chỉ cập nhật N beat đầu của beat map hiện tại. */
     onSave: (map: BeatMap, options?: { limitBeats?: number }) => Promise<boolean>;
     /** Chia beat từ JSON user có sẵn — backend khớp content với audio script, timing lấy từ Whisper. */
@@ -225,6 +229,7 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
     audioDurationSec,
     agentSourceFormat = '',
     isWhiteboard,
+    video2sState = null,
     onSave,
     onImportJson,
 }: Props) {
@@ -675,6 +680,39 @@ export default function ShortVideoAgentBeatDivisionManualDrawer({
     );
 
     const canSave = Boolean(analysis?.valid && analysis?.map);
+
+    // Clip video 2s: layout giống mode Image, nhưng drawer chỉ có duy nhất cách chia 2s.
+    if (video2sState?.isVideo2sMode) {
+        return (
+            <DrawerCustom
+                open={open}
+                onClose={onClose}
+                title="Chia beat thủ công"
+                width={760}
+                restDialogContent={{ sx: { pt: 2, px: 2, pb: 2 } }}
+            >
+                <Stack spacing={2} sx={{ pt: 3, px: 2.5, pb: 3 }}>
+                    <Box>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Typography variant="subtitle1" fontWeight={700} flex={1}>
+                                Chế độ chia beat
+                            </Typography>
+                            <ToggleButtonGroup exclusive size="small" value="split_2s" aria-label="Chế độ chia beat">
+                                <ToggleButton value="split_2s" aria-label="Chia 2s">
+                                    Chia 2s
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                            Chia 2s: mỗi beat ~2 giây một ảnh, chia thủ công bằng cách bôi đen kịch bản.
+                            Không dùng prompt AI / headless.
+                        </Typography>
+                    </Box>
+                    <ShortVideoAgentVideo2sBeatPanel state={video2sState} />
+                </Stack>
+            </DrawerCustom>
+        );
+    }
 
     return (
         <DrawerCustom

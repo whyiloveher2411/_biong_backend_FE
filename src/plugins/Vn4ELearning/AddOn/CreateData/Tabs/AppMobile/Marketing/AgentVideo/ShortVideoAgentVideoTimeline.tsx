@@ -1433,6 +1433,7 @@ export default function ShortVideoAgentVideoTimeline({
                 audioDurationSec={audioDurationSec}
                 agentSourceFormat={agentSourceFormat}
                 isWhiteboard={isWhiteboardMode}
+                video2sState={agentState ?? null}
                 onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSaveWithOptions}
                 onImportJson={onImportBeatMapJson}
             />

@@ -20,6 +20,8 @@ const OPEN_IMPORT_HTML_DUCKAI_EVENT = 'vn4-open-import-html-beat-duckai';
 const OPEN_IMPORT_HTML_DUCKAI_RESULT_EVENT = 'vn4-open-import-html-beat-duckai-result';
 const OPEN_IMPORT_HTML_METAAI_EVENT = 'vn4-open-import-html-beat-metaai';
 const OPEN_IMPORT_HTML_METAAI_RESULT_EVENT = 'vn4-open-import-html-beat-metaai-result';
+const OPEN_VIDEO_2S_PROMPT_METAAI_EVENT = 'vn4-open-video-2s-beat-prompt-metaai';
+const OPEN_VIDEO_2S_PROMPT_METAAI_RESULT_EVENT = 'vn4-open-video-2s-beat-prompt-metaai-result';
 
 /** Extension dispatch sau khi lưu beat HTML từ Gemini — drawer Agent Video lắng nghe để reload. */
 export const IMPORT_HTML_BEAT_HTML_SAVED_EVENT = 'vn4-import-html-beat-html-saved';
@@ -740,6 +742,76 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
         ...(options.autoSubmit === false ? {} : { auto_submit: true }),
     });
+    if (!result.ok) {
+        throw new Error(result.error || 'Không mở được tab Meta.ai');
+    }
+}
+
+export type Video2sPromptBeat = {
+    markId: string;
+    order: number;
+    content: string;
+    imagePrompt?: string;
+    startSec?: number;
+    endSec?: number;
+};
+
+/**
+ * Clip video 2s — mở 1 tab Meta.ai làm workspace sinh prompt ảnh: panel tự dán
+ * master prompt art-director rồi hiện danh sách beat để user copy content / dán
+ * prompt trả về từ clipboard.
+ */
+export async function openVideo2sBeatPromptMetaAi(options: {
+    shortVideoId: number;
+    masterPrompt: string;
+    beats: Video2sPromptBeat[];
+    title?: string;
+}): Promise<void> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const masterPrompt = String(options.masterPrompt || '').trim();
+    const beats = (Array.isArray(options.beats) ? options.beats : [])
+        .map((beat) => ({
+            mark_id: String(beat?.markId || '').trim(),
+            order: Number(beat?.order || 0),
+            content: String(beat?.content || '').trim(),
+            image_prompt: String(beat?.imagePrompt || '').trim(),
+            start_sec: Number(beat?.startSec || 0),
+            end_sec: Number(beat?.endSec || 0),
+        }))
+        .filter((beat) => beat.mark_id && beat.content);
+
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+    if (!masterPrompt) {
+        throw new Error('Thiếu master prompt (prompts/video-2s/prompt-sinh-image.md)');
+    }
+    if (!beats.length) {
+        throw new Error('Chưa có beat nào để sinh prompt');
+    }
+
+    const extensionReady = await waitForExtensionReady(8000);
+    if (!extensionReady) {
+        throw new Error(
+            'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
+        );
+    }
+
+    const result = await dispatchCmsExtensionEvent(
+        OPEN_VIDEO_2S_PROMPT_METAAI_EVENT,
+        {
+            short_video_id: shortVideoId,
+            title: String(options.title || '').trim(),
+            master_prompt: masterPrompt,
+            beats,
+            access_token: getAccessToken() ?? '',
+            save_prompt_api_url: pluginApiPath('short-video/manual-beat/save-mark-prompt'),
+            get_marks_api_url: pluginApiPath('short-video/manual-beat/get-marks'),
+            clear_all_prompts_api_url: pluginApiPath('short-video/manual-beat/clear-all-prompts'),
+        },
+        OPEN_VIDEO_2S_PROMPT_METAAI_RESULT_EVENT,
+        12000,
+    );
     if (!result.ok) {
         throw new Error(result.error || 'Không mở được tab Meta.ai');
     }

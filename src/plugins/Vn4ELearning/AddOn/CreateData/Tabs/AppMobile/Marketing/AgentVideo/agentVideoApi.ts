@@ -14,7 +14,7 @@ export type VisualStyleCatalogItem = {
 
 export type AgentRenderMode = 'creative' | 'import_html';
 
-export type AgentVisualMode = 'hyperframes' | 'whiteboard';
+export type AgentVisualMode = 'hyperframes' | 'whiteboard' | 'video_2s';
 
 export type AgentImageAnimationEffect =
     | 'none'
@@ -3464,6 +3464,99 @@ export async function fetchBeatDivisionDraft(shortVideoId: number): Promise<Json
         phase2_json?: string | null;
         phase1_valid?: boolean;
         phase2_valid?: boolean;
+    }>;
+}
+
+/** Beat thủ công của clip video 2s — chỉ đánh dấu khoảng từ + timing, chưa có prompt ảnh. */
+export type ManualBeatMarkPayload = {
+    id?: string;
+    order?: number;
+    startTokenIndex: number;
+    endTokenIndex: number;
+    content: string;
+    image_prompt?: string;
+    startSec: number;
+    endSec: number;
+    durationSec?: number;
+    created_at?: string;
+};
+
+type ManualBeatResponse = JsonResponse & {
+    manual_beat_marks?: ManualBeatMarkPayload[];
+    total?: number;
+};
+
+export async function fetchManualBeatMarks(shortVideoId: number): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-marks',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<ManualBeatResponse>;
+}
+
+export async function saveManualBeatMarks(
+    shortVideoId: number,
+    marks: ManualBeatMarkPayload[],
+): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/save-marks',
+        shortVideoBody(shortVideoId, { marks }),
+    ) as Promise<ManualBeatResponse>;
+}
+
+export async function addManualBeatMark(
+    shortVideoId: number,
+    mark: ManualBeatMarkPayload,
+): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/add-mark',
+        shortVideoBody(shortVideoId, { mark }),
+    ) as Promise<ManualBeatResponse>;
+}
+
+export async function deleteManualBeatMark(
+    shortVideoId: number,
+    markId: string,
+): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/delete-mark',
+        shortVideoBody(shortVideoId, { mark_id: markId }),
+    ) as Promise<ManualBeatResponse>;
+}
+
+/** System prompt art-director video 2s (prompts/video-2s/prompt-sinh-image.md). */
+export async function fetchManualBeatImagePromptMaster(): Promise<JsonResponse & {
+    prompt?: string;
+    length?: number;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-image-prompt-master',
+        {},
+    ) as Promise<JsonResponse & { prompt?: string; length?: number }>;
+}
+
+export async function saveManualBeatMarkPrompt(
+    shortVideoId: number,
+    markId: string,
+    imagePrompt: string,
+    force = false,
+): Promise<ManualBeatResponse & {
+    duplicate?: boolean;
+    duplicate_order?: number;
+    similarity?: number;
+    filled?: number;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/save-mark-prompt',
+        shortVideoBody(shortVideoId, {
+            mark_id: markId,
+            image_prompt: imagePrompt,
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<ManualBeatResponse & {
+        duplicate?: boolean;
+        duplicate_order?: number;
+        similarity?: number;
+        filled?: number;
     }>;
 }
 
