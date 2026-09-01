@@ -38,6 +38,19 @@ import {
     PipelineScriptQaLoopSection,
 } from './PipelineScriptQaLoopUi';
 import { PipelineStepToggleCheckbox } from './PipelineStepToggleCheckbox';
+
+function resolvePipelineGroupToggleKey(groupKey: string): FullAutoStepToggleKey | null {
+    if (groupKey === 'render') {
+        return 'render';
+    }
+    if (groupKey === 'thumbnail') {
+        return 'thumbnail';
+    }
+    if (groupKey === 'audio_background') {
+        return 'bgm';
+    }
+    return null;
+}
 import { PipelineBeatImageFillModeToggle } from './PipelineBeatImageFillModeToggle';
 import {
     getVisibleFullAutoPipelineStepGroups,
@@ -686,15 +699,21 @@ export function PipelineGroupedMenuItems({
                             >
                                 {group.label}
                             </Typography>
-                            {group.key === 'render' || group.key === 'thumbnail' ? (
-                                <PipelineStepToggleCheckbox
-                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
-                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
-                                    disabled={stepToggleDisabled}
-                                    onChange={onStepToggleChange}
-                                    size="section"
-                                />
-                            ) : null}
+                            {(() => {
+                                const groupToggleKey = resolvePipelineGroupToggleKey(group.key);
+                                return groupToggleKey ? (
+                                    <PipelineStepToggleCheckbox
+                                        toggleKey={groupToggleKey}
+                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        disabled={stepToggleDisabled}
+                                        onChange={onStepToggleChange}
+                                        size="section"
+                                        tooltip={groupToggleKey === 'bgm'
+                                            ? 'Chạy bước audio background trong pipeline A→Z. Bỏ check = bỏ qua BGM, không ghép audio nền vào video.'
+                                            : undefined}
+                                    />
+                                ) : null;
+                            })()}
                             {group.key === 'audio_background' && onManualBgm ? (
                                 <PipelineManualStepButton
                                     title="Audio background thủ công: copy prompt tạo nhạc AI → upload MP3 → quản lý audio nền (lặp lại khi không đủ dài)"
@@ -894,15 +913,21 @@ export function PipelineGroupedStepList({
                             >
                                 {group.label}
                             </Typography>
-                            {group.key === 'render' || group.key === 'thumbnail' ? (
-                                <PipelineStepToggleCheckbox
-                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
-                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
-                                    disabled={stepToggleDisabled}
-                                    onChange={onStepToggleChange}
-                                    size="section"
-                                />
-                            ) : null}
+                            {(() => {
+                                const groupToggleKey = resolvePipelineGroupToggleKey(group.key);
+                                return groupToggleKey ? (
+                                    <PipelineStepToggleCheckbox
+                                        toggleKey={groupToggleKey}
+                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        disabled={stepToggleDisabled}
+                                        onChange={onStepToggleChange}
+                                        size="section"
+                                        tooltip={groupToggleKey === 'bgm'
+                                            ? 'Chạy bước audio background trong pipeline A→Z. Bỏ check = bỏ qua BGM, không ghép audio nền vào video.'
+                                            : undefined}
+                                    />
+                                ) : null;
+                            })()}
                         </Box>
                         {group.key === 'script' ? (() => {
                             const split = splitScriptGroupSteps(group.steps);
@@ -1228,15 +1253,21 @@ export function PipelineGroupedWorkflowListV3({
                             >
                                 {group.label}
                             </Typography>
-                            {group.key === 'render' || group.key === 'thumbnail' ? (
-                                <PipelineStepToggleCheckbox
-                                    toggleKey={group.key === 'render' ? 'render' : 'thumbnail'}
-                                    checked={stepToggles?.[group.key === 'render' ? 'render' : 'thumbnail'] !== false}
-                                    disabled={stepToggleDisabled}
-                                    onChange={onStepToggleChange}
-                                    size="section"
-                                />
-                            ) : null}
+                            {(() => {
+                                const groupToggleKey = resolvePipelineGroupToggleKey(group.key);
+                                return groupToggleKey ? (
+                                    <PipelineStepToggleCheckbox
+                                        toggleKey={groupToggleKey}
+                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        disabled={stepToggleDisabled}
+                                        onChange={onStepToggleChange}
+                                        size="section"
+                                        tooltip={groupToggleKey === 'bgm'
+                                            ? 'Chạy bước audio background trong pipeline A→Z. Bỏ check = bỏ qua BGM, không ghép audio nền vào video.'
+                                            : undefined}
+                                    />
+                                ) : null;
+                            })()}
                             {isRenderGroup ? (
                                 <PipelineRenderRunButton
                                     onClick={onRerunRenderUpload}

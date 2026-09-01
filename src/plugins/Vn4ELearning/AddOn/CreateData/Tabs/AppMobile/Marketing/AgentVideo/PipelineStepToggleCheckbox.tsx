@@ -15,6 +15,7 @@ type PipelineStepToggleCheckboxProps = {
     disabled?: boolean;
     /** compact = workflow/menu row; section = cạnh nhóm improve+QA */
     size?: 'compact' | 'section';
+    tooltip?: string;
     onChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
 };
 
@@ -23,12 +24,13 @@ export function PipelineStepToggleCheckbox({
     checked,
     disabled = false,
     size = 'compact',
+    tooltip,
     onChange,
 }: PipelineStepToggleCheckboxProps) {
     const compact = size === 'compact';
 
     return (
-        <Tooltip title={TOGGLE_TOOLTIP} arrow placement="top">
+        <Tooltip title={tooltip || TOGGLE_TOOLTIP} arrow placement="top">
             <FormControlLabel
                 onClick={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}

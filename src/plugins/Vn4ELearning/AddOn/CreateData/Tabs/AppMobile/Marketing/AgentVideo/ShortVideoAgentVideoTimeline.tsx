@@ -540,7 +540,11 @@ export default function ShortVideoAgentVideoTimeline({
         || launchingImportAssemble
         || startingFullAuto
         || Boolean(deletingBeatHtmlBeatId);
-    const showBeatTimelineOverlay = customHtmlPreview && Boolean(beatMap?.sections?.length);
+    const showBeatTimelineOverlay = Boolean(beatMap?.sections?.length)
+        && (customHtmlPreview || isWhiteboardMode);
+    const hasVideo = customHtmlPreview
+        || String(videoUrl || '').trim() !== ''
+        || (isWhiteboardMode && Boolean(beatMap?.sections?.length));
 
     const timelineLayout = React.useMemo(() => ({
         startLeft: TIMELINE_START_LEFT,
@@ -548,7 +552,6 @@ export default function ShortVideoAgentVideoTimeline({
         timelineScale: TIMELINE_SCALE,
     }), [timelineScaleWidth]);
 
-    const hasVideo = customHtmlPreview || String(videoUrl || '').trim() !== '';
     const contentDurationSec = React.useMemo(
         () => resolveAgentVideoDurationSec({
             mediaDurationSec,

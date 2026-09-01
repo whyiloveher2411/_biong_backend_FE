@@ -216,6 +216,7 @@ import { beatImageEntryUrls } from './whiteboardImageLayers';
 import { isAgentVideo2sMode, isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
 import {
     buildManualBeatMark,
+    buildBeatMapFromManualMarks,
     buildSentenceBeatMarks,
     findManualBeatOverlap,
     manualBeatMarksToPayload,
@@ -5347,6 +5348,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.full_auto_step_toggles) {
                 setFullAutoStepToggles(normalizeFullAutoStepToggles(res.full_auto_step_toggles));
             }
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
         } catch (e) {
             setFullAutoStepToggles(prev);
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -6534,7 +6538,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [manualBeatMarks, openingVideo2sMetaAi, shortVideoId, showMessage, title]);
 
-    /** Panel Meta.ai lưu prompt xong → CMS đọc lại danh sách beat. */
+    /** Panel Meta.ai lưu prompt xong → CMS đọc lại danh sách beat + beat_map timeline. */
     const reloadManualBeatMarks = React.useCallback(async () => {
         if (!shortVideoId) {
             return;
@@ -6543,11 +6547,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const res = await fetchManualBeatMarks(shortVideoId);
             if (res?.success) {
                 setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                if (res.full_auto_pipeline) {
+                    setFullAutoPipeline(res.full_auto_pipeline);
+                }
+                loadRow();
             }
         } catch {
             // bỏ qua — user có thể bấm lại
         }
-    }, [shortVideoId]);
+    }, [loadRow, shortVideoId]);
+
+    /** Video 2s: beat thủ công là nguồn truth — luôn derive beat_map cho preview/timeline/render UI. */
+    const effectiveBeatMap = React.useMemo(() => {
+        if (isVideo2sMode && manualBeatMarks.length > 0) {
+            const fromMarks = buildBeatMapFromManualMarks(
+                manualBeatMarks,
+                Number(audioDurationSec || beatMap?.totalVideoSec || 0),
+            );
+            if (fromMarks?.sections?.length) {
+                return fromMarks;
+            }
+        }
+        if (beatMap?.sections?.length) {
+            return beatMap;
+        }
+        return beatMap;
+    }, [audioDurationSec, beatMap, isVideo2sMode, manualBeatMarks]);
+
+    const beatMapReadyForUi = Boolean(
+        beatMapReady
+        || (isVideo2sMode && (effectiveBeatMap?.sections?.length ?? 0) > 0),
+    );
 
     const whisperAlignKeyRef = React.useRef('');
     React.useEffect(() => {
@@ -8211,6 +8241,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         renderMode,
         importHtml,
         beatMap,
+        effectiveBeatMap,
         beatMapJsonDraft,
         beatHtml,
         beatImage,
@@ -8225,6 +8256,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatRenderErrorIds,
         beatImageRenderErrorIds,
         beatMapReady,
+        beatMapReadyForUi,
         beatsHtmlTotal,
         beatsHtmlCompleted,
         activeBeatId,

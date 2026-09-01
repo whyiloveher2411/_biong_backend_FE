@@ -9,6 +9,7 @@ export type AgentPreviewSourceInput = {
     agentVideoUrl: string;
     localFinalMp4Url?: string;
     beatMapReady: boolean;
+    manualBeatMarksCount?: number;
     beatsHtmlCompleted: number;
     beatsImageCompleted?: number;
     agentVisualMode?: string;
@@ -41,9 +42,10 @@ export function hasBeatImageForPreview(input: AgentPreviewSourceInput): boolean 
     return Object.values(beatImage).some((entry) => String(entry?.image_url || '').trim() !== '');
 }
 
-/** Whiteboard: vào view ảnh beat ngay khi đã chia beat-map (ảnh có thể chưa sinh). */
+/** Whiteboard / video 2s: vào view ảnh beat khi đã có beat-map hoặc beat thủ công. */
 export function canEnterWhiteboardBeatPreviewView(input: AgentPreviewSourceInput): boolean {
-    return Boolean(input.beatMapReady);
+    return Boolean(input.beatMapReady)
+        || Number(input.manualBeatMarksCount || 0) > 0;
 }
 
 export function canShowHtmlBeatPreview(input: AgentPreviewSourceInput): boolean {

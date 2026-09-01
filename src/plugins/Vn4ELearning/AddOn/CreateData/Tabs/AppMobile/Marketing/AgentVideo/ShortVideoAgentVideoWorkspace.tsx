@@ -54,6 +54,8 @@ export default function ShortVideoAgentVideoWorkspace({
 }: Props) {
     const state = useAgentVideoContent({ open, shortVideoId, onUploaded });
     const videoRef = React.useRef<HTMLVideoElement>(null);
+    const beatMapForUi = state.effectiveBeatMap ?? state.beatMap;
+    const beatMapReadyForUi = state.beatMapReadyForUi;
     const [previewSource, setPreviewSource] = React.useState<AgentPreviewSource>('html_beat');
     const [editBeatHtmlId, setEditBeatHtmlId] = React.useState('');
     const [editBeatImageId, setEditBeatImageId] = React.useState('');
@@ -62,34 +64,34 @@ export default function ShortVideoAgentVideoWorkspace({
 
     const currentBeatId = React.useMemo(() => {
         const beat = resolveActiveBeatSection(
-            state.beatMapReady ? state.beatMap : null,
+            beatMapReadyForUi ? beatMapForUi : null,
             currentTimeSec,
         );
         return beat?.id || '';
-    }, [currentTimeSec, state.beatMap, state.beatMapReady]);
+    }, [beatMapForUi, beatMapReadyForUi, currentTimeSec]);
 
     // ===== Edit vùng ảnh beat trực tiếp (thay VideoPreview) =====
     const currentBeatImageUrl = String(
         state.beatImage[currentBeatId || '']?.image_url || '',
     ).trim();
     const canEditRegion = Boolean(
-        state.isWhiteboardMode && currentBeatId && currentBeatImageUrl,
+        state.isWhiteboardMode && currentBeatId,
     );
 
     const activeBeatIndex = React.useMemo(() => {
-        if (!currentBeatId || !state.beatMap?.sections?.length) {
+        if (!currentBeatId || !beatMapForUi?.sections?.length) {
             return null;
         }
-        const index = state.beatMap.sections.findIndex((section) => section.id === currentBeatId);
+        const index = beatMapForUi.sections.findIndex((section) => section.id === currentBeatId);
         return index >= 0 ? index + 1 : null;
-    }, [currentBeatId, state.beatMap?.sections]);
+    }, [beatMapForUi?.sections, currentBeatId]);
 
     const currentBeatSection = React.useMemo(() => {
-        if (!currentBeatId || !state.beatMap?.sections?.length) {
+        if (!currentBeatId || !beatMapForUi?.sections?.length) {
             return null;
         }
-        return state.beatMap.sections.find((section) => section.id === currentBeatId) || null;
-    }, [currentBeatId, state.beatMap?.sections]);
+        return beatMapForUi.sections.find((section) => section.id === currentBeatId) || null;
+    }, [beatMapForUi?.sections, currentBeatId]);
 
     const currentBeatVersions = React.useMemo(() => {
         if (!currentBeatId) {
@@ -179,32 +181,32 @@ export default function ShortVideoAgentVideoWorkspace({
         if (!beatId) {
             return null;
         }
-        return getBeatTimelineSegments(state.beatMap).find((segment) => segment.beatId === beatId)
+        return getBeatTimelineSegments(beatMapForUi).find((segment) => segment.beatId === beatId)
             || null;
-    }, [editBeatHtmlId, editBeatImageId, state.beatMap]);
+    }, [beatMapForUi, editBeatHtmlId, editBeatImageId]);
 
     const editBeatSection = React.useMemo(() => {
         const beatId = editBeatHtmlId || editBeatImageId;
-        if (!beatId || !state.beatMap?.sections?.length) {
+        if (!beatId || !beatMapForUi?.sections?.length) {
             return null;
         }
-        return state.beatMap.sections.find((section) => section.id === beatId) || null;
-    }, [editBeatHtmlId, editBeatImageId, state.beatMap]);
+        return beatMapForUi.sections.find((section) => section.id === beatId) || null;
+    }, [beatMapForUi, editBeatHtmlId, editBeatImageId]);
 
     const infoBeatSection = React.useMemo(() => {
-        if (!infoBeatId || !state.beatMap?.sections?.length) {
+        if (!infoBeatId || !beatMapForUi?.sections?.length) {
             return null;
         }
-        return state.beatMap.sections.find((section) => section.id === infoBeatId) || null;
-    }, [infoBeatId, state.beatMap]);
+        return beatMapForUi.sections.find((section) => section.id === infoBeatId) || null;
+    }, [beatMapForUi, infoBeatId]);
 
     const infoBeatIndex = React.useMemo(() => {
-        if (!infoBeatId || !state.beatMap?.sections?.length) {
+        if (!infoBeatId || !beatMapForUi?.sections?.length) {
             return null;
         }
-        const index = state.beatMap.sections.findIndex((section) => section.id === infoBeatId);
+        const index = beatMapForUi.sections.findIndex((section) => section.id === infoBeatId);
         return index >= 0 ? index + 1 : null;
-    }, [infoBeatId, state.beatMap]);
+    }, [beatMapForUi, infoBeatId]);
 
     const handleOpenEditBeatHtml = React.useCallback((beatId: string) => {
         const nextId = String(beatId || '').trim();
@@ -378,7 +380,8 @@ export default function ShortVideoAgentVideoWorkspace({
         hasAudio: state.hasAudio,
         agentVideoUrl: state.agentVideoUrl,
         localFinalMp4Url: state.localFinalMp4OpenUrl || state.localFinalMp4Url,
-        beatMapReady: state.beatMapReady,
+        beatMapReady: beatMapReadyForUi,
+        manualBeatMarksCount: state.manualBeatMarks.length,
         beatsHtmlCompleted: state.beatsHtmlCompleted,
         beatsImageCompleted: state.beatsImageCompleted,
         agentVisualMode: state.agentVisualMode,
@@ -391,7 +394,8 @@ export default function ShortVideoAgentVideoWorkspace({
         state.agentVideoUrl,
         state.localFinalMp4OpenUrl,
         state.localFinalMp4Url,
-        state.beatMapReady,
+        beatMapReadyForUi,
+        state.manualBeatMarks.length,
         state.beatsHtmlCompleted,
         state.beatsImageCompleted,
         state.agentVisualMode,
@@ -476,8 +480,8 @@ export default function ShortVideoAgentVideoWorkspace({
             beatDurationSec={Number(currentBeatSection?.durationSec ?? 8) || 8}
             isLastBeat={
                 activeBeatIndex != null
-                && Boolean(state.beatMap?.sections?.length)
-                && activeBeatIndex >= (state.beatMap?.sections?.length || 0) - 1
+                && Boolean(beatMapForUi?.sections?.length)
+                && activeBeatIndex >= (beatMapForUi?.sections?.length || 0) - 1
             }
             agentWhiteboardConfig={state.agentWhiteboardConfig || {}}
             whiteboardBeatOverride={
@@ -722,7 +726,7 @@ export default function ShortVideoAgentVideoWorkspace({
                                     }}
                                 >
                                     <ShortVideoAgentCustomHtmlPreview
-                                        beatMap={state.beatMapReady ? state.beatMap : null}
+                                        beatMap={beatMapReadyForUi ? beatMapForUi : null}
                                         beatHtml={state.beatHtml}
                                         beatImage={state.beatImage}
                                         isWhiteboardMode={false}
@@ -856,7 +860,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     onSaveScriptPhonetic={state.handleManualScriptPhoneticSave}
                     customHtmlPreview={useCustomHtmlPreview}
                     previewSourceKey={activePreviewSource}
-                    beatMap={state.beatMapReady ? state.beatMap : null}
+                    beatMap={beatMapReadyForUi ? beatMapForUi : null}
                     beatHtml={state.beatHtml}
                     beatImage={state.beatImage}
                     isWhiteboardMode={state.isWhiteboardMode}
@@ -1075,7 +1079,7 @@ export default function ShortVideoAgentVideoWorkspace({
             <ShortVideoAgentBeatInfoDrawer
                 open={Boolean(infoBeatId && infoBeatSection)}
                 onClose={handleCloseBeatInfo}
-                beatMap={state.beatMapReady ? state.beatMap : null}
+                beatMap={beatMapReadyForUi ? beatMapForUi : null}
                 beat={infoBeatSection}
                 beatHtml={infoBeatId ? state.beatHtml[infoBeatId] || null : null}
                 beatImage={infoBeatId ? state.beatImage[infoBeatId] || null : null}

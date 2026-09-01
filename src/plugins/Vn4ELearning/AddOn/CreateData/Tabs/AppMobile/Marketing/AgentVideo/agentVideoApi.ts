@@ -2039,6 +2039,7 @@ export type FullAutoPipelineSummary = {
 export type FullAutoStepToggleKey =
     | 'script_improve'
     | 'script_phonetic_normalize'
+    | 'bgm'
     | 'render'
     | 'thumbnail';
 
@@ -2047,6 +2048,7 @@ export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     script_improve: true,
     script_phonetic_normalize: true,
+    bgm: true,
     render: true,
     thumbnail: true,
 };
@@ -2057,6 +2059,7 @@ export function normalizeFullAutoStepToggles(
     return {
         script_improve: raw?.script_improve !== false,
         script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
+        bgm: raw?.bgm !== false,
         render: raw?.render !== false,
         thumbnail: raw?.thumbnail !== false,
     };
@@ -2069,6 +2072,9 @@ export function fullAutoStepToggleKeyForStep(stepKey: string): FullAutoStepToggl
     }
     if (stepKey === 'script_phonetic_normalize') {
         return stepKey;
+    }
+    if (stepKey === 'bgm') {
+        return 'bgm';
     }
     if (stepKey === 'render' || stepKey === 'upload') {
         return 'render';
@@ -2570,7 +2576,10 @@ export async function saveAgentAutoFillBeatHtml(
 export async function saveFullAutoStepToggles(
     shortVideoId: number,
     toggles: Partial<FullAutoStepToggles>,
-): Promise<JsonResponse & { full_auto_step_toggles?: FullAutoStepToggles }> {
+): Promise<JsonResponse & {
+    full_auto_step_toggles?: FullAutoStepToggles;
+    full_auto_pipeline?: FullAutoPipelineSummary;
+}> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-full-auto-step-toggles',
         shortVideoBody(shortVideoId, {
@@ -3484,6 +3493,9 @@ export type ManualBeatMarkPayload = {
 type ManualBeatResponse = JsonResponse & {
     manual_beat_marks?: ManualBeatMarkPayload[];
     total?: number;
+    all_prompts_filled?: boolean;
+    beat_division_completed?: boolean;
+    full_auto_pipeline?: FullAutoPipelineSummary;
 };
 
 export async function fetchManualBeatMarks(shortVideoId: number): Promise<ManualBeatResponse> {

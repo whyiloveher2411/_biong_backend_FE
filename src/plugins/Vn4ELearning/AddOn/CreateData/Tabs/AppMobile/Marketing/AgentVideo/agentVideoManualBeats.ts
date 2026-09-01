@@ -1,5 +1,6 @@
 import type { CaptionAlignToken } from './agentVideoCaptionScriptAlign';
 import type { ManualBeatMarkPayload } from './agentVideoApi';
+import type { BeatMap, BeatMapSection } from './agentVideoBeatMap';
 
 /** Beat thủ công clip video 2s — chỉ có content + timing, image_prompt điền sau. */
 export type ManualBeatMark = {
@@ -363,4 +364,120 @@ export function manualBeatCoverageRatio(
 
 export function manualBeatsAllHavePrompt(marks: ManualBeatMark[]): boolean {
     return marks.length > 0 && marks.every((mark) => mark.imagePrompt.trim() !== '');
+}
+
+/** Meta.ai video 2s trả prompt plain text — bọc thành JSON object đủ 7 key cho beat_map. */
+export function wrapVideo2sPlainImagePrompt(plain: string, content: string): Record<string, string> {
+    const normalized = String(plain || '').trim();
+    let subject = normalized;
+    const imageMatch = /IMAGE PROMPT:\s*\n?([\s\S]*?)(?:\n\s*NEGATIVE PROMPT:|$)/i.exec(normalized);
+    if (imageMatch?.[1]) {
+        subject = imageMatch[1].trim();
+    } else {
+        const visualMatch = /VISUAL CONCEPT:\s*\n?([\s\S]*?)(?:\n\s*IMAGE PROMPT:|$)/i.exec(normalized);
+        if (visualMatch?.[1]) {
+            subject = visualMatch[1].trim();
+        }
+    }
+    let mustAvoid = 'watermark, logo, photorealism, 3D render, dense text';
+    const negativeMatch = /NEGATIVE PROMPT:\s*\n?([\s\S]*)$/i.exec(normalized);
+    if (negativeMatch?.[1]) {
+        mustAvoid = negativeMatch[1].trim().slice(0, 400);
+    }
+    if (!subject) {
+        subject = content.trim() || 'illustrate script beat';
+    }
+    if (subject.length > 1800) {
+        subject = subject.slice(0, 1800);
+    }
+    let scene = content.trim() || 'documentary scene';
+    if (scene.length > 400) {
+        scene = scene.slice(0, 400);
+    }
+    return {
+        subject,
+        action: 'illustrate the script moment',
+        scene,
+        text_overlay: '',
+        composition: 'clean 2D documentary illustration, centered subject, white background',
+        must_avoid: mustAvoid,
+    };
+}
+
+/** Mirror backend align_timings — nối liền gap nhỏ giữa các beat thủ công. */
+export function alignManualBeatMapTimings(beatMap: BeatMap): BeatMap {
+    const sections = [...beatMap.sections].sort((a, b) => a.startSec - b.startSec);
+    if (sections.length === 0) {
+        return beatMap;
+    }
+    if (Math.abs(sections[0].startSec) > 0.001) {
+        sections[0] = { ...sections[0], startSec: 0 };
+    }
+    for (let i = 1; i < sections.length; i += 1) {
+        const prevEnd = sections[i - 1].endSec;
+        const curStart = sections[i].startSec;
+        if (curStart > prevEnd + 0.001) {
+            sections[i - 1] = {
+                ...sections[i - 1],
+                endSec: curStart,
+                durationSec: round3(curStart - sections[i - 1].startSec),
+            };
+        } else if (curStart < prevEnd - 0.001) {
+            sections[i] = {
+                ...sections[i],
+                startSec: prevEnd,
+                durationSec: round3(sections[i].endSec - prevEnd),
+            };
+        }
+    }
+    const total = beatMap.totalVideoSec;
+    if (total > 0) {
+        const lastIdx = sections.length - 1;
+        if (Math.abs(sections[lastIdx].endSec - total) > 0.001) {
+            sections[lastIdx] = {
+                ...sections[lastIdx],
+                endSec: total,
+                durationSec: round3(total - sections[lastIdx].startSec),
+            };
+        }
+    }
+    return { ...beatMap, sections };
+}
+
+/** Video 2s: đồng bộ beat thủ công → beat_map để timeline / edit beat hoạt động. */
+export function buildBeatMapFromManualMarks(
+    marks: ManualBeatMark[],
+    totalVideoSec: number,
+): BeatMap | null {
+    if (!marks.length) {
+        return null;
+    }
+    const total = totalVideoSec > 0
+        ? totalVideoSec
+        : Math.max(...marks.map((mark) => mark.endSec));
+    const sections: BeatMapSection[] = marks.map((mark, index) => {
+        const id = `beat_${index + 1}`;
+        const content = mark.content.trim();
+        const visualDescription = content.length > 200 ? `${content.slice(0, 197)}...` : content;
+        const section: BeatMapSection = {
+            id,
+            beat_id: id,
+            startSec: mark.startSec,
+            endSec: mark.endSec,
+            durationSec: mark.durationSec,
+            phrase_anchor: content,
+            visual_description: visualDescription || `Beat ${index + 1}`,
+            background: '',
+        };
+        if (mark.imagePrompt.trim()) {
+            section.image_prompt = wrapVideo2sPlainImagePrompt(mark.imagePrompt, content);
+        }
+        return section;
+    });
+    return alignManualBeatMapTimings({
+        schema_version: 2,
+        totalVideoSec: round3(total),
+        source: 'video_2s_manual',
+        sections,
+    });
 }
