@@ -11,6 +11,8 @@ import {
     Typography,
     IconButton,
     Tooltip,
+    Stack,
+    Divider,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -22,6 +24,12 @@ import DragHandleIcon from '@mui/icons-material/DragHandle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import EditIcon from '@mui/icons-material/Edit';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CloseIcon from '@mui/icons-material/Close';
+import { LoadingButton } from '@mui/lab';
 import type { BeatImageLayer, BeatImageOverlay, BeatRegion, BeatTimelineEffect, BeatZoomEffect } from './agentVideoApi';
 import { WHITEBOARD_MIN_LAYER_SLOT_SEC } from './whiteboardImageLayers';
 import { attentionEffectTimelineLabel, getAgentWhiteboardBeatRenderTimeline, isRegionAttentionEnabled, isOverlayInstantEntry, isRegionPlaceInstantEntry, renderPlaceEffectAfterSec } from './agentVideoApi';
@@ -65,6 +73,30 @@ type Word = { index: number; text: string; start: number };
 type TimelineSelectMeta = {
     shiftKey?: boolean;
     doubleClick?: boolean;
+};
+
+export type ManualBeatAdjSlot = {
+    relation: 'prev' | 'current' | 'next';
+    order: number;
+    confirmed: boolean;
+    color: { bg: string; border: string; label: string };
+    words: Word[];
+    /** Token index của đoạn whisper khớp dài nhất với nội dung beat (chuẩn hóa cả 2) — dùng để tô màu. */
+    hintWordIndexes: number[];
+};
+
+export type ManualBeatAdjSession = {
+    open: boolean;
+    content: string;
+    /** Đúng 3 slot: [prev?, current, next?] — slot prev/next có thể null. */
+    slots: ManualBeatAdjSlot[];
+    selection: { start: number; end: number } | null;
+    confirming: boolean;
+    canSeekPrev: boolean;
+    canSeekNext: boolean;
+    beatLabel: string;
+    startSec: number;
+    endSec: number;
 };
 
 type Props = {
@@ -131,6 +163,17 @@ type Props = {
     onExitGroupView?: () => void;
     /** Tách group đang xem — mọi member mất group_id, về timeline chính. */
     onUngroupActiveGroup?: () => void;
+    /**
+     * Phiên điều chỉnh timeline beat thủ công (video 2s). Khi có prop này, audio script
+     * hiển thị nút "Điều chỉnh timeline" bên phải; khi `open`, audio script đổi sang
+     * chế độ chọn từ n-1/n/n+1 và thêm dòng Xác nhận/Hủy dưới thanh timeline.
+     */
+    manualBeatAdj?: ManualBeatAdjSession | null;
+    onManualBeatAdjToggleOpen?: () => void;
+    onManualBeatAdjTokenClick?: (tokenIndex: number) => void;
+    onManualBeatAdjConfirm?: () => void;
+    onManualBeatAdjClose?: () => void;
+    onManualBeatAdjSeekActive?: (delta: -1 | 1) => void;
 };
 
 type EffectDragHandle = 'start' | 'end' | 'body' | 'zoom_in_end' | 'hold_end';
@@ -159,6 +202,17 @@ const LAYER_ROW_COLOR = '#ffb300';
 const MAX_VISIBLE_TIMELINE_ROWS_COLLAPSED = 5;
 const MAX_VISIBLE_TIMELINE_ROWS_EXPANDED = 10;
 const TIMELINE_EXPANDED_STORAGE_KEY = 'biong.whiteboard.regionTimeline.expanded';
+
+/** Chuẩn hóa từ để so khớp đầu/cuối: chữ thường, bỏ dấu tiếng Việt, bỏ kí tự/dấu câu. */
+function normalizeHintWord(value: string): string {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9]+/g, '')
+        .trim();
+}
 const SYNTHETIC_GROUP_ID_PREFIX = '__group__:';
 
 function parseSyntheticGroupId(id: string): string | null {
@@ -235,6 +289,12 @@ export default function WhiteboardRegionTimeline({
     timelineViewMode = 'main',
     onExitGroupView,
     onUngroupActiveGroup,
+    manualBeatAdj = null,
+    onManualBeatAdjToggleOpen,
+    onManualBeatAdjTokenClick,
+    onManualBeatAdjConfirm,
+    onManualBeatAdjClose,
+    onManualBeatAdjSeekActive,
 }: Props) {
     const duration = Math.max(0.1, beatDurationSec);
     const effectDuration = Math.max(0.1, effectTimelineDurationSec ?? duration);
@@ -910,11 +970,11 @@ export default function WhiteboardRegionTimeline({
                 {/* Từ như đoạn văn xuống dòng */}
                 <Box
                     sx={{
-                        maxHeight: 52,
+                        maxHeight: manualBeatAdj?.open ? 180 : 52,
                         overflowY: 'auto',
-                        mb: 0.5,
-                        border: '1px solid',
-                        borderColor: 'divider',
+                        mb: manualBeatAdj?.open ? 0.75 : 0.5,
+                        border: manualBeatAdj?.open ? '1px solid' : '1px solid',
+                        borderColor: manualBeatAdj?.open ? 'divider' : 'divider',
                         borderRadius: 1,
                         p: 0.5,
                         bgcolor: 'background.paper',
@@ -922,7 +982,7 @@ export default function WhiteboardRegionTimeline({
                         userSelect: 'none',
                         WebkitUserSelect: 'none',
                         display: 'flex',
-                        alignItems: 'flex-start',
+                        alignItems: manualBeatAdj?.open ? 'stretch' : 'flex-start',
                         gap: 0.75,
                     }}
                 >
@@ -943,7 +1003,93 @@ export default function WhiteboardRegionTimeline({
                         />
                     ) : null}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {beatWords.length === 0 ? (
+                    {manualBeatAdj?.open ? (
+                        <Stack direction="column" spacing={0.75} sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                                {manualBeatAdj.content}
+                            </Typography>
+                            <Divider />
+                            <Box sx={{ display: 'block', minWidth: 0, lineHeight: 1.9 }}>
+                                {manualBeatAdj.slots.map((slot) => {
+                                    const selStart = manualBeatAdj.selection?.start;
+                                    const selEnd = manualBeatAdj.selection?.end;
+                                    const hasSelection = selStart != null && selEnd != null;
+                                    const isCurrentSlot = slot.relation === 'current';
+                                    const audioNormWords = slot.words.map((w) => normalizeHintWord(w.text));
+                                    const contentNormWords = manualBeatAdj.content.trim().split(/\s+/).map(normalizeHintWord);
+                                    let pref = 0;
+                                    for (; pref < Math.min(audioNormWords.length, contentNormWords.length); pref += 1) {
+                                        if (audioNormWords[pref] !== contentNormWords[pref]) break;
+                                    }
+                                    const fullMatch = pref === contentNormWords.length && contentNormWords.length > 0;
+                                    let blueEnd = pref;
+                                    let purpleStart = audioNormWords.length;
+                                    const purpleEnd = audioNormWords.length;
+                                    if (fullMatch) {
+                                        const fullLen = Math.min(audioNormWords.length, contentNormWords.length);
+                                        blueEnd = Math.ceil(fullLen / 2);
+                                        purpleStart = blueEnd;
+                                    } else {
+                                        let suff = 0;
+                                        for (; suff < Math.min(audioNormWords.length, contentNormWords.length) - pref; suff += 1) {
+                                            if (audioNormWords[audioNormWords.length - 1 - suff] !== contentNormWords[contentNormWords.length - 1 - suff]) break;
+                                        }
+                                        purpleStart = audioNormWords.length - suff;
+                                    }
+                                    const isRunBlue = (wi: number) => isCurrentSlot && wi < blueEnd;
+                                    const isRunPurple = (wi: number) => isCurrentSlot && wi >= purpleStart && wi < purpleEnd;
+                                    return slot.words.map((word, wi) => {
+                                        const isStart = selStart === word.index;
+                                        const isEnd = selEnd === word.index;
+                                        const inSelection = hasSelection && word.index >= (selStart ?? -1) && word.index <= (selEnd ?? Infinity);
+                                        const isHintStart = isRunBlue(wi);
+                                        const isHintEnd = isRunPurple(wi);
+                                        const matchRun = isHintStart || isHintEnd;
+                                        const t = Math.max(0, Math.min(duration, word.start - beatStartSec));
+                                        const isPlayhead = Math.abs(playhead - t) < 0.12;
+                                        const baseColor = slot.relation === 'next'
+                                            ? '#c62828'
+                                            : slot.relation === 'prev'
+                                                ? '#2e7d32'
+                                                : '#000000';
+                                        const wordColor = inSelection
+                                            ? '#ffffff'
+                                            : (matchRun ? '#ffffff' : baseColor);
+                                        return (
+                                            <Box
+                                                component="span"
+                                                key={word.index}
+                                                onClick={() => onManualBeatAdjTokenClick?.(word.index)}
+                                                sx={{
+                                                    display: 'inline-block',
+                                                    cursor: 'pointer',
+                                                    px: 0.45,
+                                                    py: 0.05,
+                                                    mr: 0.45,
+                                                    borderRadius: 0.5,
+                                                    fontSize: 13,
+                                                    fontWeight: isStart || isEnd ? 900 : (inSelection || isPlayhead ? 700 : 400),
+                                                    opacity: isCurrentSlot ? 1 : 0.6,
+                                                    color: wordColor,
+                                                    bgcolor: inSelection
+                                                        ? (isStart ? '#00c853' : isEnd ? '#d50000' : '#1976d2')
+                                                        : (isHintEnd ? '#9c27b0' : isHintStart ? '#1976d2' : 'transparent'),
+                                                    textDecoration: isCurrentSlot && !inSelection ? 'underline' : 'none',
+                                                    textDecorationThickness: 2,
+                                                    textDecorationColor: matchRun ? '#ffffff' : '#000000',
+                                                    textUnderlineOffset: 2,
+                                                    userSelect: 'none',
+                                                    WebkitUserSelect: 'none',
+                                                }}
+                                            >
+                                                {word.text}
+                                            </Box>
+                                        );
+                                    });
+                                })}
+                            </Box>
+                        </Stack>
+                    ) : beatWords.length === 0 ? (
                         <Typography variant="caption" color="text.secondary">
                             Chưa có whisper — kéo các điểm trên thanh để đặt thời gian render theo giây.
                         </Typography>
@@ -983,6 +1129,22 @@ export default function WhiteboardRegionTimeline({
                         })
                     )}
                     </Box>
+                    {manualBeatAdj && !manualBeatAdj.open ? (
+                        <Box sx={{ flexShrink: 0, alignSelf: 'flex-start', mt: '2px' }}>
+                            <Tooltip title="Điều chỉnh timeline beat thủ công: bấm từ BẮT ĐẦU rồi từ KẾT THÚC trên đoạn nói (whisper) và Xác nhận.">
+                                <Button
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    onClick={onManualBeatAdjToggleOpen}
+                                    startIcon={<EditIcon fontSize="small" />}
+                                    sx={{ textTransform: 'none', fontSize: 11, py: 0.25, whiteSpace: 'nowrap' }}
+                                >
+                                    Điều chỉnh timeline
+                                </Button>
+                            </Tooltip>
+                        </Box>
+                    ) : null}
                 </Box>
 
                 {/* Timeline nhiều dòng (kiểu CapCut) — thu gọn 5 / mở rộng 10 dòng, phần dư cuộn */}
@@ -2029,6 +2191,53 @@ export default function WhiteboardRegionTimeline({
                 </Box>
             </Box>
         </Box>
+        {manualBeatAdj?.open ? (
+            <Box sx={{ px: 0.5, pb: 0.5, mt: 0.75 }}>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Stack direction="row" spacing={0.25} alignItems="center" sx={{ mr: 1 }}>
+                        <IconButton size="small" onClick={() => onManualBeatAdjSeekActive?.(-1)} disabled={!manualBeatAdj.canSeekPrev}>
+                            <ChevronLeftIcon fontSize="small" />
+                        </IconButton>
+                        <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {manualBeatAdj.beatLabel}
+                        </Typography>
+                        <IconButton size="small" onClick={() => onManualBeatAdjSeekActive?.(1)} disabled={!manualBeatAdj.canSeekNext}>
+                            <ChevronRightIcon fontSize="small" />
+                        </IconButton>
+                    </Stack>
+                    <Divider orientation="vertical" flexItem />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+                        {manualBeatAdj.selection ? (
+                            <>Đã chọn {manualBeatAdj.selection.start} → {manualBeatAdj.selection.end}. Bấm từ BẮT ĐẦU rồi từ KẾT THÚC (bấm lại sẽ đổi).</>
+                        ) : (
+                            <>Chưa chọn — bấm vào từ ở audio script để chọn BẮT ĐẦU rồi KẾT THÚC.</>
+                        )}
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Button
+                        size="small"
+                        variant="text"
+                        color="inherit"
+                        startIcon={<CloseIcon fontSize="small" />}
+                        onClick={onManualBeatAdjClose}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Hủy
+                    </Button>
+                    <LoadingButton
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        loading={manualBeatAdj.confirming}
+                        startIcon={<VerifiedIcon fontSize="small" />}
+                        onClick={onManualBeatAdjConfirm}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Xác nhận timeline beat này
+                    </LoadingButton>
+                </Stack>
+            </Box>
+        ) : null}
         <Dialog
             open={ungroupConfirmOpen}
             onClose={() => setUngroupConfirmOpen(false)}

@@ -9,6 +9,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
@@ -32,6 +33,7 @@ import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisi
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
+
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import type {
     BeatImageFillMode,
@@ -393,6 +395,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [tracksCollapsed, setTracksCollapsed] = usePersistedTimelineTracksCollapsed(
         SHORT_VIDEO_AGENT_TIMELINE_COLLAPSED_STORAGE_KEY,
     );
+
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
@@ -885,6 +888,7 @@ export default function ShortVideoAgentVideoTimeline({
     return (
         <Box
             sx={{
+                position: 'relative',
                 flexShrink: 0,
                 borderTop: 1,
                 borderColor: 'divider',

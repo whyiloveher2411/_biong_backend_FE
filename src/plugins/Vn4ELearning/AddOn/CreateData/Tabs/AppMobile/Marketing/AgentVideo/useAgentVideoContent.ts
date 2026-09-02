@@ -27,6 +27,7 @@ import {
 import {
     addManualBeatMark,
     approveAudioScript,
+    confirmManualBeatTimeline,
     deleteManualBeatMark,
     mergeManualBeatMarks as apiMergeManualBeatMarks,
     fetchManualBeatDivisionPrompt,
@@ -6391,6 +6392,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
     const [importingAiBeatDivision, setImportingAiBeatDivision] = React.useState(false);
     const [mergingManualBeat, setMergingManualBeat] = React.useState(false);
+    /** Mode điều chỉnh timeline audio (overlay trên thanh timeline) — video 2s. */
+    const [manualBeatTimelineAdjOpen, setManualBeatTimelineAdjOpen] = React.useState(false);
+    const [confirmingManualBeatTimeline, setConfirmingManualBeatTimeline] = React.useState(false);
+
+    const toggleManualBeatTimelineAdj = React.useCallback(() => {
+        setManualBeatTimelineAdjOpen((prev) => !prev);
+    }, []);
+
+    const closeManualBeatTimelineAdj = React.useCallback(() => {
+        setManualBeatTimelineAdjOpen(false);
+    }, []);
 
     React.useEffect(() => {
         if (!shortVideoId || !isVideo2sMode) {
@@ -6649,6 +6661,56 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setImportingAiBeatDivision(false);
         }
     }, [importingAiBeatDivision, loadRow, manualBeatMarks, shortVideoId, showMessage]);
+
+    /**
+     * Xác nhận timeline thủ công beat n (video 2s): start/end tính theo whisper timing
+     * của từ user chọn (click trong overlay "điều chỉnh timeline"). Beat n thành chuẩn
+     * (timeline_confirmed), backend dịch ranh giới 2 beat kề n-1/n+1.
+     */
+    const handleConfirmManualBeatTimeline = React.useCallback(async (
+        markId: string,
+        startTokenIndex: number,
+        endTokenIndex: number,
+    ): Promise<boolean> => {
+        if (!shortVideoId || confirmingManualBeatTimeline || !whisperScriptAlign) {
+            return false;
+        }
+        const tokens = whisperScriptAlign.tokens;
+        const startToken = tokens[startTokenIndex];
+        const endToken = tokens[endTokenIndex];
+        if (!startToken || !endToken) {
+            showMessage('Không tìm thấy từ được chọn', 'error');
+            return false;
+        }
+        const startSec = Number(startToken.start) || 0;
+        const endSec = Number(endToken.end) || 0;
+        if (!(endSec >= startSec)) {
+            showMessage('Thời điểm KẾT THÚC phải sau thời điểm BẮT ĐẦU', 'error');
+            return false;
+        }
+        setConfirmingManualBeatTimeline(true);
+        try {
+            const res = await confirmManualBeatTimeline(shortVideoId, markId, {
+                startTokenIndex,
+                endTokenIndex,
+                startSec,
+                endSec,
+            });
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không xác nhận được timeline', 'error');
+                return false;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            loadRow();
+            showMessage(parseApiMessage(res?.message) || 'Đã xác nhận timeline beat', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setConfirmingManualBeatTimeline(false);
+        }
+    }, [confirmingManualBeatTimeline, loadRow, shortVideoId, showMessage, whisperScriptAlign]);
 
     /** Video 2s: beat thủ công là nguồn truth — luôn derive beat_map cho preview/timeline/render UI. */
     const effectiveBeatMap = React.useMemo(() => {
@@ -8102,6 +8164,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         mergingManualBeat,
         handleMergeManualBeats,
         reloadManualBeatMarks,
+        manualBeatTimelineAdjOpen,
+        toggleManualBeatTimelineAdj,
+        closeManualBeatTimelineAdj,
+        confirmingManualBeatTimeline,
+        handleConfirmManualBeatTimeline,
         title,
         shortVideoId,
         audioScript,

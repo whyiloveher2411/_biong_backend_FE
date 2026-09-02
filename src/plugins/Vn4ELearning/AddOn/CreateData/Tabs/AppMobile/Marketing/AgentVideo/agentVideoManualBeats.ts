@@ -13,6 +13,8 @@ export type ManualBeatMark = {
     startSec: number;
     endSec: number;
     durationSec: number;
+    /** Beat đã xác nhận timeline thủ công (timing là chuẩn, không bị realign whisper đè). */
+    timelineConfirmed?: boolean;
     created_at?: string;
 };
 
@@ -27,14 +29,14 @@ export const MANUAL_BEAT_TOLERANCE_SEC = 1;
 export const MANUAL_BEAT_TOKEN_ATTR = 'data-token-index';
 
 export const MANUAL_BEAT_COLORS: Array<{ bg: string; hover: string; border: string; label: string }> = [
-    { bg: 'rgba(25, 118, 210, 0.16)', hover: 'rgba(25, 118, 210, 0.28)', border: 'rgba(25, 118, 210, 0.6)', label: '#1565c0' },
-    { bg: 'rgba(46, 125, 50, 0.16)', hover: 'rgba(46, 125, 50, 0.28)', border: 'rgba(46, 125, 50, 0.6)', label: '#2e7d32' },
-    { bg: 'rgba(237, 108, 2, 0.18)', hover: 'rgba(237, 108, 2, 0.3)', border: 'rgba(237, 108, 2, 0.6)', label: '#e65100' },
-    { bg: 'rgba(123, 31, 162, 0.16)', hover: 'rgba(123, 31, 162, 0.28)', border: 'rgba(123, 31, 162, 0.6)', label: '#7b1fa2' },
-    { bg: 'rgba(0, 131, 143, 0.16)', hover: 'rgba(0, 131, 143, 0.28)', border: 'rgba(0, 131, 143, 0.6)', label: '#00838f' },
-    { bg: 'rgba(194, 24, 91, 0.16)', hover: 'rgba(194, 24, 91, 0.28)', border: 'rgba(194, 24, 91, 0.6)', label: '#c2185b' },
-    { bg: 'rgba(85, 139, 47, 0.18)', hover: 'rgba(85, 139, 47, 0.3)', border: 'rgba(85, 139, 47, 0.6)', label: '#558b2f' },
-    { bg: 'rgba(69, 90, 100, 0.18)', hover: 'rgba(69, 90, 100, 0.3)', border: 'rgba(69, 90, 100, 0.6)', label: '#455a64' },
+    { bg: 'rgba(13, 71, 161, 0.2)', hover: 'rgba(13, 71, 161, 0.34)', border: 'rgba(13, 71, 161, 0.85)', label: '#0d47a1' },
+    { bg: 'rgba(27, 94, 32, 0.2)', hover: 'rgba(27, 94, 32, 0.34)', border: 'rgba(27, 94, 32, 0.85)', label: '#1b5e20' },
+    { bg: 'rgba(191, 54, 12, 0.22)', hover: 'rgba(191, 54, 12, 0.36)', border: 'rgba(191, 54, 12, 0.85)', label: '#bf360c' },
+    { bg: 'rgba(74, 20, 140, 0.2)', hover: 'rgba(74, 20, 140, 0.34)', border: 'rgba(74, 20, 140, 0.85)', label: '#4a148c' },
+    { bg: 'rgba(0, 96, 100, 0.2)', hover: 'rgba(0, 96, 100, 0.34)', border: 'rgba(0, 96, 100, 0.85)', label: '#006064' },
+    { bg: 'rgba(136, 14, 79, 0.2)', hover: 'rgba(136, 14, 79, 0.34)', border: 'rgba(136, 14, 79, 0.85)', label: '#880e4f' },
+    { bg: 'rgba(51, 105, 30, 0.22)', hover: 'rgba(51, 105, 30, 0.36)', border: 'rgba(51, 105, 30, 0.85)', label: '#33691e' },
+    { bg: 'rgba(38, 50, 56, 0.22)', hover: 'rgba(38, 50, 56, 0.36)', border: 'rgba(38, 50, 56, 0.85)', label: '#263238' },
 ];
 
 export function manualBeatColor(order: number): typeof MANUAL_BEAT_COLORS[number] {
@@ -79,6 +81,9 @@ export function normalizeManualBeatMarks(raw: unknown): ManualBeatMark[] {
             startSec,
             endSec,
             durationSec: round3(endSec - startSec),
+            timelineConfirmed: Boolean(
+                source.timeline_confirmed ?? source.timelineConfirmed ?? false,
+            ),
             created_at: source.created_at ? String(source.created_at) : undefined,
         });
     });
@@ -103,6 +108,7 @@ export function manualBeatMarksToPayload(marks: ManualBeatMark[]): ManualBeatMar
         startSec: mark.startSec,
         endSec: mark.endSec,
         durationSec: mark.durationSec,
+        timeline_confirmed: Boolean(mark.timelineConfirmed),
         created_at: mark.created_at,
     }));
 }
@@ -425,6 +431,7 @@ export function mergeManualBeatMarks(marks: ManualBeatMark[], ids: string[]): Ma
         startSec: Math.min(...selectedByStart.map((mark) => mark.startSec)),
         endSec: Math.max(...selectedByStart.map((mark) => mark.endSec)),
         durationSec: 0,
+        timelineConfirmed: false,
     };
     merged.durationSec = Math.max(0, merged.endSec - merged.startSec);
 

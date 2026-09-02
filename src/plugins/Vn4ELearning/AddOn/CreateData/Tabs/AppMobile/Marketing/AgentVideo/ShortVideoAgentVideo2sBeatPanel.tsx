@@ -22,6 +22,7 @@ import AutoAwesomeMotionIcon from '@mui/icons-material/AutoAwesomeMotion';
 import ImageSearchIcon from '@mui/icons-material/ImageSearch';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import VerifiedIcon from '@mui/icons-material/Verified';
 import ShortVideoAgentWhisperCompareText, {
     type ManualBeatCursorClickPayload,
     type ManualBeatMarkClickPayload,
@@ -359,6 +360,14 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                                         <Typography variant="caption" fontWeight={700} sx={{ color: color.label }}>
                                             #{mark.order}
                                         </Typography>
+                                        {mark.timelineConfirmed ? (
+                                            <Tooltip title="Đã xác nhận timeline thủ công — timing là chuẩn">
+                                                <VerifiedIcon
+                                                    fontSize="small"
+                                                    sx={{ color: 'success.main', fontSize: 14 }}
+                                                />
+                                            </Tooltip>
+                                        ) : null}
                                         <Typography
                                             variant="caption"
                                             color="text.secondary"

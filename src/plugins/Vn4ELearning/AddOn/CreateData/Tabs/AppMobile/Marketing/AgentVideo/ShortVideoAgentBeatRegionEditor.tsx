@@ -4,6 +4,7 @@ import {
     Alert,
     Box,
     Button,
+    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -44,6 +45,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import EditIcon from '@mui/icons-material/Edit';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import VerifiedIcon from '@mui/icons-material/Verified';
 import { LoadingButton } from '@mui/lab';
 import useAjax from 'hook/useApi';
 import { resolveAgentLocalVideoOpenUrl } from 'helpers/shortVideoVisualClips';
@@ -53,7 +55,11 @@ import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimati
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
-import WhiteboardRegionTimeline from './WhiteboardRegionTimeline';
+import WhiteboardRegionTimeline, {
+    type ManualBeatAdjSession,
+    type ManualBeatAdjSlot,
+} from './WhiteboardRegionTimeline';
+import { manualBeatColor } from './agentVideoManualBeats';
 import { useBeatTimelineEffects } from './beatTimelineEffects/useBeatTimelineEffects';
 import { getBeatTimelineEffectDefinition } from './beatTimelineEffects/registry';
 import {
@@ -147,6 +153,55 @@ const SYNTHETIC_GROUP_ID_PREFIX = '__group__:';
 type TimelineViewMode = 'main' | 'group';
 type GroupItemType = 'region' | 'overlay' | 'effect';
 type GroupSelectionKey = `${GroupItemType}:${string}`;
+
+/** Chuẩn hóa text để so khớp: chữ thường, không dấu (bỏ dấu tiếng Việt), không kí tự/dấu câu. */
+function normalizeTextForMatch(value: string): string {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * Tìm đoạn whisper words LIÊN TỤC dài nhất khớp chuỗi con với nội dung beat.
+ * Cả 2 nguồn đều được chuẩn hóa (thường/không dấu/không kí tự) trước khi so sánh.
+ * Trả về token index theo thứ tự (start → end). Trống nếu không khớp.
+ */
+function findLongestWhisperHint(
+    content: string,
+    words: Array<{ index: number; text: string }>,
+): number[] {
+    const target = normalizeTextForMatch(content);
+    if (!target || words.length === 0) {
+        return [];
+    }
+    const norm = words.map((w) => normalizeTextForMatch(w.text));
+    let best: number[] = [];
+    for (let start = 0; start < norm.length; start += 1) {
+        let buff = '';
+        for (let end = start; end < norm.length; end += 1) {
+            const piece = norm[end];
+            if (!piece) {
+                break;
+            }
+            buff = buff ? `${buff} ${piece}` : piece;
+            if (buff.length > target.length) {
+                break;
+            }
+            if (target.includes(buff)) {
+                const candidate = words.slice(start, end + 1).map((w) => w.index);
+                if (candidate.length > best.length) {
+                    best = candidate;
+                }
+            }
+        }
+    }
+    return best;
+}
 
 function makeGroupSelectionKey(type: GroupItemType, id: string): GroupSelectionKey {
     return `${type}:${id}`;
@@ -857,6 +912,148 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
         return beatSegments.findIndex((segment) => segment.beatId === beatId);
     }, [beatId, beatSegments]);
+    const currentBeatTimelineConfirmed = state.isVideo2sMode
+        && activeSegmentIndex >= 0
+        && state.manualBeatMarks[activeSegmentIndex]?.timelineConfirmed === true;
+    const [adjPhase, setAdjPhase] = React.useState<'start' | 'end'>('start');
+    const [adjSelection, setAdjSelection] = React.useState<{ start: number; end: number } | null>(null);
+    const manualBeatAdjActive = Boolean(
+        state.isVideo2sMode
+        && (state.manualBeatMarks?.length ?? 0) > 0
+        && state.whisperStatus === 'completed'
+        && activeSegmentIndex >= 0
+        && activeSegmentIndex < (state.manualBeatMarks?.length ?? 0),
+    );
+    const adjTokens = state.whisperScriptAlign?.tokens ?? [];
+    const manualBeatAdj: ManualBeatAdjSession | null = manualBeatAdjActive
+        ? (() => {
+            const cur = state.manualBeatMarks[activeSegmentIndex];
+            if (!cur) {
+                return null;
+            }
+            const slotWords = (mark: (typeof state.manualBeatMarks)[number]) =>
+                adjTokens
+                    .filter((t) => t.index >= mark.startTokenIndex && t.index <= mark.endTokenIndex)
+                    .map((t) => ({ index: t.index, text: t.whisperText ?? t.text, start: Number(t.start) || 0 }));
+            const slots: ManualBeatAdjSlot[] = [];
+            if (activeSegmentIndex > 0) {
+                const m = state.manualBeatMarks[activeSegmentIndex - 1];
+                slots.push({
+                    relation: 'prev',
+                    order: m.order,
+                    confirmed: m.timelineConfirmed === true,
+                    color: manualBeatColor(m.order),
+                    words: slotWords(m),
+                    hintWordIndexes: findLongestWhisperHint(m.content, slotWords(m)),
+                });
+            }
+            const curWords = slotWords(cur);
+            slots.push({
+                relation: 'current',
+                order: cur.order,
+                confirmed: cur.timelineConfirmed === true,
+                color: manualBeatColor(cur.order),
+                words: curWords,
+                hintWordIndexes: findLongestWhisperHint(cur.content, curWords),
+            });
+            if (activeSegmentIndex + 1 < state.manualBeatMarks.length) {
+                const m = state.manualBeatMarks[activeSegmentIndex + 1];
+                slots.push({
+                    relation: 'next',
+                    order: m.order,
+                    confirmed: m.timelineConfirmed === true,
+                    color: manualBeatColor(m.order),
+                    words: slotWords(m),
+                    hintWordIndexes: findLongestWhisperHint(m.content, slotWords(m)),
+                });
+            }
+            return {
+                open: Boolean(state.manualBeatTimelineAdjOpen),
+                content: cur.content,
+                slots,
+                selection: adjSelection,
+                confirming: state.confirmingManualBeatTimeline,
+                canSeekPrev: activeSegmentIndex > 0,
+                canSeekNext: activeSegmentIndex + 1 < state.manualBeatMarks.length,
+                beatLabel: `Beat ${activeSegmentIndex + 1}/${state.manualBeatMarks.length}`,
+                startSec: cur.startSec,
+                endSec: cur.endSec,
+            };
+        })()
+        : null;
+    const resetAdjSelection = React.useCallback(() => {
+        setAdjSelection(null);
+        setAdjPhase('start');
+    }, []);
+    React.useEffect(() => {
+        resetAdjSelection();
+    }, [activeSegmentIndex, resetAdjSelection]);
+    const handleAdjTokenClick = React.useCallback((tokenIndex: number) => {
+        setAdjSelection((prev) => {
+            if (adjPhase === 'end' && prev) {
+                setAdjPhase('start');
+                const a = prev.start;
+                return { start: Math.min(a, tokenIndex), end: Math.max(a, tokenIndex) };
+            }
+            setAdjPhase('end');
+            return { start: tokenIndex, end: tokenIndex };
+        });
+    }, [adjPhase]);
+    const handleAdjToggle = React.useCallback(() => {
+        if (state.manualBeatTimelineAdjOpen) {
+            state.closeManualBeatTimelineAdj();
+        } else {
+            state.toggleManualBeatTimelineAdj();
+        }
+        setAdjSelection(null);
+        setAdjPhase('start');
+    }, [state]);
+    const handleAdjClose = React.useCallback(() => {
+        state.closeManualBeatTimelineAdj();
+        setAdjSelection(null);
+        setAdjPhase('start');
+    }, [state]);
+    const seekToAdjustBeat = React.useCallback((targetIdx: number) => {
+        const total = state.manualBeatMarks?.length ?? 0;
+        if (targetIdx < 0 || targetIdx >= total) {
+            return;
+        }
+        if (typeof state.handleSeekBeatPlayback === 'function') {
+            const mark = state.manualBeatMarks[targetIdx];
+            state.handleSeekBeatPlayback(beatSegments[targetIdx]?.beatId ?? beatId, (mark?.startSec ?? 0) + (mark?.durationSec ?? 0) / 2);
+        }
+        if (typeof state.focusBeatEditor === 'function') {
+            state.focusBeatEditor(beatSegments[targetIdx]?.beatId ?? beatId);
+        }
+        setAdjSelection(null);
+        setAdjPhase('start');
+    }, [beatId, beatSegments, state]);
+    const handleAdjConfirm = React.useCallback(() => {
+        const cur = state.manualBeatMarks[activeSegmentIndex];
+        if (!cur) {
+            return;
+        }
+        const startIdx = adjSelection?.start ?? cur.startTokenIndex;
+        const endIdx = adjSelection?.end ?? cur.endTokenIndex;
+        const done = (ok: boolean) => {
+            if (!ok) {
+                return;
+            }
+            const nextIdx = activeSegmentIndex + 1;
+            if (nextIdx < (state.manualBeatMarks?.length ?? 0)) {
+                seekToAdjustBeat(nextIdx);
+            } else {
+                state.closeManualBeatTimelineAdj();
+                setAdjSelection(null);
+                setAdjPhase('start');
+            }
+        };
+        void state.handleConfirmManualBeatTimeline(cur.id, startIdx, endIdx).then(done);
+    }, [activeSegmentIndex, adjSelection, seekToAdjustBeat, state]);
+    const handleAdjSeekActive = React.useCallback((delta: -1 | 1) => {
+        const targetIdx = activeSegmentIndex + delta;
+        seekToAdjustBeat(targetIdx);
+    }, [activeSegmentIndex, seekToAdjustBeat]);
     const handleSeekAdjacentBeat = React.useCallback((delta: -1 | 1) => {
         if (activeSegmentIndex < 0) {
             return;
@@ -1106,6 +1303,20 @@ export default function ShortVideoAgentBeatRegionEditor({
     // KHÔNG cộng dồn endSec + durationSec (sẽ làm timeline dài gấp đôi, vượt khỏi
     // phạm vi audio của beat).
     const beatTimeline = React.useMemo(() => {
+        // NGUỒN THỜI GIAN = đúng ranh giới user đã CONFIRM (mark.startSec/endSec).
+        // QUAN TRỌNG: KHÔNG dùng section sau align (alignManualBeatMapTimings có thể
+        // kéo dài endSec beat để lấp gap, làm audio play vượt quá thời gian đã cấu
+        // hình). Beat n play ĐÚNG trong [mark.startSec, mark.endSec].
+        const mark = state.isVideo2sMode ? state.manualBeatMarks?.[activeSegmentIndex] : undefined;
+        if (mark) {
+            const start = Number(mark.startSec ?? 0);
+            const end = Number(mark.endSec ?? 0);
+            const durationSec = end > start ? end - start : Math.max(0.1, 0);
+            return {
+                beatStartSec: start,
+                beatDurationSec: Math.max(0.1, durationSec),
+            };
+        }
         const section = beatMapForUi?.sections?.find((sec) => sec.id === beatId);
         const start = Number(section?.startSec ?? 0);
         const dur = Number(section?.durationSec ?? 0);
@@ -1115,8 +1326,9 @@ export default function ShortVideoAgentBeatRegionEditor({
             beatStartSec: start,
             beatDurationSec: durationSec,
         };
-    }, [beatId, beatMapForUi?.sections]);
+    }, [activeSegmentIndex, beatId, state.isVideo2sMode, state.manualBeatMarks, beatMapForUi?.sections]);
 
+    // === TEMP DIAGNOSTIC (debug audio lệch beat) — xoá sau khi fix ===
     // Danh mục transition (có effect_duration_sec THỰC TẾ từ asset) — dùng tính
     // vùng đỏ cuối beat + scene budget cho timeline hiệu ứng.
     const [whiteboardTransitions, setWhiteboardTransitions] = React.useState<
@@ -5199,7 +5411,18 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         p: 0.5,
                                     }}
                                 >
-                                    <Tooltip placement="left" title="Beat trước (←)">
+                                    {currentBeatTimelineConfirmed ? (
+                                        <Tooltip placement="left" title="Timeline beat này đã xác nhận thủ công — timing là chuẩn, không bị realign whisper đè">
+                                            <Chip
+                                                size="small"
+                                                color="success"
+                                                icon={<VerifiedIcon sx={{ fontSize: 14 }} />}
+                                                label="TL ✓"
+                                                sx={{ height: 24, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                            />
+                                        </Tooltip>
+                                    ) : null}
+                                    <Tooltip placement="bottom" title="Beat trước (←)">
                                         <span>
                                             <IconButton
                                                 size="small"
@@ -5211,7 +5434,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                             </IconButton>
                                         </span>
                                     </Tooltip>
-                                    <Tooltip placement="left" title="Beat sau (→)">
+                                    <Tooltip placement="bottom" title="Beat sau (→)">
                                         <span>
                                             <IconButton
                                                 size="small"
@@ -5440,6 +5663,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                             setDeleteMenuAnchor(el);
                         }}
                         onRequestDeleteAllTimelineItems={handleClearAllTimelineItems}
+                        manualBeatAdj={manualBeatAdj}
+                        onManualBeatAdjToggleOpen={handleAdjToggle}
+                        onManualBeatAdjTokenClick={handleAdjTokenClick}
+                        onManualBeatAdjConfirm={handleAdjConfirm}
+                        onManualBeatAdjClose={handleAdjClose}
+                        onManualBeatAdjSeekActive={handleAdjSeekActive}
                     />
 
                     {/* Dialog tạo group */}

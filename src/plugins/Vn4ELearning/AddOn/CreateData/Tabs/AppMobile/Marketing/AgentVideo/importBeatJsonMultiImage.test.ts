@@ -52,7 +52,8 @@ describe('analyzeImportJson — JSON chia beat nhiều ảnh', () => {
     });
 
     it('báo lỗi khi thiếu background_prompt', () => {
-        const { background_prompt: _omitted, ...noBackground } = validBeat;
+        const { background_prompt: omittedPrompt, ...noBackground } = validBeat;
+        void omittedPrompt;
         const result = analyzeImportJson(JSON.stringify([noBackground]));
         expect(result.errors.some((err) => err.includes('background_prompt'))).toBe(true);
     });

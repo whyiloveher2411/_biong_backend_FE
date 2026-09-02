@@ -3487,6 +3487,8 @@ export type ManualBeatMarkPayload = {
     startSec: number;
     endSec: number;
     durationSec?: number;
+    /** Beat đã xác nhận timeline thủ công — realign whisper không đè timing. */
+    timeline_confirmed?: boolean;
     created_at?: string;
 };
 
@@ -3496,6 +3498,7 @@ type ManualBeatResponse = JsonResponse & {
     all_prompts_filled?: boolean;
     beat_division_completed?: boolean;
     full_auto_pipeline?: FullAutoPipelineSummary;
+    timeline_confirmed?: boolean;
 };
 
 export async function fetchManualBeatMarks(shortVideoId: number): Promise<ManualBeatResponse> {
@@ -3542,6 +3545,35 @@ export async function mergeManualBeatMarks(
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/merge-marks',
         shortVideoBody(shortVideoId, { mark_ids: markIds }),
+    ) as Promise<ManualBeatResponse>;
+}
+
+export type ConfirmManualBeatTimingRange = {
+    startTokenIndex: number;
+    endTokenIndex: number;
+    startSec: number;
+    endSec: number;
+};
+
+/**
+ * Xác nhận timeline thủ công cho 1 beat (video 2s): timing theo whisper của từ
+ * user chọn, đánh dấu timeline_confirmed — beat n là chuẩn, backend dịch ranh
+ * giới 2 beat kề (n-1/n+1) và KHÔNG realign lại beat này.
+ */
+export async function confirmManualBeatTimeline(
+    shortVideoId: number,
+    markId: string,
+    range: ConfirmManualBeatTimingRange,
+): Promise<ManualBeatResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/confirm-timing',
+        shortVideoBody(shortVideoId, {
+            mark_id: markId,
+            start_token_index: range.startTokenIndex,
+            end_token_index: range.endTokenIndex,
+            start_sec: range.startSec,
+            end_sec: range.endSec,
+        }),
     ) as Promise<ManualBeatResponse>;
 }
 
