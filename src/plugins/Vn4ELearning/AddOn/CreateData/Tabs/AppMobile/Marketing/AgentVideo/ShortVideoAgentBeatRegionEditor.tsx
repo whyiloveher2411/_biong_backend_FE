@@ -436,11 +436,19 @@ export default function ShortVideoAgentBeatRegionEditor({
 }: Props) {
     const currentOverride = state.agentWhiteboardBeatOverrides?.[beatId] || {};
 
+    // Video 2s: beat thủ công là nguồn truth — dùng CHUNG effectiveBeatMap (như
+    // workspace) thay vì state.beatMap snapshot, tránh lệch nội dung/đánh số beat
+    // sau khi user split/merge/delete trong chia beat thủ công.
+    const beatMapForUi = state.effectiveBeatMap ?? state.beatMap;
+    const beatMapReadyForUi = Boolean(
+        state.beatMapReadyForUi || (beatMapForUi?.sections?.length ?? 0) > 0,
+    );
+
     // NHIỀU LỚP ẢNH / BEAT: các lớp thay nhau theo slot, dùng chung 1 custom
     // background. Editor luôn làm việc trên ĐÚNG 1 lớp (activeLayerId) —
     // vùng/ảnh thêm của các lớp khác được giữ nguyên và merge lại khi lưu.
     const beatWindowSec = React.useMemo(() => {
-        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const section = beatMapForUi?.sections?.find((sec) => sec.id === beatId);
         const dur = Number(section?.durationSec ?? 0);
         if (dur > 0) {
             return dur;
@@ -448,7 +456,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         const start = Number(section?.startSec ?? 0);
         const end = Number(section?.endSec ?? start);
         return Math.max(0.1, end - start);
-    }, [beatId, state.beatMap?.sections]);
+    }, [beatId, beatMapForUi?.sections]);
 
     const imageLayers = React.useMemo(
         () => resolveBeatImageLayers({
@@ -840,8 +848,8 @@ export default function ShortVideoAgentBeatRegionEditor({
     // Prev/Next beat ngay trong drawer: seek timeline đến GIỮA beat kế/cũ —
     // ảnh + vùng mới tự load (giống nút cột giữa của VideoPreview).
     const beatSegments = React.useMemo(
-        () => getBeatTimelineSegments(state.beatMapReady ? state.beatMap : null),
-        [state.beatMapReady, state.beatMap],
+        () => getBeatTimelineSegments(beatMapReadyForUi ? beatMapForUi : null),
+        [beatMapReadyForUi, beatMapForUi],
     );
     const activeSegmentIndex = React.useMemo(() => {
         if (!beatId) {
@@ -1083,7 +1091,7 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (all.length === 0) {
             return all;
         }
-        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const section = beatMapForUi?.sections?.find((sec) => sec.id === beatId);
         const start = Number(section?.startSec ?? 0);
         const dur = Number(section?.durationSec ?? 0);
         const end = Number(section?.endSec ?? (start + dur));
@@ -1091,14 +1099,14 @@ export default function ShortVideoAgentBeatRegionEditor({
             return all;
         }
         return all.filter((w) => Number(w.start) >= start - 0.1 && Number(w.end) <= end + 0.1);
-    }, [beatId, state.beatMap?.sections, state.whisperWords]);
+    }, [beatId, beatMapForUi?.sections, state.whisperWords]);
 
     // Thời lượng + mốc bắt đầu của beat (scene-relative) cho thanh thời gian render.
     // QUAN TRỌNG: beatDurationSec = ĐÚNG durationSec của beat (window audio script).
     // KHÔNG cộng dồn endSec + durationSec (sẽ làm timeline dài gấp đôi, vượt khỏi
     // phạm vi audio của beat).
     const beatTimeline = React.useMemo(() => {
-        const section = state.beatMap?.sections?.find((sec) => sec.id === beatId);
+        const section = beatMapForUi?.sections?.find((sec) => sec.id === beatId);
         const start = Number(section?.startSec ?? 0);
         const dur = Number(section?.durationSec ?? 0);
         const end = Number(section?.endSec ?? (start + dur));
@@ -1107,7 +1115,7 @@ export default function ShortVideoAgentBeatRegionEditor({
             beatStartSec: start,
             beatDurationSec: durationSec,
         };
-    }, [beatId, state.beatMap?.sections]);
+    }, [beatId, beatMapForUi?.sections]);
 
     // Danh mục transition (có effect_duration_sec THỰC TẾ từ asset) — dùng tính
     // vùng đỏ cuối beat + scene budget cho timeline hiệu ứng.
@@ -1128,7 +1136,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     }, []);
 
     const beatTransitionDurationSec = React.useMemo(() => {
-        const sections = state.beatMap?.sections || [];
+        const sections = beatMapForUi?.sections || [];
         if (sections.length === 0) {
             return 0;
         }
@@ -1144,9 +1152,9 @@ export default function ShortVideoAgentBeatRegionEditor({
         });
     }, [
         beatId,
+        beatMapForUi?.sections,
         state.agentWhiteboardBeatOverrides,
         state.agentWhiteboardConfig,
-        state.beatMap?.sections,
         whiteboardTransitions,
     ]);
 
