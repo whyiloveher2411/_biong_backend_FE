@@ -52,6 +52,7 @@ function resolvePipelineGroupToggleKey(groupKey: string): FullAutoStepToggleKey 
     return null;
 }
 import { PipelineBeatImageFillModeToggle } from './PipelineBeatImageFillModeToggle';
+import { PipelineBeatAudioOnlyMissingToggle } from './PipelineBeatAudioOnlyMissingToggle';
 import {
     getVisibleFullAutoPipelineStepGroups,
     getVisibleFullAutoPipelineStepIndex,
@@ -180,6 +181,7 @@ function PipelineAiBadge({ variant = 'dark', compact = false }: { variant?: 'lig
 type PipelineStepTitleProps = {
     stepKey: FullAutoPipelineStepKey;
     agentVisualMode?: string;
+    beatAudioMode?: boolean;
     beatImageFillMode?: BeatImageFillMode;
     variant?: 'light' | 'dark';
     headlessStepSet: Set<string>;
@@ -192,6 +194,7 @@ type PipelineStepTitleProps = {
 function PipelineStepTitle({
     stepKey,
     agentVisualMode,
+    beatAudioMode = false,
     beatImageFillMode = 'auto',
     variant = 'dark',
     headlessStepSet,
@@ -204,7 +207,7 @@ function PipelineStepTitle({
         || isFullAutoPipelineHeadlessStep(stepKey)
         || (stepKey === 'beat_image_fill' && beatImageFillMode === 'auto');
     const showAi = aiStepSet.has(stepKey) || isFullAutoPipelineAiStep(stepKey);
-    const stepIndex = getVisibleFullAutoPipelineStepIndex(stepKey, agentVisualMode);
+    const stepIndex = getVisibleFullAutoPipelineStepIndex(stepKey, agentVisualMode, beatAudioMode);
     const label = `${stepIndex > 0 ? `${stepIndex}. ` : ''}${resolveFullAutoPipelineStepLabel(stepKey, agentVisualMode)}`;
 
     if (compact) {
@@ -390,6 +393,7 @@ type PipelineGroupedCommonProps = {
     aiSteps?: FullAutoPipelineSummary['ai_steps'];
     qaLoops?: FullAutoPipelineSummary['qa_loops'];
     agentVisualMode?: string;
+    beatAudioMode?: boolean;
     pipelineStatus?: string;
     currentStep?: string;
     /** Checkbox Chạy — mặc định true; tắt = full-auto skip. */
@@ -403,6 +407,10 @@ type PipelineGroupedCommonProps = {
     beatImageFillOnlyMissing?: boolean;
     beatImageFillOnlyMissingDisabled?: boolean;
     onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
+    /** Chỉ tạo audio cho beat còn thiếu khi chạy bước Audio từng beat. */
+    beatAudioOnlyMissing?: boolean;
+    beatAudioOnlyMissingDisabled?: boolean;
+    onBeatAudioOnlyMissingChange?: (checked: boolean) => void;
 };
 
 type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
@@ -436,6 +444,7 @@ export function PipelineGroupedMenuItems({
     aiSteps,
     qaLoops,
     agentVisualMode,
+    beatAudioMode = false,
     pipelineStatus,
     currentStep = '',
     stepToggles,
@@ -447,6 +456,9 @@ export function PipelineGroupedMenuItems({
     beatImageFillOnlyMissing = true,
     beatImageFillOnlyMissingDisabled = false,
     onBeatImageFillOnlyMissingChange,
+    beatAudioOnlyMissing = true,
+    beatAudioOnlyMissingDisabled = false,
+    onBeatAudioOnlyMissingChange,
     restartableSet,
     disabled = false,
     onSelectStep,
@@ -480,7 +492,7 @@ export function PipelineGroupedMenuItems({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
         [agentVisualMode],
     );
 
@@ -645,6 +657,13 @@ export function PipelineGroupedMenuItems({
                             onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
                         />
                     ) : null}
+                    {key === 'beat_audio' ? (
+                        <PipelineBeatAudioOnlyMissingToggle
+                            onlyMissing={beatAudioOnlyMissing}
+                            disabled={disabled || beatAudioOnlyMissingDisabled}
+                            onChange={onBeatAudioOnlyMissingChange}
+                        />
+                    ) : null}
                 </Box>
             </MenuItem>
         );
@@ -770,6 +789,7 @@ export function PipelineGroupedStepList({
     aiSteps,
     qaLoops,
     agentVisualMode,
+    beatAudioMode = false,
     beatImageFillMode = 'auto',
     pipelineStatus,
     currentStep = '',
@@ -792,7 +812,7 @@ export function PipelineGroupedStepList({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
         [agentVisualMode],
     );
 
@@ -989,6 +1009,7 @@ export function PipelineGroupedWorkflowListV3({
     aiSteps,
     qaLoops,
     agentVisualMode,
+    beatAudioMode = false,
     currentStep = '',
     pipelineStatus = '',
     stepToggles,
@@ -1000,6 +1021,9 @@ export function PipelineGroupedWorkflowListV3({
     beatImageFillOnlyMissing = true,
     beatImageFillOnlyMissingDisabled = false,
     onBeatImageFillOnlyMissingChange,
+    beatAudioOnlyMissing = true,
+    beatAudioOnlyMissingDisabled = false,
+    onBeatAudioOnlyMissingChange,
     onRerunRenderUpload,
     rerunRenderUploadDisabled = false,
     rerunningRenderUpload = false,
@@ -1033,7 +1057,7 @@ export function PipelineGroupedWorkflowListV3({
         status: pipelineStatus,
     } as FullAutoPipelineSummary);
     const visibleGroups: VisibleFullAutoPipelineStepGroup[] = React.useMemo(
-        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode),
+        () => getVisibleFullAutoPipelineStepGroups(agentVisualMode, beatAudioMode),
         [agentVisualMode],
     );
 
@@ -1198,6 +1222,13 @@ export function PipelineGroupedWorkflowListV3({
                             onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
                         />
                     ) : null}
+                    {key === 'beat_audio' ? (
+                        <PipelineBeatAudioOnlyMissingToggle
+                            onlyMissing={beatAudioOnlyMissing}
+                            disabled={selectStepDisabled || beatAudioOnlyMissingDisabled}
+                            onChange={onBeatAudioOnlyMissingChange}
+                        />
+                    ) : null}
                 </Box>
             </Box>
         );
@@ -1206,7 +1237,7 @@ export function PipelineGroupedWorkflowListV3({
     const extraSteps = steps
         ? Object.entries(steps).filter(([stepKey]) => (
             !(FULL_AUTO_PIPELINE_STEP_ORDER as readonly string[]).includes(stepKey)
-            && isFullAutoPipelineStepRelevantForMode(stepKey, agentVisualMode)
+            && isFullAutoPipelineStepRelevantForMode(stepKey, agentVisualMode, beatAudioMode)
         ))
         : [];
 

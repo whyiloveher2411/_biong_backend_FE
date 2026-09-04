@@ -286,6 +286,8 @@ type Props = {
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
     beatImageFillOnlyMissing?: boolean;
     onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
+    beatAudioOnlyMissing?: boolean;
+    onBeatAudioOnlyMissingChange?: (checked: boolean) => void;
     agentVisualMode?: string;
     startingFullAuto?: boolean;
     cancellingFullAuto?: boolean;
@@ -378,6 +380,8 @@ export default function ShortVideoAgentVideoTimeline({
     onBeatImageFillModeChange,
     beatImageFillOnlyMissing = true,
     onBeatImageFillOnlyMissingChange,
+    beatAudioOnlyMissing = true,
+    onBeatAudioOnlyMissingChange,
     agentVisualMode = '',
     startingFullAuto = false,
     cancellingFullAuto = false,
@@ -1121,6 +1125,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         aiSteps={fullAutoPipeline?.ai_steps}
                                         qaLoops={fullAutoPipeline?.qa_loops}
                                         agentVisualMode={agentVisualMode}
+                                        beatAudioMode={agentState?.agentBeatAudio}
                                         pipelineStatus={fullAutoPipeline?.status}
                                         currentStep={fullAutoPipeline?.current_step}
                                         stepToggles={fullAutoStepToggles}
@@ -1134,6 +1139,11 @@ export default function ShortVideoAgentVideoTimeline({
                                             onBeatImageFillOnlyMissingChange?.(checked);
                                         }}
                                         onBeatImageFillModeChange={onBeatImageFillModeChange}
+                                        beatAudioOnlyMissing={beatAudioOnlyMissing}
+                                        beatAudioOnlyMissingDisabled={startingFullAuto}
+                                        onBeatAudioOnlyMissingChange={(checked) => {
+                                            onBeatAudioOnlyMissingChange?.(checked);
+                                        }}
                                         restartableSet={restartableSet}
                                         disabled={startingFullAuto}
                                         onSelectStep={(stepKey: FullAutoPipelineStepKey) => {

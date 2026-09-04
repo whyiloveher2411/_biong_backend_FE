@@ -208,6 +208,18 @@ export default function ShortVideoAgentVideoWorkspace({
         return index >= 0 ? index + 1 : null;
     }, [beatMapForUi, infoBeatId]);
 
+    /** Audio riêng của beat đang mở (beat-audio mode) — ưu tiên phát thay vì audio full. */
+    const infoBeatAudioItem = React.useMemo(() => {
+        if (!state.agentBeatAudio || !infoBeatIndex) {
+            return null;
+        }
+        return (state.beatAudio?.items ?? []).find((it) => (
+            it.order === infoBeatIndex
+            && it.status === 'ready'
+            && String(it.url || '').trim() !== ''
+        )) ?? null;
+    }, [infoBeatIndex, state.agentBeatAudio, state.beatAudio]);
+
     const handleOpenEditBeatHtml = React.useCallback((beatId: string) => {
         const nextId = String(beatId || '').trim();
         if (!nextId) {
@@ -730,7 +742,7 @@ export default function ShortVideoAgentVideoWorkspace({
                                         beatHtml={state.beatHtml}
                                         beatImage={state.beatImage}
                                         isWhiteboardMode={false}
-                                        audioUrl={state.audioFileUrl || ''}
+                                        audioUrl={state.audioPreviewUrl || ''}
                                         audioDurationSec={state.audioDurationSec}
                                         videoRef={videoRef}
                                         clipAspect={state.agentClipAspect}
@@ -973,6 +985,10 @@ export default function ShortVideoAgentVideoWorkspace({
                     onBeatImageFillOnlyMissingChange={(checked) => {
                         void state.handleBeatImageFillOnlyMissingChange(checked);
                     }}
+                    beatAudioOnlyMissing={state.beatAudioOnlyMissing}
+                    onBeatAudioOnlyMissingChange={(checked) => {
+                        void state.handleBeatAudioOnlyMissingChange(checked);
+                    }}
                     agentVisualMode={state.agentVisualMode}
                     startingFullAuto={state.startingFullAuto}
                     cancellingFullAuto={state.cancellingFullAuto}
@@ -1084,7 +1100,9 @@ export default function ShortVideoAgentVideoWorkspace({
                 beatHtml={infoBeatId ? state.beatHtml[infoBeatId] || null : null}
                 beatImage={infoBeatId ? state.beatImage[infoBeatId] || null : null}
                 isWhiteboardMode={state.isWhiteboardMode}
-                audioUrl={state.audioFileUrl || state.agentVideoUrl}
+                audioUrl={state.audioPreviewUrl || state.audioFileUrl || state.agentVideoUrl}
+                beatAudioUrl={infoBeatAudioItem ? String(infoBeatAudioItem.url || '') : ''}
+                beatAudioDurationSec={infoBeatAudioItem?.duration_sec}
                 beatIndex={infoBeatIndex}
                 clipAspect={state.agentClipAspect}
                 saving={state.savingImportHtml}
@@ -1098,6 +1116,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 headlessBrowserActive={state.headlessBrowserActive}
                 agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
                 agentVisualMode={state.agentVisualMode}
+                beatAudioMode={state.agentBeatAudio}
                 stepToggles={state.fullAutoStepToggles}
                 stepToggleDisabled={state.savingFullAutoStepToggles}
                 onStepToggleChange={(toggleKey, checked) => {

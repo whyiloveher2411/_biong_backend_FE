@@ -54,6 +54,7 @@ import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
+import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardRegionTimeline, {
     type ManualBeatAdjSession,
@@ -919,6 +920,7 @@ export default function ShortVideoAgentBeatRegionEditor({
     const [adjSelection, setAdjSelection] = React.useState<{ start: number; end: number } | null>(null);
     const manualBeatAdjActive = Boolean(
         state.isVideo2sMode
+        && !state.agentBeatAudio
         && (state.manualBeatMarks?.length ?? 0) > 0
         && state.whisperStatus === 'completed'
         && activeSegmentIndex >= 0
@@ -1280,8 +1282,34 @@ export default function ShortVideoAgentBeatRegionEditor({
             : `translate(${(x * 1000).toFixed(2)}, ${(y * 1000).toFixed(2)})`
     );
 
+    // Audio từng beat — item MP3 + whisper RIÊNG của beat này (lookup theo order).
+    const beatAudioItem = React.useMemo(() => {
+        if (!state.agentBeatAudio) {
+            return null;
+        }
+        const order = Number(String(beatId).replace(/\D+/g, '')) || 0;
+        return (state.beatAudio?.items ?? []).find((it) => it.order === order) ?? null;
+    }, [beatId, state.agentBeatAudio, state.beatAudio]);
+
     // Lấy từ trong phạm vi beat (window) từ whisper words toàn video.
+    // Phân loại theo thời điểm BẮT ĐẦU của từ, nửa mở [start - 0.1, end - 0.05):
+    // từ bắt đầu đúng/sau mốc endSec là của beat KẾ TIẾP — nếu lọc theo w.end (+0.1)
+    // thì từ đầu beat sau (bắt đầu đúng tại endSec) bị "dư" vào cuối beat trước.
     const beatWords = React.useMemo(() => {
+        // Beat-audio mode: ƯU TIÊN whisper RIÊNG của beat (beat-local 0s, transcribe
+        // trên chính MP3 beat) — whisper full là timing của audio CŨ, có thể thiếu/
+        // sai từ so với audio beat thật (beat 69: full whisper mất "một loại hạt").
+        const beatWhisperWords = (beatAudioItem?.whisper_words ?? [])
+            .filter((w) => String(w?.text || '').trim() !== '');
+        if (beatWhisperWords.length > 0) {
+            return beatWhisperWords.map((w, index) => ({
+                index,
+                text: String(w.text || ''),
+                start: Number(w.start) || 0,
+                end: Number(w.end) || 0,
+            }));
+        }
+
         const all = Array.isArray(state.whisperWords)
             ? state.whisperWords.map((w, index) => ({ ...w, index }))
             : [];
@@ -1295,14 +1323,30 @@ export default function ShortVideoAgentBeatRegionEditor({
         if (!(end > start)) {
             return all;
         }
-        return all.filter((w) => Number(w.start) >= start - 0.1 && Number(w.end) <= end + 0.1);
-    }, [beatId, beatMapForUi?.sections, state.whisperWords]);
+        return all.filter((w) => {
+            const wordStart = Number(w.start);
+            return wordStart >= start - 0.1 && wordStart < end - 0.05;
+        });
+    }, [beatAudioItem, beatId, beatMapForUi?.sections, state.whisperWords]);
 
     // Thời lượng + mốc bắt đầu của beat (scene-relative) cho thanh thời gian render.
     // QUAN TRỌNG: beatDurationSec = ĐÚNG durationSec của beat (window audio script).
     // KHÔNG cộng dồn endSec + durationSec (sẽ làm timeline dài gấp đôi, vượt khỏi
     // phạm vi audio của beat).
     const beatTimeline = React.useMemo(() => {
+        // Beat-audio mode + beat đã có MP3 → hệ tọa độ BEAT-LOCAL (bắt đầu 0s,
+        // duration = duration MP3 thật): khớp audio bar, whisper per beat và
+        // payload vùng render khi render beat dùng MP3 của chính beat đó.
+        if (
+            beatAudioItem
+            && (beatAudioItem.status ?? '') === 'ready'
+            && Number(beatAudioItem.duration_sec) > 0
+        ) {
+            return {
+                beatStartSec: 0,
+                beatDurationSec: Math.max(0.1, Number(beatAudioItem.duration_sec)),
+            };
+        }
         // NGUỒN THỜI GIAN = đúng ranh giới user đã CONFIRM (mark.startSec/endSec).
         // QUAN TRỌNG: KHÔNG dùng section sau align (alignManualBeatMapTimings có thể
         // kéo dài endSec beat để lấp gap, làm audio play vượt quá thời gian đã cấu
@@ -1327,6 +1371,37 @@ export default function ShortVideoAgentBeatRegionEditor({
             beatDurationSec: durationSec,
         };
     }, [activeSegmentIndex, beatId, state.isVideo2sMode, state.manualBeatMarks, beatMapForUi?.sections]);
+
+    /**
+     * Audio từng beat — beat đã có MP3 riêng (ready) → thanh audio play CHÍNH MP3
+     * này từ 0 (thay vì windowed audio full). Words whisper (mốc tuyệt đối trên
+     * audio full) được rebase về beat-local cho khớp trục thời gian mới; nếu words
+     * đã là whisper RIÊNG của beat (beat-local sẵn) thì giữ nguyên.
+     */
+    const beatAudioPlayback = React.useMemo(() => {
+        if (
+            !beatAudioItem
+            || (beatAudioItem.status ?? '') !== 'ready'
+            || String(beatAudioItem.url || '').trim() === ''
+        ) {
+            return null;
+        }
+        const durationSec = Number(beatAudioItem.duration_sec) > 0
+            ? Number(beatAudioItem.duration_sec)
+            : beatTimeline.beatDurationSec;
+        const hasBeatLocalWords = (beatAudioItem.whisper_words ?? []).length > 0;
+        return {
+            url: String(beatAudioItem.url || '').trim(),
+            durationSec: Math.max(0.1, durationSec),
+            wordOffset: hasBeatLocalWords ? 0 : beatTimeline.beatStartSec,
+        };
+    }, [beatAudioItem, beatTimeline.beatDurationSec, beatTimeline.beatStartSec]);
+
+    const beatWordsForTimeline = React.useMemo(() => (
+        beatAudioPlayback
+            ? beatWords.map((word) => ({ ...word, start: Number(word.start) - beatAudioPlayback.wordOffset }))
+            : beatWords
+    ), [beatAudioPlayback, beatWords]);
 
     // === TEMP DIAGNOSTIC (debug audio lệch beat) — xoá sau khi fix ===
     // Danh mục transition (có effect_duration_sec THỰC TẾ từ asset) — dùng tính
@@ -5534,6 +5609,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     Tạo group ({groupableSelectionCount})
                                 </Button>
                             ) : null}
+                            {state.agentBeatAudio ? (
+                                <WhiteboardBeatAudioControl state={state} beatId={beatId} />
+                            ) : null}
                         <Stack
                             direction="row"
                             spacing={0.75}
@@ -5607,10 +5685,12 @@ export default function ShortVideoAgentBeatRegionEditor({
                     {/* Thanh thời gian render theo vùng (audio bar) — dưới box ảnh */}
                     <WhiteboardRegionTimeline
                         regions={displayRegions}
-                        beatDurationSec={beatTimeline.beatDurationSec}
+                        beatDurationSec={beatAudioPlayback
+                            ? beatAudioPlayback.durationSec
+                            : beatTimeline.beatDurationSec}
                         effectTimelineDurationSec={sceneBudgetSec}
-                        beatStartSec={beatTimeline.beatStartSec}
-                        beatWords={beatWords}
+                        beatStartSec={beatAudioPlayback ? 0 : beatTimeline.beatStartSec}
+                        beatWords={beatWordsForTimeline}
                         colorFor={colorFor}
                         onChangeRegion={updateRegion}
                         onSelectRegion={selectRegionFromTimeline}
@@ -5622,7 +5702,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         onCommitEffect={(id, patch) => { void commitEffect(id, patch); }}
                         onSelectEffect={selectEffectFromTimeline}
                         onSwitchToEditTab={() => setRightPanelTab('edit')}
-                        audioUrl={state.audioFileUrl || ''}
+                        audioUrl={beatAudioPlayback?.url || state.audioFileUrl || ''}
                         maxWidth={boxSize ? boxSize.w : undefined}
                         transitionDurationSec={beatTransitionDurationSec}
                         shortVideoId={shortVideoId}

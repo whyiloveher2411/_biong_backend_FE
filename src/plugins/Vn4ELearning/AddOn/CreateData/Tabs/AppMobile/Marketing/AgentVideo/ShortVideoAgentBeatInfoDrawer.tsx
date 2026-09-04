@@ -40,6 +40,9 @@ type Props = {
     beatImage?: BeatImageEntry | null;
     isWhiteboardMode?: boolean;
     audioUrl?: string;
+    /** Audio riêng của beat (beat-audio mode) — ưu tiên phát thay vì windowed audioUrl. */
+    beatAudioUrl?: string;
+    beatAudioDurationSec?: number;
     beatIndex?: number | null;
     clipAspect?: import('./agentVideoClipAspect').ClipAspect;
     saving?: boolean;
@@ -125,6 +128,8 @@ export default function ShortVideoAgentBeatInfoDrawer({
     beatImage = null,
     isWhiteboardMode = false,
     audioUrl = '',
+    beatAudioUrl = '',
+    beatAudioDurationSec,
     beatIndex = null,
     clipAspect = '9:16',
     saving = false,
@@ -385,15 +390,20 @@ export default function ShortVideoAgentBeatInfoDrawer({
                                 beatId={beat.id}
                                 imageUrl={String(beatImage?.image_url || '')}
                                 clipAspect={clipAspect}
+                                audioUrl={beatAudioUrl}
                             />
                         ) : (
                             <ShortVideoAgentBeatVisualPreview
                                 beatId={beat.id}
                                 html={String(beatHtml?.html || '')}
                                 revision={String(beatHtml?.updated_at || '')}
-                                audioUrl={audioUrl}
-                                startSec={beat.startSec}
-                                durationSec={beat.durationSec}
+                                audioUrl={beatAudioUrl || audioUrl}
+                                startSec={beatAudioUrl ? 0 : beat.startSec}
+                                durationSec={beatAudioUrl
+                                    ? (Number(beatAudioDurationSec) > 0
+                                        ? Number(beatAudioDurationSec)
+                                        : beat.durationSec)
+                                    : beat.durationSec}
                                 clipAspect={clipAspect}
                             />
                         )}

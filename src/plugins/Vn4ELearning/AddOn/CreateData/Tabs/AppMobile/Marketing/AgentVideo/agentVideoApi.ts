@@ -1678,6 +1678,57 @@ export function normalizeBeatImageFillOnlyMissing(raw?: boolean | string | numbe
     return DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING;
 }
 
+/** Chỉ tạo audio beat còn thiếu khi chạy bước Audio từng beat — agent_video_json.beat_audio_only_missing. */
+export type BeatAudioOnlyMissing = boolean;
+
+export const DEFAULT_BEAT_AUDIO_ONLY_MISSING = true;
+
+export function normalizeBeatAudioOnlyMissing(raw?: boolean | string | number | null): boolean {
+    if (typeof raw === 'boolean') {
+        return raw;
+    }
+    if (typeof raw === 'number') {
+        return raw !== 0;
+    }
+    if (typeof raw === 'string') {
+        const value = raw.trim().toLowerCase();
+        return value === '' || ['1', 'true', 'yes', 'on'].includes(value);
+    }
+    return DEFAULT_BEAT_AUDIO_ONLY_MISSING;
+}
+
+export type AgentVideoBeatAudioItem = {
+    mark_id: string;
+    order: number;
+    status: 'pending' | 'generating' | 'ready' | 'error' | string;
+    source: 'tts' | 'upload' | string;
+    tts_engine?: string;
+    duration_sec: number;
+    start_sec?: number;
+    end_sec?: number;
+    pause_after_ms?: number;
+    url?: string;
+    whisper_word_count?: number;
+    /** Whisper RIÊNG của beat (beat-local 0s, chạy trên MP3 beat) — ưu tiên hơn whisper full. */
+    whisper_words?: { text: string; start: number; end: number }[];
+    qa_passed?: boolean;
+    error?: string;
+};
+
+export type AgentVideoBeatAudioState = {
+    enabled: boolean;
+    total: number;
+    ready: number;
+    items: AgentVideoBeatAudioItem[];
+    merged?: {
+        url?: string;
+        duration_sec?: number;
+        updated_at?: string;
+        pause_config?: { end_ms: number; comma_ms: number; none_ms: number };
+    };
+    updated_at?: string;
+};
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -1709,6 +1760,9 @@ export type AgentVideoContentResponse = {
     agent_avatar_anchor?: AvatarPipAnchor;
     agent_show_karaoke?: boolean;
     agent_render_debug?: boolean;
+    agent_beat_audio?: boolean;
+    beat_audio?: AgentVideoBeatAudioState;
+    beat_audio_only_missing?: boolean;
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
@@ -1927,8 +1981,10 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'beat_image_fill',
     'beat_refine_visual',
     'beat_refine_html',
+    'beat_audio',
     'bgm',
     'render',
+    'whiteboard_mux',
     'upload',
     'thumbnail_idea',
     'thumbnail_fill',
@@ -2092,6 +2148,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     script_phonetic_normalize: 'Chuẩn hóa giọng đọc',
     approve_tts: 'Duyệt / TTS',
     whisper: 'Whisper',
+    beat_audio: 'Audio từng beat',
     beat_division: 'Chia beat',
     beat_fill: 'Fill HTML beat',
     beat_image_fill: 'Ảnh beat',
@@ -2099,6 +2156,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
     render: 'Render',
+    whiteboard_mux: 'Final video',
     upload: 'Upload store',
     thumbnail_idea: 'Thumbnail idea',
     thumbnail_fill: 'Thumbnail HTML',
@@ -2130,6 +2188,11 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
         ],
     },
     {
+        key: 'audio',
+        label: 'Audio',
+        steps: ['beat_audio'],
+    },
+    {
         key: 'audio_background',
         label: 'Audio background',
         steps: ['bgm'],
@@ -2137,7 +2200,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
     {
         key: 'render',
         label: 'Render',
-        steps: ['render', 'upload'],
+        steps: ['render', 'whiteboard_mux', 'upload'],
     },
     {
         key: 'thumbnail',
@@ -2656,6 +2719,30 @@ export async function saveAgentShowKaraoke(
             agent_show_karaoke: enabled ? '1' : '0',
         }),
     ) as Promise<JsonResponse & { agent_show_karaoke?: boolean }>;
+}
+
+export async function saveAgentBeatAudio(
+    shortVideoId: number,
+    enabled: boolean,
+): Promise<JsonResponse & { agent_beat_audio?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-audio',
+        shortVideoBody(shortVideoId, {
+            agent_beat_audio: enabled ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { agent_beat_audio?: boolean }>;
+}
+
+export async function saveBeatAudioOnlyMissing(
+    shortVideoId: number,
+    onlyMissing: boolean,
+): Promise<JsonResponse & { beat_audio_only_missing?: boolean }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-audio-only-missing',
+        shortVideoBody(shortVideoId, {
+            beat_audio_only_missing: onlyMissing ? '1' : '0',
+        }),
+    ) as Promise<JsonResponse & { beat_audio_only_missing?: boolean }>;
 }
 
 export async function saveAgentRenderDebug(
@@ -3575,6 +3662,75 @@ export async function confirmManualBeatTimeline(
             end_sec: range.endSec,
         }),
     ) as Promise<ManualBeatResponse>;
+}
+
+export type ManualBeatAudioResponse = JsonResponse & { beat_audio?: AgentVideoBeatAudioState };
+
+export async function generateManualBeatAudio(
+    shortVideoId: number,
+    markId = '',
+    engine = '',
+    force = false,
+): Promise<ManualBeatAudioResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/generate-audio',
+        shortVideoBody(shortVideoId, {
+            mark_id: markId,
+            engine,
+            force: force ? '1' : '0',
+        }),
+    ) as Promise<ManualBeatAudioResponse>;
+}
+
+export async function mergeManualBeatAudio(shortVideoId: number): Promise<ManualBeatAudioResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/merge-audio',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<ManualBeatAudioResponse>;
+}
+
+export async function fetchManualBeatAudio(shortVideoId: number): Promise<ManualBeatAudioResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-audio',
+        shortVideoBody(shortVideoId, {}),
+    ) as Promise<ManualBeatAudioResponse>;
+}
+
+export async function uploadManualBeatAudio(
+    shortVideoId: number,
+    markId: string,
+    file: File,
+): Promise<ManualBeatAudioResponse> {
+    const formData = new FormData();
+    formData.append('short_video_id', String(shortVideoId));
+    formData.append('id', String(shortVideoId));
+    formData.append('mark_id', markId);
+    formData.append('audio', file);
+    formData.append('__l', window.btoa(`${getLanguage().code}#${Date.now()}`));
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAccessToken();
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/upload-audio',
+        ),
+        {
+            method: 'POST',
+            headers,
+            body: formData,
+        },
+    );
+
+    const result = await response.json() as ManualBeatAudioResponse;
+    if (!response.ok && !result?.message) {
+        throw new Error(response.statusText || 'Upload thất bại');
+    }
+    return result;
 }
 
 /** System prompt art-director video 2s (prompts/video-2s/prompt-sinh-image.md). */

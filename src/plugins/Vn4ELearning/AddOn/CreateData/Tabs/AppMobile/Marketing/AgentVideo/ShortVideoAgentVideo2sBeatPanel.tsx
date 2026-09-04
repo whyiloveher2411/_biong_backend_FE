@@ -23,6 +23,10 @@ import ImageSearchIcon from '@mui/icons-material/ImageSearch';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ShortVideoAgentWhisperCompareText, {
     type ManualBeatCursorClickPayload,
     type ManualBeatMarkClickPayload,
@@ -45,6 +49,48 @@ type Props = {
     state: ReturnType<typeof useAgentVideoContent>;
 };
 
+function BeatAudioUploadButton({
+    markId,
+    disabled,
+    onUpload,
+}: {
+    markId: string;
+    disabled: boolean;
+    onUpload: (markId: string, file: File) => void;
+}) {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    return (
+        <>
+            <input
+                ref={inputRef}
+                type="file"
+                accept="audio/mpeg,.mp3"
+                hidden
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        onUpload(markId, file);
+                    }
+                    e.target.value = '';
+                }}
+            />
+            <Button
+                size="small"
+                variant="text"
+                disabled={disabled}
+                startIcon={<UploadFileIcon />}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    inputRef.current?.click();
+                }}
+            >
+                Upload
+            </Button>
+        </>
+    );
+}
+
 export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     const [anchor, setAnchor] = React.useState<ManualBeatQuickMenuAnchor | null>(null);
     const [pendingBeatRange, setPendingBeatRange] = React.useState<ManualBeatTokenRange | null>(null);
@@ -52,12 +98,21 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     const [aiOutputText, setAiOutputText] = React.useState('');
     const [selectedBeatIds, setSelectedBeatIds] = React.useState<string[]>([]);
 
-    const tokens = state.whisperScriptAlign?.tokens ?? [];
+    const tokens = state.whisperScriptAlign?.tokens ?? state.scriptOnlyScriptAlign?.tokens ?? [];
     const marks = state.manualBeatMarks;
     const latestMark = marks.length > 0 ? marks[marks.length - 1] : null;
     const coverage = manualBeatCoverageRatio(marks, tokens);
     const coveragePercent = Math.round(coverage * 100);
     const promptFilled = marks.filter((mark) => mark.imagePrompt.trim() !== '').length;
+    const beatAudioItemsByMark = React.useMemo(() => {
+        const map = new Map<string, NonNullable<typeof state.beatAudio>['items'][number]>();
+        for (const item of state.beatAudio?.items ?? []) {
+            map.set(item.mark_id, item);
+        }
+        return map;
+    }, [state.beatAudio]);
+    const beatAudioReadyCount = (state.beatAudio?.items ?? []).filter((item) => item.status === 'ready').length;
+    const beatAudioAllReady = marks.length > 0 && beatAudioReadyCount >= marks.length;
     const pendingSentenceBeats = React.useMemo(
         () => buildSentenceBeatMarks(tokens, marks).length,
         [marks, tokens],
@@ -138,10 +193,12 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
         });
     }, [marks]);
 
-    if (state.whisperStatus !== 'completed' || tokens.length === 0) {
+    if (tokens.length === 0 || (state.whisperStatus !== 'completed' && !state.agentBeatAudio)) {
         return (
             <Alert severity="warning">
-                Chưa có dữ liệu whisper — chạy transcribe xong mới chia beat thủ công được.
+                {state.agentBeatAudio
+                    ? 'Cần có audio script để chia beat — script đang rỗng.'
+                    : 'Chưa có dữ liệu whisper — chạy transcribe xong mới chia beat thủ công được.'}
             </Alert>
         );
     }
@@ -371,7 +428,27 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                                         <Typography
                                             variant="caption"
                                             color="text.secondary"
-                                            sx={{ minWidth: 116, fontVariantNumeric: 'tabular-nums' }}
+                                            onClick={(event) => {
+                                                const audioItem = beatAudioItemsByMark.get(mark.id);
+                                                if (!state.agentBeatAudio || !audioItem?.url) {
+                                                    return;
+                                                }
+                                                event.stopPropagation();
+                                                event.preventDefault();
+                                                window.open(String(audioItem.url || ''), '_blank', 'noopener,noreferrer');
+                                            }}
+                                            sx={{
+                                                minWidth: 116,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                ...(state.agentBeatAudio && beatAudioItemsByMark.get(mark.id)?.url ? {
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline dotted',
+                                                    '&:hover': { color: 'primary.main' },
+                                                } : {}),
+                                            }}
+                                            title={state.agentBeatAudio && beatAudioItemsByMark.get(mark.id)?.url
+                                                ? 'Bấm để nghe audio beat'
+                                                : undefined}
                                         >
                                             {mark.startSec.toFixed(2)}s → {mark.endSec.toFixed(2)}s
                                             {' '}({mark.durationSec.toFixed(2)}s)
@@ -417,6 +494,135 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                                                 <DeleteOutlineOutlinedIcon fontSize="small" />
                                             </IconButton>
                                         )}
+                                    </Stack>
+                                );
+                            })}
+                        </Stack>
+                    </Box>
+                </Stack>
+            ) : null}
+
+            {state.agentBeatAudio ? (
+                <Stack spacing={1}>
+                    <Box>
+                        <Typography variant="subtitle2">Audio từng beat</Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                            Mỗi beat đọc audio RIÊNG theo đúng content (provider lấy từ cài đặt TTS — mặc định Saydi).
+                            Beat nào đọc sai (whisper QA báo lỗi) thì bấm <b>Tạo lại</b> hoặc <b>Upload</b> MP3 thủ công.
+                            Xong tất cả bấm <b>Ghép audio</b> để tạo audio full (ngắt nghỉ theo dấu câu).
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={state.generatingBeatAudio === 'all'
+                                ? <CircularProgress size={14} color="inherit" />
+                                : <GraphicEqIcon />}
+                            disabled={state.generatingBeatAudio !== null || marks.length === 0}
+                            onClick={() => { void state.handleGenerateAllBeatAudio(); }}
+                        >
+                            {state.generatingBeatAudio === 'all' ? 'Đang tạo...' : 'Tạo audio tất cả beat'}
+                        </Button>
+                        {state.beatAudio?.merged?.duration_sec ? (
+                            <Chip
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                label={`Audio full ${state.beatAudio.merged.duration_sec.toFixed(2)}s (ghép lúc render)`}
+                            />
+                        ) : (
+                            <Typography variant="caption" color="text.secondary">
+                                Audio full được ghép TỰ ĐỘNG khi bấm Render — không cần bước riêng.
+                            </Typography>
+                        )}
+                    </Stack>
+                    <Box sx={{ maxHeight: 260, overflowY: 'auto', pr: 0.5 }}>
+                        <Stack spacing={0.5}>
+                            {marks.map((mark) => {
+                                const item = beatAudioItemsByMark.get(mark.id);
+                                const status = item?.status ?? 'pending';
+                                const isGenerating = state.generatingBeatAudio === mark.id;
+                                const color = manualBeatColor(mark.order);
+                                return (
+                                    <Stack
+                                        key={`beat-audio-${mark.id}`}
+                                        direction="row"
+                                        spacing={1}
+                                        alignItems="center"
+                                        sx={{
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: 1,
+                                            bgcolor: status === 'error'
+                                                ? 'rgba(244, 67, 54, 0.08)'
+                                                : status === 'ready'
+                                                    ? 'rgba(76, 175, 80, 0.08)'
+                                                    : 'background.default',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                        }}
+                                    >
+                                        <Typography variant="caption" fontWeight={700} sx={{ color: color.label }}>
+                                            #{mark.order}
+                                        </Typography>
+                                        {status === 'ready' ? (
+                                            <Tooltip title={item?.source === 'upload' ? 'Audio upload thủ công' : `Audio do ${item?.tts_engine ?? 'TTS'} đọc`}>
+                                                <CheckCircleOutlineIcon fontSize="small" sx={{ color: 'success.main', fontSize: 15 }} />
+                                            </Tooltip>
+                                        ) : status === 'error' ? (
+                                            <Tooltip title={item?.error || 'Audio lỗi'}>
+                                                <ErrorOutlineIcon fontSize="small" sx={{ color: 'error.main', fontSize: 15 }} />
+                                            </Tooltip>
+                                        ) : null}
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{
+                                                minWidth: 74,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                ...(status === 'ready' && item?.url ? {
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline dotted',
+                                                    '&:hover': { color: 'primary.main' },
+                                                } : {}),
+                                            }}
+                                            onClick={status === 'ready' && item?.url
+                                                ? (event) => {
+                                                    event.stopPropagation();
+                                                    event.preventDefault();
+                                                    window.open(String(item?.url || ''), '_blank', 'noopener,noreferrer');
+                                                }
+                                                : undefined}
+                                        >
+                                            {status === 'ready' ? `${(item?.duration_sec ?? 0).toFixed(2)}s` : status}
+                                        </Typography>
+                                        {item?.pause_after_ms ? (
+                                            <Typography variant="caption" color="text.secondary">
+                                                pause {item.pause_after_ms}ms
+                                            </Typography>
+                                        ) : null}
+                                        <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1 }}>
+                                            {mark.content}
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={isGenerating
+                                                ? <CircularProgress size={13} color="inherit" />
+                                                : <GraphicEqIcon />}
+                                            disabled={state.generatingBeatAudio !== null}
+                                            onClick={() => {
+                                                void state.handleGenerateBeatAudio(mark.id, status === 'ready');
+                                            }}
+                                        >
+                                            {status === 'ready' ? 'Tạo lại' : 'Tạo audio'}
+                                        </Button>
+                                        <BeatAudioUploadButton
+                                            markId={mark.id}
+                                            disabled={state.generatingBeatAudio !== null}
+                                            onUpload={(markId, file) => { void state.handleUploadBeatAudio(markId, file); }}
+                                        />
                                     </Stack>
                                 );
                             })}

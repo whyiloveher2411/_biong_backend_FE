@@ -525,6 +525,39 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             control={(
                                 <Switch
                                     size="small"
+                                    checked={state.agentBeatAudio}
+                                    disabled={state.savingBeatAudio}
+                                    onChange={(e) => {
+                                        void state.handleAgentBeatAudioChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Audio từng beat' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Audio từng beat
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Mỗi beat đọc audio RIÊNG theo đúng content (ảnh khớp 100% audio), ghép lại với
+                                        ngắt nghỉ theo dấu câu. Chia beat TRƯỚC, rồi tạo audio từng beat trong panel video 2s.
+                                        Whisper chỉ dùng cho caption/QA từng beat — không cần cho timing.
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                px: 1.25,
+                                py: 1,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
                                     checked={state.agentRenderDebug}
                                     disabled={state.savingRenderDebug}
                                     onChange={(e) => {

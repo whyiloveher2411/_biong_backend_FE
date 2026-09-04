@@ -12,12 +12,15 @@ type Props = {
     beatId: string;
     imageUrl?: string;
     clipAspect?: ClipAspect;
+    /** Audio beat (beat-audio mode) — phát thử ngay dưới ảnh. */
+    audioUrl?: string;
 };
 
 export default function ShortVideoAgentBeatImagePreview({
     beatId,
     imageUrl = '',
     clipAspect = '9:16',
+    audioUrl = '',
 }: Props) {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [containerWidth, setContainerWidth] = React.useState(0);
@@ -115,6 +118,23 @@ export default function ShortVideoAgentBeatImagePreview({
                     }}
                 />
             </Box>
+            {audioUrl ? (
+                <audio
+                    controls
+                    controlsList="nodownload noplaybackrate"
+                    preload="metadata"
+                    src={audioUrl}
+                    style={{
+                        display: 'block',
+                        width: '100%',
+                        maxWidth: 360,
+                        height: 40,
+                        marginTop: 12,
+                    }}
+                >
+                    <track kind="captions" />
+                </audio>
+            ) : null}
         </Box>
     );
 }

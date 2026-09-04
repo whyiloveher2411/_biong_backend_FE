@@ -507,7 +507,7 @@ export default function ShortVideoAgentVideoPreview({
                                     beatHtml={state.beatHtml}
                                     beatImage={state.beatImage}
                                     isWhiteboardMode={isWhiteboardMode}
-                                    audioUrl={state.audioFileUrl}
+                                    audioUrl={state.audioPreviewUrl}
                                     audioDurationSec={state.audioDurationSec}
                                     videoRef={videoRef}
                                     showAvatarPip={showAvatarPip}

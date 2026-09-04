@@ -48,6 +48,7 @@ type Props = {
     /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
     agentGeminiOpenBrowser?: boolean;
     agentVisualMode?: string;
+    beatAudioMode?: boolean;
     stepToggles?: FullAutoStepToggles;
     stepToggleDisabled?: boolean;
     onStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
@@ -163,6 +164,7 @@ export default function ShortVideoAgentHeadlessPreview({
     headlessBrowserActive = false,
     agentGeminiOpenBrowser = false,
     agentVisualMode = '',
+    beatAudioMode = false,
     stepToggles,
     stepToggleDisabled = false,
     onStepToggleChange,
@@ -643,6 +645,7 @@ export default function ShortVideoAgentHeadlessPreview({
                         aiSteps={pipeline.ai_steps}
                         qaLoops={pipeline.qa_loops}
                         agentVisualMode={agentVisualMode}
+                        beatAudioMode={beatAudioMode}
                         pipelineStatus={pipeline.status}
                         currentStep={currentStep}
                         stepToggles={stepToggles}
