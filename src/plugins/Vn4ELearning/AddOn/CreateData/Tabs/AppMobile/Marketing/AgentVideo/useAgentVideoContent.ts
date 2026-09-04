@@ -236,6 +236,7 @@ import {
     manualBeatMarksToPayload,
     mergeManualBeatMarks,
     normalizeManualBeatMarks,
+    resolveVideo2sPlainImagePrompt,
     type ManualBeatMark,
     type ManualBeatTokenRange,
 } from './agentVideoManualBeats';
@@ -906,6 +907,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
     const [regeneratingBeatImageBeatId, setRegeneratingBeatImageBeatId] = React.useState('');
+    const [deletingBeatImageId, setDeletingBeatImageId] = React.useState('');
     const [openingAllMissingBeatGemini, setOpeningAllMissingBeatGemini] = React.useState(false);
     const [openingAllMissingBeatMetaAi, setOpeningAllMissingBeatMetaAi] = React.useState(false);
     const [openingAllMissingBeatAiStudio, setOpeningAllMissingBeatAiStudio] = React.useState(false);
@@ -931,6 +933,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const githubImageShotsSavedRef = React.useRef<string>('[]');
     const readmeMediaSavedRef = React.useRef<string>('[]');
     const autoWhisperStartedRef = React.useRef('');
+    /**
+     * Manual beat marks video 2s — ref để các callback khai báo TRƯỚC state
+     * `manualBeatMarks` (nút Mở Meta.ai) vẫn đọc được prompt plain mới nhất.
+     */
+    const manualBeatMarksRef = React.useRef<ManualBeatMark[]>([]);
 
     const resolveScriptFromResponse = React.useCallback((
         serverScript: string,
@@ -2441,6 +2448,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatHtml?: string;
         beatImageUrl?: string;
         beatImagePrompt?: string;
+        beatImageDelete?: boolean;
+        beatImageChatUrl?: string;
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
@@ -2459,6 +2468,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatHtml: payload.beatHtml,
                 beatImageUrl: payload.beatImageUrl,
                 beatImagePrompt: payload.beatImagePrompt,
+                beatImageDelete: payload.beatImageDelete,
+                beatImageChatUrl: payload.beatImageChatUrl,
                 creativePrompt: payload.creativePrompt,
                 qaStatus: payload.qaStatus,
                 qaRefineNote: payload.qaRefineNote,
@@ -3664,6 +3675,37 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         imagePrompt: string,
     ): Promise<string | null> => {
         const prompt = String(imagePrompt || '').trim();
+        // Video 2s: prompt ảnh lưu dạng STRING ở marks (bước pipeline "Ảnh beat") —
+        // mở Meta.ai phải dùng ĐÚNG prompt đó, nguyên văn, không JSON/suffix/dual-layer.
+        if (isAgentVideo2sMode(agentVisualMode)) {
+            const plainPrompt = prompt || resolveVideo2sPlainImagePrompt(manualBeatMarksRef.current, beatId);
+            if (!plainPrompt) {
+                showMessage(`Beat ${beatId} chưa có image prompt — bấm "Sinh prompt ảnh từ Meta.ai" trước`, 'warning');
+                return null;
+            }
+            setRegeneratingBeatImageBeatId(beatId);
+            try {
+                await openImportHtmlBeatMetaAiFillOnly({
+                    shortVideoId,
+                    beatId,
+                    imagePrompt: plainPrompt,
+                    video2s: true,
+                    autoSubmit: true,
+                });
+                setActiveBeatId(beatId);
+                setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
+                showMessage(
+                    `Đã mở tab Meta.ai cho ${beatId}. Prompt string của beat sẽ tự điền + submit — download ảnh trên Meta.ai → tự lưu beat.`,
+                    'success',
+                );
+                return beatImage[beatId]?.image_url || null;
+            } catch (e) {
+                showMessage(e instanceof Error ? e.message : String(e), 'error');
+                return null;
+            } finally {
+                setRegeneratingBeatImageBeatId('');
+            }
+        }
         if (!validateBeatImagePrompt(prompt)) {
             showMessage(`image_prompt không hợp lệ — ${describeBeatImagePromptErrors(prompt).join('; ') || 'phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)'}`, 'warning');
             return null;
@@ -3749,6 +3791,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setRegeneratingBeatImageBeatId('');
         }
     }, [
+        agentVisualMode,
         beatImage,
         beatMap?.sections,
         handleBeatImagePromptChange,
@@ -3811,6 +3854,69 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setSavingImportHtml(false);
         }
     }, [beatImage, beatMap, commitBeatImageChange, shortVideoId, showMessage]);
+
+    /**
+     * Xóa CHỈ ảnh beat hiện tại (image_url + extra layers) — giữ nguyên
+     * image_prompt / chat_url / vùng ảnh; user tự quản lý phần còn lại.
+     */
+    const handleDeleteBeatImage = React.useCallback(async (beatId: string): Promise<boolean> => {
+        const normalizedBeatId = String(beatId || '').trim();
+        if (!normalizedBeatId) {
+            showMessage('Thiếu beat_id để xóa ảnh', 'error');
+            return false;
+        }
+        if (deletingBeatImageId) {
+            return false;
+        }
+        if (!window.confirm(`Xóa ảnh beat hiện tại của ${normalizedBeatId}? Chỉ xóa ảnh — giữ nguyên prompt, url chatbot và các vùng ảnh.`)) {
+            return false;
+        }
+        setDeletingBeatImageId(normalizedBeatId);
+        try {
+            const saved = await persistImportHtml({
+                beatId: normalizedBeatId,
+                beatImageDelete: true,
+            });
+            if (!saved) {
+                return false;
+            }
+            setBeatImage((prev) => {
+                const entry = prev[normalizedBeatId];
+                if (!entry) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    [normalizedBeatId]: {
+                        ...entry,
+                        image_url: '',
+                        extra_image_urls: undefined,
+                    },
+                };
+            });
+            // Preview/editor ưu tiên override.image_layers hơn beat_image —
+            // clear luôn local để box ảnh + timeline cập nhật ngay không cần refresh.
+            setAgentWhiteboardBeatOverrides((prev) => {
+                const override = prev[normalizedBeatId];
+                if (!override) {
+                    return prev;
+                }
+                const rest: AgentWhiteboardBeatOverride = { ...override };
+                delete rest.image_layers;
+                return {
+                    ...prev,
+                    [normalizedBeatId]: rest,
+                };
+            });
+            showMessage(`Đã xóa ảnh beat hiện tại của ${normalizedBeatId} (giữ prompt + url chatbot)`, 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setDeletingBeatImageId('');
+        }
+    }, [deletingBeatImageId, persistImportHtml, showMessage]);
 
     const handleSaveBeatQa = React.useCallback(async (
         beatId: string,
@@ -4929,6 +5035,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Meta.ai chỉ dùng cho ảnh beat (mode Image)', 'info');
             return;
         }
+        // Video 2s: prompt string lưu ở marks (bước "Ảnh beat") là nguồn truth —
+        // KHÔNG dùng JSON beat_map (kiểu video image).
+        if (isAgentVideo2sMode(agentVisualMode)) {
+            void handleOpenBeatImageMetaAiManual(
+                beatId,
+                resolveVideo2sPlainImagePrompt(manualBeatMarksRef.current, beatId),
+            );
+            return;
+        }
         void handleOpenBeatImageMetaAiManual(
             beatId,
             beatImagePromptToText(beat.image_prompt || beatImage[beatId]?.image_prompt || '').trim(),
@@ -5117,26 +5232,32 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...batchIds])));
         void (async () => {
             try {
+                // Video 2s: prompt string ở marks (bước "Ảnh beat") là nguồn truth — KHÔNG JSON.
+                const isVideo2s = isAgentVideo2sMode(agentVisualMode);
                 const workspaceBeats: DuckAiWorkspaceBeat[] = beatMap.sections.map((section, index) => {
                     const id = String(section?.id || '').trim();
-                    const prompt = String(
-                        beatImage[id]?.image_prompt
-                        || section?.image_prompt
-                        || '',
-                    ).trim();
+                    const prompt = isVideo2s
+                        ? resolveVideo2sPlainImagePrompt(manualBeatMarksRef.current, id)
+                        : String(
+                            beatImage[id]?.image_prompt
+                            || section?.image_prompt
+                            || '',
+                        ).trim();
                     return {
                         beatId: id,
                         beatIndex: index + 1,
                         imagePrompt: prompt,
                         imageUrl: String(beatImage[id]?.image_url || '').trim(),
                         imageUrls: beatImageEntryUrls(beatImage[id]),
-                        objectLayerCount: Math.max(
-                            beatSectionObjectLayerCount(section),
-                            beatImagePromptObjectLayerCount(
-                                beatImage[id]?.image_prompt || section?.image_prompt,
+                        objectLayerCount: isVideo2s
+                            ? 1
+                            : Math.max(
+                                beatSectionObjectLayerCount(section),
+                                beatImagePromptObjectLayerCount(
+                                    beatImage[id]?.image_prompt || section?.image_prompt,
+                                ),
                             ),
-                        ),
-                        backgroundImageUrl: beatBackgroundImageUrls[id] || '',
+                        backgroundImageUrl: isVideo2s ? '' : (beatBackgroundImageUrls[id] || ''),
                         missingImage: isBeatImageMissing(beatImage, id, {
                             section,
                             backgroundUrl: beatBackgroundImageUrls[id],
@@ -5150,9 +5271,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beats: workspaceBeats,
                     activeBeatId: batchIds[0] || '',
                     autoSubmit: true,
-                    imageStyleSuffix: whiteboardImageStyleSuffix,
-                    imageAspectSuffix: whiteboardImageAspectSuffix,
-                    imageTextLangRule: whiteboardImageTextLangRule,
+                    ...(isVideo2s
+                        ? { video2s: true }
+                        : {
+                            imageStyleSuffix: whiteboardImageStyleSuffix,
+                            imageAspectSuffix: whiteboardImageAspectSuffix,
+                            imageTextLangRule: whiteboardImageTextLangRule,
+                        }),
                 });
                 const failNote = result.failed.length
                     ? ` (${result.failed.length} beat lỗi: ${result.failed.join(', ')})`
@@ -6563,6 +6688,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     // Clip video 2s — beat thủ công: bôi đen audio script rồi bấm "Tạo beat"
     const isVideo2sMode = isAgentVideo2sMode(agentVisualMode);
     const [manualBeatMarks, setManualBeatMarks] = React.useState<ManualBeatMark[]>([]);
+    // Sync ref mỗi render — callback khai báo trước vẫn đọc được marks mới nhất.
+    manualBeatMarksRef.current = manualBeatMarks;
     const [savingManualBeat, setSavingManualBeat] = React.useState(false);
     const [openingVideo2sMetaAi, setOpeningVideo2sMetaAi] = React.useState(false);
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
@@ -8732,6 +8859,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         openingBeatGeminiHeadlessBeatIds,
         refiningBeatHtmlBeatId,
         regeneratingBeatImageBeatId,
+        deletingBeatImageId,
         openingAllMissingBeatGemini,
         openingAllMissingBeatMetaAi,
         openingAllMissingBeatAiStudio,
@@ -8799,6 +8927,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenBeatImageDuckAiManual,
         handleOpenBeatImageMetaAiManual,
         handleUploadBeatImageFromFile,
+        handleDeleteBeatImage,
         /** @deprecated Alias tương thích cũ */
         handleRegenerateBeatImageZImage: handleOpenBeatImageDuckAiManual,
         handleRefineBeatHtmlViaGemini,

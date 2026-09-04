@@ -230,6 +230,7 @@ type Props = {
     onRenderWhiteboardBeat?: (beatId: string) => void;
     onAddBeatVideoToCapcut?: (beatId: string) => void;
     whiteboardBeatRenders?: Record<string, { status?: string; error?: string }>;
+    agentWhiteboardBeatOverrides?: Record<string, { image_layers?: unknown } | null>;
     renderingWhiteboardBeatIds?: string[];
     whiteboardRenderProgress?: WhiteboardRenderProgress | null;
     uploadingBeatVideoToCapcutIds?: string[];
@@ -336,6 +337,7 @@ export default function ShortVideoAgentVideoTimeline({
     onRenderWhiteboardBeat,
     onAddBeatVideoToCapcut,
     whiteboardBeatRenders = {},
+    agentWhiteboardBeatOverrides = {},
     renderingWhiteboardBeatIds = [],
     whiteboardRenderProgress = null,
     uploadingBeatVideoToCapcutIds = [],
@@ -1425,6 +1427,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 onRenderWhiteboardBeat={onRenderWhiteboardBeat}
                                 onAddBeatVideoToCapcut={onAddBeatVideoToCapcut}
                                 whiteboardBeatRenders={whiteboardBeatRenders}
+                                agentWhiteboardBeatOverrides={agentWhiteboardBeatOverrides}
                                 renderingWhiteboardBeatIds={renderingWhiteboardBeatIds}
                                 uploadingBeatVideoToCapcutIds={uploadingBeatVideoToCapcutIds}
                                 onSaveBeatQa={onSaveBeatQa}

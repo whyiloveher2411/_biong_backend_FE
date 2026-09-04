@@ -699,16 +699,24 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
     imageVoiceContent?: string;
+    /**
+     * Video 2s: 1 ảnh/beat — prompt string nguyên văn từ bước "Ảnh beat",
+     * KHÔNG nối style suffix / dual-layer, panel không đòi background.
+     */
+    video2s?: boolean;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
-    const imagePrompt = withImageStyleSuffix(
-        String(options.imagePrompt || '').trim(),
-        options.imageStyleSuffix,
-        options.imageAspectSuffix,
-        options.imageTextLangRule,
-        options.imageVoiceContent,
-    );
+    const video2s = options.video2s === true;
+    const imagePrompt = video2s
+        ? String(options.imagePrompt || '').trim()
+        : withImageStyleSuffix(
+            String(options.imagePrompt || '').trim(),
+            options.imageStyleSuffix,
+            options.imageAspectSuffix,
+            options.imageTextLangRule,
+            options.imageVoiceContent,
+        );
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
     }
@@ -734,12 +742,13 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         image_prompt: imagePrompt,
         image_url: String(options.imageUrl || '').trim(),
         image_urls: (options.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
-        object_layer_count: Math.max(1, Number(options.objectLayerCount || 0) || 1),
-        background_image_url: String(options.backgroundImageUrl || '').trim(),
+        object_layer_count: video2s ? 1 : Math.max(1, Number(options.objectLayerCount || 0) || 1),
+        background_image_url: video2s ? '' : String(options.backgroundImageUrl || '').trim(),
         title: String(options.title || '').trim(),
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
+        ...(video2s ? { video_2s: 1 } : {}),
         ...(options.autoSubmit === false ? {} : { auto_submit: true }),
     });
     if (!result.ok) {
@@ -828,8 +837,11 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     imageStyleSuffix?: string;
     imageAspectSuffix?: string;
     imageTextLangRule?: string;
+    /** Video 2s: 1 ảnh/beat, prompt string nguyên văn — không style suffix / background. */
+    video2s?: boolean;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
+    const video2s = options.video2s === true;
     const beats = Array.isArray(options.beats)
         ? options.beats
             .map((item) => ({
@@ -838,8 +850,10 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imagePrompt: String(item?.imagePrompt || '').trim(),
                 imageUrl: String(item?.imageUrl || '').trim(),
                 imageUrls: (item?.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
-                objectLayerCount: Math.max(1, Number(item?.objectLayerCount || 0) || 1),
-                backgroundImageUrl: String(item?.backgroundImageUrl || '').trim(),
+                objectLayerCount: video2s
+                    ? 1
+                    : Math.max(1, Number(item?.objectLayerCount || 0) || 1),
+                backgroundImageUrl: video2s ? '' : String(item?.backgroundImageUrl || '').trim(),
                 missingImage: Boolean(item?.missingImage),
                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
             }))
@@ -880,6 +894,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imageAspectSuffix: options.imageAspectSuffix,
                 imageTextLangRule: options.imageTextLangRule,
                 imageVoiceContent: beat.imageVoiceContent,
+                video2s,
             });
             opened += 1;
         } catch (e) {

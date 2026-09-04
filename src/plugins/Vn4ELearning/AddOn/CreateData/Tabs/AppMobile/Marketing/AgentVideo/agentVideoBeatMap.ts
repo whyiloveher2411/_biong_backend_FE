@@ -54,6 +54,11 @@ export type BeatImageEntry = {
      */
     extra_image_urls?: string[];
     image_prompt?: string;
+    /**
+     * URL chat chatbot (Meta.ai / Duck.ai) đã tạo ảnh beat — user mở lại chat gốc
+     * để xem/update ảnh ngay trong conversation đó.
+     */
+    chat_url?: string;
     updated_at?: string;
     creative_prompt?: string;
     qa_status?: BeatQaStatus;
@@ -657,7 +662,11 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
     }
     const raw = entry as Record<string, unknown>;
     const imageUrl = String(raw.image_url || '').trim();
-    if (!imageUrl) {
+    const chatUrl = String(raw.chat_url || '').trim();
+    const imagePrompt = String(raw.image_prompt || '').trim();
+    // Ảnh đã xóa nhưng còn metadata (prompt / chat_url) → vẫn parse để nút
+    // "Mở url chatbot" dùng được; chỉ bỏ entry rỗng hoàn toàn.
+    if (!imageUrl && !chatUrl && !imagePrompt) {
         return null;
     }
     const qaStatus = raw.qa_status != null ? normalizeBeatQaStatus(raw.qa_status) : undefined;
@@ -669,7 +678,8 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
     return {
         image_url: imageUrl,
         extra_image_urls: extraUrls.length ? extraUrls : undefined,
-        image_prompt: raw.image_prompt != null ? String(raw.image_prompt) : undefined,
+        image_prompt: imagePrompt || undefined,
+        chat_url: chatUrl || undefined,
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
         qa_status: qaStatus || undefined,
@@ -702,11 +712,20 @@ export function parseBeatImageBlock(raw: unknown): Record<string, BeatImageEntry
 export function getBeatImageVisualState(
     beatImage: Record<string, BeatImageEntry>,
     beatId: string,
+    override?: { image_layers?: unknown } | null,
 ): BeatHtmlVisualState {
-    if (!String(beatImage[beatId]?.image_url || '').trim()) {
+    const entry = beatImage[beatId];
+    const hasEntryImage = Boolean(String(entry?.image_url || '').trim());
+    // Ảnh beat có thể nằm trong override.image_layers (lưu qua extension) —
+    // chỉ khi KHÔNG có ảnh ở cả hai nguồn mới tính là missing (timeline đỏ).
+    const overrideLayers = Array.isArray(override?.image_layers) ? override.image_layers : [];
+    const hasOverrideImage = overrideLayers.some(
+        (layer) => String((layer as { image_url?: unknown } | null)?.image_url || '').trim() !== '',
+    );
+    if (!hasEntryImage && !hasOverrideImage) {
         return 'missing';
     }
-    if (beatImage[beatId]?.render_status === 'error') {
+    if (entry?.render_status === 'error') {
         return 'error';
     }
     return 'ok';

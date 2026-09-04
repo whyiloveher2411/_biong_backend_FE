@@ -476,6 +476,28 @@ export function manualBeatsAllHavePrompt(marks: ManualBeatMark[]): boolean {
     return marks.length > 0 && marks.every((mark) => mark.imagePrompt.trim() !== '');
 }
 
+/**
+ * Video 2s: beat_{N} → mark thứ N — trả NGUYÊN VĂN image_prompt plain text đã lưu
+ * (bước pipeline "Ảnh beat" dùng đúng chuỗi này, không phải JSON beat_map).
+ * Mirror marketing_short_video_manual_beat_resolve_plain_image_prompt() (PHP).
+ */
+export function resolveVideo2sPlainImagePrompt(marks: ManualBeatMark[], beatId: string): string {
+    const match = /^beat_(\d+)$/.exec(String(beatId || '').trim());
+    if (!match) {
+        return '';
+    }
+    const order = Number(match[1]);
+    if (order < 1) {
+        return '';
+    }
+    const byIndex = marks[order - 1];
+    if (byIndex && Number(byIndex.order || order) === order) {
+        return byIndex.imagePrompt.trim();
+    }
+    const byOrder = marks.find((mark) => Number(mark.order || 0) === order);
+    return String(byOrder?.imagePrompt || '').trim();
+}
+
 /** Meta.ai video 2s trả prompt plain text — bọc thành JSON object đủ 7 key cho beat_map. */
 export function wrapVideo2sPlainImagePrompt(plain: string, content: string): Record<string, string> {
     const normalized = String(plain || '').trim();

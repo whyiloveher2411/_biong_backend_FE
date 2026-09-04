@@ -48,6 +48,8 @@ type Props = {
     beatMap: BeatMap | null;
     beatHtml: Record<string, BeatHtmlEntry>;
     beatImage?: Record<string, BeatImageEntry>;
+    /** Beat override (image_layers/regions/…) — nhận diện đúng trạng thái có ảnh của beat. */
+    agentWhiteboardBeatOverrides?: Record<string, { image_layers?: unknown } | null>;
     isWhiteboardMode?: boolean;
     activeBeatId: string;
     copyingBeatHtmlPromptBeatId: string;
@@ -106,6 +108,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     beatMap,
     beatHtml,
     beatImage = {},
+    agentWhiteboardBeatOverrides = {},
     isWhiteboardMode = false,
     activeBeatId,
     copyingBeatHtmlPromptBeatId,
@@ -190,7 +193,7 @@ export default function AgentVideoBeatBoundaryOverlay({
     const menuSegment = segments.find((segment) => segment.beatId === menuBeatId) || null;
     const menuVisualState = menuSegment
         ? (isWhiteboardMode
-            ? getBeatImageVisualState(beatImage, menuSegment.beatId)
+            ? getBeatImageVisualState(beatImage, menuSegment.beatId, agentWhiteboardBeatOverrides[menuSegment.beatId])
             : getBeatHtmlVisualState(beatHtml, menuSegment.beatId))
         : 'missing';
     const menuIsCopying = menuBeatId !== '' && copyingBeatHtmlPromptBeatId === menuBeatId;
@@ -260,7 +263,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                     const leftPx = toLeft(segment.startSec);
                     const widthPx = Math.max(2, toLeft(segment.endSec) - leftPx);
                     const visualState = isWhiteboardMode
-                        ? getBeatImageVisualState(beatImage, segment.beatId)
+                        ? getBeatImageVisualState(beatImage, segment.beatId, agentWhiteboardBeatOverrides[segment.beatId])
                         : getBeatHtmlVisualState(beatHtml, segment.beatId);
                     const qaStatus = normalizeBeatQaStatus(
                         isWhiteboardMode
@@ -286,7 +289,11 @@ export default function AgentVideoBeatBoundaryOverlay({
                     let segmentColor: string = visualState === 'error'
                         ? 'warning.main'
                         : (visualState === 'ok' ? 'success.main' : 'error.main');
-                    if (hasWbRenderStatus) {
+                    // Beat trắng ảnh (mode Image) LUÔN đỏ — kể cả khi còn render cũ
+                    // hoàn thành: ảnh bị xóa → beat thiếu tư liệu, không còn xanh.
+                    if (isWhiteboardMode && visualState === 'missing') {
+                        segmentColor = 'error.main';
+                    } else if (hasWbRenderStatus) {
                         if (wbRenderStatus === 'completed') {
                             segmentColor = 'success.main';
                         } else if (wbRenderStatus === 'processing') {

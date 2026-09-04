@@ -921,6 +921,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         void state.handleAddBeatVideoToCapcut(beatId);
                     }}
                     whiteboardBeatRenders={state.whiteboardBeatRenders}
+                    agentWhiteboardBeatOverrides={state.agentWhiteboardBeatOverrides}
                     renderingWhiteboardBeatIds={state.renderingWhiteboardBeatIds}
                     whiteboardRenderProgress={state.whiteboardRenderProgress}
                     uploadingBeatVideoToCapcutIds={state.uploadingBeatVideoToCapcutIds}

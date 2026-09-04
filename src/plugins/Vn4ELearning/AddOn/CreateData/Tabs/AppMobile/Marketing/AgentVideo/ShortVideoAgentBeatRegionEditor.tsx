@@ -54,6 +54,7 @@ import type { useAgentVideoContent } from './useAgentVideoContent';
 import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimationControls';
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
+import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
 import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardRegionTimeline, {
@@ -5610,6 +5611,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     Tạo group ({groupableSelectionCount})
                                 </Button>
                             ) : null}
+                            <WhiteboardBeatImageControl state={state} beatId={beatId} />
                             {state.agentBeatAudio ? (
                                 <WhiteboardBeatAudioControl state={state} beatId={beatId} />
                             ) : null}
