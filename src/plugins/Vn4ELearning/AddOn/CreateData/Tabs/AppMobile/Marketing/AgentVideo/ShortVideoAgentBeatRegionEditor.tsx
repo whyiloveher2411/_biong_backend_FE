@@ -4808,6 +4808,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                                         height: '100%',
                                         transform: timelineZoomCss !== 'none' ? timelineZoomCss : undefined,
                                         transformOrigin: 'center center',
+                                        backgroundColor: 'white',
                                     }}
                                 >
                                     <Box
