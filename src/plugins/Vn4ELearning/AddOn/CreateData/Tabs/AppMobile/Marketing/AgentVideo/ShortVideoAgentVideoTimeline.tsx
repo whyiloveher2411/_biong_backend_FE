@@ -33,6 +33,7 @@ import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisi
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
+import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
 
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import type {
@@ -973,6 +974,7 @@ export default function ShortVideoAgentVideoTimeline({
                         onChange={setTimelineScaleWidth}
                     />
                 ) : null}
+                <MarketingWorkflowButtons />
                 {(showTimelineActions) ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (

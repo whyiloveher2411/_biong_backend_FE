@@ -434,7 +434,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         >
             <Stack spacing={1.5}>
                 <Typography variant="subtitle2" fontWeight={700} sx={{ px: 0.25 }}>
-                    Workflow HyperFrames
+                    Workflow Video
                 </Typography>
 
                 {state.ttsFailed && state.lastError ? (
