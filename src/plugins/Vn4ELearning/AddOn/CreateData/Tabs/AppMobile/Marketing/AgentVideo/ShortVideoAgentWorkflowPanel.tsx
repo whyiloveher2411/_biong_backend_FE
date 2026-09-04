@@ -33,6 +33,7 @@ import { convertToURL, validURL } from 'helpers/url';
 import {
     DEFAULT_WHITEBOARD_TRANSITIONS,
     fetchWhiteboardTransitions,
+    type AgentVisualMode,
     type WhiteboardTransitionOption,
 } from './agentVideoApi';
 import { formatTtsChain, phaseLabel, visualStyleLabel } from './agentVideoUi';
@@ -792,17 +793,20 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                             <AgentOptionToggleGroup
                                 value={state.agentVisualMode}
                                 disabled={state.savingVisualMode}
-                                onChange={(value) => { void state.handleAgentVisualModeChange(value as 'hyperframes' | 'whiteboard'); }}
+                                onChange={(value) => { void state.handleAgentVisualModeChange(value as AgentVisualMode); }}
                                 ariaLabel="Chế độ visual clip"
                                 options={[
                                     { value: 'hyperframes', label: 'Motion HTML' },
                                     { value: 'whiteboard', label: 'Image' },
+                                    { value: 'video_2s', label: 'Video 2s' },
                                 ]}
                             />
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.35 }}>
-                                {state.isWhiteboardMode
-                                    ? 'Image: ảnh beat theo phong cách (Whiteboard/Collage/Vox/Courtroom) + render. Cấu hình riêng ở khối Image bên dưới.'
-                                    : 'Motion HTML: HyperFrames HTML theo beat. Cấu hình riêng ở khối Motion HTML bên dưới.'}
+                                {state.isVideo2sMode
+                                    ? 'Video 2s: ~2 giây đổi 1 ảnh beat, chia beat thủ công bằng cách bôi đen audio script. Dùng chung pipeline ảnh với Image.'
+                                    : state.isWhiteboardMode
+                                        ? 'Image: ảnh beat theo phong cách (Whiteboard/Collage/Vox/Courtroom) + render. Cấu hình riêng ở khối Image bên dưới.'
+                                        : 'Motion HTML: HyperFrames HTML theo beat. Cấu hình riêng ở khối Motion HTML bên dưới.'}
                             </Typography>
                         </Box>
                         {state.isWhiteboardMode ? (

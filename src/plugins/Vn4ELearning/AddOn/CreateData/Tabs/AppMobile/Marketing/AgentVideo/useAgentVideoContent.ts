@@ -6216,7 +6216,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 parseApiMessage(res?.message)
                     || (nextMode === 'whiteboard'
                         ? 'Đã chọn clip whiteboard'
-                        : 'Đã chọn clip motion HTML'),
+                        : nextMode === 'video_2s'
+                            ? 'Đã chọn clip video 2s'
+                            : 'Đã chọn clip motion HTML'),
                 'success',
             );
             loadRow();
