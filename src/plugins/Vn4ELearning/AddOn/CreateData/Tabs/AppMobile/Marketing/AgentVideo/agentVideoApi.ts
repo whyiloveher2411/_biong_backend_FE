@@ -1729,6 +1729,13 @@ export type AgentVideoBeatAudioState = {
     updated_at?: string;
 };
 
+/** 1 field setting khai báo trong prompts/{folder}/setting-field.md — render động theo key. */
+export type AgentVideoSettingField = {
+    key: string;
+    title: string;
+    field_type: string;
+};
+
 export type AgentVideoContentResponse = {
     success?: boolean;
     title?: string;
@@ -1766,6 +1773,10 @@ export type AgentVideoContentResponse = {
     agent_clip_aspect?: '9:16' | '16:9';
     clip_render_spec?: import('./agentVideoClipAspect').ClipRenderSpec;
     agent_visual_mode?: AgentVisualMode | string;
+    /** Setting fields theo visual type (parse từ prompts/{folder}/setting-field.md). */
+    setting_fields?: AgentVideoSettingField[];
+    /** Giá trị settings đã lưu của toàn video (agent_video_json.video_settings). */
+    setting_values?: Record<string, string>;
     agent_image_text_lang?: AgentImageTextLang | string;
     agent_beat_frequency?: import('./agentVideoBeatFrequency').AgentBeatFrequency | string;
     agent_whiteboard_config?: AgentWhiteboardConfig;
@@ -2785,6 +2796,17 @@ export async function saveAgentVisualMode(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-visual-mode',
         shortVideoBody(shortVideoId, { agent_visual_mode: mode }),
     ) as Promise<JsonResponse & { agent_visual_mode?: AgentVisualMode }>;
+}
+
+/** Lưu settings toàn video (merge key → value; value rỗng = xóa key). */
+export async function saveAgentVideoSettings(
+    shortVideoId: number,
+    values: Record<string, string>,
+): Promise<JsonResponse & { setting_values?: Record<string, string> }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-video-settings',
+        shortVideoBody(shortVideoId, { settings: values }),
+    ) as Promise<JsonResponse & { setting_values?: Record<string, string> }>;
 }
 
 export async function saveAgentBeatFrequency(

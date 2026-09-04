@@ -77,6 +77,7 @@ import {
     saveAgentRenderDebug,
     saveAgentClipAspect,
     saveAgentVisualMode,
+    saveAgentVideoSettings,
     saveAgentBeatFrequency,
     saveAgentImageTextLang,
     type AgentImageTextLang,
@@ -123,6 +124,7 @@ import {
     uploadAgentVisualImage,
     type AgentRenderMode,
     type AgentVisualMode,
+    type AgentVideoSettingField,
     type AgentWhiteboardConfig,
     type AgentWhiteboardBeatOverride,
     type WhiteboardBeatRenderEntry,
@@ -611,6 +613,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentBeatFrequency, setAgentBeatFrequency] = React.useState<AgentBeatFrequency>('free');
     const [savingBeatFrequency, setSavingBeatFrequency] = React.useState(false);
     const [agentVisualMode, setAgentVisualMode] = React.useState<AgentVisualMode>('hyperframes');
+    // Settings toàn video — field parse từ prompts/{folder}/setting-field.md theo visual type,
+    // value lưu agent_video_json.video_settings. Key mới trong md tự hiện UI, không hard-code.
+    const [settingFields, setSettingFields] = React.useState<AgentVideoSettingField[]>([]);
+    const [videoSettings, setVideoSettings] = React.useState<Record<string, string>>({});
+    const [savingVideoSettingKeys, setSavingVideoSettingKeys] = React.useState<Record<string, boolean>>({});
+    const videoSettingsRef = React.useRef<Record<string, string>>({});
     const [agentImageTextLang, setAgentImageTextLang] = React.useState<AgentImageTextLang>('vi');
     const [savingImageTextLang, setSavingImageTextLang] = React.useState(false);
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
@@ -1128,6 +1136,22 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatAudioOnlyMissing(normalizeBeatAudioOnlyMissing(res?.beat_audio_only_missing));
         setAgentClipAspect(normalizeClipAspect(res?.agent_clip_aspect));
         setAgentVisualMode(normalizeAgentVisualMode(res?.agent_visual_mode));
+        const nextSettingFields = Array.isArray(res?.setting_fields)
+            ? res.setting_fields
+                .map((field) => ({
+                    key: String(field?.key || '').trim(),
+                    title: String(field?.title || '').trim(),
+                    field_type: String(field?.field_type || '').trim(),
+                }))
+                .filter((field) => field.key !== '')
+            : [];
+        setSettingFields(nextSettingFields);
+        const nextVideoSettings: Record<string, string> = {};
+        Object.entries(res?.setting_values && typeof res.setting_values === 'object' ? res.setting_values : {}).forEach(([key, value]) => {
+            nextVideoSettings[key] = String(value ?? '');
+        });
+        setVideoSettings(nextVideoSettings);
+        videoSettingsRef.current = nextVideoSettings;
         setAgentImageTextLang(normalizeAgentImageTextLang(res?.agent_image_text_lang));
         setAgentBeatFrequency(normalizeAgentBeatFrequency(res?.agent_beat_frequency));
         setAgentWhiteboardConfig(res?.agent_whiteboard_config ?? {});
@@ -6355,6 +6379,52 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    /**
+     * Lưu 1 setting toàn video — auto-save (debounce/blur do caller quản lý) + optimistic update.
+     * Value rỗng = xóa key khỏi video_settings.
+     */
+    const handleSaveVideoSetting = React.useCallback(async (key: string, value: string): Promise<boolean> => {
+        const normalizedKey = String(key || '').trim();
+        if (!normalizedKey || !shortVideoId) {
+            return false;
+        }
+        const nextValue = String(value ?? '').trim();
+        const previous = videoSettingsRef.current;
+        const next: Record<string, string> = { ...previous };
+        if (nextValue === '') {
+            delete next[normalizedKey];
+        } else {
+            next[normalizedKey] = nextValue;
+        }
+        videoSettingsRef.current = next;
+        setVideoSettings(next);
+        setSavingVideoSettingKeys((prev) => ({ ...prev, [normalizedKey]: true }));
+        try {
+            const res = await saveAgentVideoSettings(shortVideoId, { [normalizedKey]: nextValue });
+            if (!res?.success) {
+                videoSettingsRef.current = previous;
+                setVideoSettings(previous);
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được setting', 'error');
+                return false;
+            }
+            return true;
+        } catch (e) {
+            videoSettingsRef.current = previous;
+            setVideoSettings(previous);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingVideoSettingKeys((prev) => {
+                if (!prev[normalizedKey]) {
+                    return prev;
+                }
+                const rest = { ...prev };
+                delete rest[normalizedKey];
+                return rest;
+            });
+        }
+    }, [shortVideoId, showMessage]);
+
     const handleAgentImageTextLangChange = async (nextLang: AgentImageTextLang) => {
         if (savingImageTextLang || nextLang === agentImageTextLang) {
             return;
@@ -8552,6 +8622,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         savingBeatFrequency,
         handleAgentBeatFrequencyChange,
         agentVisualMode,
+        settingFields,
+        videoSettings,
+        savingVideoSettingKeys,
+        handleSaveVideoSetting,
         agentWhiteboardConfig,
         agentWhiteboardBeatOverrides,
         savingVisualMode,

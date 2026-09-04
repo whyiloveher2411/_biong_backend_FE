@@ -718,7 +718,8 @@ export function getBeatImageVisualState(
     const hasEntryImage = Boolean(String(entry?.image_url || '').trim());
     // Ảnh beat có thể nằm trong override.image_layers (lưu qua extension) —
     // chỉ khi KHÔNG có ảnh ở cả hai nguồn mới tính là missing (timeline đỏ).
-    const overrideLayers = Array.isArray(override?.image_layers) ? override.image_layers : [];
+    const rawOverrideLayers = override?.image_layers;
+    const overrideLayers = Array.isArray(rawOverrideLayers) ? rawOverrideLayers : [];
     const hasOverrideImage = overrideLayers.some(
         (layer) => String((layer as { image_url?: unknown } | null)?.image_url || '').trim() !== '',
     );
