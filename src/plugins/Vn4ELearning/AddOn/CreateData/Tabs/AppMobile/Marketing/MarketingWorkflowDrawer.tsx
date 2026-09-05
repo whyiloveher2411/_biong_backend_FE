@@ -168,9 +168,25 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
                                                                 mt: '7px',
                                                             }}
                                                         />
-                                                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
-                                                            {item}
-                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            component="div"
+                                                            color="text.secondary"
+                                                            sx={{
+                                                                lineHeight: 1.5,
+                                                                '& a': { color: 'link' },
+                                                                '& b, & strong': { fontWeight: 600 },
+                                                                '& code': {
+                                                                    px: 0.5,
+                                                                    borderRadius: 0.5,
+                                                                    bgcolor: 'action.hover',
+                                                                    fontFamily: 'monospace',
+                                                                    fontSize: '0.9em',
+                                                                },
+                                                                '& img': { maxWidth: '100%' },
+                                                            }}
+                                                            dangerouslySetInnerHTML={{ __html: item }}
+                                                        />
                                                     </Box>
                                                 ))}
                                             </Box>
@@ -204,9 +220,25 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
                                                 }}
                                             >
                                                 <TipsAndUpdatesOutlinedIcon sx={{ fontSize: 15, color: 'warning.dark', mt: '2px' }} />
-                                                <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-                                                    {step.note}
-                                                </Typography>
+                                                <Typography
+                                                    variant="body2"
+                                                    component="div"
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        lineHeight: 1.5,
+                                                        '& a': { color: 'link' },
+                                                        '& b, & strong': { fontWeight: 600 },
+                                                        '& code': {
+                                                            px: 0.5,
+                                                            borderRadius: 0.5,
+                                                            bgcolor: 'action.hover',
+                                                            fontFamily: 'monospace',
+                                                            fontSize: '0.9em',
+                                                        },
+                                                        '& img': { maxWidth: '100%' },
+                                                    }}
+                                                    dangerouslySetInnerHTML={{ __html: step.note }}
+                                                />
                                             </Box>
                                         )}
 
