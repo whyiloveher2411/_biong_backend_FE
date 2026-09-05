@@ -704,6 +704,11 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
      * KHÔNG nối style suffix / dual-layer, panel không đòi background.
      */
     video2s?: boolean;
+    /**
+     * Tỉ lệ khung hình clip (9:16 | 16:9) — video 2s thêm aspect vào prompt
+     * ngay trước khi sinh ảnh (không lưu).
+     */
+    clipAspect?: string;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
@@ -749,6 +754,7 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
         ...(video2s ? { video_2s: 1 } : {}),
+        ...(options.clipAspect ? { clip_aspect: String(options.clipAspect).trim() } : {}),
         ...(options.autoSubmit === false ? {} : { auto_submit: true }),
     });
     if (!result.ok) {
@@ -839,6 +845,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     imageTextLangRule?: string;
     /** Video 2s: 1 ảnh/beat, prompt string nguyên văn — không style suffix / background. */
     video2s?: boolean;
+    /** Tỉ lệ khung hình clip (9:16 | 16:9) — video 2s thêm aspect khi sinh ảnh (không lưu). */
+    clipAspect?: string;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const video2s = options.video2s === true;
@@ -895,6 +903,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imageTextLangRule: options.imageTextLangRule,
                 imageVoiceContent: beat.imageVoiceContent,
                 video2s,
+                clipAspect: options.clipAspect,
             });
             opened += 1;
         } catch (e) {

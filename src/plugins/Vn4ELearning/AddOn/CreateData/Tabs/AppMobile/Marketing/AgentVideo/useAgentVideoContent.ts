@@ -3715,6 +3715,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imagePrompt: plainPrompt,
                     video2s: true,
                     autoSubmit: true,
+                    clipAspect: agentClipAspect,
                 });
                 setActiveBeatId(beatId);
                 setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
@@ -3816,6 +3817,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [
         agentVisualMode,
+        agentClipAspect,
         beatImage,
         beatMap?.sections,
         handleBeatImagePromptChange,
@@ -5296,7 +5298,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     activeBeatId: batchIds[0] || '',
                     autoSubmit: true,
                     ...(isVideo2s
-                        ? { video2s: true }
+                        ? { video2s: true, clipAspect: agentClipAspect }
                         : {
                             imageStyleSuffix: whiteboardImageStyleSuffix,
                             imageAspectSuffix: whiteboardImageAspectSuffix,
