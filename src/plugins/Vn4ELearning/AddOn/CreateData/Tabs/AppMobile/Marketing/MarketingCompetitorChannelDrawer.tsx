@@ -5,6 +5,7 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Divider,
     IconButton,
     LinearProgress,
     Link,
@@ -126,6 +127,12 @@ const VIDEO_SORT_OPTIONS: Array<{ key: VideoSort; label: string }> = [
     { key: 'lvr', label: 'LVR' },
 ];
 
+const VIDEO_FILTER_LABELS: Record<VideoFilter, string> = {
+    all: 'Tất cả',
+    hot: 'Nổi bật',
+    explode: 'Bùng nổ',
+};
+
 const CRAWL_STEPS = [
     { key: 'open', label: 'Mở kênh YouTube (tab Videos)' },
     { key: 'scroll', label: 'Cuộn tải toàn bộ video' },
@@ -199,6 +206,22 @@ function computeEps(video: { vph?: number; lpd?: number; lvr?: number }): number
 
 function formatCrawlDate(value: string | null | undefined): string {
     return String(value || '').slice(5, 16).replace('-', '/');
+}
+
+/**
+ * Dòng copy: "[title] - View [view] - ngày đăng [ngày đăng]"
+ * — ngày đăng lấy publish_date chính xác (dd/MM/yyyy), thiếu thì fallback published_at ("3 tuần trước").
+ */
+function formatVideoCopyLine(video: CompetitorVideo): string {
+    const view = Number(video.view_count || 0).toLocaleString('vi-VN');
+    let date = video.publish_date || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [y, m, d] = date.split('-');
+        date = `${d}/${m}/${y}`;
+    } else {
+        date = video.published_at || '';
+    }
+    return `${video.title} - View ${view} - ngày đăng ${date}`;
 }
 
 function StatItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }): JSX.Element {
@@ -790,13 +813,26 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
 
         const handleCopyTopEps = (limit: number) => {
             setCopyMenuAnchor(null);
-            const titles = explodeVideos.slice(0, limit).map((video) => video.title).join('\n');
-            if (!titles) {
+            const lines = explodeVideos.slice(0, limit).map(formatVideoCopyLine);
+            if (lines.length === 0) {
                 setError('Chưa có video nào có điểm bùng nổ');
                 return;
             }
-            navigator.clipboard.writeText(titles)
-                .then(() => setInfo(`Đã copy title ${Math.min(limit, explodeVideos.length)} video bùng nổ nhất`))
+            navigator.clipboard.writeText(lines.join('\n'))
+                .then(() => setInfo(`Đã copy ${lines.length} video bùng nổ nhất (title, view, ngày đăng)`))
+                .catch(() => setError('Không copy được vào clipboard'));
+        };
+
+        const handleCopyCurrentView = () => {
+            setCopyMenuAnchor(null);
+            const lines = sortedVideos.map(formatVideoCopyLine);
+            if (lines.length === 0) {
+                setError('Danh sách đang xem không có video nào');
+                return;
+            }
+            const sortLabel = VIDEO_SORT_OPTIONS.find((option) => option.key === videoSort)?.label || 'View';
+            navigator.clipboard.writeText(lines.join('\n'))
+                .then(() => setInfo(`Đã copy ${lines.length} video (${VIDEO_FILTER_LABELS[videoFilter]} · sắp xếp ${sortLabel})`))
                 .catch(() => setError('Không copy được vào clipboard'));
         };
 
@@ -1083,37 +1119,39 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                             </Tooltip>
                         ) : null}
                         {explodeVideos.length > 0 ? (
-                            <React.Fragment>
-                                <Tooltip title={`Top ${EXPLODE_TOP_LIMIT} video có Điểm bùng nổ (EPS) cao nhất`}>
-                                    <Chip
-                                        size="small"
-                                        icon={<RocketLaunchIcon fontSize="small" />}
-                                        label={`Bùng nổ (${explodeVideos.length})`}
-                                        color={videoFilter === 'explode' ? 'primary' : 'default'}
-                                        variant={videoFilter === 'explode' ? 'filled' : 'outlined'}
-                                        onClick={() => setVideoFilter('explode')}
-                                        sx={{ textTransform: 'none' }}
-                                    />
-                                </Tooltip>
-                                <Button
+                            <Tooltip title={`Top ${EXPLODE_TOP_LIMIT} video có Điểm bùng nổ (EPS) cao nhất`}>
+                                <Chip
                                     size="small"
-                                    variant="outlined"
-                                    startIcon={<ContentCopyIcon fontSize="small" />}
-                                    onClick={(e) => setCopyMenuAnchor(e.currentTarget)}
-                                    sx={{ textTransform: 'none', flexShrink: 0 }}
-                                >
-                                    Copy title top
-                                </Button>
-                                <Menu
-                                    anchorEl={copyMenuAnchor}
-                                    open={Boolean(copyMenuAnchor)}
-                                    onClose={() => setCopyMenuAnchor(null)}
-                                >
-                                    <MenuItem onClick={() => handleCopyTopEps(5)}>Top 5 EPS</MenuItem>
-                                    <MenuItem onClick={() => handleCopyTopEps(10)}>Top 10 EPS</MenuItem>
-                                </Menu>
-                            </React.Fragment>
+                                    icon={<RocketLaunchIcon fontSize="small" />}
+                                    label={`Bùng nổ (${explodeVideos.length})`}
+                                    color={videoFilter === 'explode' ? 'primary' : 'default'}
+                                    variant={videoFilter === 'explode' ? 'filled' : 'outlined'}
+                                    onClick={() => setVideoFilter('explode')}
+                                    sx={{ textTransform: 'none' }}
+                                />
+                            </Tooltip>
                         ) : null}
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon fontSize="small" />}
+                            onClick={(e) => setCopyMenuAnchor(e.currentTarget)}
+                            sx={{ textTransform: 'none', flexShrink: 0, ml: 'auto' }}
+                        >
+                            Copy title
+                        </Button>
+                        <Menu
+                            anchorEl={copyMenuAnchor}
+                            open={Boolean(copyMenuAnchor)}
+                            onClose={() => setCopyMenuAnchor(null)}
+                        >
+                            <MenuItem onClick={handleCopyCurrentView}>
+                                {`Danh sách đang xem (${sortedVideos.length}) — ${VIDEO_FILTER_LABELS[videoFilter]} · ${VIDEO_SORT_OPTIONS.find((option) => option.key === videoSort)?.label || 'View'}`}
+                            </MenuItem>
+                            <Divider />
+                            <MenuItem onClick={() => handleCopyTopEps(5)}>Top 5 EPS</MenuItem>
+                            <MenuItem onClick={() => handleCopyTopEps(10)}>Top 10 EPS</MenuItem>
+                        </Menu>
                     </Stack>
 
                     <Tooltip title="Sắp xếp video giảm dần theo chỉ số">
