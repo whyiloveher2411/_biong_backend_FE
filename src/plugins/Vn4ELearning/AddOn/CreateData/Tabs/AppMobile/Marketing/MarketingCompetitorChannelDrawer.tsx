@@ -43,7 +43,7 @@ type CompetitorChannel = {
     subscriber_count?: number;
     keywords?: string;
     avg_duration_sec?: number;
-    avg_vpd?: number;
+    avg_vph?: number;
     avg_lvr?: number;
     avg_lpd?: number;
     video_count?: number;
@@ -61,7 +61,7 @@ type CompetitorVideo = {
     publish_date?: string;
     duration_sec?: number;
     age_days?: number;
-    vpd?: number;
+    vph?: number;
     like_count?: number;
     comment_count?: number;
     lvr?: number;
@@ -83,7 +83,7 @@ type ChannelVideosResponse = {
         max_views?: number;
         avg_views?: number;
         avg_duration_sec?: number;
-        avg_vpd?: number;
+        avg_vph?: number;
         avg_lvr?: number;
         avg_lpd?: number;
     };
@@ -95,7 +95,7 @@ type ChannelVideosResponse = {
         subscriber_count?: number;
         keywords?: string;
         avg_duration_sec?: number;
-        avg_vpd?: number;
+        avg_vph?: number;
         avg_lvr?: number;
         avg_lpd?: number;
         last_crawled_at?: string | null;
@@ -111,9 +111,9 @@ type Props = {
 
 type VideoFilter = 'all' | 'hot' | 'explode';
 
-type VideoSort = 'newest' | 'view' | 'like' | 'eps' | 'vpd' | 'lpd' | 'lvr';
+type VideoSort = 'newest' | 'view' | 'like' | 'eps' | 'vph' | 'lpd' | 'lvr';
 
-const HOT_VPD_MULTIPLIER = 2;
+const HOT_VPH_MULTIPLIER = 2;
 const EXPLODE_TOP_LIMIT = 10;
 
 const VIDEO_SORT_OPTIONS: Array<{ key: VideoSort; label: string }> = [
@@ -121,7 +121,7 @@ const VIDEO_SORT_OPTIONS: Array<{ key: VideoSort; label: string }> = [
     { key: 'newest', label: 'Mới nhất' },
     { key: 'like', label: 'Like' },
     { key: 'eps', label: 'Bùng nổ (EPS)' },
-    { key: 'vpd', label: 'Nổi bật (VPD)' },
+    { key: 'vph', label: 'Nổi bật (VPH)' },
     { key: 'lpd', label: 'LPD' },
     { key: 'lvr', label: 'LVR' },
 ];
@@ -165,12 +165,13 @@ function formatDurationSec(value: number | undefined | null): string {
     return `${m}:${ss}`;
 }
 
-function formatVpd(value: number | undefined | null): string {
+function formatVph(value: number | undefined | null, unit: 'hour' | 'day' = 'hour'): string {
     const v = Number(value || 0);
     if (!Number.isFinite(v) || v <= 0) return '0';
-    if (v >= 1e6) return `${(v / 1e6).toFixed(1).replace('.0', '')}Tr/ngày`;
-    if (v >= 1e3) return `${(v / 1e3).toFixed(1).replace('.0', '')}N/ngày`;
-    if (v >= 10) return `${Math.round(v).toLocaleString('vi-VN')}/ngày`;
+    const suffix = unit === 'hour' ? '/giờ' : '/ngày';
+    if (v >= 1e6) return `${(v / 1e6).toFixed(1).replace('.0', '')}Tr${suffix}`;
+    if (v >= 1e3) return `${(v / 1e3).toFixed(1).replace('.0', '')}N${suffix}`;
+    if (v >= 10) return `${Math.round(v).toLocaleString('vi-VN')}${suffix}`;
     return v.toFixed(1);
 }
 
@@ -190,11 +191,71 @@ function formatScore(value: number | undefined | null): string {
     return v.toFixed(1).replace('.0', '');
 }
 
-function computeEps(video: { vpd?: number; lpd?: number; lvr?: number }): number {
+function computeEps(video: { vph?: number; lpd?: number; lvr?: number }): number {
     return Math.round(
-        ((video.vpd || 0) * 0.4 + (video.lpd || 0) * 0.3 + (video.lvr || 0) * 10 * 0.3) * 100,
+        ((video.vph || 0) * 0.4 + (video.lpd || 0) * 0.3 + (video.lvr || 0) * 10 * 0.3) * 100,
     ) / 100;
 }
+
+function formatCrawlDate(value: string | null | undefined): string {
+    return String(value || '').slice(5, 16).replace('-', '/');
+}
+
+function StatItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }): JSX.Element {
+    return (
+        <Box sx={{ minWidth: 0 }}>
+            <Typography
+                variant="caption"
+                sx={{
+                    display: 'block',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.4,
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    color: 'text.disabled',
+                }}
+            >
+                {label}
+            </Typography>
+            <Typography
+                sx={{
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    lineHeight: 1.3,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: highlight ? 'primary.main' : 'text.primary',
+                }}
+                noWrap
+            >
+                {value}
+            </Typography>
+        </Box>
+    );
+}
+
+const STAT_GRID_SX = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+    gap: 1.5,
+} as const;
+
+const STAT_GROUP_SX = {
+    p: 1.25,
+    borderRadius: 1,
+    bgcolor: 'action.hover',
+} as const;
+
+const STAT_GROUP_LABEL_SX = {
+    display: 'block',
+    mb: 1,
+    fontWeight: 700,
+    fontSize: '0.65rem',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: 'text.secondary',
+} as const;
 
 function isValidYouTubeChannelUrl(raw: string): boolean {
     const url = raw.trim();
@@ -331,7 +392,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                         subscriber_count: res.channel?.subscriber_count || prev.subscriber_count,
                         keywords: res.channel?.keywords || prev.keywords,
                         avg_duration_sec: res.channel?.avg_duration_sec || prev.avg_duration_sec,
-                        avg_vpd: res.channel?.avg_vpd || prev.avg_vpd,
+                        avg_vph: res.channel?.avg_vph || prev.avg_vph,
                         avg_lvr: res.channel?.avg_lvr || prev.avg_lvr,
                         avg_lpd: res.channel?.avg_lpd || prev.avg_lpd,
                         last_crawled_at: res.channel?.last_crawled_at ?? prev.last_crawled_at,
@@ -509,8 +570,8 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                     alt={channel.title}
                     onClick={() => handleOpenDetail(channel)}
                     sx={{
-                        width: 36,
-                        height: 36,
+                        width: 44,
+                        height: 44,
                         borderRadius: '50%',
                         objectFit: 'cover',
                         bgcolor: 'action.hover',
@@ -522,26 +583,31 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                 <YouTubeIcon color="error" sx={{ flexShrink: 0, cursor: 'pointer' }} onClick={() => handleOpenDetail(channel)} />
             )}
             <Box sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => handleOpenDetail(channel)}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                    <Typography
-                        variant="body2"
-                        sx={{ fontWeight: 600,  }}
-                        onClick={() => handleOpenDetail(channel)}
-                    >
-                        {channel.title}
-                    </Typography>
-                    {channel.channel_handle ? (
-                        <Chip size="small" label={channel.channel_handle} variant="outlined" />
-                    ) : null}
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }} noWrap>
+                    {channel.title}
+                </Typography>
+                <Typography
+                    variant="caption"
+                    sx={{ display: 'block', mt: 0.25, fontWeight: 500, color: 'text.secondary' }}
+                    noWrap
+                >
                     {[
-                        `${channel.video_count ?? 0} video`,
-                        `${formatViews(channel.total_views)} view`,
+                        channel.channel_handle || '',
                         channel.subscriber_count ? `${formatViews(channel.subscriber_count)} sub` : '',
-                        channel.avg_vpd ? `VPD TB ${formatVpd(channel.avg_vpd)}` : '',
-                        channel.last_crawled_at ? `Lấy data: ${channel.last_crawled_at}` : 'Chưa lấy data',
+                        `${channel.video_count ?? 0} video`,
                     ].filter(Boolean).join(' · ')}
+                </Typography>
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.disabled' }} noWrap>
+                    {formatViews(channel.total_views)} view
+                    {channel.avg_vph ? (
+                        <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                            {' · '}
+                            {`VPH TB ${formatVph(channel.avg_vph)}`}
+                        </Box>
+                    ) : null}
+                    {channel.last_crawled_at
+                        ? ` · Lấy data: ${formatCrawlDate(channel.last_crawled_at)}`
+                        : ' · Chưa lấy data'}
                 </Typography>
             </Box>
             <Tooltip title="Mở trang chủ kênh">
@@ -677,8 +743,8 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
     );
 
     const renderDetail = () => {
-        const hotThreshold = (videoStats?.avg_vpd || 0) * HOT_VPD_MULTIPLIER;
-        const hotVideos = videos.filter((video) => (video.vpd || 0) > 0 && (video.vpd || 0) >= hotThreshold);
+        const hotThreshold = (videoStats?.avg_vph || 0) * HOT_VPH_MULTIPLIER;
+        const hotVideos = videos.filter((video) => (video.vph || 0) > 0 && (video.vph || 0) >= hotThreshold);
         const durationLabel = formatDurationSec(videoStats?.avg_duration_sec);
 
         const epsOf = (video: CompetitorVideo): number => ((video.eps || 0) > 0 ? (video.eps as number) : computeEps(video));
@@ -711,8 +777,8 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                     return arr.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
                 case 'eps':
                     return arr.sort((a, b) => epsOf(b) - epsOf(a));
-                case 'vpd':
-                    return arr.sort((a, b) => (b.vpd || 0) - (a.vpd || 0));
+                case 'vph':
+                    return arr.sort((a, b) => (b.vph || 0) - (a.vph || 0));
                 case 'lpd':
                     return arr.sort((a, b) => (b.lpd || 0) - (a.lpd || 0));
                 case 'lvr':
@@ -777,44 +843,45 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
 
         return (
         <Stack spacing={2}>
-            <Stack direction="row" spacing={1} alignItems="center">
-                <IconButton size="small" onClick={handleBackToList}>
-                    <ArrowBackIcon fontSize="small" />
-                </IconButton>
-                {currentChannel?.avatar_url ? (
-                    <Box
-                        component="img"
-                        src={currentChannel.avatar_url}
-                        alt={currentChannel.title}
-                        sx={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            bgcolor: 'action.hover',
-                            flexShrink: 0,
-                        }}
-                    />
-                ) : (
-                    <YouTubeIcon color="error" sx={{ flexShrink: 0 }} />
-                )}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-                        {currentChannel?.title || 'Kênh'}
-                    </Typography>
-                    {currentChannel?.channel_url ? (
-                        <Link
-                            href={currentChannel.channel_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+            <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+                    <IconButton size="small" onClick={handleBackToList}>
+                        <ArrowBackIcon fontSize="small" />
+                    </IconButton>
+                    {currentChannel?.avatar_url ? (
+                        <Box
+                            component="img"
+                            src={currentChannel.avatar_url}
+                            alt={currentChannel.title}
+                            sx={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                bgcolor: 'action.hover',
+                                flexShrink: 0,
+                            }}
+                        />
+                    ) : (
+                        <YouTubeIcon color="error" sx={{ flexShrink: 0, fontSize: 48 }} />
+                    )}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }} noWrap>
+                            {currentChannel?.title || 'Kênh'}
+                        </Typography>
+                        <Typography
                             variant="caption"
-                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                            sx={{ display: 'block', fontWeight: 600, color: 'text.secondary' }}
+                            noWrap
                         >
-                            {currentChannel.channel_url}
-                            <OpenInNewIcon sx={{ fontSize: 12 }} />
-                        </Link>
-                    ) : null}
-                </Box>
+                            {[
+                                currentChannel?.channel_handle || '',
+                                currentChannel?.subscriber_count ? `${formatViews(currentChannel.subscriber_count)} sub` : '',
+                                videoStats?.video_count ? `${videoStats.video_count} video` : '',
+                            ].filter(Boolean).join(' · ') || '—'}
+                        </Typography>
+                    </Box>
+                </Stack>
                 <Button
                     size="small"
                     variant="contained"
@@ -826,6 +893,18 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                     {crawling ? 'Đang lấy data…' : 'Lấy data'}
                 </Button>
             </Stack>
+            {currentChannel?.channel_url ? (
+                <Link
+                    href={currentChannel.channel_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="caption"
+                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: -1.5 }}
+                >
+                    {currentChannel.channel_url}
+                    <OpenInNewIcon sx={{ fontSize: 12 }} />
+                </Link>
+            ) : null}
 
             {crawling && (
                 <Box>
@@ -857,30 +936,84 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             )}
 
             {videoStats && (
-                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                    <Chip size="small" label={`${videoStats.video_count || 0} video`} variant="outlined" />
-                    {currentChannel?.subscriber_count ? (
-                        <Chip size="small" label={`${formatViews(currentChannel.subscriber_count)} sub`} variant="outlined" />
+                <Box
+                    sx={{
+                        p: 1.5,
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'block', mb: 1.25 }}>
+                        Thống kê kênh
+                    </Typography>
+
+                    <Box sx={STAT_GROUP_SX}>
+                        <Typography variant="caption" sx={STAT_GROUP_LABEL_SX}>
+                            Quy mô
+                        </Typography>
+                        <Box sx={STAT_GRID_SX}>
+                            {currentChannel?.subscriber_count ? (
+                                <StatItem label="Subscribers" value={formatViews(currentChannel.subscriber_count)} />
+                            ) : null}
+                            <StatItem label="Video" value={`${videoStats.video_count || 0}`} />
+                            <StatItem label="View tổng" value={formatViews(videoStats.total_views)} />
+                        </Box>
+                    </Box>
+
+                    {videoStats.avg_views || videoStats.max_views || durationLabel ? (
+                        <Box sx={{ ...STAT_GROUP_SX, mt: 1.25 }}>
+                            <Typography variant="caption" sx={STAT_GROUP_LABEL_SX}>
+                                Trung bình mỗi video
+                            </Typography>
+                            <Box sx={STAT_GRID_SX}>
+                                <StatItem label="View TB" value={formatViews(videoStats.avg_views)} />
+                                <StatItem label="Max view" value={formatViews(videoStats.max_views)} />
+                                {durationLabel ? (
+                                    <StatItem label="Dài TB" value={durationLabel} />
+                                ) : null}
+                            </Box>
+                        </Box>
                     ) : null}
-                    <Chip size="small" label={`${formatViews(videoStats.total_views)} view tổng`} variant="outlined" />
-                    <Chip size="small" label={`TB ${formatViews(videoStats.avg_views)}/video`} variant="outlined" />
-                    <Chip size="small" label={`Max ${formatViews(videoStats.max_views)}`} variant="outlined" />
-                    {durationLabel ? (
-                        <Chip size="small" label={`Dài TB ${durationLabel}`} variant="outlined" />
+
+                    {videoStats.avg_vph || videoStats.avg_lpd || videoStats.avg_lvr ? (
+                        <Box sx={{ ...STAT_GROUP_SX, mt: 1.25 }}>
+                            <Typography variant="caption" sx={STAT_GROUP_LABEL_SX}>
+                                Tăng trưởng theo thời gian
+                            </Typography>
+                            <Box sx={STAT_GRID_SX}>
+                                {videoStats.avg_vph ? (
+                                    <Tooltip title="VPH trung bình — lượt xem trung bình mỗi giờ của video kênh (views / (ngày đăng × 24))">
+                                        <Box>
+                                            <StatItem label="VPH TB" value={formatVph(videoStats.avg_vph)} highlight />
+                                        </Box>
+                                    </Tooltip>
+                                ) : null}
+                                {videoStats.avg_lpd ? (
+                                    <Tooltip title="LPD trung bình — lượt like trung bình mỗi ngày của video kênh">
+                                        <Box>
+                                            <StatItem label="LPD TB" value={formatVph(videoStats.avg_lpd, 'day')} />
+                                        </Box>
+                                    </Tooltip>
+                                ) : null}
+                                {videoStats.avg_lvr ? (
+                                    <Tooltip title="LVR trung bình — tỷ lệ like/view trung bình của video kênh">
+                                        <Box>
+                                            <StatItem label="LVR TB" value={formatPercent(videoStats.avg_lvr)} />
+                                        </Box>
+                                    </Tooltip>
+                                ) : null}
+                            </Box>
+                        </Box>
                     ) : null}
-                    {videoStats.avg_vpd ? (
-                        <Chip size="small" label={`VPD TB ${formatVpd(videoStats.avg_vpd)}`} variant="outlined" />
-                    ) : null}
-                    {videoStats.avg_lvr ? (
-                        <Chip size="small" label={`LVR TB ${formatPercent(videoStats.avg_lvr)}`} variant="outlined" />
-                    ) : null}
-                    {videoStats.avg_lpd ? (
-                        <Chip size="small" label={`LPD TB ${formatVpd(videoStats.avg_lpd)}`} variant="outlined" />
-                    ) : null}
-                    {currentChannel?.last_crawled_at ? (
-                        <Chip size="small" label={`Lấy data: ${currentChannel.last_crawled_at}`} variant="outlined" />
-                    ) : null}
-                </Stack>
+
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1.25 }}>
+                        {currentChannel?.last_crawled_at
+                            ? `Lấy data gần nhất: ${currentChannel.last_crawled_at}`
+                            : 'Chưa lấy data'}
+                    </Typography>
+                </Box>
             )}
 
             {keywordCountList.length > 0 ? (
@@ -937,7 +1070,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                             />
                         ) : null}
                         {hotVideos.length > 0 ? (
-                            <Tooltip title={`Video có VPD ≥ ${HOT_VPD_MULTIPLIER}× VPD trung bình kênh — nội dung đang được đẩy mạnh`}>
+                            <Tooltip title={`Video có VPH ≥ ${HOT_VPH_MULTIPLIER}× VPH trung bình kênh — nội dung đang được đẩy mạnh`}>
                                 <Chip
                                     size="small"
                                     icon={<WhatshotIcon fontSize="small" />}
@@ -1022,7 +1155,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             ) : (
                 <Stack spacing={1}>
                     {sortedVideos.map((video, index) => {
-                        const isHot = (video.vpd || 0) > 0 && (video.vpd || 0) >= hotThreshold;
+                        const isHot = (video.vph || 0) > 0 && (video.vph || 0) >= hotThreshold;
                         const isExpanded = expandedVideoId === video.id;
                         const videoTags = [...new Set((video.tags || '')
                             .split(',')
@@ -1075,7 +1208,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                                         }}
                                     />
                                     {epsOf(video) > 0 ? (
-                                        <Tooltip title={`EPS — Điểm bùng nổ = VPD×0.4 + LPD×0.3 + LVR×10×0.3${explodeIds.has(video.id || video.video_id) ? ' — Top bùng nổ của kênh' : ''}`}>
+                                        <Tooltip title={`EPS — Điểm bùng nổ = VPH×0.4 + LPD×0.3 + LVR×10×0.3${explodeIds.has(video.id || video.video_id) ? ' — Top bùng nổ của kênh' : ''}`}>
                                             <Chip
                                                 size="small"
                                                 label={`EPS ${formatScore(epsOf(video))}`}
@@ -1090,10 +1223,10 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                                             />
                                         </Tooltip>
                                     ) : null}
-                                    <Tooltip title="VPD — lượt xem trung bình mỗi ngày (views / số ngày từ khi đăng)">
+                                    <Tooltip title="VPH — lượt xem trung bình mỗi giờ (views / (số ngày từ khi đăng × 24))">
                                         <Chip
                                             size="small"
-                                            label={formatVpd(video.vpd)}
+                                            label={formatVph(video.vph)}
                                             color={isHot ? 'warning' : 'default'}
                                             variant={isHot ? 'filled' : 'outlined'}
                                             sx={{
@@ -1108,7 +1241,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                                         <Tooltip title="LPD — lượt like trung bình mỗi ngày (likes / số ngày từ khi đăng)">
                                             <Chip
                                                 size="small"
-                                                label={formatVpd(video.lpd)}
+                                                label={formatVph(video.lpd, 'day')}
                                                 variant="outlined"
                                                 sx={{
                                                     width: 80,
@@ -1125,7 +1258,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                                 <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
                                         {isHot ? (
-                                            <Tooltip title="Nổi bật: VPD cao gấp nhiều lần trung bình kênh">
+                                            <Tooltip title="Nổi bật: VPH cao gấp nhiều lần trung bình kênh">
                                                 <WhatshotIcon sx={{ fontSize: 16, color: 'warning.main', flexShrink: 0 }} />
                                             </Tooltip>
                                         ) : null}
