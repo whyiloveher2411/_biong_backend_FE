@@ -41,6 +41,7 @@ import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FaceRetouchingNaturalIcon from '@mui/icons-material/FaceRetouchingNatural';
 import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
+import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
@@ -54,6 +55,7 @@ import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
+import MarketingCompetitorChannelDrawer from './MarketingCompetitorChannelDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
 import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
@@ -477,6 +479,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
+    const [openCompetitorChannelDrawer, setOpenCompetitorChannelDrawer] = useState(false);
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
     const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
     const [openWhiteboardTransitionManager, setOpenWhiteboardTransitionManager] = useState(false);
@@ -790,6 +793,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
                                 >
                                     Get script
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<LeaderboardOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenCompetitorChannelDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Phân tích kênh đối thủ
                                 </Button>
                                 <Button
                                     size="small"
@@ -1124,6 +1136,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingGetScriptDrawer
                 open={openGetScriptDrawer}
                 onClose={() => setOpenGetScriptDrawer(false)}
+            />
+
+            <MarketingCompetitorChannelDrawer
+                open={openCompetitorChannelDrawer}
+                onClose={() => setOpenCompetitorChannelDrawer(false)}
             />
 
             <MarketingImageToWhiteboardDrawer
