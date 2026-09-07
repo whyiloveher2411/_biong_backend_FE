@@ -1,4 +1,4 @@
-import { buildSentenceBeatMarks, isSentenceEndToken, normalizeManualBeatMarks, parseBeatListText } from './agentVideoManualBeats';
+import { buildBeatMapFromManualMarks, buildSentenceBeatMarks, isSentenceEndToken, normalizeManualBeatMarks, parseBeatListText } from './agentVideoManualBeats';
 import { CaptionAlignToken } from './agentVideoCaptionScriptAlign';
 
 function token(index: number, text: string): CaptionAlignToken {
@@ -96,5 +96,52 @@ describe('parseBeatListText', () => {
     it('text rỗng hoặc toàn dòng trống → rỗng', () => {
         expect(parseBeatListText('')).toEqual([]);
         expect(parseBeatListText('   \n  \n')).toEqual([]);
+    });
+});
+
+describe('buildBeatMapFromManualMarks — timing tạm', () => {
+    const zeroMarks = [
+        { startTokenIndex: 0, endTokenIndex: 2, content: 'một hai ba.', startSec: 0, endSec: 0 },
+        { startTokenIndex: 3, endTokenIndex: 4, content: 'bốn năm.', startSec: 0, endSec: 0 },
+        { startTokenIndex: 5, endTokenIndex: 6, content: 'sáu.', startSec: 0, endSec: 0 },
+    ];
+
+    it('timing 0 → tự sinh timing tạm liên tục, endSec > startSec, total > 0', () => {
+        const beatMap = buildBeatMapFromManualMarks(normalizeManualBeatMarks(zeroMarks), 0);
+        if (!beatMap) {
+            throw new Error('beatMap phải được build từ marks');
+        }
+        expect(beatMap.totalVideoSec).toBeGreaterThan(0);
+        let cursor = 0;
+        beatMap.sections.forEach((section) => {
+            expect(section.startSec).toBeCloseTo(cursor, 2);
+            expect(section.endSec).toBeGreaterThan(section.startSec);
+            expect(section.durationSec).toBeCloseTo(section.endSec - section.startSec, 2);
+            cursor = section.endSec;
+        });
+        expect(beatMap.sections[beatMap.sections.length - 1].endSec).toBeCloseTo(beatMap.totalVideoSec, 2);
+    });
+
+    it('timing thật (endSec > startSec) giữ nguyên, không đè timing tạm', () => {
+        const realMarks = normalizeManualBeatMarks([
+            { startTokenIndex: 0, endTokenIndex: 2, content: 'một hai ba.', startSec: 0, endSec: 2 },
+            { startTokenIndex: 3, endTokenIndex: 4, content: 'bốn năm.', startSec: 2, endSec: 4 },
+            { startTokenIndex: 5, endTokenIndex: 6, content: 'sáu.', startSec: 4, endSec: 6 },
+        ]);
+        const beatMap = buildBeatMapFromManualMarks(realMarks, 0);
+        if (!beatMap) {
+            throw new Error('beatMap phải được build từ marks');
+        }
+        expect(beatMap.sections.map((s) => [s.startSec, s.endSec])).toEqual([[0, 2], [2, 4], [4, 6]]);
+        expect(beatMap.totalVideoSec).toBe(6);
+    });
+
+    it('tỉ lệ timing tạm theo số từ: beat nhiều từ dài hơn beat ít từ', () => {
+        const beatMap = buildBeatMapFromManualMarks(normalizeManualBeatMarks(zeroMarks), 0);
+        if (!beatMap) {
+            throw new Error('beatMap phải được build từ marks');
+        }
+        const durations = beatMap.sections.map((section) => section.durationSec);
+        expect(durations[0]).toBeGreaterThan(durations[2]);
     });
 });

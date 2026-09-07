@@ -862,7 +862,9 @@ export default function ShortVideoAgentVideoWorkspace({
                     promptTopic={state.title || ''}
                     agentState={state}
                     audioDurationSec={state.audioDurationSec}
-                    estimatedDurationSec={state.agentVideoSummary?.estimated_duration_sec}
+                    estimatedDurationSec={Number(state.agentVideoSummary?.estimated_duration_sec || 0) > 0
+                        ? state.agentVideoSummary?.estimated_duration_sec
+                        : Number(beatMapForUi?.totalVideoSec || 0)}
                     shortVideoId={shortVideoId}
                     agentSourceFormat={state.agentSourceFormat}
                     onSaveBeatMapManual={state.handleManualBeatDivisionSave}

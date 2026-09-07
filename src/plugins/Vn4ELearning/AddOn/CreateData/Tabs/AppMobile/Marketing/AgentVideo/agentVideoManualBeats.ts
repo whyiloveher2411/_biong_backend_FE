@@ -608,10 +608,44 @@ export function buildBeatMapFromManualMarks(
     if (!marks.length) {
         return null;
     }
-    const total = totalVideoSec > 0
-        ? totalVideoSec
-        : Math.max(...marks.map((mark) => mark.endSec));
-    const sections: BeatMapSection[] = marks.map((mark, index) => {
+
+    // Timing tạm theo số từ khi beat CHƯA có timing thật (flow danh sách beat: chia
+    // beat trước khi có audio) — khớp logic backend marketing_short_video_manual_beat_
+    // build_beat_map để timeline hiển thị beat ngay sau khi chia; timing thật từ
+    // audio từng beat sẽ tự đè lên sau khi ghép audio.
+    const needsProvisionalTiming = marks.some((mark) => mark.endSec <= mark.startSec);
+    let effectiveTotal = totalVideoSec > 0 ? totalVideoSec : round3(Math.max(...marks.map((mark) => mark.endSec)));
+    let effectiveMarks = marks;
+    if (needsProvisionalTiming) {
+        const weights = marks.map(
+            (mark) => Math.max(1, mark.content.trim().split(/\s+/u).filter(Boolean).length),
+        );
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        effectiveTotal = totalVideoSec > 0
+            ? totalVideoSec
+            : Math.max(round3(totalWeight * 0.45), marks.length);
+        let cursor = 0;
+        effectiveMarks = marks.map((mark, index) => {
+            const start = round3(cursor);
+            const end = index === marks.length - 1
+                ? round3(effectiveTotal)
+                : round3(cursor + effectiveTotal * (weights[index] / Math.max(1, totalWeight)));
+            const safeEnd = end > start ? end : round3(start + 0.5);
+            cursor = safeEnd;
+
+            return {
+                ...mark,
+                startSec: start,
+                endSec: safeEnd,
+                durationSec: round3(safeEnd - start),
+            };
+        });
+    }
+
+    const total = effectiveTotal > 0
+        ? effectiveTotal
+        : Math.max(...effectiveMarks.map((mark) => mark.endSec));
+    const sections: BeatMapSection[] = effectiveMarks.map((mark, index) => {
         const id = `beat_${index + 1}`;
         const content = mark.content.trim();
         const visualDescription = content.length > 200 ? `${content.slice(0, 197)}...` : content;

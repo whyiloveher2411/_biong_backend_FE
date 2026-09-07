@@ -35,6 +35,7 @@ import {
     fetchManualBeatMarks,
     importManualBeatAiDivision,
     importManualBeatList,
+    importManualBeatPromptFile,
     saveManualBeatMarks,
     fetchImportHtmlContext,
     normalizePlatforms,
@@ -4777,7 +4778,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     }, []);
 
     const handleOpenBeatDivisionGemini = async () => {
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -4801,7 +4804,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     const handleEnqueueBeatDivisionGeminiHeadless = async () => {
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5002,7 +5007,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5046,7 +5053,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5082,7 +5091,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5139,7 +5150,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5230,7 +5243,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5328,7 +5343,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -5418,7 +5435,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             showMessage('Cần beat-map hợp lệ trước', 'warning');
             return;
         }
-        if (whisperStatus !== 'completed') {
+        // Video 2s: whisper chạy RIÊNG từng beat sau bước audio — fill ảnh không phụ
+        // thuộc whisper full, không được chặn mở extension/queue bằng gate này.
+        if (whisperStatus !== 'completed' && !isAgentVideo2sMode(agentVisualMode)) {
             showMessage('Whisper chưa hoàn tất', 'warning');
             return;
         }
@@ -7080,6 +7099,56 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     }, [importingVideo2sBeatList, loadRow, shortVideoId, showMessage]);
 
     /**
+     * Video 2s — upload prompt ảnh từ file (format Meta.ai): all-or-nothing.
+     * Lỗi validate KHÔNG toast — trả về cho dialog liệt kê tất cả 1 lần.
+     */
+    const [importingVideo2sPromptFile, setImportingVideo2sPromptFile] = React.useState(false);
+    const handleImportVideo2sPromptFile = React.useCallback(async (
+        fileText: string,
+    ): Promise<{ success: boolean; errors: string[]; warnings: string[] }> => {
+        const empty = { success: false, errors: [], warnings: [] };
+        if (!shortVideoId || importingVideo2sPromptFile) {
+            return empty;
+        }
+        setImportingVideo2sPromptFile(true);
+        try {
+            const res = await importManualBeatPromptFile(shortVideoId, fileText);
+            if (!res?.success) {
+                const errors = Array.isArray(res?.errors)
+                    ? res.errors.map((item) => String(item))
+                    : [parseApiMessage(res?.message) || 'File có lỗi — chưa import beat nào'];
+                return {
+                    success: false,
+                    errors,
+                    warnings: Array.isArray(res?.warnings) ? res.warnings.map((item) => String(item)) : [],
+                };
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            loadRow();
+            showMessage(
+                parseApiMessage(res?.message)
+                    || `Đã nhập prompt ảnh cho ${res.total ?? 0} beat đúng vị trí`,
+                'success',
+            );
+
+            return {
+                success: true,
+                errors: [],
+                warnings: Array.isArray(res?.warnings) ? res.warnings.map((item) => String(item)) : [],
+            };
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+
+            return { success: false, errors: [e instanceof Error ? e.message : String(e)], warnings: [] };
+        } finally {
+            setImportingVideo2sPromptFile(false);
+        }
+    }, [importingVideo2sPromptFile, loadRow, shortVideoId, showMessage]);
+
+    /**
      * Xác nhận timeline thủ công beat n (video 2s): start/end tính theo whisper timing
      * của từ user chọn (click trong overlay "điều chỉnh timeline"). Beat n thành chuẩn
      * (timeline_confirmed), backend dịch ranh giới 2 beat kề n-1/n+1.
@@ -8570,6 +8639,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleImportAiBeatDivision,
         importingVideo2sBeatList,
         handleImportVideo2sBeatList,
+        importingVideo2sPromptFile,
+        handleImportVideo2sPromptFile,
         mergingManualBeat,
         handleMergeManualBeats,
         reloadManualBeatMarks,

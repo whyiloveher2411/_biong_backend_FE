@@ -97,6 +97,41 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
     const [aiDialogOpen, setAiDialogOpen] = React.useState(false);
     const [aiOutputText, setAiOutputText] = React.useState('');
     const [selectedBeatIds, setSelectedBeatIds] = React.useState<string[]>([]);
+    const [promptFileOpen, setPromptFileOpen] = React.useState(false);
+    const [promptFileText, setPromptFileText] = React.useState('');
+    const [promptFileErrors, setPromptFileErrors] = React.useState<string[]>([]);
+    const [promptFileWarnings, setPromptFileWarnings] = React.useState<string[]>([]);
+    const promptFileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const submitPromptFile = React.useCallback(async () => {
+        const text = promptFileText.trim();
+        if (!text || state.importingVideo2sPromptFile) {
+            return;
+        }
+        const result = await state.handleImportVideo2sPromptFile(text);
+        if (result.success) {
+            setPromptFileOpen(false);
+            setPromptFileText('');
+            setPromptFileErrors([]);
+            setPromptFileWarnings([]);
+        } else {
+            // Lỗi validate hiển thị ĐỦ trong dialog 1 lần — user sửa file rồi upload lại.
+            setPromptFileErrors(result.errors);
+            setPromptFileWarnings(result.warnings);
+        }
+    }, [promptFileText, state]);
+
+    const handlePromptFileChosen = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        const text = await file.text();
+        setPromptFileText(text);
+        setPromptFileErrors([]);
+        setPromptFileWarnings([]);
+    };
 
     const tokens = state.whisperScriptAlign?.tokens ?? state.scriptOnlyScriptAlign?.tokens ?? [];
     const marks = state.manualBeatMarks;
@@ -111,8 +146,6 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
         }
         return map;
     }, [state.beatAudio]);
-    const beatAudioReadyCount = (state.beatAudio?.items ?? []).filter((item) => item.status === 'ready').length;
-    const beatAudioAllReady = marks.length > 0 && beatAudioReadyCount >= marks.length;
     const pendingSentenceBeats = React.useMemo(
         () => buildSentenceBeatMarks(tokens, marks).length,
         [marks, tokens],
@@ -351,7 +384,30 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
 
             {marks.length > 0 ? (
                 <Stack spacing={0.5}>
-                    <Typography variant="subtitle2">Beat đã chia</Typography>
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                    >
+                        <Typography variant="subtitle2">Beat đã chia</Typography>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<UploadFileIcon />}
+                            onClick={() => {
+                                setPromptFileErrors([]);
+                                setPromptFileWarnings([]);
+                                setPromptFileOpen(true);
+                            }}
+                            sx={{ whiteSpace: 'nowrap' }}
+                        >
+                            Upload prompt từ file
+                        </Button>
+                    </Stack>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                         {selectedBeatIds.length > 0 ? (
                             <Chip
@@ -702,6 +758,124 @@ export default function ShortVideoAgentVideo2sBeatPanel({ state }: Props) {
                         onClick={submitAiResult}
                     >
                         {state.importingAiBeatDivision ? 'Đang nhập...' : 'Nhập beat AI'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={promptFileOpen}
+                onClose={() => {
+                    if (!state.importingVideo2sPromptFile) {
+                        setPromptFileOpen(false);
+                    }
+                }}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Upload prompt ảnh từ file</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={1.5}>
+                        <Alert severity="info" sx={{ py: 0.5 }}>
+                            File theo format Meta.ai: mỗi beat mở đầu bằng{' '}
+                            <b>BEAT 1:</b>
+                            , bên trong có{' '}
+                            <b>SCRIPT SENTENCE</b>
+                            ,{' '}
+                            <b>IMAGE PROMPT</b>
+                            ,{' '}
+                            <b>NEGATIVE PROMPT</b>
+                            {' '}… Hệ thống kiểm tra chặt: đủ số beat, đúng thứ tự BEAT 1→N,
+                            SCRIPT SENTENCE khớp content beat, IMAGE PROMPT không trùng — có
+                            lỗi sẽ liệt kê <b>tất cả</b> và <b>không import beat nào</b>.
+                        </Alert>
+                        {promptFileErrors.length > 0 ? (
+                            <Alert severity="error">
+                                <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                                    {`File có ${promptFileErrors.length} lỗi — chưa import beat nào:`}
+                                </Typography>
+                                <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                                    {promptFileErrors.map((error, index) => (
+                                        <Typography key={`pf-err-${index}`} component="li" variant="caption" sx={{ display: 'list-item' }}>
+                                            {error}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            </Alert>
+                        ) : null}
+                        {promptFileWarnings.length > 0 ? (
+                            <Alert severity="warning">
+                                <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                                    Cảnh báo (không chặn nhập):
+                                </Typography>
+                                <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                                    {promptFileWarnings.map((warning, index) => (
+                                        <Typography key={`pf-warn-${index}`} component="li" variant="caption" sx={{ display: 'list-item' }}>
+                                            {warning}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            </Alert>
+                        ) : null}
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <input
+                                ref={promptFileInputRef}
+                                type="file"
+                                accept=".md,.markdown,.txt,text/plain"
+                                hidden
+                                onChange={(event) => { void handlePromptFileChosen(event); }}
+                            />
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<UploadFileIcon />}
+                                onClick={() => { promptFileInputRef.current?.click(); }}
+                            >
+                                Chọn file .md / .txt
+                            </Button>
+                            <Typography variant="caption" color="text.secondary">
+                                hoặc dán trực tiếp nội dung vào ô bên dưới.
+                            </Typography>
+                        </Stack>
+                        <Box
+                            component="textarea"
+                            value={promptFileText}
+                            onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
+                                setPromptFileText(event.target.value);
+                            }}
+                            placeholder={'BEAT 1:\n\nSCRIPT SENTENCE:\nTry to imagine a morning more than one hundred thousand years ago.\n\nVISUAL CONCEPT:\n…\n\nIMAGE PROMPT:\n…\n\nNEGATIVE PROMPT:\n…\n\nBEAT 2:\n…'}
+                            sx={{
+                                width: '100%',
+                                minHeight: 220,
+                                p: 1,
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1,
+                                bgcolor: 'background.paper',
+                                color: 'text.primary',
+                                resize: 'vertical',
+                            }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        size="small"
+                        disabled={state.importingVideo2sPromptFile}
+                        onClick={() => { setPromptFileOpen(false); }}
+                    >
+                        Hủy
+                    </Button>
+                    <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={state.importingVideo2sPromptFile
+                            ? <CircularProgress size={14} color="inherit" />
+                            : <UploadFileIcon />}
+                        disabled={!promptFileText.trim() || state.importingVideo2sPromptFile}
+                        onClick={() => { void submitPromptFile(); }}
+                    >
+                        {state.importingVideo2sPromptFile ? 'Đang kiểm tra…' : 'Kiểm tra & nhập prompt'}
                     </Button>
                 </DialogActions>
             </Dialog>

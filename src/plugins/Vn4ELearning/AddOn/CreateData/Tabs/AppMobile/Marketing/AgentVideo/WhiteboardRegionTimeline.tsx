@@ -106,6 +106,11 @@ type Props = {
     effectTimelineDurationSec?: number;
     beatStartSec: number;
     beatWords: Word[];
+    /**
+     * Content của beat hiện tại (video 2s: mark content; mode khác: phrase_anchor) —
+     * hiển thị thay cho thông báo khi beat CHƯA có whisper words.
+     */
+    beatContent?: string;
     colorFor: (index: number) => string;
     onChangeRegion: (id: string, patch: Partial<BeatRegion>) => void;
     onSelectRegion?: (id: string, meta?: TimelineSelectMeta) => void;
@@ -252,6 +257,7 @@ export default function WhiteboardRegionTimeline({
     effectTimelineDurationSec,
     beatStartSec,
     beatWords,
+    beatContent = '',
     colorFor,
     onChangeRegion,
     onSelectRegion,
@@ -1090,9 +1096,18 @@ export default function WhiteboardRegionTimeline({
                             </Box>
                         </Stack>
                     ) : beatWords.length === 0 ? (
-                        <Typography variant="caption" color="text.secondary">
-                            Chưa có whisper — kéo các điểm trên thanh để đặt thời gian render theo giây.
-                        </Typography>
+                        beatContent.trim() !== '' ? (
+                            <Typography
+                                variant="caption"
+                                sx={{ color: 'text.primary', lineHeight: 1.7, display: 'block', px: 0.25 }}
+                            >
+                                {beatContent}
+                            </Typography>
+                        ) : (
+                            <Typography variant="caption" color="text.secondary">
+                                Chưa có whisper — kéo các điểm trên thanh để đặt thời gian render theo giây.
+                            </Typography>
+                        )
                     ) : (
                         beatWords.map((word) => {
                             const wi = word.index ?? 0;
@@ -1118,8 +1133,8 @@ export default function WhiteboardRegionTimeline({
                                         color: isCurrent ? '#f50057' : (inRange ? '#fff' : 'text.primary'),
                                         bgcolor: inRange ? 'primary.main' : 'transparent',
                                         '&:hover': { bgcolor: 'primary.light', color: '#fff' },
-                                        userSelect: 'none',
-                                        WebkitUserSelect: 'none',
+                                        // userSelect: 'none',
+                                        // WebkitUserSelect: 'none',
                                     }}
                                     title={`«${word.text}» @ ${t.toFixed(2)}s — bấm để chạy audio${selectedRange ? ' (trong khoảng đang chọn)' : ''}`}
                                 >

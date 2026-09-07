@@ -3655,6 +3655,34 @@ export async function importManualBeatList(
     }>;
 }
 
+/**
+ * Video 2s — upload prompt ảnh từ file (format Meta.ai: BEAT N: + SCRIPT
+ * SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT...). All-or-nothing: validate tổng
+ * hợp mọi lỗi (đủ beat, đúng thứ tự, script khớp vị trí, prompt không trùng)
+ * rồi mới ghi prompt đúng vị trí beat.
+ */
+export async function importManualBeatPromptFile(
+    shortVideoId: number,
+    fileText: string,
+): Promise<ManualBeatResponse & {
+    errors?: string[];
+    warnings?: string[];
+    beats_in_file?: number;
+    beats_in_clip?: number;
+    updated_orders?: number[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/import-prompt-file',
+        shortVideoBody(shortVideoId, { file_text: fileText }),
+    ) as Promise<ManualBeatResponse & {
+        errors?: string[];
+        warnings?: string[];
+        beats_in_file?: number;
+        beats_in_clip?: number;
+        updated_orders?: number[];
+    }>;
+}
+
 export async function addManualBeatMark(
     shortVideoId: number,
     mark: ManualBeatMarkPayload,
