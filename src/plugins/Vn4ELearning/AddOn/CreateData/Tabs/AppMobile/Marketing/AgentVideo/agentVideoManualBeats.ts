@@ -48,6 +48,30 @@ function round3(value: number): number {
     return Math.round((Number(value) || 0) * 1000) / 1000;
 }
 
+/**
+ * Parse text danh sách beat (video 2s): mỗi dòng = 1 beat. Bỏ prefix số thứ tự
+ * ("1.", "1)", "1:", "1 -", "-", "*", "•") và dòng trống — khớp logic backend
+ * marketing_short_video_manual_beat_parse_list. Dùng cho preview đếm beat; lưu
+ * vẫn gửi nguyên văn để backend parse (nguồn truth duy nhất).
+ */
+export function parseBeatListText(text: string): string[] {
+    const beats: string[] = [];
+    for (const rawLine of String(text || '').split(/\r\n|\r|\n/)) {
+        const line = rawLine.trim();
+        if (!line) {
+            continue;
+        }
+        const stripped = line
+            .replace(/^\s*(?:\d{1,4}\s*[.)]\s+|\d{1,4}\s*:\s*|\d{1,4}\s+-\s+|[-*•]\s+)/u, '')
+            .trim();
+        if (!stripped) {
+            continue;
+        }
+        beats.push(stripped);
+    }
+    return beats;
+}
+
 export function normalizeManualBeatMarks(raw: unknown): ManualBeatMark[] {
     if (!Array.isArray(raw)) {
         return [];

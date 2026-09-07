@@ -3627,6 +3627,34 @@ export async function saveManualBeatMarks(
     ) as Promise<ManualBeatResponse>;
 }
 
+/**
+ * Video 2s — nhập danh sách beat dạng text (mỗi dòng = 1 beat): 1 lần lưu tự
+ * chia beat + sync beat_map; audio beat thiếu/thay đổi do pipeline beat_audio tự tạo.
+ */
+export async function importManualBeatList(
+    shortVideoId: number,
+    listText: string,
+): Promise<ManualBeatResponse & {
+    beat_list_text?: string;
+    changed?: number;
+    filled?: number;
+    invalidated_audio?: number[];
+    audio_script_updated?: boolean;
+    audio?: { total?: number; ready?: number };
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/import-beat-list',
+        shortVideoBody(shortVideoId, { list_text: listText }),
+    ) as Promise<ManualBeatResponse & {
+        beat_list_text?: string;
+        changed?: number;
+        filled?: number;
+        invalidated_audio?: number[];
+        audio_script_updated?: boolean;
+        audio?: { total?: number; ready?: number };
+    }>;
+}
+
 export async function addManualBeatMark(
     shortVideoId: number,
     mark: ManualBeatMarkPayload,

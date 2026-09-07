@@ -1195,14 +1195,14 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                     {sortedVideos.map((video, index) => {
                         const isHot = (video.vph || 0) > 0 && (video.vph || 0) >= hotThreshold;
                         const isExpanded = expandedVideoId === video.id;
-                        const videoTags = [...new Set((video.tags || '')
+                        const videoTags = Array.from(new Set((video.tags || '')
                             .split(',')
                             .map(normalizeTag)
-                            .filter(Boolean))]
+                            .filter(Boolean)))
                             .sort((a, b) => (tagCountMap[b] || 0) - (tagCountMap[a] || 0));
-                        const videoHashtags = [...new Set(extractHashtags(video.description)
+                        const videoHashtags = Array.from(new Set(extractHashtags(video.description)
                             .map(normalizeTag)
-                            .filter(Boolean))]
+                            .filter(Boolean)))
                             .sort((a, b) => (hashtagCountMap[b] || 0) - (hashtagCountMap[a] || 0));
                         return (
                         <Box

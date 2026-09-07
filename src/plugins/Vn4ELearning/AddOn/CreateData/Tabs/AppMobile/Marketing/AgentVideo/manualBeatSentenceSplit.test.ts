@@ -1,4 +1,4 @@
-import { buildSentenceBeatMarks, isSentenceEndToken, normalizeManualBeatMarks } from './agentVideoManualBeats';
+import { buildSentenceBeatMarks, isSentenceEndToken, normalizeManualBeatMarks, parseBeatListText } from './agentVideoManualBeats';
 import { CaptionAlignToken } from './agentVideoCaptionScriptAlign';
 
 function token(index: number, text: string): CaptionAlignToken {
@@ -58,5 +58,43 @@ describe('buildSentenceBeatMarks', () => {
         const marks = buildSentenceBeatMarks(tokens, []);
 
         expect(marks.map((mark) => mark.content)).toEqual(['xin chào.', 'còn nữa']);
+    });
+});
+
+describe('parseBeatListText', () => {
+    it('mỗi dòng = 1 beat, bỏ số thứ tự và dòng trống', () => {
+        const beats = parseBeatListText(
+            '1. Try to imagine a morning more than one hundred thousand years ago.\n'
+            + '2) The sun has just risen beyond the rock wall.\n'
+            + "3: Inside the cave, last night's fire has burned down to a few red coals.\n"
+            + '\n',
+        );
+
+        expect(beats).toEqual([
+            'Try to imagine a morning more than one hundred thousand years ago.',
+            'The sun has just risen beyond the rock wall.',
+            "Inside the cave, last night's fire has burned down to a few red coals.",
+        ]);
+    });
+
+    it('hỗ trợ bullet và dòng không số thứ tự, giữ số thập phân', () => {
+        const beats = parseBeatListText(
+            '- Dòng bullet.\n'
+            + '* Dòng sao.\n'
+            + 'Dòng không đánh số.\n'
+            + '12.5 degrees vẫn nguyên vẹn.\n',
+        );
+
+        expect(beats).toEqual([
+            'Dòng bullet.',
+            'Dòng sao.',
+            'Dòng không đánh số.',
+            '12.5 degrees vẫn nguyên vẹn.',
+        ]);
+    });
+
+    it('text rỗng hoặc toàn dòng trống → rỗng', () => {
+        expect(parseBeatListText('')).toEqual([]);
+        expect(parseBeatListText('   \n  \n')).toEqual([]);
     });
 });

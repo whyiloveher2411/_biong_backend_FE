@@ -5,6 +5,7 @@ import {
     Button,
     CircularProgress,
     Stack,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -18,15 +19,18 @@ import {
     getWorkflowContrastTextColor,
     splitWorkflowStepTitle,
     type WorkflowDefinition,
+    type WorkflowPromptContext,
 } from 'helpers/marketingWorkflowPrompts';
 
 type Props = {
     open: boolean;
     onClose: () => void;
     workflow: WorkflowDefinition | null;
+    /** Giá trị thay các key [key] trong prompt khi copy. VD: { topic: title } */
+    promptContext?: WorkflowPromptContext;
 };
 
-export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Props) {
+export default function MarketingWorkflowDrawer({ open, onClose, workflow, promptContext }: Props) {
     const api = useAjax();
     const [copyingStep, setCopyingStep] = React.useState('');
     const [copiedStep, setCopiedStep] = React.useState('');
@@ -54,7 +58,7 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
         setCopyingStep(stepKey);
         let result: { ok: boolean; message: string };
         try {
-            result = await copyWorkflowPromptToClipboard(workflow.key, file);
+            result = await copyWorkflowPromptToClipboard(workflow.key, file, promptContext || {});
         } catch {
             result = { ok: false, message: 'Không copy được prompt' };
         }
@@ -67,7 +71,7 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
             copiedTimerRef.current = setTimeout(() => setCopiedStep(''), 2000);
         }
         api.showMessage(result.message, result.ok ? 'success' : 'error');
-    }, [workflow, copyingStep, api]);
+    }, [workflow, copyingStep, promptContext, api]);
 
     const accent = workflow?.background || '';
     const accentText = accent ? getWorkflowContrastTextColor(accent) : '#ffffff';
@@ -98,7 +102,7 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
                                 {workflow.title}
                             </Typography>
                             <Typography variant="caption" sx={{ color: accentText, opacity: 0.85, display: 'block', mt: 0.25 }}>
-                                {workflow.steps.length} bước · Bấm "Copy prompt" ở mỗi bước để copy prompt vào clipboard
+                                {workflow.steps.length} bước · Copy prompt sẽ tự thay [topic] bằng title short video
                             </Typography>
                         </Box>
                     )}
@@ -242,23 +246,87 @@ export default function MarketingWorkflowDrawer({ open, onClose, workflow }: Pro
                                             </Box>
                                         )}
 
-                                        {step.prompt && (
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                disabled={Boolean(copyingStep)}
-                                                startIcon={
-                                                    isCopying
-                                                        ? <CircularProgress size={12} color="inherit" />
-                                                        : isCopied
-                                                            ? <CheckIcon fontSize="small" />
-                                                            : <ContentCopyIcon fontSize="small" />
-                                                }
-                                                onClick={() => handleCopy(stepKey, step.prompt)}
-                                                sx={{ textTransform: 'none', mt: 1 }}
+                                        {(step.prompts.length > 0 || step.prompt) && (
+                                            <Box
+                                                sx={{
+                                                    mt: 1.25,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-start',
+                                                    gap: 0.75,
+                                                }}
                                             >
-                                                {isCopied ? 'Đã copy' : 'Copy prompt'}
-                                            </Button>
+                                                {step.prompts.map((promptItem, promptIndex) => {
+                                                    const itemKey = `${stepKey}:p${promptIndex}`;
+                                                    const itemCopying = copyingStep === itemKey;
+                                                    const itemCopied = copiedStep === itemKey;
+                                                    const button = (
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            disabled={Boolean(copyingStep) || !promptItem.exists}
+                                                            startIcon={
+                                                                itemCopying
+                                                                    ? <CircularProgress size={12} color="inherit" />
+                                                                    : itemCopied
+                                                                        ? <CheckIcon fontSize="small" />
+                                                                        : <ContentCopyIcon fontSize="small" />
+                                                            }
+                                                            onClick={() => handleCopy(itemKey, promptItem.file)}
+                                                            sx={{ textTransform: 'none' }}
+                                                        >
+                                                            {itemCopied ? 'Đã copy' : promptItem.label}
+                                                        </Button>
+                                                    );
+
+                                                    if (promptItem.exists) {
+                                                        return <React.Fragment key={itemKey}>{button}</React.Fragment>;
+                                                    }
+
+                                                    return (
+                                                        <Tooltip
+                                                            key={itemKey}
+                                                            title={promptItem.file ? `File prompt chưa tồn tại: ${promptItem.file}` : 'Prompt này không có file'}
+                                                            placement="top"
+                                                        >
+                                                            <span>{button}</span>
+                                                        </Tooltip>
+                                                    );
+                                                })}
+
+                                                {step.prompt && (
+                                                    (() => {
+                                                        const button = (
+                                                            <Button
+                                                                size="small"
+                                                                variant="outlined"
+                                                                disabled={Boolean(copyingStep) || !step.promptExists}
+                                                                startIcon={
+                                                                    isCopying
+                                                                        ? <CircularProgress size={12} color="inherit" />
+                                                                        : isCopied
+                                                                            ? <CheckIcon fontSize="small" />
+                                                                            : <ContentCopyIcon fontSize="small" />
+                                                                }
+                                                                onClick={() => handleCopy(stepKey, step.prompt)}
+                                                                sx={{ textTransform: 'none' }}
+                                                            >
+                                                                {isCopied ? 'Đã copy' : 'Copy prompt'}
+                                                            </Button>
+                                                        );
+
+                                                        if (step.promptExists) {
+                                                            return button;
+                                                        }
+
+                                                        return (
+                                                            <Tooltip title={`File prompt chưa tồn tại: ${step.prompt}`} placement="top">
+                                                                <span>{button}</span>
+                                                            </Tooltip>
+                                                        );
+                                                    })()
+                                                )}
+                                            </Box>
                                         )}
                                     </Box>
                                 </Box>

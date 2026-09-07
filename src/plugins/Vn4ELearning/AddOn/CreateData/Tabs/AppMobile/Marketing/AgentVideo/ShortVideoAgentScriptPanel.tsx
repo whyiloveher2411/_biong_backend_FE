@@ -47,6 +47,7 @@ import {
 } from './agentVideoUi';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import ShortVideoAgentAudioSettingsDrawer from './ShortVideoAgentAudioSettingsDrawer';
+import ShortVideoAgentVideo2sBeatListPanel from './ShortVideoAgentVideo2sBeatListPanel';
 import ShortVideoAgentWhisperCompareDrawer from './ShortVideoAgentWhisperCompareDrawer';
 import ShortVideoAgentWhisperCompareSummary from './ShortVideoAgentWhisperCompareSummary';
 import ShortVideoAgentPhoneticQuickMenu from './ShortVideoAgentPhoneticQuickMenu';
@@ -319,6 +320,9 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const scriptPipeline = resolveScriptPipelineState(state);
     const audioPipeline = resolveAudioPipelineState(state);
     const whisperPipeline = resolveWhisperPipelineState(state);
+    // Video 2s + audio từng beat: thay section Kịch bản/Audio/Whisper bằng 1 ô
+    // "Danh sách beat" — nhập 1 lần là tự chia beat, audio beat do pipeline tự tạo.
+    const video2sBeatListMode = state.isVideo2sMode && state.agentBeatAudio;
     const geminiScriptStatus = String(state.geminiScriptStatus || 'none');
     const geminiScriptQueueActive = geminiScriptStatus === 'queued'
         || geminiScriptStatus === 'processing';
@@ -429,6 +433,12 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
             sx={{ height: '100%', overflow: 'auto', p: 2 }}
         >
             <Stack spacing={2}>
+                {video2sBeatListMode ? (
+                    <ShortVideoAgentVideo2sBeatListPanel
+                        state={state}
+                        onOpenAudioSettings={() => setAudioSettingsOpen(true)}
+                    />
+                ) : (
                 <SectionShell
                     step={1}
                     title="Kịch bản"
@@ -766,7 +776,9 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         </Stack>
                     </Stack>
                 </SectionShell>
+                )}
 
+                {!video2sBeatListMode ? (
                 <SectionShell
                     step={2}
                     title="Audio"
@@ -1137,7 +1149,9 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         </Box>
                     </Stack>
                 </SectionShell>
+                ) : null}
 
+                {!video2sBeatListMode ? (
                 <SectionShell
                     step={3}
                     title="Whisper"
@@ -1221,6 +1235,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         </Stack>
                     )}
                 </SectionShell>
+                ) : null}
             </Stack>
 
             <ShortVideoAgentWhisperCompareDrawer

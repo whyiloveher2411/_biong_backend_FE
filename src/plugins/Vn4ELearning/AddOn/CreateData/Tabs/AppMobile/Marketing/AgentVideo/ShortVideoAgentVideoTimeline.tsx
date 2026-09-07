@@ -189,6 +189,8 @@ type Props = {
     videoUrl: string;
     videoRef: React.RefObject<HTMLVideoElement>;
     clipLabel?: string;
+    /** Title của short video — thay key [topic] trong prompt workflow khi copy. */
+    promptTopic?: string;
     /** State đầy đủ của AgentVideo — dùng cho drawer audio background thủ công. */
     agentState?: AgentVideoState;
     audioDurationSec?: number | null;
@@ -302,6 +304,7 @@ export default function ShortVideoAgentVideoTimeline({
     videoUrl,
     videoRef,
     clipLabel = 'HyperFrames',
+    promptTopic = '',
     agentState,
     audioDurationSec,
     estimatedDurationSec,
@@ -976,7 +979,7 @@ export default function ShortVideoAgentVideoTimeline({
                         onChange={setTimelineScaleWidth}
                     />
                 ) : null}
-                <MarketingWorkflowButtons />
+                <MarketingWorkflowButtons promptContext={{ topic: promptTopic }} />
                 {(showTimelineActions) ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (

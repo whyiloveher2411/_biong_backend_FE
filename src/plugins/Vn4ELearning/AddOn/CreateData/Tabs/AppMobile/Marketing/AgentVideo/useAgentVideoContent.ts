@@ -34,6 +34,7 @@ import {
     fetchManualBeatImagePromptMaster,
     fetchManualBeatMarks,
     importManualBeatAiDivision,
+    importManualBeatList,
     saveManualBeatMarks,
     fetchImportHtmlContext,
     normalizePlatforms,
@@ -7038,6 +7039,47 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     }, [importingAiBeatDivision, loadRow, manualBeatMarks, shortVideoId, showMessage]);
 
     /**
+     * Video 2s — nhập danh sách beat dạng text (mỗi dòng = 1 beat): 1 lần lưu tự
+     * chia beat + sync beat_map; beat đổi nội dung pipeline tự TTS lại audio beat đó.
+     */
+    const [importingVideo2sBeatList, setImportingVideo2sBeatList] = React.useState(false);
+    const handleImportVideo2sBeatList = React.useCallback(async (listText: string): Promise<boolean> => {
+        if (!shortVideoId || importingVideo2sBeatList) {
+            return false;
+        }
+        setImportingVideo2sBeatList(true);
+        try {
+            const res = await importManualBeatList(shortVideoId, listText);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không nhập được danh sách beat', 'error');
+                return false;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            loadRow();
+            const invalidCount = Array.isArray(res.invalidated_audio) ? res.invalidated_audio.length : 0;
+            const baseMsg = parseApiMessage(res?.message)
+                || `Đã chia ${res.total ?? 0} beat từ danh sách`;
+            showMessage(
+                invalidCount > 0
+                    ? `${baseMsg} — ${invalidCount} beat đổi nội dung sẽ tự tạo lại audio`
+                    : baseMsg,
+                'success',
+            );
+
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+
+            return false;
+        } finally {
+            setImportingVideo2sBeatList(false);
+        }
+    }, [importingVideo2sBeatList, loadRow, shortVideoId, showMessage]);
+
+    /**
      * Xác nhận timeline thủ công beat n (video 2s): start/end tính theo whisper timing
      * của từ user chọn (click trong overlay "điều chỉnh timeline"). Beat n thành chuẩn
      * (timeline_confirmed), backend dịch ranh giới 2 beat kề n-1/n+1.
@@ -8526,6 +8568,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         importingAiBeatDivision,
         handleCopyBeatDivisionPrompt,
         handleImportAiBeatDivision,
+        importingVideo2sBeatList,
+        handleImportVideo2sBeatList,
         mergingManualBeat,
         handleMergeManualBeats,
         reloadManualBeatMarks,

@@ -1,12 +1,20 @@
 import { ajax } from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 
+export type WorkflowPromptItem = {
+    label: string;
+    file: string;
+    exists: boolean;
+};
+
 export type WorkflowPromptStep = {
     title: string;
     prompt: string;
+    promptExists: boolean;
     description: string[];
     result: string;
     note: string;
+    prompts: WorkflowPromptItem[];
 };
 
 export type WorkflowDefinition = {
@@ -40,12 +48,34 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
         : [];
     const result = String(raw?.result || '').trim();
     const note = String(raw?.note || '').trim();
+    const prompts = (Array.isArray(raw?.prompts) ? raw.prompts : [])
+        .map((item: ANY): WorkflowPromptItem | null => {
+            const label = String(item?.label || '').trim();
+            const file = String(item?.file || '').trim();
+            if (!label && !file) {
+                return null;
+            }
+            return {
+                label: label || file,
+                file,
+                exists: item?.exists !== false,
+            };
+        })
+        .filter(Boolean) as WorkflowPromptItem[];
 
-    if (!title && !prompt && description.length === 0 && !result && !note) {
+    if (!title && !prompt && description.length === 0 && !result && !note && prompts.length === 0) {
         return null;
     }
 
-    return { title, prompt, description, result, note };
+    return {
+        title,
+        prompt,
+        promptExists: raw?.prompt_exists !== false,
+        description,
+        result,
+        note,
+        prompts,
+    };
 }
 
 function normalizeWorkflow(raw: ANY): WorkflowDefinition | null {
@@ -132,9 +162,47 @@ export async function fetchWorkflowPromptContent(
     return { ok: true, content: res.content };
 }
 
+export type WorkflowPromptContext = Record<string, string>;
+
+const REGEX_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * Thay các key dạng [key] trong nội dung prompt bằng giá trị từ context.
+ * VD: context { topic: '...' } thay mọi "[topic]" (không phân biệt hoa thường,
+ * cho phép khoảng trắng trong ngoặc "[ topic ]") bằng title của short video.
+ * Key nào chưa có giá trị trong context sẽ được giữ nguyên.
+ */
+export function replaceWorkflowPromptKeys(
+    content: string,
+    context: WorkflowPromptContext = {},
+): { content: string; replaced: string[] } {
+    let result = content;
+    const replaced: string[] = [];
+
+    Object.entries(context).forEach(([rawKey, rawValue]) => {
+        const key = String(rawKey || '').trim();
+        const value = String(rawValue ?? '');
+
+        if (!key || !value.trim()) {
+            return;
+        }
+
+        const escapedKey = key.replace(REGEX_ESCAPE_RE, '\\$&');
+        const pattern = `\\[\\s*${escapedKey}\\s*\\]`;
+
+        if (new RegExp(pattern, 'i').test(result)) {
+            result = result.replace(new RegExp(pattern, 'gi'), value);
+            replaced.push(`[${key}]`);
+        }
+    });
+
+    return { content: result, replaced };
+}
+
 export async function copyWorkflowPromptToClipboard(
     workflow: string,
     file: string,
+    context: WorkflowPromptContext = {},
 ): Promise<{ ok: boolean; message: string }> {
     const res = await fetchWorkflowPromptContent(workflow, file);
 
@@ -142,13 +210,16 @@ export async function copyWorkflowPromptToClipboard(
         return { ok: false, message: res.message || 'Không tải được prompt' };
     }
 
-    const copied = await writePromptTextToClipboard(res.content);
+    const { content, replaced } = replaceWorkflowPromptKeys(res.content, context);
+    const copied = await writePromptTextToClipboard(content);
 
     if (!copied) {
         return { ok: false, message: 'Không copy được — hãy copy thủ công' };
     }
 
-    return { ok: true, message: 'Đã copy prompt vào clipboard' };
+    const replacedNote = replaced.length > 0 ? ` (đã thay ${replaced.join(', ')})` : '';
+
+    return { ok: true, message: `Đã copy prompt vào clipboard${replacedNote}` };
 }
 
 const STEP_TITLE_PREFIX_RE = /^(?:bước|step)\s*(\d+)\s*[:.\-–)]?\s*/i;

@@ -164,7 +164,7 @@ function collectTranscriptIndexes(entries) {
             indexes.push(single);
         }
     }
-    return [...new Set(indexes)].sort((a, b) => a - b);
+    return Array.from(new Set(indexes)).sort((a, b) => a - b);
 }
 
 function matchTypeRank(matchType) {
