@@ -13,13 +13,22 @@ type Props = {
     disabled?: boolean;
     /** Giá trị thay các key [key] trong prompt khi copy. VD: { topic: title } */
     promptContext?: WorkflowPromptContext;
+    /** ID short video hiện tại — lưu/đọc workflow outputs (key/value updateField). */
+    shortVideoId?: number;
+    /** Audio script hiện tại của post — nút download ở đầu drawer. */
+    audioScript?: string;
 };
 
 /**
  * Danh sách button workflow (1 workflow = 1 màu theo index.md).
  * Click mở drawer xem các bước + copy prompt từng bước.
  */
-export default function MarketingWorkflowButtons({ disabled = false, promptContext }: Props) {
+export default function MarketingWorkflowButtons({
+    disabled = false,
+    promptContext,
+    shortVideoId,
+    audioScript,
+}: Props) {
     const [workflows, setWorkflows] = React.useState<WorkflowDefinition[] | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [activeWorkflow, setActiveWorkflow] = React.useState<WorkflowDefinition | null>(null);
@@ -97,6 +106,8 @@ export default function MarketingWorkflowButtons({ disabled = false, promptConte
                 open={Boolean(activeWorkflow)}
                 workflow={activeWorkflow}
                 promptContext={promptContext}
+                shortVideoId={shortVideoId}
+                audioScript={audioScript}
                 onClose={() => setActiveWorkflow(null)}
             />
         </>

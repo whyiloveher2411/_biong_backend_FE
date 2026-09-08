@@ -979,7 +979,11 @@ export default function ShortVideoAgentVideoTimeline({
                         onChange={setTimelineScaleWidth}
                     />
                 ) : null}
-                <MarketingWorkflowButtons promptContext={{ topic: promptTopic }} />
+                <MarketingWorkflowButtons
+                    promptContext={{ topic: promptTopic }}
+                    shortVideoId={shortVideoId}
+                    audioScript={audioScript}
+                />
                 {(showTimelineActions) ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (

@@ -5,6 +5,10 @@ export type WorkflowPromptItem = {
     label: string;
     file: string;
     exists: boolean;
+    /** Key lưu output (từ dòng updateField trong index.md) — có key thì UI hiển thị nút update. */
+    updateField: string;
+    /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
+    note: string;
 };
 
 export type WorkflowPromptStep = {
@@ -17,6 +21,16 @@ export type WorkflowPromptStep = {
     prompts: WorkflowPromptItem[];
 };
 
+/** Outputs đã lưu theo workflow: {workflow: {KEY: value}} — key/value của updateField. */
+export type WorkflowOutputsMap = Record<string, Record<string, string>>;
+
+/**
+ * Key đặc biệt thay bằng audio script của post short video hiện tại khi copy prompt:
+ * mọi "[audio-script]" (không phân biệt hoa thường, cho phép "[ audio-script ]")
+ * trong nội dung prompt được thay — nếu script trống thì key giữ nguyên.
+ */
+export const WORKFLOW_AUDIO_SCRIPT_KEY = 'audio-script';
+
 export type WorkflowDefinition = {
     key: string;
     title: string;
@@ -26,6 +40,8 @@ export type WorkflowDefinition = {
 
 const WORKFLOW_PROMPTS_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-prompts';
 const WORKFLOW_PROMPT_CONTENT_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-prompt-content';
+const WORKFLOW_OUTPUTS_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-outputs';
+const WORKFLOW_OUTPUTS_SAVE_PATH = 'plugin/vn4-e-learning/app-mobile/marketing/workflow-outputs-save';
 
 let workflowListCache: WorkflowDefinition[] | null = null;
 let workflowListPromise: Promise<WorkflowDefinition[]> | null = null;
@@ -59,6 +75,8 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 label: label || file,
                 file,
                 exists: item?.exists !== false,
+                updateField: normalizeWorkflowUpdateFieldKey(String(item?.update_field || '')),
+                note: String(item?.note || '').trim(),
             };
         })
         .filter(Boolean) as WorkflowPromptItem[];
@@ -163,6 +181,82 @@ export async function fetchWorkflowPromptContent(
 }
 
 export type WorkflowPromptContext = Record<string, string>;
+
+/**
+ * Chuẩn hóa tên key updateField — chấp nhận cả "KEY" lẫn "[KEY]":
+ * bỏ ngoặc vuông 2 đầu, trim. Key này vừa là key lưu DB vừa là key thay [KEY] trong prompt.
+ */
+export function normalizeWorkflowUpdateFieldKey(value: string): string {
+    return String(value || '').trim().replace(/^\[+|\]+$/g, '').trim();
+}
+
+/**
+ * Đọc workflow outputs (key/value theo updateField) đã lưu của 1 short video.
+ * Trả về {} khi lỗi/thiếu id — không throw để UI vẫn dùng được drawer.
+ */
+export async function fetchWorkflowOutputs(shortVideoId: number): Promise<WorkflowOutputsMap> {
+    if (!shortVideoId || shortVideoId <= 0) {
+        return {};
+    }
+
+    try {
+        const res: ANY = await ajax({
+            url: WORKFLOW_OUTPUTS_PATH,
+            method: 'POST',
+            data: { short_video_id: shortVideoId, id: shortVideoId },
+        });
+        const outputs = res?.outputs;
+        if (!outputs || typeof outputs !== 'object' || Array.isArray(outputs)) {
+            return {};
+        }
+        return outputs as WorkflowOutputsMap;
+    } catch {
+        return {};
+    }
+}
+
+/** Lưu 1 key/value output (key = updateField) của 1 workflow vào short video. */
+export async function saveWorkflowOutput(
+    shortVideoId: number,
+    workflow: string,
+    key: string,
+    value: string,
+): Promise<{ ok: boolean; outputs?: WorkflowOutputsMap; message?: string }> {
+    if (!shortVideoId || shortVideoId <= 0) {
+        return { ok: false, message: 'Thiếu short_video_id — không lưu được output' };
+    }
+    const normalizedKey = normalizeWorkflowUpdateFieldKey(key);
+    if (!workflow || !normalizedKey) {
+        return { ok: false, message: 'Thiếu workflow hoặc key — không lưu được output' };
+    }
+
+    try {
+        const res: ANY = await ajax({
+            url: WORKFLOW_OUTPUTS_SAVE_PATH,
+            method: 'POST',
+            data: {
+                short_video_id: shortVideoId,
+                id: shortVideoId,
+                workflow,
+                key: normalizedKey,
+                value,
+            },
+        });
+
+        if (!res?.success) {
+            return { ok: false, message: parseApiMessage(res?.message) || 'Không lưu được output' };
+        }
+
+        return {
+            ok: true,
+            outputs: (res.outputs && typeof res.outputs === 'object' ? res.outputs : undefined) as
+                | WorkflowOutputsMap
+                | undefined,
+        };
+    } catch {
+        return { ok: false, message: 'Không lưu được output' };
+    }
+}
 
 const REGEX_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g;
 

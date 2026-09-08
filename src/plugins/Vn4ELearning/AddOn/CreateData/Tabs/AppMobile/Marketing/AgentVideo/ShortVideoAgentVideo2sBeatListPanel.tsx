@@ -21,6 +21,7 @@ import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
     SECTION_THEMES,
     SectionShell,
+    subPanelSx,
 } from './ShortVideoAgentSectionShell';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -131,35 +132,68 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                             />
                         </>
                     ) : null}
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<TuneIcon />}
-                        onClick={onOpenAudioSettings}
-                        sx={{ ml: 'auto', whiteSpace: 'nowrap' }}
-                    >
-                        Cài đặt giọng đọc
-                    </Button>
-                    <Chip
-                        size="small"
-                        variant="outlined"
-                        avatar={(
-                            <Avatar
-                                sx={{
-                                    width: 20,
-                                    height: 20,
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    bgcolor: voiceSummary.avatarColor,
-                                    color: '#fff',
-                                }}
-                            >
-                                {voiceSummary.initials}
-                            </Avatar>
-                        )}
-                        label={voiceSummary.displayName}
-                    />
                 </Stack>
+
+                {/* Cấu hình giọng đọc TTS (audio từng beat đọc theo voice này) —
+                    cùng block với section Audio của mode khác để không bị ẩn. */}
+                <Box sx={subPanelSx(SECTION_THEMES.audio)}>
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                        sx={{ mb: 1 }}
+                    >
+                        <Typography variant="caption" fontWeight={700} color="text.secondary">
+                            Cấu hình giọng đọc TTS
+                        </Typography>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<TuneIcon />}
+                            onClick={onOpenAudioSettings}
+                        >
+                            Cài đặt
+                        </Button>
+                    </Stack>
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                        <Chip
+                            size="small"
+                            label={state.agentTtsAuto ? 'TTS bật' : 'TTS tắt'}
+                            color={state.agentTtsAuto ? 'success' : 'default'}
+                            variant="outlined"
+                        />
+                        {state.agentTtsAuto ? (
+                            <Chip size="small" label={state.chainLabel} variant="outlined" />
+                        ) : null}
+                        <Chip
+                            size="small"
+                            avatar={(
+                                <Avatar
+                                    sx={{
+                                        width: 20,
+                                        height: 20,
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        bgcolor: voiceSummary.avatarColor,
+                                        color: '#fff',
+                                    }}
+                                >
+                                    {voiceSummary.initials}
+                                </Avatar>
+                            )}
+                            label={voiceSummary.displayName}
+                            variant="outlined"
+                        />
+                        <Chip
+                            size="small"
+                            label={`x${Number(state.omnivoiceSpeed || 1).toFixed(2)}`}
+                            variant="outlined"
+                        />
+                    </Stack>
+                </Box>
 
                 <TextField
                     multiline
