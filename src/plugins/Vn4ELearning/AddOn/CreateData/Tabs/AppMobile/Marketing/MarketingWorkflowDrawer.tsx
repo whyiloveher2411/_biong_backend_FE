@@ -22,13 +22,18 @@ import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import LandscapeOutlinedIcon from '@mui/icons-material/LandscapeOutlined';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import {
+    importManualBeatPromptFile,
+} from './AgentVideo/agentVideoApi';
+import {
     copyWorkflowPromptToClipboard,
     fetchWorkflowOutputs,
     getWorkflowContrastTextColor,
+    MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     saveWorkflowOutput,
     splitWorkflowStepTitle,
     WORKFLOW_AUDIO_SCRIPT_KEY,
@@ -40,7 +45,10 @@ import {
     parseWorkflowAssetRegister,
     resolveWorkflowResourceKind,
 } from 'helpers/marketingWorkflowResourceImport';
-import { importShortVideoResources } from 'helpers/marketingShortVideoResourceApi';
+import {
+    importShortVideoResources,
+    parseShortVideoResourceApiMessage,
+} from 'helpers/marketingShortVideoResourceApi';
 
 type Props = {
     open: boolean;
@@ -78,6 +86,14 @@ export default function MarketingWorkflowDrawer({
     const [updateValue, setUpdateValue] = React.useState('');
     const [savingUpdate, setSavingUpdate] = React.useState(false);
     const [importingAsset, setImportingAsset] = React.useState(false);
+    const [importingBeatPrompts, setImportingBeatPrompts] = React.useState(false);
+    const [beatPromptErrors, setBeatPromptErrors] = React.useState<string[]>([]);
+
+    /** buttonUpdate = imagePromptBeatUpdate → update image prompt cho các beat. */
+    const isBeatPromptUpdate = Boolean(
+        updatingItem
+        && String(updatingItem.buttonUpdate || '').trim().toLowerCase() === 'imagepromptbeatupdate',
+    );
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const outputsLoadedRef = React.useRef<number>(-1);
 
@@ -166,6 +182,7 @@ export default function MarketingWorkflowDrawer({
 
     const openUpdateDialog = React.useCallback((itemKey: string, label: string, fieldKey: string, buttonUpdate = '') => {
         setUpdateValue('');
+        setBeatPromptErrors([]);
         setUpdatingItem({ itemKey, label, fieldKey, buttonUpdate });
     }, []);
 
@@ -271,6 +288,62 @@ export default function MarketingWorkflowDrawer({
             'success',
         );
     }, [updatingItem, importingAsset, shortVideoId, updateValue, workflowOutputs, api]);
+
+    /**
+     * buttonUpdate: imagePromptBeatUpdate — parse output "BEAT IMAGE PROMPTS"
+     * (BEAT BN + SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT…) và import
+     * vào đúng vị trí beat của clip (all-or-nothing, validate phía BE).
+     * Ưu tiên "Giá trị mới" (textarea), trống thì fallback giá trị đã lưu.
+     */
+    const handleImportBeatPrompts = React.useCallback(async () => {
+        if (!updatingItem || !isBeatPromptUpdate || importingBeatPrompts) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            api.showMessage('Thiếu short_video_id — không update được image prompt', 'warning');
+            return;
+        }
+        const savedValue = workflowOutputs[updatingItem.fieldKey] || '';
+        const source = updateValue.trim() ? updateValue : savedValue;
+        if (!source.trim()) {
+            api.showMessage('Chưa có dữ liệu prompt để update', 'warning');
+            return;
+        }
+
+        setImportingBeatPrompts(true);
+        setBeatPromptErrors([]);
+        try {
+            const result = await importManualBeatPromptFile(sid, source);
+            if (result?.success === false) {
+                const errors = Array.isArray(result?.errors) ? result.errors : [];
+                if (errors.length) {
+                    setBeatPromptErrors(errors);
+                    api.showMessage(
+                        `Dữ liệu có ${errors.length} lỗi — CHƯA update beat nào (xem chi tiết bên dưới)`,
+                        'error',
+                    );
+                } else {
+                    api.showMessage(
+                        parseShortVideoResourceApiMessage(result, 'Không update được image prompt'),
+                        'error',
+                    );
+                }
+                return;
+            }
+            const updatedCount = Array.isArray(result?.updated_orders) ? result.updated_orders.length : 0;
+            api.showMessage(`Đã update image prompt cho ${updatedCount} beat đúng vị trí`, 'success');
+            // Workspace Agent Video reload manual beat marks — "Mở Meta.ai" đọc prompt mới nhất.
+            document.dispatchEvent(new CustomEvent(MANUAL_BEAT_PROMPTS_SAVED_EVENT, {
+                detail: { shortVideoId: sid },
+            }));
+            setUpdatingItem(null);
+        } catch (err) {
+            api.showMessage(err instanceof Error ? err.message : 'Không update được image prompt', 'error');
+        } finally {
+            setImportingBeatPrompts(false);
+        }
+    }, [updatingItem, isBeatPromptUpdate, importingBeatPrompts, shortVideoId, updateValue, workflowOutputs, api]);
 
     const accent = workflow?.background || '';
     const accentText = accent ? getWorkflowContrastTextColor(accent) : '#ffffff';
@@ -702,10 +775,70 @@ export default function MarketingWorkflowDrawer({
                                             ? 'Update resource nhân vật'
                                             : 'Update resource không gian'}
                                     </Button>
-                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
+                                     <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
                                         Import nhanh asset từ dữ liệu trên vào resource của short video
                                         (trùng mã định danh → cập nhật, không xóa resource cũ).
                                     </Typography>
+                                </Box>
+                            ) : null}
+
+                            {isBeatPromptUpdate && Boolean((updateValue.trim() || oldValue).trim()) ? (
+                                <Box
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 1,
+                                        p: 1,
+                                        display: 'flex',
+                                        gap: 1,
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="warning"
+                                        startIcon={
+                                            importingBeatPrompts
+                                                ? <CircularProgress size={12} color="inherit" />
+                                                : <ImageOutlinedIcon fontSize="small" />
+                                        }
+                                        onClick={handleImportBeatPrompts}
+                                        disabled={importingBeatPrompts || savingUpdate}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Update image prompt cho beat
+                                    </Button>
+                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
+                                        Import prompt vào đúng vị trí beat của clip (beat N trong file → beat N của clip,
+                                        all-or-nothing — có lỗi thì không beat nào được update).
+                                    </Typography>
+                                    {beatPromptErrors.length > 0 && (
+                                        <Box
+                                            sx={{
+                                                width: '100%',
+                                                maxHeight: 180,
+                                                overflowY: 'auto',
+                                                borderRadius: 1,
+                                                border: '1px solid',
+                                                borderColor: 'error.light',
+                                                bgcolor: 'error.lighter',
+                                                p: 1,
+                                            }}
+                                        >
+                                            {beatPromptErrors.map((errorItem, errorIndex) => (
+                                                <Typography
+                                                    key={errorIndex}
+                                                    variant="caption"
+                                                    color="error.dark"
+                                                    sx={{ display: 'block', lineHeight: 1.5 }}
+                                                >
+                                                    • {errorItem}
+                                                </Typography>
+                                            ))}
+                                        </Box>
+                                    )}
                                 </Box>
                             ) : null}
                         </Stack>

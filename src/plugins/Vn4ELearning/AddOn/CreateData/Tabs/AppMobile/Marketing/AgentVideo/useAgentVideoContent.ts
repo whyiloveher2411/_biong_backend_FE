@@ -11,6 +11,9 @@ import {
     AGENT_AUDIO_SCRIPT_SAVED_EVENT,
 } from 'helpers/marketingAgentAudioScriptGeminiWorkflow';
 import {
+    MANUAL_BEAT_PROMPTS_SAVED_EVENT,
+} from 'helpers/marketingWorkflowPrompts';
+import {
     IMPORT_HTML_BEAT_HTML_SAVED_EVENT,
     type DuckAiWorkspaceBeat,
     fetchImportHtmlBeatHtmlPrompt,
@@ -6998,6 +7001,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             // bỏ qua — user có thể bấm lại
         }
     }, [loadRow, shortVideoId]);
+
+    // Workflow drawer import xong image prompt cho beat → reload marks để nút
+    // "Mở Meta.ai" đọc prompt mới nhất (thay vì giữ dữ liệu cũ trong state).
+    React.useEffect(() => {
+        if (!open || !isVideo2sMode) {
+            return;
+        }
+        const onManualBeatPromptsSaved = (event: Event) => {
+            const custom = event as CustomEvent<{ shortVideoId?: number }>;
+            const savedShortVideoId = Number(custom.detail?.shortVideoId || 0);
+            if (savedShortVideoId > 0 && savedShortVideoId === shortVideoId) {
+                void reloadManualBeatMarks();
+            }
+        };
+        document.addEventListener(MANUAL_BEAT_PROMPTS_SAVED_EVENT, onManualBeatPromptsSaved);
+        return () => {
+            document.removeEventListener(MANUAL_BEAT_PROMPTS_SAVED_EVENT, onManualBeatPromptsSaved);
+        };
+    }, [open, isVideo2sMode, shortVideoId, reloadManualBeatMarks]);
 
     /** Copy prompt chia beat AI (prompt-chia-beat.md + script + whisper timing) vào clipboard. */
     const handleCopyBeatDivisionPrompt = React.useCallback(async () => {

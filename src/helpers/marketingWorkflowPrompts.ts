@@ -34,6 +34,9 @@ export type WorkflowOutputsMap = Record<string, Record<string, string>>;
  */
 export const WORKFLOW_AUDIO_SCRIPT_KEY = 'audio-script';
 
+/** Workflow step import xong image prompt cho beat → workspace reload manual beat marks. */
+export const MANUAL_BEAT_PROMPTS_SAVED_EVENT = 'vn4-manual-beat-prompts-saved';
+
 export type WorkflowDefinition = {
     key: string;
     title: string;
