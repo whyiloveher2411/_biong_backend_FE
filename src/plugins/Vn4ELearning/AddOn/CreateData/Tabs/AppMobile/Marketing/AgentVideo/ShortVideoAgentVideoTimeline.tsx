@@ -9,6 +9,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
@@ -33,6 +34,7 @@ import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisi
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
+import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
 import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
 
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -413,6 +415,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
     const [bgmManualOpen, setBgmManualOpen] = React.useState(false);
+    const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -1107,6 +1110,16 @@ export default function ShortVideoAgentVideoTimeline({
                                 </span>
                             </Tooltip>
                         ) : null}
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<CollectionsOutlinedIcon />}
+                            disabled={shortVideoId <= 0}
+                            onClick={() => { setResourceDrawerOpen(true); }}
+                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                        >
+                            Quản lý resource
+                        </Button>
                         {showPipelineRunControls ? (
                             <>
                                 <LoadingButton
@@ -1487,6 +1500,12 @@ export default function ShortVideoAgentVideoTimeline({
                     state={agentState}
                 />
             ) : null}
+            <ShortVideoResourceManageDrawer
+                open={resourceDrawerOpen}
+                onClose={() => setResourceDrawerOpen(false)}
+                shortVideoId={shortVideoId}
+                shortVideoTitle={clipLabel}
+            />
         </Box>
     );
 }
