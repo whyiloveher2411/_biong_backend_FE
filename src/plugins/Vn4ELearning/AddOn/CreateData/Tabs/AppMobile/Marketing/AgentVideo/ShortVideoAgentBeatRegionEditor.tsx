@@ -55,6 +55,7 @@ import ShortVideoAgentImageAnimationControls from './ShortVideoAgentImageAnimati
 import ShortVideoAgentBeatAddPanel from './ShortVideoAgentBeatAddPanel';
 import WhiteboardBeatImageReplaceControl from './WhiteboardBeatImageReplaceControl';
 import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
+import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl';
 import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
 import WhiteboardRegionTimeline, {
@@ -6045,6 +6046,14 @@ export default function ShortVideoAgentBeatRegionEditor({
                         );
                     })() : null}
 
+                    {!selectedEffect && state.isVideo2sMode && !selectedOverlay && !selectedRegion ? (
+                        <WhiteboardBeatImagePromptControl
+                            key={beatId}
+                            state={state}
+                            beatId={beatId}
+                            headline="Prompt image (beat đang chọn)"
+                        />
+                    ) : null}
                     {!selectedEffect && bgSampleMode ? (
                         <Typography variant="caption" color="secondary.main" display="block" sx={{ mb: 0.5 }}>
                             Đang chọn <strong>background</strong> cho vùng đang chọn: <strong>click 1 phát</strong>
@@ -6056,7 +6065,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         <Typography variant="caption" color="text.secondary">
                             Chưa có vùng nào — vẽ trên ảnh bên trái.
                         </Typography>
-                    ) : !selectedEffect && !selectedRegion && !selectedOverlay ? (
+                    ) : !selectedEffect && !selectedRegion && !selectedOverlay && !state.isVideo2sMode ? (
                         <Typography variant="caption" color="text.secondary">
                             Chưa chọn vùng, ảnh thêm hoặc hiệu ứng — click trên ảnh / timeline bên dưới.
                         </Typography>

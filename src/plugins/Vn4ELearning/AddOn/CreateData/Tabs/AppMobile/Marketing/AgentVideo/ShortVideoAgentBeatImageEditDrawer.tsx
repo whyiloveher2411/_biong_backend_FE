@@ -18,6 +18,12 @@ import DrawerCustom from 'components/molecules/DrawerCustom';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import { formatDurationSec } from './agentVideoHfPromptDuration';
+import {
+    joinPlainImagePromptSections,
+    plainImagePromptSectionColor,
+    plainImagePromptSectionLabel,
+    splitPlainImagePromptSections,
+} from './agentVideoManualBeats';
 import { validateBeatImagePrompt } from './agentVideoBeatMap';
 import ShortVideoAgentBeatImagePreview from './ShortVideoAgentBeatImagePreview';
 
@@ -44,6 +50,13 @@ type Props = {
     onRegenerateZImage: (payload: { imagePrompt: string }) => Promise<string | null>;
     onRegenerateMetaAi?: (payload: { imagePrompt: string }) => Promise<string | null>;
     onUploadImageFile: (file: File) => Promise<string | null>;
+    /** Video 2s: prompt ảnh plain text hiện tại của beat (từ marks) — bật chế độ */
+    /** split-section thay vì JSON image_prompt. */
+    video2sPlainImagePrompt?: string | null;
+    /** Video 2s: lưu plain prompt (sections ghép lại) về marks beat này. */
+    onSaveVideo2sPlainPrompt?: (prompt: string) => Promise<boolean>;
+    /** Video 2s: đang lưu plain prompt (save-mark-prompt). */
+    savingVideo2sPrompt?: boolean;
 };
 
 export default function ShortVideoAgentBeatImageEditDrawer({
@@ -64,6 +77,9 @@ export default function ShortVideoAgentBeatImageEditDrawer({
     onRegenerateZImage,
     onRegenerateMetaAi,
     onUploadImageFile,
+    video2sPlainImagePrompt = '',
+    onSaveVideo2sPlainPrompt,
+    savingVideo2sPrompt = false,
 }: Props) {
     const { showMessage } = useFloatingMessages();
     const [imagePrompt, setImagePrompt] = React.useState(initialImagePrompt);
@@ -76,9 +92,22 @@ export default function ShortVideoAgentBeatImageEditDrawer({
     const syncedOpenKeyRef = React.useRef('');
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
+    // Video 2s — chế độ split-section: prompt plain text tách thành từng section,
+    // mỗi section 1 textarea. Danh sách section derive TỪ prompt nên field mới
+    // (thêm sau trong format Meta.ai) tự xuất hiện không cần sửa UI.
+    const plainMode = Boolean(onSaveVideo2sPlainPrompt);
+    const [promptSections, setPromptSections] = React.useState(() =>
+        splitPlainImagePromptSections(String(video2sPlainImagePrompt ?? '')));
+    const initialPlainPrompt = String(video2sPlainImagePrompt ?? '');
+    const plainJoined = plainMode ? joinPlainImagePromptSections(promptSections) : '';
+    const plainDirty = plainJoined.trim() !== initialPlainPrompt.trim();
+    // Prompt SAVED gần nhất — so để phân biệt "prompt đổi từ DB" vs "user đang gõ chưa lưu".
+    const savedPlainRef = React.useRef(initialPlainPrompt);
+
     React.useEffect(() => {
         if (!open) {
             syncedOpenKeyRef.current = '';
+            savedPlainRef.current = '';
             return;
         }
         const openKey = `${beatId}::open`;
@@ -93,31 +122,79 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         setPreviewUrl(initialImageUrl);
         setAiLoading(false);
         setUploadingImage(false);
+        setPromptSections(splitPlainImagePromptSections(initialPlainPrompt));
+        savedPlainRef.current = initialPlainPrompt;
     }, [
         beatId,
         initialBackground,
         initialCreativePrompt,
         initialImagePrompt,
         initialImageUrl,
+        initialPlainPrompt,
         initialVisualDescription,
         open,
     ]);
+
+    // Prompt đổi từ DB (marks load chậm lúc refresh, import mới, beat khác) → tự
+    // sync; user đang gõ (joined khác CẢ bản saved cũ lẫn bản mới) thì không đè.
+    React.useEffect(() => {
+        if (!open || !plainMode) {
+            return;
+        }
+        const previousSaved = savedPlainRef.current;
+        savedPlainRef.current = initialPlainPrompt;
+        setPromptSections((prev) => {
+            const joined = joinPlainImagePromptSections(prev).trim();
+            if (
+                joined !== ''
+                && joined !== previousSaved.trim()
+                && joined !== initialPlainPrompt.trim()
+            ) {
+                return prev;
+            }
+            return splitPlainImagePromptSections(initialPlainPrompt);
+        });
+    }, [
+        beatId,
+        initialPlainPrompt,
+        open,
+        plainMode,
+    ]);
+
+    const handlePromptSectionChange = (index: number, value: string) => {
+        setPromptSections((prev) => prev
+            .map((item, itemIndex) => (itemIndex === index ? { ...item, value } : item)));
+    };
 
     const titleLabel = beatIndex != null && beatIndex > 0
         ? `Sửa ảnh beat · beat ${beatIndex}`
         : `Sửa ảnh beat · ${beatId || 'beat'}`;
 
-    const dirty = imagePrompt !== initialImagePrompt
-        || creativePrompt !== initialCreativePrompt
-        || visualDescription !== initialVisualDescription
-        || background !== initialBackground;
-    const busy = saving || regenerating || aiLoading || uploadingImage;
-    const promptValid = Boolean(validateBeatImagePrompt(imagePrompt.trim()));
+    const dirty = plainMode
+        ? plainDirty
+        : imagePrompt !== initialImagePrompt
+            || creativePrompt !== initialCreativePrompt
+            || visualDescription !== initialVisualDescription
+            || background !== initialBackground;
+    const busy = saving || regenerating || aiLoading || uploadingImage || savingVideo2sPrompt;
+    const promptValid = plainMode
+        ? plainJoined.trim() !== ''
+        : Boolean(validateBeatImagePrompt(imagePrompt.trim()));
     const canSave = dirty && !busy && promptValid;
     const canRegenerate = promptValid && !busy;
 
     const handleSave = async () => {
         if (!canSave) {
+            return;
+        }
+        if (plainMode) {
+            if (!onSaveVideo2sPlainPrompt) {
+                return;
+            }
+            const saved = await onSaveVideo2sPlainPrompt(plainJoined);
+            if (saved) {
+                onClose();
+            }
             return;
         }
         const saved = await onSave({
@@ -131,10 +208,20 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         }
     };
 
+    const resolveRegeneratePrompt = (): { prompt: string; valid: boolean } => {
+        if (plainMode) {
+            return { prompt: plainJoined.trim(), valid: plainJoined.trim() !== '' };
+        }
+        const trimmed = imagePrompt.trim();
+        return Boolean(validateBeatImagePrompt(trimmed))
+            ? { prompt: trimmed, valid: true }
+            : { prompt: '', valid: false };
+    };
+
     const handleRegenerate = async () => {
-        const prompt = imagePrompt.trim();
-        if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)', 'warning');
+        const { prompt, valid } = resolveRegeneratePrompt();
+        if (!valid || !prompt) {
+            showMessage('Prompt không hợp lệ', 'warning');
             return;
         }
         setAiLoading(true);
@@ -167,9 +254,9 @@ export default function ShortVideoAgentBeatImageEditDrawer({
         if (!onRegenerateMetaAi) {
             return;
         }
-        const prompt = imagePrompt.trim();
-        if (!validateBeatImagePrompt(prompt)) {
-            showMessage('image_prompt phải là JSON đủ 6 field (subject, action, scene, text_overlay, composition, must_avoid)', 'warning');
+        const { prompt, valid } = resolveRegeneratePrompt();
+        if (!valid || !prompt) {
+            showMessage('Prompt không hợp lệ', 'warning');
             return;
         }
         setAiLoading(true);
@@ -182,6 +269,49 @@ export default function ShortVideoAgentBeatImageEditDrawer({
             setAiLoading(false);
         }
     };
+
+    const regenerateAdornment = (
+        <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
+            <Stack direction="row" spacing={0.25}>
+                <Tooltip title="Sinh lại ảnh qua Duck.ai">
+                    <span>
+                        <IconButton
+                            color="primary"
+                            edge="end"
+                            disabled={!canRegenerate}
+                            onClick={() => { void handleRegenerate(); }}
+                            aria-label="Sinh lại ảnh Duck.ai"
+                        >
+                            {(aiLoading || regenerating) ? (
+                                <CircularProgress size={18} />
+                            ) : (
+                                <AutoAwesomeIcon fontSize="small" />
+                            )}
+                        </IconButton>
+                    </span>
+                </Tooltip>
+                {onRegenerateMetaAi ? (
+                    <Tooltip title="Sinh lại ảnh qua Meta.ai">
+                        <span>
+                            <IconButton
+                                color="secondary"
+                                edge="end"
+                                disabled={!canRegenerate}
+                                onClick={() => { void handleRegenerateMetaAi(); }}
+                                aria-label="Sinh lại ảnh Meta.ai"
+                            >
+                                {(aiLoading || regenerating) ? (
+                                    <CircularProgress size={18} />
+                                ) : (
+                                    <AutoAwesomeIcon fontSize="small" />
+                                )}
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                ) : null}
+            </Stack>
+        </InputAdornment>
+    );
 
     return (
         <DrawerCustom
@@ -212,7 +342,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                 <LoadingButton
                     variant="contained"
                     color="primary"
-                    loading={saving}
+                    loading={plainMode ? savingVideo2sPrompt : saving}
                     disabled={!canSave}
                     startIcon={<SaveIcon />}
                     onClick={() => { void handleSave(); }}
@@ -256,29 +386,47 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                     disabled={busy}
                 />
 
-                <TextField
-                    label="Image prompt (Duck.ai / Meta.ai)"
-                    value={imagePrompt}
-                    onChange={(event) => setImagePrompt(event.target.value)}
-                    fullWidth
-                    size="small"
-                    multiline
-                    minRows={3}
-                    maxRows={6}
-                    helperText="English ~30–120 từ; line art nét mỏng; chữ Việt phải sát nghĩa phrase_anchor (cấm 'Nguyên liệu 1/2/3'); icon outline"
-                    disabled={busy}
-                    InputProps={{
-                        endAdornment: (
-                            <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
-                                <Stack direction="row" spacing={0.25}>
-                                    <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Duck.ai' : 'Cần image_prompt hợp lệ'}>
+                {!plainMode ? (
+                    <TextField
+                        label="Image prompt (Duck.ai / Meta.ai)"
+                        value={imagePrompt}
+                        onChange={(event) => setImagePrompt(event.target.value)}
+                        fullWidth
+                        size="small"
+                        multiline
+                        minRows={3}
+                        maxRows={6}
+                        helperText="English ~30–120 từ; line art nét mỏng; chữ Việt phải sát nghĩa phrase_anchor (cấm 'Nguyên liệu 1/2/3'); icon outline"
+                        disabled={busy}
+                        InputProps={{ endAdornment: regenerateAdornment }}
+                    />
+                ) : (
+                    <Box>
+                        <Stack
+                            direction="row"
+                            alignItems="center"
+                            justifyContent="space-between"
+                            spacing={1}
+                            sx={{ mb: 0.75 }}
+                        >
+                            <Stack spacing={0}>
+                                <Typography variant="subtitle2" sx={{ lineHeight: 1.2 }}>
+                                    Prompt image
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Mỗi mục 1 ô riêng — cắt theo “TÊN MỤC:” trong prompt; mục mới xuất hiện trong prompt tự thêm ô (không cần sửa UI)
+                                </Typography>
+                            </Stack>
+                            <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
+                                {onRegenerateMetaAi ? (
+                                    <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Meta.ai' : 'Cần có nội dung prompt'}>
                                         <span>
                                             <IconButton
-                                                color="primary"
-                                                edge="end"
+                                                color="secondary"
+                                                size="small"
                                                 disabled={!canRegenerate}
-                                                onClick={() => { void handleRegenerate(); }}
-                                                aria-label="Sinh lại ảnh Duck.ai"
+                                                onClick={() => { void handleRegenerateMetaAi(); }}
+                                                aria-label="Sinh lại ảnh Meta.ai"
                                             >
                                                 {(aiLoading || regenerating) ? (
                                                     <CircularProgress size={18} />
@@ -288,30 +436,38 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                                             </IconButton>
                                         </span>
                                     </Tooltip>
-                                    {onRegenerateMetaAi ? (
-                                        <Tooltip title={canRegenerate ? 'Sinh lại ảnh qua Meta.ai' : 'Cần image_prompt hợp lệ'}>
-                                            <span>
-                                                <IconButton
-                                                    color="secondary"
-                                                    edge="end"
-                                                    disabled={!canRegenerate}
-                                                    onClick={() => { void handleRegenerateMetaAi(); }}
-                                                    aria-label="Sinh lại ảnh Meta.ai"
-                                                >
-                                                    {(aiLoading || regenerating) ? (
-                                                        <CircularProgress size={18} />
-                                                    ) : (
-                                                        <AutoAwesomeIcon fontSize="small" />
-                                                    )}
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
-                                    ) : null}
-                                </Stack>
-                            </InputAdornment>
-                        ),
-                    }}
-                />
+                                ) : null}
+                                {regenerating ? <CircularProgress size={18} /> : null}
+                            </Stack>
+                        </Stack>
+                        {promptSections.length === 0 ? (
+                            <Typography variant="caption" color="warning.main" display="block">
+                                Beat chưa có prompt ảnh — bấm “Sinh prompt ảnh từ Meta.ai” hoặc nhập các mục bên dưới.
+                            </Typography>
+                        ) : null}
+                        <Stack spacing={1.25} sx={{ mt: 0.75 }}>
+                        {promptSections.map((section, index) => (
+                            <TextField
+                                key={`${section.key}#${index}`}
+                                label={plainImagePromptSectionLabel(section.key)}
+                                value={section.value}
+                                onChange={(event) => handlePromptSectionChange(index, event.target.value)}
+                                fullWidth
+                                size="small"
+                                multiline
+                                minRows={3}
+                                maxRows={16}
+                                disabled={busy}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        bgcolor: plainImagePromptSectionColor(index),
+                                    },
+                                }}
+                            />
+                        ))}
+                        </Stack>
+                    </Box>
+                )}
 
                 <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
                     <LoadingButton

@@ -25,6 +25,7 @@ import {
     type AgentPreviewSource,
 } from './agentVideoPreviewSource';
 import { beatImagePromptToText, getBeatTimelineSegments, resolveActiveBeatSection } from './agentVideoBeatMap';
+import { resolveVideo2sPlainImagePrompt } from './agentVideoManualBeats';
 
 type Props = {
     open: boolean;
@@ -1095,6 +1096,17 @@ export default function ShortVideoAgentVideoWorkspace({
                 onRegenerateZImage={handleRegenerateEditBeatImage}
                 onRegenerateMetaAi={handleRegenerateEditBeatImageMetaAi}
                 onUploadImageFile={handleUploadBeatImageFile}
+                video2sPlainImagePrompt={
+                    state.isVideo2sMode
+                        ? resolveVideo2sPlainImagePrompt(state.manualBeatMarks, editBeatImageId)
+                        : undefined
+                }
+                onSaveVideo2sPlainPrompt={
+                    state.isVideo2sMode && editBeatImageId
+                        ? (prompt) => state.handleSaveVideo2sBeatPrompt(editBeatImageId, prompt)
+                        : undefined
+                }
+                savingVideo2sPrompt={state.savingVideo2sBeatPrompt}
             />
             <ShortVideoAgentBeatInfoDrawer
                 open={Boolean(infoBeatId && infoBeatSection)}

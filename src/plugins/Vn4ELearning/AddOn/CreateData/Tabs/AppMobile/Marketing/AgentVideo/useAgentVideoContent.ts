@@ -182,6 +182,7 @@ import {
     generateManualBeatAudio,
     mergeManualBeatAudio,
     uploadManualBeatAudio,
+    saveManualBeatMarkPrompt,
 } from './agentVideoApi';
 import {
     bgmPreviewUrl,
@@ -7148,6 +7149,49 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     }, [importingVideo2sPromptFile, loadRow, shortVideoId, showMessage]);
 
+    /** Đang lưu prompt ảnh 1 beat (video 2s) — bấm Save trong drawer "Sửa ảnh beat". */
+    const [savingVideo2sBeatPrompt, setSavingVideo2sBeatPrompt] = React.useState(false);
+    const handleSaveVideo2sBeatPrompt = React.useCallback(async (
+        beatId: string,
+        imagePrompt: string,
+    ): Promise<boolean> => {
+        const prompt = String(imagePrompt || '').trim();
+        if (!shortVideoId || !beatId || savingVideo2sBeatPrompt) {
+            return false;
+        }
+        if (!prompt) {
+            showMessage('Prompt ảnh trống — điền ít nhất IMAGE PROMPT', 'warning');
+            return false;
+        }
+        // Timeline beat id là `beat_N` — marks dùng `mark_N` (hoặc `merged_*`):
+        // map theo thứ tự để set đúng mark, không lưu nhầm beat khác.
+        const beatOrderMatch = /^beat_(\d+)$/.exec(beatId.trim());
+        const markId = beatOrderMatch
+            ? (manualBeatMarksRef.current.find((mark) => Number(mark.order || 0) === Number(beatOrderMatch[1]))?.id
+                ?? `mark_${beatOrderMatch[1]}`)
+            : beatId;
+        setSavingVideo2sBeatPrompt(true);
+        try {
+            const res = await saveManualBeatMarkPrompt(shortVideoId, markId, prompt);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không lưu được prompt ảnh beat', 'error');
+                return false;
+            }
+            setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+            if (res.full_auto_pipeline) {
+                setFullAutoPipeline(res.full_auto_pipeline);
+            }
+            loadRow();
+            showMessage(parseApiMessage(res?.message) || 'Đã lưu prompt ảnh beat', 'success');
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingVideo2sBeatPrompt(false);
+        }
+    }, [savingVideo2sBeatPrompt, loadRow, shortVideoId, showMessage]);
+
     /**
      * Xác nhận timeline thủ công beat n (video 2s): start/end tính theo whisper timing
      * của từ user chọn (click trong overlay "điều chỉnh timeline"). Beat n thành chuẩn
@@ -8641,6 +8685,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleImportVideo2sBeatList,
         importingVideo2sPromptFile,
         handleImportVideo2sPromptFile,
+        savingVideo2sBeatPrompt,
+        handleSaveVideo2sBeatPrompt,
         mergingManualBeat,
         handleMergeManualBeats,
         reloadManualBeatMarks,

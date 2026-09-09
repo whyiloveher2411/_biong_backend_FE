@@ -560,6 +560,86 @@ export function wrapVideo2sPlainImagePrompt(plain: string, content: string): Rec
     };
 }
 
+/**
+ * Tách prompt ảnh plain text (video 2s) thành danh sách section — mỗi
+ * `SECTION NAME:` (IN HOA, dòng riêng) mở 1 mục kèm nội dung tới section kế.
+ * KHÔNG dùng whitelist cứng: mọi section tìm thấy trong text đều được render
+ * (sau này sinh thêm field mới → UI tự thêm ô, không phải sửa code).
+ * Dòng text trước section đầu tiên gom vào 1 mục ẩn danh (key '').
+ */
+export type PlainImagePromptSection = { key: string; value: string };
+
+// TÊN MỤC: chữ IN HOA + số + space/underscore/kéo dấu ngoặc, slash, gạch —
+// không giới hạn danh sách cứng (CHARACTER ID(S), tương lai FIELD MỚI (X)…).
+const PLAIN_PROMPT_SECTION_RE = /^\s*(?:#{1,6}\s*)?[-*•]*\s*([A-Z][A-Z0-9_ ()/\\-]{1,60})\s*:\s*$/;
+
+export function splitPlainImagePromptSections(plain: string): PlainImagePromptSection[] {
+    const normalized = String(plain ?? '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/\\n/g, '\n');
+    if (!normalized.trim()) {
+        return [];
+    }
+    const sections: PlainImagePromptSection[] = [];
+    let current: PlainImagePromptSection | null = normalized.match(PLAIN_PROMPT_SECTION_RE)
+        ? null
+        : { key: '', value: '' };
+    for (const rawLine of normalized.split('\n')) {
+        const match = PLAIN_PROMPT_SECTION_RE.exec(rawLine);
+        if (match) {
+            if (current) {
+                sections.push(current);
+            }
+            current = { key: match[1].trim(), value: '' };
+            continue;
+        }
+        if (current) {
+            current.value = (current.value ? `${current.value}\n` : '') + rawLine.trim();
+        }
+    }
+    if (current) {
+        sections.push(current);
+    }
+    // Chuẩn hoá value: bỏ ≥3 dòng trống liên tiếp + trim.
+    for (const section of sections) {
+        section.value = section.value.trim().replace(/\n{3,}/g, '\n\n');
+    }
+    return sections.filter((section) => section.key !== '' || section.value !== '');
+}
+
+/** Ghép danh sách section ngược lại thành prompt plain text — section có tên được keep kể cả value rỗng. */
+export function joinPlainImagePromptSections(sections: PlainImagePromptSection[]): string {
+    return sections
+        .map((section, index) => ({ section, block: section.key
+            ? `${section.key}:\n${section.value.trim()}`
+            : section.value.trim() }))
+        .filter((item) => item.section.key !== '' || item.block.replace(/\s+/g, '') !== '')
+        .map((item) => item.block)
+        .join('\n\n')
+        .trim();
+}
+
+const PLAIN_PROMPT_SECTION_COLORS = [
+    'rgba(13, 71, 161, 0.08)',
+    'rgba(27, 94, 32, 0.10)',
+    'rgba(191, 54, 12, 0.10)',
+    'rgba(74, 20, 140, 0.08)',
+    'rgba(0, 96, 100, 0.08)',
+    'rgba(136, 14, 79, 0.08)',
+];
+
+/** Màu nền phân biệt từng field prompt (cycle theo index — không set cứng số field). */
+export function plainImagePromptSectionColor(index: number): string {
+    const safe = ((index % PLAIN_PROMPT_SECTION_COLORS.length) + PLAIN_PROMPT_SECTION_COLORS.length)
+        % PLAIN_PROMPT_SECTION_COLORS.length;
+    return PLAIN_PROMPT_SECTION_COLORS[safe];
+}
+
+/** Nhãn hiển thị của field = TÊN MỤC nguyên bản trong prompt (không dịch — field mới tự dùng tên mới). */
+export function plainImagePromptSectionLabel(key: string): string {
+    return key || 'Prompt';
+}
+
 /** Mirror backend align_timings — nối liền gap nhỏ giữa các beat thủ công. */
 export function alignManualBeatMapTimings(beatMap: BeatMap): BeatMap {
     const sections = [...beatMap.sections].sort((a, b) => a.startSec - b.startSec);
