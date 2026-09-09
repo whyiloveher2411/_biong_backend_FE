@@ -24,7 +24,7 @@ export type ParsedWorkflowResource = {
 };
 
 type RegisterKindConfig = {
-    /** Dòng mở đầu 1 asset block trong register. */
+    /** Dòng mở đầu 1 asset block trong register — hỗ trợ markdown heading/bullet. */
     marker: RegExp;
     keyLabel: RegExp;
     titleLabel: RegExp;
@@ -34,14 +34,15 @@ type RegisterKindConfig = {
 
 const REGISTER_KIND_CONFIG: Record<WorkflowResourceKind, RegisterKindConfig> = {
     character: {
-        marker: /^CHARACTER\s+ASSET\s*$/i,
+        // "# CHARACTER ASSET REGISTER" là TIÊU ĐỀ file — không mở block (exclude REGISTER).
+        marker: /^(?:#{1,6}\s*)?[-*\s]*CHARACTER\s+ASSET\b(?!\s*REGISTER)/i,
         keyLabel: /^CHARACTER\s+ID$/i,
         titleLabel: /^CHARACTER\s+NAME$/i,
         promptLabel: /^REFERENCE\s+IMAGE\s+PROMPT$/i,
         descriptionLabel: /^REFERENCE\s+IMAGE\s+PURPOSE$/i,
     },
     space: {
-        marker: /^SPACE\s+ASSET\s*$/i,
+        marker: /^(?:#{1,6}\s*)?[-*\s]*SPACE\s+ASSET\b(?!\s*REGISTER)/i,
         keyLabel: /^SPACE\s+ID$/i,
         titleLabel: /^SPACE\s+NAME$/i,
         promptLabel: /^REFERENCE\s+IMAGE\s+PROMPT$/i,
