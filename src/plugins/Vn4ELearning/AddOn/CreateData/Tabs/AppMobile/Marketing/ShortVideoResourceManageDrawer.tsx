@@ -3,6 +3,7 @@ import {
     Alert,
     Box,
     Button,
+    Checkbox,
     Chip,
     CircularProgress,
     Dialog,
@@ -22,13 +23,17 @@ import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
     deleteShortVideoResource,
+    deleteShortVideoResources,
     listShortVideoResources,
+    openResourceMetaAi,
     parseShortVideoResourceApiMessage,
     saveShortVideoResource,
+    SHORT_VIDEO_RESOURCE_IMAGE_SAVED_EVENT,
     uploadShortVideoResourceImage,
     type ShortVideoResource,
 } from 'helpers/marketingShortVideoResourceApi';
@@ -45,6 +50,7 @@ type ResourceFormState = {
     resource_key: string;
     title: string;
     prompt: string;
+    description: string;
     image: { url: string; s3_key: string } | null;
 };
 
@@ -53,6 +59,7 @@ const EMPTY_FORM: ResourceFormState = {
     resource_key: '',
     title: '',
     prompt: '',
+    description: '',
     image: null,
 };
 
@@ -126,6 +133,17 @@ function ResourceForm({
                 multiline
                 minRows={4}
                 placeholder="Prompt dùng để tạo resource này"
+            />
+            <TextField
+                label="Mô tả"
+                value={form.description}
+                onChange={(e) => onFormChange({ description: e.target.value })}
+                disabled={saving || uploading}
+                size="small"
+                fullWidth
+                multiline
+                minRows={2}
+                placeholder="Resource này dùng để làm gì, xuất hiện ở đâu…"
             />
             <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
@@ -247,6 +265,16 @@ export default function ShortVideoResourceManageDrawer({
     const [uploading, setUploading] = React.useState(false);
     const [deleteTarget, setDeleteTarget] = React.useState<ShortVideoResource | null>(null);
     const [deleting, setDeleting] = React.useState(false);
+    const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
+    const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+    const [bulkDeleting, setBulkDeleting] = React.useState(false);
+    const [openingMetaAiId, setOpeningMetaAiId] = React.useState(0);
+
+    const toggleSelected = (resourceId: number) => {
+        setSelectedIds((prev) => (prev.includes(resourceId)
+            ? prev.filter((id) => id !== resourceId)
+            : [...prev, resourceId]));
+    };
 
     const reloadList = React.useCallback(() => {
         if (shortVideoId <= 0) {
@@ -281,9 +309,64 @@ export default function ShortVideoResourceManageDrawer({
             setMode('list');
             setForm(EMPTY_FORM);
             setDeleteTarget(null);
+            setSelectedIds([]);
+            setBulkDeleteOpen(false);
             reloadList();
         }
     }, [open, reloadList]);
+
+    // Extension lưu ảnh resource xong → tự reload danh sách.
+    React.useEffect(() => {
+        if (!open) {
+            return;
+        }
+        const onResourceImageSaved = (event: Event) => {
+            const detail = (event as CustomEvent<{ shortVideoId?: number }>).detail || {};
+            const savedShortVideoId = Number(detail.shortVideoId || 0);
+            if (savedShortVideoId && savedShortVideoId !== shortVideoId) {
+                return;
+            }
+            reloadList();
+        };
+        document.addEventListener(SHORT_VIDEO_RESOURCE_IMAGE_SAVED_EVENT, onResourceImageSaved);
+        return () => {
+            document.removeEventListener(SHORT_VIDEO_RESOURCE_IMAGE_SAVED_EVENT, onResourceImageSaved);
+        };
+    }, [open, shortVideoId, reloadList]);
+
+    const handleOpenMetaAi = (resource: ShortVideoResource) => {
+        if (shortVideoId <= 0 || !resource.prompt.trim()) {
+            return;
+        }
+        // Gửi CẢ DANH SÁCH resource có prompt — panel Meta.ai Prev/Next di chuyển
+        // trong 1 tab, update nhiều resource không cần mở lại từ CMS.
+        const fillable = resources.filter((item) => item.prompt.trim());
+        if (!fillable.length) {
+            showMessage('Chưa có resource nào có prompt', 'warning');
+            return;
+        }
+        setOpeningMetaAiId(resource.id);
+        openResourceMetaAi({
+            shortVideoId,
+            activeResourceId: resource.id,
+            resources: fillable.map((item) => ({
+                resourceId: item.id,
+                resourceKey: item.resource_key,
+                resourceTitle: item.title,
+                prompt: item.prompt,
+                imageUrl: item.image_url,
+            })),
+            autoSubmit: true,
+        })
+            .then(() => {
+                setOpeningMetaAiId(0);
+                showMessage(`Đã mở tab Meta.ai với ${fillable.length} resource — Prev/Next chuyển resource, download ảnh → tự lưu`, 'success');
+            })
+            .catch((err: unknown) => {
+                setOpeningMetaAiId(0);
+                showMessage(err instanceof Error ? err.message : 'Không mở được tab Meta.ai', 'error');
+            });
+    };
 
     const openAddForm = () => {
         setForm(EMPTY_FORM);
@@ -296,6 +379,7 @@ export default function ShortVideoResourceManageDrawer({
             resource_key: resource.resource_key || '',
             title: resource.title || '',
             prompt: resource.prompt || '',
+            description: resource.description || '',
             image: resource.image_url
                 ? { url: resource.image_url, s3_key: resource.image_s3_key || '' }
                 : null,
@@ -368,6 +452,7 @@ export default function ShortVideoResourceManageDrawer({
             resource_key: key,
             title,
             prompt: form.prompt,
+            description: form.description,
             image: form.image,
         })
             .then((result) => {
@@ -422,6 +507,37 @@ export default function ShortVideoResourceManageDrawer({
             });
     };
 
+    const handleBulkDelete = () => {
+        if (!selectedIds.length) {
+            return;
+        }
+        setBulkDeleting(true);
+        deleteShortVideoResources(selectedIds)
+            .then((result) => {
+                setBulkDeleting(false);
+                if (result?.success === false) {
+                    showMessage(
+                        parseShortVideoResourceApiMessage(
+                            result,
+                            'Không xóa được resource đã chọn',
+                        ),
+                        'error',
+                    );
+                    setBulkDeleteOpen(false);
+                    return;
+                }
+                const deletedCount = Number(result?.deleted || selectedIds.length);
+                showMessage(`Đã xóa ${deletedCount} resource`, 'success');
+                setBulkDeleteOpen(false);
+                setSelectedIds([]);
+                reloadList();
+            })
+            .catch((err: unknown) => {
+                setBulkDeleting(false);
+                showMessage(err instanceof Error ? err.message : 'Không xóa được resource đã chọn', 'error');
+            });
+    };
+
     const headerAction = (
         <Stack direction="row" spacing={1} alignItems="center">
             {mode === 'form' ? (
@@ -467,6 +583,7 @@ export default function ShortVideoResourceManageDrawer({
                     },
                 }}
             >
+                <Typography>&nbsp;</Typography>
                 {error && (
                     <Alert severity="error" sx={{ mb: 2 }}>
                         {error}
@@ -536,6 +653,58 @@ export default function ShortVideoResourceManageDrawer({
                     </Box>
                 ) : null}
 
+                {!loading && mode === 'list' && selectedIds.length > 0 ? (
+                    <Box
+                        sx={{
+                            mb: 1.5,
+                            px: 1.5,
+                            py: 1,
+                            border: '1px solid',
+                            borderColor: 'primary.main',
+                            borderRadius: 2,
+                            bgcolor: 'background.paper',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            flexWrap: 'wrap',
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 2,
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 120 }}>
+                            Đã chọn {selectedIds.length} resource
+                        </Typography>
+                        <Button
+                            size="small"
+                            onClick={() => setSelectedIds(resources.map((item) => item.id))}
+                            disabled={bulkDeleting || selectedIds.length >= resources.length}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Chọn tất cả
+                        </Button>
+                        <Button
+                            size="small"
+                            onClick={() => setSelectedIds([])}
+                            disabled={bulkDeleting}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Bỏ chọn
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            onClick={() => setBulkDeleteOpen(true)}
+                            disabled={bulkDeleting}
+                            startIcon={bulkDeleting ? <CircularProgress size={14} color="inherit" /> : undefined}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Xóa đã chọn
+                        </Button>
+                    </Box>
+                ) : null}
+
                 {!loading && mode === 'list' && resources.length > 0 ? (
                     <Box
                         sx={{
@@ -565,14 +734,31 @@ export default function ShortVideoResourceManageDrawer({
                                         flexShrink: 0,
                                         borderRadius: 1.5,
                                         border: '1px solid',
-                                        borderColor: 'divider',
+                                        borderColor: selectedIds.includes(resource.id) ? 'primary.main' : 'divider',
                                         bgcolor: 'background.default',
                                         overflow: 'hidden',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        position: 'relative',
                                     }}
                                 >
+                                    <Checkbox
+                                        size="small"
+                                        checked={selectedIds.includes(resource.id)}
+                                        onChange={() => toggleSelected(resource.id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            p: 0.25,
+                                            zIndex: 1,
+                                            bgcolor: 'rgba(255,255,255,0.75)',
+                                            borderRadius: 1,
+                                            '& .MuiSvgIcon-root': { fontSize: 18 },
+                                        }}
+                                    />
                                     {resource.image_url ? (
                                         <Box
                                             component="img"
@@ -602,8 +788,35 @@ export default function ShortVideoResourceManageDrawer({
                                             ? promptPreview(resource.prompt)
                                             : 'Chưa có prompt'}
                                     </Typography>
+                                    {resource.description ? (
+                                        <Typography
+                                            variant="caption"
+                                            color="text.disabled"
+                                            sx={{ display: 'block', fontStyle: 'italic' }}
+                                        >
+                                            {promptPreview(resource.description)}
+                                        </Typography>
+                                    ) : null}
                                 </Box>
                                 <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                    <Tooltip
+                                        title={resource.prompt.trim()
+                                            ? 'Mở Meta.ai + điền prompt — download ảnh → tự lưu vào resource'
+                                            : 'Resource chưa có prompt'}
+                                    >
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                color="warning"
+                                                disabled={!resource.prompt.trim() || openingMetaAiId === resource.id}
+                                                onClick={() => handleOpenMetaAi(resource)}
+                                            >
+                                                {openingMetaAiId === resource.id
+                                                    ? <CircularProgress size={16} />
+                                                    : <AutoAwesomeIcon fontSize="small" />}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
                                     <Tooltip title="Sửa">
                                         <IconButton size="small" onClick={() => openEditForm(resource)}>
                                             <EditOutlinedIcon fontSize="small" />
@@ -638,6 +851,26 @@ export default function ShortVideoResourceManageDrawer({
                     <Button color="error" variant="contained" onClick={handleConfirmDelete} disabled={deleting}>
                         {deleting ? <CircularProgress size={16} color="inherit" /> : null}
                         Xóa
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={bulkDeleteOpen}
+                onClose={() => (bulkDeleting ? null : setBulkDeleteOpen(false))}
+            >
+                <DialogTitle>Xóa {selectedIds.length} resource đã chọn?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Xóa {selectedIds.length} resource khỏi short video? Hành động không thể hoàn tác.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>
+                        Hủy
+                    </Button>
+                    <Button color="error" variant="contained" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                        {bulkDeleting ? <CircularProgress size={16} color="inherit" /> : null}
+                        Xóa {selectedIds.length} resource
                     </Button>
                 </DialogActions>
             </Dialog>

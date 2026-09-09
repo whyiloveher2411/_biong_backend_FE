@@ -7,6 +7,9 @@ export type WorkflowPromptItem = {
     exists: boolean;
     /** Key lưu output (từ dòng updateField trong index.md) — có key thì UI hiển thị nút update. */
     updateField: string;
+    /** Loại nút update asset nhanh trong dialog (từ dòng buttonUpdate trong index.md):
+     * characterUpdate | spaceUpdate. */
+    buttonUpdate: string;
     /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
     note: string;
 };
@@ -76,6 +79,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 file,
                 exists: item?.exists !== false,
                 updateField: normalizeWorkflowUpdateFieldKey(String(item?.update_field || '')),
+                buttonUpdate: String(item?.button_update || '').trim(),
                 note: String(item?.note || '').trim(),
             };
         })

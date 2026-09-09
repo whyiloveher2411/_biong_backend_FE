@@ -20,6 +20,8 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
+import LandscapeOutlinedIcon from '@mui/icons-material/LandscapeOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
@@ -34,6 +36,11 @@ import {
     type WorkflowOutputsMap,
     type WorkflowPromptContext,
 } from 'helpers/marketingWorkflowPrompts';
+import {
+    parseWorkflowAssetRegister,
+    resolveWorkflowResourceKind,
+} from 'helpers/marketingWorkflowResourceImport';
+import { importShortVideoResources } from 'helpers/marketingShortVideoResourceApi';
 
 type Props = {
     open: boolean;
@@ -51,6 +58,8 @@ type UpdateDialogState = {
     itemKey: string;
     label: string;
     fieldKey: string;
+    /** Loại nút update asset nhanh (buttonUpdate trong index.md): characterUpdate | spaceUpdate. */
+    buttonUpdate: string;
 };
 
 export default function MarketingWorkflowDrawer({
@@ -68,6 +77,7 @@ export default function MarketingWorkflowDrawer({
     const [updatingItem, setUpdatingItem] = React.useState<UpdateDialogState | null>(null);
     const [updateValue, setUpdateValue] = React.useState('');
     const [savingUpdate, setSavingUpdate] = React.useState(false);
+    const [importingAsset, setImportingAsset] = React.useState(false);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const outputsLoadedRef = React.useRef<number>(-1);
 
@@ -78,6 +88,7 @@ export default function MarketingWorkflowDrawer({
             setUpdatingItem(null);
             setUpdateValue('');
             setSavingUpdate(false);
+            setImportingAsset(false);
             setOutputs({});
             outputsLoadedRef.current = -1;
             return;
@@ -153,9 +164,9 @@ export default function MarketingWorkflowDrawer({
         api.showMessage('Đã tải audio script', 'success');
     }, [audioScript, shortVideoId, api]);
 
-    const openUpdateDialog = React.useCallback((itemKey: string, label: string, fieldKey: string) => {
+    const openUpdateDialog = React.useCallback((itemKey: string, label: string, fieldKey: string, buttonUpdate = '') => {
         setUpdateValue('');
-        setUpdatingItem({ itemKey, label, fieldKey });
+        setUpdatingItem({ itemKey, label, fieldKey, buttonUpdate });
     }, []);
 
     const handleCopyOldValue = React.useCallback(async () => {
@@ -203,6 +214,63 @@ export default function MarketingWorkflowDrawer({
         setUpdatingItem(null);
         api.showMessage(`Đã lưu output [${updatingItem.fieldKey}] — copy prompt sẽ tự thay key`, 'success');
     }, [workflow, updatingItem, savingUpdate, shortVideoId, updateValue, api]);
+
+    /**
+     * Import nhanh asset từ dữ liệu output register (CHARACTER/SPACE ASSET REGISTER)
+     * vào resource của short video — upsert theo mã định danh, không xóa resource cũ.
+     * Ưu tiên parse "Giá trị mới" (textarea), trống thì fallback giá trị đã lưu.
+     */
+    const handleImportAsset = React.useCallback(async () => {
+        if (!updatingItem || importingAsset) {
+            return;
+        }
+        const kind = resolveWorkflowResourceKind(updatingItem.buttonUpdate);
+        if (!kind) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            api.showMessage('Thiếu short_video_id — không import được resource', 'warning');
+            return;
+        }
+
+        const savedValue = workflowOutputs[updatingItem.fieldKey] || '';
+        const source = updateValue.trim() ? updateValue : savedValue;
+        if (!source.trim()) {
+            api.showMessage('Chưa có dữ liệu register để import resource', 'warning');
+            return;
+        }
+
+        const parsed = parseWorkflowAssetRegister(kind, source);
+        if (parsed.length === 0) {
+            api.showMessage(
+                'Không tìm thấy asset nào — dữ liệu cần đúng cấu trúc CHARACTER/SPACE ASSET REGISTER',
+                'warning',
+            );
+            return;
+        }
+
+        setImportingAsset(true);
+        let result: { success?: boolean; created?: number; updated?: number } | null = null;
+        try {
+            result = await importShortVideoResources(sid, parsed);
+        } catch {
+            result = null;
+        }
+        setImportingAsset(false);
+
+        if (!result?.success) {
+            api.showMessage('Import resource thất bại', 'error');
+            return;
+        }
+
+        const createdCount = Number(result.created || 0);
+        const updatedCount = Number(result.updated || 0);
+        api.showMessage(
+            `Đã import ${createdCount + updatedCount} resource (${createdCount} mới, ${updatedCount} cập nhật) — không xóa resource cũ`,
+            'success',
+        );
+    }, [updatingItem, importingAsset, shortVideoId, updateValue, workflowOutputs, api]);
 
     const accent = workflow?.background || '';
     const accentText = accent ? getWorkflowContrastTextColor(accent) : '#ffffff';
@@ -405,7 +473,7 @@ export default function MarketingWorkflowDrawer({
                                                             <IconButton
                                                                 size="small"
                                                                 color={hasSavedOutput ? 'success' : 'default'}
-                                                                onClick={() => openUpdateDialog(itemKey, promptItem.label, promptItem.updateField)}
+                                                                onClick={() => openUpdateDialog(itemKey, promptItem.label, promptItem.updateField, promptItem.buttonUpdate)}
                                                             >
                                                                 <CloudUploadOutlinedIcon fontSize="small" />
                                                             </IconButton>
@@ -598,6 +666,48 @@ export default function MarketingWorkflowDrawer({
                                 value={updateValue}
                                 onChange={(event) => setUpdateValue(event.target.value)}
                             />
+
+                            {updatingItem && resolveWorkflowResourceKind(updatingItem.buttonUpdate)
+                                && Boolean((updateValue.trim() || oldValue).trim()) ? (
+                                <Box
+                                    sx={{
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 1,
+                                        p: 1,
+                                        display: 'flex',
+                                        gap: 1,
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="warning"
+                                        startIcon={
+                                            importingAsset ? (
+                                                <CircularProgress size={12} color="inherit" />
+                                            ) : resolveWorkflowResourceKind(updatingItem.buttonUpdate) === 'character' ? (
+                                                <PersonAddAltOutlinedIcon fontSize="small" />
+                                            ) : (
+                                                <LandscapeOutlinedIcon fontSize="small" />
+                                            )
+                                        }
+                                        onClick={handleImportAsset}
+                                        disabled={importingAsset || savingUpdate}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        {resolveWorkflowResourceKind(updatingItem.buttonUpdate) === 'character'
+                                            ? 'Update resource nhân vật'
+                                            : 'Update resource không gian'}
+                                    </Button>
+                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
+                                        Import nhanh asset từ dữ liệu trên vào resource của short video
+                                        (trùng mã định danh → cập nhật, không xóa resource cũ).
+                                    </Typography>
+                                </Box>
+                            ) : null}
                         </Stack>
                     )}
                 </DialogContent>
