@@ -45,6 +45,132 @@ export type ShortVideoResourceSavePayload = {
     image?: { url: string; s3_key: string } | null;
 };
 
+/** Resource được prompt generate image sử dụng (thứ tự = thứ tự xuất hiện trong prompt). */
+export type ShortVideoPromptImageReference = {
+    resource_id: number;
+    resource_key: string;
+    title: string;
+    /** Ảnh đính kèm — rỗng khi resource chưa có ảnh (dùng prompt thay thế). */
+    image_url: string;
+    /** Prompt mô tả resource — thay ảnh khi image_url rỗng. */
+    prompt: string;
+    has_image: boolean;
+};
+
+export type ShortVideoPromptImageReferenceResult = {
+    matched: boolean;
+    /** Prompt gốc + "\n\nIMAGE REFERENCE:\n- …" (đã nối khi matched). */
+    prompt_final: string;
+    /** Section IMAGE REFERENCE (không kèm prompt gốc). */
+    reference_text: string;
+    references: ShortVideoPromptImageReference[];
+};
+
+/** Chuẩn hoá khoảng trắng của prompt thay thế — giữ danh sách IMAGE REFERENCE 1 dòng/resource. */
+function normalizeResourceSubstitutePrompt(text: string): string {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+/** Dựng section IMAGE REFERENCE từ danh sách reference (mirror PHP build_image_reference_text). */
+function buildImageReferenceText(references: ShortVideoPromptImageReference[]): string {
+    const lines: string[] = [];
+    for (const reference of references) {
+        const resourceKey = String(reference.resource_key || '').trim();
+        if (!resourceKey) {
+            continue;
+        }
+        const title = String(reference.title || '').trim();
+        let line = `- ${title || resourceKey} (${resourceKey})`;
+        if (!reference.has_image) {
+            const substitute = normalizeResourceSubstitutePrompt(reference.prompt);
+            if (substitute) {
+                line += `: ${substitute}`;
+            }
+        }
+        lines.push(line);
+    }
+    return lines.length ? `IMAGE REFERENCE:\n${lines.join('\n')}` : '';
+}
+
+/** Escape resource_key để dùng trong regex whole-word (C01, S01…). */
+function escapeResourceKeyPattern(resourceKey: string): string {
+    return resourceKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Resolve resource được prompt generate image sử dụng (chỉ RUNTIME — không ghi DB):
+ * load tất cả resource của short video, quét mã (C01/S01…) trong prompt — match
+ * whole-word case-insensitive, sắp theo vị trí xuất hiện ĐẦU TIÊN.
+ * Mirror PHP marketing_short_video_resource_resolve_prompt_references().
+ */
+export async function resolveShortVideoPromptImageReferences(
+    shortVideoId: number,
+    prompt: string,
+): Promise<ShortVideoPromptImageReferenceResult> {
+    const sourcePrompt = String(prompt || '');
+    const emptyResult: ShortVideoPromptImageReferenceResult = {
+        matched: false,
+        prompt_final: sourcePrompt,
+        reference_text: '',
+        references: [],
+    };
+    if (!shortVideoId || !sourcePrompt.trim()) {
+        return emptyResult;
+    }
+
+    const listResult = await listShortVideoResources(shortVideoId);
+    const resources = Array.isArray(listResult?.resources) ? listResult.resources : [];
+    if (!resources.length) {
+        return emptyResult;
+    }
+
+    const matches: Array<{ position: number; reference: ShortVideoPromptImageReference }> = [];
+    for (const resource of resources) {
+        const resourceKey = String(resource?.resource_key || '').replace(/\s+/g, ' ').trim();
+        if (!resourceKey) {
+            continue;
+        }
+        const pattern = new RegExp(
+            `(?<![A-Za-z0-9])${escapeResourceKeyPattern(resourceKey)}(?![A-Za-z0-9])`,
+            'i',
+        );
+        const match = pattern.exec(sourcePrompt);
+        if (!match) {
+            continue;
+        }
+        const imageUrl = String(resource?.image_url || '').trim();
+        matches.push({
+            position: match.index,
+            reference: {
+                resource_id: Number(resource?.id || 0),
+                resource_key: resourceKey,
+                title: String(resource?.title || '').trim(),
+                image_url: imageUrl,
+                prompt: String(resource?.prompt || ''),
+                has_image: Boolean(imageUrl),
+            },
+        });
+    }
+
+    if (!matches.length) {
+        return emptyResult;
+    }
+
+    matches.sort((a, b) => a.position - b.position);
+    const references = matches.map((item) => item.reference);
+    const referenceText = buildImageReferenceText(references);
+    if (!referenceText) {
+        return emptyResult;
+    }
+
+    return {
+        matched: true,
+        prompt_final: `${sourcePrompt.replace(/\s+$/, '')}\n\n${referenceText}`,
+        reference_text: referenceText,
+        references,
+    };
+}
+
 type ApiMessageLike = { content?: string } | string | undefined;
 
 /** Lấy message dạng string từ result API (message là string hoặc {content}). */

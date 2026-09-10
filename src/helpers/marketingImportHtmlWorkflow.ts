@@ -4,6 +4,10 @@ import { convertToURL } from 'helpers/url';
 import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
 import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
 import {
+    resolveShortVideoPromptImageReferences,
+    type ShortVideoPromptImageReference,
+} from 'helpers/marketingShortVideoResourceApi';
+import {
     WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
     WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
     whiteboardOutputRuleForPrompt,
@@ -292,6 +296,85 @@ function dispatchOpenImportHtmlMetaAiEvent(detail: Record<string, unknown>): Pro
         OPEN_IMPORT_HTML_METAAI_RESULT_EVENT,
         12000,
     );
+}
+
+const OPEN_METAAI_CHAT_SYNC_LATEST_EVENT = 'vn4-open-metaai-chat-sync-latest';
+const OPEN_METAAI_CHAT_SYNC_LATEST_RESULT_EVENT = 'vn4-open-metaai-chat-sync-latest-result';
+
+function dispatchOpenMetaAiChatSyncLatestEvent(
+    detail: Record<string, unknown>,
+): Promise<{ ok: boolean; duplicate?: boolean; error?: string }> {
+    return dispatchCmsExtensionEvent(
+        OPEN_METAAI_CHAT_SYNC_LATEST_EVENT,
+        detail,
+        OPEN_METAAI_CHAT_SYNC_LATEST_RESULT_EVENT,
+        12000,
+    ) as Promise<{ ok: boolean; duplicate?: boolean; error?: string }>;
+}
+
+/**
+ * Mở URL chat GỐC của beat (chatbot Meta.ai đã tạo ảnh) và bootstrap panel
+ * Meta.ai beat ở chế độ sync-latest: panel bên phải cho user bấm
+ * "Update ảnh mới nhất từ chatbot" để pull ảnh cuối trong conversation NGAY
+ * (sau khi user feedback trực tiếp với chatbot ngoài pipeline).
+ */
+export async function openImportHtmlBeatMetaAiChatSyncLatest(options: {
+    shortVideoId: number;
+    beatId: string;
+    chatUrl: string;
+    title?: string;
+    imageUrl?: string;
+    imageUrls?: string[];
+    objectLayerCount?: number;
+    imagePrompt?: string;
+    video2s?: boolean;
+}): Promise<void> {
+    const shortVideoId = Number(options.shortVideoId || 0);
+    const beatId = String(options.beatId || '').trim();
+    const chatUrl = String(options.chatUrl || '').trim();
+    if (!shortVideoId) {
+        throw new Error('Thiếu short_video_id');
+    }
+    if (!beatId) {
+        throw new Error('Thiếu beat_id');
+    }
+    if (!chatUrl) {
+        throw new Error('Thiếu chat_url');
+    }
+
+    const extensionReady = await waitForExtensionReady(8000);
+    if (!extensionReady) {
+        throw new Error(
+            'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
+        );
+    }
+
+    const accessToken = getAccessToken() ?? '';
+    const result = await dispatchOpenMetaAiChatSyncLatestEvent({
+        short_video_id: shortVideoId,
+        beat_id: beatId,
+        beat_index: 0,
+        chat_url: chatUrl,
+        image_prompt: String(options.imagePrompt || '').trim(),
+        image_url: String(options.imageUrl || '').trim(),
+        image_urls: (options.imageUrls ?? []).map((url) => String(url || '').trim()).filter(Boolean),
+        object_layer_count: options.video2s
+            ? 1
+            : Math.max(1, Number(options.objectLayerCount || 0) || 1),
+        title: String(options.title || '').trim(),
+        access_token: accessToken,
+        save_api_url: pluginApiPath('short-video/save-agent-import-html'),
+        upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
+        ...(options.video2s ? { video_2s: 1 } : {}),
+    });
+    if (!result.ok && result.duplicate === true) {
+        // SW đã mở tab cùng URL trong 2.5s trước đó — coi như thành công, chặn
+        // fallback window.open tạo tab thứ 2.
+        return;
+    }
+    if (!result.ok) {
+        throw new Error(result.error || 'Không mở được tab Meta.ai');
+    }
 }
 
 const BULK_OPEN_IMPORT_HTML_GEMINI_DELAY_MS = 500;
@@ -732,6 +815,21 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         throw new Error('Thiếu image_prompt');
     }
 
+    // Resource reference: prompt nhắc mã resource (C01/S01…) → gửi kèm section
+    // IMAGE REFERENCE + danh sách ảnh để panel Meta.ai đính vào composer
+    // (chỉ runtime — không ghi DB; lỗi list resource không chặn mở tab).
+    let imageReferenceText = '';
+    let referenceImages: ShortVideoPromptImageReference[] = [];
+    try {
+        const resolved = await resolveShortVideoPromptImageReferences(shortVideoId, imagePrompt);
+        if (resolved.matched) {
+            imageReferenceText = resolved.reference_text;
+            referenceImages = resolved.references;
+        }
+    } catch (_e) {
+        // Không load được resource → prompt vẫn fill bình thường, không đính ảnh.
+    }
+
     const extensionReady = await waitForExtensionReady(8000);
     if (!extensionReady) {
         throw new Error(
@@ -753,6 +851,18 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
+        ...(imageReferenceText ? { image_reference_text: imageReferenceText } : {}),
+        ...(referenceImages.length
+            ? {
+                reference_images: referenceImages.map((reference) => ({
+                    resource_id: reference.resource_id,
+                    resource_key: reference.resource_key,
+                    title: reference.title,
+                    image_url: reference.image_url,
+                    prompt: reference.prompt,
+                })),
+            }
+            : {}),
         ...(video2s ? { video_2s: 1 } : {}),
         ...(options.clipAspect ? { clip_aspect: String(options.clipAspect).trim() } : {}),
         ...(options.autoSubmit === false ? {} : { auto_submit: true }),

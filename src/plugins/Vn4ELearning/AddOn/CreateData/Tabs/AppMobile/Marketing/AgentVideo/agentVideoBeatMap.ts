@@ -63,6 +63,11 @@ export type BeatImageEntry = {
     creative_prompt?: string;
     qa_status?: BeatQaStatus;
     qa_refine_note?: string;
+    /**
+     * Flag "cần update ảnh mới nhất từ chatbot" — user feedback trực tiếp với
+     * chatbot (ngoài CMS); pipeline sẽ mở lại chat cũ và pull ảnh cuối cùng.
+     */
+    sync_latest_pending?: boolean;
     render_status?: 'error' | 'ok' | string;
     render_error?: string;
     render_error_code?: string;
@@ -684,6 +689,9 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
         creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
         qa_status: qaStatus || undefined,
         qa_refine_note: raw.qa_refine_note != null ? String(raw.qa_refine_note) : undefined,
+        sync_latest_pending: raw.sync_latest_pending === true || raw.sync_latest_pending === 1
+            ? true
+            : undefined,
         render_status: raw.render_status ? String(raw.render_status) : undefined,
         render_error: raw.render_error ? String(raw.render_error) : undefined,
         render_error_code: raw.render_error_code ? String(raw.render_error_code) : undefined,

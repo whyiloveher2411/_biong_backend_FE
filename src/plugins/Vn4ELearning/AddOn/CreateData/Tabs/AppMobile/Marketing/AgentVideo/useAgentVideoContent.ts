@@ -2480,6 +2480,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatImagePrompt?: string;
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;
+        beatImageSyncLatest?: boolean;
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
@@ -2500,6 +2501,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatImagePrompt: payload.beatImagePrompt,
                 beatImageDelete: payload.beatImageDelete,
                 beatImageChatUrl: payload.beatImageChatUrl,
+                beatImageSyncLatest: payload.beatImageSyncLatest,
                 creativePrompt: payload.creativePrompt,
                 qaStatus: payload.qaStatus,
                 qaRefineNote: payload.qaRefineNote,
@@ -3722,6 +3724,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     video2s: true,
                     autoSubmit: true,
                     clipAspect: agentClipAspect,
+                    // Beat đã có ảnh → panel thumbload ảnh hiện trạng, không hiện "chưa có".
+                    imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    imageUrls: beatImageEntryUrls(beatImage[beatId]),
                 });
                 setActiveBeatId(beatId);
                 setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
@@ -3801,6 +3806,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     shortVideoId,
                     beatId,
                     imagePrompt: prompt,
+                    imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
+                    imageUrls: beatImageEntryUrls(beatImage[beatId]),
                     autoSubmit: true,
                     imageStyleSuffix: whiteboardImageStyleSuffix,
                     imageAspectSuffix: whiteboardImageAspectSuffix,
@@ -3949,6 +3956,55 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setDeletingBeatImageId('');
         }
     }, [deletingBeatImageId, persistImportHtml, showMessage]);
+
+    /**
+     * Toggle flag "cần update ảnh mới nhất từ chatbot" (sync_latest_pending) —
+     * một beat được mark khi user feedback trực tiếp với chatbot (ngoài CMS);
+     * pipeline sẽ ưu tiên opening chat cũ + pull ảnh mới nhất trước.
+     */
+    const handleToggleBeatImageSyncLatest = React.useCallback(async (
+        beatId: string,
+        next: boolean,
+    ): Promise<boolean> => {
+        const normalizedId = String(beatId || '').trim();
+        if (!normalizedId) {
+            showMessage('Thiếu beat_id để đánh dấu pull ảnh mới nhất', 'error');
+            return false;
+        }
+        setSavingImportHtml(true);
+        try {
+            const saved = await persistImportHtml({
+                beatId: normalizedId,
+                beatImageSyncLatest: next,
+            });
+            if (saved) {
+                setBeatImage((prev) => {
+                    const entry = prev[normalizedId];
+                    if (!entry) {
+                        return prev;
+                    }
+                    const nextEntry = { ...entry };
+                    if (next) {
+                        nextEntry.sync_latest_pending = true;
+                    } else {
+                        delete nextEntry.sync_latest_pending;
+                    }
+                    return { ...prev, [normalizedId]: nextEntry };
+                });
+                if (next) {
+                    showMessage(`Đã đánh dấu ${normalizedId} cần update ảnh mới nhất từ chatbot`, 'success');
+                } else {
+                    showMessage(`Đã gỡ đánh dấu update ảnh mới nhất của ${normalizedId}`, 'success');
+                }
+            }
+            return saved;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setSavingImportHtml(false);
+        }
+    }, [persistImportHtml, showMessage]);
 
     const handleSaveBeatQa = React.useCallback(async (
         beatId: string,
@@ -9187,6 +9243,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleOpenBeatImageMetaAiManual,
         handleUploadBeatImageFromFile,
         handleDeleteBeatImage,
+        handleToggleBeatImageSyncLatest,
         /** @deprecated Alias tương thích cũ */
         handleRegenerateBeatImageZImage: handleOpenBeatImageDuckAiManual,
         handleRefineBeatHtmlViaGemini,

@@ -4531,6 +4531,8 @@ export async function saveAgentImportHtml(
         /** Xóa CHỈ ảnh beat (image_url + extra urls) — giữ prompt / chat_url / vùng ảnh. */
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;
+        /** Flag "cần update ảnh mới nhất từ chatbot" (toggle CMS/extension). */
+        beatImageSyncLatest?: boolean;
         creativePrompt?: string;
         qaStatus?: import('./agentVideoBeatMap').BeatQaStatus;
         qaRefineNote?: string;
@@ -4577,6 +4579,7 @@ export async function saveAgentImportHtml(
         || payload.beatImagePrompt !== undefined
         || payload.beatImageDelete !== undefined
         || payload.beatImageChatUrl !== undefined
+        || payload.beatImageSyncLatest !== undefined
         || payload.creativePrompt !== undefined
         || payload.qaStatus !== undefined
         || payload.qaRefineNote !== undefined
@@ -4598,6 +4601,9 @@ export async function saveAgentImportHtml(
         }
         if (payload.beatImageChatUrl !== undefined) {
             body.beat_image_chat_url = payload.beatImageChatUrl;
+        }
+        if (payload.beatImageSyncLatest !== undefined) {
+            body.beat_image_sync_latest = payload.beatImageSyncLatest === true;
         }
         if (payload.creativePrompt !== undefined) {
             body.creative_prompt = payload.creativePrompt;
