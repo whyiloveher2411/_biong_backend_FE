@@ -148,6 +148,23 @@ export default function AgentVideoBeatBoundaryOverlay({
     const [menuBeatId, setMenuBeatId] = React.useState('');
     const [menuAnchorEl, setMenuAnchorEl] = React.useState<HTMLElement | null>(null);
     const [savingQaBeatId, setSavingQaBeatId] = React.useState('');
+    const viewportRef = React.useRef<HTMLDivElement | null>(null);
+    const [viewportWidthPx, setViewportWidthPx] = React.useState(0);
+
+    // Magic scroll: đo viewport hiển thị để chỉ render beat trong view.
+    React.useLayoutEffect(() => {
+        const el = viewportRef.current;
+        if (!el) {
+            return undefined;
+        }
+        const update = () => setViewportWidthPx(el.clientWidth);
+        update();
+        const observer = typeof ResizeObserver !== 'undefined'
+            ? new ResizeObserver(update)
+            : null;
+        observer?.observe(el);
+        return () => observer?.disconnect();
+    }, []);
 
     const boundaries = React.useMemo(
         () => getBeatBoundaryMarkers(beatMap),
@@ -188,8 +205,23 @@ export default function AgentVideoBeatBoundaryOverlay({
         return null;
     }
 
+    // Chỉ render beat đang trong view (+ overscan 200px mỗi bên) — beat ngoài
+    // view bỏ khỏi DOM để scroll không lag khi timeline có rất nhiều beat.
+    const overscanPx = 200;
+    const viewStartPx = Math.max(0, scrollLeft - overscanPx);
+    const viewEndPx = scrollLeft + (viewportWidthPx || contentWidthPx) + overscanPx;
+
     const toLeft = (timeSec: number) => timeSecToTimelineLeftPx(timeSec, layout);
     const trackTop = rulerHeight + trackTopGap;
+    const visibleBoundaries = boundaries.filter((marker) => {
+        const leftPx = toLeft(marker.timeSec);
+        return leftPx >= viewStartPx && leftPx <= viewEndPx;
+    });
+    const visibleSegments = segments.filter((segment) => {
+        const leftPx = toLeft(segment.startSec);
+        const rightPx = toLeft(segment.endSec);
+        return rightPx >= viewStartPx && leftPx <= viewEndPx;
+    });
     const menuSegment = segments.find((segment) => segment.beatId === menuBeatId) || null;
     const menuVisualState = menuSegment
         ? (isWhiteboardMode
@@ -225,6 +257,7 @@ export default function AgentVideoBeatBoundaryOverlay({
 
     return (
         <Box
+            ref={viewportRef}
             sx={{
                 position: 'absolute',
                 top: 0,
@@ -244,7 +277,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                     transform: `translateX(-${scrollLeft}px)`,
                 }}
             >
-                {boundaries.map((marker) => (
+                {visibleBoundaries.map((marker) => (
                     <Box
                         key={`beat-boundary-${marker.beatIndex}-${marker.timeSec}`}
                         sx={{
@@ -259,7 +292,7 @@ export default function AgentVideoBeatBoundaryOverlay({
                     />
                 ))}
 
-                {segments.map((segment) => {
+                {visibleSegments.map((segment) => {
                     const leftPx = toLeft(segment.startSec);
                     const widthPx = Math.max(2, toLeft(segment.endSec) - leftPx);
                     const visualState = isWhiteboardMode

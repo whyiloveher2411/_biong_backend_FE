@@ -184,16 +184,27 @@ export function validateShortVideoCookieJson(cookieValue: string): {
 /**
  * Dựng fragment payload `metaai_cookie` cho event extension mở Meta.ai:
  * cookieId > 0 → cookie đã lưu với beat; ngược lại → round-robin.
- * Không lấy được cookie → trả {} (mở tab như cũ, không chặn).
+ * KHÔNG swallow lỗi — nếu không load được cookie mà vẫn mở tab, extension sẽ
+ * không set cookie và tab dùng cookie còn sót của beat trước → sai account.
+ * Throw để caller đánh dấu beat lỗi thay vì mở tab cookie sai.
  */
 export async function metaaiCookiePayloadForOpen(cookieId = 0): Promise<Record<string, unknown>> {
+    let cookie: MetaaiCookiePayload | null = null;
     try {
-        const cookie = await fetchShortVideoCookieForOpen(SUPPORTED_COOKIE_WEBSITE, cookieId);
-        return cookie ? { metaai_cookie: cookie } : {};
+        cookie = await fetchShortVideoCookieForOpen(SUPPORTED_COOKIE_WEBSITE, cookieId);
     } catch (e) {
-        console.warn('[Cookie] fetch cookie for open failed', e);
-        return {};
+        throw new Error(
+            `Cookie meta.ai (id ${cookieId}) — ${
+                e instanceof Error && e.message ? e.message : 'không load được cookie'
+            }`,
+        );
     }
+    if (!cookie) {
+        throw new Error(
+            `Không load được cookie meta.ai (id ${cookieId}) — kiểm tra Quản lý cookie hoặc cookie_id của beat`,
+        );
+    }
+    return { metaai_cookie: cookie };
 }
 
 export function shortVideoCookieApiUrl(suffix: string): string {
