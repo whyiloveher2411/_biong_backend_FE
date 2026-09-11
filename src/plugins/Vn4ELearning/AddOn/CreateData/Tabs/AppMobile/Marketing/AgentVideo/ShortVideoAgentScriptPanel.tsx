@@ -25,6 +25,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import DnsIcon from '@mui/icons-material/Dns';
 import SaveIcon from '@mui/icons-material/Save';
 import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -829,6 +830,23 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                 />
                                 {state.agentTtsAuto ? (
                                     <Chip size="small" label={state.chainLabel} variant="outlined" />
+                                ) : null}
+                                {state.ttsGlobalSource ? (
+                                    <Chip
+                                        size="small"
+                                        color="info"
+                                        icon={<DnsIcon fontSize="small" />}
+                                        label={
+                                            'Dùng cài đặt chung'
+                                            + (state.ttsGlobalSource.title
+                                                ? ` từ “${state.ttsGlobalSource.title}”`
+                                                : state.ttsGlobalSource.shortVideoId
+                                                    ? ` từ video #${state.ttsGlobalSource.shortVideoId}`
+                                                    : '')
+                                        }
+                                        title="Video chưa có cài đặt riêng — đang dùng cài đặt TTS chung của hệ thống. Lưu cài đặt khác cho video này sẽ cập nhật chung."
+                                        variant="outlined"
+                                    />
                                 ) : null}
                                 <Chip
                                     size="small"

@@ -1795,6 +1795,16 @@ export type AgentVideoContentResponse = {
     agent_omnivoice_voice_design?: string;
     agent_omnivoice_speed?: number;
     agent_saydi_voice?: string;
+    /** Video đã tự lưu cài đặt TTS riêng → KHÔNG kế thừa global default. */
+    agent_tts_settings_saved?: boolean;
+    agent_tts_global_default?: {
+        success?: boolean;
+        has?: boolean;
+        config?: Record<string, unknown>;
+        source_short_video_id?: number;
+        source_title?: string;
+        updated_at?: string;
+    };
     omnivoice_voice_catalog?: OmnivoiceVoiceCatalogItem[];
     omnivoice_voice_design_tokens?: OmnivoiceVoiceDesignTokenGroup[];
     agent_video_status?: string;
@@ -2611,6 +2621,42 @@ export async function saveAgentSaydiVoice(
             agent_saydi_voice: voice,
         }),
     );
+}
+
+/** Cài đặt TTS "chung toàn hệ thống" — đọc từ vn4_setting (chi tiết xem helper BE). */
+export type AgentTtsGlobalDefault = JsonResponse & {
+    has?: boolean;
+    config?: Record<string, unknown>;
+    source_short_video_id?: number;
+    source_title?: string;
+    updated_at?: string;
+};
+
+export async function fetchAgentTtsGlobalDefault(): Promise<AgentTtsGlobalDefault> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/get-agent-tts-default',
+        { fetch: '1' },
+    ) as Promise<AgentTtsGlobalDefault>;
+}
+
+/** Lưu cache global sau khi user đã lưu cài đặt riêng của 1 video (MERGE phía BE). */
+export async function saveAgentTtsGlobalDefault(
+    shortVideoId: number,
+    config: Partial<Record<
+        'agent_tts_auto'
+        | 'agent_tts_platforms'
+        | 'agent_omnivoice_speed'
+        | 'agent_saydi_voice'
+        | 'agent_omnivoice_voice'
+        | 'agent_omnivoice_voice_mode'
+        | 'agent_omnivoice_voice_design',
+        string | number | string[] | boolean
+    >>,
+): Promise<AgentTtsGlobalDefault> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-tts-default',
+        shortVideoBody(shortVideoId, config),
+    ) as Promise<AgentTtsGlobalDefault>;
 }
 
 export async function saveAgentTtsSettings(
@@ -3608,6 +3654,7 @@ type ManualBeatResponse = JsonResponse & {
     beat_division_completed?: boolean;
     full_auto_pipeline?: FullAutoPipelineSummary;
     timeline_confirmed?: boolean;
+    beat_translations?: Record<string, string>;
 };
 
 export async function fetchManualBeatMarks(shortVideoId: number): Promise<ManualBeatResponse> {
@@ -3615,6 +3662,29 @@ export async function fetchManualBeatMarks(shortVideoId: number): Promise<Manual
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/get-marks',
         shortVideoBody(shortVideoId, {}),
     ) as Promise<ManualBeatResponse>;
+}
+
+/**
+ * Video 2s — lưu bản dịch tiếng Việt của audio script beat
+ * (map key = thứ tự beat string). Dùng cho timeline audio hiển thị dưới whisper.
+ */
+export async function saveManualBeatTranslations(
+    shortVideoId: number,
+    translations: Record<string, string>,
+    sourceLanguage = '',
+): Promise<JsonResponse & {
+    beat_translations?: Record<string, string>;
+    source_language?: string;
+    total?: number;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/save-translations',
+        shortVideoBody(shortVideoId, { translations, source_language: sourceLanguage }),
+    ) as Promise<JsonResponse & {
+        beat_translations?: Record<string, string>;
+        source_language?: string;
+        total?: number;
+    }>;
 }
 
 export async function saveManualBeatMarks(

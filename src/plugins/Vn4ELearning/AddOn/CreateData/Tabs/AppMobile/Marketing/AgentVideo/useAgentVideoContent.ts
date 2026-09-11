@@ -40,12 +40,14 @@ import {
     importManualBeatList,
     importManualBeatPromptFile,
     saveManualBeatMarks,
+    saveManualBeatTranslations,
     fetchImportHtmlContext,
     normalizePlatforms,
     parseApiMessage,
     regenerateAgentNarrationTts,
     retryAgentNarrationTts,
     saveAdminAudioScript,
+    saveAgentTtsGlobalDefault,
     saveAgentVisualStyle,
     saveAgentImportHtml,
     saveAgentOmnivoiceVoice,
@@ -234,6 +236,10 @@ import {
     type BeatVersionsByBeatId,
 } from './agentVideoBeatMap';
 import { beatImageEntryUrls } from './whiteboardImageLayers';
+import {
+    normalizeBeatTranslationMap,
+    type BeatTranslationMap,
+} from './agentVideoBeatTranslation';
 import { isAgentVideo2sMode, isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
 import { buildCaptionAlignResult } from './agentVideoCaptionScriptAlign';
 import {
@@ -775,6 +781,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [omnivoiceVoiceDesignTokens, setOmnivoiceVoiceDesignTokens] = React.useState<OmnivoiceVoiceDesignTokenGroup[]>([]);
     const [savingOmnivoiceVoice, setSavingOmnivoiceVoice] = React.useState(false);
     const [saydiVoice, setSaydiVoice] = React.useState(DEFAULT_SAYDI_VOICE);
+    /**
+     * Nguồn cài đặt TTS đang kế thừa GLOBAL (chip UI): video này chưa tự lưu
+     * cài đặt riêng nên hệ thống tự dùng setting chung (vn4_setting).
+     * null = video đang dùng cài đặt riêng của chính nó.
+     */
+    const [ttsGlobalSource, setTtsGlobalSource] = React.useState<{
+        shortVideoId: number;
+        title: string;
+        updatedAt: string;
+    } | null>(null);
     const [saydiSamples, setSaydiSamples] = React.useState<SaydiVoiceSampleItem[]>([]);
     const [saydiGenders, setSaydiGenders] = React.useState<string[]>([]);
     const [saydiLanguages, setSaydiLanguages] = React.useState<string[]>([]);
@@ -1368,6 +1384,46 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             Array.isArray(res?.omnivoice_voice_design_tokens) ? res.omnivoice_voice_design_tokens : [],
         );
         setSaydiVoice(String(res?.agent_saydi_voice || DEFAULT_SAYDI_VOICE).trim() || DEFAULT_SAYDI_VOICE);
+        // Kế thừa cài đặt TTS CHUNG (global) — CHỈ khi video chưa từng tự lưu
+        // cài đặt riêng (agent_tts_settings_saved = false). Video có cài đặt
+        // riêng → giữ nguyên, không đè; không có cache global → dùng default cũ.
+        {
+            const ttsDefault = res?.agent_tts_global_default;
+            const cfg = ttsDefault?.has && ttsDefault.config && typeof ttsDefault.config === 'object'
+                ? (ttsDefault.config as Record<string, unknown>)
+                : null;
+            if (!cfg || res?.agent_tts_settings_saved) {
+                setTtsGlobalSource(null);
+            } else {
+                if (typeof cfg.agent_tts_auto === 'boolean') {
+                    setAgentTtsAuto(cfg.agent_tts_auto);
+                }
+                if (Array.isArray(cfg.agent_tts_platforms)) {
+                    setSelectedPlatforms(normalizePlatforms(cfg.agent_tts_platforms as string[]));
+                }
+                const cfgSpeed = Number(cfg.agent_omnivoice_speed);
+                if (Number.isFinite(cfgSpeed) && cfgSpeed > 0) {
+                    setOmnivoiceSpeed(Math.max(0.5, Math.min(1.5, cfgSpeed)));
+                }
+                if (typeof cfg.agent_saydi_voice === 'string' && cfg.agent_saydi_voice.trim() !== '') {
+                    setSaydiVoice(cfg.agent_saydi_voice.trim() || DEFAULT_SAYDI_VOICE);
+                }
+                if (typeof cfg.agent_omnivoice_voice === 'string' && cfg.agent_omnivoice_voice.trim() !== '') {
+                    setOmnivoiceVoice(cfg.agent_omnivoice_voice.trim() || 'minh_quân');
+                }
+                if (cfg.agent_omnivoice_voice_mode === 'design' || cfg.agent_omnivoice_voice_mode === 'clone') {
+                    setOmnivoiceVoiceMode(cfg.agent_omnivoice_voice_mode);
+                }
+                if (typeof cfg.agent_omnivoice_voice_design === 'string' && cfg.agent_omnivoice_voice_design.trim() !== '') {
+                    setOmnivoiceVoiceDesign(cfg.agent_omnivoice_voice_design.trim());
+                }
+                setTtsGlobalSource({
+                    shortVideoId: Number(ttsDefault?.source_short_video_id || 0),
+                    title: String(ttsDefault?.source_title || ''),
+                    updatedAt: String(ttsDefault?.updated_at || ''),
+                });
+            }
+        }
         const mpId = Number(res?.marketing_post_id || 0);
         setMarketingPostId(Number.isFinite(mpId) && mpId > 0 ? mpId : 0);
         const nextSource = String(res?.agent_source_content || '');
@@ -1836,6 +1892,31 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     });
     const chainLabel = formatTtsChain(selectedPlatforms);
 
+    /**
+     * Cập nhật cache TTS GLOBAL (chung hệ thống) sau khi user LƯU cài đặt riêng
+     * của video này — video kế tiếp chưa cài đặt sẽ tự nhận option mới nhất.
+     * Fire-and-forget: lỗi không chặn thao tác chính (chỉ log message error).
+     */
+    const persistTtsGlobalDefault = async (
+        patch: Parameters<typeof saveAgentTtsGlobalDefault>[1],
+    ) => {
+        if (!shortVideoId) {
+            return;
+        }
+        try {
+            const res = await saveAgentTtsGlobalDefault(shortVideoId, patch);
+            if (res?.success && res.has) {
+                setTtsGlobalSource({
+                    shortVideoId,
+                    title: String(res.source_title || title || ''),
+                    updatedAt: String(res.updated_at || ''),
+                });
+            }
+        } catch {
+            // im lặng — global cache là tiện lợi thêm, không chặn các save chính
+        }
+    };
+
     const persistTtsSettings = async (
         nextAuto: boolean,
         nextPlatforms: string[],
@@ -1862,6 +1943,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (successMessage) {
                 showMessage(successMessage, 'success');
             }
+            void persistTtsGlobalDefault({
+                agent_tts_auto: nextAuto,
+                agent_tts_platforms: nextPlatforms,
+                ...(nextSpeed !== undefined ? { agent_omnivoice_speed: nextSpeed } : {}),
+            });
             loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -1945,6 +2031,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             setOmnivoiceSpeed(clamped);
             showMessage('Đã lưu tốc độ OmniVoice', 'success');
+            void persistTtsGlobalDefault({ agent_omnivoice_speed: clamped });
             loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -6843,6 +6930,51 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     // Sync ref mỗi render — callback khai báo trước vẫn đọc được marks mới nhất.
     manualBeatMarksRef.current = manualBeatMarks;
     const [savingManualBeat, setSavingManualBeat] = React.useState(false);
+
+    // Dịch audio script beat (video 2s) — map key = thứ tự beat (mark.order 1-based).
+    // Nguồn truth: agent_video_json.video_2s.beat_translations trên CMS — đọc từ
+    // get-marks, ghi qua save-translations (không dùng localStorage).
+    const [beatTranslations, setBeatTranslationsState] = React.useState<BeatTranslationMap>({});
+    React.useEffect(() => {
+        setBeatTranslationsState({});
+    }, [shortVideoId]);
+    /**
+     * Upsert bản dịch lên server (optimistic set trước, save sau; lỗi → hoàn tác state).
+     * Trả về tổng số beat có bản dịch sau lưu (hoặc -1 khi lỗi API).
+     */
+    const setBeatTranslations = React.useCallback(
+        async (updater: (prev: BeatTranslationMap) => BeatTranslationMap, sourceLanguage = ''): Promise<number> => {
+            const prev = beatTranslations;
+            const next = updater(prev);
+            setBeatTranslationsState(next);
+            if (!shortVideoId) {
+                showMessage('Thiếu short_video_id', 'error');
+                setBeatTranslationsState(prev);
+                return -1;
+            }
+            try {
+                const res = await saveManualBeatTranslations(shortVideoId, next, sourceLanguage);
+                const ok = res?.success == null ? true : Boolean(res.success);
+                if (!ok || !res.success) {
+                    setBeatTranslationsState(prev);
+                    showMessage(parseApiMessage(res?.message) || 'Không lưu được bản dịch beat', 'error');
+                    return -1;
+                }
+                // Nguồn truth server — chuẩn hoá lại theo response nếu có
+                const serverMap = res?.beat_translations;
+                if (serverMap && typeof serverMap === 'object') {
+                    setBeatTranslationsState(normalizeBeatTranslationMap(serverMap));
+                }
+                return Object.keys(serverMap && typeof serverMap === 'object' ? normalizeBeatTranslationMap(serverMap) : next).length;
+            } catch (error) {
+                setBeatTranslationsState(prev);
+                showMessage(error instanceof Error ? error.message : 'Không lưu được bản dịch beat', 'error');
+                return -1;
+            }
+        },
+        [beatTranslations, shortVideoId],
+    );
+
     const [openingVideo2sMetaAi, setOpeningVideo2sMetaAi] = React.useState(false);
     const [copyingBeatDivisionPrompt, setCopyingBeatDivisionPrompt] = React.useState(false);
     const [importingAiBeatDivision, setImportingAiBeatDivision] = React.useState(false);
@@ -6869,6 +7001,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 const res = await fetchManualBeatMarks(shortVideoId);
                 if (!cancelled && res?.success) {
                     setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                    if (res.beat_translations != null && typeof res.beat_translations === 'object') {
+                        setBeatTranslationsState(normalizeBeatTranslationMap(res.beat_translations));
+                    }
                 }
             } catch {
                 // im lặng — panel vẫn dùng được, user tạo beat sẽ tự sync lại
@@ -7048,6 +7183,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             const res = await fetchManualBeatMarks(shortVideoId);
             if (res?.success) {
                 setManualBeatMarks(normalizeManualBeatMarks(res.manual_beat_marks));
+                if (res.beat_translations != null && typeof res.beat_translations === 'object') {
+                    setBeatTranslationsState(normalizeBeatTranslationMap(res.beat_translations));
+                }
                 if (res.full_auto_pipeline) {
                     setFullAutoPipeline(res.full_auto_pipeline);
                 }
@@ -8157,6 +8295,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             applyOmnivoiceVoiceResponse(res);
             showMessage(parseApiMessage(res?.message) || 'Đã lưu giọng OmniVoice', 'success');
+            void persistTtsGlobalDefault({
+                agent_omnivoice_voice: String(res?.agent_omnivoice_voice || voice),
+                agent_omnivoice_voice_mode: String(res?.agent_omnivoice_voice_mode || mode || 'clone'),
+                agent_omnivoice_voice_design: String(res?.agent_omnivoice_voice_design || design),
+            });
             await maybeRegenerateOmnivoiceTts(shouldAskRerender);
             loadRow();
             return true;
@@ -8208,6 +8351,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             setSaydiVoice(String(res.agent_saydi_voice || voice).trim() || DEFAULT_SAYDI_VOICE);
             showMessage(parseApiMessage(res?.message) || 'Đã lưu giọng Saydi', 'success');
+            void persistTtsGlobalDefault({
+                agent_saydi_voice: String(res.agent_saydi_voice || voice).trim(),
+            });
             loadRow();
             return true;
         } catch (e) {
@@ -9184,6 +9330,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         hasAudio,
         statusChip,
         chainLabel,
+        ttsGlobalSource,
         loadRow,
         handleTtsAutoChange,
         handleAutoFillBeatHtmlChange,
@@ -9276,6 +9423,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleRemoveManualAudioSegment,
         handleReorderManualAudioSegments,
         handleFinalizeManualAudio,
+        beatTranslations,
+        setBeatTranslations,
         showMessage,
     };
 }

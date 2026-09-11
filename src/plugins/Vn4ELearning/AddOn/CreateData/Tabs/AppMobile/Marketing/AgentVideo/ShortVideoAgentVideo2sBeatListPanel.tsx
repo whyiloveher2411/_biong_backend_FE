@@ -10,13 +10,23 @@ import {
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import DnsIcon from '@mui/icons-material/Dns';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SaveIcon from '@mui/icons-material/Save';
 import TuneIcon from '@mui/icons-material/Tune';
 import Button from 'components/atoms/Button';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { parseBeatListText } from './agentVideoManualBeats';
+import {
+    beatTranslationsFromPayload,
+    buildBeatTranslationPrompt,
+    parseBeatTranslationClipboard,
+} from './agentVideoBeatTranslation';
 import { resolveOmnivoiceDisplaySummary } from './agentVideoUi';
+import { useFloatingMessages } from 'hook/useFloatingMessages';
+import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
     SECTION_THEMES,
@@ -38,6 +48,7 @@ const PLACEHOLDER = [
 ].join('\n');
 
 export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudioSettings }: Props) {
+    const { showMessage } = useFloatingMessages();
     const marks = state.manualBeatMarks;
     const promptFilled = marks.filter((mark) => mark.imagePrompt.trim() !== '').length;
     const beatAudioReadyCount = (state.beatAudio?.items ?? []).filter(
@@ -83,6 +94,77 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
         voiceDesign: state.omnivoiceVoiceDesign,
         catalog: state.omnivoiceVoiceCatalog,
     });
+
+    // === Dịch audio script beat (tiếng Việt) ===
+    const beatTranslations = state.beatTranslations ?? {};
+    const translatedCount = marks.filter(
+        (mark) => (beatTranslations[String(mark.order)] || '').trim() !== '',
+    ).length;
+    const allTranslated = marks.length > 0 && translatedCount === marks.length;
+    const translationStatus = marks.length === 0
+        ? 'Chưa có beat nào để dịch'
+        : allTranslated
+            ? `Đã đủ bản dịch ${translatedCount}/${marks.length} beat — bấm vào beat để xem bản dịch trên timeline audio`
+            : `Đã dịch ${translatedCount}/${marks.length} beat — còn thiếu beat: ${
+                marks
+                    .filter((mark) => (beatTranslations[String(mark.order)] || '').trim() === '')
+                    .map((mark) => mark.order)
+                    .slice(0, 12)
+                    .join(', ')
+            }${translatedCount < marks.length && marks.length - translatedCount > 12 ? '…' : ''}`;
+
+    const [copyingTranslationPrompt, setCopyingTranslationPrompt] = React.useState(false);
+    const [pastingTranslation, setPastingTranslation] = React.useState(false);
+
+    // Copy prompt dịch beat — kèm danh sách audio script beat hiện tại (mỗi dòng = 1 beat),
+    // output bắt buộc JSON để validate khi dán lại.
+    const handleCopyTranslationPrompt = async () => {
+        if (marks.length === 0) {
+            showMessage('Chưa có beat nào — cập nhật beat trước khi dịch', 'warning');
+            return;
+        }
+        setCopyingTranslationPrompt(true);
+        try {
+            await copyTextToClipboard(buildBeatTranslationPrompt(marks));
+            showMessage(`Đã copy prompt dịch ${marks.length} beat — dán vào AI để lấy kết quả`, 'success');
+        } catch (error) {
+            showMessage(error instanceof Error ? error.message : 'Không copy được prompt', 'error');
+        } finally {
+            setCopyingTranslationPrompt(false);
+        }
+    };
+
+    // Dán kết quả dịch beat: đọc clipboard → parse/validate JSON (đủ beat, đúng thứ
+    // tự, vi khác rỗng) → cập nhật bản dịch; lỗi thì thông báo, không đụng dữ liệu.
+    const handlePasteTranslation = async () => {
+        if (marks.length === 0) {
+            showMessage('Chưa có beat nào — cập nhật beat trước khi dán kết quả', 'warning');
+            return;
+        }
+        setPastingTranslation(true);
+        try {
+            const text = await readTextFromClipboard();
+            const { payload } = parseBeatTranslationClipboard(text, marks);
+            const merged = beatTranslationsFromPayload(payload);
+            const saved = await state.setBeatTranslations(
+                (prev) => ({ ...prev, ...merged }),
+                payload.source_language,
+            );
+            if (saved >= 0) {
+                showMessage(
+                    `Đã cập nhật bản dịch ${payload.translations.length} beat (nguồn: ${payload.source_language})`,
+                    'success',
+                );
+            }
+        } catch (error) {
+            showMessage(
+                error instanceof Error ? error.message : 'Không đọc được clipboard — dán thủ công',
+                'error',
+            );
+        } finally {
+            setPastingTranslation(false);
+        }
+    };
 
     return (
         <SectionShell
@@ -168,6 +250,23 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                         {state.agentTtsAuto ? (
                             <Chip size="small" label={state.chainLabel} variant="outlined" />
                         ) : null}
+                        {state.ttsGlobalSource ? (
+                            <Chip
+                                size="small"
+                                color="info"
+                                icon={<DnsIcon fontSize="small" />}
+                                label={
+                                    'Dùng cài đặt chung'
+                                    + (state.ttsGlobalSource.title
+                                        ? ` từ “${state.ttsGlobalSource.title}”`
+                                        : state.ttsGlobalSource.shortVideoId
+                                            ? ` từ video #${state.ttsGlobalSource.shortVideoId}`
+                                            : '')
+                                }
+                                title="Video chưa có cài đặt riêng — đang dùng cài đặt TTS chung của hệ thống. Lưu cài đặt khác cho video này sẽ cập nhật chung."
+                                variant="outlined"
+                            />
+                        ) : null}
                         <Chip
                             size="small"
                             avatar={(
@@ -234,6 +333,64 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                         Sửa/xóa dòng rồi cập nhật lại — beat đổi nội dung sẽ tự tạo lại audio.
                     </Typography>
                 </Stack>
+
+                {/* Dịch audio script beat — nhiều AI dịch tốt hơn nên copy prompt ra
+                    AI rồi dán kết quả JSON về để validate + cập nhật bản dịch. */}
+                <Box sx={subPanelSx(SECTION_THEMES.script)}>
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                        sx={{ mb: 1 }}
+                    >
+                        <Typography variant="caption" fontWeight={700} color="text.secondary">
+                            Dịch audio script (tiếng Việt)
+                        </Typography>
+                        <Chip
+                            size="small"
+                            color={allTranslated ? 'success' : 'default'}
+                            variant="outlined"
+                            icon={allTranslated ? <CheckCircleOutlineIcon fontSize="small" /> : undefined}
+                            label={
+                                marks.length === 0
+                                    ? 'chưa có beat'
+                                    : `${translatedCount}/${marks.length} beat đã dịch`
+                            }
+                        />
+                    </Stack>
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                        <LoadingButton
+                            size="small"
+                            loading={copyingTranslationPrompt}
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => { void handleCopyTranslationPrompt(); }}
+                        >
+                            Copy prompt dịch beat
+                        </LoadingButton>
+                        <LoadingButton
+                            size="small"
+                            loading={pastingTranslation}
+                            variant="outlined"
+                            startIcon={<ContentPasteIcon />}
+                            onClick={() => { void handlePasteTranslation(); }}
+                        >
+                            Dán kết quả dịch beat
+                        </LoadingButton>
+                    </Stack>
+                    <Typography
+                        variant="caption"
+                        color={allTranslated
+                            ? 'success.main'
+                            : marks.length === 0 ? 'text.secondary' : 'text.secondary'}
+                        sx={{ display: 'block', mt: 0.5 }}
+                    >
+                        {translationStatus}
+                    </Typography>
+                </Box>
 
                 <Box>
                     <Typography variant="caption" color="text.secondary">

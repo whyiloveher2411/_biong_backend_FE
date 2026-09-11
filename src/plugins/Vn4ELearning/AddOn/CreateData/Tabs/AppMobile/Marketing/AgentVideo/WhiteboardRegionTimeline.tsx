@@ -111,6 +111,8 @@ type Props = {
      * hiển thị thay cho thông báo khi beat CHƯA có whisper words.
      */
     beatContent?: string;
+    /** Bản dịch tiếng Việt của beat hiện tại — hiển thị màu xanh dưới whisper. */
+    beatTranslation?: string;
     colorFor: (index: number) => string;
     onChangeRegion: (id: string, patch: Partial<BeatRegion>) => void;
     onSelectRegion?: (id: string, meta?: TimelineSelectMeta) => void;
@@ -258,6 +260,7 @@ export default function WhiteboardRegionTimeline({
     beatStartSec,
     beatWords,
     beatContent = '',
+    beatTranslation = '',
     colorFor,
     onChangeRegion,
     onSelectRegion,
@@ -1143,6 +1146,21 @@ export default function WhiteboardRegionTimeline({
                             );
                         })
                     )}
+                    {beatTranslation.trim() !== '' ? (
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                display: 'block',
+                                color: '#2e7d32',
+                                fontWeight: 600,
+                                lineHeight: 1.7,
+                                px: 0.25,
+                            }}
+                            title="Bản dịch tiếng Việt của beat (nguồn: danh sách beat)"
+                        >
+                            {beatTranslation}
+                        </Typography>
+                    ) : null}
                     </Box>
                     {manualBeatAdj && !manualBeatAdj.open ? (
                         <Box sx={{ flexShrink: 0, alignSelf: 'flex-start', mt: '2px' }}>

@@ -213,7 +213,7 @@ export default function ShortVideoAgentBeatImageEditDrawer({
             return { prompt: plainJoined.trim(), valid: plainJoined.trim() !== '' };
         }
         const trimmed = imagePrompt.trim();
-        return Boolean(validateBeatImagePrompt(trimmed))
+        return validateBeatImagePrompt(trimmed)
             ? { prompt: trimmed, valid: true }
             : { prompt: '', valid: false };
     };

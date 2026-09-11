@@ -5702,6 +5702,13 @@ export default function ShortVideoAgentBeatRegionEditor({
                                     beatMapForUi?.sections?.find((sec) => sec.id === beatId)?.phrase_anchor || '',
                                 )).trim()
                         }
+                        beatTranslation={
+                            state.isVideo2sMode
+                                ? String(
+                                    state.beatTranslations?.[String(activeSegmentIndex + 1)] || '',
+                                ).trim()
+                                : ''
+                        }
                         colorFor={colorFor}
                         onChangeRegion={updateRegion}
                         onSelectRegion={selectRegionFromTimeline}
