@@ -408,14 +408,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
         return 'drag' as const;
     }, [state.agentWhiteboardConfig?.photo_place_mode]);
 
-    const whiteboardGenStyle = React.useMemo(() => {
-        const raw = String(state.agentWhiteboardConfig?.gen_style || 'hybrid').trim();
-        if (raw === 'collage_art' || raw === 'whiteboard' || raw === 'sketch' || raw === 'vox' || raw === 'courtroom_sketch') {
-            return raw;
-        }
-        return 'hybrid';
-    }, [state.agentWhiteboardConfig?.gen_style]);
-
     const clipOptionStackSx = {
         borderRadius: 1,
         border: '1px solid',
@@ -1072,93 +1064,6 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                                 : ' Beat chưa render video sẽ bị bỏ qua và báo lỗi.'}
                                         </Typography>
                                     </Box>
-                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600} sx={{ mt: 1.25, mb: 0.75 }}>
-                                        Phong cách hình ảnh
-                                    </Typography>
-                                    <Stack spacing={0.75}>
-                                        {[
-                                            { key: 'hybrid', label: 'Whiteboard (Hybrid)', color: '#1976d2', desc: 'Phong cách whiteboard: outline + hình ảnh thật trên nền bảng.' },
-                                            { key: 'collage_art', label: 'Collage Art', color: '#e65100', desc: 'Giấy cắt tay, mép giấy rách, nền cream/kraft, halftone dots, washi tape, chữ báo vintage, accent đỏ.' },
-                                            { key: 'vox', label: 'Vox', color: '#d32f2f', desc: 'Editorial documentary collage: cutout minh họa chủ đề, layered composition, hierarchy, scale contrast; annotation marker tối thiểu.' },
-                                            { key: 'courtroom_sketch', label: 'Courtroom Sketch', color: '#6a1b9a', desc: 'Phác thảo tòa án vẽ tay: bút chì màu/phấn màu/nước trên giấy vân nhám, nét nhanh thô, màu trầm.' },
-                                        ].map((option) => {
-                                            const active = whiteboardGenStyle === option.key;
-                                            return (
-                                                <Box
-                                                    key={option.key}
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    aria-pressed={active}
-                                                    aria-label={`Phong cách hình ảnh ${option.label}`}
-                                                    onClick={() => {
-                                                        if (!state.savingWhiteboardConfig) {
-                                                            void state.handleAgentWhiteboardConfigChange({
-                                                                gen_style: option.key,
-                                                            });
-                                                        }
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if ((e.key === 'Enter' || e.key === ' ') && !state.savingWhiteboardConfig) {
-                                                            e.preventDefault();
-                                                            void state.handleAgentWhiteboardConfigChange({
-                                                                gen_style: option.key,
-                                                            });
-                                                        }
-                                                    }}
-                                                    sx={{
-                                                        cursor: state.savingWhiteboardConfig ? 'default' : 'pointer',
-                                                        borderRadius: 1,
-                                                        border: '1px solid',
-                                                        borderColor: active ? option.color : 'rgba(25, 118, 210, 0.15)',
-                                                        bgcolor: active ? `${option.color}1A` : 'transparent',
-                                                        px: 1.25,
-                                                        py: 0.75,
-                                                        '&:hover': {
-                                                            borderColor: active ? option.color : 'rgba(25, 118, 210, 0.45)',
-                                                            bgcolor: active ? `${option.color}26` : 'rgba(25, 118, 210, 0.05)',
-                                                        },
-                                                    }}
-                                                >
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                                        {active ? (
-                                                            <CheckCircleIcon sx={{ color: option.color, fontSize: 15, flexShrink: 0 }} />
-                                                        ) : (
-                                                            <Box
-                                                                sx={{
-                                                                    width: 9,
-                                                                    height: 9,
-                                                                    borderRadius: '50%',
-                                                                    border: '1px solid',
-                                                                    borderColor: option.color,
-                                                                    bgcolor: 'transparent',
-                                                                    flexShrink: 0,
-                                                                }}
-                                                            />
-                                                        )}
-                                                        <Typography
-                                                            variant="caption"
-                                                            display="block"
-                                                            sx={{
-                                                                fontWeight: 700,
-                                                                color: active ? option.color : 'text.primary',
-                                                                lineHeight: 1.3,
-                                                            }}
-                                                        >
-                                                            {option.label}
-                                                        </Typography>
-                                                    </Box>
-                                                    <Typography
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                        display="block"
-                                                        sx={{ lineHeight: 1.35, mt: 0.25, pl: 1.75 }}
-                                                    >
-                                                        {option.desc}
-                                                    </Typography>
-                                                </Box>
-                                            );
-                                        })}
-                                    </Stack>
                                 </Box>
                             </Stack>
                         ) : (

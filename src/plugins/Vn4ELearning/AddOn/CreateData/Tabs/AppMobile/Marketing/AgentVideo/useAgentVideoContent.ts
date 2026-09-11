@@ -634,12 +634,16 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [agentImageTextLang, setAgentImageTextLang] = React.useState<AgentImageTextLang>('vi');
     const [savingImageTextLang, setSavingImageTextLang] = React.useState(false);
     const [agentWhiteboardConfig, setAgentWhiteboardConfig] = React.useState<AgentWhiteboardConfig>({});
+    // Video 2s: image prompt đã chứa sẵn phong cách (thay [prompt-style] từ post
+    // type image style) → KHÔNG append suffix gen_style khi dùng prompt.
     const whiteboardImageStyleSuffix = React.useMemo(
-        () => beatImageStyleSuffix(
-            String(agentWhiteboardConfig?.gen_style || 'hybrid'),
-            agentImageTextLang,
-        ),
-        [agentWhiteboardConfig, agentImageTextLang],
+        () => (agentVisualMode === 'video_2s'
+            ? ''
+            : beatImageStyleSuffix(
+                String(agentWhiteboardConfig?.gen_style || 'hybrid'),
+                agentImageTextLang,
+            )),
+        [agentVisualMode, agentWhiteboardConfig, agentImageTextLang],
     );
     const whiteboardImageTextLangRule = React.useMemo(
         () => imageTextLangSuffixRule(agentImageTextLang),
