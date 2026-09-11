@@ -3814,6 +3814,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     // Beat đã có ảnh → panel thumbload ảnh hiện trạng, không hiện "chưa có".
                     imageUrl: String(beatImage[beatId]?.image_url || '').trim(),
                     imageUrls: beatImageEntryUrls(beatImage[beatId]),
+                    // Beat đã có chat cũ → đúng cookie account tạo chat.
+                    beatCookieId: Number(beatImage[beatId]?.cookie_id || 0),
                 });
                 setActiveBeatId(beatId);
                 setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
@@ -3900,6 +3902,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
                     imageVoiceContent: resolveBeatVoice(beatId),
+                    beatCookieId: Number(beatImage[beatId]?.cookie_id || 0),
                 });
             }
             setActiveBeatId(beatId);
@@ -5452,6 +5455,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                             backgroundUrl: beatBackgroundImageUrls[id],
                         }),
                         imageVoiceContent: resolveBeatVoice(id),
+                        // Beat có chat cũ → mở lại đúng cookie account tạo chat.
+                        cookieId: Number(beatImage[id]?.cookie_id || 0),
                     };
                 }).filter((item) => item.beatId && item.imagePrompt && batchIds.includes(item.beatId));
                 const result = await openImportHtmlBeatMetaAiForMissingBeats({

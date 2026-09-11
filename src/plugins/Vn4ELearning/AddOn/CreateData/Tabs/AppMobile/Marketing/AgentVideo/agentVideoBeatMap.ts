@@ -59,6 +59,11 @@ export type BeatImageEntry = {
      * để xem/update ảnh ngay trong conversation đó.
      */
     chat_url?: string;
+    /**
+     * Cookie pool id (Quản lý cookie) của account tạo chat — mở lại chat /
+     * feedback / pull ảnh phải dùng đúng cookie này (session Meta gắn account).
+     */
+    cookie_id?: number;
     updated_at?: string;
     creative_prompt?: string;
     qa_status?: BeatQaStatus;

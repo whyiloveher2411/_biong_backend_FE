@@ -5,6 +5,7 @@ import { convertToURL } from 'helpers/url';
 import { getAccessToken } from 'store/user/user.reducers';
 import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
 import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
+import { metaaiCookiePayloadForOpen } from 'helpers/marketingShortVideoCookieApi';
 
 const RESOURCE_BASE_PATH =
     'plugin/vn4-e-learning/app-mobile/marketing/short-video/resource';
@@ -403,6 +404,7 @@ export async function openResourceMetaAi(
             resources,
             access_token: getAccessToken() ?? '',
             upload_api_url: resourceApiUrl('short-video/resource/upload-image'),
+            ...(await metaaiCookiePayloadForOpen(0)),
             ...(payload.autoSubmit === false ? {} : { auto_submit: true }),
         },
         RESOURCE_METAAI_OPEN_RESULT_EVENT,

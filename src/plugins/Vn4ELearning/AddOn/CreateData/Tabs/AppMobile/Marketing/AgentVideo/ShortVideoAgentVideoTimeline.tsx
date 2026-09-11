@@ -10,6 +10,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
+import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
@@ -35,6 +36,7 @@ import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDraw
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
 import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
+import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
 import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
 
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -416,6 +418,7 @@ export default function ShortVideoAgentVideoTimeline({
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
     const [bgmManualOpen, setBgmManualOpen] = React.useState(false);
     const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
+    const [cookieDrawerOpen, setCookieDrawerOpen] = React.useState(false);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -1120,6 +1123,15 @@ export default function ShortVideoAgentVideoTimeline({
                         >
                             Quản lý resource
                         </Button>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<VpnKeyOutlinedIcon />}
+                            onClick={() => { setCookieDrawerOpen(true); }}
+                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                        >
+                            Quản lý cookie
+                        </Button>
                         {showPipelineRunControls ? (
                             <>
                                 <LoadingButton
@@ -1505,6 +1517,10 @@ export default function ShortVideoAgentVideoTimeline({
                 onClose={() => setResourceDrawerOpen(false)}
                 shortVideoId={shortVideoId}
                 shortVideoTitle={clipLabel}
+            />
+            <ShortVideoCookieManageDrawer
+                open={cookieDrawerOpen}
+                onClose={() => setCookieDrawerOpen(false)}
             />
         </Box>
     );

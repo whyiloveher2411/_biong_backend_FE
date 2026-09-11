@@ -7,6 +7,7 @@ import {
     resolveShortVideoPromptImageReferences,
     type ShortVideoPromptImageReference,
 } from 'helpers/marketingShortVideoResourceApi';
+import { metaaiCookiePayloadForOpen } from 'helpers/marketingShortVideoCookieApi';
 import {
     WHITEBOARD_CENTRAL_SAFE_AREA_RULE,
     WHITEBOARD_DUAL_LAYER_OUTPUT_RULE,
@@ -328,6 +329,8 @@ export async function openImportHtmlBeatMetaAiChatSyncLatest(options: {
     objectLayerCount?: number;
     imagePrompt?: string;
     video2s?: boolean;
+    /** Cookie pool id đã lưu với beat — mở lại đúng account tạo chat. */
+    cookieId?: number;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
@@ -350,6 +353,8 @@ export async function openImportHtmlBeatMetaAiChatSyncLatest(options: {
     }
 
     const accessToken = getAccessToken() ?? '';
+    // Cookie pool: mở lại chat cũ → dùng đúng cookie account tạo chat (fallback round-robin).
+    const cookieFragment = await metaaiCookiePayloadForOpen(Number(options.cookieId || 0));
     const result = await dispatchOpenMetaAiChatSyncLatestEvent({
         short_video_id: shortVideoId,
         beat_id: beatId,
@@ -365,6 +370,7 @@ export async function openImportHtmlBeatMetaAiChatSyncLatest(options: {
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
+        ...cookieFragment,
         ...(options.video2s ? { video_2s: 1 } : {}),
     });
     if (!result.ok && result.duplicate === true) {
@@ -637,6 +643,8 @@ export type DuckAiWorkspaceBeat = {
     backgroundImageUrl?: string;
     missingImage?: boolean;
     imageVoiceContent?: string;
+    /** Cookie pool id đã lưu với beat (Meta.ai — mở lại cùng account). */
+    cookieId?: number;
 };
 
 /** Mở 1 tab Duck.ai cho 1 beat (activeBeatId hoặc beat đầu). */
@@ -792,6 +800,11 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
      * ngay trước khi sinh ảnh (không lưu).
      */
     clipAspect?: string;
+    /**
+     * Cookie pool id đã lưu với beat — extension set đúng cookie account tạo
+     * chat cũ; 0 → round-robin cookie pool.
+     */
+    beatCookieId?: number;
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
@@ -838,6 +851,8 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
     }
 
     const accessToken = getAccessToken() ?? '';
+    // Cookie pool (Quản lý cookie): extension tự set cookie meta.ai trước khi mở tab.
+    const cookieFragment = await metaaiCookiePayloadForOpen(Number(options.beatCookieId || 0));
     const result = await dispatchOpenImportHtmlMetaAiEvent({
         short_video_id: shortVideoId,
         beat_id: beatId,
@@ -865,6 +880,7 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
             : {}),
         ...(video2s ? { video_2s: 1 } : {}),
         ...(options.clipAspect ? { clip_aspect: String(options.clipAspect).trim() } : {}),
+        ...cookieFragment,
         ...(options.autoSubmit === false ? {} : { auto_submit: true }),
     });
     if (!result.ok) {
@@ -933,6 +949,7 @@ export async function openVideo2sBeatPromptMetaAi(options: {
             save_prompt_api_url: pluginApiPath('short-video/manual-beat/save-mark-prompt'),
             get_marks_api_url: pluginApiPath('short-video/manual-beat/get-marks'),
             clear_all_prompts_api_url: pluginApiPath('short-video/manual-beat/clear-all-prompts'),
+            ...(await metaaiCookiePayloadForOpen(0)),
         },
         OPEN_VIDEO_2S_PROMPT_METAAI_RESULT_EVENT,
         12000,
@@ -971,12 +988,13 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 objectLayerCount: video2s
                     ? 1
                     : Math.max(1, Number(item?.objectLayerCount || 0) || 1),
-                backgroundImageUrl: video2s ? '' : String(item?.backgroundImageUrl || '').trim(),
-                missingImage: Boolean(item?.missingImage),
-                imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
-            }))
-            .filter((item) => item.beatId && item.imagePrompt)
-        : [];
+                 backgroundImageUrl: video2s ? '' : String(item?.backgroundImageUrl || '').trim(),
+                 missingImage: Boolean(item?.missingImage),
+                 imageVoiceContent: String(item?.imageVoiceContent || '').trim(),
+                 cookieId: Number(item?.cookieId || 0),
+             }))
+             .filter((item) => item.beatId && item.imagePrompt)
+         : [];
     if (!shortVideoId) {
         throw new Error('Thiếu short_video_id');
     }
@@ -1014,6 +1032,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 imageVoiceContent: beat.imageVoiceContent,
                 video2s,
                 clipAspect: options.clipAspect,
+                beatCookieId: beat.cookieId,
             });
             opened += 1;
         } catch (e) {

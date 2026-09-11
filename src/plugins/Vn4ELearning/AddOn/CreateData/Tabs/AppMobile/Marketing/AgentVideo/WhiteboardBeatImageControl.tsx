@@ -158,6 +158,8 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
                                             imagePrompt: String(entry?.image_prompt || '').trim(),
                                             objectLayerCount: 1,
                                             video2s: true,
+                                            // Account tạo chat gốc — extension set đúng cookie này.
+                                            cookieId: Number(entry?.cookie_id || 0),
                                         }).then(() => {
                                             state.showMessage(
                                                 `Đã mở tab Meta.ai pull ảnh ${beatId} — bấm nút Update ảnh mới nhất trong panel bên phải`,
