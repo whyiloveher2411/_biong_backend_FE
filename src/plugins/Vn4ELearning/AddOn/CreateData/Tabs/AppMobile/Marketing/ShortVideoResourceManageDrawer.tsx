@@ -28,6 +28,7 @@ import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
     deleteShortVideoResource,
+    deleteShortVideoResourceImages,
     deleteShortVideoResources,
     listShortVideoResources,
     openResourceMetaAi,
@@ -268,6 +269,9 @@ export default function ShortVideoResourceManageDrawer({
     const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
     const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
     const [bulkDeleting, setBulkDeleting] = React.useState(false);
+    const [imageDeleteTarget, setImageDeleteTarget] = React.useState<ShortVideoResource | null>(null);
+    const [bulkImageDeleteOpen, setBulkImageDeleteOpen] = React.useState(false);
+    const [deletingImage, setDeletingImage] = React.useState(false);
     const [openingMetaAiId, setOpeningMetaAiId] = React.useState(0);
 
     const toggleSelected = (resourceId: number) => {
@@ -311,6 +315,8 @@ export default function ShortVideoResourceManageDrawer({
             setDeleteTarget(null);
             setSelectedIds([]);
             setBulkDeleteOpen(false);
+            setImageDeleteTarget(null);
+            setBulkImageDeleteOpen(false);
             reloadList();
         }
     }, [open, reloadList]);
@@ -355,12 +361,19 @@ export default function ShortVideoResourceManageDrawer({
                 resourceTitle: item.title,
                 prompt: item.prompt,
                 imageUrl: item.image_url,
+                chatUrl: item.metaai_chat_url,
+                cookieId: item.metaai_cookie_id,
             })),
             autoSubmit: true,
         })
             .then(() => {
                 setOpeningMetaAiId(0);
-                showMessage(`Đã mở tab Meta.ai với ${fillable.length} resource — Prev/Next chuyển resource, download ảnh → tự lưu`, 'success');
+                showMessage(
+                    resource.metaai_chat_url
+                        ? `Đã mở lại chat Meta.ai của ${resource.resource_key} (update mode) — không tự submit, dùng panel để update`
+                        : `Đã mở tab Meta.ai với ${fillable.length} resource — Prev/Next chuyển resource, download ảnh → tự lưu`,
+                    'success',
+                );
             })
             .catch((err: unknown) => {
                 setOpeningMetaAiId(0);
@@ -538,6 +551,56 @@ export default function ShortVideoResourceManageDrawer({
             });
     };
 
+    const runDeleteImages = (ids: number[], onDone: () => void) => {
+        if (!ids.length) {
+            return;
+        }
+        setDeletingImage(true);
+        deleteShortVideoResourceImages(ids)
+            .then((result) => {
+                setDeletingImage(false);
+                if (result?.success === false) {
+                    showMessage(
+                        parseShortVideoResourceApiMessage(result, 'Không xóa được ảnh resource'),
+                        'error',
+                    );
+                    onDone();
+                    return;
+                }
+                const cleared = Number(result?.cleared || ids.length);
+                const s3Count = Array.isArray(result?.s3_deleted) ? result.s3_deleted.length : 0;
+                showMessage(
+                    `Đã xóa ảnh của ${cleared} resource${s3Count > 0 ? ` (xóa ${s3Count} file S3)` : ''}`,
+                    'success',
+                );
+                onDone();
+                reloadList();
+            })
+            .catch((err: unknown) => {
+                setDeletingImage(false);
+                showMessage(err instanceof Error ? err.message : 'Không xóa được ảnh resource', 'error');
+                onDone();
+            });
+    };
+
+    const handleConfirmDeleteImage = () => {
+        if (!imageDeleteTarget || !imageDeleteTarget.image_url) {
+            return;
+        }
+        runDeleteImages([imageDeleteTarget.id], () => setImageDeleteTarget(null));
+    };
+
+    const handleBulkDeleteImages = () => {
+        const withImage = resources.filter(
+            (item) => selectedIds.includes(item.id) && item.image_url,
+        );
+        if (!withImage.length) {
+            showMessage('Resource đã chọn không có ảnh nào', 'warning');
+            return;
+        }
+        runDeleteImages(withImage.map((item) => item.id), () => setBulkImageDeleteOpen(false));
+    };
+
     const headerAction = (
         <Stack direction="row" spacing={1} alignItems="center">
             {mode === 'form' ? (
@@ -693,10 +756,23 @@ export default function ShortVideoResourceManageDrawer({
                         </Button>
                         <Button
                             size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={() => setBulkImageDeleteOpen(true)}
+                            disabled={bulkDeleting || deletingImage || !resources.some(
+                                (item) => selectedIds.includes(item.id) && item.image_url,
+                            )}
+                            startIcon={deletingImage ? <CircularProgress size={14} color="inherit" /> : undefined}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Xóa ảnh đã chọn
+                        </Button>
+                        <Button
+                            size="small"
                             variant="contained"
                             color="error"
                             onClick={() => setBulkDeleteOpen(true)}
-                            disabled={bulkDeleting}
+                            disabled={bulkDeleting || deletingImage}
                             startIcon={bulkDeleting ? <CircularProgress size={14} color="inherit" /> : undefined}
                             sx={{ textTransform: 'none' }}
                         >
@@ -769,6 +845,31 @@ export default function ShortVideoResourceManageDrawer({
                                     ) : (
                                         <ImageOutlinedIcon color="disabled" />
                                     )}
+                                    {resource.image_url ? (
+                                        <Tooltip title="Xóa ảnh resource">
+                                            <IconButton
+                                                size="small"
+                                                color="error"
+                                                disabled={deletingImage}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setImageDeleteTarget(resource);
+                                                }}
+                                                sx={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    right: 0,
+                                                    p: 0.25,
+                                                    zIndex: 1,
+                                                    bgcolor: 'rgba(255,255,255,0.75)',
+                                                    borderRadius: 1,
+                                                    '& .MuiSvgIcon-root': { fontSize: 16 },
+                                                }}
+                                            >
+                                                <DeleteOutlineOutlinedIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    ) : null}
                                 </Box>
                                 <Box sx={{ minWidth: 0, flex: 1 }}>
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
@@ -871,6 +972,61 @@ export default function ShortVideoResourceManageDrawer({
                     <Button color="error" variant="contained" onClick={handleBulkDelete} disabled={bulkDeleting}>
                         {bulkDeleting ? <CircularProgress size={16} color="inherit" /> : null}
                         Xóa {selectedIds.length} resource
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={Boolean(imageDeleteTarget)}
+                onClose={() => (deletingImage ? null : setImageDeleteTarget(null))}
+            >
+                <DialogTitle>Xóa ảnh resource?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Xóa ảnh của resource "{imageDeleteTarget?.title || imageDeleteTarget?.resource_key || ''}"
+                        ({imageDeleteTarget?.resource_key}) khỏi resource và file trên S3?
+                        Resource vẫn được giữ lại. Hành động không thể hoàn tác.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setImageDeleteTarget(null)} disabled={deletingImage}>
+                        Hủy
+                    </Button>
+                    <Button
+                        color="error"
+                        variant="contained"
+                        onClick={handleConfirmDeleteImage}
+                        disabled={deletingImage}
+                    >
+                        {deletingImage ? <CircularProgress size={16} color="inherit" /> : null}
+                        Xóa ảnh
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog
+                open={bulkImageDeleteOpen}
+                onClose={() => (deletingImage ? null : setBulkImageDeleteOpen(false))}
+            >
+                <DialogTitle>
+                    Xóa ảnh của {resources.filter((item) => selectedIds.includes(item.id) && item.image_url).length} resource đã chọn?
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Xóa ảnh của các resource đã chọn (chỉ resource có ảnh) khỏi resource và file trên S3?
+                        Resource vẫn được giữ lại. Hành động không thể hoàn tác.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setBulkImageDeleteOpen(false)} disabled={deletingImage}>
+                        Hủy
+                    </Button>
+                    <Button
+                        color="error"
+                        variant="contained"
+                        onClick={handleBulkDeleteImages}
+                        disabled={deletingImage}
+                    >
+                        {deletingImage ? <CircularProgress size={16} color="inherit" /> : null}
+                        Xóa ảnh đã chọn
                     </Button>
                 </DialogActions>
             </Dialog>

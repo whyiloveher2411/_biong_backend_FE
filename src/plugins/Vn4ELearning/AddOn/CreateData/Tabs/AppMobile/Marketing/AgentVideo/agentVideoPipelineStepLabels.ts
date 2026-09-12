@@ -4,7 +4,7 @@ import {
     FULL_AUTO_PIPELINE_STEP_ORDER,
     type FullAutoPipelineStepKey,
 } from './agentVideoApi';
-import { isAgentWhiteboardMode } from './agentVideoVisualMode';
+import { isAgentVideo2sMode, isAgentWhiteboardMode } from './agentVideoVisualMode';
 
 export const EXTENDED_PIPELINE_STEP_LABELS: Record<string, string> = {
     ...FULL_AUTO_PIPELINE_STEP_LABELS,
@@ -68,6 +68,10 @@ export function isFullAutoPipelineStepRelevantForMode(
     }
     if (beatAudioMode && (FULL_AUTO_PIPELINE_BEAT_AUDIO_SKIPPED_STEPS as readonly string[]).includes(key)) {
         return false;
+    }
+    // Render ảnh resource chỉ thuộc video 2s — whiteboard/hyperframes auto-skip, ẩn khỏi UI.
+    if (key === 'resource_image_render') {
+        return isAgentVideo2sMode(agentVisualMode);
     }
     if (isAgentWhiteboardMode(agentVisualMode)) {
         return !(FULL_AUTO_PIPELINE_HYPERFRAMES_ONLY_STEPS as readonly string[]).includes(key);

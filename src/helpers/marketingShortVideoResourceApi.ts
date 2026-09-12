@@ -31,6 +31,10 @@ export type ShortVideoResource = {
     description: string;
     image_url: string;
     image_s3_key: string;
+    /** URL chat Meta.ai đã render ảnh resource (pipeline headless lưu lại). */
+    metaai_chat_url: string;
+    /** ID cookie (Quản lý cookie) của account đã render chat trên. */
+    metaai_cookie_id: number;
     short_video_id: number;
     created_at?: string;
     updated_at?: string;
@@ -270,6 +274,29 @@ export function deleteShortVideoResources(resourceIds: number[]): Promise<{
     }>;
 }
 
+/** Xóa ảnh resource (1 id hoặc mảng ids): xóa file S3 theo s3_key + clear field image. */
+export function deleteShortVideoResourceImages(resourceIds: number | number[]): Promise<{
+    success?: boolean;
+    cleared?: number;
+    cleared_ids?: number[];
+    s3_deleted?: string[];
+    errors?: string[];
+}> {
+    const ids = Array.isArray(resourceIds) ? resourceIds : [resourceIds];
+    return ajax({
+        url: `${RESOURCE_BASE_PATH}/delete-image`,
+        method: 'POST',
+        loading: false,
+        data: { ids },
+    }) as Promise<{
+        success?: boolean;
+        cleared?: number;
+        cleared_ids?: number[];
+        s3_deleted?: string[];
+        errors?: string[];
+    }>;
+}
+
 export type ShortVideoResourceImportItem = {
     resource_key: string;
     title: string;
@@ -347,6 +374,10 @@ export type OpenResourceMetaAiItem = {
     resourceTitle?: string;
     prompt: string;
     imageUrl?: string;
+    /** URL chat Meta.ai đã render resource này — extension mở lại đúng chat (update mode). */
+    chatUrl?: string;
+    /** ID cookie của account đã render chat trên — mở lại phải đúng account. */
+    cookieId?: number;
 };
 
 export type OpenResourceMetaAiPayload = {
@@ -363,6 +394,10 @@ export type OpenResourceMetaAiPayload = {
  * Panel bên phải: Prev/Next chuyển resource (không auto-fill), nút chạy mở /create
  * mới rồi điền prompt (nguyên văn) + submit; download ảnh → tự upload vào resource
  * đang chọn (upload-image với resource_id → CMS lưu field image).
+ *
+ * Resource đã có chat Meta.ai (pipeline headless render trước đó) → mở ĐÚNG chat cũ
+ * + cookie account đã render, KHÔNG auto điền/submit (user đang muốn update — panel
+ * vẫn có nút Điền + Submit để chủ động update lại trong chat cũ).
  */
 export async function openResourceMetaAi(
     payload: OpenResourceMetaAiPayload,
@@ -376,6 +411,8 @@ export async function openResourceMetaAi(
             resource_title: String(item.resourceTitle || '').trim(),
             image_prompt: String(item.prompt || '').trim(),
             image_url: String(item.imageUrl || '').trim(),
+            chat_url: String(item.chatUrl || '').trim(),
+            cookie_id: Number(item.cookieId || 0),
         }))
         .filter((item) => item.resource_id > 0 && item.image_prompt);
 
@@ -389,12 +426,20 @@ export async function openResourceMetaAi(
         throw new Error('Resource đang chọn không có trong danh sách (thiếu prompt?)');
     }
 
+    // Resource active đã có chat → update mode: mở chat cũ, không auto submit.
+    const activeResource = resources.find((item) => item.resource_id === activeResourceId) || null;
+    const hasExistingChat = Boolean(activeResource?.chat_url);
+    const effectiveAutoSubmit = payload.autoSubmit !== false && !hasExistingChat;
+
     const extensionReady = await waitForExtensionReady(8000);
     if (!extensionReady) {
         throw new Error(
             'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
         );
     }
+
+    // Cookie: resource đã render → dùng ĐÚNG cookie account của chat đó; chưa có → round-robin.
+    const activeCookieId = Number(activeResource?.cookie_id || 0);
 
     const result = await dispatchCmsExtensionEvent(
         RESOURCE_METAAI_OPEN_EVENT,
@@ -404,8 +449,8 @@ export async function openResourceMetaAi(
             resources,
             access_token: getAccessToken() ?? '',
             upload_api_url: resourceApiUrl('short-video/resource/upload-image'),
-            ...(await metaaiCookiePayloadForOpen(0)),
-            ...(payload.autoSubmit === false ? {} : { auto_submit: true }),
+            ...(await metaaiCookiePayloadForOpen(activeCookieId)),
+            ...(effectiveAutoSubmit ? { auto_submit: true } : {}),
         },
         RESOURCE_METAAI_OPEN_RESULT_EVENT,
         12000,

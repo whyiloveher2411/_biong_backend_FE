@@ -109,6 +109,18 @@ export function resolveRestartableSet(
         );
         if (cur > maxIdx) maxIdx = cur;
     }
+    // Bước «Render ảnh resource» LUÔN tùy chọn — beat_division xong → bước kế
+    // (beat_fill) active dù resource_image_render đang pending/running/failed.
+    const optIdx = FULL_AUTO_PIPELINE_STEP_ORDER.indexOf(
+        'resource_image_render' as FullAutoPipelineStepKey,
+    );
+    if (optIdx > 0) {
+        const prevKey = FULL_AUTO_PIPELINE_STEP_ORDER[optIdx - 1];
+        const prevStatus = String(steps?.[prevKey]?.status || 'pending');
+        if (['done', 'skipped'].includes(prevStatus)) {
+            maxIdx = Math.max(maxIdx, optIdx + 1);
+        }
+    }
     const lastIdx = FULL_AUTO_PIPELINE_STEP_ORDER.length - 1;
     if (maxIdx < lastIdx) {
         const topKey = FULL_AUTO_PIPELINE_STEP_ORDER[maxIdx];
