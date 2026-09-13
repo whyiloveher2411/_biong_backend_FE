@@ -13,6 +13,8 @@ import {
     Tooltip,
     Stack,
     Divider,
+    InputAdornment,
+    TextField,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -129,6 +131,11 @@ type Props = {
     beatCurrent?: number;
     /** Tổng số beat — hiển thị cùng beatCurrent dạng current/total. */
     beatTotal?: number;
+    /**
+     * Nhảy nhanh đến beat N (1-based) khi user nhập vào ô beat hiện tại.
+     * Không truyền → ô beat chỉ hiển thị dạng chip như cũ.
+     */
+    onGoToBeat?: (beatNumber: number) => void;
     onCopyError?: (message: string) => void;
     /** Playhead scene-relative (0 → beatDuration) + đang phát — đồng bộ preview phía trên. */
     onPlayheadChange?: (sec: number, playing: boolean) => void;
@@ -272,6 +279,7 @@ export default function WhiteboardRegionTimeline({
     beatId = '',
     beatCurrent = 0,
     beatTotal = 0,
+    onGoToBeat,
     onCopyError,
     onPlayheadChange,
     seekRequest = null,
@@ -324,6 +332,24 @@ export default function WhiteboardRegionTimeline({
     const [timelineExpanded, setTimelineExpanded] = React.useState(readStoredTimelineExpanded);
     /** Slot lớp ảnh đang kéo (preview) — commit khi thả chuột. */
     const [layerSlotDraft, setLayerSlotDraft] = React.useState<BeatImageLayer[] | null>(null);
+    /** Ô nhập "đi tới beat" — đồng bộ theo beatCurrent khi không focus. */
+    const [beatJumpDraft, setBeatJumpDraft] = React.useState('');
+    const beatJumpFocusedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!beatJumpFocusedRef.current) {
+            setBeatJumpDraft(beatCurrent > 0 ? String(beatCurrent) : '');
+        }
+    }, [beatCurrent]);
+    const commitBeatJump = React.useCallback(() => {
+        const total = beatTotal || 0;
+        const raw = parseInt(beatJumpDraft, 10);
+        if (onGoToBeat && Number.isFinite(raw) && raw >= 1 && (total <= 0 || raw <= total)) {
+            onGoToBeat(raw);
+            return;
+        }
+        // Số không có trong beat (ngoài 1..total) → giữ nguyên beat hiện tại.
+        setBeatJumpDraft(beatCurrent > 0 ? String(beatCurrent) : '');
+    }, [beatCurrent, beatTotal, beatJumpDraft, onGoToBeat]);
 
     React.useEffect(() => {
         if (timelineViewMode !== 'group') {
@@ -996,20 +1022,84 @@ export default function WhiteboardRegionTimeline({
                     }}
                 >
                     {beatCurrent > 0 && beatTotal > 0 ? (
-                        <Chip
-                            size="small"
-                            label={`${beatCurrent}/${beatTotal}`}
-                            title={`Beat ${beatCurrent} / ${beatTotal}`}
-                            sx={{
-                                height: 20,
-                                flexShrink: 0,
-                                mt: '2px',
-                                fontWeight: 800,
-                                fontSize: 11,
-                                fontVariantNumeric: 'tabular-nums',
-                                '& .MuiChip-label': { px: 0.75 },
-                            }}
-                        />
+                        onGoToBeat ? (
+                            <Tooltip title={`Đi tới beat (1–${beatTotal}). Nhập số rồi Enter/blur; số không tồn tại sẽ giữ nguyên beat hiện tại`}>
+                                <TextField
+                                    size="small"
+                                    value={beatJumpDraft}
+                                    onChange={(event) => {
+                                        setBeatJumpDraft(String(event.target.value).replace(/[^0-9]/g, '').slice(0, 5));
+                                    }}
+                                    onFocus={() => {
+                                        beatJumpFocusedRef.current = true;
+                                    }}
+                                    onBlur={() => {
+                                        beatJumpFocusedRef.current = false;
+                                        commitBeatJump();
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault();
+                                            (event.currentTarget as HTMLInputElement).blur();
+                                        }
+                                    }}
+                                    inputProps={{
+                                        inputMode: 'numeric',
+                                        'aria-label': 'Đi tới beat',
+                                        style: {
+                                            textAlign: 'center',
+                                            width: 26,
+                                            padding: '1px 2px',
+                                            fontSize: 11,
+                                            fontWeight: 800,
+                                            fontVariantNumeric: 'tabular-nums',
+                                        },
+                                    }}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <InputAdornment
+                                                position="end"
+                                                sx={{
+                                                    ml: 0.25,
+                                                    '& .MuiTypography-root': {
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: 'text.secondary',
+                                                    },
+                                                }}
+                                            >
+                                                /{beatTotal}
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                    sx={{
+                                        flexShrink: 0,
+                                        mt: '2px',
+                                        width: 74,
+                                        '& .MuiInputBase-root': {
+                                            height: 20,
+                                            fontSize: 11,
+                                            bgcolor: 'background.default',
+                                        },
+                                    }}
+                                />
+                            </Tooltip>
+                        ) : (
+                            <Chip
+                                size="small"
+                                label={`${beatCurrent}/${beatTotal}`}
+                                title={`Beat ${beatCurrent} / ${beatTotal}`}
+                                sx={{
+                                    height: 20,
+                                    flexShrink: 0,
+                                    mt: '2px',
+                                    fontWeight: 800,
+                                    fontSize: 11,
+                                    fontVariantNumeric: 'tabular-nums',
+                                    '& .MuiChip-label': { px: 0.75 },
+                                }}
+                            />
+                        )
                     ) : null}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                     {manualBeatAdj?.open ? (

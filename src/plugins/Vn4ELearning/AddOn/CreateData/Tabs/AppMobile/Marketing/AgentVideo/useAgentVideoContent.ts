@@ -67,6 +67,7 @@ import {
     saveAgentAutoFillBeatHtml,
     saveFullAutoStepToggles,
     saveBeatImageFillMode,
+    getBeatImagesAspectFixStatus,
     saveBeatAudioOnlyMissing,
     saveAgentGeminiOpenBrowser,
     saveAgentGithubScreenshotHomepage,
@@ -865,6 +866,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [beatsImageTotal, setBeatsImageTotal] = React.useState(0);
     const [beatsImageCompleted, setBeatsImageCompleted] = React.useState(0);
     const [geminiImageFillStatus, setGeminiImageFillStatus] = React.useState('none');
+    // Job fix tỉ lệ ảnh beat đang active — poll 5s (badge UI: hình đang chạy / chờ chạy).
+    const [beatAspectFixStatuses, setBeatAspectFixStatuses] = React.useState<
+        Record<string, 'queued' | 'running'>
+    >({});
     const [activeBeatId, setActiveBeatId] = React.useState('');
     const [beatEditorFocusRequest, setBeatEditorFocusRequest] = React.useState<{
         beatId: string;
@@ -1849,6 +1854,51 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             window.clearInterval(timer);
         };
     }, [loadRow, open, shortVideoId, anyWhiteboardBeatRenderBusy]);
+
+    // Poll RIÊNG cho job fix tỉ lệ ảnh beat (act=status — query nhẹ): badge UI
+    // "đang chạy / đang chờ" trên từng ảnh beat cập nhật realtime khi worker xong.
+    // Còn job → trả empty lần đầu → refresh row 1 lần để aspect_check + ảnh mới đổ UI.
+    const wasAspectFixBusyRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!open || !shortVideoId) {
+            return undefined;
+        }
+        let cancelled = false;
+        let active = false;
+        const tick = async () => {
+            if (cancelled || active) {
+                return;
+            }
+            active = true;
+            try {
+                const res = await getBeatImagesAspectFixStatus(shortVideoId);
+                if (!cancelled && res?.success) {
+                    const next = res.fixing && typeof res.fixing === 'object' ? res.fixing : {};
+                    setBeatAspectFixStatuses(next);
+                    const wasBusy = wasAspectFixBusyRef.current;
+                    const busyNow = Object.keys(next).length > 0;
+                    if (wasBusy && !busyNow) {
+                        wasAspectFixBusyRef.current = false;
+                        loadRow();
+                    } else if (!wasBusy && busyNow) {
+                        wasAspectFixBusyRef.current = true;
+                    }
+                }
+            } catch {
+                // bỏ qua — lần poll sau sẽ thử lại
+            } finally {
+                active = false;
+            }
+        };
+        const timer = window.setInterval(() => {
+            void tick();
+        }, 5000);
+        void tick();
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [loadRow, open, shortVideoId]);
 
     const quickIterateBeatStages = React.useMemo(() => {
         const stages: Record<string, 'queued' | 'visual' | 'html'> = {};
@@ -9311,6 +9361,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatsImageTotal,
         beatsImageCompleted,
         geminiImageFillStatus,
+        beatAspectFixStatuses,
         beatsRenderErrorCount,
         beatRenderErrorIds,
         beatImageRenderErrorIds,

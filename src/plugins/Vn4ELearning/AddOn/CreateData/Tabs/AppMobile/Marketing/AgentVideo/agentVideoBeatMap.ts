@@ -73,6 +73,19 @@ export type BeatImageEntry = {
      * chatbot (ngoài CMS); pipeline sẽ mở lại chat cũ và pull ảnh cuối cùng.
      */
     sync_latest_pending?: boolean;
+    /**
+     * Kết quả kiểm tra tỉ lệ ảnh beat so với tỉ lệ clip user cài (agent_clip_aspect):
+     * so RATIO (dimension thật) — sai → status 'warning', ảnh vẫn được dùng + UI badge.
+     */
+    aspect_check?: {
+        status?: 'ok' | 'warning' | string;
+        expected_aspect?: string;
+        actual_aspect?: string;
+        width?: number;
+        height?: number;
+        message?: string;
+        checked_at?: string;
+    };
     render_status?: 'error' | 'ok' | string;
     render_error?: string;
     render_error_code?: string;

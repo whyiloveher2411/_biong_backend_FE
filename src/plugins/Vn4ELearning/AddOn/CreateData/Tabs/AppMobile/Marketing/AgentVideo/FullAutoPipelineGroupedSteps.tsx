@@ -452,6 +452,9 @@ type PipelineGroupedMenuItemsProps = PipelineGroupedCommonProps & {
     /** Mở drawer audio background thủ công (chỉ hiển thị trên bước bgm). */
     onManualBgm?: () => void;
     manualBgmDisabled?: boolean;
+    /** Làm lại ảnh beat không đúng tỉ lệ (bước beat_image_fill): check → xác nhận → job/ảnh. */
+    onFixBeatImagesAspect?: () => void;
+    fixBeatImagesAspectBusy?: boolean;
 };
 
 export function PipelineGroupedMenuItems({
@@ -495,6 +498,8 @@ export function PipelineGroupedMenuItems({
     manualScriptPhoneticDisabled = false,
     onManualBgm,
     manualBgmDisabled = false,
+    onFixBeatImagesAspect,
+    fixBeatImagesAspectBusy = false,
 }: PipelineGroupedMenuItemsProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -678,6 +683,15 @@ export function PipelineGroupedMenuItems({
                             uploadPrevBeatsDisabled={disabled || beatImageFillUploadPrevBeatsDisabled}
                             onUploadPrevBeatsChange={onBeatImageFillUploadPrevBeatsChange}
                         />
+                    ) : null}
+                    {key === 'beat_image_fill' && onFixBeatImagesAspect ? (
+                        <PipelineManualStepButton
+                            title={`Làm lại các ảnh không đúng tỉ lệ: check dimension thật của từng ảnh beat → xác nhận → job mở lại chat cũ yêu cầu update ảnh đúng tỉ lệ (không làm lại mới)`}
+                            disabled={disabled || fixBeatImagesAspectBusy}
+                            onClick={() => onFixBeatImagesAspect()}
+                        >
+                            Fix tỉ lệ ảnh
+                        </PipelineManualStepButton>
                     ) : null}
                     {key === 'beat_audio' ? (
                         <PipelineBeatAudioOnlyMissingToggle
@@ -1022,6 +1036,9 @@ type PipelineGroupedWorkflowListProps = PipelineGroupedCommonProps & {
     beatImageFillOnlyMissing?: boolean;
     beatImageFillOnlyMissingDisabled?: boolean;
     onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
+    /** Làm lại ảnh beat không đúng tỉ lệ (bước beat_image_fill): check → xác nhận → job/ảnh. */
+    onFixBeatImagesAspect?: () => void;
+    fixBeatImagesAspectBusy?: boolean;
 };
 
 /** V3: nút Run từng bước sau status — đổi tên để Fast Refresh remount. */
@@ -1066,6 +1083,8 @@ export function PipelineGroupedWorkflowListV3({
     manualScriptPhoneticDisabled = false,
     onManualBgm,
     manualBgmDisabled = false,
+    onFixBeatImagesAspect,
+    fixBeatImagesAspectBusy = false,
 }: PipelineGroupedWorkflowListProps) {
     const headlessStepSet = React.useMemo(
         () => resolveHeadlessStepSet(headlessSteps),
@@ -1249,6 +1268,15 @@ export function PipelineGroupedWorkflowListV3({
                             uploadPrevBeatsDisabled={selectStepDisabled || beatImageFillUploadPrevBeatsDisabled}
                             onUploadPrevBeatsChange={onBeatImageFillUploadPrevBeatsChange}
                         />
+                    ) : null}
+                    {key === 'beat_image_fill' && onFixBeatImagesAspect ? (
+                        <PipelineManualStepButton
+                            title={`Làm lại các ảnh không đúng tỉ lệ: check dimension thật của từng ảnh beat → xác nhận → job mở lại chat cũ yêu cầu update ảnh đúng tỉ lệ (không làm lại mới)`}
+                            disabled={selectStepDisabled || fixBeatImagesAspectBusy}
+                            onClick={() => onFixBeatImagesAspect()}
+                        >
+                            Fix tỉ lệ ảnh
+                        </PipelineManualStepButton>
                     ) : null}
                     {key === 'beat_audio' ? (
                         <PipelineBeatAudioOnlyMissingToggle

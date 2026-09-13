@@ -2758,6 +2758,85 @@ export async function saveBeatImageFillMode(
     }>;
 }
 
+/** Beat sai tỉ lệ ảnh — kết quả check "Làm lại các ảnh không đúng tỉ lệ". */
+export type BeatImageAspectMismatchBeat = {
+    beat_id: string;
+    has_chat: boolean;
+    cookie_id?: number;
+    width: number;
+    height: number;
+    actual_aspect: string;
+    expected_aspect: string;
+};
+
+export type BeatImageAspectCheckResponse = JsonResponse & {
+    act?: string;
+    total?: number;
+    matched?: number;
+    mismatched?: number;
+    /** Số beat đã XÓA ảnh (không còn image_url) — cũng làm lại được (chat mới). */
+    missing?: number;
+    mismatched_with_chat?: number;
+    mismatched_without_chat?: number;
+    unchecked?: { beat_id: string; reason: string }[];
+    mismatched_beats?: BeatImageAspectMismatchBeat[];
+    missing_beats?: { beat_id: string }[];
+};
+
+/** Button "Làm lại các ảnh không đúng tỉ lệ" — bước 1: check toàn bộ ảnh beat. */
+export async function checkBeatImagesAspect(
+    shortVideoId: number,
+): Promise<BeatImageAspectCheckResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/fix-beat-images-aspect',
+        shortVideoBody(shortVideoId, { act: 'check' }),
+    ) as Promise<BeatImageAspectCheckResponse>;
+}
+
+export type BeatImageAspectConfirmResponse = JsonResponse & {
+    aspect_fix_queued?: number;
+    regen_queued?: number;
+    /** Tổng job thực tế đã insert (dùng con số này để thông báo user). */
+    queued_total?: number;
+    already_running?: number;
+    aspect_fix_beat_ids?: string[];
+    regen_beat_ids?: string[];
+    job_ids?: number[];
+};
+
+export type BeatImageAspectFixStatuses = Record<string, 'queued' | 'running'>;
+
+export type BeatImageAspectStatusResponse = JsonResponse & {
+    fixing?: BeatImageAspectFixStatuses;
+    total_fixing?: number;
+    total_running?: number;
+    total_queued?: number;
+};
+
+/** Poll trạng thái job fix tỉ lệ đang active — badge trên UI từng ảnh beat. */
+export async function getBeatImagesAspectFixStatus(
+    shortVideoId: number,
+): Promise<BeatImageAspectStatusResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/fix-beat-images-aspect',
+        shortVideoBody(shortVideoId, { act: 'status' }),
+    ) as Promise<BeatImageAspectStatusResponse>;
+}
+
+/** Bước 2 (sau khi user xác nhận): tạo job per ảnh — chat cũ → fix tỉ lệ, không chat → fill mới. */
+export async function confirmFixBeatImagesAspect(
+    shortVideoId: number,
+    beatIds: string[],
+): Promise<BeatImageAspectConfirmResponse> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/fix-beat-images-aspect',
+        shortVideoBody(shortVideoId, {
+            act: 'confirm',
+            beat_ids: JSON.stringify(beatIds),
+        }),
+    ) as Promise<BeatImageAspectConfirmResponse>;
+}
+
 export async function saveAgentGeminiOpenBrowser(
     shortVideoId: number,
     enabled: boolean,

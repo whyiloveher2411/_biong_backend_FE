@@ -11,6 +11,7 @@ import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
+import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
@@ -33,6 +34,7 @@ import {
     resolveRestartableSet,
 } from './FullAutoPipelineGroupedSteps';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
+import ShortVideoAgentFixBeatImagesAspectDialog from './ShortVideoAgentFixBeatImagesAspectDialog';
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
@@ -100,6 +102,9 @@ async function fallbackManualScriptPhoneticSave(): Promise<boolean> {
 function getTimelineScrollGrids(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('.timeline-editor-edit-area .ReactVirtualized__Grid'));
 }
+
+/** Offset đặt beat vào ~200px từ mép trái viewport (thấy beat + vùng kế tiếp). */
+const SCROLL_TO_BEAT_VIEWPORT_OFFSET_PX = 200;
 
 function getTimelineHorizontalScrollLeft(host: HTMLElement): number {
     const grids = getTimelineScrollGrids(host);
@@ -420,6 +425,8 @@ export default function ShortVideoAgentVideoTimeline({
     const [timelineScrollLeft, setTimelineScrollLeft] = React.useState(0);
     const [restartMenuAnchor, setRestartMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
+    // Dialog "Làm lại các ảnh không đúng tỉ lệ" (bước Ảnh beat).
+    const [fixAspectDialogOpen, setFixAspectDialogOpen] = React.useState(false);
 
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
@@ -662,12 +669,67 @@ export default function ShortVideoAgentVideoTimeline({
         }
     }, [contentDurationSec, schedulePersistTimelineSec, syncTimelineCursor, videoRef]);
 
+    // Scroll ngang timeline ĐÚNG API của thư viện (ref.setScrollLeft) — set DOM
+    // scrollLeft trực tiếp sẽ bị ScrollSync state của lib ghi đè về 0 khi re-render
+    // (ruler grid là controlled, edit grid bị scrollToPosition mỗi render).
+    const scrollTimelineToSec = React.useCallback((timeSec: number) => {
+        const targetLeft = Math.max(
+            0,
+            timeSecToTimelineLeftPx(Math.max(0, timeSec), timelineLayout)
+                - SCROLL_TO_BEAT_VIEWPORT_OFFSET_PX,
+        );
+        timelineRef.current?.setScrollLeft(targetLeft);
+        // Overlay (AgentVideoBeatBoundaryOverlay) đọc state scrollLeft này — set
+        // TỨC THỜI để không nhấp nháy; scroll event listener sẽ đồng bộ lại sau.
+        setTimelineScrollLeft(targetLeft);
+    }, [timelineLayout]);
+
+    // Beat "đang active" theo thứ tự: beat CHỨA PLAYHEAD (vị trí đang xem, khớp
+    // hành vi auto-scroll khi refresh) → activeBeatId (beat đang chọn) → playhead.
+    // KHÔNG ưu tiên activeBeatId trước: sau refresh activeBeatId mặc định = beat_1
+    // nên button sẽ luôn nhảy về beat 1 dù đang xem beat khác.
+    const resolveActiveBeatStartSec = React.useCallback((): { sec: number; beatId: string } => {
+        const sections = Array.isArray(beatMap?.sections) ? beatMap?.sections ?? [] : [];
+        const playheadSecRaw = currentTimeSec > 0
+            ? currentTimeSec
+            : Math.max(0, Number(lastPersistedTimelineSecRef.current || 0));
+        const byPlayhead = sections.find((section) => (
+            playheadSecRaw >= Number(section.startSec || 0)
+            && playheadSecRaw < Math.max(Number(section.endSec || 0), Number(section.startSec || 0))
+        ));
+        const byId = activeBeatId
+            ? sections.find((section) => String(section.id || '') === activeBeatId)
+            : undefined;
+        const pick = byPlayhead ?? byId;
+        if (pick) {
+            return {
+                sec: Math.max(0, Number(pick.startSec || 0)),
+                beatId: String(pick.id || activeBeatId || ''),
+            };
+        }
+
+        return { sec: playheadSecRaw, beatId: activeBeatId };
+    }, [activeBeatId, beatMap, currentTimeSec]);
+
+    const scrollToActiveBeat = React.useCallback((): boolean => {
+        const target = resolveActiveBeatStartSec();
+        if (!hasVideo || !(target.sec >= 0)) {
+            return false;
+        }
+        const clamped = Math.min(target.sec, contentDurationSec);
+        scrollTimelineToSec(clamped);
+        return true;
+    }, [contentDurationSec, hasVideo, resolveActiveBeatStartSec, scrollTimelineToSec]);
+
+    // Mỗi lần có yêu cầu seek theo beat (click beat, hoặc nhập số beat ở audio
+    // timeline) → seek video tới beat + TỰ ĐỘNG scroll timeline video đến beat đó.
     React.useEffect(() => {
         if (!beatPlaybackSeekRequest) {
             return;
         }
         seekToTime(beatPlaybackSeekRequest.startSec, { pauseVideo: true });
-    }, [beatPlaybackSeekRequest, seekToTime]);
+        scrollTimelineToSec(Math.min(beatPlaybackSeekRequest.startSec, contentDurationSec));
+    }, [beatPlaybackSeekRequest, contentDurationSec, scrollTimelineToSec, seekToTime]);
 
     // Restore vị trí đã lưu 1 lần khi video/metadata sẵn sàng.
     React.useEffect(() => {
@@ -684,8 +746,49 @@ export default function ShortVideoAgentVideoTimeline({
         const clamped = Math.max(0, Math.min(restoreTimelineSec, contentDurationSec));
         lastPersistedTimelineSecRef.current = clamped;
         seekToTime(clamped, { pauseVideo: true, persist: false });
+        scrollTimelineToSec(clamped);
         onRestoreTimelineAppliedRef.current?.();
-    }, [contentDurationSec, hasVideo, restoreTimelineSec, seekToTime]);
+    }, [contentDurationSec, hasVideo, restoreTimelineSec, scrollTimelineToSec, seekToTime]);
+
+    // Mở trang / refresh (không có vị trí lưu) → tự scroll timeline về beat đang active 1 lần.
+    const autoScrolledToBeatRef = React.useRef(false);
+    React.useEffect(() => {
+        if (autoScrolledToBeatRef.current) {
+            return;
+        }
+        if (restoreAppliedRef.current) {
+            // Đã scroll theo vị trí restore — không override bằng active beat.
+            autoScrolledToBeatRef.current = true;
+            return;
+        }
+        if (restoreTimelineSec != null && restoreTimelineSec > 0 && !hasVideo) {
+            return;
+        }
+        if (!hasVideo || !(contentDurationSec > 0)) {
+            return;
+        }
+        const sections = beatMap?.sections;
+        if (!Array.isArray(sections) || sections.length === 0) {
+            return;
+        }
+        autoScrolledToBeatRef.current = true;
+        scrollToActiveBeat();
+        // Timeline chưa mount xong + beat bridge vừa đổ về: retry ít lần, chỉ dừng
+        // khi ref sẵn sàng.
+        let attempts = 0;
+        const retry = () => {
+            if (attempts >= 10) {
+                return;
+            }
+            attempts++;
+            if (!timelineRef.current) {
+                window.setTimeout(retry, 200);
+                return;
+            }
+            scrollToActiveBeat();
+        };
+        window.setTimeout(retry, 200);
+    }, [beatMap, contentDurationSec, hasVideo, restoreTimelineSec, scrollTimelineToSec, scrollToActiveBeat]);
 
     React.useLayoutEffect(() => {
         if (!hasVideo) {
@@ -1016,6 +1119,22 @@ export default function ShortVideoAgentVideoTimeline({
                         {`Ổn: ${beatQaCounts.approved} · HTML: ${beatQaCounts.needs_html_refill} · Visual: ${beatQaCounts.needs_visual_tweak}`}
                     </Typography>
                 ) : null}
+                {showBeatTimelineOverlay ? (
+                    <Tooltip title="Scroll timeline về beat đang active (playhead / beat đang chọn)">
+                        <span>
+                            <IconButton
+                                size="small"
+                                aria-label="Về beat đang active"
+                                disabled={!hasVideo || !beatMap?.sections?.length}
+                                onClick={() => {
+                                    scrollToActiveBeat();
+                                }}
+                            >
+                                <CenterFocusStrongIcon fontSize="small" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                ) : null}
                 {hasVideo ? (
                     <TimelineZoomControls
                         value={timelineScaleWidth}
@@ -1231,6 +1350,10 @@ export default function ShortVideoAgentVideoTimeline({
                                             onBeatImageFillUploadPrevBeatsChange?.(checked);
                                         }}
                                         onBeatImageFillModeChange={onBeatImageFillModeChange}
+                                        onFixBeatImagesAspect={() => {
+                                            setRestartMenuAnchor(null);
+                                            setFixAspectDialogOpen(true);
+                                        }}
                                         beatAudioOnlyMissing={beatAudioOnlyMissing}
                                         beatAudioOnlyMissingDisabled={startingFullAuto}
                                         onBeatAudioOnlyMissingChange={(checked) => {
@@ -1546,6 +1669,11 @@ export default function ShortVideoAgentVideoTimeline({
                 video2sState={agentState ?? null}
                 onSave={onSaveBeatMapManual ?? fallbackManualBeatDivisionSaveWithOptions}
                 onImportJson={onImportBeatMapJson}
+            />
+            <ShortVideoAgentFixBeatImagesAspectDialog
+                shortVideoId={shortVideoId ?? 0}
+                open={fixAspectDialogOpen}
+                onClose={() => setFixAspectDialogOpen(false)}
             />
             <ShortVideoAgentScriptManualDrawer
                 open={scriptManualOpen}

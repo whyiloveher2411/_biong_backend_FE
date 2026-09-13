@@ -1072,6 +1072,25 @@ export default function ShortVideoAgentBeatRegionEditor({
         }
     }, [activeSegmentIndex, beatSegments, state.handleSeekBeatPlayback]);
 
+    /** Nhảy nhanh đến beat N (1-based) từ ô input trên audio timeline. */
+    const handleGoToBeat = React.useCallback((beatNumber: number) => {
+        if (!Number.isFinite(beatNumber) || beatNumber < 1) {
+            return;
+        }
+        const target = beatSegments[Math.trunc(beatNumber) - 1];
+        if (!target) {
+            // Số không có trong beat → giữ nguyên beat hiện tại.
+            return;
+        }
+        const midSec = (target.startSec + target.endSec) / 2;
+        if (typeof state.handleSeekBeatPlayback === 'function') {
+            state.handleSeekBeatPlayback(target.beatId, midSec);
+        }
+        if (typeof state.focusBeatEditor === 'function') {
+            state.focusBeatEditor(target.beatId);
+        }
+    }, [beatSegments, state]);
+
     const beatQaStatus = normalizeBeatQaStatus(state.beatImage[beatId]?.qa_status);
     const isBeatApproved = beatQaStatus === 'approved';
     const handleToggleApproved = React.useCallback(async () => {
@@ -5727,6 +5746,7 @@ export default function ShortVideoAgentBeatRegionEditor({
                         beatId={beatId}
                         beatCurrent={activeSegmentIndex >= 0 ? activeSegmentIndex + 1 : 0}
                         beatTotal={beatSegments.length}
+                        onGoToBeat={handleGoToBeat}
                         onCopyError={(msg) => notify(msg, 'error')}
                         onPlayheadChange={(sec, isPlaying) => {
                             setPlayheadSec(sec);

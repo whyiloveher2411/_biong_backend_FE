@@ -67,6 +67,11 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
     // pull beat này TRƯỚC beat feedback / beat thiếu).
     const syncLatestPending = Boolean(entry?.sync_latest_pending);
     const [syncSaving, setSyncSaving] = React.useState(false);
+    // Kết quả kiểm tra tỉ lệ ảnh beat — sai → badge cảnh báo (ảnh vẫn được dùng).
+    const aspectChecked = entry?.aspect_check;
+    const aspectWarning = aspectChecked?.status === 'warning';
+    // Job fix tỉ lệ đang active cho beat này — ưu tiên hiển thị thay cảnh báo.
+    const aspectFixStatus = state.beatAspectFixStatuses?.[beatId];
     // Click "Mở url chatbot" debounce in-flight (control bị render nhiều lớp).
     const openChatInFlightRef = React.useRef<Record<string, number>>({});
 
@@ -103,6 +108,78 @@ export default function WhiteboardBeatImageControl({ state, beatId }: Props) {
                         <SettingsIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                 </Tooltip>
+                {aspectFixStatus ? (
+                    <Tooltip
+                        placement="top"
+                        title={aspectFixStatus === 'running'
+                            ? 'Job đang mở lại chat Meta.ai cũ và update ảnh beat này đúng tỉ lệ clip'
+                            : 'Job đang chờ worker — sẽ mở lại chat Meta.ai cũ và update ảnh beat này đúng tỉ lệ clip'}
+                    >
+                        <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={0.5}
+                            sx={{
+                                px: 0.75,
+                                py: 0.25,
+                                borderRadius: 1,
+                                bgcolor: 'rgba(21, 101, 192, 0.25)',
+                                border: '1px solid rgba(100, 181, 246, 0.6)',
+                                maxWidth: 220,
+                            }}
+                        >
+                            <CircularProgress size={10} sx={{ color: '#64b5f6' }} />
+                            <Typography
+                                sx={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: '#90caf9',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                            >
+                                {aspectFixStatus === 'running' ? 'Đang fix tỉ lệ…' : 'Chờ fix tỉ lệ'}
+                            </Typography>
+                        </Stack>
+                    </Tooltip>
+                ) : aspectWarning ? (
+                    <Tooltip
+                        placement="top"
+                        title={String(aspectChecked?.message || 'Ảnh beat không đúng tỉ lệ clip — ảnh vẫn được dùng')}
+                    >
+                        <Stack
+                            direction="row"
+                            alignItems="center"
+                            sx={{
+                                px: 0.75,
+                                py: 0.25,
+                                borderRadius: 1,
+                                bgcolor: 'rgba(255, 171, 0, 0.2)',
+                                border: '1px solid rgba(255, 171, 0, 0.65)',
+                                maxWidth: 220,
+                            }}
+                        >
+                            <Typography
+                                sx={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: '#ffcc80',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                            >
+                                Sai tỉ lệ
+                                {aspectChecked?.actual_aspect
+                                    ? ` (${aspectChecked.actual_aspect})`
+                                    : ''}
+                                {' ≠ '}
+                                {String(aspectChecked?.expected_aspect || '')}
+                            </Typography>
+                        </Stack>
+                    </Tooltip>
+                ) : null}
                 <Stack
                     direction="row"
                     spacing={0.5}
