@@ -148,6 +148,8 @@ import {
     normalizeBeatImageFillMode,
     normalizeBeatImageFillOnlyMissing,
     DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING,
+    normalizeBeatImageFillUploadPrevBeats,
+    DEFAULT_BEAT_IMAGE_FILL_UPLOAD_PREV_BEATS,
     normalizeBeatAudioOnlyMissing,
     DEFAULT_BEAT_AUDIO_ONLY_MISSING,
     DEFAULT_BEAT_IMAGE_FILL_MODE,
@@ -241,6 +243,7 @@ import {
     type BeatTranslationMap,
 } from './agentVideoBeatTranslation';
 import { isAgentVideo2sMode, isAgentWhiteboardMode, normalizeAgentVisualMode } from './agentVideoVisualMode';
+import type { ShortVideoPrevBeatReference } from 'helpers/marketingShortVideoResourceApi';
 import { buildCaptionAlignResult } from './agentVideoCaptionScriptAlign';
 import {
     buildManualBeatMark,
@@ -581,6 +584,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [savingBeatImageFillMode, setSavingBeatImageFillMode] = React.useState(false);
     const [beatImageFillOnlyMissing, setBeatImageFillOnlyMissing] = React.useState<boolean>(
         DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING,
+    );
+    const [beatImageFillUploadPrevBeats, setBeatImageFillUploadPrevBeats] = React.useState<boolean>(
+        DEFAULT_BEAT_IMAGE_FILL_UPLOAD_PREV_BEATS,
     );
     const [agentGeminiOpenBrowser, setAgentGeminiOpenBrowser] = React.useState(false);
     const [savingGeminiOpenBrowser, setSavingGeminiOpenBrowser] = React.useState(false);
@@ -1118,6 +1124,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setFullAutoStepToggles(normalizeFullAutoStepToggles(res?.full_auto_step_toggles));
         setBeatImageFillMode(normalizeBeatImageFillMode(res?.beat_image_fill_mode));
         setBeatImageFillOnlyMissing(normalizeBeatImageFillOnlyMissing(res?.beat_image_fill_only_missing));
+        setBeatImageFillUploadPrevBeats(normalizeBeatImageFillUploadPrevBeats(res?.beat_image_fill_upload_prev_beats));
         setAgentGeminiOpenBrowser(Boolean(res?.agent_gemini_open_browser));
         setAgentGithubScreenshotHomepage(Boolean(res?.agent_github_screenshot_homepage));
         setAgentIntroduceApp(Boolean(res?.agent_introduce_app));
@@ -3793,6 +3800,53 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         whiteboardImageStyleSuffix,
     ]);
 
+    /**
+     * 3 beat gần nhất (script + ảnh) làm reference render đồng nhất — chỉ khi bật
+     * checkbox "Upload 3 beat gần nhất" trên bước Ảnh beat. Thứ tự n-1 → n-2 → n-3,
+     * chỉ giữ beat CÓ ảnh; beat đầu tiên (không có beat trước) trả [].
+     */
+    const buildPrevBeatsReferenceFor = React.useCallback((beatId: string): ShortVideoPrevBeatReference[] => {
+        if (!beatImageFillUploadPrevBeats) {
+            return [];
+        }
+        const target = String(beatId || '').trim();
+        if (!target) {
+            return [];
+        }
+        const ordered: ShortVideoPrevBeatReference[] = [];
+        if (isAgentVideo2sMode(agentVisualMode)) {
+            // Video 2s: beat_N = mark thứ N — script = content, ảnh = beat_image[beat_N].
+            (manualBeatMarksRef.current || []).forEach((mark, index) => {
+                const id = `beat_${index + 1}`;
+                ordered.push({
+                    beat_id: id,
+                    script: String(mark?.content || '').trim(),
+                    image_url: String(beatImage[id]?.image_url || '').trim(),
+                });
+            });
+        } else {
+            (beatMap?.sections || []).forEach((section) => {
+                const id = String(section?.id || '').trim();
+                if (!id) {
+                    return;
+                }
+                ordered.push({
+                    beat_id: id,
+                    script: String(section?.phrase_anchor || '').trim(),
+                    image_url: String(beatImage[id]?.image_url || '').trim(),
+                });
+            });
+        }
+        const pos = ordered.findIndex((item) => item.beat_id === target);
+        if (pos <= 0) {
+            return [];
+        }
+        return ordered
+            .slice(Math.max(0, pos - 3), pos)
+            .reverse()
+            .filter((item) => item.script && item.image_url);
+    }, [agentVisualMode, beatImage, beatImageFillUploadPrevBeats, beatMap?.sections]);
+
     const handleOpenBeatImageMetaAiManual = React.useCallback(async (
         beatId: string,
         imagePrompt: string,
@@ -3820,6 +3874,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageUrls: beatImageEntryUrls(beatImage[beatId]),
                     // Beat đã có chat cũ → đúng cookie account tạo chat.
                     beatCookieId: Number(beatImage[beatId]?.cookie_id || 0),
+                    prevBeats: buildPrevBeatsReferenceFor(beatId),
                 });
                 setActiveBeatId(beatId);
                 setBeatEditorFocusRequest({ beatId, nonce: Date.now() });
@@ -3893,6 +3948,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageAspectSuffix: whiteboardImageAspectSuffix,
                     imageTextLangRule: whiteboardImageTextLangRule,
                     imageVoiceContent: resolveBeatVoice(beatId),
+                    prevBeats: buildPrevBeatsReferenceFor(beatId),
                 });
             } else {
                 await openImportHtmlBeatMetaAiFillOnly({
@@ -3907,6 +3963,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     imageTextLangRule: whiteboardImageTextLangRule,
                     imageVoiceContent: resolveBeatVoice(beatId),
                     beatCookieId: Number(beatImage[beatId]?.cookie_id || 0),
+                    prevBeats: buildPrevBeatsReferenceFor(beatId),
                 });
             }
             setActiveBeatId(beatId);
@@ -3927,6 +3984,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         agentClipAspect,
         beatImage,
         beatMap?.sections,
+        beatImageFillUploadPrevBeats,
+        buildPrevBeatsReferenceFor,
         handleBeatImagePromptChange,
         openImportHtmlBeatMetaAiFillOnly,
         shortVideoId,
@@ -5469,6 +5528,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     beats: workspaceBeats,
                     activeBeatId: batchIds[0] || '',
                     autoSubmit: true,
+                    ...(beatImageFillUploadPrevBeats
+                        ? {
+                            prevBeatsByBeatId: workspaceBeats.reduce<Record<string, ShortVideoPrevBeatReference[]>>(
+                                (acc, beat) => {
+                                    acc[beat.beatId] = buildPrevBeatsReferenceFor(beat.beatId);
+                                    return acc;
+                                },
+                                {},
+                            ),
+                        }
+                        : {}),
                     ...(isVideo2s
                         ? { video2s: true, clipAspect: agentClipAspect }
                         : {
@@ -5734,7 +5804,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatImageFillMode(mode);
         setSavingBeatImageFillMode(true);
         try {
-            const res = await saveBeatImageFillMode(shortVideoId, mode);
+            const res = await saveBeatImageFillMode(shortVideoId, mode, beatImageFillOnlyMissing, beatImageFillUploadPrevBeats);
             if (!res?.success) {
                 setBeatImageFillMode(prev);
                 showMessage(
@@ -5748,6 +5818,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             }
             if (res.beat_image_fill_only_missing !== undefined) {
                 setBeatImageFillOnlyMissing(normalizeBeatImageFillOnlyMissing(res.beat_image_fill_only_missing));
+            }
+            if (res.beat_image_fill_upload_prev_beats !== undefined) {
+                setBeatImageFillUploadPrevBeats(normalizeBeatImageFillUploadPrevBeats(res.beat_image_fill_upload_prev_beats));
             }
         } catch (e) {
             setBeatImageFillMode(prev);
@@ -5765,7 +5838,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setBeatImageFillOnlyMissing(onlyMissing);
         setSavingBeatImageFillMode(true);
         try {
-            const res = await saveBeatImageFillMode(shortVideoId, beatImageFillMode, onlyMissing);
+            const res = await saveBeatImageFillMode(shortVideoId, beatImageFillMode, onlyMissing, beatImageFillUploadPrevBeats);
             if (!res?.success) {
                 setBeatImageFillOnlyMissing(prev);
                 showMessage(
@@ -5777,8 +5850,49 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (res.beat_image_fill_only_missing !== undefined) {
                 setBeatImageFillOnlyMissing(normalizeBeatImageFillOnlyMissing(res.beat_image_fill_only_missing));
             }
+            if (res.beat_image_fill_upload_prev_beats !== undefined) {
+                setBeatImageFillUploadPrevBeats(normalizeBeatImageFillUploadPrevBeats(res.beat_image_fill_upload_prev_beats));
+            }
         } catch (e) {
             setBeatImageFillOnlyMissing(prev);
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingBeatImageFillMode(false);
+        }
+    };
+
+    const handleBeatImageFillUploadPrevBeatsChange = async (uploadPrevBeats: boolean) => {
+        if (savingBeatImageFillMode || uploadPrevBeats === beatImageFillUploadPrevBeats) {
+            return;
+        }
+        const prev = beatImageFillUploadPrevBeats;
+        setBeatImageFillUploadPrevBeats(uploadPrevBeats);
+        setSavingBeatImageFillMode(true);
+        try {
+            const res = await saveBeatImageFillMode(shortVideoId, beatImageFillMode, beatImageFillOnlyMissing, uploadPrevBeats);
+            if (!res?.success) {
+                setBeatImageFillUploadPrevBeats(prev);
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không lưu được cài đặt Ảnh beat',
+                    'error',
+                );
+                return;
+            }
+            if (res.beat_image_fill_only_missing !== undefined) {
+                setBeatImageFillOnlyMissing(normalizeBeatImageFillOnlyMissing(res.beat_image_fill_only_missing));
+            }
+            if (res.beat_image_fill_upload_prev_beats !== undefined) {
+                setBeatImageFillUploadPrevBeats(normalizeBeatImageFillUploadPrevBeats(res.beat_image_fill_upload_prev_beats));
+            }
+            showMessage(
+                parseApiMessage(res?.message)
+                    || (uploadPrevBeats
+                        ? 'Đã bật Upload 3 beat gần nhất — prompt ảnh beat kèm script + ảnh 3 beat trước để render đồng nhất'
+                        : 'Đã tắt Upload 3 beat gần nhất'),
+                'success',
+            );
+        } catch (e) {
+            setBeatImageFillUploadPrevBeats(prev);
             showMessage(e instanceof Error ? e.message : String(e), 'error');
         } finally {
             setSavingBeatImageFillMode(false);
@@ -8952,6 +9066,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatImageFillModeChange,
         beatImageFillOnlyMissing,
         handleBeatImageFillOnlyMissingChange,
+        beatImageFillUploadPrevBeats,
+        handleBeatImageFillUploadPrevBeatsChange,
         beatAudioOnlyMissing,
         savingBeatAudioOnlyMissing,
         handleBeatAudioOnlyMissingChange,

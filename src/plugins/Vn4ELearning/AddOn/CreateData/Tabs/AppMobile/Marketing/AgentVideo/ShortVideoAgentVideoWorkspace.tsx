@@ -990,6 +990,10 @@ export default function ShortVideoAgentVideoWorkspace({
                     onBeatImageFillOnlyMissingChange={(checked) => {
                         void state.handleBeatImageFillOnlyMissingChange(checked);
                     }}
+                    beatImageFillUploadPrevBeats={state.beatImageFillUploadPrevBeats}
+                    onBeatImageFillUploadPrevBeatsChange={(checked) => {
+                        void state.handleBeatImageFillUploadPrevBeatsChange(checked);
+                    }}
                     beatAudioOnlyMissing={state.beatAudioOnlyMissing}
                     onBeatAudioOnlyMissingChange={(checked) => {
                         void state.handleBeatAudioOnlyMissingChange(checked);

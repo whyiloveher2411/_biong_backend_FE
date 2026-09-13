@@ -71,6 +71,96 @@ export type ShortVideoPromptImageReferenceResult = {
     references: ShortVideoPromptImageReference[];
 };
 
+/** 1 dòng trong sequence reference đan xen text ↔ ảnh (panel/node attach ảnh ngay sau dòng). */
+export type ShortVideoPromptImageReferenceSequenceItem = {
+    text: string;
+    /** Ảnh đính kèm dòng này — rỗng = dòng text thuần. */
+    image_url?: string;
+};
+
+/** Beat liền trước dùng làm reference render đồng nhất (checkbox "Upload 3 beat gần nhất"). */
+export type ShortVideoPrevBeatReference = {
+    beat_id: string;
+    /** Audio script (lời thoại) của beat trước. */
+    script: string;
+    /** Ảnh đã render của beat trước — rỗng = bỏ qua (không attach). */
+    image_url: string;
+};
+
+/** Headline + hướng dẫn cho section IMAGE REFERENCE (mirror PHP). */
+export const IMAGE_REFERENCE_SEQUENCE_HEADERS: ShortVideoPromptImageReferenceSequenceItem[] = [
+    { text: '## IMAGE REFERENCE (ảnh resource đính kèm)' },
+    {
+        text: 'Các ảnh đính kèm CUỐI tin nhắn này là ảnh THAM CHIẾU của resource trong prompt — thứ tự ảnh khớp THỨ TỰ dòng mô tả resource bên dưới (dòng 1 ↔ ảnh đính 1, dòng 2 ↔ ảnh đính 2…). '
+            + 'Dùng chúng làm mẫu về ngoại hình/phong cách resource, KHÔNG vẽ lại nội dung beat theo ảnh này.',
+    },
+];
+
+/** Headline + hướng dẫn cho section 3 beat gần nhất (mirror PHP). */
+export const PREV_BEATS_SEQUENCE_HEADERS: ShortVideoPromptImageReferenceSequenceItem[] = [
+    { text: '## REFERENCE — 3 BEAT GẦN NHẤT (script + ảnh đã render)' },
+    {
+        text: 'BẮT BUỘC ĐỌC: các ảnh đính kèm CUỐI tin nhắn này là ảnh ĐÃ RENDER của các beat liền trước trong cùng video — THỨ TỰ ảnh khớp THỨ TỰ dòng audio script bên dưới (dòng 1 ↔ ảnh đính 1, dòng 2 ↔ ảnh đính 2, dòng 3 ↔ ảnh đính 3). '
+            + 'Dùng chúng để: (1) hiểu nội dung các beat trước liền kề (bối cảnh, mạch nội dung); '
+            + '(2) tham khảo phong cách để render ảnh beat hiện tại ĐỒNG NHẤT — cùng màu sắc, bố cục, kiểu vẽ, nhân vật/bối cảnh giữ nhất quán với các beat trước.',
+    },
+];
+
+/** Dựng sequence đan xen cho resource (mirror PHP marketing_metaai_beat_image_reference_prepare). */
+export function buildResourceReferenceSequence(
+    references: ShortVideoPromptImageReference[],
+): ShortVideoPromptImageReferenceSequenceItem[] {
+    const items: ShortVideoPromptImageReferenceSequenceItem[] = [...IMAGE_REFERENCE_SEQUENCE_HEADERS];
+    for (const reference of references) {
+        const resourceKey = String(reference.resource_key || '').trim();
+        if (!resourceKey) {
+            continue;
+        }
+        const title = String(reference.title || '').trim();
+        let line = `- ${title || resourceKey} (${resourceKey})`;
+        const item: ShortVideoPromptImageReferenceSequenceItem = { text: line };
+        if (reference.has_image && String(reference.image_url || '').trim()) {
+            line += ' [hình]';
+            item.text = line;
+            item.image_url = String(reference.image_url).trim();
+        } else {
+            const substitute = normalizeResourceSubstitutePrompt(reference.prompt);
+            if (substitute) {
+                line += `: ${substitute}`;
+            }
+            item.text = line;
+        }
+        items.push(item);
+    }
+    return items.length > IMAGE_REFERENCE_SEQUENCE_HEADERS.length ? items : [];
+}
+
+/** Dựng sequence đan xen cho 3 beat gần nhất (mirror PHP prev_beats_reference_prepare). */
+export function buildPrevBeatsReferenceSequence(
+    prevBeats: ShortVideoPrevBeatReference[],
+): ShortVideoPromptImageReferenceSequenceItem[] {
+    const withImage = prevBeats.filter((beat) => String(beat.script || '').trim() && String(beat.image_url || '').trim());
+    if (!withImage.length) {
+        return [];
+    }
+    const items: ShortVideoPromptImageReferenceSequenceItem[] = [...PREV_BEATS_SEQUENCE_HEADERS];
+    for (const beat of withImage) {
+        items.push({
+            text: `${String(beat.script).replace(/\s+/g, ' ').trim()} [hình]`,
+            image_url: String(beat.image_url).trim(),
+        });
+    }
+    return items;
+}
+
+/** Gộp 2 sequence (resource + prev beats) — bỏ nếu chỉ còn header không có dòng nào. */
+export function mergeReferenceSequences(
+    ...sequences: ShortVideoPromptImageReferenceSequenceItem[][]
+): ShortVideoPromptImageReferenceSequenceItem[] {
+    const merged = sequences.flat();
+    return merged.length > 2 ? merged : [];
+}
+
 /** Chuẩn hoá khoảng trắng của prompt thay thế — giữ danh sách IMAGE REFERENCE 1 dòng/resource. */
 function normalizeResourceSubstitutePrompt(text: string): string {
     return String(text || '').replace(/\s+/g, ' ').trim();

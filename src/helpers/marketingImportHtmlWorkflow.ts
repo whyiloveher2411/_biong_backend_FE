@@ -5,7 +5,11 @@ import { waitForExtensionReady } from 'helpers/openExternalTabViaExtension';
 import { dispatchCmsExtensionEvent } from 'helpers/cmsExtensionEventBridge';
 import {
     resolveShortVideoPromptImageReferences,
-    type ShortVideoPromptImageReference,
+    buildResourceReferenceSequence,
+    buildPrevBeatsReferenceSequence,
+    mergeReferenceSequences,
+    type ShortVideoPromptImageReferenceSequenceItem,
+    type ShortVideoPrevBeatReference,
 } from 'helpers/marketingShortVideoResourceApi';
 import { metaaiCookiePayloadForOpen } from 'helpers/marketingShortVideoCookieApi';
 import {
@@ -805,6 +809,11 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
      * chat cũ; 0 → round-robin cookie pool.
      */
     beatCookieId?: number;
+    /**
+     * 3 beat gần nhất (script + ảnh) làm reference render đồng nhất — bật bằng
+     * checkbox "Upload 3 beat gần nhất" trên bước Ảnh beat.
+     */
+    prevBeats?: ShortVideoPrevBeatReference[];
 }): Promise<void> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const beatId = String(options.beatId || '').trim();
@@ -828,19 +837,25 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         throw new Error('Thiếu image_prompt');
     }
 
-    // Resource reference: prompt nhắc mã resource (C01/S01…) → gửi kèm section
-    // IMAGE REFERENCE + danh sách ảnh để panel Meta.ai đính vào composer
+    // Resource reference: prompt nhắc mã resource (C01/S01…) → gửi kèm sequence
+    // ĐAN XEN (mỗi dòng resource kèm ảnh của chính nó) + 3 beat gần nhất để panel
+    // Meta.ai type từng dòng rồi attach ảnh ngay sau dòng đó
     // (chỉ runtime — không ghi DB; lỗi list resource không chặn mở tab).
-    let imageReferenceText = '';
-    let referenceImages: ShortVideoPromptImageReference[] = [];
+    let referenceSequence: ShortVideoPromptImageReferenceSequenceItem[] = [];
     try {
         const resolved = await resolveShortVideoPromptImageReferences(shortVideoId, imagePrompt);
-        if (resolved.matched) {
-            imageReferenceText = resolved.reference_text;
-            referenceImages = resolved.references;
-        }
+        const resourceSequence = resolved.matched ? buildResourceReferenceSequence(resolved.references) : [];
+        const prevSequence = buildPrevBeatsReferenceSequence(options.prevBeats ?? []);
+        referenceSequence = mergeReferenceSequences(resourceSequence, prevSequence);
     } catch (_e) {
         // Không load được resource → prompt vẫn fill bình thường, không đính ảnh.
+        try {
+            referenceSequence = mergeReferenceSequences(
+                buildPrevBeatsReferenceSequence(options.prevBeats ?? []),
+            );
+        } catch (_e2) {
+            referenceSequence = [];
+        }
     }
 
     const extensionReady = await waitForExtensionReady(8000);
@@ -866,15 +881,11 @@ export async function openImportHtmlBeatMetaAiFillOnly(options: {
         access_token: accessToken,
         save_api_url: pluginApiPath('short-video/save-agent-import-html'),
         upload_api_url: pluginApiPath('short-video/upload-agent-visual-image'),
-        ...(imageReferenceText ? { image_reference_text: imageReferenceText } : {}),
-        ...(referenceImages.length
+        ...(referenceSequence.length
             ? {
-                reference_images: referenceImages.map((reference) => ({
-                    resource_id: reference.resource_id,
-                    resource_key: reference.resource_key,
-                    title: reference.title,
-                    image_url: reference.image_url,
-                    prompt: reference.prompt,
+                image_reference_sequence: referenceSequence.map((item) => ({
+                    text: item.text,
+                    ...(item.image_url ? { image_url: item.image_url } : {}),
                 })),
             }
             : {}),
@@ -974,6 +985,8 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
     video2s?: boolean;
     /** Tỉ lệ khung hình clip (9:16 | 16:9) — video 2s thêm aspect khi sinh ảnh (không lưu). */
     clipAspect?: string;
+    /** 3 beat gần nhất theo beat — key = beat_id của beat đang render. */
+    prevBeatsByBeatId?: Record<string, ShortVideoPrevBeatReference[]>;
 }): Promise<{ opened: number; failed: string[] }> {
     const shortVideoId = Number(options.shortVideoId || 0);
     const video2s = options.video2s === true;
@@ -1033,6 +1046,7 @@ export async function openImportHtmlBeatMetaAiForMissingBeats(options: {
                 video2s,
                 clipAspect: options.clipAspect,
                 beatCookieId: beat.cookieId,
+                prevBeats: options.prevBeatsByBeatId?.[beat.beatId] ?? [],
             });
             opened += 1;
         } catch (e) {

@@ -297,6 +297,8 @@ type Props = {
     onBeatImageFillModeChange?: (mode: BeatImageFillMode) => void;
     beatImageFillOnlyMissing?: boolean;
     onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
+    beatImageFillUploadPrevBeats?: boolean;
+    onBeatImageFillUploadPrevBeatsChange?: (checked: boolean) => void;
     beatAudioOnlyMissing?: boolean;
     onBeatAudioOnlyMissingChange?: (checked: boolean) => void;
     agentVisualMode?: string;
@@ -393,6 +395,8 @@ export default function ShortVideoAgentVideoTimeline({
     onBeatImageFillModeChange,
     beatImageFillOnlyMissing = true,
     onBeatImageFillOnlyMissingChange,
+    beatImageFillUploadPrevBeats = false,
+    onBeatImageFillUploadPrevBeatsChange,
     beatAudioOnlyMissing = true,
     onBeatAudioOnlyMissingChange,
     agentVisualMode = '',
@@ -1220,6 +1224,11 @@ export default function ShortVideoAgentVideoTimeline({
                                         beatImageFillOnlyMissingDisabled={savingBeatImageFillMode || startingFullAuto}
                                         onBeatImageFillOnlyMissingChange={(checked) => {
                                             onBeatImageFillOnlyMissingChange?.(checked);
+                                        }}
+                                        beatImageFillUploadPrevBeats={beatImageFillUploadPrevBeats}
+                                        beatImageFillUploadPrevBeatsDisabled={savingBeatImageFillMode || startingFullAuto}
+                                        onBeatImageFillUploadPrevBeatsChange={(checked) => {
+                                            onBeatImageFillUploadPrevBeatsChange?.(checked);
                                         }}
                                         onBeatImageFillModeChange={onBeatImageFillModeChange}
                                         beatAudioOnlyMissing={beatAudioOnlyMissing}

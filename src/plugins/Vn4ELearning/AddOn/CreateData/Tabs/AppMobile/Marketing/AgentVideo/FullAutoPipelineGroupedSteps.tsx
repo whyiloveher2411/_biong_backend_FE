@@ -419,6 +419,10 @@ type PipelineGroupedCommonProps = {
     beatImageFillOnlyMissing?: boolean;
     beatImageFillOnlyMissingDisabled?: boolean;
     onBeatImageFillOnlyMissingChange?: (checked: boolean) => void;
+    /** Upload 3 beat gần nhất (script + ảnh) làm reference khi fill ảnh beat. */
+    beatImageFillUploadPrevBeats?: boolean;
+    beatImageFillUploadPrevBeatsDisabled?: boolean;
+    onBeatImageFillUploadPrevBeatsChange?: (checked: boolean) => void;
     /** Chỉ tạo audio cho beat còn thiếu khi chạy bước Audio từng beat. */
     beatAudioOnlyMissing?: boolean;
     beatAudioOnlyMissingDisabled?: boolean;
@@ -468,6 +472,9 @@ export function PipelineGroupedMenuItems({
     beatImageFillOnlyMissing = true,
     beatImageFillOnlyMissingDisabled = false,
     onBeatImageFillOnlyMissingChange,
+    beatImageFillUploadPrevBeats = false,
+    beatImageFillUploadPrevBeatsDisabled = false,
+    onBeatImageFillUploadPrevBeatsChange,
     beatAudioOnlyMissing = true,
     beatAudioOnlyMissingDisabled = false,
     onBeatAudioOnlyMissingChange,
@@ -667,6 +674,9 @@ export function PipelineGroupedMenuItems({
                             onlyMissing={beatImageFillOnlyMissing}
                             onlyMissingDisabled={disabled || beatImageFillOnlyMissingDisabled}
                             onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
+                            uploadPrevBeats={beatImageFillUploadPrevBeats}
+                            uploadPrevBeatsDisabled={disabled || beatImageFillUploadPrevBeatsDisabled}
+                            onUploadPrevBeatsChange={onBeatImageFillUploadPrevBeatsChange}
                         />
                     ) : null}
                     {key === 'beat_audio' ? (
@@ -1033,6 +1043,9 @@ export function PipelineGroupedWorkflowListV3({
     beatImageFillOnlyMissing = true,
     beatImageFillOnlyMissingDisabled = false,
     onBeatImageFillOnlyMissingChange,
+    beatImageFillUploadPrevBeats = false,
+    beatImageFillUploadPrevBeatsDisabled = false,
+    onBeatImageFillUploadPrevBeatsChange,
     beatAudioOnlyMissing = true,
     beatAudioOnlyMissingDisabled = false,
     onBeatAudioOnlyMissingChange,
@@ -1232,6 +1245,9 @@ export function PipelineGroupedWorkflowListV3({
                             onlyMissing={beatImageFillOnlyMissing}
                             onlyMissingDisabled={selectStepDisabled || beatImageFillOnlyMissingDisabled}
                             onOnlyMissingChange={onBeatImageFillOnlyMissingChange}
+                            uploadPrevBeats={beatImageFillUploadPrevBeats}
+                            uploadPrevBeatsDisabled={selectStepDisabled || beatImageFillUploadPrevBeatsDisabled}
+                            onUploadPrevBeatsChange={onBeatImageFillUploadPrevBeatsChange}
                         />
                     ) : null}
                     {key === 'beat_audio' ? (

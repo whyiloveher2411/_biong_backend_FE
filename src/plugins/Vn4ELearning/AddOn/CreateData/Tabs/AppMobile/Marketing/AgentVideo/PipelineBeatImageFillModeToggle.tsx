@@ -11,6 +11,10 @@ type Props = {
     onlyMissing?: boolean;
     onlyMissingDisabled?: boolean;
     onOnlyMissingChange?: (checked: boolean) => void;
+    /** Upload 3 beat gần nhất (script + ảnh) làm reference khi render ảnh beat. */
+    uploadPrevBeats?: boolean;
+    uploadPrevBeatsDisabled?: boolean;
+    onUploadPrevBeatsChange?: (checked: boolean) => void;
 };
 
 /** Toggle Thủ công / Tự động + checkbox "chỉ beat thiếu" cho bước Ảnh beat (pipeline). */
@@ -21,6 +25,9 @@ export function PipelineBeatImageFillModeToggle({
     onlyMissing = true,
     onlyMissingDisabled = false,
     onOnlyMissingChange,
+    uploadPrevBeats = false,
+    uploadPrevBeatsDisabled = false,
+    onUploadPrevBeatsChange,
 }: Props) {
     return (
         <Tooltip
@@ -96,6 +103,36 @@ export function PipelineBeatImageFillModeToggle({
                             label={
                                 <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
                                     Chỉ beat thiếu
+                                </span>
+                            }
+                        />
+                    </Tooltip>
+                ) : null}
+                {onUploadPrevBeatsChange ? (
+                    <Tooltip
+                        title={uploadPrevBeats
+                            ? 'Upload 3 beat gần nhất: prompt kèm script + ảnh 3 beat liền trước (đan xen dòng ↔ ảnh) để AI render đồng nhất — beat đầu không có reference'
+                            : 'Bật để đính kèm script + ảnh 3 beat gần nhất vào prompt render ảnh beat'}
+                        arrow
+                        placement="top"
+                    >
+                        <FormControlLabel
+                            sx={{ m: 0, mr: 0.5 }}
+                            control={
+                                <Checkbox
+                                    size="small"
+                                    checked={uploadPrevBeats}
+                                    disabled={disabled || uploadPrevBeatsDisabled}
+                                    onChange={(event) => onUploadPrevBeatsChange(event.target.checked)}
+                                    sx={{
+                                        p: 0.3,
+                                        '& .MuiSvgIcon-root': { fontSize: 15 },
+                                    }}
+                                />
+                            }
+                            label={
+                                <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
+                                    Upload 3 beat gần nhất
                                 </span>
                             }
                         />

@@ -1678,6 +1678,25 @@ export function normalizeBeatImageFillOnlyMissing(raw?: boolean | string | numbe
     return DEFAULT_BEAT_IMAGE_FILL_ONLY_MISSING;
 }
 
+/** Upload 3 beat gần nhất (script + ảnh) làm reference khi fill ảnh beat — agent_video_json.beat_image_fill_upload_prev_beats. */
+export type BeatImageFillUploadPrevBeats = boolean;
+
+export const DEFAULT_BEAT_IMAGE_FILL_UPLOAD_PREV_BEATS = false;
+
+export function normalizeBeatImageFillUploadPrevBeats(raw?: boolean | string | number | null): boolean {
+    if (typeof raw === 'boolean') {
+        return raw;
+    }
+    if (typeof raw === 'number') {
+        return raw !== 0;
+    }
+    if (typeof raw === 'string') {
+        const value = raw.trim().toLowerCase();
+        return ['1', 'true', 'yes', 'on'].includes(value);
+    }
+    return DEFAULT_BEAT_IMAGE_FILL_UPLOAD_PREV_BEATS;
+}
+
 /** Chỉ tạo audio beat còn thiếu khi chạy bước Audio từng beat — agent_video_json.beat_audio_only_missing. */
 export type BeatAudioOnlyMissing = boolean;
 
@@ -1912,6 +1931,7 @@ export type AgentVideoContentResponse = {
     full_auto_step_toggles?: FullAutoStepToggles;
     beat_image_fill_mode?: BeatImageFillMode | string;
     beat_image_fill_only_missing?: boolean;
+    beat_image_fill_upload_prev_beats?: boolean;
     github_top_enrich?: GithubTopEnrichSummary;
     topic_research?: TopicResearchBlock;
     remix?: RemixBlock;
@@ -2716,14 +2736,26 @@ export async function saveBeatImageFillMode(
     shortVideoId: number,
     mode: BeatImageFillMode,
     onlyMissing?: boolean,
-): Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode; beat_image_fill_only_missing?: boolean }> {
+    uploadPrevBeats?: boolean,
+): Promise<JsonResponse & {
+    beat_image_fill_mode?: BeatImageFillMode;
+    beat_image_fill_only_missing?: boolean;
+    beat_image_fill_upload_prev_beats?: boolean;
+}> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-beat-image-fill-mode',
         shortVideoBody(shortVideoId, {
             beat_image_fill_mode: mode,
             ...(onlyMissing !== undefined ? { beat_image_fill_only_missing: onlyMissing ? '1' : '0' } : {}),
+            ...(uploadPrevBeats !== undefined
+                ? { beat_image_fill_upload_prev_beats: uploadPrevBeats ? '1' : '0' }
+                : {}),
         }),
-    ) as Promise<JsonResponse & { beat_image_fill_mode?: BeatImageFillMode; beat_image_fill_only_missing?: boolean }>;
+    ) as Promise<JsonResponse & {
+        beat_image_fill_mode?: BeatImageFillMode;
+        beat_image_fill_only_missing?: boolean;
+        beat_image_fill_upload_prev_beats?: boolean;
+    }>;
 }
 
 export async function saveAgentGeminiOpenBrowser(
