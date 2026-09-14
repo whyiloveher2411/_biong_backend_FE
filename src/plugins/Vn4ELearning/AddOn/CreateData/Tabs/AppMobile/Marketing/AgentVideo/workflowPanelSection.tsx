@@ -1,5 +1,11 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import {
+    Box,
+    Collapse,
+    IconButton,
+    Typography,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { alpha, type Theme } from '@mui/material/styles';
 
 export type WorkflowSectionTone =
@@ -65,6 +71,10 @@ type WorkflowSectionProps = {
     children: React.ReactNode;
     /** Header phụ bên phải title (vd. nút Import). */
     headerAction?: React.ReactNode;
+    /** Bật thu gọn (mặc định mở nếu không truyền). */
+    collapsible?: boolean;
+    /** Trạng thái mở ban đầu khi collapsible (mặc định false = thu gọn). */
+    defaultExpanded?: boolean;
 };
 
 export function WorkflowSection({
@@ -73,7 +83,23 @@ export function WorkflowSection({
     tone = 'neutral',
     children,
     headerAction,
+    collapsible = false,
+    defaultExpanded = false,
 }: WorkflowSectionProps) {
+    const [expanded, setExpanded] = React.useState(collapsible ? defaultExpanded : true);
+
+    React.useEffect(() => {
+        if (collapsible) {
+            setExpanded(defaultExpanded);
+        }
+    }, [collapsible, defaultExpanded]);
+
+    const toggleExpanded = React.useCallback(() => {
+        if (collapsible) {
+            setExpanded((prev) => !prev);
+        }
+    }, [collapsible]);
+
     return (
         <Box
             sx={(theme) => {
@@ -89,12 +115,14 @@ export function WorkflowSection({
             }}
         >
             <Box
+                onClick={toggleExpanded}
                 sx={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     justifyContent: 'space-between',
                     gap: 1,
-                    mb: description ? 0.5 : 1,
+                    mb: (expanded && description) ? 0.5 : (expanded ? 1 : 0),
+                    cursor: collapsible ? 'pointer' : 'default',
                 }}
             >
                 <Typography
@@ -106,24 +134,44 @@ export function WorkflowSection({
                         textTransform: 'uppercase',
                         fontSize: 10.5,
                         color: TONE_STYLES[tone](theme).titleColor,
-                        pt: headerAction ? 0.35 : 0,
+                        pt: headerAction || collapsible ? 0.35 : 0,
                     })}
                 >
                     {title}
                 </Typography>
-                {headerAction}
-            </Box>
-            {description ? (
-                <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
-                    sx={{ mb: 1.25, lineHeight: 1.4 }}
+                <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                    onClick={collapsible ? (event) => event.stopPropagation() : undefined}
                 >
-                    {description}
-                </Typography>
-            ) : null}
-            {children}
+                    {headerAction}
+                    {collapsible ? (
+                        <IconButton
+                            size="small"
+                            aria-label={expanded ? 'Thu gọn' : 'Mở rộng'}
+                            sx={{
+                                p: 0.25,
+                                transform: expanded ? 'rotate(180deg)' : 'none',
+                                transition: 'transform 150ms',
+                            }}
+                        >
+                            <ExpandMoreIcon fontSize="small" />
+                        </IconButton>
+                    ) : null}
+                </Box>
+            </Box>
+            <Collapse in={expanded} timeout="auto" unmountOnExit>
+                {description ? (
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        sx={{ mb: 1.25, lineHeight: 1.4 }}
+                    >
+                        {description}
+                    </Typography>
+                ) : null}
+                {children}
+            </Collapse>
         </Box>
     );
 }

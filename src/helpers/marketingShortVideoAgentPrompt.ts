@@ -84,8 +84,86 @@ export type ShortVideoPromptFetchResponse = {
     short_video_id?: number;
     content?: string;
     content_file_name?: string;
+    file?: string;
+    kind?: 'title' | 'thumbnail' | string;
+    video_content?: string;
+    selected_title?: string;
+    style_reference?: string;
+    replaced?: Record<string, boolean>;
     message?: { content?: string } | string;
 };
+
+export type YoutubePromptKind = 'title' | 'thumbnail';
+
+export type YoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
+    url?: string;
+    image_url?: string;
+    preview_url?: string;
+    s3_key?: string;
+    width?: number;
+    height?: number;
+    cookie_id?: number;
+    /** true khi Meta.ai chặn prompt gốc và ảnh được tạo bằng prompt phiên bản an toàn. */
+    safe_version_used?: boolean;
+};
+
+/** Sinh ảnh thumbnail YouTube từ prompt qua Meta.ai headless (đồng bộ). */
+export async function generateYoutubeThumbnailImage(
+    shortVideoId: number,
+    prompt: string,
+    options: { rank?: number; label?: string } = {},
+): Promise<YoutubeThumbnailImageResponse> {
+    return postShortVideoPrompt('short-video/generate-youtube-thumbnail-image', shortVideoId, {
+        prompt,
+        label: options.label ?? '',
+        rank: options.rank ?? 0,
+    }) as Promise<YoutubeThumbnailImageResponse>;
+}
+
+export type YoutubeThumbnailConceptPrompt = {
+    rank: number;
+    prompt: string;
+    label?: string;
+};
+
+export type EnqueueYoutubeThumbnailImagesResponse = {
+    success?: boolean;
+    regenerate?: boolean;
+    cancelled_job_count?: number;
+    queued?: { rank: number; job_id: number }[];
+    skipped?: { rank: number; reason: string }[];
+    invalid?: number[];
+    message?: { content?: string } | string;
+};
+
+/**
+ * Enqueue render ảnh thumbnail cho nhiều concept (job riêng mỗi concept).
+ * regenerate = true → huỷ job đang chạy và render lại TẤT CẢ concept.
+ */
+export async function enqueueYoutubeThumbnailImages(
+    shortVideoId: number,
+    concepts: YoutubeThumbnailConceptPrompt[],
+    regenerate = false,
+): Promise<EnqueueYoutubeThumbnailImagesResponse> {
+    return postShortVideoPrompt('short-video/enqueue-youtube-thumbnail-images', shortVideoId, {
+        concepts,
+        regenerate,
+    }) as Promise<EnqueueYoutubeThumbnailImagesResponse>;
+}
+
+export type YoutubeThumbnailStatusResponse = {
+    success?: boolean;
+    active?: { rank: number; job_id: number; status: string }[];
+    image_urls?: Record<string, string>;
+    message?: { content?: string } | string;
+};
+
+/** Trạng thái job thumbnail đang chạy + URL ảnh đã render (UI polling). */
+export async function fetchYoutubeThumbnailStatus(
+    shortVideoId: number,
+): Promise<YoutubeThumbnailStatusResponse> {
+    return postShortVideoPrompt('short-video/youtube-thumbnail-status', shortVideoId) as Promise<YoutubeThumbnailStatusResponse>;
+}
 
 export async function fetchShortVideoAgentPrompt(
     shortVideoId: number,
@@ -153,6 +231,43 @@ export async function fetchScriptPhoneticPrompt(
     return postShortVideoPrompt('short-video/get-script-phonetic-prompt', shortVideoId, {
         content_mode: contentMode === 'file' ? 'file' : 'inline',
     });
+}
+
+/**
+ * Prompt generate title/thumbnail YouTube — BE thay các keyword:
+ * [VIDEO_CONTENT] = audio script, [TITLE] = tiêu đề đã chọn, [STYLE_REFERENCE] = phong cách hình ảnh.
+ */
+export async function fetchYoutubePrompt(
+    shortVideoId: number,
+    kind: YoutubePromptKind,
+): Promise<ShortVideoPromptFetchResponse> {
+    return postShortVideoPrompt('short-video/get-youtube-prompt', shortVideoId, { kind });
+}
+
+export async function copyYoutubePromptToClipboard(
+    shortVideoId: number,
+    kind: YoutubePromptKind,
+): Promise<{ ok: boolean; message: string }> {
+    const res = await fetchYoutubePrompt(shortVideoId, kind);
+    const content = String(res?.content || '').trim();
+    if (!res?.success || !content) {
+        return {
+            ok: false,
+            message: parseShortVideoPromptMessage(res?.message) || 'Không tải được prompt',
+        };
+    }
+
+    const copied = await writePromptTextToClipboard(content);
+    if (!copied) {
+        return { ok: false, message: 'Không copy được — hãy chọn và copy thủ công' };
+    }
+
+    return {
+        ok: true,
+        message: kind === 'title'
+            ? 'Đã copy prompt tạo tiêu đề (YouTube)'
+            : 'Đã copy prompt tạo ảnh thu nhỏ (YouTube)',
+    };
 }
 
 export function parseShortVideoPromptMessage(

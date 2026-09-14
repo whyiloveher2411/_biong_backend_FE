@@ -7,6 +7,7 @@ import ShortVideoAgentScriptPanel from './ShortVideoAgentScriptPanel';
 import ShortVideoAgentChatbotHtmlPanel from './ShortVideoAgentChatbotHtmlPanel';
 import ShortVideoAgentThumbnailPanel from './ShortVideoAgentThumbnailPanel';
 import ShortVideoAgentFacebookSocialCopyPanel from './ShortVideoAgentFacebookSocialCopyPanel';
+import ShortVideoAgentYoutubePanel from './ShortVideoAgentYoutubePanel';
 import MarketingFacebookPreviewPanel from '../MarketingFacebookPreviewPanel';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
@@ -16,6 +17,7 @@ const TAB = {
     render: 2,
     thumbnail: 3,
     facebook: 4,
+    youtube: 5,
 } as const;
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -32,6 +34,9 @@ function resolveInitialTabIndex(initialTab?: ShortVideoAgentLeftTab): number {
     }
     if (initialTab === 'facebook') {
         return TAB.facebook;
+    }
+    if (initialTab === 'youtube') {
+        return TAB.youtube;
     }
     if (initialTab === 'resources' || initialTab === 'chatbot' || initialTab === 'render') {
         return TAB.render;
@@ -76,6 +81,7 @@ export default function ShortVideoAgentLeftPanel({
                     { label: 'Render' },
                     { label: 'Thumbnail' },
                     { label: 'Facebook' },
+                    { label: 'YouTube' },
                 ]}
             />
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -103,6 +109,9 @@ export default function ShortVideoAgentLeftPanel({
                     ) : (
                         <ShortVideoAgentFacebookSocialCopyPanel state={state} />
                     )
+                ) : null}
+                {activeTab === TAB.youtube ? (
+                    <ShortVideoAgentYoutubePanel state={state} />
                 ) : null}
             </Box>
         </Box>
