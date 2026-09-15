@@ -317,6 +317,55 @@ function dispatchOpenMetaAiChatSyncLatestEvent(
     ) as Promise<{ ok: boolean; duplicate?: boolean; error?: string }>;
 }
 
+const OPEN_METAAI_CHAT_EVENT = 'vn4-open-metaai-chat';
+const OPEN_METAAI_CHAT_RESULT_EVENT = 'vn4-open-metaai-chat-result';
+
+function dispatchOpenMetaAiChatEvent(
+    detail: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
+    return dispatchCmsExtensionEvent(
+        OPEN_METAAI_CHAT_EVENT,
+        detail,
+        OPEN_METAAI_CHAT_RESULT_EVENT,
+        12000,
+    ) as Promise<{ ok: boolean; error?: string }>;
+}
+
+/**
+ * Mở LẠI url chat Meta.ai đã tạo ảnh thumbnail (hoặc beat) — set đúng cookie
+ * account tạo chat qua extension TRƯỚC khi mở tab. window.open thường không set
+ * được cookie pool nên chat mở ra sai/không mở.
+ */
+export async function openMetaAiChatUrlWithCookie(options: {
+    chatUrl: string;
+    shortVideoId?: number;
+    rank?: number;
+    cookieId?: number;
+}): Promise<void> {
+    const chatUrl = String(options.chatUrl || '').trim();
+    if (!/^https?:\/\//i.test(chatUrl)) {
+        throw new Error('Thiếu chat_url hợp lệ');
+    }
+
+    const extensionReady = await waitForExtensionReady(8000);
+    if (!extensionReady) {
+        throw new Error(
+            'Cần Chrome extension VN4 trên tab CMS này. Reload extension (chrome://extensions) rồi F5 trang CMS.',
+        );
+    }
+
+    const cookieFragment = await metaaiCookiePayloadForOpen(Number(options.cookieId || 0));
+    const result = await dispatchOpenMetaAiChatEvent({
+        short_video_id: Number(options.shortVideoId || 0),
+        rank: Number(options.rank || 0),
+        chat_url: chatUrl,
+        ...cookieFragment,
+    });
+    if (!result.ok) {
+        throw new Error(result.error || 'Không mở được tab Meta.ai');
+    }
+}
+
 /**
  * Mở URL chat GỐC của beat (chatbot Meta.ai đã tạo ảnh) và bootstrap panel
  * Meta.ai beat ở chế độ sync-latest: panel bên phải cho user bấm

@@ -103,6 +103,11 @@ export type YoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
     width?: number;
     height?: number;
     cookie_id?: number;
+    /** Url chatbot (Meta.ai / Duck.ai) đã tạo ảnh — dùng để mở lại/update theo feedback. */
+    chat_url?: string;
+    image_prompt?: string;
+    rank?: number;
+    mode?: string;
     /** true khi Meta.ai chặn prompt gốc và ảnh được tạo bằng prompt phiên bản an toàn. */
     safe_version_used?: boolean;
 };
@@ -155,6 +160,12 @@ export type YoutubeThumbnailStatusResponse = {
     success?: boolean;
     active?: { rank: number; job_id: number; status: string }[];
     image_urls?: Record<string, string>;
+    /** rank → url chatbot đã tạo ảnh (để mở lại / update theo feedback). */
+    chat_urls?: Record<string, string>;
+    /** rank → cookie_id account Meta.ai đã tạo chat (để set lại cookie khi mở). */
+    chat_cookie_ids?: Record<string, number>;
+    /** rank → feedback đang chờ update (pending tới khi worker render xong). */
+    feedback_notes?: Record<string, string>;
     message?: { content?: string } | string;
 };
 
@@ -163,6 +174,28 @@ export async function fetchYoutubeThumbnailStatus(
     shortVideoId: number,
 ): Promise<YoutubeThumbnailStatusResponse> {
     return postShortVideoPrompt('short-video/youtube-thumbnail-status', shortVideoId) as Promise<YoutubeThumbnailStatusResponse>;
+}
+
+export type RefineYoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
+    job_id?: number;
+    rank?: number;
+    feedback?: string;
+};
+
+/**
+ * Gửi feedback cho 1 concept thumbnail: BE lưu feedback + tạo job ngay để mở lại
+ * chat Meta.ai cũ và render lại ảnh theo feedback mới.
+ */
+export async function refineYoutubeThumbnailImage(
+    shortVideoId: number,
+    rank: number,
+    feedback: string,
+): Promise<RefineYoutubeThumbnailImageResponse> {
+    return postShortVideoPrompt('short-video/refine-youtube-thumbnail-image', shortVideoId, {
+        rank,
+        feedback,
+        note: feedback,
+    }) as Promise<RefineYoutubeThumbnailImageResponse>;
 }
 
 export async function fetchShortVideoAgentPrompt(

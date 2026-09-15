@@ -13,6 +13,8 @@ import {
     DialogTitle,
     IconButton,
     Stack,
+    TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -21,6 +23,8 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import { translateYoutubeLabel } from 'helpers/shortVideoYoutubeLabelVi';
@@ -35,10 +39,18 @@ type Props = {
     shortVideoId: number;
     /** rank (dạng string) → URL ảnh đã generate. */
     imageUrls: Record<string, string>;
+    /** rank (dạng string) → url chatbot đã tạo ảnh (mở lại để xem/update). */
+    chatUrls: Record<string, string>;
+    /** rank (dạng string) → feedback đang chờ update (badge + prefill). */
+    feedbackNotes: Record<string, string>;
     /** rank đang render đồng bộ ('' nếu không có). */
     generatingRank: string;
     /** rank đang có job pending/processing (icon loading trên ô ảnh). */
     pendingRanks: Set<string>;
+    /** rank đang gửi feedback (disable submit). */
+    savingFeedbackRank: string;
+    onOpenChat: (rank: number) => void;
+    onSubmitFeedback: (rank: number, feedback: string) => Promise<boolean>;
     onGenerateImage: (rank: number, prompt: string) => void;
 };
 
@@ -176,17 +188,25 @@ function CopyPromptButton({ prompt, size = 'small' }: { prompt: string; size?: '
 function ThumbnailTile({
     concept,
     imageUrl,
+    chatUrl,
+    feedbackNote,
     loading,
     canGenerate,
     onGenerateImage,
     onOpenDetail,
+    onOpenChat,
+    onOpenFeedback,
 }: {
     concept: YoutubeThumbnailConcept;
     imageUrl: string;
+    chatUrl: string;
+    feedbackNote: string;
     loading: boolean;
     canGenerate: boolean;
     onGenerateImage: (rank: number, prompt: string) => void;
     onOpenDetail: () => void;
+    onOpenChat: () => void;
+    onOpenFeedback: () => void;
 }) {
     return (
         <Box
@@ -266,6 +286,28 @@ function ThumbnailTile({
                 </Box>
             ) : null}
 
+            {/* Badge feedback đang chờ update */}
+            {feedbackNote ? (
+                <Tooltip title={`Đang chờ update theo feedback: ${feedbackNote}`}>
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: 30,
+                            right: 2,
+                            px: 0.5,
+                            py: 0.15,
+                            borderRadius: 1,
+                            bgcolor: 'rgba(255,171,0,0.9)',
+                            color: '#1b1b1b',
+                            fontSize: 9,
+                            fontWeight: 800,
+                        }}
+                    >
+                        CHỜ FEEDBACK
+                    </Box>
+                </Tooltip>
+            ) : null}
+
             {/* Nút detail */}
             <IconButton
                 size="small"
@@ -283,6 +325,57 @@ function ThumbnailTile({
             >
                 <InfoOutlinedIcon sx={{ fontSize: 16 }} />
             </IconButton>
+
+            {/* Mở chatbot + để lại feedback (khi ảnh đã có url chatbot) */}
+            {imageUrl && chatUrl && !loading ? (
+                <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        p: 0.5,
+                        bgcolor: 'rgba(0,0,0,0.35)',
+                    }}
+                >
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<OpenInNewIcon sx={{ fontSize: 13 }} />}
+                        onClick={onOpenChat}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: 10,
+                            py: 0.1,
+                            color: '#fff',
+                            borderColor: 'rgba(255,255,255,0.5)',
+                        }}
+                    >
+                        Chat
+                    </Button>
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<RateReviewIcon sx={{ fontSize: 13 }} />}
+                        onClick={onOpenFeedback}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: 10,
+                            py: 0.1,
+                            color: feedbackNote ? '#ffcc80' : '#fff',
+                            borderColor: feedbackNote
+                                ? 'rgba(255,171,0,0.8)'
+                                : 'rgba(255,255,255,0.5)',
+                        }}
+                    >
+                        Feedback
+                    </Button>
+                </Stack>
+            ) : null}
 
             {/* Loading khi đang render/pending job */}
             {loading ? (
@@ -331,18 +424,36 @@ function ThumbnailTile({
 function ConceptDetailDialog({
     concept,
     imageUrl,
+    chatUrl,
+    feedbackNote,
     loading,
+    savingFeedback,
     canGenerate,
     onClose,
     onGenerateImage,
+    onOpenChat,
+    onSubmitFeedback,
 }: {
     concept: YoutubeThumbnailConcept | null;
     imageUrl: string;
+    chatUrl: string;
+    feedbackNote: string;
     loading: boolean;
+    savingFeedback: boolean;
     canGenerate: boolean;
     onClose: () => void;
     onGenerateImage: (rank: number, prompt: string) => void;
+    onOpenChat: () => void;
+    onSubmitFeedback: (rank: number, feedback: string) => Promise<boolean>;
 }) {
+    const [feedbackDraft, setFeedbackDraft] = React.useState('');
+
+    // Prefill feedback hiện tại khi mở concept khác (không reset theo mỗi lần poll).
+    React.useEffect(() => {
+        setFeedbackDraft(feedbackNote || '');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [concept?.rank]);
+
     return (
         <Dialog open={Boolean(concept)} onClose={onClose} fullWidth maxWidth="sm">
             {concept ? (
@@ -420,6 +531,69 @@ function ConceptDetailDialog({
                                 </Stack>
                             )}
 
+                            {chatUrl ? (
+                                <Box
+                                    sx={{
+                                        p: 1,
+                                        borderRadius: 1.5,
+                                        border: '1px solid',
+                                        borderColor: feedbackNote ? 'warning.main' : 'divider',
+                                        bgcolor: 'action.hover',
+                                    }}
+                                >
+                                    <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                                        <Typography variant="caption" fontWeight={700} color="text.secondary">
+                                            Chatbot &amp; feedback
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            variant="text"
+                                            startIcon={<OpenInNewIcon fontSize="small" />}
+                                            onClick={onOpenChat}
+                                            sx={{ textTransform: 'none', fontSize: 11, minWidth: 0, py: 0 }}
+                                        >
+                                            Mở url chatbot
+                                        </Button>
+                                    </Stack>
+                                    {feedbackNote ? (
+                                        <Chip
+                                            size="small"
+                                            color="warning"
+                                            sx={{ mt: 0.5, height: 20, fontSize: 10 }}
+                                            label={`Đang chờ update theo feedback: ${feedbackNote}`}
+                                        />
+                                    ) : null}
+                                    <TextField
+                                        multiline
+                                        minRows={3}
+                                        fullWidth
+                                        size="small"
+                                        placeholder="VD: chữ quá nhỏ, đổi nền sáng hơn, chủ thể to hơn…"
+                                        value={feedbackDraft}
+                                        onChange={(event) => setFeedbackDraft(event.target.value)}
+                                        sx={{ mt: 0.75 }}
+                                    />
+                                    <Stack direction="row" justifyContent="flex-end" sx={{ mt: 0.5 }}>
+                                        <LoadingButton
+                                            size="small"
+                                            variant="contained"
+                                            loading={savingFeedback}
+                                            disabled={savingFeedback || !feedbackDraft.trim()}
+                                            onClick={() => {
+                                                const note = feedbackDraft.trim();
+                                                if (note === '') {
+                                                    return;
+                                                }
+                                                void onSubmitFeedback(concept.rank, note);
+                                            }}
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Gửi feedback &amp; render lại
+                                        </LoadingButton>
+                                    </Stack>
+                                </Box>
+                            ) : null}
+
                             {concept.why.length > 0 ? (
                                 <Box>
                                     <Typography variant="caption" fontWeight={700} color="text.secondary">
@@ -496,8 +670,13 @@ export default function ShortVideoAgentYoutubeThumbnailList({
     parsed,
     shortVideoId,
     imageUrls,
+    chatUrls,
+    feedbackNotes,
     generatingRank,
     pendingRanks,
+    savingFeedbackRank,
+    onOpenChat,
+    onSubmitFeedback,
     onGenerateImage,
 }: Props) {
     const [detailRank, setDetailRank] = React.useState<number | null>(null);
@@ -567,6 +746,8 @@ export default function ShortVideoAgentYoutubeThumbnailList({
                                 key={`${concept.rank}-${concept.conceptName}`}
                                 concept={concept}
                                 imageUrl={imageUrls[String(concept.rank)] || ''}
+                                chatUrl={chatUrls[String(concept.rank)] || ''}
+                                feedbackNote={feedbackNotes[String(concept.rank)] || ''}
                                 loading={
                                     generatingRank === String(concept.rank)
                                     || pendingRanks.has(String(concept.rank))
@@ -574,6 +755,8 @@ export default function ShortVideoAgentYoutubeThumbnailList({
                                 canGenerate={shortVideoId > 0}
                                 onGenerateImage={onGenerateImage}
                                 onOpenDetail={() => setDetailRank(concept.rank)}
+                                onOpenChat={() => onOpenChat(concept.rank)}
+                                onOpenFeedback={() => setDetailRank(concept.rank)}
                             />
                         ))}
                     </Box>
@@ -626,12 +809,22 @@ export default function ShortVideoAgentYoutubeThumbnailList({
             <ConceptDetailDialog
                 concept={detailConcept}
                 imageUrl={detailConcept ? (imageUrls[String(detailConcept.rank)] || '') : ''}
+                chatUrl={detailConcept ? (chatUrls[String(detailConcept.rank)] || '') : ''}
+                feedbackNote={detailConcept ? (feedbackNotes[String(detailConcept.rank)] || '') : ''}
                 loading={Boolean(detailConcept)
                     && (generatingRank === String(detailConcept.rank)
                         || pendingRanks.has(String(detailConcept.rank)))}
+                savingFeedback={Boolean(detailConcept)
+                    && savingFeedbackRank === String(detailConcept.rank)}
                 canGenerate={shortVideoId > 0}
                 onClose={() => setDetailRank(null)}
                 onGenerateImage={onGenerateImage}
+                onOpenChat={() => {
+                    if (detailConcept) {
+                        onOpenChat(detailConcept.rank);
+                    }
+                }}
+                onSubmitFeedback={onSubmitFeedback}
             />
         </Stack>
     );

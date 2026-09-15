@@ -20,6 +20,7 @@ import {
     Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LoadingButton from 'components/atoms/LoadingButton';
@@ -29,12 +30,14 @@ import {
     fetchYoutubeThumbnailStatus,
     generateYoutubeThumbnailImage,
     parseShortVideoPromptMessage,
+    refineYoutubeThumbnailImage,
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
 import { parseYoutubeTitleResponse } from 'helpers/shortVideoYoutubeTitleResponse';
 import { parseYoutubeThumbnailResponse } from 'helpers/shortVideoYoutubeThumbnailResponse';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
+import { openMetaAiChatUrlWithCookie } from 'helpers/marketingImportHtmlWorkflow';
 import {
     fetchWorkflowOutputs,
     saveWorkflowOutput,
@@ -61,6 +64,7 @@ type PromptSpec = {
     title: string;
     description: string;
     copyLabel: string;
+    pasteLabel: string;
     resultLabel: string;
     placeholder: string;
     saveLabel: string;
@@ -72,6 +76,7 @@ const PROMPT_SPECS: Record<YoutubeSubTab, PromptSpec> = {
         title: 'Prompt tạo tiêu đề',
         description: 'Copy prompt → gửi chatbot → dán toàn bộ phản hồi vào ô bên dưới để lưu và phân tích.',
         copyLabel: 'Copy prompt tiêu đề',
+        pasteLabel: 'Dán & lưu tiêu đề từ clipboard',
         resultLabel: 'Phản hồi tiêu đề từ chatbot',
         placeholder: 'Dán phản hồi tiêu đề từ chatbot…',
         saveLabel: 'Lưu & phân tích tiêu đề',
@@ -81,6 +86,7 @@ const PROMPT_SPECS: Record<YoutubeSubTab, PromptSpec> = {
         title: 'Prompt tạo ảnh thu nhỏ',
         description: 'Copy prompt → gửi chatbot → dán ý tưởng/prompt ảnh thu nhỏ nhận được vào ô bên dưới để lưu.',
         copyLabel: 'Copy prompt ảnh thu nhỏ',
+        pasteLabel: 'Dán & lưu ảnh thu nhỏ từ clipboard',
         resultLabel: 'Phản hồi ảnh thu nhỏ từ chatbot',
         placeholder: 'Dán phản hồi ảnh thu nhỏ từ chatbot…',
         saveLabel: 'Lưu ảnh thu nhỏ',
@@ -151,6 +157,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     });
     const [copyingKind, setCopyingKind] = React.useState<YoutubePromptKind | ''>('');
     const [copiedKind, setCopiedKind] = React.useState<YoutubePromptKind | ''>('');
+    const [pastingKind, setPastingKind] = React.useState<YoutubePromptKind | ''>('');
     const [savingKind, setSavingKind] = React.useState<YoutubePromptKind | ''>('');
     const [generatingRank, setGeneratingRank] = React.useState<string>('');
     const [savingSelectedTitle, setSavingSelectedTitle] = React.useState(false);
@@ -159,6 +166,11 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [enqueueingAll, setEnqueueingAll] = React.useState(false);
     const [renderAllDialogOpen, setRenderAllDialogOpen] = React.useState(false);
     const [jobImageUrls, setJobImageUrls] = React.useState<Record<string, string>>({});
+    // rank → url chatbot đã tạo ảnh + feedback đang chờ update (từ status polling).
+    const [statusChatUrls, setStatusChatUrls] = React.useState<Record<string, string>>({});
+    const [statusChatCookieIds, setStatusChatCookieIds] = React.useState<Record<string, number>>({});
+    const [statusFeedbackNotes, setStatusFeedbackNotes] = React.useState<Record<string, string>>({});
+    const [savingFeedbackRank, setSavingFeedbackRank] = React.useState<string>('');
     const loadedRef = React.useRef<number>(-1);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -170,6 +182,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             setHasStyleReference(false);
             setPendingRanks(new Set());
             setJobImageUrls({});
+            setStatusChatUrls({});
+            setStatusChatCookieIds({});
+            setStatusFeedbackNotes({});
             return;
         }
         if (loadedRef.current === shortVideoId) {
@@ -178,6 +193,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         loadedRef.current = shortVideoId;
         setPendingRanks(new Set());
         setJobImageUrls({});
+        setStatusChatUrls({});
+        setStatusChatCookieIds({});
+        setStatusFeedbackNotes({});
         fetchWorkflowOutputs(shortVideoId).then((map) => {
             setOutputs(map || {});
             const saved = map?.[YOUTUBE_WORKFLOW_KEY] || {};
@@ -194,6 +212,17 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 if (res?.image_urls && typeof res.image_urls === 'object') {
                     setJobImageUrls(res.image_urls);
                 }
+                if (res?.chat_urls && typeof res.chat_urls === 'object') {
+                    setStatusChatUrls(res.chat_urls);
+                }
+                if (res?.chat_cookie_ids && typeof res.chat_cookie_ids === 'object') {
+                    setStatusChatCookieIds(res.chat_cookie_ids);
+                }
+                setStatusFeedbackNotes(
+                    res?.feedback_notes && typeof res.feedback_notes === 'object'
+                        ? res.feedback_notes
+                        : {},
+                );
             })
             .catch(() => setPendingRanks(new Set()));
         fetchShortVideoAgentImageStyle(shortVideoId)
@@ -232,6 +261,18 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 if (res?.image_urls && typeof res.image_urls === 'object') {
                     setJobImageUrls((prev) => ({ ...prev, ...res.image_urls }));
                 }
+                if (res?.chat_urls && typeof res.chat_urls === 'object') {
+                    setStatusChatUrls((prev) => ({ ...prev, ...res.chat_urls }));
+                }
+                if (res?.chat_cookie_ids && typeof res.chat_cookie_ids === 'object') {
+                    setStatusChatCookieIds((prev) => ({ ...prev, ...res.chat_cookie_ids }));
+                }
+                // Feedback được BE xóa khi update xong → thay toàn bộ (không merge) để badge tắt.
+                setStatusFeedbackNotes(
+                    res?.feedback_notes && typeof res.feedback_notes === 'object'
+                        ? res.feedback_notes
+                        : {},
+                );
             } catch {
                 // Lỗi tạm thời — giữ nguyên, thử lại vòng sau.
             }
@@ -273,6 +314,37 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         });
         return { ...map, ...jobImageUrls };
     }, [outputs, jobImageUrls]);
+
+    // Url chatbot đã tạo ảnh theo rank (từ workflow outputs + status polling).
+    const thumbnailChatUrls = React.useMemo(() => {
+        const map: Record<string, string> = {};
+        Object.entries(outputs[YOUTUBE_WORKFLOW_KEY] || {}).forEach(([key, value]) => {
+            const match = key.match(/^thumbnail_chat_url_(\d+)$/);
+            if (match && value) {
+                map[match[1]] = value;
+            }
+        });
+        return { ...map, ...statusChatUrls };
+    }, [outputs, statusChatUrls]);
+
+    // Cookie_id account Meta.ai đã tạo chat theo rank (để set lại cookie khi mở).
+    const thumbnailChatCookieIds = React.useMemo(() => {
+        const map: Record<string, number> = {};
+        Object.entries(outputs[YOUTUBE_WORKFLOW_KEY] || {}).forEach(([key, value]) => {
+            const match = key.match(/^thumbnail_cookie_id_(\d+)$/);
+            const id = Number(value);
+            if (match && Number.isFinite(id) && id > 0) {
+                map[match[1]] = id;
+            }
+        });
+        return { ...map, ...statusChatCookieIds };
+    }, [outputs, statusChatCookieIds]);
+
+    // Feedback đang chờ update theo rank (BE xóa khi render xong).
+    const thumbnailFeedbackNotes = React.useMemo<Record<string, string>>(
+        () => statusFeedbackNotes,
+        [statusFeedbackNotes],
+    );
     const isDirty = (kind: YoutubePromptKind) => (values[kind] || '') !== (savedValues[kind] || '');
 
     const handleCopy = React.useCallback(async (kind: YoutubePromptKind) => {
@@ -297,7 +369,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         state.showMessage(result.message, result.ok ? 'success' : 'error');
     }, [shortVideoId, copyingKind, state]);
 
-    const handleSave = React.useCallback(async (kind: YoutubePromptKind) => {
+    const handleSave = React.useCallback(async (kind: YoutubePromptKind, overrideValue?: string) => {
         if (savingKind) {
             return;
         }
@@ -305,8 +377,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             state.showMessage('Thiếu short video — không lưu được kết quả', 'warning');
             return;
         }
+        const value = overrideValue !== undefined ? overrideValue : (values[kind] || '');
         setSavingKind(kind);
-        const res = await saveWorkflowOutput(shortVideoId, YOUTUBE_WORKFLOW_KEY, kind, values[kind] || '');
+        const res = await saveWorkflowOutput(shortVideoId, YOUTUBE_WORKFLOW_KEY, kind, value);
         setSavingKind('');
         if (!res.ok) {
             state.showMessage(res.message || 'Không lưu được kết quả', 'error');
@@ -319,12 +392,49 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 ...prev,
                 [YOUTUBE_WORKFLOW_KEY]: {
                     ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
-                    [kind]: values[kind] || '',
+                    [kind]: value,
                 },
             }));
         }
         state.showMessage(kind === 'title' ? 'Đã lưu & phân tích tiêu đề' : 'Đã lưu ảnh thu nhỏ', 'success');
     }, [savingKind, shortVideoId, values, state]);
+
+    /**
+     * Đọc nội dung dài từ clipboard rồi lưu luôn — không cần mở ô phản hồi
+     * (phản hồi chatbot rất dài, mở ra phải scroll xa mới thấy kết quả phân tích).
+     */
+    const handlePasteAndSave = React.useCallback(async (kind: YoutubePromptKind) => {
+        if (pastingKind || savingKind) {
+            return;
+        }
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không lưu được kết quả', 'warning');
+            return;
+        }
+        if (!navigator.clipboard?.readText) {
+            state.showMessage('Trình duyệt không hỗ trợ đọc clipboard', 'error');
+            return;
+        }
+
+        setPastingKind(kind);
+        let text = '';
+        try {
+            text = (await navigator.clipboard.readText()) || '';
+        } catch {
+            setPastingKind('');
+            state.showMessage('Không đọc được clipboard — hãy cấp quyền hoặc dán thủ công', 'error');
+            return;
+        }
+        setPastingKind('');
+
+        if (!text.trim()) {
+            state.showMessage('Clipboard đang trống — không có nội dung để lưu', 'warning');
+            return;
+        }
+
+        setValues((prev) => ({ ...prev, [kind]: text }));
+        await handleSave(kind, text);
+    }, [pastingKind, savingKind, shortVideoId, handleSave, state]);
 
     const handleSelectTitle = React.useCallback(async (title: string) => {
         if (savingSelectedTitle) {
@@ -477,10 +587,112 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         }
     }, [enqueueingAll, shortVideoId, parsedThumbnail, state]);
 
+    const handleOpenThumbnailChat = React.useCallback(async (rank: number) => {
+        const rankKey = String(rank);
+        const chatUrl = String(thumbnailChatUrls[rankKey] || '').trim();
+        if (chatUrl === '') {
+            state.showMessage('Concept này chưa có url chatbot', 'warning');
+            return;
+        }
+        let host = '';
+        try {
+            host = new URL(chatUrl).hostname || '';
+        } catch {
+            host = '';
+        }
+        // Chat Meta.ai cần extension set lại cookie account tạo chat trước khi mở
+        // (window.open không set được cookie pool → chat không mở).
+        if (!/(^|\.)meta\.ai$/i.test(host)) {
+            window.open(chatUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        try {
+            await openMetaAiChatUrlWithCookie({
+                chatUrl,
+                shortVideoId,
+                rank,
+                cookieId: Number(thumbnailChatCookieIds[rankKey] || 0),
+            });
+        } catch (error) {
+            state.showMessage(
+                error instanceof Error ? error.message : 'Không mở được chat Meta.ai',
+                'error',
+            );
+        }
+    }, [thumbnailChatUrls, thumbnailChatCookieIds, shortVideoId, state]);
+
+    /**
+     * Gửi feedback cho 1 concept: FE hiển thị ngay trạng thái chờ + gọi API tạo job;
+     * worker mở lại chat Meta.ai cũ để render ảnh mới, polling tự cập nhật ảnh.
+     */
+    const handleSubmitThumbnailFeedback = React.useCallback(async (rank: number, feedback: string) => {
+        const note = String(feedback || '').trim();
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không gửi được feedback', 'warning');
+            return false;
+        }
+        if (note === '') {
+            state.showMessage('Nhập nội dung feedback trước khi gửi', 'warning');
+            return false;
+        }
+        if (savingFeedbackRank) {
+            return false;
+        }
+        const rankKey = String(rank);
+        setSavingFeedbackRank(rankKey);
+        setStatusFeedbackNotes((prev) => ({ ...prev, [rankKey]: note }));
+        setPendingRanks((prev) => {
+            const next = new Set(prev);
+            next.add(rankKey);
+            return next;
+        });
+        try {
+            const res = await refineYoutubeThumbnailImage(shortVideoId, rank, note);
+            if (!res?.success) {
+                setStatusFeedbackNotes((prev) => {
+                    const next = { ...prev };
+                    delete next[rankKey];
+                    return next;
+                });
+                setPendingRanks((prev) => {
+                    const next = new Set(prev);
+                    next.delete(rankKey);
+                    return next;
+                });
+                state.showMessage(
+                    parseShortVideoPromptMessage(res?.message) || 'Không gửi được feedback',
+                    'error',
+                );
+                return false;
+            }
+            state.showMessage(
+                parseShortVideoPromptMessage(res?.message)
+                    || `Đã gửi feedback cho thumbnail #${rank} — đang render lại`,
+                'success',
+            );
+            return true;
+        } catch (error) {
+            setStatusFeedbackNotes((prev) => {
+                const next = { ...prev };
+                delete next[rankKey];
+                return next;
+            });
+            state.showMessage(
+                error instanceof Error ? error.message : 'Không gửi được feedback',
+                'error',
+            );
+            return false;
+        } finally {
+            setSavingFeedbackRank('');
+        }
+    }, [shortVideoId, savingFeedbackRank, state]);
+
     const spec = PROMPT_SPECS[subTab];
     const copying = copyingKind === spec.kind;
     const copied = copiedKind === spec.kind;
+    const pasting = pastingKind === spec.kind;
     const saving = savingKind === spec.kind;
+    const pasteDisabled = !shortVideoId || Boolean(pastingKind) || Boolean(savingKind);
     const copyDisabled = !shortVideoId || !hasScript || Boolean(copyingKind);
     const copyDisabledReason = !hasScript
         ? 'Cần audio script trước'
@@ -560,26 +772,50 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                     description={spec.description}
                 >
                     <Stack spacing={1.5}>
-                        <Tooltip title={copyDisabledReason} placement="top">
-                            <span style={{ alignSelf: 'flex-start' }}>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    disabled={copyDisabled}
-                                    startIcon={
-                                        copying
-                                            ? <CircularProgress size={12} color="inherit" />
-                                            : copied
-                                                ? <CheckIcon fontSize="small" />
-                                                : <ContentCopyIcon fontSize="small" />
-                                    }
-                                    onClick={() => { void handleCopy(spec.kind); }}
-                                    sx={{ textTransform: 'none' }}
-                                >
-                                    {copied ? 'Đã copy' : spec.copyLabel}
-                                </Button>
-                            </span>
-                        </Tooltip>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            flexWrap="wrap"
+                            useFlexGap
+                            alignItems="center"
+                        >
+                            <Tooltip title={copyDisabledReason} placement="top">
+                                <span>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        disabled={copyDisabled}
+                                        startIcon={
+                                            copying
+                                                ? <CircularProgress size={12} color="inherit" />
+                                                : copied
+                                                    ? <CheckIcon fontSize="small" />
+                                                    : <ContentCopyIcon fontSize="small" />
+                                        }
+                                        onClick={() => { void handleCopy(spec.kind); }}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        {copied ? 'Đã copy' : spec.copyLabel}
+                                    </Button>
+                                </span>
+                            </Tooltip>
+
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                disabled={pasteDisabled}
+                                startIcon={
+                                    pasting
+                                        ? <CircularProgress size={12} color="inherit" />
+                                        : <ContentPasteIcon fontSize="small" />
+                                }
+                                onClick={() => { void handlePasteAndSave(spec.kind); }}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                {spec.pasteLabel}
+                            </Button>
+                        </Stack>
 
                         <CollapsibleResponseField
                             key={spec.kind}
@@ -649,8 +885,13 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                             parsed={parsedThumbnail}
                             shortVideoId={shortVideoId}
                             imageUrls={thumbnailImageUrls}
+                            chatUrls={thumbnailChatUrls}
+                            feedbackNotes={thumbnailFeedbackNotes}
                             generatingRank={generatingRank}
                             pendingRanks={pendingRanks}
+                            savingFeedbackRank={savingFeedbackRank}
+                            onOpenChat={handleOpenThumbnailChat}
+                            onSubmitFeedback={handleSubmitThumbnailFeedback}
                             onGenerateImage={(rank, prompt) => {
                                 void handleGenerateThumbnailImage(rank, prompt);
                             }}
