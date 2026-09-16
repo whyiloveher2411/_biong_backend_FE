@@ -4,7 +4,9 @@ import {
     AccordionDetails,
     AccordionSummary,
     Box,
+    Button,
     Chip,
+    Collapse,
     IconButton,
     Radio,
     Stack,
@@ -16,6 +18,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import type {
+    YoutubeSeoScore,
     YoutubeTitleItem,
     YoutubeTitleParseResult,
 } from 'helpers/shortVideoYoutubeTitleResponse';
@@ -87,6 +90,145 @@ function QuickCopyTitleButton({ title, label }: { title: string; label?: string 
     );
 }
 
+/** State copy dùng chung cho các nút copy text (description, tags…). */
+function useCopyFeedback() {
+    const [copied, setCopied] = React.useState(false);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => () => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+    }, []);
+
+    const copy = React.useCallback(async (text: string) => {
+        if (!text.trim()) {
+            return false;
+        }
+        const ok = await writePromptTextToClipboard(text);
+        if (!ok) {
+            return false;
+        }
+        setCopied(true);
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+        timerRef.current = setTimeout(() => setCopied(false), 2000);
+        return true;
+    }, []);
+
+    return { copied, copy };
+}
+
+/** Nút copy dạng button có nhãn (dùng cho description / tags). */
+function CopyTextButton({ text, label, fullWidth }: { text: string; label: string; fullWidth?: boolean }) {
+    const { copied, copy } = useCopyFeedback();
+
+    return (
+        <Button
+            size="small"
+            variant="outlined"
+            disabled={!text.trim()}
+            startIcon={copied
+                ? <CheckIcon fontSize="small" color="success" />
+                : <ContentCopyIcon fontSize="small" />}
+            onClick={(event) => {
+                event.stopPropagation();
+                void copy(text);
+            }}
+            sx={{
+                textTransform: 'none',
+                fontSize: 11,
+                py: 0.25,
+                minHeight: 26,
+                ...(fullWidth ? { width: '100%' } : {}),
+            }}
+        >
+            {copied ? 'Đã copy' : label}
+        </Button>
+    );
+}
+
+function scoreChipColor(value: number | null): 'success' | 'warning' | 'error' | 'default' {
+    if (value === null) {
+        return 'default';
+    }
+    if (value >= 80) {
+        return 'success';
+    }
+    if (value >= 60) {
+        return 'warning';
+    }
+    return 'error';
+}
+
+/** Box điểm SEO to, rõ — click để xem nhận xét chi tiết. */
+function SeoScoreCard({ label, seo }: { label: string; seo: YoutubeSeoScore | null }) {
+    const [open, setOpen] = React.useState(false);
+    if (!seo) {
+        return null;
+    }
+    const color = scoreChipColor(seo.score);
+    const colorMain = color === 'success'
+        ? 'success.main'
+        : color === 'warning'
+            ? 'warning.main'
+            : color === 'error'
+                ? 'error.main'
+                : 'text.disabled';
+    const hasNotes = seo.notes.length > 0;
+
+    return (
+        <Box
+            onClick={() => hasNotes && setOpen((prev) => !prev)}
+            sx={{
+                flex: 1,
+                minWidth: 150,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 1.25,
+                bgcolor: 'background.paper',
+                cursor: hasNotes ? 'pointer' : 'default',
+            }}
+        >
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+                {label}
+            </Typography>
+            <Stack direction="row" alignItems="baseline" spacing={0.5} sx={{ mt: 0.25 }}>
+                <Typography sx={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: colorMain }}>
+                    {seo.score ?? '—'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                    /100
+                </Typography>
+                {hasNotes ? (
+                    <ExpandMoreIcon
+                        fontSize="small"
+                        sx={{
+                            ml: 'auto',
+                            color: 'text.disabled',
+                            transform: open ? 'rotate(180deg)' : 'none',
+                            transition: 'transform 150ms',
+                        }}
+                    />
+                ) : null}
+            </Stack>
+            <Collapse in={open} timeout="auto" unmountOnExit>
+                <Box component="ul" sx={{ m: 0, mt: 1, pl: 2 }}>
+                    {seo.notes.map((note, index) => (
+                        <Box component="li" key={index} sx={{ mb: 0.25 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.45 }}>
+                                {note}
+                            </Typography>
+                        </Box>
+                    ))}
+                </Box>
+            </Collapse>
+        </Box>
+    );
+}
+
 function TitleItemCard({
     item,
     selected,
@@ -98,6 +240,11 @@ function TitleItemCard({
     selectable: boolean;
     onSelect: () => void;
 }) {
+    const [expanded, setExpanded] = React.useState(false);
+    const hasDetails = Boolean(item.curiosityGap || item.curiosityDevice)
+        || item.subScores.length > 0
+        || item.why.length > 0;
+
     return (
         <Box
             onClick={selectable ? onSelect : undefined}
@@ -105,12 +252,13 @@ function TitleItemCard({
                 border: 1,
                 borderColor: selected ? 'primary.main' : 'divider',
                 borderRadius: 2,
-                p: 1.25,
+                px: 1.25,
+                py: 1,
                 bgcolor: selected ? 'action.selected' : 'background.paper',
                 cursor: selectable ? 'pointer' : 'default',
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="flex-start">
+            <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
                     size="small"
                     color="primary"
@@ -131,6 +279,28 @@ function TitleItemCard({
                 {item.title ? (
                     <QuickCopyTitleButton title={item.title} label={`Copy tiêu đề ${item.rankLabel}`} />
                 ) : null}
+                {hasDetails ? (
+                    <Tooltip title={expanded ? 'Ẩn chi tiết' : 'Xem chi tiết'}>
+                        <IconButton
+                            size="small"
+                            aria-label={expanded ? 'Ẩn chi tiết' : 'Xem chi tiết'}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setExpanded((prev) => !prev);
+                            }}
+                            sx={{ p: 0.25 }}
+                        >
+                            <ExpandMoreIcon
+                                fontSize="small"
+                                sx={{
+                                    color: 'text.secondary',
+                                    transform: expanded ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 150ms',
+                                }}
+                            />
+                        </IconButton>
+                    </Tooltip>
+                ) : null}
                 {selectable && item.title ? (
                     <Radio
                         size="small"
@@ -140,37 +310,52 @@ function TitleItemCard({
                             onSelect();
                         }}
                         inputProps={{ 'aria-label': `Chọn tiêu đề ${item.rankLabel}` }}
-                        sx={{ p: 0.25, mt: -0.25 }}
+                        sx={{ p: 0.25 }}
                     />
                 ) : null}
             </Stack>
 
-            {item.subScores.length > 0 ? (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
-                    {item.subScores.map((score) => (
-                        <Chip
-                            key={score.label}
-                            size="small"
-                            variant="outlined"
-                            label={`${translateYoutubeLabel(score.label)}: ${score.value}`}
-                            sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10 } }}
-                        />
-                    ))}
-                </Stack>
-            ) : null}
+            <Collapse in={expanded} timeout="auto" unmountOnExit>
+                <Box sx={{ pt: 0.5 }}>
+                    {item.curiosityGap || item.curiosityDevice ? (
+                        <Typography
+                            variant="caption"
+                            sx={{ display: 'block', fontSize: 11.5, lineHeight: 1.4, color: 'text.secondary' }}
+                        >
+                            {item.curiosityDevice ? <strong>{translateYoutubeLabel(item.curiosityDevice)}</strong> : null}
+                            {item.curiosityDevice && item.curiosityGap ? ' · ' : null}
+                            {item.curiosityGap}
+                        </Typography>
+                    ) : null}
 
-            {item.why.length > 0 ? (
-                <Box component="ul" sx={{ m: 0, mt: 0.75, pl: 2 }}>
-                    {item.why.map((point, index) => (
-                        <Box component="li" key={index} sx={{ mb: 0.25 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.45 }}>
-                                {point.label ? <strong>{translateYoutubeLabel(point.label)}: </strong> : null}
-                                {point.text}
-                            </Typography>
+                    {item.subScores.length > 0 ? (
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
+                            {item.subScores.map((score) => (
+                                <Chip
+                                    key={score.label}
+                                    size="small"
+                                    variant="outlined"
+                                    label={`${translateYoutubeLabel(score.label)}: ${score.value}`}
+                                    sx={{ height: 18, '& .MuiChip-label': { px: 0.6, fontSize: 10 } }}
+                                />
+                            ))}
+                        </Stack>
+                    ) : null}
+
+                    {item.why.length > 0 ? (
+                        <Box component="ul" sx={{ m: 0, mt: 0.75, pl: 2 }}>
+                            {item.why.map((point, index) => (
+                                <Box component="li" key={index} sx={{ mb: 0.25 }}>
+                                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, lineHeight: 1.45 }}>
+                                        {point.label ? <strong>{translateYoutubeLabel(point.label)}: </strong> : null}
+                                        {point.text}
+                                    </Typography>
+                                </Box>
+                            ))}
                         </Box>
-                    ))}
+                    ) : null}
                 </Box>
-            ) : null}
+            </Collapse>
         </Box>
     );
 }
@@ -193,12 +378,154 @@ export default function ShortVideoAgentYoutubeTitleList({
             || packaging.refinements.length > 0),
     );
 
-    if (!hasItems && !hasAudience && !hasWinner && !hasPackaging) {
+    const description = parsed.description || '';
+    const firstComment = parsed.firstComment || '';
+    const hashtags = parsed.hashtags;
+    const tags = parsed.tags;
+    const seoTitle = parsed.seo?.title ?? null;
+    const seoDescription = parsed.seo?.description ?? null;
+    const hasDescription = Boolean(description) || hashtags.length > 0;
+    const hasFirstComment = Boolean(firstComment);
+    const hasTags = tags.length > 0;
+    const hasSeo = Boolean(seoTitle || seoDescription);
+
+    if (!hasItems && !hasAudience && !hasWinner && !hasPackaging && !hasDescription && !hasFirstComment && !hasTags && !hasSeo) {
         return null;
     }
 
     return (
         <Stack spacing={1.5}>
+            {hasDescription ? (
+                <Box
+                    sx={{
+                        border: 1,
+                        borderColor: 'primary.main',
+                        borderRadius: 2,
+                        p: 1.25,
+                        bgcolor: 'action.hover',
+                    }}
+                >
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        sx={{ mb: 0.75 }}
+                    >
+                        <Typography variant="caption" fontWeight={700} color="primary.main">
+                            MÔ TẢ VIDEO
+                        </Typography>
+                        <CopyTextButton text={description} label="Copy mô tả" />
+                    </Stack>
+                    {description ? (
+                        <Typography
+                            variant="body2"
+                            sx={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                        >
+                            {description}
+                        </Typography>
+                    ) : null}
+                    {hashtags.length > 0 ? (
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
+                            {hashtags.map((tag) => (
+                                <Chip
+                                    key={tag}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                    label={tag}
+                                    sx={{ height: 20, '& .MuiChip-label': { px: 0.6, fontSize: 10.5 } }}
+                                />
+                            ))}
+                        </Stack>
+                    ) : null}
+                </Box>
+            ) : null}
+
+            {hasFirstComment ? (
+                <Box
+                    sx={{
+                        border: 1,
+                        borderColor: 'secondary.main',
+                        borderRadius: 2,
+                        p: 1.25,
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        sx={{ mb: 0.75 }}
+                    >
+                        <Typography variant="caption" fontWeight={700} color="secondary.main">
+                            COMMENT ĐẦU TIÊN (ghim)
+                        </Typography>
+                        <CopyTextButton text={firstComment} label="Copy comment" />
+                    </Stack>
+                    <Typography
+                        variant="body2"
+                        sx={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    >
+                        {firstComment}
+                    </Typography>
+                </Box>
+            ) : null}
+
+            {hasTags ? (
+                <Box
+                    sx={{
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        p: 1.25,
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={1}
+                        sx={{ mb: 0.75 }}
+                    >
+                        <Typography variant="caption" fontWeight={700} color="text.secondary">
+                            TAGS ({tags.length})
+                        </Typography>
+                        <CopyTextButton text={tags.join(', ')} label="Copy tags" />
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        {tags.map((tag) => (
+                            <Chip
+                                key={tag}
+                                size="small"
+                                variant="outlined"
+                                label={tag}
+                                sx={{ height: 20, '& .MuiChip-label': { px: 0.6, fontSize: 10.5 } }}
+                            />
+                        ))}
+                    </Stack>
+                </Box>
+            ) : null}
+
+            {hasSeo ? (
+                <Box>
+                    <Typography
+                        variant="caption"
+                        fontWeight={700}
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 0.5 }}
+                    >
+                        ĐIỂM SEO (bấm để xem chi tiết)
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <SeoScoreCard label="Tiêu đề" seo={seoTitle} />
+                        <SeoScoreCard label="Mô tả" seo={seoDescription} />
+                    </Stack>
+                </Box>
+            ) : null}
+
             {hasAudience ? (
                 <Box
                     sx={{

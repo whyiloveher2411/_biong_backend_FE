@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { parseYoutubeTitleResponse } from './shortVideoYoutubeTitleResponse';
+import { parseYoutubeTitleResponse, isYoutubeTitleResponse } from './shortVideoYoutubeTitleResponse';
 
 const SAMPLE = `### Audience Insight
 
@@ -108,12 +108,94 @@ describe('parseYoutubeTitleResponse', () => {
         const parsed = parseYoutubeTitleResponse(fs.readFileSync(filePath, 'utf8'));
         expect(parsed.items.length).toBeGreaterThanOrEqual(10);
         expect(parsed.items[0].title).toBe('The First Time Humans Said Goodbye');
-        expect(parsed.items[0].subScores).toContainEqual({ label: 'Emotional Impact', value: '10' });
+        expect(parsed.items[0].subScores).toContainEqual({ label: 'emotional impact', value: '10' });
         expect(parsed.items[0].why.length).toBeGreaterThan(0);
-        expect(parsed.items[0].why[0].label).toBe('Emotional Hook');
         expect(parsed.audienceInsight.length).toBeGreaterThanOrEqual(3);
         expect(parsed.winner?.title).toBe('The First Time Humans Said Goodbye');
         expect(parsed.packaging?.concepts.length).toBe(5);
         expect(parsed.packaging?.textOptions.length).toBe(5);
+        // Field mới: description + hashtags + tags + SEO score.
+        expect(parsed.description.length).toBeGreaterThan(0);
+        expect(parsed.description).toContain('#prehistory');
+        expect(parsed.hashtags.length).toBeGreaterThanOrEqual(3);
+        expect(parsed.tags.length).toBeGreaterThanOrEqual(10);
+        expect(parsed.seo.title?.score).toBe(88);
+        expect(parsed.seo.title?.notes.length).toBeGreaterThan(0);
+        expect(parsed.seo.description?.score).toBe(84);
+    });
+
+    it('parses JSON response wrapped in a code fence', () => {
+        const wrapped = '```json\n' + JSON.stringify({
+            audience_insight: {
+                target_audience: 'Gen Z viewers',
+                primary_motivation: 'Entertainment',
+                primary_reason_to_click: 'Curiosity',
+            },
+            titles: [
+                {
+                    rank: 1,
+                    title: 'Sample Title',
+                    viral_score: 9.2,
+                    score_breakdown: { curiosity: 9, emotional_impact: 9, clarity: 9, viral_potential: 9, ctr_potential: 10 },
+                    why_it_works: ['Reason A', 'Reason B'],
+                },
+            ],
+            winner: {
+                title: 'Sample Title',
+                why_strongest: 'Strongest hook.',
+                psychological_triggers: ['Curiosity gap'],
+                audience_segment: 'Gen Z',
+            },
+            description: 'Sample description\n\n#tag1 #tag2 #tag3',
+            first_comment: 'What would you have done differently?',
+            hashtags: ['#tag1', '#tag2', '#tag3'],
+            tags: ['tag one', 'tag two'],
+            seo_score: {
+                title: { score: 90, notes: ['Good keyword placement'] },
+                description: { score: 75, notes: ['Add more keywords'] },
+            },
+        }) + '\n```';
+
+        const parsed = parseYoutubeTitleResponse(wrapped);
+        expect(parsed.items).toHaveLength(1);
+        expect(parsed.items[0].title).toBe('Sample Title');
+        expect(parsed.items[0].viralScore).toBe('9.2/10');
+        expect(parsed.items[0].subScores).toContainEqual({ label: 'ctr potential', value: '10' });
+        expect(parsed.audienceInsight).toContainEqual({ label: 'Target Audience', value: 'Gen Z viewers' });
+        expect(parsed.winner?.sections.map((s) => s.heading)).toEqual([
+            'Why it is the strongest option',
+            'Psychological Triggers Used',
+            'Audience Segment It Will Attract',
+        ]);
+        expect(parsed.description).toContain('#tag1');
+        expect(parsed.firstComment).toBe('What would you have done differently?');
+        expect(parsed.hashtags).toEqual(['#tag1', '#tag2', '#tag3']);
+        expect(parsed.tags).toEqual(['tag one', 'tag two']);
+        expect(parsed.seo.title).toEqual({ score: 90, scoreLabel: '90/100', notes: ['Good keyword placement'] });
+        expect(parsed.seo.description?.score).toBe(75);
+    });
+});
+
+describe('isYoutubeTitleResponse', () => {
+    it('accepts a valid JSON title response', () => {
+        expect(isYoutubeTitleResponse(JSON.stringify({
+            titles: [{ rank: 1, title: 'A real title' }],
+            description: 'desc',
+        }))).toBe(true);
+    });
+
+    it('accepts the legacy markdown title response', () => {
+        expect(isYoutubeTitleResponse(SAMPLE)).toBe(true);
+    });
+
+    it('rejects empty, plain text and thumbnail-like content', () => {
+        expect(isYoutubeTitleResponse('')).toBe(false);
+        expect(isYoutubeTitleResponse('just some random clipboard text')).toBe(false);
+        expect(isYoutubeTitleResponse(JSON.stringify([{
+            rank: 1,
+            concept_name: 'The First Tear',
+            thumbnail_text: 'X',
+            image_generation_prompt: 'prompt',
+        }]))).toBe(false);
     });
 });

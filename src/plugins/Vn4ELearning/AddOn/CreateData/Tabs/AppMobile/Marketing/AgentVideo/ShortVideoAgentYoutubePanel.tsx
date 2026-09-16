@@ -34,8 +34,8 @@ import {
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
-import { parseYoutubeTitleResponse } from 'helpers/shortVideoYoutubeTitleResponse';
-import { parseYoutubeThumbnailResponse } from 'helpers/shortVideoYoutubeThumbnailResponse';
+import { parseYoutubeTitleResponse, isYoutubeTitleResponse } from 'helpers/shortVideoYoutubeTitleResponse';
+import { parseYoutubeThumbnailResponse, isYoutubeThumbnailResponse } from 'helpers/shortVideoYoutubeThumbnailResponse';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
 import { openMetaAiChatUrlWithCookie } from 'helpers/marketingImportHtmlWorkflow';
 import {
@@ -46,6 +46,9 @@ import {
 import { WorkflowSection } from './workflowPanelSection';
 import ShortVideoAgentYoutubeTitleList from './ShortVideoAgentYoutubeTitleList';
 import ShortVideoAgentYoutubeThumbnailList from './ShortVideoAgentYoutubeThumbnailList';
+import ShortVideoAgentYoutubeThumbnailResourcePicker, {
+    parseThumbnailResourceIds,
+} from './ShortVideoAgentYoutubeThumbnailResourcePicker';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 
 type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
@@ -304,6 +307,12 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const savedValues = outputs[YOUTUBE_WORKFLOW_KEY] || {};
     const selectedTitle = String(savedValues.selected_title || '');
 
+    // Resource user chọn để đính kèm khi render thumbnail (thứ tự chọn giữ nguyên).
+    const thumbnailResourceIds = React.useMemo(
+        () => parseThumbnailResourceIds(savedValues.thumbnail_resource_ids),
+        [savedValues.thumbnail_resource_ids],
+    );
+
     const thumbnailImageUrls = React.useMemo(() => {
         const map: Record<string, string> = {};
         Object.entries(outputs[YOUTUBE_WORKFLOW_KEY] || {}).forEach(([key, value]) => {
@@ -432,6 +441,20 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             return;
         }
 
+        // Chặn lưu khi clipboard không đúng cấu trúc phản hồi (tránh user copy nhầm).
+        const isValid = kind === 'title'
+            ? isYoutubeTitleResponse(text)
+            : isYoutubeThumbnailResponse(text);
+        if (!isValid) {
+            state.showMessage(
+                kind === 'title'
+                    ? 'Clipboard không đúng cấu trúc phản hồi tiêu đề (cần JSON/markdown có danh sách tiêu đề) — kiểm tra lại đã copy đúng kết quả chatbot chưa.'
+                    : 'Clipboard không đúng cấu trúc phản hồi ảnh thu nhỏ (cần JSON/markdown có danh sách concept) — kiểm tra lại đã copy đúng kết quả chatbot chưa.',
+                'warning',
+            );
+            return;
+        }
+
         setValues((prev) => ({ ...prev, [kind]: text }));
         await handleSave(kind, text);
     }, [pastingKind, savingKind, shortVideoId, handleSave, state]);
@@ -469,6 +492,36 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             }));
         }
     }, [savingSelectedTitle, shortVideoId, selectedTitle, state]);
+
+    /** Lưu danh sách resource đã chọn cho thumbnail (JSON array, giữ thứ tự). */
+    const handleThumbnailResourcesChange = React.useCallback(async (ids: number[]) => {
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không lưu được resource', 'warning');
+            return;
+        }
+        const value = JSON.stringify(ids);
+        const res = await saveWorkflowOutput(
+            shortVideoId,
+            YOUTUBE_WORKFLOW_KEY,
+            'thumbnail_resource_ids',
+            value,
+        );
+        if (!res.ok) {
+            state.showMessage(res.message || 'Không lưu được resource đã chọn', 'error');
+            return;
+        }
+        if (res.outputs) {
+            setOutputs(res.outputs);
+        } else {
+            setOutputs((prev) => ({
+                ...prev,
+                [YOUTUBE_WORKFLOW_KEY]: {
+                    ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
+                    thumbnail_resource_ids: value,
+                },
+            }));
+        }
+    }, [shortVideoId, state]);
 
     const handleGenerateThumbnailImage = React.useCallback(async (rank: number, prompt: string) => {
         if (generatingRank) {
@@ -704,6 +757,12 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         || parsedTitle.audienceInsight.length > 0
         || parsedTitle.winner !== null
         || parsedTitle.packaging !== null
+        || Boolean(parsedTitle.description)
+        || Boolean(parsedTitle.firstComment)
+        || parsedTitle.hashtags.length > 0
+        || parsedTitle.tags.length > 0
+        || parsedTitle.seo.title !== null
+        || parsedTitle.seo.description !== null
     );
     const hasParsedThumbnail = subTab === 'thumbnail' && (
         parsedThumbnail.concepts.length > 0
@@ -842,6 +901,15 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         >
                             {spec.saveLabel}
                         </LoadingButton>
+
+                        {spec.kind === 'thumbnail' ? (
+                            <ShortVideoAgentYoutubeThumbnailResourcePicker
+                                shortVideoId={shortVideoId}
+                                selectedIds={thumbnailResourceIds}
+                                onChange={(ids) => { void handleThumbnailResourcesChange(ids); }}
+                                disabled={savingKind !== ''}
+                            />
+                        ) : null}
                     </Stack>
                 </WorkflowSection>
 

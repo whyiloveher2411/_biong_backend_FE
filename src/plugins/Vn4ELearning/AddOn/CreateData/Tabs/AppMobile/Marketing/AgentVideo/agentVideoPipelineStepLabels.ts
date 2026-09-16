@@ -26,6 +26,13 @@ export const FULL_AUTO_PIPELINE_WHITEBOARD_ONLY_STEPS = [
     'whiteboard_mux',
 ] as const;
 
+/** Nhóm bước thumbnail (idea → HTML → chụp) — video 2s không dùng nên ẩn/tắt. */
+export const FULL_AUTO_PIPELINE_THUMBNAIL_STEPS = [
+    'thumbnail_idea',
+    'thumbnail_fill',
+    'thumbnail_capture',
+] as const;
+
 /**
  * Bước BE phụ (không nằm trong STEP_ORDER BE hiển thị riêng) — ẩn khỏi list «Khác».
  * whiteboard_render dùng slot `render` (label đổi) + nút Run nhóm Render;
@@ -72,6 +79,11 @@ export function isFullAutoPipelineStepRelevantForMode(
     // Render ảnh resource chỉ thuộc video 2s — whiteboard/hyperframes auto-skip, ẩn khỏi UI.
     if (key === 'resource_image_render') {
         return isAgentVideo2sMode(agentVisualMode);
+    }
+    // Video 2s không dùng thumbnail tạo ở bước thumbnail → tắt chuỗi 3 bước thumbnail.
+    if (isAgentVideo2sMode(agentVisualMode)
+        && (FULL_AUTO_PIPELINE_THUMBNAIL_STEPS as readonly string[]).includes(key)) {
+        return false;
     }
     if (isAgentWhiteboardMode(agentVisualMode)) {
         return !(FULL_AUTO_PIPELINE_HYPERFRAMES_ONLY_STEPS as readonly string[]).includes(key);

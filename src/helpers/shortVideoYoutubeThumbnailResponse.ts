@@ -470,3 +470,11 @@ export function parseYoutubeThumbnailResponse(raw: string): YoutubeThumbnailPars
 
     return result;
 }
+
+/**
+ * Kiểm tra text có phải phản hồi tạo ảnh thu nhỏ hợp lệ — phải parse ra ít nhất
+ * 1 concept (dùng để chặn lưu nhầm khi user copy sai nội dung clipboard).
+ */
+export function isYoutubeThumbnailResponse(raw: string): boolean {
+    return parseYoutubeThumbnailResponse(raw).concepts.length > 0;
+}

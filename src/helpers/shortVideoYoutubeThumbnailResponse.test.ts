@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { parseYoutubeThumbnailResponse } from './shortVideoYoutubeThumbnailResponse';
+import { parseYoutubeThumbnailResponse, isYoutubeThumbnailResponse } from './shortVideoYoutubeThumbnailResponse';
 
 const JSON_SAMPLE = `[{
     "rank": 1,
@@ -79,5 +79,20 @@ describe('parseYoutubeThumbnailResponse', () => {
         expect(parsed.concepts[0].scoreBreakdown).toHaveLength(5);
         expect(parsed.concepts[0].imagePrompt).toContain('2D digital cartoon illustration');
         expect(parsed.concepts[0].why[0].label).toBe('why it could work');
+    });
+});
+
+describe('isYoutubeThumbnailResponse', () => {
+    it('accepts a valid JSON thumbnail response', () => {
+        expect(isYoutubeThumbnailResponse(JSON_SAMPLE)).toBe(true);
+    });
+
+    it('rejects empty, plain text and title-like content', () => {
+        expect(isYoutubeThumbnailResponse('')).toBe(false);
+        expect(isYoutubeThumbnailResponse('hello world, this is not a thumbnail response')).toBe(false);
+        expect(isYoutubeThumbnailResponse(JSON.stringify({
+            titles: [{ rank: 1, title: 'A title' }],
+            description: 'a description',
+        }))).toBe(false);
     });
 });

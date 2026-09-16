@@ -13,6 +13,7 @@ import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
+import LiveTvOutlinedIcon from '@mui/icons-material/LiveTvOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
@@ -41,7 +42,9 @@ import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
 import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
 import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
 import ShortVideoImageStyleManageDrawer from '../ShortVideoImageStyleManageDrawer';
+import ShortVideoChannelManageDrawer from '../ShortVideoChannelManageDrawer';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
+import { fetchShortVideoAgentChannel } from 'helpers/marketingShortVideoChannelApi';
 import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
 
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -436,6 +439,8 @@ export default function ShortVideoAgentVideoTimeline({
     const [imageStyleDrawerOpen, setImageStyleDrawerOpen] = React.useState(false);
     const [imageStyleId, setImageStyleId] = React.useState(0);
     const [imageStylePrompt, setImageStylePrompt] = React.useState('');
+    const [channelDrawerOpen, setChannelDrawerOpen] = React.useState(false);
+    const [channelId, setChannelId] = React.useState(0);
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -481,6 +486,30 @@ export default function ShortVideoAgentVideoTimeline({
                 if (!cancelled) {
                     setImageStyleId(0);
                     setImageStylePrompt('');
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [shortVideoId]);
+
+    // Kênh của video (lưu thông tin kênh cho video).
+    React.useEffect(() => {
+        let cancelled = false;
+        if (!shortVideoId || shortVideoId <= 0) {
+            setChannelId(0);
+            return;
+        }
+        fetchShortVideoAgentChannel(shortVideoId)
+            .then((result) => {
+                if (cancelled) {
+                    return;
+                }
+                setChannelId(result?.channelId || 0);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setChannelId(0);
                 }
             });
         return () => {
@@ -1153,7 +1182,7 @@ export default function ShortVideoAgentVideoTimeline({
                 />
                 {(showTimelineActions) ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        {showOpenAllMissingGemini && onOpenAllMissingBeatGemini ? (
+                        {showOpenAllMissingGemini && !!false && onOpenAllMissingBeatGemini ? (
                             <Tooltip
                                 title={isWhiteboardMode
                                     ? `Mở Duck.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Duck.ai → tự lưu beat.`
@@ -1180,7 +1209,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 </span>
                             </Tooltip>
                         ) : null}
-                        {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
+                        {isWhiteboardMode && !!false && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
                             <Tooltip
                                 title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Meta.ai → tự lưu beat.`}
                                 placement="top"
@@ -1301,6 +1330,15 @@ export default function ShortVideoAgentVideoTimeline({
                             sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                         >
                             Quản lý phong cách hình ảnh
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<LiveTvOutlinedIcon />}
+                            onClick={() => { setChannelDrawerOpen(true); }}
+                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                        >
+                            Quản lý kênh
                         </Button>
                         {showPipelineRunControls ? (
                             <>
@@ -1720,6 +1758,15 @@ export default function ShortVideoAgentVideoTimeline({
                     fetchShortVideoAgentImageStyle(shortVideoId)
                         .then((result) => setImageStylePrompt(result?.prompt || ''))
                         .catch(() => setImageStylePrompt(''));
+                }}
+            />
+            <ShortVideoChannelManageDrawer
+                open={channelDrawerOpen}
+                onClose={() => setChannelDrawerOpen(false)}
+                shortVideoId={shortVideoId}
+                currentChannelId={channelId}
+                onChannelChange={(nextChannelId) => {
+                    setChannelId(nextChannelId);
                 }}
             />
         </Box>
