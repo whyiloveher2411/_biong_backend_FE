@@ -2,7 +2,7 @@
 
 MCP server cho Cursor agent — workflow video + **media search** (Pexels stock + Pixabay BGM).
 
-**Phiên bản:** 2.3.1
+**Phiên bản:** 2.4.0
 
 ## Luồng workflow (3 bước)
 
@@ -63,6 +63,10 @@ npx skills add https://github.com/greensock/gsap-skills
 | `short_video_get_context` | Creative brief + production_playbook (media_assets) |
 | `short_video_save_audio_script` | Script viral — chờ admin duyệt CMS |
 | `short_video_update_agent_status` | Lưu `visual_shot_plan` (Phase 2) |
+| `short_video_get_workflow_outputs` | Đọc `workflow_outputs` (key/value theo updateField) — kiểm tra `plan-prompt`/`prompt-image-v2-final` |
+| `short_video_save_workflow_output` | Lưu 1 key/value output workflow (vd `plan-prompt`, `prompt-image-v2-final`) |
+| `short_video_get_image_style` | Prompt phong cách hình ảnh — thay `[prompt-style]` |
+| `short_video_update_beat_image_prompts` | Import output `BEAT IMAGE PROMPTS` vào đúng vị trí beat (`imagePromptBeatUpdate`) |
 | `short_video_generate_narration_tts` | CMS queue TTS nội bộ — **CẤM agent Phase 2**; reject nếu `audio_file` đã có |
 | `short_video_search_stock_media` | Stock Pexels |
 | `short_video_search_meme_sound` | Meme SFX Myinstants (hook) |

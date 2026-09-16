@@ -811,10 +811,10 @@ export default function ShortVideoAgentYoutubeThumbnailList({
                 imageUrl={detailConcept ? (imageUrls[String(detailConcept.rank)] || '') : ''}
                 chatUrl={detailConcept ? (chatUrls[String(detailConcept.rank)] || '') : ''}
                 feedbackNote={detailConcept ? (feedbackNotes[String(detailConcept.rank)] || '') : ''}
-                loading={Boolean(detailConcept)
+                loading={detailConcept !== null
                     && (generatingRank === String(detailConcept.rank)
                         || pendingRanks.has(String(detailConcept.rank)))}
-                savingFeedback={Boolean(detailConcept)
+                savingFeedback={detailConcept !== null
                     && savingFeedbackRank === String(detailConcept.rank)}
                 canGenerate={shortVideoId > 0}
                 onClose={() => setDetailRank(null)}

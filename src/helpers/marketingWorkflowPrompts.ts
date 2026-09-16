@@ -10,6 +10,9 @@ export type WorkflowPromptItem = {
     /** Loại nút update asset nhanh trong dialog (từ dòng buttonUpdate trong index.md):
      * characterUpdate | spaceUpdate. */
     buttonUpdate: string;
+    /** Số beat mỗi lần chạy (từ dòng scriptBreakdown trong index.md) — 0 = tắt chia đoạn.
+     * Khi > 0, UI tự chia audio script thành nhiều phần và render nhiều button copy. */
+    scriptBreakdown: number;
     /** Ghi chú của prompt (từ dòng note trong index.md) — hiển thị nhỏ dưới button. */
     note: string;
 };
@@ -83,6 +86,7 @@ function normalizeStep(raw: ANY): WorkflowPromptStep | null {
                 exists: item?.exists !== false,
                 updateField: normalizeWorkflowUpdateFieldKey(String(item?.update_field || '')),
                 buttonUpdate: String(item?.button_update || '').trim(),
+                scriptBreakdown: Math.max(0, parseInt(String(item?.script_breakdown ?? ''), 10) || 0),
                 note: String(item?.note || '').trim(),
             };
         })
@@ -321,6 +325,381 @@ export async function copyWorkflowPromptToClipboard(
     const replacedNote = replaced.length > 0 ? ` (đã thay ${replaced.join(', ')})` : '';
 
     return { ok: true, message: `Đã copy prompt vào clipboard${replacedNote}` };
+}
+
+/**
+ * ---- scriptBreakdown: chia audio script thành nhiều phần để chạy từng lần ----
+ *
+ * index.md có thể khai báo `scriptBreakdown: N` cho 1 prompt: mỗi lần chỉ chạy N beat
+ * (beat = dòng non-empty của audio script, khớp BEAT RULE trong prompt bước 3). UI tự
+ * tính số phần và render nhiều button copy; user dán kết quả từng phần rồi nối lại.
+ * Với prompt cần cả [audio-script] lẫn output dạng block BEAT (vd plan-prompt), các
+ * output đó cũng được cắt theo đúng dải beat của từng phần.
+ */
+
+/** Mỗi dòng non-empty của audio script = 1 beat. */
+export function splitWorkflowBeats(text: string): string[] {
+    return String(text || '')
+        .split(/\r\n|\r|\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+}
+
+/** Chia list thành các đoạn size phần tử. */
+export function chunkWorkflowList<T>(list: T[], size: number): T[][] {
+    const chunkSize = Math.max(1, Math.floor(size));
+    const chunks: T[][] = [];
+    for (let i = 0; i < list.length; i += chunkSize) {
+        chunks.push(list.slice(i, i + chunkSize));
+    }
+    return chunks;
+}
+
+/** 1 block BEAT trong output (BEAT B01 / BEAT 1 / BEAT #1 / ## BEAT B01). */
+const WORKFLOW_BEAT_BLOCK_RE = /^[ \t]*(?:#{1,6}[ \t]*)?[-*•]?[ \t]*BEAT[ \t]+#?B?(\d+)\b[^\n]*$/gim;
+
+/** 1 dòng header beat (giữ tiền tố markdown nếu có): BEAT B01 / BEAT 1: / ## BEAT B01. */
+const WORKFLOW_BEAT_HEADER_RE = /^([ \t]*(?:#{1,6}[ \t]*)?[-*•]?[ \t]*BEAT[ \t]*[:#]?[ \t]*B?)(\d{1,4})([ \t]*:?[ \t]*)$/gimu;
+
+/**
+ * Đánh lại số header BEAT liên tục 1..N (giữ style tiền tố + zero-padding 2 chữ số).
+ * Mỗi phần chạy AI sẽ tự đánh số từ B01; nối các phần phải renumber để backend import
+ * đúng vị trí beat của clip (backend chặn trùng số / lệch số).
+ */
+export function renumberWorkflowBeatHeaders(text: string): string {
+    let counter = 0;
+    return String(text || '').replace(
+        WORKFLOW_BEAT_HEADER_RE,
+        (_match, prefix: string, _number: string, suffix: string) => {
+            counter += 1;
+            return `${prefix}${String(counter).padStart(2, '0')}${suffix}`;
+        },
+    );
+}
+
+/**
+ * Cắt text output thành các block BEAT. Phần đầu trước block đầu tiên (vd dòng tiêu đề
+ * "BEAT VISUAL PLAN") được gộp vào block đầu để nối lại không mất dữ liệu.
+ */
+export function splitWorkflowBeatBlocks(text: string): string[] {
+    const source = String(text || '');
+    if (!source.trim()) {
+        return [];
+    }
+    const matches = Array.from(source.matchAll(WORKFLOW_BEAT_BLOCK_RE));
+    if (matches.length === 0) {
+        return [];
+    }
+    return matches.map((match, index) => {
+        const start = index === 0 ? 0 : (match.index ?? 0);
+        const end = index + 1 < matches.length
+            ? (matches[index + 1].index ?? source.length)
+            : source.length;
+        return source.slice(start, end).trim();
+    });
+}
+
+export type WorkflowBreakdownChunk = {
+    index: number;
+    total: number;
+    /** Beat bắt đầu (1-based) trong toàn bộ audio script. */
+    beatStart: number;
+    /** Beat kết thúc (1-based, inclusive). */
+    beatEnd: number;
+    beatCount: number;
+    /** Đoạn audio script của phần này. */
+    audioScript: string;
+    /** Context thay key cho phần này: [audio-script] + output block BEAT đã cắt theo dải beat. */
+    context: WorkflowPromptContext;
+};
+
+export type WorkflowBreakdownPlan = {
+    size: number;
+    totalBeats: number;
+    /** Số beat của từng phần (theo thứ tự) — dùng để chia output đã lưu về từng phần. */
+    beatCounts: number[];
+    chunks: WorkflowBreakdownChunk[];
+};
+
+/**
+ * Tính kế hoạch chia audio script theo scriptBreakdown. Trả null khi tắt chia (size <= 0)
+ * hoặc audio script không có beat.
+ */
+export function buildWorkflowBreakdownPlan(
+    audioScript: string,
+    size: number,
+    baseContext: WorkflowPromptContext = {},
+): WorkflowBreakdownPlan | null {
+    const chunkSize = Math.floor(Number(size) || 0);
+    if (chunkSize <= 0) {
+        return null;
+    }
+    const beats = splitWorkflowBeats(audioScript);
+    if (beats.length === 0) {
+        return null;
+    }
+
+    const beatGroups = chunkWorkflowList(beats, chunkSize);
+
+    // Các key output chứa block BEAT (vd plan-prompt) → cắt theo dải beat tương ứng.
+    const blockSources = Object.entries(baseContext)
+        .filter(([key]) => key !== WORKFLOW_AUDIO_SCRIPT_KEY)
+        .map(([key, value]) => ({ key, blocks: splitWorkflowBeatBlocks(value) }))
+        .filter((entry) => entry.blocks.length === beats.length);
+
+    let offset = 0;
+    const chunks: WorkflowBreakdownChunk[] = beatGroups.map((group, index) => {
+        const beatStart = offset + 1;
+        const beatEnd = offset + group.length;
+        offset = beatEnd;
+
+        const context: WorkflowPromptContext = { ...baseContext };
+        context[WORKFLOW_AUDIO_SCRIPT_KEY] = group.join('\n');
+        blockSources.forEach(({ key, blocks }) => {
+            context[key] = blocks.slice(beatStart - 1, beatEnd).join('\n\n');
+        });
+
+        return {
+            index,
+            total: beatGroups.length,
+            beatStart,
+            beatEnd,
+            beatCount: group.length,
+            audioScript: group.join('\n'),
+            context,
+        };
+    });
+
+    return {
+        size: chunkSize,
+        totalBeats: beats.length,
+        beatCounts: beatGroups.map((group) => group.length),
+        chunks,
+    };
+}
+
+/**
+ * Chia output đã lưu (dạng block BEAT) về từng phần theo số beat mỗi phần.
+ * Block dư (nếu có) gộp vào phần cuối; không parse được block thì để nguyên phần đầu.
+ */
+export function splitWorkflowOutputIntoParts(savedValue: string, beatCounts: number[]): string[] {
+    const count = beatCounts.length;
+    if (count === 0) {
+        return [];
+    }
+    const source = String(savedValue || '').trim();
+    const blocks = splitWorkflowBeatBlocks(source);
+
+    if (blocks.length === 0) {
+        const parts = beatCounts.map(() => '');
+        if (source) {
+            parts[0] = source;
+        }
+        return parts;
+    }
+
+    const parts: string[] = [];
+    let cursor = 0;
+    beatCounts.forEach((beatCount) => {
+        const take = Math.max(1, Math.floor(beatCount) || 1);
+        parts.push(blocks.slice(cursor, cursor + take).join('\n\n'));
+        cursor += take;
+    });
+    if (cursor < blocks.length) {
+        parts[count - 1] = [parts[count - 1], ...blocks.slice(cursor)]
+            .filter((part) => part.trim().length > 0)
+            .join('\n\n');
+    }
+    return parts;
+}
+
+/**
+ * Chuẩn hóa text để so khớp beat — mirror backend
+ * `marketing_short_video_manual_beat_list_content_key` (lowercase + chỉ giữ chữ/số).
+ */
+export function normalizeWorkflowScriptKey(text: string): string {
+    return String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/** Bỏ prefix số thứ tự/gạch đầu dòng của 1 dòng beat ("1. ", "2) ", "1:", "-", "•"). */
+export function stripWorkflowBeatPrefix(line: string): string {
+    return String(line || '')
+        .replace(/^\s*\d{1,4}\s*[.)]\s+/, '')
+        .replace(/^\s*\d{1,4}\s*:\s*/, '')
+        .replace(/^\s*\d{1,4}\s+-\s+/, '')
+        .replace(/^\s*[-*•]\s+/, '')
+        .trim();
+}
+
+const WORKFLOW_SECTION_NAMES = [
+    'SCRIPT SENTENCE',
+    'CORE MEANING',
+    'CHARACTER USED',
+    'CHARACTER ROLE',
+    'VISUAL CONCEPT',
+    'IMAGE PROMPT',
+    'NEGATIVE PROMPT',
+];
+
+const WORKFLOW_SECTION_RE = new RegExp(
+    `^\\s*(?:#{1,6}\\s*)?[-*•]?\\s*(${WORKFLOW_SECTION_NAMES.join('|')})\\s*:\\s*(.*)$`,
+    'i',
+);
+const WORKFLOW_UNKNOWN_LABEL_RE = /^\s*(?:#{1,6}\s*)?[-*•]?\s*([A-Z][A-Z0-9 ()/\\-]{2,60})\s*:\s*(.*)$/;
+const WORKFLOW_BEAT_HEADER_LINE_RE = /^\s*(?:#{1,6}\s*)?[-*•]?\s*BEAT\s*[:#]?\s*B?(\d{1,4})\s*:?\s*$/i;
+
+/**
+ * Parse section của 1 block BEAT (SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT…).
+ * Hỗ trợ cả 2 format: giá trị cùng dòng với label, hoặc các dòng kế tiếp.
+ */
+export function parseWorkflowBeatSections(blockText: string): { number: number; sections: Record<string, string> } {
+    const text = String(blockText || '').replace(/\r\n|\r/g, '\n');
+    const sections: Record<string, string> = {};
+    let number = 0;
+    let current = '';
+
+    text.split('\n').forEach((line) => {
+        const headerMatch = line.match(WORKFLOW_BEAT_HEADER_LINE_RE);
+        if (headerMatch && number === 0) {
+            number = parseInt(headerMatch[1], 10) || 0;
+            return;
+        }
+
+        const sectionMatch = line.match(WORKFLOW_SECTION_RE);
+        if (sectionMatch) {
+            current = sectionMatch[1].toUpperCase().replace(/\s+/g, ' ');
+            if (!(current in sections)) {
+                sections[current] = '';
+            }
+            const inlineValue = (sectionMatch[2] || '').trim();
+            if (inlineValue && !sections[current].trim()) {
+                sections[current] = inlineValue;
+            }
+            return;
+        }
+
+        const unknownMatch = line.match(WORKFLOW_UNKNOWN_LABEL_RE);
+        if (unknownMatch) {
+            current = unknownMatch[1].toUpperCase().replace(/\s+/g, ' ');
+            if (current && !(current in sections)) {
+                sections[current] = '';
+            }
+            const inlineValue = (unknownMatch[2] || '').trim();
+            if (inlineValue && current && !(sections[current] || '').trim()) {
+                sections[current] = inlineValue;
+            }
+            return;
+        }
+
+        if (current) {
+            sections[current] = `${sections[current] ? `${sections[current]}\n` : ''}${line}`;
+        }
+    });
+
+    Object.keys(sections).forEach((key) => {
+        sections[key] = sections[key].trim();
+    });
+
+    return { number, sections };
+}
+
+export type WorkflowBreakdownPartValidation = {
+    ok: boolean;
+    /** Số khối BEAT parse được từ nội dung đã dán. */
+    beatCount: number;
+    /** Số beat phần này phải có. */
+    expectedBeatCount: number;
+    errors: string[];
+    /** Trích SCRIPT SENTENCE beat đầu — hiển thị ngắn để đối chiếu nhanh. */
+    preview: string;
+};
+
+/**
+ * Validate 1 phần đã dán trước khi gộp vào input tổng: đủ số beat, đúng thứ tự audio
+ * (chống dán nhầm phần), đủ SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT, prompt
+ * không trùng trong phần. Mirror các check quan trọng của backend import-prompt-file.
+ */
+export function validateWorkflowBreakdownPart(
+    partText: string,
+    expectedBeats: string[],
+): WorkflowBreakdownPartValidation {
+    const expected = expectedBeats.map((beat) => normalizeWorkflowScriptKey(stripWorkflowBeatPrefix(beat)));
+    const text = String(partText || '').trim();
+    const base: WorkflowBreakdownPartValidation = {
+        ok: false,
+        beatCount: 0,
+        expectedBeatCount: expected.length,
+        errors: [],
+        preview: '',
+    };
+
+    if (!text) {
+        return { ...base, errors: ['Chưa có nội dung — bấm "Paste" để dán kết quả từ clipboard'] };
+    }
+
+    const blocks = splitWorkflowBeatBlocks(text);
+    if (blocks.length === 0) {
+        return {
+            ...base,
+            errors: ['Không tìm thấy khối "BEAT ..." — sai format hoặc dán nhầm nội dung'],
+        };
+    }
+
+    const parsed = blocks.map((block) => parseWorkflowBeatSections(block));
+    const errors: string[] = [];
+
+    if (parsed.length !== expected.length) {
+        errors.push(`Số beat không khớp: phần này cần ${expected.length} beat, nhận ${parsed.length} khối BEAT`);
+    }
+
+    const promptSignatures = new Map<string, number>();
+    const limit = Math.min(parsed.length, expected.length);
+    for (let index = 0; index < limit; index += 1) {
+        const sections = parsed[index].sections;
+        const script = (sections['SCRIPT SENTENCE'] || '').trim();
+        const imagePrompt = (sections['IMAGE PROMPT'] || '').trim();
+        const negativePrompt = (sections['NEGATIVE PROMPT'] || '').trim();
+
+        if (!script) {
+            errors.push(`Beat ${index + 1}: thiếu SCRIPT SENTENCE`);
+        } else if (normalizeWorkflowScriptKey(stripWorkflowBeatPrefix(script)) !== expected[index]) {
+            errors.push(`Beat ${index + 1}: SCRIPT SENTENCE không khớp audio — có thể dán nhầm phần`);
+        }
+        if (!imagePrompt) {
+            errors.push(`Beat ${index + 1}: thiếu IMAGE PROMPT`);
+        }
+        if (!negativePrompt) {
+            errors.push(`Beat ${index + 1}: thiếu NEGATIVE PROMPT`);
+        }
+        if (imagePrompt) {
+            const signature = normalizeWorkflowScriptKey(imagePrompt);
+            const duplicatedWith = promptSignatures.get(signature);
+            if (duplicatedWith !== undefined) {
+                errors.push(`Beat ${index + 1}: IMAGE PROMPT trùng với Beat ${duplicatedWith}`);
+            } else {
+                promptSignatures.set(signature, index + 1);
+            }
+        }
+    }
+
+    const preview = (parsed[0]?.sections['SCRIPT SENTENCE'] || '').trim().slice(0, 90);
+
+    return {
+        ok: errors.length === 0,
+        beatCount: parsed.length,
+        expectedBeatCount: expected.length,
+        errors: Array.from(new Set(errors)),
+        preview,
+    };
+}
+
+/** Nối các phần output thành input tổng (bỏ phần trống) và đánh lại số BEAT liên tục. */
+export function joinWorkflowBreakdownParts(parts: string[]): string {
+    const joined = parts
+        .map((part) => String(part || '').trim())
+        .filter((part) => part.length > 0)
+        .join('\n\n');
+    return renumberWorkflowBeatHeaders(joined);
 }
 
 const STEP_TITLE_PREFIX_RE = /^(?:bước|step)\s*(\d+)\s*[:.\-–)]?\s*/i;

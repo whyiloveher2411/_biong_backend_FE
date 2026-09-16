@@ -30,6 +30,7 @@ import {
     importManualBeatPromptFile,
 } from './AgentVideo/agentVideoApi';
 import {
+    buildWorkflowBreakdownPlan,
     copyWorkflowPromptToClipboard,
     fetchWorkflowOutputs,
     getWorkflowContrastTextColor,
@@ -41,6 +42,7 @@ import {
     type WorkflowOutputsMap,
     type WorkflowPromptContext,
 } from 'helpers/marketingWorkflowPrompts';
+import MarketingWorkflowBreakdown from './MarketingWorkflowBreakdown';
 import {
     parseWorkflowAssetRegister,
     resolveWorkflowResourceKind,
@@ -180,8 +182,14 @@ export default function MarketingWorkflowDrawer({
         api.showMessage('Đã tải audio script', 'success');
     }, [audioScript, shortVideoId, api]);
 
-    const openUpdateDialog = React.useCallback((itemKey: string, label: string, fieldKey: string, buttonUpdate = '') => {
-        setUpdateValue('');
+    const openUpdateDialog = React.useCallback((
+        itemKey: string,
+        label: string,
+        fieldKey: string,
+        buttonUpdate = '',
+        initialValue = '',
+    ) => {
+        setUpdateValue(initialValue);
         setBeatPromptErrors([]);
         setUpdatingItem({ itemKey, label, fieldKey, buttonUpdate });
     }, []);
@@ -347,6 +355,7 @@ export default function MarketingWorkflowDrawer({
 
     const accent = workflow?.background || '';
     const accentText = accent ? getWorkflowContrastTextColor(accent) : '#ffffff';
+    const activeWorkflowKey = workflow?.key || '';
     const oldValue = updatingItem ? (workflowOutputs[updatingItem.fieldKey] || '') : '';
 
     return (
@@ -553,6 +562,67 @@ export default function MarketingWorkflowDrawer({
                                                         </Tooltip>
                                                     ) : null;
 
+                                                    const noteNode = promptItem.note ? (
+                                                        <Typography
+                                                            variant="caption"
+                                                            component="div"
+                                                            color="text.secondary"
+                                                            sx={{
+                                                                mt: 0.25,
+                                                                ml: 0.25,
+                                                                lineHeight: 1.4,
+                                                                '& a': { color: 'link' },
+                                                                '& b, & strong': { fontWeight: 600 },
+                                                                '& code': {
+                                                                    px: 0.5,
+                                                                    borderRadius: 0.5,
+                                                                    bgcolor: 'action.hover',
+                                                                    fontFamily: 'monospace',
+                                                                    fontSize: '0.9em',
+                                                                },
+                                                            }}
+                                                            dangerouslySetInnerHTML={{ __html: promptItem.note }}
+                                                        />
+                                                    ) : null;
+
+                                                    const breakdownPlan = promptItem.scriptBreakdown > 0 && audioScript
+                                                        ? buildWorkflowBreakdownPlan(
+                                                            audioScript,
+                                                            promptItem.scriptBreakdown,
+                                                            mergedPromptContext,
+                                                        )
+                                                        : null;
+
+                                                    if (breakdownPlan) {
+                                                        return (
+                                                            <Box key={itemKey} sx={{ minWidth: 0, width: '100%', mb: 0.5 }}>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                                                    {updateButton}
+                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                        {promptItem.label}
+                                                                    </Typography>
+                                                                </Box>
+                                                                <MarketingWorkflowBreakdown
+                                                                    workflowKey={activeWorkflowKey}
+                                                                    item={promptItem}
+                                                                    plan={breakdownPlan}
+                                                                    savedValue={workflowOutputs[promptItem.updateField] || ''}
+                                                                    showMessage={api.showMessage}
+                                                                    onRequestUpdate={promptItem.updateField
+                                                                        ? (totalValue) => openUpdateDialog(
+                                                                            itemKey,
+                                                                            promptItem.label,
+                                                                            promptItem.updateField,
+                                                                            promptItem.buttonUpdate,
+                                                                            totalValue,
+                                                                        )
+                                                                        : null}
+                                                                />
+                                                                {noteNode}
+                                                            </Box>
+                                                        );
+                                                    }
+
                                                     const row = promptItem.exists
                                                         ? button
                                                         : (
@@ -570,28 +640,7 @@ export default function MarketingWorkflowDrawer({
                                                                 {row}
                                                                 {updateButton}
                                                             </Box>
-                                                            {promptItem.note && (
-                                                                <Typography
-                                                                    variant="caption"
-                                                                    component="div"
-                                                                    color="text.secondary"
-                                                                    sx={{
-                                                                        mt: 0.25,
-                                                                        ml: 0.25,
-                                                                        lineHeight: 1.4,
-                                                                        '& a': { color: 'link' },
-                                                                        '& b, & strong': { fontWeight: 600 },
-                                                                        '& code': {
-                                                                            px: 0.5,
-                                                                            borderRadius: 0.5,
-                                                                            bgcolor: 'action.hover',
-                                                                            fontFamily: 'monospace',
-                                                                            fontSize: '0.9em',
-                                                                        },
-                                                                    }}
-                                                                    dangerouslySetInnerHTML={{ __html: promptItem.note }}
-                                                                />
-                                                            )}
+                                                            {noteNode}
                                                         </Box>
                                                     );
                                                 })}

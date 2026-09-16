@@ -1209,7 +1209,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 </span>
                             </Tooltip>
                         ) : null}
-                        {isWhiteboardMode && !!false && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
+                        {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
                             <Tooltip
                                 title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Meta.ai → tự lưu beat.`}
                                 placement="top"
@@ -1219,7 +1219,7 @@ export default function ShortVideoAgentVideoTimeline({
                                         size="small"
                                         variant="contained"
                                         color="secondary"
-                                        disabled={!hasVideo || timelineActionsBusy || whisperStatus !== 'completed'}
+                                        disabled={!hasVideo || timelineActionsBusy}
                                         loading={openingAllMissingBeatMetaAi}
                                         onClick={() => { onOpenAllMissingBeatMetaAi(); }}
                                         startIcon={<AutoAwesomeIcon fontSize="small" />}

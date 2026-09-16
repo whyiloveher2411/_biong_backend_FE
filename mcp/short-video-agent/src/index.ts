@@ -95,7 +95,7 @@ function formatJson(data: unknown): string {
 
 const server = new McpServer({
   name: 'biong-short-video',
-  version: '2.3.0',
+  version: '2.4.0',
 });
 
 server.tool(
@@ -109,6 +109,85 @@ server.tool(
       query: { short_video_id },
     });
 
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_get_workflow_outputs',
+  'Đọc workflow_outputs (key/value theo updateField trong index.md) đã lưu của short video. Dùng để kiểm tra field như plan-prompt / prompt-image-v2-final đã có chưa. Truyền workflow (vd "video-image") để lấy riêng 1 workflow.',
+  {
+    short_video_id: z.number().int().positive().describe('ID short video trong spacedev_app_short_video'),
+    workflow: z.string().optional().describe('Key workflow (vd "video-image"); bỏ trống để lấy tất cả'),
+  },
+  async (args) => {
+    const query: Record<string, string | number> = {
+      short_video_id: args.short_video_id,
+    };
+    if (args.workflow) query.workflow = args.workflow;
+    const result = await apiRequest('get-workflow-outputs', { query });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_save_workflow_output',
+  'Lưu 1 key/value output của workflow vào short video (field workflow_outputs, merge giữ key khác). Key = updateField trong index.md (vd plan-prompt, prompt-image-v2-final).',
+  {
+    short_video_id: z.number().int().positive(),
+    workflow: z.string().min(1).describe('Key workflow (vd "video-image")'),
+    key: z.string().min(1).describe('updateField key (vd plan-prompt, prompt-image-v2-final)'),
+    value: z.string().describe('Nội dung output cần lưu'),
+  },
+  async (args) => {
+    const result = await apiRequest('save-workflow-output', {
+      body: {
+        short_video_id: args.short_video_id,
+        workflow: args.workflow,
+        key: args.key,
+        value: args.value,
+      },
+    });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_get_image_style',
+  'Lấy prompt phong cách hình ảnh đang gắn với short video — dùng thay [prompt-style] trong prompt workflow. has_image_style=false nghĩa là chưa chọn style.',
+  {
+    short_video_id: z.number().int().positive(),
+  },
+  async ({ short_video_id }) => {
+    const result = await apiRequest('get-image-style', {
+      query: { short_video_id },
+    });
+    return {
+      content: [{ type: 'text', text: formatJson(result) }],
+    };
+  }
+);
+
+server.tool(
+  'short_video_update_beat_image_prompts',
+  'Import prompt ảnh vào đúng vị trí beat (buttonUpdate imagePromptBeatUpdate). Input là output "BEAT IMAGE PROMPTS" (khối BEAT N kèm SCRIPT SENTENCE / IMAGE PROMPT / NEGATIVE PROMPT). All-or-nothing, validate phía backend.',
+  {
+    short_video_id: z.number().int().positive(),
+    file_text: z.string().min(1).describe('Toàn bộ output BEAT IMAGE PROMPTS'),
+  },
+  async (args) => {
+    const result = await apiRequest('update-beat-image-prompts', {
+      body: {
+        short_video_id: args.short_video_id,
+        file_text: args.file_text,
+      },
+    });
     return {
       content: [{ type: 'text', text: formatJson(result) }],
     };
