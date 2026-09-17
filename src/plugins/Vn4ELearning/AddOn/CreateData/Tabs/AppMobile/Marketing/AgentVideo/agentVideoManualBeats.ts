@@ -522,6 +522,25 @@ export function resolveVideo2sPlainImagePrompt(marks: ManualBeatMark[], beatId: 
     return String(byOrder?.imagePrompt || '').trim();
 }
 
+export function buildVideo2sChatbotPrompt(plain: string, aspect: string): string {
+    const text = String(plain || '').trim();
+    if (!text) {
+        return '';
+    }
+    const normalized = String(aspect || '').trim().toLowerCase().replace(/[\sx]/g, '');
+    const aspectPhrase = normalized === '16:9'
+        ? 'wide 16:9 landscape composition filling the entire frame, 1920x1080 aspect ratio, no borders no margins'
+        : 'vertical 9:16 portrait composition filling the entire frame, 1080x1920 aspect ratio, no borders no margins';
+    const aspectSection = `ASPECT RATIO:\n${aspectPhrase}`;
+    const negativeMatch = /^\s*NEGATIVE\s+PROMPT\s*:/im.exec(text);
+    if (negativeMatch && negativeMatch.index >= 0) {
+        const head = text.slice(0, negativeMatch.index).replace(/[ \t\n]+$/, '');
+        const tail = text.slice(negativeMatch.index).replace(/^[ \t\n]+/, '');
+        return `${head}\n\n${aspectSection}\n\n${tail}`;
+    }
+    return `${text}\n\n${aspectSection}`;
+}
+
 /** Meta.ai video 2s trả prompt plain text — bọc thành JSON object đủ 7 key cho beat_map. */
 export function wrapVideo2sPlainImagePrompt(plain: string, content: string): Record<string, string> {
     const normalized = String(plain || '').trim();

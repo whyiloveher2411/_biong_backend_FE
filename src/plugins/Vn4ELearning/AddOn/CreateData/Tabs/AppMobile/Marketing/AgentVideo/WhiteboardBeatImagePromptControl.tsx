@@ -1,10 +1,13 @@
 import React from 'react';
-import { Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 import LoadingButton from 'components/atoms/LoadingButton';
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import {
+    buildVideo2sChatbotPrompt,
     joinPlainImagePromptSections,
     plainImagePromptSectionColor,
     plainImagePromptSectionLabel,
@@ -54,6 +57,23 @@ export default function WhiteboardBeatImagePromptControl({ state, beatId, headli
     const dirty = joined.trim() !== plainPrompt.trim();
     const promptEmpty = sections.length === 0;
 
+    const [copied, setCopied] = React.useState(false);
+    const chatbotPrompt = buildVideo2sChatbotPrompt(joined, state.agentClipAspect);
+
+    const handleCopy = async () => {
+        if (!chatbotPrompt) {
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(chatbotPrompt);
+            setCopied(true);
+            state.showMessage('Đã copy prompt gửi chatbot AI', 'success');
+            window.setTimeout(() => setCopied(false), 2000);
+        } catch {
+            state.showMessage('Không copy được — trình duyệt chặn clipboard', 'error');
+        }
+    };
+
     const handleSave = async () => {
         const ok = await state.handleSaveVideo2sBeatPrompt(beatId, joined);
         if (ok) {
@@ -84,23 +104,39 @@ export default function WhiteboardBeatImagePromptControl({ state, beatId, headli
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
                         {headline || 'Prompt image'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-                        Mỗi mục 1 ô riêng — cắt theo “TÊN MỤC:” trong prompt; mục mới tự thêm ô khi prompt đổi
-                    </Typography>
                 </Stack>
                 {!promptEmpty ? (
-                    <LoadingButton
-                        size="small"
-                        variant="contained"
-                        color="primary"
-                        loading={Boolean(state.savingVideo2sBeatPrompt)}
-                        disabled={!dirty || editing || joined.trim() === ''}
-                        startIcon={<SaveOutlinedIcon fontSize="small" />}
-                        onClick={() => { void handleSave(); }}
-                        sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 700 }}
-                    >
-                        Lưu
-                    </LoadingButton>
+                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                        <Tooltip title="Copy toàn bộ prompt sẽ gửi cho chatbot AI (kèm tỉ lệ khung hình)">
+                            <span>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color={copied ? 'success' : 'primary'}
+                                    disabled={!chatbotPrompt}
+                                    startIcon={copied
+                                        ? <CheckIcon fontSize="small" />
+                                        : <ContentCopyIcon fontSize="small" />}
+                                    onClick={() => { void handleCopy(); }}
+                                    sx={{ textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
+                                >
+                                    {copied ? 'Đã copy' : 'Copy prompt'}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            color="primary"
+                            loading={Boolean(state.savingVideo2sBeatPrompt)}
+                            disabled={!dirty || editing || joined.trim() === ''}
+                            startIcon={<SaveOutlinedIcon fontSize="small" />}
+                            onClick={() => { void handleSave(); }}
+                            sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 700 }}
+                        >
+                            Lưu
+                        </LoadingButton>
+                    </Stack>
                 ) : null}
             </Stack>
             {promptEmpty ? (

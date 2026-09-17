@@ -17,26 +17,28 @@ export type BeatTranslationPayload = {
 /** Prompt dịch audio script beat — output CHỈ JSON,フォーム cố định để validate. */
 export function buildBeatTranslationPrompt(marks: ManualBeatMark[]): string {
     const lines = marks
-        .map((mark) => `${mark.order}. [${mark.content.trim()}]`)
+        .map((mark) => `${mark.order}. ${mark.content.trim()}`)
         .join('\n');
     return [
         'Dịch audio script TIỆNG VIỆT.',
         '',
-        'INPUT: mỗi dòng là MỘT beat, format "<STT>. [nội dung beat]":',
+        'INPUT: mỗi dòng là MỘT beat, format "<STT>. nội dung beat".',
+        'Nội dung beat là TOÀN BỘ phần chữ nằm SAU dấu chấm đầu dòng, không có ký tự bao quanh:',
         lines,
         '',
         'YÊU CẦU NGHIÊM KHẮT:',
         '- Bản dịch "vi" phải là TIẾNG VIỆT tự nhiên, dễ đọc.',
         '- Số beat (order) = số dòng input, ĐÚNG THỨ TỰ, KHÔNG bỏ/skip beat nào, KHÔNG thêm beat mới.',
-        '- "source" = copy NGUYÊN VĂN nội dung trong [ ] của beat đó, không sửa chữ.',
+        '- "source" = copy NGUYÊN VĂN nội dung beat đó (phần sau "STT. "), không sửa chữ.',
+        '- KHÔNG thêm ngoặc vuông [], ngoặc nhọn <>, ngoặc kép hay ký tự đánh dấu nào bao quanh "source" và "vi".',
         '- "vi" phải cùng số dòng/câu với "source": mỗi dòng của source → đúng một dòng của vi, KHÔNG gộp, KHÔNG tách, KHÔNG thêm bớt nội dung.',
         '- Giữ nguyên tên riêng, số, đơn vị và từ viết tắt.',
         '',
         'OUTPUT: CHỈ TRẢ VỀ MỘT JSON (không markdown, không giải thích), schema:',
         '{',
-        '  "source_language": "<ngôn ngữ nguồn phát hiện được, viết tắt ISO: en/ru/zh...>",',
+        '  "source_language": "ngôn ngữ nguồn phát hiện được, viết tắt ISO: en/ru/zh...",',
         '  "translations": [',
-        '    { "order": 1, "source": "<nguyên văn beat 1>", "vi": "<bản dịch tiếng Việt beat 1>" }',
+        '    { "order": 1, "source": "nguyên văn beat 1", "vi": "bản dịch tiếng Việt beat 1" }',
         '  ]',
         '}',
     ].join('\n');
@@ -56,6 +58,23 @@ function extractJsonObject(text: string): string | null {
         return null;
     }
     return candidate.slice(start, end + 1);
+}
+
+/** Bỏ ngoặc bao quanh beat ("[abc]" / "<abc>" / '"abc"') do AI thêm nhầm. */
+function stripBeatWrapping(value: string): string {
+    let text = String(value || '').trim();
+    const pairs: Array<[string, string]> = [['[', ']'], ['<', '>'], ['"', '"'], ['“', '”']];
+    let changed = true;
+    while (changed && text.length >= 2) {
+        changed = false;
+        for (const [open, close] of pairs) {
+            if (text.startsWith(open) && text.endsWith(close)) {
+                text = text.slice(open.length, text.length - close.length).trim();
+                changed = true;
+            }
+        }
+    }
+    return text;
 }
 
 /** Chuẩn hóa để so khớp "source" trả về với beat gốc — bỏ khoảng trắng/punctuation. */
@@ -108,8 +127,8 @@ export function parseBeatTranslationClipboard(
         const entry = item as Record<string, unknown>;
         return {
             order: Number(entry.order || 0),
-            source: String(entry.source ?? '').trim(),
-            vi: String(entry.vi ?? '').trim(),
+            source: stripBeatWrapping(String(entry.source ?? '')),
+            vi: stripBeatWrapping(String(entry.vi ?? '')),
         };
     });
 

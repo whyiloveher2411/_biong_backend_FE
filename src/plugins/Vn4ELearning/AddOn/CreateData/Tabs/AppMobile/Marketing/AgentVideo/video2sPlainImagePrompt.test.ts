@@ -1,4 +1,5 @@
 import {
+    buildVideo2sChatbotPrompt,
     normalizeManualBeatMarks,
     resolveVideo2sPlainImagePrompt,
     type ManualBeatMark,
@@ -40,5 +41,32 @@ describe('resolveVideo2sPlainImagePrompt', () => {
         const prompt = resolveVideo2sPlainImagePrompt(marks, 'beat_1');
         expect(prompt).not.toMatch(/^\s*\{/);
         expect(() => JSON.parse(prompt)).toThrow();
+    });
+});
+
+describe('buildVideo2sChatbotPrompt', () => {
+    it('nối mục ASPECT RATIO cuối prompt khi không có NEGATIVE PROMPT', () => {
+        const prompt = buildVideo2sChatbotPrompt('IMAGE PROMPT:\nCave at dawn.', '9:16');
+        expect(prompt).toBe(
+            'IMAGE PROMPT:\nCave at dawn.\n\n'
+            + 'ASPECT RATIO:\nvertical 9:16 portrait composition filling the entire frame, 1080x1920 aspect ratio, no borders no margins',
+        );
+    });
+
+    it('chèn ASPECT RATIO TRƯỚC mục NEGATIVE PROMPT (không bị nuốt vào negative)', () => {
+        const prompt = buildVideo2sChatbotPrompt(
+            'IMAGE PROMPT:\nCave at dawn.\n\nNEGATIVE PROMPT:\nNo modern objects.',
+            '9:16',
+        );
+        expect(prompt).toBe(
+            'IMAGE PROMPT:\nCave at dawn.\n\n'
+            + 'ASPECT RATIO:\nvertical 9:16 portrait composition filling the entire frame, 1080x1920 aspect ratio, no borders no margins\n\n'
+            + 'NEGATIVE PROMPT:\nNo modern objects.',
+        );
+    });
+
+    it('16:9 → dòng landscape; rỗng → rỗng', () => {
+        expect(buildVideo2sChatbotPrompt('IMAGE PROMPT:\nX', '16:9')).toContain('1920x1080');
+        expect(buildVideo2sChatbotPrompt('', '9:16')).toBe('');
     });
 });
