@@ -607,16 +607,8 @@ export default function MarketingWorkflowDrawer({
                                                                     item={promptItem}
                                                                     plan={breakdownPlan}
                                                                     savedValue={workflowOutputs[promptItem.updateField] || ''}
+                                                                    shortVideoId={shortVideoId}
                                                                     showMessage={api.showMessage}
-                                                                    onRequestUpdate={promptItem.updateField
-                                                                        ? (totalValue) => openUpdateDialog(
-                                                                            itemKey,
-                                                                            promptItem.label,
-                                                                            promptItem.updateField,
-                                                                            promptItem.buttonUpdate,
-                                                                            totalValue,
-                                                                        )
-                                                                        : null}
                                                                 />
                                                                 {noteNode}
                                                             </Box>

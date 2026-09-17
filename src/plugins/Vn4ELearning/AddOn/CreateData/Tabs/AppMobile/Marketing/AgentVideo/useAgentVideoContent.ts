@@ -5531,7 +5531,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return;
         }
         // Mỗi lần click chỉ mở tối đa 10 beat thiếu ảnh để browser không bị ngốn RAM.
-        const batchIds = missingBeatIds.slice(0, 10);
+        // Mở NGƯỢC từ beat cuối (n→1) để ăn khớp pipeline tự động chạy từ beat đầu (1→n),
+        // hai luồng gặp nhau ở giữa — user vừa chạy auto vừa bấm extension thủ công.
+        const batchIds = missingBeatIds.slice(-10).reverse();
 
         setOpeningAllMissingBeatMetaAi(true);
         setOpeningBeatGeminiBeatIds((prev) => Array.from(new Set([...prev, ...batchIds])));

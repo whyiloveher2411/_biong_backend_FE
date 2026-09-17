@@ -3849,6 +3849,7 @@ export async function importManualBeatList(
 export async function importManualBeatPromptFile(
     shortVideoId: number,
     fileText: string,
+    options: { partial?: boolean; startOrder?: number } = {},
 ): Promise<ManualBeatResponse & {
     errors?: string[];
     warnings?: string[];
@@ -3858,7 +3859,10 @@ export async function importManualBeatPromptFile(
 }> {
     return postJson(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/manual-beat/import-prompt-file',
-        shortVideoBody(shortVideoId, { file_text: fileText }),
+        shortVideoBody(shortVideoId, {
+            file_text: fileText,
+            ...(options.partial ? { partial: 1, start_order: Math.max(1, Math.floor(options.startOrder || 1)) } : {}),
+        }),
     ) as Promise<ManualBeatResponse & {
         errors?: string[];
         warnings?: string[];

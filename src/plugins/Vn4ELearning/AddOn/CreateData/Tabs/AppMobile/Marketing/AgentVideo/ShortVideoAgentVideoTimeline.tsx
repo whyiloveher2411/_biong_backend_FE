@@ -1211,7 +1211,7 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                         {isWhiteboardMode && showOpenAllMissingGemini && onOpenAllMissingBeatMetaAi ? (
                             <Tooltip
-                                title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}). Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Meta.ai → tự lưu beat.`}
+                                title={`Mở Meta.ai 10 beat thiếu ảnh mỗi lần click (còn ${imageRemaining}), mở NGƯỢC từ beat cuối (n→1) để ăn khớp pipeline tự động chạy từ beat đầu. Prompt sẽ được điền sẵn, bạn tự submit. Mỗi beat cần ĐỦ 2 ảnh: IMAGE 1 object layer (nền trong suốt) + IMAGE 2 background plate — download cả 2 ảnh trên Meta.ai → tự lưu beat.`}
                                 placement="top"
                             >
                                 <span>

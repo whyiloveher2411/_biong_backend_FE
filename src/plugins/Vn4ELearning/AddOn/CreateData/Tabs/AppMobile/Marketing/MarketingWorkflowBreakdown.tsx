@@ -4,10 +4,10 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CloseIcon from '@mui/icons-material/Close';
-import MergeTypeIcon from '@mui/icons-material/MergeType';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import {
     copyWorkflowPromptToClipboard,
-    joinWorkflowBreakdownParts,
+    MANUAL_BEAT_PROMPTS_SAVED_EVENT,
     splitWorkflowBeats,
     splitWorkflowOutputIntoParts,
     validateWorkflowBreakdownPart,
@@ -15,7 +15,12 @@ import {
     type WorkflowBreakdownPlan,
     type WorkflowPromptItem,
 } from 'helpers/marketingWorkflowPrompts';
-import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
+import { importManualBeatPromptFile } from './AgentVideo/agentVideoApi';
+
+type PartNotice = {
+    ok: boolean;
+    errors: string[];
+};
 
 type Props = {
     workflowKey: string;
@@ -23,35 +28,39 @@ type Props = {
     plan: WorkflowBreakdownPlan;
     /** Output đã lưu theo updateField — dùng để prefill lại từng phần khi mở lại. */
     savedValue: string;
+    /** ID short video — để cập nhật prompt vào đúng beat (imagePromptBeatUpdate). */
+    shortVideoId?: number;
     showMessage: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
-    /** Mở dialog update output với "input tổng" đã nối sẵn (null khi thiếu updateField). */
-    onRequestUpdate: ((total: string) => void) | null;
 };
 
 /**
  * scriptBreakdown > 0: KHÔNG hiển thị nội dung prompt (quá dài) — mỗi phần chỉ có
  * button Copy prompt + button Paste kết quả từ clipboard. Nội dung dán được validate
- * (đủ beat, đúng audio, đủ section, không trùng prompt) trước khi tự gộp thành input tổng.
+ * (đủ beat, đúng audio, đủ section, không trùng prompt) rồi cập nhật THẲNG vào các
+ * beat tương ứng của clip (partial import, không cần gộp input tổng).
  */
 export default function MarketingWorkflowBreakdown({
     workflowKey,
     item,
     plan,
     savedValue,
+    shortVideoId,
     showMessage,
-    onRequestUpdate,
 }: Props) {
     const beatCountsKey = plan.beatCounts.join(',');
     const [parts, setParts] = React.useState<string[]>(
         () => splitWorkflowOutputIntoParts(savedValue, plan.beatCounts),
     );
+    const [notices, setNotices] = React.useState<Record<number, PartNotice>>({});
     const [copyingIndex, setCopyingIndex] = React.useState(-1);
     const [copiedIndex, setCopiedIndex] = React.useState(-1);
     const [pastingIndex, setPastingIndex] = React.useState(-1);
+    const [importingIndex, setImportingIndex] = React.useState(-1);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     React.useEffect(() => {
         setParts(splitWorkflowOutputIntoParts(savedValue, plan.beatCounts));
+        setNotices({});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [savedValue, beatCountsKey]);
 
@@ -68,10 +77,8 @@ export default function MarketingWorkflowBreakdown({
         [plan, parts],
     );
 
-    const filledCount = parts.filter((part) => String(part || '').trim().length > 0).length;
     const validCount = validations.filter((validation) => validation.ok).length;
-    const allValid = validations.length === plan.chunks.length && validCount === plan.chunks.length;
-    const total = allValid ? joinWorkflowBreakdownParts(parts) : '';
+    const updatedCount = plan.chunks.filter((chunk) => notices[chunk.index]?.ok).length;
 
     const handleCopyChunk = React.useCallback(async (index: number) => {
         const chunk = plan.chunks[index];
@@ -96,8 +103,64 @@ export default function MarketingWorkflowBreakdown({
         showMessage(result.message, result.ok ? 'success' : 'error');
     }, [plan, copyingIndex, workflowKey, item.file, showMessage]);
 
+    /** Cập nhật prompt của 1 phần thẳng vào các beat tương ứng (partial import). */
+    const runImport = React.useCallback(async (index: number, text: string) => {
+        const chunk = plan.chunks[index];
+        if (!chunk || !String(text || '').trim()) {
+            return;
+        }
+        const sid = Number(shortVideoId || 0);
+        if (!sid) {
+            showMessage('Thiếu short_video_id — không cập nhật được prompt cho beat', 'warning');
+            return;
+        }
+        setImportingIndex(index);
+        try {
+            const result = await importManualBeatPromptFile(sid, text, {
+                partial: true,
+                startOrder: chunk.beatStart,
+            });
+            if (result?.success === false) {
+                const errors = Array.isArray(result?.errors) ? result.errors : [];
+                setNotices((prev) => ({
+                    ...prev,
+                    [index]: { ok: false, errors: errors.length > 0 ? errors : ['Không cập nhật được prompt cho beat'] },
+                }));
+                showMessage(`Phần ${index + 1} có lỗi — chưa cập nhật beat nào`, 'error');
+                return;
+            }
+            const updatedOrders = Array.isArray(result?.updated_orders) ? result.updated_orders : [];
+            setNotices((prev) => ({ ...prev, [index]: { ok: true, errors: [] } }));
+            showMessage(
+                `Đã cập nhật image prompt cho ${updatedOrders.length || chunk.beatCount} beat (phần ${index + 1})`,
+                'success',
+            );
+            document.dispatchEvent(new CustomEvent(MANUAL_BEAT_PROMPTS_SAVED_EVENT, {
+                detail: { shortVideoId: sid },
+            }));
+            if (result?.beat_division_completed) {
+                showMessage('Đã đủ prompt — chia beat hoàn tất, chạy tiếp pipeline', 'success');
+            }
+        } catch (err) {
+            setNotices((prev) => ({
+                ...prev,
+                [index]: {
+                    ok: false,
+                    errors: [err instanceof Error ? err.message : 'Không cập nhật được prompt cho beat'],
+                },
+            }));
+            showMessage('Không cập nhật được prompt cho beat', 'error');
+        } finally {
+            setImportingIndex(-1);
+        }
+    }, [plan, shortVideoId, showMessage]);
+
     const handlePasteChunk = React.useCallback(async (index: number) => {
-        if (pastingIndex >= 0) {
+        if (pastingIndex >= 0 || importingIndex >= 0) {
+            return;
+        }
+        const chunk = plan.chunks[index];
+        if (!chunk) {
             return;
         }
         setPastingIndex(index);
@@ -112,13 +175,25 @@ export default function MarketingWorkflowBreakdown({
             showMessage('Clipboard trống hoặc trình duyệt chặn đọc clipboard — hãy cho phép quyền rồi thử lại', 'warning');
             return;
         }
+
+        setNotices((prev) => {
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
         setParts((prev) => {
             const next = [...prev];
             next[index] = text;
             return next;
         });
-        showMessage(`Đã dán nội dung phần ${index + 1} — đang kiểm tra`, 'success');
-    }, [pastingIndex, showMessage]);
+
+        const validation = validateWorkflowBreakdownPart(text, splitWorkflowBeats(chunk.audioScript));
+        if (!validation.ok) {
+            showMessage(`Phần ${index + 1} chưa hợp lệ — xem lỗi bên dưới, chưa cập nhật beat`, 'error');
+            return;
+        }
+        await runImport(index, text);
+    }, [pastingIndex, importingIndex, plan, showMessage, runImport]);
 
     const handleClearChunk = React.useCallback((index: number) => {
         setParts((prev) => {
@@ -126,15 +201,14 @@ export default function MarketingWorkflowBreakdown({
             next[index] = '';
             return next;
         });
+        setNotices((prev) => {
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
     }, []);
 
-    const handleCopyTotal = React.useCallback(async () => {
-        const copied = await writePromptTextToClipboard(total);
-        showMessage(
-            copied ? 'Đã copy input tổng' : 'Không copy được — hãy copy thủ công',
-            copied ? 'success' : 'error',
-        );
-    }, [total, showMessage]);
+    const busy = copyingIndex >= 0 || pastingIndex >= 0 || importingIndex >= 0;
 
     return (
         <Box
@@ -151,8 +225,8 @@ export default function MarketingWorkflowBreakdown({
                 Chia {plan.chunks.length} phần · tối đa {plan.size} beat/lần · tổng {plan.totalBeats} beat
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                Copy prompt từng phần → chạy AI → dán kết quả bằng nút Paste. Đủ {plan.chunks.length} phần hợp lệ
-                thì tự gộp thành input tổng.
+                Copy prompt từng phần → chạy AI → dán kết quả bằng nút Paste. Phần hợp lệ sẽ được cập nhật
+                thẳng vào các beat của clip.
             </Typography>
 
             <Stack spacing={0.75} sx={{ mt: 1 }}>
@@ -160,21 +234,31 @@ export default function MarketingWorkflowBreakdown({
                     const isCopying = copyingIndex === chunk.index;
                     const isCopied = copiedIndex === chunk.index;
                     const isPasting = pastingIndex === chunk.index;
+                    const isImporting = importingIndex === chunk.index;
                     const validation = validations[chunk.index];
+                    const notice = notices[chunk.index];
                     const hasContent = String(parts[chunk.index] || '').trim().length > 0;
-                    const statusColor = !hasContent ? 'default' : validation.ok ? 'success' : 'error';
+                    const hasError = hasContent && (!validation.ok || (notice !== undefined && !notice.ok));
+                    const displayErrors = [
+                        ...(hasContent && !validation.ok ? validation.errors : []),
+                        ...(notice !== undefined && !notice.ok ? notice.errors : []),
+                    ];
+
+                    const statusColor = !hasContent ? 'default' : hasError ? 'error' : 'success';
                     const statusLabel = !hasContent
                         ? 'Chưa có'
-                        : validation.ok
-                            ? `Hợp lệ · ${validation.beatCount} beat`
-                            : `Lỗi · ${validation.errors.length}`;
+                        : hasError
+                            ? `Lỗi · ${displayErrors.length}`
+                            : notice?.ok
+                                ? `Đã cập nhật beat ${chunk.beatStart}–${chunk.beatEnd}`
+                                : `Hợp lệ · ${validation.beatCount} beat`;
 
                     return (
                         <Box
                             key={chunk.index}
                             sx={{
                                 border: '1px solid',
-                                borderColor: hasContent && !validation.ok ? 'error.light' : 'divider',
+                                borderColor: hasError ? 'error.light' : 'divider',
                                 borderRadius: 1.5,
                                 px: 1,
                                 py: 0.75,
@@ -197,7 +281,7 @@ export default function MarketingWorkflowBreakdown({
                                         <Button
                                             size="small"
                                             variant="outlined"
-                                            disabled={copyingIndex >= 0 || !item.exists}
+                                            disabled={Boolean(copyingIndex >= 0) || !item.exists}
                                             startIcon={
                                                 isCopying
                                                     ? <CircularProgress size={12} color="inherit" />
@@ -226,7 +310,7 @@ export default function MarketingWorkflowBreakdown({
                                 <Button
                                     size="small"
                                     variant={hasContent ? 'outlined' : 'contained'}
-                                    disabled={pastingIndex >= 0}
+                                    disabled={busy}
                                     startIcon={
                                         isPasting
                                             ? <CircularProgress size={12} color="inherit" />
@@ -237,11 +321,31 @@ export default function MarketingWorkflowBreakdown({
                                 >
                                     Paste
                                 </Button>
+                                {hasContent && validation.ok && (
+                                    <Tooltip title={`Cập nhật lại prompt vào beat ${chunk.beatStart}–${chunk.beatEnd}`}>
+                                        <Button
+                                            size="small"
+                                            color="success"
+                                            variant="outlined"
+                                            disabled={busy}
+                                            startIcon={
+                                                isImporting
+                                                    ? <CircularProgress size={12} color="inherit" />
+                                                    : <CloudUploadOutlinedIcon fontSize="small" />
+                                            }
+                                            onClick={() => runImport(chunk.index, parts[chunk.index] || '')}
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Cập nhật beat
+                                        </Button>
+                                    </Tooltip>
+                                )}
                                 {hasContent && (
                                     <Tooltip title="Xoá nội dung phần này">
                                         <Button
                                             size="small"
                                             color="inherit"
+                                            disabled={busy}
                                             onClick={() => handleClearChunk(chunk.index)}
                                             sx={{ minWidth: 0, px: 0.5 }}
                                         >
@@ -251,7 +355,7 @@ export default function MarketingWorkflowBreakdown({
                                 )}
                             </Box>
 
-                            {hasContent && validation.ok && validation.preview && (
+                            {hasContent && !hasError && validation.preview && (
                                 <Typography
                                     variant="caption"
                                     color="text.secondary"
@@ -261,9 +365,9 @@ export default function MarketingWorkflowBreakdown({
                                 </Typography>
                             )}
 
-                            {hasContent && !validation.ok && (
+                            {hasError && (
                                 <Box sx={{ mt: 0.5, ml: 0.25 }}>
-                                    {validation.errors.slice(0, 3).map((error, errorIndex) => (
+                                    {displayErrors.slice(0, 3).map((error, errorIndex) => (
                                         <Typography
                                             key={errorIndex}
                                             variant="caption"
@@ -273,9 +377,9 @@ export default function MarketingWorkflowBreakdown({
                                             • {error}
                                         </Typography>
                                     ))}
-                                    {validation.errors.length > 3 && (
+                                    {displayErrors.length > 3 && (
                                         <Typography variant="caption" color="error.main" sx={{ display: 'block' }}>
-                                            … và {validation.errors.length - 3} lỗi nữa
+                                            … và {displayErrors.length - 3} lỗi nữa
                                         </Typography>
                                     )}
                                 </Box>
@@ -285,41 +389,9 @@ export default function MarketingWorkflowBreakdown({
                 })}
             </Stack>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                <Typography variant="caption" color={allValid ? 'success.main' : 'text.secondary'} sx={{ flex: 1, minWidth: 140 }}>
-                    {allValid
-                        ? `Đủ ${plan.chunks.length}/${plan.chunks.length} phần hợp lệ · input tổng ${plan.totalBeats} beat đã sẵn sàng`
-                        : `Hợp lệ ${validCount}/${plan.chunks.length} phần (đã có ${filledCount})`}
-                </Typography>
-                <Button
-                    size="small"
-                    variant="text"
-                    onClick={handleCopyTotal}
-                    disabled={!total}
-                    sx={{ textTransform: 'none' }}
-                >
-                    Copy input tổng
-                </Button>
-                {onRequestUpdate && (
-                    <Tooltip
-                        title={allValid ? '' : 'Cần đủ tất cả các phần hợp lệ trước khi gộp input tổng'}
-                        placement="top"
-                    >
-                        <span>
-                            <Button
-                                size="small"
-                                variant="contained"
-                                startIcon={<MergeTypeIcon fontSize="small" />}
-                                disabled={!allValid}
-                                onClick={() => onRequestUpdate(total)}
-                                sx={{ textTransform: 'none' }}
-                            >
-                                Gộp {plan.chunks.length} phần → cập nhật input tổng
-                            </Button>
-                        </span>
-                    </Tooltip>
-                )}
-            </Box>
+            <Typography variant="caption" color={updatedCount === plan.chunks.length ? 'success.main' : 'text.secondary'} sx={{ display: 'block', mt: 1 }}>
+                Đã cập nhật {updatedCount}/{plan.chunks.length} phần vào beat · hợp lệ {validCount}/{plan.chunks.length}
+            </Typography>
         </Box>
     );
 }

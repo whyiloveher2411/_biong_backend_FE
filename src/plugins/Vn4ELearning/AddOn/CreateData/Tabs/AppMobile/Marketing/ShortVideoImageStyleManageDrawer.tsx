@@ -383,6 +383,11 @@ export default function ShortVideoImageStyleManageDrawer({
                 setMode('list');
                 setForm(EMPTY_FORM);
                 reloadList();
+                // Sửa style đang dùng cho video → refresh prompt ở cha để copy prompt
+                // workflow thay [prompt-style] bằng dữ liệu mới nhất (không bị cache cũ).
+                if (form.id > 0 && currentStyleId === form.id) {
+                    onStyleChange?.(form.id);
+                }
             })
             .catch((err: unknown) => {
                 setSaving(false);
