@@ -649,7 +649,7 @@ export function validateWorkflowBreakdownPart(
     const errors: string[] = [];
 
     if (parsed.length !== expected.length) {
-        errors.push(`Số beat không khớp: phần này cần ${expected.length} beat, nhận ${parsed.length} khối BEAT`);
+        errors.push(`Số beat không khớp: phần này cần ${expected.length} beat, out chỉ có ${parsed.length} khối BEAT`);
     }
 
     const promptSignatures = new Map<string, number>();
