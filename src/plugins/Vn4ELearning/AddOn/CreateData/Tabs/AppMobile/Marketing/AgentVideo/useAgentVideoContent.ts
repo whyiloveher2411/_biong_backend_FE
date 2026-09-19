@@ -50,6 +50,8 @@ import {
     saveAgentTtsGlobalDefault,
     saveAgentVisualStyle,
     saveAgentImportHtml,
+    bulkDeleteBeatAssets,
+    type BulkDeleteBeatAssetsTarget,
     saveAgentOmnivoiceVoice,
     saveAgentSaydiVoice,
     fetchSaydiVoiceSamples,
@@ -215,6 +217,8 @@ import {
     beatMapToJson,
     countMissingBeatHtml,
     countMissingBeatImage,
+    countMissingBeatImagePrompt,
+    listBeatsWithPendingAudio,
     listMissingBeatImageIds,
     isBeatImageMissing,
     listBeatIdsWithHtml,
@@ -262,6 +266,10 @@ import {
     deriveWhiteboardRenderProgress,
     type WhiteboardRenderProgress,
 } from './agentVideoWhiteboardRenderProgress';
+import {
+    deriveBeatAudioProgress,
+    type BeatAudioProgress,
+} from './agentVideoBeatAudioProgress';
 import { normalizeClipAspect, type ClipAspect } from './agentVideoClipAspect';
 import { normalizeAgentBeatFrequency, type AgentBeatFrequency } from './agentVideoBeatFrequency';
 import { normalizeImportHtmlForAudio } from './agentVideoCustomHtmlPreview';
@@ -948,6 +956,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [pastingBeatHtmlBeatId, setPastingBeatHtmlBeatId] = React.useState('');
     const [deletingBeatHtmlBeatId, setDeletingBeatHtmlBeatId] = React.useState('');
     const [deletingAllBeatHtml, setDeletingAllBeatHtml] = React.useState(false);
+    /** Target đang xóa hàng loạt (image_prompt | image | audio) — '' khi rảnh. */
+    const [bulkDeletingBeatAsset, setBulkDeletingBeatAsset] = React.useState<BulkDeleteBeatAssetsTarget | ''>('');
     const [openingBeatGeminiBeatIds, setOpeningBeatGeminiBeatIds] = React.useState<string[]>([]);
     const [openingBeatGeminiHeadlessBeatIds, setOpeningBeatGeminiHeadlessBeatIds] = React.useState<string[]>([]);
     const [refiningBeatHtmlBeatId, setRefiningBeatHtmlBeatId] = React.useState('');
@@ -5221,6 +5231,122 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    /**
+     * Xóa hàng loạt tài nguyên beat (prompt ảnh / ảnh / audio) của beat-map hiện tại.
+     * Sau khi BE xác nhận, cập nhật state NGAY (lạc quan) để UI đổi tức thì, rồi
+     * load lại row để đồng bộ số liệu chuẩn.
+     */
+    const handleBulkDeleteBeatAssets = React.useCallback(async (
+        target: BulkDeleteBeatAssetsTarget,
+        options?: { confirmMessage?: string },
+    ): Promise<boolean> => {
+        if (!shortVideoId) {
+            showMessage('Thiếu short video — không xóa được', 'warning');
+            return false;
+        }
+        if (bulkDeletingBeatAsset) {
+            return false;
+        }
+        if (options?.confirmMessage && !window.confirm(options.confirmMessage)) {
+            return false;
+        }
+
+        setBulkDeletingBeatAsset(target);
+        try {
+            const res = await bulkDeleteBeatAssets(shortVideoId, target);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Không xóa được', 'error');
+                return false;
+            }
+
+            // Cập nhật lạc quan ngay trên state — không chờ loadRow.
+            if (target === 'image_prompt') {
+                setBeatMap((prev) => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        sections: prev.sections.map((section) => {
+                            if (!section.image_prompt) {
+                                return section;
+                            }
+                            const next = { ...section };
+                            delete next.image_prompt;
+                            return next;
+                        }),
+                    };
+                });
+                setBeatImage((prev) => {
+                    const next: Record<string, BeatImageEntry> = {};
+                    Object.entries(prev).forEach(([beatId, entry]) => {
+                        const clone = { ...entry };
+                        delete clone.image_prompt;
+                        delete clone.creative_prompt;
+                        next[beatId] = clone;
+                    });
+                    return next;
+                });
+                // Video 2s: prompt plain lưu ở marks — clear luôn để UI đổi ngay.
+                setManualBeatMarks((prevMarks) => {
+                    if (prevMarks.length === 0) {
+                        return prevMarks;
+                    }
+                    let touched = false;
+                    const nextMarks = prevMarks.map((mark) => {
+                        if (String(mark.imagePrompt || '').trim() === '') {
+                            return mark;
+                        }
+                        touched = true;
+                        return { ...mark, imagePrompt: '' };
+                    });
+                    return touched ? nextMarks : prevMarks;
+                });
+            } else if (target === 'image') {
+                setBeatImage((prev) => {
+                    const next: Record<string, BeatImageEntry> = {};
+                    Object.entries(prev).forEach(([beatId, entry]) => {
+                        next[beatId] = { ...entry, image_url: '', extra_image_urls: undefined };
+                    });
+                    return next;
+                });
+                // Preview/editor ưu tiên override.image_layers hơn beat_image —
+                // clear luôn để box ảnh + timeline cập nhật ngay.
+                setAgentWhiteboardBeatOverrides((prev) => {
+                    let changed = false;
+                    const next = { ...prev };
+                    Object.keys(next).forEach((beatId) => {
+                        if (next[beatId]?.image_layers) {
+                            const clone = { ...next[beatId] };
+                            delete clone.image_layers;
+                            next[beatId] = clone;
+                            changed = true;
+                        }
+                    });
+                    return changed ? next : prev;
+                });
+            } else {
+                setBeatAudio((prev) => (prev
+                    ? { ...prev, items: {}, ready: 0 }
+                    : prev));
+            }
+
+            loadRow({ includeCatalogs: false });
+            const failed = Array.isArray(res.failed_beat_ids) ? res.failed_beat_ids.length : 0;
+            showMessage(
+                parseApiMessage(res?.message)
+                    || `Đã xóa ${Number(res?.deleted_count || 0)} tài nguyên beat${failed ? ` (${failed} lỗi)` : ''}`,
+                failed ? 'warning' : 'success',
+            );
+            return true;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return false;
+        } finally {
+            setBulkDeletingBeatAsset('');
+        }
+    }, [bulkDeletingBeatAsset, loadRow, shortVideoId, showMessage]);
+
     const handleDeleteAllBeatHtml = async () => {
         const beatIds = listBeatIdsWithHtml(beatHtml);
         if (!beatIds.length) {
@@ -9034,6 +9160,25 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         [beatMap, beatImage, beatBackgroundImageUrls],
     );
 
+    /** Số beat thiếu image prompt (section không có prompt hợp lệ). */
+    const missingBeatImagePromptCount = React.useMemo(
+        () => countMissingBeatImagePrompt(
+            beatMap,
+            beatImage,
+            // Video 2s: prompt lưu ở marks (plain string), không nằm trong beat-map.
+            isVideo2sMode
+                ? (beatId) => resolveVideo2sPlainImagePrompt(manualBeatMarks, beatId)
+                : undefined,
+        ),
+        [beatMap, beatImage, isVideo2sMode, manualBeatMarks],
+    );
+
+    /** Số beat có audio item nhưng chưa ready (chỉ tính beat đã từng tạo audio). */
+    const pendingBeatAudioCount = React.useMemo(
+        () => listBeatsWithPendingAudio(beatAudio?.items as Record<string, { status?: string }> | undefined).length,
+        [beatAudio],
+    );
+
     const beatRenderErrorIds = React.useMemo(
         () => listBeatRenderErrorIds(beatHtml),
         [beatHtml],
@@ -9061,6 +9206,24 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         isWhiteboardMode,
         beatMap?.sections,
         whiteboardBeatRenders,
+        fullAutoPipeline?.current_step,
+        fullAutoPipeline?.status,
+    ]);
+
+    const beatAudioProgress = React.useMemo((): BeatAudioProgress => deriveBeatAudioProgress({
+        items: beatAudio?.items,
+        totalBeats: beatMap?.sections?.length,
+        stateTotal: beatAudio?.total,
+        stateReady: beatAudio?.ready,
+        queueProgress: beatAudio?.queue?.progress,
+        pipelineStep: fullAutoPipeline?.current_step,
+        pipelineStatus: fullAutoPipeline?.status,
+    }), [
+        beatAudio?.items,
+        beatAudio?.total,
+        beatAudio?.ready,
+        beatAudio?.queue?.progress,
+        beatMap?.sections,
         fullAutoPipeline?.current_step,
         fullAutoPipeline?.status,
     ]);
@@ -9153,6 +9316,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleUploadAllToCapcut,
         whiteboardBeatRenders,
         whiteboardRenderProgress,
+        beatAudioProgress,
         renderingWhiteboardBeatIds,
         uploadingBeatVideoToCapcutIds,
         handleRenderWhiteboardBeat,
@@ -9494,6 +9658,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         pastingBeatHtmlBeatId,
         deletingBeatHtmlBeatId,
         deletingAllBeatHtml,
+        bulkDeletingBeatAsset,
+        handleBulkDeleteBeatAssets,
+        missingBeatImagePromptCount,
+        pendingBeatAudioCount,
         openingBeatGeminiBeatIds,
         openingBeatGeminiHeadlessBeatIds,
         refiningBeatHtmlBeatId,

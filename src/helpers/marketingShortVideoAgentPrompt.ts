@@ -227,11 +227,11 @@ export async function fetchShortVideoAgentPrompt(
     return res.json() as Promise<ShortVideoAgentPromptResponse>;
 }
 
-async function postShortVideoPrompt(
+async function postShortVideoPrompt<T = ShortVideoPromptFetchResponse>(
     suffix: string,
     shortVideoId: number,
     extra: Record<string, unknown> = {},
-): Promise<ShortVideoPromptFetchResponse> {
+): Promise<T> {
     const token = getAccessToken() ?? '';
     const res = await fetch(pluginApiPath(suffix), {
         method: 'POST',
@@ -248,7 +248,7 @@ async function postShortVideoPrompt(
             ...extra,
         }),
     });
-    return res.json() as Promise<ShortVideoPromptFetchResponse>;
+    return res.json() as Promise<T>;
 }
 
 export async function fetchImproveScriptPrompt(
@@ -301,6 +301,40 @@ export async function copyYoutubePromptToClipboard(
             ? 'Đã copy prompt tạo tiêu đề (YouTube)'
             : 'Đã copy prompt tạo ảnh thu nhỏ (YouTube)',
     };
+}
+
+export type YoutubeResolvedChapterResponse = {
+    success?: boolean;
+    short_video_id?: number;
+    timing_source?: string;
+    chapter_count?: number;
+    chapters?: Array<{
+        title?: string;
+        anchor_line?: string;
+        line_index?: number;
+        startSec?: number;
+        endSec?: number | null;
+        startLabel?: string;
+        timing_source?: string;
+    }>;
+    chapters_text?: string;
+    unmatched_titles?: string[];
+    message?: { content?: string } | string;
+};
+
+/**
+ * Nhờ BE quyết mốc thời gian thật cho chapter — chatbot chỉ trả neo nội dung
+ * (anchor_line/anchor_text/title), BE dò từ whisper/beat_map rồi trả `M:SS`.
+ */
+export async function resolveYoutubeChapters(
+    shortVideoId: number,
+    chapters: Array<{ anchor_line: string; anchor_text?: string; title: string }>,
+): Promise<YoutubeResolvedChapterResponse> {
+    return postShortVideoPrompt<YoutubeResolvedChapterResponse>(
+        'short-video/resolve-youtube-chapters',
+        shortVideoId,
+        { chapters },
+    );
 }
 
 export function parseShortVideoPromptMessage(

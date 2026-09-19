@@ -31,6 +31,7 @@ import {
     generateYoutubeThumbnailImage,
     parseShortVideoPromptMessage,
     refineYoutubeThumbnailImage,
+    resolveYoutubeChapters,
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
@@ -174,6 +175,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [statusChatCookieIds, setStatusChatCookieIds] = React.useState<Record<string, number>>({});
     const [statusFeedbackNotes, setStatusFeedbackNotes] = React.useState<Record<string, string>>({});
     const [savingFeedbackRank, setSavingFeedbackRank] = React.useState<string>('');
+    const [chaptersText, setChaptersText] = React.useState<string>('');
+    const [resolvingChapters, setResolvingChapters] = React.useState(false);
+    const [chaptersWarning, setChaptersWarning] = React.useState<string>('');
     const loadedRef = React.useRef<number>(-1);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -188,6 +192,8 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
             setStatusChatUrls({});
             setStatusChatCookieIds({});
             setStatusFeedbackNotes({});
+            setChaptersText('');
+            setChaptersWarning('');
             return;
         }
         if (loadedRef.current === shortVideoId) {
@@ -206,6 +212,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                 title: saved.title || '',
                 thumbnail: saved.thumbnail || '',
             });
+            setChaptersText(String(saved.chapters_text || ''));
         });
         // Nạp job thumbnail đang chạy (nếu mở lại tab khi có job pending).
         fetchYoutubeThumbnailStatus(shortVideoId)
@@ -302,6 +309,85 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const parsedThumbnail = React.useMemo(
         () => parseYoutubeThumbnailResponse(values.thumbnail),
         [values.thumbnail],
+    );
+
+    /**
+     * Chatbot chỉ trả chapter dạng NEO NỘI DUNG (không có mốc thời gian). Nhờ BE
+     * dò mốc thật từ whisper/beat_map, lưu `chapters_text` để ghép vào
+     * `{{CHAPTERS}}` trong description. Chạy lại khi tập neo chapter đổi.
+     */
+    const chapterAnchorsKey = React.useMemo(
+        () => JSON.stringify(parsedTitle.chapters.map((chapter) => [chapter.anchorLine, chapter.title])),
+        [parsedTitle.chapters],
+    );
+
+    React.useEffect(() => {
+        if (!shortVideoId || parsedTitle.chapters.length === 0) {
+            return;
+        }
+        let cancelled = false;
+        setResolvingChapters(true);
+        setChaptersWarning('');
+        resolveYoutubeChapters(
+            shortVideoId,
+            parsedTitle.chapters.map((chapter) => ({
+                anchor_line: chapter.anchorLine,
+                anchor_text: chapter.anchorText,
+                title: chapter.title,
+            })),
+        )
+            .then(async (res) => {
+                if (cancelled) {
+                    return;
+                }
+                const text = String(res?.chapters_text || '').trim();
+                if (!res?.success || !text) {
+                    setChaptersWarning(parseShortVideoPromptMessage(res?.message) || 'Không resolve được mốc thời gian chapter');
+                    return;
+                }
+                setChaptersText(text);
+                const unmatched = Array.isArray(res?.unmatched_titles) ? res.unmatched_titles : [];
+                if (unmatched.length > 0) {
+                    setChaptersWarning(`Không khớp được mốc cho: ${unmatched.join(', ')}`);
+                }
+                await saveWorkflowOutput(shortVideoId, YOUTUBE_WORKFLOW_KEY, 'chapters_text', text);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setChaptersWarning('Không resolve được mốc thời gian chapter');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setResolvingChapters(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [shortVideoId, chapterAnchorsKey]);
+
+    /** Description với mốc chapter thật đã ghép vào placeholder `{{CHAPTERS}}`. */
+    const descriptionWithChapters = React.useMemo(() => {
+        const description = parsedTitle.description || '';
+        if (!description.includes('{{CHAPTERS}}')) {
+            return description;
+        }
+        const replacement = chaptersText.trim();
+        if (!replacement) {
+            return description;
+        }
+
+        return description.replace(/\{\{CHAPTERS\}\}/g, replacement);
+    }, [parsedTitle.description, chaptersText]);
+
+    const parsedTitleWithChapters = React.useMemo(
+        () => (descriptionWithChapters === parsedTitle.description
+            ? parsedTitle
+            : { ...parsedTitle, description: descriptionWithChapters }),
+        [parsedTitle, descriptionWithChapters],
     );
 
     const savedValues = outputs[YOUTUBE_WORKFLOW_KEY] || {};
@@ -921,8 +1007,21 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         tone="neutral"
                         description="Danh sách tiêu đề theo phản hồi chatbot — bấm Người thắng / Gợi ý đóng gói để xem chi tiết."
                     >
+                        {resolvingChapters ? (
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                <CircularProgress size={14} />
+                                <Typography variant="caption" color="text.secondary">
+                                    Đang dò mốc thời gian chapter từ whisper…
+                                </Typography>
+                            </Stack>
+                        ) : null}
+                        {!resolvingChapters && chaptersWarning ? (
+                            <Alert severity="warning" sx={{ py: 0.25, mb: 1 }}>
+                                {chaptersWarning}
+                            </Alert>
+                        ) : null}
                         <ShortVideoAgentYoutubeTitleList
-                            parsed={parsedTitle}
+                            parsed={parsedTitleWithChapters}
                             selectedTitle={selectedTitle}
                             onSelectTitle={(title) => { void handleSelectTitle(title); }}
                         />

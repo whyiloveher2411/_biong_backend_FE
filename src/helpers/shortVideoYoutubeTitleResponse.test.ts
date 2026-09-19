@@ -122,6 +122,13 @@ describe('parseYoutubeTitleResponse', () => {
         expect(parsed.seo.title?.score).toBe(88);
         expect(parsed.seo.title?.notes.length).toBeGreaterThan(0);
         expect(parsed.seo.description?.score).toBe(84);
+        // Chapter neo nội dung (không có M:SS) + placeholder trong description.
+        expect(parsed.description).toContain('{{CHAPTERS}}');
+        expect(parsed.description).not.toMatch(/\b\d{1,2}:\d{2}\b/);
+        expect(parsed.chapters.length).toBeGreaterThanOrEqual(4);
+        expect(parsed.chapters[0].anchorLine.length).toBeGreaterThan(0);
+        expect(parsed.chapters[0].anchorText.length).toBeGreaterThan(0);
+        expect(parsed.chapters[0].title.length).toBeGreaterThan(0);
     });
 
     it('parses JSON response wrapped in a code fence', () => {
@@ -146,7 +153,11 @@ describe('parseYoutubeTitleResponse', () => {
                 psychological_triggers: ['Curiosity gap'],
                 audience_segment: 'Gen Z',
             },
-            description: 'Sample description\n\n#tag1 #tag2 #tag3',
+            description: 'Sample description\n\nChapters:\n{{CHAPTERS}}\n\n#tag1 #tag2 #tag3',
+            chapters: [
+                { anchor_line: 'First line of the script', anchor_text: 'First line', title: 'Opening' },
+                { anchor_line: 'Second line of the script', anchor_text: 'Second line', title: 'Middle' },
+            ],
             first_comment: 'What would you have done differently?',
             hashtags: ['#tag1', '#tag2', '#tag3'],
             tags: ['tag one', 'tag two'],
@@ -168,6 +179,11 @@ describe('parseYoutubeTitleResponse', () => {
             'Audience Segment It Will Attract',
         ]);
         expect(parsed.description).toContain('#tag1');
+        expect(parsed.description).toContain('{{CHAPTERS}}');
+        expect(parsed.chapters).toEqual([
+            { anchorLine: 'First line of the script', anchorText: 'First line', title: 'Opening' },
+            { anchorLine: 'Second line of the script', anchorText: 'Second line', title: 'Middle' },
+        ]);
         expect(parsed.firstComment).toBe('What would you have done differently?');
         expect(parsed.hashtags).toEqual(['#tag1', '#tag2', '#tag3']);
         expect(parsed.tags).toEqual(['tag one', 'tag two']);

@@ -14,6 +14,7 @@ import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
 import LiveTvOutlinedIcon from '@mui/icons-material/LiveTvOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
 import LoadingButton from 'components/atoms/LoadingButton';
@@ -36,6 +37,7 @@ import {
 } from './FullAutoPipelineGroupedSteps';
 import ShortVideoAgentBeatDivisionManualDrawer from './ShortVideoAgentBeatDivisionManualDrawer';
 import ShortVideoAgentFixBeatImagesAspectDialog from './ShortVideoAgentFixBeatImagesAspectDialog';
+import ShortVideoAgentBeatAssetsInfoDialog from './ShortVideoAgentBeatAssetsInfoDialog';
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
@@ -430,6 +432,8 @@ export default function ShortVideoAgentVideoTimeline({
     const [beatDivisionManualOpen, setBeatDivisionManualOpen] = React.useState(false);
     // Dialog "Làm lại các ảnh không đúng tỉ lệ" (bước Ảnh beat).
     const [fixAspectDialogOpen, setFixAspectDialogOpen] = React.useState(false);
+    // Dialog thống kê tài nguyên beat (icon info cạnh label "Video").
+    const [beatAssetsInfoOpen, setBeatAssetsInfoOpen] = React.useState(false);
 
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
@@ -1566,6 +1570,7 @@ export default function ShortVideoAgentVideoTimeline({
                                 height: AGENT_VIDEO_TRACK_ROW_HEIGHT + TIMELINE_EDIT_AREA_TOP_GAP,
                                 display: 'flex',
                                 alignItems: 'center',
+                                gap: 0.5,
                                 px: 1,
                                 mt: `${TIMELINE_EDIT_AREA_TOP_GAP}px`,
                             }}
@@ -1576,6 +1581,20 @@ export default function ShortVideoAgentVideoTimeline({
                             >
                                 Video
                             </Typography>
+                            <Tooltip title="Thống kê tài nguyên beat (thiếu prompt ảnh / hình / audio)">
+                                <IconButton
+                                    size="small"
+                                    aria-label="Thống kê tài nguyên beat"
+                                    onClick={() => setBeatAssetsInfoOpen(true)}
+                                    sx={{
+                                        p: 0.25,
+                                        color: 'rgba(255,255,255,0.6)',
+                                        '&:hover': { color: 'rgba(255,255,255,0.9)' },
+                                    }}
+                                >
+                                    <InfoOutlinedIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                            </Tooltip>
                         </Box>
                     </Box>
 
@@ -1713,6 +1732,29 @@ export default function ShortVideoAgentVideoTimeline({
                 open={fixAspectDialogOpen}
                 onClose={() => setFixAspectDialogOpen(false)}
             />
+            {agentState ? (
+                <ShortVideoAgentBeatAssetsInfoDialog
+                    open={beatAssetsInfoOpen}
+                    onClose={() => setBeatAssetsInfoOpen(false)}
+                    totalBeats={beatMap?.sections?.length ?? 0}
+                    missingImagePromptCount={agentState.missingBeatImagePromptCount}
+                    missingImageCount={agentState.missingBeatImageCount}
+                    pendingAudioCount={agentState.pendingBeatAudioCount}
+                    imagePromptHaveCount={Math.max(
+                        0,
+                        (beatMap?.sections?.length ?? 0) - agentState.missingBeatImagePromptCount,
+                    )}
+                    imageHaveCount={Math.max(
+                        0,
+                        (beatMap?.sections?.length ?? 0) - agentState.missingBeatImageCount,
+                    )}
+                    readyAudioCount={Number(agentState.beatAudio?.ready || 0)}
+                    deletingTarget={agentState.bulkDeletingBeatAsset}
+                    onDelete={(target) => {
+                        void agentState.handleBulkDeleteBeatAssets(target);
+                    }}
+                />
+            ) : null}
             <ShortVideoAgentScriptManualDrawer
                 open={scriptManualOpen}
                 onClose={() => setScriptManualOpen(false)}

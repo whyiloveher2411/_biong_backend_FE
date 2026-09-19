@@ -1734,11 +1734,26 @@ export type AgentVideoBeatAudioItem = {
     error?: string;
 };
 
+export type AgentVideoBeatAudioQueueProgress = {
+    current?: number;
+    total?: number;
+    /** Beat kế tiếp chưa có audio (beat đang/ sắp tạo). */
+    beat_id?: string;
+    succeeded?: number;
+    failed?: string[];
+};
+
 export type AgentVideoBeatAudioState = {
     enabled: boolean;
     total: number;
     ready: number;
     items: AgentVideoBeatAudioItem[];
+    /** Trạng thái queue tạo audio từng beat (backend cập nhật sau mỗi beat). */
+    queue?: {
+        status?: string;
+        error?: string;
+        progress?: AgentVideoBeatAudioQueueProgress;
+    };
     merged?: {
         url?: string;
         duration_sec?: number;
@@ -4856,6 +4871,36 @@ export async function saveAgentImportHtml(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-import-html',
         body,
     );
+}
+
+export type BulkDeleteBeatAssetsTarget = 'image_prompt' | 'image' | 'audio';
+
+/**
+ * Xóa hàng loạt tài nguyên beat (prompt ảnh / ảnh / audio) theo beat-map hiện tại.
+ * Bỏ `beatIds` → BE áp dụng cho mọi beat trong beat-map.
+ */
+export async function bulkDeleteBeatAssets(
+    shortVideoId: number,
+    target: BulkDeleteBeatAssetsTarget,
+    beatIds?: string[],
+): Promise<JsonResponse & {
+    target?: BulkDeleteBeatAssetsTarget;
+    deleted_count?: number;
+    deleted_beat_ids?: string[];
+    failed_beat_ids?: string[];
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/bulk-delete-beat-assets',
+        shortVideoBody(shortVideoId, {
+            target,
+            ...(beatIds && beatIds.length > 0 ? { beat_ids: beatIds } : {}),
+        }),
+    ) as Promise<JsonResponse & {
+        target?: BulkDeleteBeatAssetsTarget;
+        deleted_count?: number;
+        deleted_beat_ids?: string[];
+        failed_beat_ids?: string[];
+    }>;
 }
 
 export async function saveAgentCaptionAlignments(

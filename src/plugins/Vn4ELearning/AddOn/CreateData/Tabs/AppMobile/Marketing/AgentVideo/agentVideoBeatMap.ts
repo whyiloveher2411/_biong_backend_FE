@@ -1172,6 +1172,80 @@ export function listBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): st
         .map(([beatId]) => beatId);
 }
 
+/**
+ * Beat thiếu image prompt = section không có `image_prompt` hợp lệ, HOẶC
+ * prompt nằm ở beat_image block nhưng rỗng.
+ * `promptResolver` cho phép mode đặc biệt (video-2s: prompt ở marks) cung cấp
+ * prompt theo beat — trả '' nghĩa là không có.
+ * Dùng cho panel thống kê trên timeline.
+ */
+export function isBeatImagePromptMissing(
+    section: BeatMapSection | null | undefined,
+    beatImage?: Record<string, BeatImageEntry>,
+    promptResolver?: (beatId: string) => string,
+): boolean {
+    const beatId = String(section?.id || '');
+    if (promptResolver && String(promptResolver(beatId) || '').trim() !== '') {
+        return false;
+    }
+    const sectionPrompt = String(
+        beatImagePromptToText(section?.image_prompt) || (section?.image_prompt as string) || '',
+    ).trim();
+    if (sectionPrompt) {
+        return false;
+    }
+    const savedPrompt = beatImage?.[beatId]?.image_prompt;
+    return String(beatImagePromptToText(savedPrompt)).trim() === '';
+}
+
+export function listMissingBeatImagePromptIds(
+    map: BeatMap | null,
+    beatImage?: Record<string, BeatImageEntry>,
+    promptResolver?: (beatId: string) => string,
+): string[] {
+    if (!map?.sections?.length) {
+        return [];
+    }
+    return map.sections
+        .filter((section) => isBeatImagePromptMissing(section, beatImage, promptResolver))
+        .map((section) => section.id);
+}
+
+export function countMissingBeatImagePrompt(
+    map: BeatMap | null,
+    beatImage?: Record<string, BeatImageEntry>,
+    promptResolver?: (beatId: string) => string,
+): number {
+    return listMissingBeatImagePromptIds(map, beatImage, promptResolver).length;
+}
+
+/**
+ * Audio item tối thiểu để đếm "beat còn thiếu audio" — tránh import vòng từ
+ * agentVideoApi. Chỉ cần `status`.
+ */
+export type BeatAudioItemLike = { status?: string };
+
+/**
+ * Beat thiếu audio = có item trong beat_audio.items nhưng status != 'ready'.
+ * Beat chưa từng tạo audio (không có item) KHÔNG tính là thiếu.
+ */
+export function listBeatsWithPendingAudio(
+    items: Record<string, BeatAudioItemLike | undefined> | null | undefined,
+): string[] {
+    if (!items) {
+        return [];
+    }
+    return Object.entries(items)
+        .filter(([, item]) => String(item?.status || '').trim() !== 'ready')
+        .map(([beatId]) => beatId);
+}
+
+export function countBeatsWithPendingAudio(
+    items: Record<string, BeatAudioItemLike | undefined> | null | undefined,
+): number {
+    return listBeatsWithPendingAudio(items).length;
+}
+
 export function countBeatIdsWithHtml(beatHtml: Record<string, BeatHtmlEntry>): number {
     return listBeatIdsWithHtml(beatHtml).length;
 }

@@ -1143,6 +1143,7 @@ export default function ShortVideoAgentVideoWorkspace({
                     void state.handleFullAutoStepToggleChange(toggleKey, checked);
                 }}
                 whiteboardRenderProgress={state.whiteboardRenderProgress}
+                beatAudioProgress={state.beatAudioProgress}
                 geminiScriptStatus={state.geminiScriptStatus}
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
                 geminiDivisionStatus={state.geminiDivisionStatus}

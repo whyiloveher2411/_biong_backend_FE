@@ -31,6 +31,11 @@ import {
     whiteboardRenderProgressLabel,
     type WhiteboardRenderProgress,
 } from './agentVideoWhiteboardRenderProgress';
+import {
+    beatAudioProgressLabel,
+    beatAudioProgressSubtitle,
+    type BeatAudioProgress,
+} from './agentVideoBeatAudioProgress';
 import { useAgentHeadlessPreview } from './useAgentHeadlessPreview';
 
 type Props = {
@@ -53,6 +58,7 @@ type Props = {
     stepToggleDisabled?: boolean;
     onStepToggleChange: (toggleKey: FullAutoStepToggleKey, checked: boolean) => void;
     whiteboardRenderProgress?: WhiteboardRenderProgress | null;
+    beatAudioProgress?: BeatAudioProgress | null;
     geminiScriptStatus?: string;
     geminiScriptPhoneticStatus?: string;
     geminiDivisionStatus?: string;
@@ -169,6 +175,7 @@ export default function ShortVideoAgentHeadlessPreview({
     stepToggleDisabled = false,
     onStepToggleChange,
     whiteboardRenderProgress = null,
+    beatAudioProgress = null,
     geminiScriptStatus = 'none',
     geminiScriptPhoneticStatus = 'none',
     geminiDivisionStatus = 'none',
@@ -206,6 +213,12 @@ export default function ShortVideoAgentHeadlessPreview({
             || (pipelineRunning && wbPipelineStep)
         ),
     );
+    const showBeatAudioProgress = Boolean(
+        pipelineRunning && currentStep === 'beat_audio',
+    );
+    const beatAudioTitle = showBeatAudioProgress && beatAudioProgress
+        ? beatAudioProgressLabel(beatAudioProgress)
+        : '';
 
     const chatgptInChain = usesChatgptWebTts(selectedTtsPlatforms);
     const chatgptTtsActive = chatgptInChain && (
@@ -349,6 +362,7 @@ export default function ShortVideoAgentHeadlessPreview({
 
     const beatId = String(
         (showWhiteboardRenderProgress && whiteboardRenderProgress?.activeBeatId)
+        || (showBeatAudioProgress && beatAudioProgress?.activeBeatId)
         || preview.metadata?.beat_id
         || geminiFillProgress?.beatId
         || '',
@@ -368,15 +382,17 @@ export default function ShortVideoAgentHeadlessPreview({
     );
     const title = showWhiteboardRenderProgress && whiteboardRenderProgress?.active
         ? whiteboardRenderProgressLabel(whiteboardRenderProgress)
-        : (isImageFillStep
-            ? imageFillProgressLabel
-            : (pipelineRunning
-                ? stepLabel(currentStep, agentVisualMode)
-                : (isActiveJobStatus(geminiScriptPhoneticStatus)
-                    ? stepLabel('script_phonetic_normalize', agentVisualMode)
-                    : (chatgptTtsActive
-                        ? 'Duyệt / TTS (ChatGPT)'
-                        : (geminiJobActive ? 'Gemini headless' : resultLabel(status))))));
+        : (showBeatAudioProgress && beatAudioTitle
+            ? beatAudioTitle
+            : (isImageFillStep
+                ? imageFillProgressLabel
+                : (pipelineRunning
+                    ? stepLabel(currentStep, agentVisualMode)
+                    : (isActiveJobStatus(geminiScriptPhoneticStatus)
+                        ? stepLabel('script_phonetic_normalize', agentVisualMode)
+                        : (chatgptTtsActive
+                            ? 'Duyệt / TTS (ChatGPT)'
+                            : (geminiJobActive ? 'Gemini headless' : resultLabel(status)))))));
     const whiteboardSubtitle = showWhiteboardRenderProgress
         ? (
             (whiteboardRenderProgress
@@ -386,6 +402,18 @@ export default function ShortVideoAgentHeadlessPreview({
                 whiteboardRenderProgress && whiteboardRenderProgress.total > 0
                     ? `${whiteboardRenderProgress.completed}/${whiteboardRenderProgress.total} beat`
                     : 'Đang chuẩn bị render ảnh beat…'
+            )
+        )
+        : '';
+    const beatAudioSubtitle = showBeatAudioProgress
+        ? (
+            (beatAudioProgress
+                ? beatAudioProgressSubtitle(beatAudioProgress)
+                : '')
+            || (
+                beatAudioProgress && beatAudioProgress.total > 0
+                    ? `${beatAudioProgress.completed}/${beatAudioProgress.total} beat`
+                    : 'Đang chuẩn bị tạo audio từng beat…'
             )
         )
         : '';
@@ -511,14 +539,16 @@ export default function ShortVideoAgentHeadlessPreview({
                                     ? `Meta.ai · ${Number(geminiFillProgress?.current || 0)}/${Number(geminiFillProgress?.total || 0)}`
                                     : 'Meta.ai headless'
                             )
-                            : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
-                                isActiveJobStatus(geminiScriptPhoneticStatus)
-                                    ? pipelineProgressLabel('script_phonetic_normalize')
-                                    : (chatgptTtsActive
-                                        ? 'ChatGPT Web TTS'
-                                        : `Short video #${shortVideoId}`)
-                            ))}
-                        {!isImageFillStep && beatId ? ` · ${beatId}` : ''}
+                            : (showBeatAudioProgress && beatAudioSubtitle
+                                ? beatAudioSubtitle
+                                : (pipelineRunning ? pipelineProgressLabel(currentStep) : (
+                                    isActiveJobStatus(geminiScriptPhoneticStatus)
+                                        ? pipelineProgressLabel('script_phonetic_normalize')
+                                        : (chatgptTtsActive
+                                            ? 'ChatGPT Web TTS'
+                                            : `Short video #${shortVideoId}`)
+                                )))}
+                        {!isImageFillStep && !showBeatAudioProgress && beatId ? ` · ${beatId}` : ''}
                     </Typography>
                 </Box>
                 {browserStep && !minimized ? (
@@ -712,6 +742,43 @@ export default function ShortVideoAgentHeadlessPreview({
                                     size="small"
                                     color="error"
                                     label={`${whiteboardRenderProgress.failed.length} beat lỗi`}
+                                    sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+                                />
+                            ) : null}
+                        </Box>
+                    ) : showBeatAudioProgress ? (
+                        <Box sx={{ px: 3, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+                            {running ? <CircularProgress size={30} color="inherit" sx={{ mb: 1.5 }} /> : null}
+                            <Typography variant="body2" fontWeight={600}>
+                                {beatAudioProgress?.active
+                                    ? beatAudioProgressLabel(beatAudioProgress)
+                                    : stepLabel(currentStep, agentVisualMode)}
+                            </Typography>
+                            {beatAudioProgress && beatAudioProgress.total > 0 ? (
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={Math.max(0, Math.min(100, beatAudioProgress.percent))}
+                                    sx={{
+                                        mt: 1.5,
+                                        mb: 1,
+                                        height: 8,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255,255,255,0.12)',
+                                        '& .MuiLinearProgress-bar': { bgcolor: 'success.light' },
+                                    }}
+                                />
+                            ) : null}
+                            <Typography
+                                variant="caption"
+                                sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.72)' }}
+                            >
+                                {beatAudioSubtitle}
+                            </Typography>
+                            {beatAudioProgress && beatAudioProgress.failed.length > 0 ? (
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`${beatAudioProgress.failed.length} beat lỗi`}
                                     sx={{ mt: 1, height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
                                 />
                             ) : null}

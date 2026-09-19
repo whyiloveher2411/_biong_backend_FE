@@ -10,11 +10,16 @@
  *     "winner": { "title": "...", "why_strongest": "...", "psychological_triggers": ["..."], "audience_segment": "..." },
  *     "packaging": { "thumbnail_concepts": [...], "thumbnail_text_options": [...],
  *                    "best_combinations": [...], "title_refinements": [...] },
- *     "description": "...",
+ *     "description": "... Chapters:\n{{CHAPTERS}} ...",
+ *     "chapters": [{ "anchor_line": "...", "anchor_text": "...", "title": "..." }],
  *     "hashtags": ["#..."],
  *     "tags": ["..."],
  *     "seo_score": { "title": { "score": 88, "notes": ["..."] }, "description": { "score": 85, "notes": ["..."] } }
  *   }
+ *
+ * Chapters do chatbot trả về dạng NEO NỘI DUNG (không có M:SS) — mốc thời gian
+ * thật do BE resolve từ whisper/beat_map (`resolve-youtube-chapters`), FE ghép
+ * vào placeholder `{{CHAPTERS}}` trước khi hiển thị/copy.
  *
  * Vẫn hỗ trợ fallback markdown cũ (Audience Insight / Top Titles Ranked / Winner / Packaging Suggestions).
  */
@@ -77,6 +82,27 @@ export type YoutubeSeoScore = {
     notes: string[];
 };
 
+/**
+ * Chapter chatbot trả về — chỉ có NEO NỘI DUNG, không có mốc thời gian.
+ * Mốc thật (startSec/startLabel) do BE resolve từ whisper/beat_map.
+ */
+export type YoutubeChapterAnchor = {
+    /** Dòng script gốc nơi chapter bắt đầu (byte-for-byte). */
+    anchorLine: string;
+    /** Cụm text neo để dò trong whisper. */
+    anchorText: string;
+    /** Tiêu đề chapter. */
+    title: string;
+};
+
+export type YoutubeResolvedChapter = YoutubeChapterAnchor & {
+    startSec: number;
+    endSec: number | null;
+    /** Nhãn M:SS đã tính từ mốc thật. */
+    startLabel: string;
+    timingSource: string;
+};
+
 export type YoutubeTitleParseResult = {
     audienceInsight: YoutubeTitleSubScore[];
     items: YoutubeTitleItem[];
@@ -84,6 +110,8 @@ export type YoutubeTitleParseResult = {
     packaging: YoutubeTitlePackaging | null;
     /** Description hoàn chỉnh theo format mẫu của kênh (đã gồm hashtag). */
     description: string;
+    /** Neo chapter chatbot trả về (chưa có mốc thời gian). */
+    chapters: YoutubeChapterAnchor[];
     /** Nội dung comment đầu tiên (ghim) kênh sẽ đăng dưới video. */
     firstComment: string;
     hashtags: string[];
@@ -102,6 +130,7 @@ const EMPTY_RESULT: YoutubeTitleParseResult = {
     winner: null,
     packaging: null,
     description: '',
+    chapters: [],
     firstComment: '',
     hashtags: [],
     tags: [],
@@ -469,6 +498,28 @@ function normalizeJsonSeoEntry(value: unknown): YoutubeSeoScore | null {
     return { score, scoreLabel: score !== null ? `${score}/100` : '', notes };
 }
 
+function normalizeJsonChapters(value: unknown): YoutubeChapterAnchor[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const chapters: YoutubeChapterAnchor[] = [];
+    value.forEach((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return;
+        }
+        const obj = entry as Record<string, unknown>;
+        const title = pickString(obj.title);
+        const anchorLine = pickString(obj.anchor_line ?? obj.anchorLine);
+        const anchorText = pickString(obj.anchor_text ?? obj.anchorText);
+        if (!title || (!anchorLine && !anchorText)) {
+            return;
+        }
+        chapters.push({ title, anchorLine, anchorText });
+    });
+
+    return chapters;
+}
+
 function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return null;
@@ -480,6 +531,7 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
     const winner = normalizeJsonWinner(obj.winner);
     const packaging = normalizeJsonPackaging(obj.packaging);
     const description = pickString(obj.description);
+    const chapters = normalizeJsonChapters(obj.chapters);
     const firstComment = pickString(obj.first_comment ?? obj.firstComment);
     const hashtags = normalizeStringArray(obj.hashtags);
     const tags = normalizeStringArray(obj.tags);
@@ -494,6 +546,7 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
         || Boolean(winner)
         || Boolean(packaging)
         || Boolean(description)
+        || chapters.length > 0
         || Boolean(firstComment)
         || hashtags.length > 0
         || tags.length > 0
@@ -504,7 +557,7 @@ function normalizeJsonResult(data: unknown): YoutubeTitleParseResult | null {
         return null;
     }
 
-    return { audienceInsight, items, winner, packaging, description, firstComment, hashtags, tags, seo };
+    return { audienceInsight, items, winner, packaging, description, chapters, firstComment, hashtags, tags, seo };
 }
 
 /* ────────────────────────── Markdown fallback ────────────────────────── */
