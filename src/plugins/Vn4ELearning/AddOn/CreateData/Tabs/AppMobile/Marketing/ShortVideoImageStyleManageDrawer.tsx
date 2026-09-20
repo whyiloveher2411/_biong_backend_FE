@@ -616,14 +616,9 @@ export default function ShortVideoImageStyleManageDrawer({
                                                 disabled={selectingStyleId !== null}
                                                 inputProps={{ 'aria-label': `Chọn phong cách ${style.title}` }}
                                             />
-                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                                                 {style.title || '(Không tên)'}
                                             </Typography>
-                                            {selected ? (
-                                                <Typography variant="caption" color="primary" sx={{ flexShrink: 0 }}>
-                                                    Đang dùng
-                                                </Typography>
-                                            ) : null}
                                         </Stack>
                                         {style.description ? (
                                             <Typography
