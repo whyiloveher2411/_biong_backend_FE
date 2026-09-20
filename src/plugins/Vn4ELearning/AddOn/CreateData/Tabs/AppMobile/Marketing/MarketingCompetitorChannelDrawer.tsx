@@ -12,6 +12,8 @@ import {
     Menu,
     MenuItem,
     Stack,
+    Tab,
+    Tabs,
     TextField,
     Tooltip,
     Typography,
@@ -32,6 +34,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import useAjax from 'hook/useApi';
+import MarketingCompetitorKeywordPanel from './MarketingCompetitorKeywordPanel';
 
 type CompetitorChannel = {
     id: number;
@@ -214,6 +217,8 @@ function formatCrawlDate(value: string | null | undefined): string {
  */
 function formatVideoCopyLine(video: CompetitorVideo): string {
     const view = Number(video.view_count || 0).toLocaleString('vi-VN');
+    const like = Number(video.like_count || 0).toLocaleString('vi-VN');
+    const comment = Number(video.comment_count || 0).toLocaleString('vi-VN');
     let date = video.publish_date || '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         const [y, m, d] = date.split('-');
@@ -221,7 +226,7 @@ function formatVideoCopyLine(video: CompetitorVideo): string {
     } else {
         date = video.published_at || '';
     }
-    return `${video.title} - View ${view} - ngày đăng ${date}`;
+    return `${video.title} - View ${view} - Like ${like} - Comment ${comment} - ngày đăng ${date}`;
 }
 
 function StatItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }): JSX.Element {
@@ -312,6 +317,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
     apiAjaxRef.current = api.ajax;
 
     const [view, setView] = React.useState<'list' | 'detail'>('list');
+    const [tab, setTab] = React.useState<'channel' | 'keyword'>('channel');
     const [channels, setChannels] = React.useState<CompetitorChannel[]>([]);
     const [loadingChannels, setLoadingChannels] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -338,6 +344,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
     React.useEffect(() => {
         if (!open) {
             setView('list');
+            setTab('channel');
             setChannels([]);
             setError(null);
             setInfo(null);
@@ -1350,6 +1357,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                                             video.published_at || video.publish_date || '—',
                                             `${formatViews(video.view_count)} view`,
                                             (video.like_count || 0) > 0 ? `${formatViews(video.like_count)} like` : '',
+                                            (video.comment_count || 0) > 0 ? `${formatViews(video.comment_count)} comment` : '',
                                         ].filter(Boolean).join(' · ')}
                                     </Typography>
                                     {videoTags.length > 0 && (
@@ -1461,18 +1469,34 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             }}
         >
             <Stack spacing={2} sx={{ pt: 2.5, pb: 1 }}>
-                {error && (
-                    <Alert severity="error" onClose={() => setError(null)}>
-                        {error}
-                    </Alert>
-                )}
-                {info && !error && (
-                    <Alert severity="success" onClose={() => setInfo(null)}>
-                        {info}
-                    </Alert>
-                )}
+                <Tabs
+                    value={tab}
+                    onChange={(_, value: 'channel' | 'keyword') => setTab(value)}
+                    variant="fullWidth"
+                    sx={{ minHeight: 40, borderBottom: '1px solid', borderColor: 'divider' }}
+                >
+                    <Tab value="channel" label="Kênh đối thủ" sx={{ textTransform: 'none', minHeight: 40 }} />
+                    <Tab value="keyword" label="Tìm theo keyword" sx={{ textTransform: 'none', minHeight: 40 }} />
+                </Tabs>
 
-                {view === 'list' ? renderList() : renderDetail()}
+                {tab === 'channel' ? (
+                    <>
+                        {error && (
+                            <Alert severity="error" onClose={() => setError(null)}>
+                                {error}
+                            </Alert>
+                        )}
+                        {info && !error && (
+                            <Alert severity="success" onClose={() => setInfo(null)}>
+                                {info}
+                            </Alert>
+                        )}
+
+                        {view === 'list' ? renderList() : renderDetail()}
+                    </>
+                ) : (
+                    <MarketingCompetitorKeywordPanel onChannelAdded={() => loadChannels({ silent: true })} />
+                )}
             </Stack>
         </DrawerCustom>
     );
