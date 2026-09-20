@@ -994,7 +994,7 @@ export default function ShortVideoAgentWorkflowPanel({ state }: Props) {
                                             <TextField
                                                 size="small"
                                                 type="number"
-                                                value={String(state.agentWhiteboardConfig?.beats_per_job ?? 1)}
+                                                value={String(state.agentWhiteboardConfig?.beats_per_job ?? 3)}
                                                 disabled={state.savingWhiteboardConfig}
                                                 onChange={(e) => {
                                                     const num = Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 1));

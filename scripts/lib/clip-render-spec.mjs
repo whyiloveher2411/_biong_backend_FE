@@ -140,6 +140,27 @@ export function loadRenderSpecFromProject(projectDir) {
       /* fall through */
     }
   }
+  // Whiteboard mux chỉ ghi assets/clip-aspect.json (không ghi clip-render-spec.json
+  // / meta.json). Đọc nó để captions.html đúng tỉ lệ clip — nếu không sẽ fallback
+  // 9:16, caption nằm ngoài khung khi clip 16:9.
+  const aspectPath = path.join(projectDir, "assets/clip-aspect.json");
+  if (fs.existsSync(aspectPath)) {
+    try {
+      const parsedAspect = JSON.parse(fs.readFileSync(aspectPath, "utf8"));
+      const aspect = parsedAspect?.aspect_ratio;
+      const width = Number(parsedAspect?.width);
+      const height = Number(parsedAspect?.height);
+      if (aspect === "16:9" || aspect === "9:16") {
+        const base = getClipRenderSpec(aspect);
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+          return { ...base, width, height };
+        }
+        return base;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
   return getClipRenderSpec("9:16");
 }
 

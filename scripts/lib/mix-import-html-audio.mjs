@@ -45,6 +45,52 @@ function probeMediaDurationSec(filePath) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+/** Duration của riêng video/audio stream (container có thể lệch timestamp). */
+function probeStreamDurationSec(filePath, kind) {
+  const stream = kind === "a" ? "a:0" : "v:0";
+  const result = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      stream,
+      "-show_entries",
+      "stream=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status === 0) {
+    const value = Number(String(result.stdout || "").trim());
+    if (Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+  return probeMediaDurationSec(filePath);
+}
+
+function probeHasAudioStream(filePath) {
+  const result = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_entries",
+      "stream=index",
+      "-of",
+      "csv=p=0",
+      filePath,
+    ],
+    { encoding: "utf8" },
+  );
+  return result.status === 0 && String(result.stdout || "").trim() !== "";
+}
+
 function loadBeatMap(projectDir) {
   const beatMapPath = path.join(projectDir, "assets/beat-map.json");
   if (!fs.existsSync(beatMapPath)) {
@@ -61,33 +107,49 @@ export function mixImportHtmlAudio({
   videoPath,
   outputPath,
   sfxHook = false,
+  skipNarration = false,
 }) {
   const beatMap = loadBeatMap(projectDir);
-  const totalVideoSec = Number(beatMap.totalVideoSec || 0);
+  const videoStreamDur = probeStreamDurationSec(videoPath, "v");
+  const totalVideoSec = videoStreamDur > 0
+    ? videoStreamDur
+    : Number(beatMap.totalVideoSec || 0);
   if (!(totalVideoSec > 0)) {
     throw new Error("beat-map totalVideoSec invalid");
   }
 
   const narration = path.join(projectDir, "assets/audio/narration.mp3");
-  if (!fs.existsSync(narration)) {
+  const useNarration = !skipNarration;
+  if (useNarration && !fs.existsSync(narration)) {
     throw new Error("Thiếu assets/audio/narration.mp3");
   }
 
-  const inputs = ["-y", "-i", videoPath, "-i", narration];
+  const inputs = ["-y", "-i", videoPath];
   /** @type {string[]} */
   const filterParts = [];
   /** @type {string[]} */
   const mixLabels = [];
 
-  // [0]=video, [1]=narration
-  // Mono→stereo bằng pan (duplicate), KHÔNG dùng aformat channel_layouts=stereo
-  // (pan-law ~-3dB triệt tiêu volume×1.4).
-  filterParts.push(
-    `[1:a]aformat=sample_rates=44100,pan=stereo|c0=c0|c1=c0,volume=${NARRATION_VOLUME}[narr]`,
-  );
-  mixLabels.push("[narr]");
+  let inputIndex = 1;
 
-  let inputIndex = 2;
+  // [0]=video. Beat-audio (concat_beats): audio đã nhúng sẵn trong từng beat →
+  // KHÔNG mix narration full nữa (nếu không sẽ chồng tiếng + lệch thời lượng).
+  if (useNarration) {
+    inputs.push("-i", narration);
+    // Mono→stereo bằng pan (duplicate), KHÔNG dùng aformat channel_layouts=stereo
+    // (pan-law ~-3dB triệt tiêu volume×1.4).
+    filterParts.push(
+      `[1:a]aformat=sample_rates=44100,pan=stereo|c0=c0|c1=c0,volume=${NARRATION_VOLUME}[narr]`,
+    );
+    mixLabels.push("[narr]");
+    inputIndex = 2;
+  } else if (probeHasAudioStream(videoPath)) {
+    // Concat-beats: giữ tiếng voice đã nhúng trong beat video, chỉ trộn thêm BGM/SFX.
+    filterParts.push(
+      `[0:a]aformat=sample_rates=44100,pan=stereo|c0=c0|c1=c0[voice]`,
+    );
+    mixLabels.push("[voice]");
+  }
 
   // BGM chain
   let bgmScheduled = [];
@@ -155,15 +217,39 @@ export function mixImportHtmlAudio({
     }
   }
 
-  const n = mixLabels.length;
-  filterParts.push(
-    `${mixLabels.join("")}amix=inputs=${n}:duration=longest:dropout_transition=0:normalize=0[aout]`,
-  );
+  if (mixLabels.length === 0) {
+    runFfmpeg([
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      videoPath,
+      "-c",
+      "copy",
+      "-movflags",
+      "+faststart",
+      outputPath,
+    ]);
+    return { finalMp4: outputPath };
+  }
 
-  const videoDur = probeMediaDurationSec(videoPath);
-  const narrDur = probeMediaDurationSec(narration);
-  const outputDur = Math.max(videoDur, narrDur, totalVideoSec);
-  const padSec = Math.max(0, outputDur - videoDur);
+  const n = mixLabels.length;
+  if (n === 1) {
+    // Chỉ 1 nguồn (vd concat-beats không BGM/SFX) → không cần amix.
+    filterParts.push(`${mixLabels[0]}anull[aout]`);
+  } else {
+    filterParts.push(
+      `${mixLabels.join("")}amix=inputs=${n}:duration=longest:dropout_transition=0:normalize=0[aout]`,
+    );
+  }
+
+  const videoDur = videoStreamDur > 0 ? videoStreamDur : probeMediaDurationSec(videoPath);
+  const narrDur = useNarration ? probeMediaDurationSec(narration) : 0;
+  // Video là nguồn thời lượng thật. Concat-beats: không pad theo audio (audio đã
+  // nằm trong beat video) → tránh đệm clone sai làm video "dài ma".
+  const outputDur = Math.max(videoDur, useNarration ? narrDur : 0, totalVideoSec);
+  const padSec = useNarration ? Math.max(0, outputDur - videoDur) : 0;
   const videoMap = padSec > 0.01 ? "[vout]" : "0:v:0";
   if (padSec > 0.01) {
     filterParts.unshift(

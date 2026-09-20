@@ -5,6 +5,8 @@ import fs from "fs";
 import path from "path";
 
 export const CANONICAL_TRANSCRIPT_REL = "transcript.json";
+/** Transcript đã rebase sang timeline concat-beats (video 2s + audio từng beat). */
+export const REBASED_TRANSCRIPT_REL = "transcript-rebased.json";
 export const TRANSCRIBE_MANIFEST_REL = "assets/transcribe-manifest.json";
 
 export const LEGACY_TRANSCRIPT_CANDIDATES = [
@@ -43,6 +45,21 @@ export function readTranscribeManifest(projectDir) {
 export function resolveTranscriptPath(projectDir) {
   const manifest = readTranscribeManifest(projectDir);
   const canonical = canonicalTranscriptPath(projectDir);
+
+  // Concat-beats (video 2s + audio từng beat): mux ghi transcript-rebased.json
+  // theo timeline video ghép. Ưu tiên để caption/karaoke khớp đúng video final.
+  const rebased = path.join(projectDir, REBASED_TRANSCRIPT_REL);
+  if (fs.existsSync(rebased)) {
+    try {
+      const rebasedMtime = fs.statSync(rebased).mtimeMs;
+      const canonicalMtime = fs.existsSync(canonical) ? fs.statSync(canonical).mtimeMs : 0;
+      if (rebasedMtime >= canonicalMtime) {
+        return rebased;
+      }
+    } catch {
+      return rebased;
+    }
+  }
 
   if (manifest) {
     if (fs.existsSync(canonical)) return canonical;
