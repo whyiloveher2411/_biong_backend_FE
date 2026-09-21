@@ -2149,7 +2149,10 @@ export type FullAutoPipelineSummary = {
     qa_loops?: Record<string, FullAutoPipelineScriptQaLoop>;
 };
 
-/** Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles (mặc định true). */
+/**
+ * Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles.
+ * Mặc định bật, riêng bgm (audio background) mặc định TẮT — không ghép audio nền vào video.
+ */
 export type FullAutoStepToggleKey =
     | 'script_improve'
     | 'script_phonetic_normalize'
@@ -2162,7 +2165,7 @@ export type FullAutoStepToggles = Record<FullAutoStepToggleKey, boolean>;
 export const DEFAULT_FULL_AUTO_STEP_TOGGLES: FullAutoStepToggles = {
     script_improve: true,
     script_phonetic_normalize: true,
-    bgm: true,
+    bgm: false,
     render: true,
     thumbnail: true,
 };
@@ -2173,7 +2176,7 @@ export function normalizeFullAutoStepToggles(
     return {
         script_improve: raw?.script_improve !== false,
         script_phonetic_normalize: raw?.script_phonetic_normalize !== false,
-        bgm: raw?.bgm !== false,
+        bgm: raw?.bgm === true,
         render: raw?.render !== false,
         thumbnail: raw?.thumbnail !== false,
     };

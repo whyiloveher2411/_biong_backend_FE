@@ -108,6 +108,7 @@ export function mixImportHtmlAudio({
   outputPath,
   sfxHook = false,
   skipNarration = false,
+  bgm = true,
 }) {
   const beatMap = loadBeatMap(projectDir);
   const videoStreamDur = probeStreamDurationSec(videoPath, "v");
@@ -153,14 +154,19 @@ export function mixImportHtmlAudio({
 
   // BGM chain
   let bgmScheduled = [];
-  try {
-    const manifest = loadOrBuildManifest(projectDir, { totalVideoSec });
-    const chain = buildScheduledChain(manifest);
-    bgmScheduled = chain.scheduled || [];
-  } catch (err) {
-    console.warn(
-      `[mix-audio] BGM skip: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  // bgm=false (toggle audio background tắt): không đọc/khôi phục manifest cũ.
+  if (bgm) {
+    try {
+      const manifest = loadOrBuildManifest(projectDir, { totalVideoSec });
+      const chain = buildScheduledChain(manifest);
+      bgmScheduled = chain.scheduled || [];
+    } catch (err) {
+      console.warn(
+        `[mix-audio] BGM skip: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  } else {
+    console.log("[mix-audio] BGM tắt — bỏ qua audio background");
   }
 
   const crossfadeSec = 0.5;

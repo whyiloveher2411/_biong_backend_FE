@@ -14,6 +14,7 @@ import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
 import LiveTvOutlinedIcon from '@mui/icons-material/LiveTvOutlined';
+import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { Box, Button, Chip, CircularProgress, IconButton, LinearProgress, Menu, Tooltip, Typography } from '@mui/material';
@@ -44,8 +45,10 @@ import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
 import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
 import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
 import ShortVideoImageStyleManageDrawer from '../ShortVideoImageStyleManageDrawer';
+import ShortVideoScriptStyleManageDrawer from '../ShortVideoScriptStyleManageDrawer';
 import ShortVideoChannelManageDrawer from '../ShortVideoChannelManageDrawer';
 import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImageStyleApi';
+import { fetchShortVideoAgentScriptStyle } from 'helpers/marketingShortVideoScriptStyleApi';
 import { fetchShortVideoAgentChannel } from 'helpers/marketingShortVideoChannelApi';
 import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
 
@@ -84,6 +87,9 @@ const TIMELINE_SCALE_SPLIT_COUNT = 5;
 const TIMELINE_START_LEFT = 20;
 const CURSOR_HEAD_OVERFLOW = 10;
 const HORIZONTAL_SCROLLBAR_HEIGHT = 12;
+
+/** Nội dung thay [script-style] khi video chưa chọn phong cách script. */
+const SCRIPT_STYLE_DEFAULT_GUIDE = 'Không có phong cách riêng — giữ giọng tự nhiên, cuốn hút.';
 
 async function fallbackManualBeatDivisionSave(): Promise<boolean> {
     return false;
@@ -197,6 +203,84 @@ function AgentVideoSimpleClip({ clipLabel }: AgentVideoSimpleClipProps) {
                 {truncateLabel(clipLabel)}
             </Typography>
         </Box>
+    );
+}
+
+type AgentVideoSettingButtonProps = {
+    icon: React.ReactNode;
+    color: 'primary' | 'info' | 'error' | 'inherit' | 'warning';
+    /** Tên cài đặt (VD "Kênh", "Phong cách hình ảnh"). */
+    label: string;
+    /** Giá trị đang cài — rỗng = chưa chọn. */
+    value: string;
+    onClick: () => void;
+    disabled?: boolean;
+};
+
+/** Button cài đặt gọn 2 dòng: tên cài đặt + giá trị đang chọn (truncate + tooltip). */
+function AgentVideoSettingButton({
+    icon,
+    color,
+    label,
+    value,
+    onClick,
+    disabled = false,
+}: AgentVideoSettingButtonProps) {
+    const text = String(value || '').trim();
+    const hasValue = text.length > 0;
+    return (
+        <Tooltip title={hasValue ? `${label}: ${text}` : `${label}: chưa cài đặt`} placement="top">
+            <span>
+                <Button
+                    size="small"
+                    variant="contained"
+                    color={color}
+                    startIcon={icon}
+                    disabled={disabled}
+                    onClick={onClick}
+                    sx={{
+                        textTransform: 'none',
+                        fontSize: 12,
+                        py: 0.25,
+                        px: 1,
+                        minWidth: 0,
+                        maxWidth: 180,
+                        justifyContent: 'flex-start',
+                        '& .MuiButton-startIcon': { mr: 0.5, ml: 0 },
+                    }}
+                >
+                    <Box
+                        component="span"
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            minWidth: 0,
+                            lineHeight: 1.15,
+                        }}
+                    >
+                        <Box component="span" sx={{ fontSize: 10, opacity: 0.85, whiteSpace: 'nowrap' }}>
+                            {label}
+                        </Box>
+                        <Box
+                            component="span"
+                            sx={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                maxWidth: 150,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontStyle: hasValue ? 'normal' : 'italic',
+                                opacity: hasValue ? 1 : 0.75,
+                            }}
+                        >
+                            {hasValue ? text : 'Chưa cài đặt'}
+                        </Box>
+                    </Box>
+                </Button>
+            </span>
+        </Tooltip>
     );
 }
 
@@ -442,9 +526,14 @@ export default function ShortVideoAgentVideoTimeline({
     const [cookieDrawerOpen, setCookieDrawerOpen] = React.useState(false);
     const [imageStyleDrawerOpen, setImageStyleDrawerOpen] = React.useState(false);
     const [imageStyleId, setImageStyleId] = React.useState(0);
+    const [imageStyleTitle, setImageStyleTitle] = React.useState('');
     const [imageStylePrompt, setImageStylePrompt] = React.useState('');
+    const [scriptStyleDrawerOpen, setScriptStyleDrawerOpen] = React.useState(false);
+    const [scriptStyleTitle, setScriptStyleTitle] = React.useState('');
+    const [scriptStylePrompt, setScriptStylePrompt] = React.useState('');
     const [channelDrawerOpen, setChannelDrawerOpen] = React.useState(false);
     const [channelId, setChannelId] = React.useState(0);
+    const [channelTitle, setChannelTitle] = React.useState('');
     const [timelineScaleWidth, setTimelineScaleWidth] = usePersistedTimelineScaleWidth(
         SHORT_VIDEO_AGENT_TIMELINE_ZOOM_STORAGE_KEY,
     );
@@ -475,6 +564,7 @@ export default function ShortVideoAgentVideoTimeline({
         let cancelled = false;
         if (!shortVideoId || shortVideoId <= 0) {
             setImageStyleId(0);
+            setImageStyleTitle('');
             setImageStylePrompt('');
             return;
         }
@@ -484,11 +574,13 @@ export default function ShortVideoAgentVideoTimeline({
                     return;
                 }
                 setImageStyleId(result?.styleId || 0);
+                setImageStyleTitle(result?.title || '');
                 setImageStylePrompt(result?.prompt || '');
             })
             .catch(() => {
                 if (!cancelled) {
                     setImageStyleId(0);
+                    setImageStyleTitle('');
                     setImageStylePrompt('');
                 }
             });
@@ -497,11 +589,38 @@ export default function ShortVideoAgentVideoTimeline({
         };
     }, [shortVideoId]);
 
+    // Phong cách script của video (thay [script-style] khi copy prompt workflow).
+    React.useEffect(() => {
+        let cancelled = false;
+        if (!shortVideoId || shortVideoId <= 0) {
+            setScriptStyleTitle('');
+            setScriptStylePrompt('');
+            return;
+        }
+        fetchShortVideoAgentScriptStyle(shortVideoId)
+            .then((result) => {
+                if (!cancelled) {
+                    setScriptStyleTitle(result?.title || '');
+                    setScriptStylePrompt(result?.guide || '');
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setScriptStyleTitle('');
+                    setScriptStylePrompt('');
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [shortVideoId, agentState?.agentAudioScriptStyleId]);
+
     // Kênh của video (lưu thông tin kênh cho video).
     React.useEffect(() => {
         let cancelled = false;
         if (!shortVideoId || shortVideoId <= 0) {
             setChannelId(0);
+            setChannelTitle('');
             return;
         }
         fetchShortVideoAgentChannel(shortVideoId)
@@ -510,10 +629,12 @@ export default function ShortVideoAgentVideoTimeline({
                     return;
                 }
                 setChannelId(result?.channelId || 0);
+                setChannelTitle(result?.channel?.title || '');
             })
             .catch(() => {
                 if (!cancelled) {
                     setChannelId(0);
+                    setChannelTitle('');
                 }
             });
         return () => {
@@ -1177,6 +1298,7 @@ export default function ShortVideoAgentVideoTimeline({
                 <MarketingWorkflowButtons
                     promptContext={{
                         topic: promptTopic,
+                        'script-style': scriptStylePrompt.trim() || SCRIPT_STYLE_DEFAULT_GUIDE,
                         ...(imageStylePrompt.trim()
                             ? { 'prompt-style': imageStylePrompt.trim() }
                             : {}),
@@ -1309,41 +1431,46 @@ export default function ShortVideoAgentVideoTimeline({
                         ) : null}
                         <Button
                             size="small"
-                            variant="outlined"
+                            variant="contained"
+                            color="primary"
                             startIcon={<CollectionsOutlinedIcon />}
                             disabled={shortVideoId <= 0}
                             onClick={() => { setResourceDrawerOpen(true); }}
                             sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                         >
-                            Quản lý resource
+                            Resource
                         </Button>
                         <Button
                             size="small"
-                            variant="outlined"
+                            variant="contained"
+                            color="info"
                             startIcon={<VpnKeyOutlinedIcon />}
                             onClick={() => { setCookieDrawerOpen(true); }}
                             sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
                         >
                             Quản lý cookie
                         </Button>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<PaletteOutlinedIcon />}
+                        <AgentVideoSettingButton
+                            icon={<PaletteOutlinedIcon fontSize="small" />}
+                            color="error"
+                            label="Phong cách hình ảnh"
+                            value={imageStyleTitle}
                             onClick={() => { setImageStyleDrawerOpen(true); }}
-                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                        >
-                            Quản lý phong cách hình ảnh
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<LiveTvOutlinedIcon />}
+                        />
+                        <AgentVideoSettingButton
+                            icon={<RecordVoiceOverOutlinedIcon fontSize="small" />}
+                            color="inherit"
+                            label="Phong cách script"
+                            value={scriptStyleTitle}
+                            onClick={() => { setScriptStyleDrawerOpen(true); }}
+                        />
+                        <AgentVideoSettingButton
+                            icon={<LiveTvOutlinedIcon fontSize="small" />}
+                            color="warning"
+                            label="Kênh"
+                            value={channelTitle}
                             onClick={() => { setChannelDrawerOpen(true); }}
-                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                        >
-                            Quản lý kênh
-                        </Button>
+                        />
                         {showPipelineRunControls ? (
                             <>
                                 <LoadingButton
@@ -1794,12 +1921,31 @@ export default function ShortVideoAgentVideoTimeline({
                 onStyleChange={(styleId) => {
                     setImageStyleId(styleId);
                     if (styleId <= 0) {
+                        setImageStyleTitle('');
                         setImageStylePrompt('');
                         return;
                     }
                     fetchShortVideoAgentImageStyle(shortVideoId)
-                        .then((result) => setImageStylePrompt(result?.prompt || ''))
-                        .catch(() => setImageStylePrompt(''));
+                        .then((result) => {
+                            setImageStyleTitle(result?.title || '');
+                            setImageStylePrompt(result?.prompt || '');
+                        })
+                        .catch(() => {
+                            setImageStyleTitle('');
+                            setImageStylePrompt('');
+                        });
+                }}
+            />
+            <ShortVideoScriptStyleManageDrawer
+                open={scriptStyleDrawerOpen}
+                onClose={() => setScriptStyleDrawerOpen(false)}
+                shortVideoId={shortVideoId}
+                currentStyleId={agentState?.agentAudioScriptStyleId ?? 0}
+                onStyleChange={async (styleId) => {
+                    await agentState?.handleAgentAudioScriptStyleChange(styleId);
+                    const result = await fetchShortVideoAgentScriptStyle(shortVideoId);
+                    setScriptStyleTitle(result?.title || '');
+                    setScriptStylePrompt(result?.guide || '');
                 }}
             />
             <ShortVideoChannelManageDrawer
@@ -1809,6 +1955,13 @@ export default function ShortVideoAgentVideoTimeline({
                 currentChannelId={channelId}
                 onChannelChange={(nextChannelId) => {
                     setChannelId(nextChannelId);
+                    if (nextChannelId <= 0) {
+                        setChannelTitle('');
+                        return;
+                    }
+                    fetchShortVideoAgentChannel(shortVideoId)
+                        .then((result) => setChannelTitle(result?.channel?.title || ''))
+                        .catch(() => setChannelTitle(''));
                 }}
             />
         </Box>

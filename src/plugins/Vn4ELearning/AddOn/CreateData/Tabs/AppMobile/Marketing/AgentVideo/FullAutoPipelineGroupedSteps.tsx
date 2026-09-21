@@ -51,6 +51,18 @@ function resolvePipelineGroupToggleKey(groupKey: string): FullAutoStepToggleKey 
     }
     return null;
 }
+
+/** bgm (audio background) mặc định tắt; các toggle khác mặc định bật khi thiếu giá trị. */
+function resolveStepToggleChecked(
+    toggles: FullAutoStepToggles | undefined,
+    key: FullAutoStepToggleKey,
+): boolean {
+    const value = toggles?.[key];
+    if (key === 'bgm') {
+        return value === true;
+    }
+    return value !== false;
+}
 import { PipelineBeatImageFillModeToggle } from './PipelineBeatImageFillModeToggle';
 import { PipelineBeatAudioOnlyMissingToggle } from './PipelineBeatAudioOnlyMissingToggle';
 import {
@@ -759,7 +771,7 @@ export function PipelineGroupedMenuItems({
                                 return groupToggleKey ? (
                                     <PipelineStepToggleCheckbox
                                         toggleKey={groupToggleKey}
-                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        checked={resolveStepToggleChecked(stepToggles, groupToggleKey)}
                                         disabled={stepToggleDisabled}
                                         onChange={onStepToggleChange}
                                         size="section"
@@ -974,7 +986,7 @@ export function PipelineGroupedStepList({
                                 return groupToggleKey ? (
                                     <PipelineStepToggleCheckbox
                                         toggleKey={groupToggleKey}
-                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        checked={resolveStepToggleChecked(stepToggles, groupToggleKey)}
                                         disabled={stepToggleDisabled}
                                         onChange={onStepToggleChange}
                                         size="section"
@@ -1345,7 +1357,7 @@ export function PipelineGroupedWorkflowListV3({
                                 return groupToggleKey ? (
                                     <PipelineStepToggleCheckbox
                                         toggleKey={groupToggleKey}
-                                        checked={stepToggles?.[groupToggleKey] !== false}
+                                        checked={resolveStepToggleChecked(stepToggles, groupToggleKey)}
                                         disabled={stepToggleDisabled}
                                         onChange={onStepToggleChange}
                                         size="section"

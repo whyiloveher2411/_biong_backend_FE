@@ -592,6 +592,24 @@ async function main() {
       log(
         `BGM chain: ${bgmSegments.length} segment(s) (${bgmTotalSec.toFixed(1)}s / ${totalVideoSec.toFixed(1)}s${bgmInsufficient ? " — sẽ lặp lại audio nền" : ""})`,
       );
+    } else {
+      // Toggle audio background tắt (bgm_segments rỗng): xoá manifest + file BGM
+      // của lần render trước để mixer không tự dựng lại chain từ file còn sót.
+      const staleManifest = path.join(projectDir, "assets/bgm-chain.json");
+      if (fs.existsSync(staleManifest)) {
+        fs.unlinkSync(staleManifest);
+      }
+      const staleAudioDir = path.join(projectDir, "assets/audio");
+      let removedBgmFiles = 0;
+      if (fs.existsSync(staleAudioDir)) {
+        for (const name of fs.readdirSync(staleAudioDir)) {
+          if (/^bgm(_\d+)?\.mp3$/i.test(name) || /^bgm\.mp3$/i.test(name)) {
+            fs.unlinkSync(path.join(staleAudioDir, name));
+            removedBgmFiles += 1;
+          }
+        }
+      }
+      log(`BGM tắt — đã xoá manifest + ${removedBgmFiles} file BGM cũ`);
     }
 
     copySharedAssets(projectDir);
