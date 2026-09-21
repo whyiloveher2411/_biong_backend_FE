@@ -198,6 +198,25 @@ export async function refineYoutubeThumbnailImage(
     }) as Promise<RefineYoutubeThumbnailImageResponse>;
 }
 
+export type SyncLatestYoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
+    job_id?: number;
+    rank?: number;
+};
+
+/**
+ * Lấy HÌNH MỚI NHẤT từ chat Meta.ai cũ của thumbnail: tạo job nền mở lại chat
+ * (không gửi message) để pull ảnh cuối cùng. Dùng khi user đã feedback trực tiếp
+ * với chatbot ngoài CMS.
+ */
+export async function syncLatestYoutubeThumbnailImage(
+    shortVideoId: number,
+    rank: number,
+): Promise<SyncLatestYoutubeThumbnailImageResponse> {
+    return postShortVideoPrompt('short-video/sync-latest-youtube-thumbnail-image', shortVideoId, {
+        rank,
+    }) as Promise<SyncLatestYoutubeThumbnailImageResponse>;
+}
+
 export async function fetchShortVideoAgentPrompt(
     shortVideoId: number,
     phase: ShortVideoAgentPromptPhase,

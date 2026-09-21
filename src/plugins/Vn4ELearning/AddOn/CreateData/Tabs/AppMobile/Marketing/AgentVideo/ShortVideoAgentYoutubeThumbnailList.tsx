@@ -25,6 +25,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import LoadingButton from 'components/atoms/LoadingButton';
 import { writePromptTextToClipboard } from 'helpers/marketingShortVideoAgentPrompt';
 import { translateYoutubeLabel } from 'helpers/shortVideoYoutubeLabelVi';
@@ -52,6 +53,8 @@ type Props = {
     onOpenChat: (rank: number) => void;
     onSubmitFeedback: (rank: number, feedback: string) => Promise<boolean>;
     onGenerateImage: (rank: number, prompt: string) => void;
+    /** Lấy hình mới nhất từ chat chatbot cho 1 concept (chạy nền headless). */
+    onSyncLatest: (rank: number) => void;
 };
 
 /** Chuẩn hóa điểm về thang 100 để tô màu (viral_score là /100). */
@@ -196,6 +199,7 @@ function ThumbnailTile({
     onOpenDetail,
     onOpenChat,
     onOpenFeedback,
+    onSyncLatest,
 }: {
     concept: YoutubeThumbnailConcept;
     imageUrl: string;
@@ -207,6 +211,7 @@ function ThumbnailTile({
     onOpenDetail: () => void;
     onOpenChat: () => void;
     onOpenFeedback: () => void;
+    onSyncLatest: (rank: number) => void;
 }) {
     return (
         <Box
@@ -329,7 +334,6 @@ function ThumbnailTile({
             {/* Mở chatbot + để lại feedback (khi ảnh đã có url chatbot) */}
             {imageUrl && chatUrl && !loading ? (
                 <Stack
-                    direction="row"
                     spacing={0.5}
                     sx={{
                         position: 'absolute',
@@ -340,40 +344,60 @@ function ThumbnailTile({
                         bgcolor: 'rgba(0,0,0,0.35)',
                     }}
                 >
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<OpenInNewIcon sx={{ fontSize: 13 }} />}
-                        onClick={onOpenChat}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: 10,
-                            py: 0.1,
-                            color: '#fff',
-                            borderColor: 'rgba(255,255,255,0.5)',
-                        }}
-                    >
-                        Chat
-                    </Button>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<RateReviewIcon sx={{ fontSize: 13 }} />}
-                        onClick={onOpenFeedback}
-                        sx={{
-                            textTransform: 'none',
-                            fontSize: 10,
-                            py: 0.1,
-                            color: feedbackNote ? '#ffcc80' : '#fff',
-                            borderColor: feedbackNote
-                                ? 'rgba(255,171,0,0.8)'
-                                : 'rgba(255,255,255,0.5)',
-                        }}
-                    >
-                        Feedback
-                    </Button>
+                    <Tooltip title="Lấy hình mới nhất từ chat chatbot (chạy nền, không cần tải thủ công)">
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            fullWidth
+                            startIcon={<RefreshIcon sx={{ fontSize: 13 }} />}
+                            onClick={() => onSyncLatest(concept.rank)}
+                            sx={{
+                                textTransform: 'none',
+                                fontSize: 10,
+                                py: 0.1,
+                                color: '#fff',
+                                borderColor: 'rgba(255,255,255,0.5)',
+                            }}
+                        >
+                            Lấy hình mới nhất
+                        </Button>
+                    </Tooltip>
+                    <Stack direction="row" spacing={0.5}>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            fullWidth
+                            startIcon={<OpenInNewIcon sx={{ fontSize: 13 }} />}
+                            onClick={onOpenChat}
+                            sx={{
+                                textTransform: 'none',
+                                fontSize: 10,
+                                py: 0.1,
+                                color: '#fff',
+                                borderColor: 'rgba(255,255,255,0.5)',
+                            }}
+                        >
+                            Chat
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            fullWidth
+                            startIcon={<RateReviewIcon sx={{ fontSize: 13 }} />}
+                            onClick={onOpenFeedback}
+                            sx={{
+                                textTransform: 'none',
+                                fontSize: 10,
+                                py: 0.1,
+                                color: feedbackNote ? '#ffcc80' : '#fff',
+                                borderColor: feedbackNote
+                                    ? 'rgba(255,171,0,0.8)'
+                                    : 'rgba(255,255,255,0.5)',
+                            }}
+                        >
+                            Feedback
+                        </Button>
+                    </Stack>
                 </Stack>
             ) : null}
 
@@ -678,6 +702,7 @@ export default function ShortVideoAgentYoutubeThumbnailList({
     onOpenChat,
     onSubmitFeedback,
     onGenerateImage,
+    onSyncLatest,
 }: Props) {
     const [detailRank, setDetailRank] = React.useState<number | null>(null);
 
@@ -757,6 +782,7 @@ export default function ShortVideoAgentYoutubeThumbnailList({
                                 onOpenDetail={() => setDetailRank(concept.rank)}
                                 onOpenChat={() => onOpenChat(concept.rank)}
                                 onOpenFeedback={() => setDetailRank(concept.rank)}
+                                onSyncLatest={onSyncLatest}
                             />
                         ))}
                     </Box>

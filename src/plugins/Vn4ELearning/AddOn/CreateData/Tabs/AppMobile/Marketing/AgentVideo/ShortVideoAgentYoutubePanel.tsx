@@ -32,6 +32,7 @@ import {
     parseShortVideoPromptMessage,
     refineYoutubeThumbnailImage,
     resolveYoutubeChapters,
+    syncLatestYoutubeThumbnailImage,
     type YoutubePromptKind,
     type YoutubeThumbnailConceptPrompt,
 } from 'helpers/marketingShortVideoAgentPrompt';
@@ -175,6 +176,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [statusChatCookieIds, setStatusChatCookieIds] = React.useState<Record<string, number>>({});
     const [statusFeedbackNotes, setStatusFeedbackNotes] = React.useState<Record<string, string>>({});
     const [savingFeedbackRank, setSavingFeedbackRank] = React.useState<string>('');
+    const [syncingLatestRank, setSyncingLatestRank] = React.useState<string>('');
     const [chaptersText, setChaptersText] = React.useState<string>('');
     const [resolvingChapters, setResolvingChapters] = React.useState(false);
     const [chaptersWarning, setChaptersWarning] = React.useState<string>('');
@@ -826,6 +828,69 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         }
     }, [shortVideoId, savingFeedbackRank, state]);
 
+    /**
+     * Lấy hình mới nhất: user đã feedback trực tiếp với chatbot ngoài CMS → mở lại
+     * chat Meta.ai cũ (không gửi message) và pull ảnh cuối NGAY tại thời điểm bấm
+     * (chạy đồng bộ, không qua hàng đợi). Ảnh trả về được cập nhật trực tiếp.
+     */
+    const handleSyncLatestThumbnailImage = React.useCallback(async (rank: number) => {
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không lấy được hình mới nhất', 'warning');
+            return;
+        }
+        if (syncingLatestRank || generatingRank) {
+            return;
+        }
+        const rankKey = String(rank);
+        if (String(thumbnailChatUrls[rankKey] || '').trim() === '') {
+            state.showMessage('Concept này chưa có url chatbot', 'warning');
+            return;
+        }
+
+        setSyncingLatestRank(rankKey);
+        setGeneratingRank(rankKey);
+        try {
+            const res = await syncLatestYoutubeThumbnailImage(shortVideoId, rank);
+            if (!res?.success) {
+                state.showMessage(
+                    parseShortVideoPromptMessage(res?.message) || 'Không lấy được hình mới nhất',
+                    'error',
+                );
+                return;
+            }
+
+            const url = String(res?.url || res?.image_url || '').trim();
+            if (url !== '') {
+                setOutputs((prev) => ({
+                    ...prev,
+                    [YOUTUBE_WORKFLOW_KEY]: {
+                        ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
+                        [`thumbnail_image_${rank}`]: url,
+                    },
+                }));
+                setJobImageUrls((prev) => ({ ...prev, [rankKey]: url }));
+            }
+            const nextChatUrl = String(res?.chat_url || '').trim();
+            if (nextChatUrl !== '') {
+                setStatusChatUrls((prev) => ({ ...prev, [rankKey]: nextChatUrl }));
+            }
+
+            state.showMessage(
+                parseShortVideoPromptMessage(res?.message)
+                    || `Đã lấy hình mới nhất cho thumbnail #${rank}`,
+                'success',
+            );
+        } catch (error) {
+            state.showMessage(
+                error instanceof Error ? error.message : 'Không lấy được hình mới nhất',
+                'error',
+            );
+        } finally {
+            setSyncingLatestRank('');
+            setGeneratingRank('');
+        }
+    }, [shortVideoId, syncingLatestRank, generatingRank, thumbnailChatUrls, state]);
+
     const spec = PROMPT_SPECS[subTab];
     const copying = copyingKind === spec.kind;
     const copied = copiedKind === spec.kind;
@@ -1061,6 +1126,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                             onSubmitFeedback={handleSubmitThumbnailFeedback}
                             onGenerateImage={(rank, prompt) => {
                                 void handleGenerateThumbnailImage(rank, prompt);
+                            }}
+                            onSyncLatest={(rank) => {
+                                void handleSyncLatestThumbnailImage(rank);
                             }}
                         />
                     </WorkflowSection>
