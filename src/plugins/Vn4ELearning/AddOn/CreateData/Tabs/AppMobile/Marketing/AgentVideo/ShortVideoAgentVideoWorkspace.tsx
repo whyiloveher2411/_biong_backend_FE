@@ -174,8 +174,18 @@ export default function ShortVideoAgentVideoWorkspace({
     }, [currentBeatId, state.handleRestoreBeatVersion]);
 
     const [leftPanelOpen, setLeftPanelOpen] = React.useState(false);
+    const [leftPanelTab, setLeftPanelTab] = React.useState<ShortVideoAgentLeftTab>(initialTab);
     const [rightPanelOpen, setRightPanelOpen] = React.useState(false);
     const [qaDrawerOpen, setQaDrawerOpen] = React.useState(false);
+
+    React.useEffect(() => {
+        setLeftPanelTab(initialTab);
+    }, [initialTab, shortVideoId]);
+
+    const openLeftPanelAt = React.useCallback((tab: ShortVideoAgentLeftTab) => {
+        setLeftPanelTab(tab);
+        setLeftPanelOpen(true);
+    }, []);
 
     const editBeatSegment = React.useMemo(() => {
         const beatId = editBeatHtmlId || editBeatImageId;
@@ -641,32 +651,76 @@ export default function ShortVideoAgentVideoWorkspace({
                         WHITEBOARD: giữ thanh mảnh click mở drawer như cũ. */}
                     {state.isWhiteboardMode ? (
                         <Box
-                            onClick={() => setLeftPanelOpen(true)}
                             sx={{
                                 width: 40,
                                 flexShrink: 0,
                                 borderRight: 1,
                                 borderColor: 'divider',
-                                bgcolor: 'background.paper',
                                 display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                '&:hover': { bgcolor: 'action.hover' },
+                                flexDirection: 'column',
+                                minHeight: 0,
                             }}
                         >
-                            <Typography
-                                variant="caption"
+                            {/* Nửa TRÊN → mở panel ở tab TTS; nửa DƯỚI → mở panel ở tab YouTube.
+                                Cả 2 dùng CHUNG 1 panel nên click nhầm vẫn chuyển tab được. */}
+                            <Box
+                                onClick={() => openLeftPanelAt('script')}
                                 sx={{
-                                    writingMode: 'vertical-rl',
-                                    transform: 'rotate(180deg)',
-                                    fontWeight: 700,
-                                    color: 'text.secondary',
-                                    userSelect: 'none',
+                                    flex: 1,
+                                    minHeight: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    bgcolor: 'primary.main',
+                                    color: 'common.white',
+                                    borderBottom: 1,
+                                    borderColor: 'divider',
+                                    '&:hover': { bgcolor: 'primary.dark' },
                                 }}
                             >
-                                Content · Script · Render · Thumbnail · Facebook
-                            </Typography>
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        writingMode: 'vertical-rl',
+                                        transform: 'rotate(180deg)',
+                                        fontWeight: 700,
+                                        userSelect: 'none',
+                                        letterSpacing: 0.5,
+                                        color: 'common.white',
+                                    }}
+                                >
+                                    TTS
+                                </Typography>
+                            </Box>
+                            <Box
+                                onClick={() => openLeftPanelAt('youtube')}
+                                sx={{
+                                    flex: 1,
+                                    minHeight: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    bgcolor: 'error.main',
+                                    color: 'common.white',
+                                    '&:hover': { bgcolor: 'error.dark' },
+                                }}
+                            >
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        writingMode: 'vertical-rl',
+                                        transform: 'rotate(180deg)',
+                                        fontWeight: 700,
+                                        userSelect: 'none',
+                                        letterSpacing: 0.5,
+                                        color: 'common.white',
+                                    }}
+                                >
+                                    YouTube
+                                </Typography>
+                            </Box>
                         </Box>
                     ) : (
                         <Box
@@ -1036,7 +1090,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                     <ShortVideoAgentLeftPanel
                         state={state}
-                        initialTab={initialTab}
+                        initialTab={leftPanelTab}
                         onSaved={onUploaded}
                     />
                 </Box>

@@ -2637,6 +2637,7 @@ export async function fetchSaydiVoiceSamples(
     samples?: SaydiVoiceSampleItem[];
     genders?: string[];
     languages?: string[];
+    used_voice_names?: string[];
     agent_saydi_voice?: string;
     default_saydi_voice?: string;
     count?: number;

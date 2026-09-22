@@ -13,8 +13,8 @@ export const TTS_PLATFORM_OPTIONS = [
 /** Thứ tự ưu tiên đầy đủ (dùng khi sắp xếp lựa chọn user). */
 export const TTS_PLATFORM_KEYS = TTS_PLATFORM_OPTIONS.map((item) => item.key);
 
-/** Mặc định khi tạo mới / chưa cấu hình: chỉ ChatGPT Web. */
-export const DEFAULT_TTS_PLATFORMS: string[] = ['chatgpt_web'];
+/** Mặc định khi tạo mới / chưa cấu hình: chỉ Saydi API. */
+export const DEFAULT_TTS_PLATFORMS: string[] = ['saydi'];
 
 export type AgentWorkflowPhase =
     | 'pending'

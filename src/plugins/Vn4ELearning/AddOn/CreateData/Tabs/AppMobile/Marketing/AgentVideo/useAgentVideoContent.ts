@@ -811,6 +811,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         updatedAt: string;
     } | null>(null);
     const [saydiSamples, setSaydiSamples] = React.useState<SaydiVoiceSampleItem[]>([]);
+    const [saydiUsedVoices, setSaydiUsedVoices] = React.useState<string[]>([]);
     const [saydiGenders, setSaydiGenders] = React.useState<string[]>([]);
     const [saydiLanguages, setSaydiLanguages] = React.useState<string[]>([]);
     const [saydiLoading, setSaydiLoading] = React.useState(false);
@@ -1413,6 +1414,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         // Kế thừa cài đặt TTS CHUNG (global) — CHỈ khi video chưa từng tự lưu
         // cài đặt riêng (agent_tts_settings_saved = false). Video có cài đặt
         // riêng → giữ nguyên, không đè; không có cache global → dùng default cũ.
+        // Riêng TTS tự động + platform KHÔNG kế thừa global: video chưa lưu luôn
+        // dùng mặc định TTS tự động agent + Saydi API.
         {
             const ttsDefault = res?.agent_tts_global_default;
             const cfg = ttsDefault?.has && ttsDefault.config && typeof ttsDefault.config === 'object'
@@ -1421,12 +1424,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (!cfg || res?.agent_tts_settings_saved) {
                 setTtsGlobalSource(null);
             } else {
-                if (typeof cfg.agent_tts_auto === 'boolean') {
-                    setAgentTtsAuto(cfg.agent_tts_auto);
-                }
-                if (Array.isArray(cfg.agent_tts_platforms)) {
-                    setSelectedPlatforms(normalizePlatforms(cfg.agent_tts_platforms as string[]));
-                }
                 const cfgSpeed = Number(cfg.agent_omnivoice_speed);
                 if (Number.isFinite(cfgSpeed) && cfgSpeed > 0) {
                     setOmnivoiceSpeed(Math.max(0.5, Math.min(1.5, cfgSpeed)));
@@ -1448,6 +1445,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     title: String(ttsDefault?.source_title || ''),
                     updatedAt: String(ttsDefault?.updated_at || ''),
                 });
+            }
+
+            // Video chưa từng tự lưu cài đặt TTS → mặc định TTS tự động + Saydi API.
+            if (!res?.agent_tts_settings_saved) {
+                setAgentTtsAuto(true);
+                setSelectedPlatforms([...DEFAULT_TTS_PLATFORMS]);
             }
         }
         const mpId = Number(res?.marketing_post_id || 0);
@@ -8620,9 +8623,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (!res?.success) {
                 setSaydiError(parseApiMessage(res?.message) || 'Không tải được danh sách giọng Saydi');
                 setSaydiSamples([]);
+                setSaydiUsedVoices([]);
                 return;
             }
             setSaydiSamples(Array.isArray(res.samples) ? res.samples : []);
+            setSaydiUsedVoices(Array.isArray(res.used_voice_names) ? res.used_voice_names : []);
             setSaydiGenders(Array.isArray(res.genders) ? res.genders : []);
             setSaydiLanguages(Array.isArray(res.languages) ? res.languages : []);
             if (res.agent_saydi_voice) {
@@ -8631,6 +8636,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         } catch (e) {
             setSaydiError(e instanceof Error ? e.message : String(e));
             setSaydiSamples([]);
+            setSaydiUsedVoices([]);
         } finally {
             setSaydiLoading(false);
         }
@@ -9467,6 +9473,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         omnivoiceVoiceDesignTokens,
         saydiVoice,
         saydiSamples,
+        saydiUsedVoices,
         saydiGenders,
         saydiLanguages,
         saydiLoading,

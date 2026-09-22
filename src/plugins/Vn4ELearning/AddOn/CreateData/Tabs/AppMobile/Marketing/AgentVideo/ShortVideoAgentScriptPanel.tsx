@@ -1348,6 +1348,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 onPlayDesignPreview={state.handleOmnivoiceVoiceDesignPreview}
                 saydiVoice={state.saydiVoice || 'adam-11labs-vi'}
                 saydiSamples={state.saydiSamples}
+                saydiUsedVoices={state.saydiUsedVoices}
                 saydiGenders={state.saydiGenders}
                 saydiLanguages={state.saydiLanguages}
                 saydiLoading={state.saydiLoading}

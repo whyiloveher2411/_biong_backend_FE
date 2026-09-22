@@ -49,6 +49,7 @@ type Props = {
     onPlayDesignPreview: (design: string) => void;
     saydiVoice: string;
     saydiSamples: SaydiVoiceSampleItem[];
+    saydiUsedVoices: string[];
     saydiGenders: string[];
     saydiLanguages: string[];
     saydiLoading: boolean;
@@ -91,6 +92,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     onPlayDesignPreview,
     saydiVoice,
     saydiSamples,
+    saydiUsedVoices,
     saydiGenders,
     saydiLanguages,
     saydiLoading,
@@ -274,6 +276,7 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                         <ShortVideoAgentSaydiVoicePicker
                             active={open && showSaydi}
                             samples={saydiSamples}
+                            usedVoices={saydiUsedVoices}
                             genders={saydiGenders}
                             languages={saydiLanguages}
                             selectedVoice={saydiVoice}

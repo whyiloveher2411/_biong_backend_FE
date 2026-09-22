@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Avatar,
     Box,
+    Button,
     Chip,
     CircularProgress,
     FormControl,
@@ -42,6 +43,7 @@ const SELECT_MENU_PROPS = {
 type Props = {
     active?: boolean;
     samples: SaydiVoiceSampleItem[];
+    usedVoices?: string[];
     genders: string[];
     languages: string[];
     selectedVoice: string;
@@ -56,6 +58,7 @@ type Props = {
 export default function ShortVideoAgentSaydiVoicePicker({
     active = true,
     samples,
+    usedVoices = [],
     genders,
     languages,
     selectedVoice,
@@ -68,14 +71,17 @@ export default function ShortVideoAgentSaydiVoicePicker({
 }: Props) {
     const [search, setSearch] = React.useState('');
     const [gender, setGender] = React.useState('all');
-    const [language, setLanguage] = React.useState('vi');
+    const [language, setLanguage] = React.useState('en');
+    const [usedOnly, setUsedOnly] = React.useState(false);
+
+    const usedSet = React.useMemo(() => new Set(usedVoices), [usedVoices]);
 
     React.useEffect(() => {
         if (!active) {
             return;
         }
-        if (languages.includes('vi')) {
-            setLanguage('vi');
+        if (languages.includes('en')) {
+            setLanguage('en');
         } else if (languages.length > 0) {
             setLanguage(languages[0]);
         } else {
@@ -88,6 +94,9 @@ export default function ShortVideoAgentSaydiVoicePicker({
     const filtered = React.useMemo(() => {
         const q = search.trim().toLowerCase();
         return samples.filter((item) => {
+            if (usedOnly && !usedSet.has(item.name)) {
+                return false;
+            }
             if (gender !== 'all' && String(item.gender || '').toLowerCase() !== gender) {
                 return false;
             }
@@ -100,7 +109,7 @@ export default function ShortVideoAgentSaydiVoicePicker({
             const hay = `${item.display_name || ''} ${item.name || ''} ${item.description || ''}`.toLowerCase();
             return hay.includes(q);
         });
-    }, [samples, search, gender, language]);
+    }, [samples, search, gender, language, usedOnly, usedSet]);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, gap: 1.5 }}>
@@ -150,6 +159,22 @@ export default function ShortVideoAgentSaydiVoicePicker({
                         ))}
                     </Select>
                 </FormControl>
+                <Button
+                    size="small"
+                    variant={usedOnly ? 'contained' : 'outlined'}
+                    color={usedOnly ? 'primary' : 'inherit'}
+                    disabled={loading || usedVoices.length === 0}
+                    onClick={() => setUsedOnly((prev) => !prev)}
+                    sx={{
+                        minWidth: 140,
+                        whiteSpace: 'nowrap',
+                        textTransform: 'none',
+                        flexShrink: 0,
+                    }}
+                    title="Chỉ hiện giọng đã từng được dùng ở short video khác"
+                >
+                    {`Giọng đã dùng (${usedVoices.length})`}
+                </Button>
             </Stack>
 
             {loading ? (
