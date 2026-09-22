@@ -48,6 +48,7 @@ import {
 } from './agentVideoUi';
 import { useAgentVideoOpenGeminiScriptActions } from './agentVideoOpenGeminiScript';
 import ShortVideoAgentAudioSettingsDrawer from './ShortVideoAgentAudioSettingsDrawer';
+import SaydiAccountsDrawer from './SaydiAccountsDrawer';
 import ShortVideoAgentVideo2sBeatListPanel from './ShortVideoAgentVideo2sBeatListPanel';
 import ShortVideoAgentWhisperCompareDrawer from './ShortVideoAgentWhisperCompareDrawer';
 import ShortVideoAgentWhisperCompareSummary from './ShortVideoAgentWhisperCompareSummary';
@@ -151,6 +152,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const scriptFieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const phoneticZoneRef = React.useRef<HTMLDivElement | null>(null);
     const [audioSettingsOpen, setAudioSettingsOpen] = React.useState(false);
+    const [saydiAccountsOpen, setSaydiAccountsOpen] = React.useState(false);
     const [guideOpen, setGuideOpen] = React.useState(false);
     const { openCreateScriptGemini, openImproveScriptGemini } = useAgentVideoOpenGeminiScriptActions();
     const [openingCreateScriptGemini, setOpeningCreateScriptGemini] = React.useState(false);
@@ -438,6 +440,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                     <ShortVideoAgentVideo2sBeatListPanel
                         state={state}
                         onOpenAudioSettings={() => setAudioSettingsOpen(true)}
+                        onOpenSaydiAccounts={() => setSaydiAccountsOpen(true)}
                     />
                 ) : (
                 <SectionShell
@@ -1352,6 +1355,11 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 savingSaydiVoice={state.savingSaydiVoice}
                 onSelectSaydiVoice={state.handleSaydiVoiceChange}
                 onPlaySaydiPreview={state.handleSaydiVoicePreview}
+            />
+
+            <SaydiAccountsDrawer
+                open={saydiAccountsOpen}
+                onClose={() => setSaydiAccountsOpen(false)}
             />
         </Box>
     );

@@ -13,6 +13,7 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import DnsIcon from '@mui/icons-material/Dns';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SaveIcon from '@mui/icons-material/Save';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -39,6 +40,7 @@ type AgentVideoState = ReturnType<typeof useAgentVideoContent>;
 type Props = {
     state: AgentVideoState;
     onOpenAudioSettings: () => void;
+    onOpenSaydiAccounts: () => void;
 };
 
 const PLACEHOLDER = [
@@ -47,7 +49,7 @@ const PLACEHOLDER = [
     "Inside the cave, last night's fire has burned down to a few red coals.",
 ].join('\n');
 
-export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudioSettings }: Props) {
+export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudioSettings, onOpenSaydiAccounts }: Props) {
     const { showMessage } = useFloatingMessages();
     const marks = state.manualBeatMarks;
     const promptFilled = marks.filter((mark) => mark.imagePrompt.trim() !== '').length;
@@ -231,14 +233,24 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                         <Typography variant="caption" fontWeight={700} color="text.secondary">
                             Cấu hình giọng đọc TTS
                         </Typography>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<TuneIcon />}
-                            onClick={onOpenAudioSettings}
-                        >
-                            Cài đặt
-                        </Button>
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<ManageAccountsIcon />}
+                                onClick={onOpenSaydiAccounts}
+                            >
+                                Tài khoản Saydi
+                            </Button>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<TuneIcon />}
+                                onClick={onOpenAudioSettings}
+                            >
+                                Cài đặt
+                            </Button>
+                        </Stack>
                     </Stack>
                     <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
                         <Chip

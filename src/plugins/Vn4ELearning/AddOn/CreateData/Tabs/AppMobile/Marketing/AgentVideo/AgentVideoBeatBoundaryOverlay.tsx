@@ -600,64 +600,60 @@ export default function AgentVideoBeatBoundaryOverlay({
                                         </Tooltip>
                                     </Box>
                                 </Box>
-                                <Tooltip
-                                    title={isApproved ? 'Bỏ đánh dấu đã ổn' : 'Đánh dấu đã ổn'}
-                                    placement="top"
-                                >
-                                    <span style={{ display: 'inline-flex', flexShrink: 0 }}>
-                                        <IconButton
-                                            size="small"
-                                            aria-label={isApproved
-                                                ? `Bỏ đánh dấu đã ổn ${segment.beatId}`
-                                                : `Đánh dấu đã ổn ${segment.beatId}`}
-                                            disabled={
-                                                !onSaveBeatQa
-                                                || isBusy
-                                                || isSavingQa
-                                                || savingImportHtml
-                                            }
-                                            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                                                event.stopPropagation();
-                                                onBeatClick?.(segment.beatId);
-                                                void handleToggleApproved(segment.beatId);
-                                            }}
-                                            sx={{
-                                                width: 28,
-                                                height: 28,
-                                                p: 0,
-                                                ml: 0.25,
-                                                color: isApproved ? '#fbcfe8' : 'common.white',
+                            
+                                <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                                    <IconButton
+                                        size="small"
+                                        aria-label={isApproved
+                                            ? `Bỏ đánh dấu đã ổn ${segment.beatId}`
+                                            : `Đánh dấu đã ổn ${segment.beatId}`}
+                                        disabled={
+                                            !onSaveBeatQa
+                                            || isBusy
+                                            || isSavingQa
+                                            || savingImportHtml
+                                        }
+                                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                            event.stopPropagation();
+                                            onBeatClick?.(segment.beatId);
+                                            void handleToggleApproved(segment.beatId);
+                                        }}
+                                        sx={{
+                                            width: 28,
+                                            height: 28,
+                                            p: 0,
+                                            ml: 0.25,
+                                            color: isApproved ? '#fbcfe8' : 'common.white',
+                                            bgcolor: isApproved
+                                                ? 'rgba(236,72,153,0.55)'
+                                                : 'rgba(0,0,0,0.28)',
+                                            border: isApproved
+                                                ? '1px solid rgba(244,114,182,0.95)'
+                                                : '1px solid rgba(255,255,255,0.22)',
+                                            borderRadius: 0.75,
+                                            '&:hover': {
                                                 bgcolor: isApproved
-                                                    ? 'rgba(236,72,153,0.55)'
-                                                    : 'rgba(0,0,0,0.28)',
-                                                border: isApproved
-                                                    ? '1px solid rgba(244,114,182,0.95)'
-                                                    : '1px solid rgba(255,255,255,0.22)',
-                                                borderRadius: 0.75,
-                                                '&:hover': {
-                                                    bgcolor: isApproved
-                                                        ? 'rgba(236,72,153,0.72)'
-                                                        : 'rgba(0,0,0,0.5)',
-                                                    borderColor: isApproved
-                                                        ? 'rgba(251,207,232,0.98)'
-                                                        : 'rgba(255,255,255,0.45)',
-                                                },
-                                                '&.Mui-disabled': {
-                                                    color: 'rgba(255,255,255,0.45)',
-                                                    bgcolor: 'rgba(0,0,0,0.14)',
-                                                },
-                                            }}
-                                        >
-                                            {isSavingQa ? (
-                                                <CircularProgress size={14} sx={{ color: 'inherit' }} />
-                                            ) : isApproved ? (
-                                                <CheckBoxIcon sx={{ fontSize: 20 }} />
-                                            ) : (
-                                                <CheckBoxOutlineBlankIcon sx={{ fontSize: 20 }} />
-                                            )}
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
+                                                    ? 'rgba(236,72,153,0.72)'
+                                                    : 'rgba(0,0,0,0.5)',
+                                                borderColor: isApproved
+                                                    ? 'rgba(251,207,232,0.98)'
+                                                    : 'rgba(255,255,255,0.45)',
+                                            },
+                                            '&.Mui-disabled': {
+                                                color: 'rgba(255,255,255,0.45)',
+                                                bgcolor: 'rgba(0,0,0,0.14)',
+                                            },
+                                        }}
+                                    >
+                                        {isSavingQa ? (
+                                            <CircularProgress size={14} sx={{ color: 'inherit' }} />
+                                        ) : isApproved ? (
+                                            <CheckBoxIcon sx={{ fontSize: 20 }} />
+                                        ) : (
+                                            <CheckBoxOutlineBlankIcon sx={{ fontSize: 20 }} />
+                                        )}
+                                    </IconButton>
+                                </span>
 
                                 <Tooltip title="Thao tác beat" placement="top">
                                     <IconButton
