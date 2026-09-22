@@ -420,13 +420,18 @@ function DataTable(props: DataTableProps) {
                                                 <TableCell key={key}>
                                                     {key === firstFieldKey ? (
                                                         <Box display="flex" flexDirection="column" alignItems="flex-start">
-                                                            <FieldView
-                                                                name={key}
-                                                                config={config.showFields[key]}
-                                                                component={config.showFields[key].view}
-                                                                post={customer} content={customer[key]}
-                                                                actionLiveEdit={actionLiveEdit}
-                                                            />
+                                                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, minWidth: 0, maxWidth: '100%' }}>
+                                                                {customer.id !== undefined && customer.id !== null && key !== 'id'
+                                                                    ? <Box component="span" sx={{ fontWeight: 600, flexShrink: 0 }}>{`[${customer.id}].`}</Box>
+                                                                    : null}
+                                                                <FieldView
+                                                                    name={key}
+                                                                    config={config.showFields[key]}
+                                                                    component={config.showFields[key].view}
+                                                                    post={customer} content={customer[key]}
+                                                                    actionLiveEdit={actionLiveEdit}
+                                                                />
+                                                            </Box>
                                                             <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
                                                     ) : (
@@ -445,13 +450,18 @@ function DataTable(props: DataTableProps) {
                                                 <TableCell key={key}>
                                                     {key === firstFieldKey ? (
                                                         <Box display="flex" flexDirection="column" alignItems="flex-start">
-                                                            <FieldView
-                                                                name={key}
-                                                                config={data.config.fields[key]}
-                                                                component={data.config.fields[key].view ?? 'text'}
-                                                                post={customer} content={customer[key]}
-                                                                actionLiveEdit={actionLiveEdit}
-                                                            />
+                                                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, minWidth: 0, maxWidth: '100%' }}>
+                                                                {customer.id !== undefined && customer.id !== null && key !== 'id'
+                                                                    ? <Box component="span" sx={{ fontWeight: 600, flexShrink: 0 }}>{`[${customer.id}].`}</Box>
+                                                                    : null}
+                                                                <FieldView
+                                                                    name={key}
+                                                                    config={data.config.fields[key]}
+                                                                    component={data.config.fields[key].view ?? 'text'}
+                                                                    post={customer} content={customer[key]}
+                                                                    actionLiveEdit={actionLiveEdit}
+                                                                />
+                                                            </Box>
                                                             <PostTypeRowBadges row={customer} onListRefresh={() => acctionPost({})} />
                                                         </Box>
                                                     ) : (
