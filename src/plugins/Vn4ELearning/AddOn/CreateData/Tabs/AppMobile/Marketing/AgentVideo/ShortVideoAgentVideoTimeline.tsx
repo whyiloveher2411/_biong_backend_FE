@@ -9,8 +9,6 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
-import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
-import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
 import LiveTvOutlinedIcon from '@mui/icons-material/LiveTvOutlined';
@@ -42,8 +40,6 @@ import ShortVideoAgentBeatAssetsInfoDialog from './ShortVideoAgentBeatAssetsInfo
 import ShortVideoAgentScriptManualDrawer from './ShortVideoAgentScriptManualDrawer';
 import ShortVideoAgentScriptPhoneticManualDrawer from './ShortVideoAgentScriptPhoneticManualDrawer';
 import ShortVideoAgentBgmManualDrawer from './ShortVideoAgentBgmManualDrawer';
-import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
-import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
 import ShortVideoImageStyleManageDrawer from '../ShortVideoImageStyleManageDrawer';
 import ShortVideoScriptStyleManageDrawer from '../ShortVideoScriptStyleManageDrawer';
 import ShortVideoChannelManageDrawer from '../ShortVideoChannelManageDrawer';
@@ -522,8 +518,6 @@ export default function ShortVideoAgentVideoTimeline({
     const [scriptManualOpen, setScriptManualOpen] = React.useState(false);
     const [scriptPhoneticManualOpen, setScriptPhoneticManualOpen] = React.useState(false);
     const [bgmManualOpen, setBgmManualOpen] = React.useState(false);
-    const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
-    const [cookieDrawerOpen, setCookieDrawerOpen] = React.useState(false);
     const [imageStyleDrawerOpen, setImageStyleDrawerOpen] = React.useState(false);
     const [imageStyleId, setImageStyleId] = React.useState(0);
     const [imageStyleTitle, setImageStyleTitle] = React.useState('');
@@ -1429,27 +1423,6 @@ export default function ShortVideoAgentVideoTimeline({
                                 </span>
                             </Tooltip>
                         ) : null}
-                        <Button
-                            size="small"
-                            variant="contained"
-                            color="primary"
-                            startIcon={<CollectionsOutlinedIcon />}
-                            disabled={shortVideoId <= 0}
-                            onClick={() => { setResourceDrawerOpen(true); }}
-                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                        >
-                            Resource
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="contained"
-                            color="info"
-                            startIcon={<VpnKeyOutlinedIcon />}
-                            onClick={() => { setCookieDrawerOpen(true); }}
-                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                        >
-                            Quản lý cookie
-                        </Button>
                         <AgentVideoSettingButton
                             icon={<PaletteOutlinedIcon fontSize="small" />}
                             color="error"
@@ -1903,16 +1876,6 @@ export default function ShortVideoAgentVideoTimeline({
                     state={agentState}
                 />
             ) : null}
-            <ShortVideoResourceManageDrawer
-                open={resourceDrawerOpen}
-                onClose={() => setResourceDrawerOpen(false)}
-                shortVideoId={shortVideoId}
-                shortVideoTitle={clipLabel}
-            />
-            <ShortVideoCookieManageDrawer
-                open={cookieDrawerOpen}
-                onClose={() => setCookieDrawerOpen(false)}
-            />
             <ShortVideoImageStyleManageDrawer
                 open={imageStyleDrawerOpen}
                 onClose={() => setImageStyleDrawerOpen(false)}

@@ -1312,6 +1312,9 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 onClose={handleCloseAudioSettings}
                 agentTtsAuto={state.agentTtsAuto}
                 savingTtsMode={state.savingTtsMode}
+                ttsUpdateAllMode={state.ttsUpdateAllMode}
+                onTtsUpdateAllToggle={state.handleTtsUpdateAllToggle}
+                onSaveAllTts={state.handleSaveAllTts}
                 selectedPlatforms={state.selectedPlatforms}
                 chainLabel={state.chainLabel}
                 chatgptWebAvailable={state.chatgptWebAvailable}

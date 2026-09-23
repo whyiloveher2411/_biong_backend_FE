@@ -2673,6 +2673,8 @@ export type AgentTtsGlobalDefault = JsonResponse & {
     source_short_video_id?: number;
     source_title?: string;
     updated_at?: string;
+    /** Số short video chưa cấu hình riêng sẽ dùng cấu hình chung này. */
+    follow_count?: number;
 };
 
 export async function fetchAgentTtsGlobalDefault(): Promise<AgentTtsGlobalDefault> {
@@ -2700,6 +2702,28 @@ export async function saveAgentTtsGlobalDefault(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/save-agent-tts-default',
         shortVideoBody(shortVideoId, config),
     ) as Promise<AgentTtsGlobalDefault>;
+}
+
+export type AgentTtsConfigPatch = Partial<Record<
+    'agent_tts_auto'
+    | 'agent_tts_platforms'
+    | 'agent_omnivoice_speed'
+    | 'agent_saydi_voice'
+    | 'agent_omnivoice_voice'
+    | 'agent_omnivoice_voice_mode'
+    | 'agent_omnivoice_voice_design',
+    string | number | string[] | boolean
+>>;
+
+/** Áp dụng cấu hình TTS vào MỌI video chưa đăng social (ghi trực tiếp từng video). */
+export async function applyAgentTtsAll(
+    shortVideoId: number,
+    config: AgentTtsConfigPatch,
+): Promise<JsonResponse & { updated?: number; config?: Record<string, unknown> }> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/apply-agent-tts-all',
+        shortVideoBody(shortVideoId, config),
+    ) as Promise<JsonResponse & { updated?: number; config?: Record<string, unknown> }>;
 }
 
 export async function saveAgentTtsSettings(

@@ -48,6 +48,8 @@ import {
     retryAgentNarrationTts,
     saveAdminAudioScript,
     saveAgentTtsGlobalDefault,
+    applyAgentTtsAll,
+    fetchAgentTtsGlobalDefault,
     saveAgentVisualStyle,
     saveAgentImportHtml,
     bulkDeleteBeatAssets,
@@ -810,6 +812,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         title: string;
         updatedAt: string;
     } | null>(null);
+    /**
+     * Chế độ Update All: thay đổi TTS trong drawer chỉ cập nhật DRAFT local,
+     * bấm "Lưu tất cả" mới ghi cấu hình chung (global) → mọi video CHƯA tự
+     * cấu hình riêng sẽ dùng cấu hình này.
+     */
+    const [ttsUpdateAllMode, setTtsUpdateAllMode] = React.useState(false);
+    React.useEffect(() => {
+        setTtsUpdateAllMode(false);
+    }, [shortVideoId]);
     const [saydiSamples, setSaydiSamples] = React.useState<SaydiVoiceSampleItem[]>([]);
     const [saydiUsedVoices, setSaydiUsedVoices] = React.useState<string[]>([]);
     const [saydiGenders, setSaydiGenders] = React.useState<string[]>([]);
@@ -1413,9 +1424,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setSaydiVoice(String(res?.agent_saydi_voice || DEFAULT_SAYDI_VOICE).trim() || DEFAULT_SAYDI_VOICE);
         // Kế thừa cài đặt TTS CHUNG (global) — CHỈ khi video chưa từng tự lưu
         // cài đặt riêng (agent_tts_settings_saved = false). Video có cài đặt
-        // riêng → giữ nguyên, không đè; không có cache global → dùng default cũ.
-        // Riêng TTS tự động + platform KHÔNG kế thừa global: video chưa lưu luôn
-        // dùng mặc định TTS tự động agent + Saydi API.
+        // riêng → giữ nguyên, không đè; không có cache global → dùng default
+        // (TTS tự động agent + Saydi API).
         {
             const ttsDefault = res?.agent_tts_global_default;
             const cfg = ttsDefault?.has && ttsDefault.config && typeof ttsDefault.config === 'object'
@@ -1424,6 +1434,12 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             if (!cfg || res?.agent_tts_settings_saved) {
                 setTtsGlobalSource(null);
             } else {
+                if (typeof cfg.agent_tts_auto === 'boolean') {
+                    setAgentTtsAuto(cfg.agent_tts_auto);
+                }
+                if (Array.isArray(cfg.agent_tts_platforms)) {
+                    setSelectedPlatforms(normalizePlatforms(cfg.agent_tts_platforms as string[]));
+                }
                 const cfgSpeed = Number(cfg.agent_omnivoice_speed);
                 if (Number.isFinite(cfgSpeed) && cfgSpeed > 0) {
                     setOmnivoiceSpeed(Math.max(0.5, Math.min(1.5, cfgSpeed)));
@@ -1445,12 +1461,6 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     title: String(ttsDefault?.source_title || ''),
                     updatedAt: String(ttsDefault?.updated_at || ''),
                 });
-            }
-
-            // Video chưa từng tự lưu cài đặt TTS → mặc định TTS tự động + Saydi API.
-            if (!res?.agent_tts_settings_saved) {
-                setAgentTtsAuto(true);
-                setSelectedPlatforms([...DEFAULT_TTS_PLATFORMS]);
             }
         }
         const mpId = Number(res?.marketing_post_id || 0);
@@ -2059,6 +2069,13 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         const platforms = checked && selectedPlatforms.length === 0
             ? DEFAULT_TTS_PLATFORMS
             : selectedPlatforms;
+        if (ttsUpdateAllMode) {
+            setAgentTtsAuto(checked);
+            if (checked && selectedPlatforms.length === 0) {
+                setSelectedPlatforms([...DEFAULT_TTS_PLATFORMS]);
+            }
+            return;
+        }
         await persistTtsSettings(
             checked,
             platforms,
@@ -2080,6 +2097,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
 
         const ordered = TTS_PLATFORM_KEYS.filter((key) => nextPlatforms.includes(key));
+        if (ttsUpdateAllMode) {
+            setSelectedPlatforms(ordered);
+            return;
+        }
         await persistTtsSettings(agentTtsAuto, ordered);
     };
 
@@ -2089,6 +2110,10 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         const clamped = Math.max(0.5, Math.min(1.5, nextSpeed));
         if (Math.abs(clamped - omnivoiceSpeed) < 0.001) {
+            return;
+        }
+        if (ttsUpdateAllMode) {
+            setOmnivoiceSpeed(clamped);
             return;
         }
         setSavingTtsMode(true);
@@ -2106,6 +2131,95 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setOmnivoiceSpeed(clamped);
             showMessage('Đã lưu tốc độ OmniVoice', 'success');
             void persistTtsGlobalDefault({ agent_omnivoice_speed: clamped });
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setSavingTtsMode(false);
+        }
+    };
+
+    /** Nạp cấu hình TTS chung (global) vào draft khi bật chế độ Update All. */
+    const loadGlobalTtsDraft = async () => {
+        try {
+            const res = await fetchAgentTtsGlobalDefault();
+            const cfg = res?.has && res.config && typeof res.config === 'object'
+                ? (res.config as Record<string, unknown>)
+                : null;
+            if (!cfg) {
+                return;
+            }
+            if (typeof cfg.agent_tts_auto === 'boolean') {
+                setAgentTtsAuto(cfg.agent_tts_auto);
+            }
+            if (Array.isArray(cfg.agent_tts_platforms)) {
+                setSelectedPlatforms(normalizePlatforms(cfg.agent_tts_platforms as string[]));
+            }
+            const speed = Number(cfg.agent_omnivoice_speed);
+            if (Number.isFinite(speed) && speed > 0) {
+                setOmnivoiceSpeed(Math.max(0.5, Math.min(1.5, speed)));
+            }
+            if (typeof cfg.agent_saydi_voice === 'string' && cfg.agent_saydi_voice.trim() !== '') {
+                setSaydiVoice(cfg.agent_saydi_voice.trim());
+            }
+            if (typeof cfg.agent_omnivoice_voice === 'string' && cfg.agent_omnivoice_voice.trim() !== '') {
+                setOmnivoiceVoice(cfg.agent_omnivoice_voice.trim());
+            }
+            if (cfg.agent_omnivoice_voice_mode === 'design' || cfg.agent_omnivoice_voice_mode === 'clone') {
+                setOmnivoiceVoiceMode(cfg.agent_omnivoice_voice_mode);
+            }
+            if (typeof cfg.agent_omnivoice_voice_design === 'string' && cfg.agent_omnivoice_voice_design.trim() !== '') {
+                setOmnivoiceVoiceDesign(cfg.agent_omnivoice_voice_design.trim());
+            }
+        } catch {
+            // im lặng — draft vẫn giữ giá trị hiện tại
+        }
+    };
+
+    const handleTtsUpdateAllToggle = (enabled: boolean) => {
+        setTtsUpdateAllMode(enabled);
+        if (enabled) {
+            void loadGlobalTtsDraft();
+            return;
+        }
+        loadRow();
+    };
+
+    /** Lưu toàn bộ cài đặt TTS hiện tại thành cấu hình chung cho mọi video chưa cấu hình riêng. */
+    const handleSaveAllTts = async (): Promise<void> => {
+        if (savingTtsMode) {
+            return;
+        }
+        setSavingTtsMode(true);
+        try {
+            const res = await applyAgentTtsAll(shortVideoId, {
+                agent_tts_auto: agentTtsAuto,
+                agent_tts_platforms: selectedPlatforms,
+                agent_omnivoice_speed: omnivoiceSpeed,
+                agent_saydi_voice: saydiVoice,
+                agent_omnivoice_voice: omnivoiceVoice,
+                agent_omnivoice_voice_mode: omnivoiceVoiceMode,
+                agent_omnivoice_voice_design: omnivoiceVoiceDesign,
+            });
+            if (!res?.success) {
+                showMessage(
+                    parseApiMessage(res?.message) || 'Không áp dụng được cấu hình TTS',
+                    'error',
+                );
+                return;
+            }
+            setTtsGlobalSource({
+                shortVideoId,
+                title: String(title || ''),
+                updatedAt: new Date().toISOString(),
+            });
+            const updated = Number(res.updated || 0);
+            showMessage(
+                updated > 0
+                    ? `Đã áp dụng cấu hình TTS cho ${updated} video chưa đăng social`
+                    : 'Không có video chưa đăng social để áp dụng',
+                updated > 0 ? 'success' : 'warning',
+            );
             loadRow();
         } catch (e) {
             showMessage(e instanceof Error ? e.message : String(e), 'error');
@@ -8580,6 +8694,17 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             return false;
         }
 
+        if (ttsUpdateAllMode) {
+            if (mode === 'clone') {
+                setOmnivoiceVoice(voice);
+                setOmnivoiceVoiceMode('clone');
+            } else {
+                setOmnivoiceVoiceDesign(design);
+                setOmnivoiceVoiceMode('design');
+            }
+            return false;
+        }
+
         const shouldAskRerender = hasAudio || scriptApproved;
         if (shouldAskRerender) {
             const ok = window.confirm(
@@ -8645,6 +8770,11 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const handleSaydiVoiceChange = async (voiceName: string): Promise<boolean> => {
         const voice = String(voiceName || '').trim();
         if (!voice || voice === saydiVoice) {
+            return false;
+        }
+
+        if (ttsUpdateAllMode) {
+            setSaydiVoice(voice);
             return false;
         }
 
@@ -9684,6 +9814,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         statusChip,
         chainLabel,
         ttsGlobalSource,
+        ttsUpdateAllMode,
+        handleTtsUpdateAllToggle,
+        handleSaveAllTts,
         loadRow,
         handleTtsAutoChange,
         handleAutoFillBeatHtmlChange,

@@ -1,6 +1,8 @@
 import React from 'react';
 import {
+    Alert,
     Box,
+    Button,
     Checkbox,
     Chip,
     Divider,
@@ -27,6 +29,9 @@ type Props = {
     onClose: () => void;
     agentTtsAuto: boolean;
     savingTtsMode: boolean;
+    ttsUpdateAllMode: boolean;
+    onTtsUpdateAllToggle: (enabled: boolean) => void;
+    onSaveAllTts: () => void | Promise<void>;
     selectedPlatforms: string[];
     chainLabel: string;
     chatgptWebAvailable?: boolean;
@@ -70,6 +75,9 @@ export default function ShortVideoAgentAudioSettingsDrawer({
     onClose,
     agentTtsAuto,
     savingTtsMode,
+    ttsUpdateAllMode,
+    onTtsUpdateAllToggle,
+    onSaveAllTts,
     selectedPlatforms,
     chainLabel,
     chatgptWebAvailable = true,
@@ -162,6 +170,39 @@ export default function ShortVideoAgentAudioSettingsDrawer({
                 },
             }}
         >
+            <Box>
+                <Button
+                    fullWidth
+                    size="small"
+                    variant={ttsUpdateAllMode ? 'contained' : 'outlined'}
+                    color={ttsUpdateAllMode ? 'warning' : 'inherit'}
+                    disabled={savingTtsMode}
+                    onClick={() => onTtsUpdateAllToggle(!ttsUpdateAllMode)}
+                    sx={{ textTransform: 'none', fontWeight: 700, py: 0.75 }}
+                >
+                    {ttsUpdateAllMode ? 'Đang bật chế độ Update All' : 'Chế độ Update All'}
+                </Button>
+                {ttsUpdateAllMode ? (
+                    <>
+                        <Alert severity="warning" sx={{ mt: 1, py: 0.25 }}>
+                            Chỉnh các cài đặt bên dưới rồi bấm <strong>Lưu tất cả</strong>. Chỉ áp dụng cho
+                            những video <strong>chưa đăng lên social</strong> — video đã đăng sẽ giữ nguyên.
+                        </Alert>
+                        <Button
+                            fullWidth
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            disabled={savingTtsMode}
+                            onClick={() => { void onSaveAllTts(); }}
+                            sx={{ mt: 1, textTransform: 'none', fontWeight: 700, py: 0.75 }}
+                        >
+                            {savingTtsMode ? 'Đang lưu...' : 'Lưu tất cả'}
+                        </Button>
+                    </>
+                ) : null}
+            </Box>
+
             <FormControlLabel
                 control={(
                     <Switch

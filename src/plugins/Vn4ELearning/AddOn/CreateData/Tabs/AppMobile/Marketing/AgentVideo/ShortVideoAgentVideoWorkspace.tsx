@@ -1,14 +1,18 @@
 import React from 'react';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
+import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import Button from 'components/atoms/Button';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
 import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
+import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
+import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
@@ -175,6 +179,8 @@ export default function ShortVideoAgentVideoWorkspace({
 
     const [leftPanelOpen, setLeftPanelOpen] = React.useState(false);
     const [leftPanelTab, setLeftPanelTab] = React.useState<ShortVideoAgentLeftTab>(initialTab);
+    const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
+    const [cookieDrawerOpen, setCookieDrawerOpen] = React.useState(false);
     const [rightPanelOpen, setRightPanelOpen] = React.useState(false);
     const [qaDrawerOpen, setQaDrawerOpen] = React.useState(false);
 
@@ -721,6 +727,53 @@ export default function ShortVideoAgentVideoWorkspace({
                                     YouTube
                                 </Typography>
                             </Box>
+                            {/* Nút nhỏ ở đáy rail — ít dùng nên gộp cạnh nhau, đặt dưới YouTube. */}
+                            <Box
+                                sx={{
+                                    flexShrink: 0,
+                                    display: 'flex',
+                                    borderTop: 1,
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Tooltip title="Quản lý Resource" placement="right">
+                                    <IconButton
+                                        size="small"
+                                        disabled={shortVideoId <= 0}
+                                        onClick={() => setResourceDrawerOpen(true)}
+                                        sx={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                            p: 0,
+                                            height: 34,
+                                            borderRadius: 0,
+                                            color: 'primary.main',
+                                            '&:hover': { bgcolor: 'primary.main', color: 'common.white' },
+                                        }}
+                                    >
+                                        <CollectionsOutlinedIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Quản lý cookie" placement="right">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setCookieDrawerOpen(true)}
+                                        sx={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                            p: 0,
+                                            height: 34,
+                                            borderRadius: 0,
+                                            borderLeft: 1,
+                                            borderColor: 'divider',
+                                            color: 'info.main',
+                                            '&:hover': { bgcolor: 'info.main', color: 'common.white' },
+                                        }}
+                                    >
+                                        <VpnKeyOutlinedIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
                         </Box>
                     ) : (
                         <Box
@@ -1121,6 +1174,16 @@ export default function ShortVideoAgentVideoWorkspace({
             >
                 {beatQaPanel}
             </DrawerCustom>
+            <ShortVideoResourceManageDrawer
+                open={resourceDrawerOpen}
+                onClose={() => setResourceDrawerOpen(false)}
+                shortVideoId={shortVideoId}
+                shortVideoTitle={state.title || `Short video #${shortVideoId}`}
+            />
+            <ShortVideoCookieManageDrawer
+                open={cookieDrawerOpen}
+                onClose={() => setCookieDrawerOpen(false)}
+            />
             <ShortVideoAgentBeatHtmlEditDrawer
                 open={Boolean(editBeatHtmlId)}
                 onClose={handleCloseEditBeatHtml}
