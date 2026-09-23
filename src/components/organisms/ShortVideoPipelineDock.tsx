@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Chip,
@@ -18,7 +18,10 @@ import LaunchIcon from '@mui/icons-material/Launch';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import StopIcon from '@mui/icons-material/Stop';
 import LoadingButton from 'components/atoms/LoadingButton';
-import { openShortVideoAgentInSearchParams } from 'helpers/shortVideoAgentVideoDrawerUrl';
+import {
+    openShortVideoAgentInSearchParams,
+    parseShortVideoAgentIdFromSearch,
+} from 'helpers/shortVideoAgentVideoDrawerUrl';
 import {
     addQuickPreview,
     isQuickPreviewPinned,
@@ -217,6 +220,9 @@ function PipelineStepsPreview({ item }: { item: ActiveFullAutoPipelineItem }) {
 
 export default function ShortVideoPipelineDock() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    // Short video đang mở workspace (từ URL) — đánh dấu trong danh sách để không xem nhầm.
+    const activeShortVideoId = parseShortVideoAgentIdFromSearch(searchParams.toString());
     const [runningItems, setRunningItems] = React.useState<ActiveFullAutoPipelineItem[]>([]);
     const [pinnedItems, setPinnedItems] = React.useState<QuickPreviewItem[]>(() => readQuickPreviewList());
     const [selectedId, setSelectedId] = React.useState<number | null>(null);
@@ -420,6 +426,8 @@ export default function ShortVideoPipelineDock() {
                             const active = selected?.id === item.id;
                             const processing = isWorkerProcessing(item);
                             const pinned = isQuickPreviewPinned(item.id);
+                            const isCurrentVideo = activeShortVideoId !== null
+                                && item.id === activeShortVideoId;
                             return (
                                 <Box
                                     key={item.id}
@@ -435,6 +443,9 @@ export default function ShortVideoPipelineDock() {
                                         borderLeft: active
                                             ? '3px solid #29b6f6'
                                             : '3px solid transparent',
+                                        boxShadow: isCurrentVideo
+                                            ? 'inset 0 0 0 1px rgba(76,175,80,0.6)'
+                                            : 'none',
                                         '&:hover': {
                                             bgcolor: active
                                                 ? 'rgba(41,182,246,0.2)'
@@ -481,11 +492,35 @@ export default function ShortVideoPipelineDock() {
                                             {!item.pinnedOnly ? stepLabel(item, item.current_step) : ''}
                                         </Typography>
                                     </Box>
-                                    {processing ? (
-                                        <CircularProgress size={12} thickness={6} sx={{ color: '#29b6f6', mt: 0.25 }} />
-                                    ) : pinned ? (
-                                        <BookmarkIcon sx={{ fontSize: 14, color: '#ffb74d', mt: 0.25 }} />
-                                    ) : null}
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: 0.25,
+                                            mt: 0.25,
+                                            flex: '0 0 auto',
+                                        }}
+                                    >
+                                        {isCurrentVideo ? (
+                                            <Chip
+                                                size="small"
+                                                label="Đang mở"
+                                                sx={{
+                                                    height: 16,
+                                                    bgcolor: 'rgba(76,175,80,0.22)',
+                                                    color: '#a5d6a7',
+                                                    fontWeight: 800,
+                                                    '& .MuiChip-label': { px: 0.6, fontSize: 9.5 },
+                                                }}
+                                            />
+                                        ) : null}
+                                        {processing ? (
+                                            <CircularProgress size={12} thickness={6} sx={{ color: '#29b6f6' }} />
+                                        ) : pinned ? (
+                                            <BookmarkIcon sx={{ fontSize: 14, color: '#ffb74d' }} />
+                                        ) : null}
+                                    </Box>
                                 </Box>
                             );
                         })}
@@ -525,6 +560,19 @@ export default function ShortVideoPipelineDock() {
                                                 : `${isWorkerProcessing(selected) ? 'Đang chạy · ' : 'Chờ worker · '}${stepLabel(selected, selected.current_step)}`}
                                         </Typography>
                                     </Box>
+                                    {activeShortVideoId !== null && selected.id === activeShortVideoId ? (
+                                        <Chip
+                                            size="small"
+                                            label="Video đang mở"
+                                            sx={{
+                                                height: 20,
+                                                bgcolor: 'rgba(76,175,80,0.22)',
+                                                color: '#a5d6a7',
+                                                fontWeight: 800,
+                                                '& .MuiChip-label': { px: 0.9, fontSize: 10.5 },
+                                            }}
+                                        />
+                                    ) : null}
                                     <Chip
                                         size="small"
                                         label={selected.pinnedOnly
