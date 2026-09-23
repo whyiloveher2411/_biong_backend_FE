@@ -37,6 +37,7 @@ import {
     type BeatAudioProgress,
 } from './agentVideoBeatAudioProgress';
 import { useAgentHeadlessPreview } from './useAgentHeadlessPreview';
+import { setHeadlessPreviewLayout } from 'helpers/shortVideoHeadlessPreviewBus';
 
 type Props = {
     open: boolean;
@@ -274,6 +275,21 @@ export default function ShortVideoAgentHeadlessPreview({
         // Đổi video (hoặc mở trang) → thu nhỏ mặc định.
         setMinimized(true);
     }, [shortVideoId]);
+
+    // Chia sẻ layout cho dock "Pipeline short video" neo sát bên trái preview.
+    React.useEffect(() => {
+        const visible = open && (running || showResult);
+        setHeadlessPreviewLayout({
+            visible,
+            width: visible ? (minimized ? MIN_PREVIEW_WIDTH : panelWidth) : 0,
+            right: 20,
+            bottom: 20,
+        });
+    }, [open, running, showResult, minimized, panelWidth]);
+
+    React.useEffect(() => () => {
+        setHeadlessPreviewLayout({ visible: false, width: 0 });
+    }, []);
 
     React.useEffect(() => {
         try {

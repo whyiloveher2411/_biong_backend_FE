@@ -28,6 +28,11 @@ import {
     type QuickPreviewItem,
 } from 'helpers/shortVideoQuickPreview';
 import {
+    getHeadlessPreviewLayout,
+    subscribeHeadlessPreviewLayout,
+    type HeadlessPreviewLayout,
+} from 'helpers/shortVideoHeadlessPreviewBus';
+import {
     cancelFullAutoPipeline,
     listActiveFullAutoPipelines,
     parseApiMessage,
@@ -48,6 +53,9 @@ const POLL_MS = 4000;
 const LIST_COLUMN_WIDTH = 248;
 const DETAIL_COLUMN_WIDTH = 480;
 const BODY_MAX_HEIGHT = 400;
+const DOCK_MAX_WIDTH = LIST_COLUMN_WIDTH + DETAIL_COLUMN_WIDTH + 16;
+/** Khoảng cách dock với box preview headless khi nằm cạnh nhau. */
+const PREVIEW_GAP = 12;
 
 /** Item dock = pipeline đang chạy, hoặc video user ghim (không chạy pipeline). */
 type DockItem = ActiveFullAutoPipelineItem & { pinnedOnly?: boolean };
@@ -215,6 +223,9 @@ export default function ShortVideoPipelineDock() {
     const [stoppingId, setStoppingId] = React.useState<number | null>(null);
     // Mặc định thu gọn — tránh dock che UI khi refresh/mở trang.
     const [dockCollapsed, setDockCollapsed] = React.useState(true);
+    const [previewLayout, setPreviewLayout] = React.useState<HeadlessPreviewLayout>(
+        () => getHeadlessPreviewLayout(),
+    );
     // Worker chuyển giữa job con có thể khiến 1 nhịp poll trả rỗng — chỉ ẩn pipeline
     // đang chạy sau 2 nhịp liên tiếp để box không nhấp nháy.
     const emptyStreakRef = React.useRef(0);
@@ -252,6 +263,8 @@ export default function ShortVideoPipelineDock() {
         sync();
         return subscribeQuickPreview(sync);
     }, []);
+
+    React.useEffect(() => subscribeHeadlessPreviewLayout(setPreviewLayout), []);
 
     const merged = React.useMemo<DockItem[]>(() => {
         const runningIds = new Set(runningItems.map((item) => item.id));
@@ -321,18 +334,25 @@ export default function ShortVideoPipelineDock() {
     const selected = merged.find((item) => item.id === selectedId) || merged[0];
     const selectedPinned = selected ? isQuickPreviewPinned(selected.id) : false;
 
+    // Neo sát phải; khi có box preview headless thì đặt ngay bên trái nó
+    // (giống dock chat Facebook).
+    const previewVisible = previewLayout.visible && previewLayout.width > 0;
+    const dockRight = previewVisible
+        ? previewLayout.right + previewLayout.width + PREVIEW_GAP
+        : previewLayout.right;
+    const dockBottom = previewLayout.bottom;
+    const dockMaxWidth = `calc(100vw - ${Math.round(dockRight + 16)}px)`;
+
     return (
         <Paper
             elevation={12}
             sx={{
                 position: 'fixed',
-                left: 16,
-                bottom: 16,
+                right: dockRight,
+                bottom: dockBottom,
                 zIndex: 1400,
-                width: dockCollapsed
-                    ? 'auto'
-                    : `min(${LIST_COLUMN_WIDTH + DETAIL_COLUMN_WIDTH + 16}px, calc(100vw - 32px))`,
-                maxWidth: 'calc(100vw - 32px)',
+                width: dockCollapsed ? 'auto' : `min(${DOCK_MAX_WIDTH}px, ${dockMaxWidth})`,
+                maxWidth: dockMaxWidth,
                 bgcolor: 'rgba(9,12,16,0.97)',
                 color: 'common.white',
                 border: '1px solid rgba(255,255,255,0.16)',
@@ -358,7 +378,7 @@ export default function ShortVideoPipelineDock() {
                     noWrap
                     sx={{ flex: dockCollapsed ? '0 0 auto' : 1 }}
                 >
-                    Pipeline & Preview nhanh
+                    Pipeline short video
                 </Typography>
                 <Chip
                     size="small"
