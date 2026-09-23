@@ -3,6 +3,7 @@ import { makeStyles, useTheme } from '@mui/styles';
 import LinearProgress from 'components/atoms/LinearProgress';
 import FormRelogin from 'components/organisms/FormRelogin';
 import Header from 'components/organisms/Header';
+import ShortVideoPipelineDock from 'components/organisms/ShortVideoPipelineDock';
 import SidebarFull from 'components/organisms/SidebarFull';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import React, { Suspense } from 'react';
@@ -158,6 +159,7 @@ function Router() {
                             </main>
                         </div>
                     </div>
+                    <ShortVideoPipelineDock />
                 </>
             }
             {

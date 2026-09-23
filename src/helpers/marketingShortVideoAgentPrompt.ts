@@ -198,9 +198,9 @@ export async function refineYoutubeThumbnailImage(
     }) as Promise<RefineYoutubeThumbnailImageResponse>;
 }
 
-export type SyncLatestYoutubeThumbnailImageResponse = ShortVideoPromptFetchResponse & {
+export type SyncLatestYoutubeThumbnailImageResponse = YoutubeThumbnailImageResponse & {
     job_id?: number;
-    rank?: number;
+    source?: string;
 };
 
 /**

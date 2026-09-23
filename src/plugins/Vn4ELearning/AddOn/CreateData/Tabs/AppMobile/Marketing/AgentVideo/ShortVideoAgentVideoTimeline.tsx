@@ -47,6 +47,7 @@ import { fetchShortVideoAgentImageStyle } from 'helpers/marketingShortVideoImage
 import { fetchShortVideoAgentScriptStyle } from 'helpers/marketingShortVideoScriptStyleApi';
 import { fetchShortVideoAgentChannel } from 'helpers/marketingShortVideoChannelApi';
 import MarketingWorkflowButtons from '../MarketingWorkflowButtons';
+import ShortVideoQuickPreviewButton from './ShortVideoQuickPreviewButton';
 
 import type { useAgentVideoContent } from './useAgentVideoContent';
 import type {
@@ -1289,6 +1290,11 @@ export default function ShortVideoAgentVideoTimeline({
                         onChange={setTimelineScaleWidth}
                     />
                 ) : null}
+                <ShortVideoQuickPreviewButton
+                    shortVideoId={shortVideoId}
+                    title={promptTopic}
+                    appMobileId={agentState?.appMobileId}
+                />
                 <MarketingWorkflowButtons
                     promptContext={{
                         topic: promptTopic,

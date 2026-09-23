@@ -851,6 +851,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     const [fetchingTiktokScript, setFetchingTiktokScript] = React.useState(false);
     const [fetchingYoutubeScript, setFetchingYoutubeScript] = React.useState(false);
     const [appMobileTitle, setAppMobileTitle] = React.useState('');
+    const [appMobileId, setAppMobileId] = React.useState(0);
     const [thumbnail, setThumbnail] = React.useState<unknown>(null);
     const [postEligible, setPostEligible] = React.useState(false);
     const [socialPosted, setSocialPosted] = React.useState(false);
@@ -1489,6 +1490,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
         setContentPlainText(String(res?.content_plain_text || '').trim());
         setAppMobileTitle(String(res?.app_mobile_title || '').trim());
+        setAppMobileId(Number(res?.app_mobile_id || 0) || 0);
         setThumbnail(res?.thumbnail ?? null);
         setPostEligible(Boolean(res?.post_eligible));
         setSocialPosted(Boolean(res?.social_posted));
@@ -5444,7 +5446,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 });
             } else {
                 setBeatAudio((prev) => (prev
-                    ? { ...prev, items: {}, ready: 0 }
+                    ? { ...prev, items: [], ready: 0 }
                     : prev));
             }
 
@@ -9637,6 +9639,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         fetchingTiktokScript,
         fetchingYoutubeScript,
         appMobileTitle,
+        appMobileId,
         thumbnail,
         postEligible,
         socialPosted,

@@ -2150,6 +2150,33 @@ export type FullAutoPipelineSummary = {
 };
 
 /**
+ * Pipeline A→Z đang chạy (có job full_auto_pipeline pending/processing).
+ * Nguồn cho dock "Pipeline đang chạy" toàn admin — poll để mở preview / dừng nhanh.
+ */
+export type ActiveFullAutoPipelineItem = {
+    id: number;
+    title: string;
+    /** Id app_mobile gắn với video — dựng link danh sách short video. */
+    app_mobile_id?: number;
+    status: string;
+    current_step: string;
+    enabled?: boolean;
+    /** Job orchestrator gần nhất: processing = worker đang chạy bước này. */
+    job_status?: 'processing' | 'pending' | string;
+    agent_visual_mode?: string;
+    beat_audio_mode?: boolean;
+    started_at?: string;
+    updated_at?: string;
+    error_count?: number;
+    last_error?: {
+        step?: string;
+        message?: string;
+        at?: string;
+    } | null;
+    steps?: Record<string, FullAutoPipelineStep>;
+};
+
+/**
  * Checkbox «Chạy» — sibling agent_video_json.full_auto_step_toggles.
  * Mặc định bật, riêng bgm (audio background) mặc định TẮT — không ghép audio nền vào video.
  */
@@ -4657,6 +4684,18 @@ export async function cancelFullAutoPipeline(
         'plugin/vn4-e-learning/app-mobile/marketing/short-video/cancel-full-auto-pipeline',
         shortVideoBody(shortVideoId),
     ) as Promise<JsonResponse & { full_auto_pipeline?: FullAutoPipelineSummary }>;
+}
+
+/**
+ * Danh sách pipeline A→Z đang chạy trên toàn hệ thống — dùng cho dock toàn admin.
+ */
+export async function listActiveFullAutoPipelines(): Promise<
+    JsonResponse & { pipelines?: ActiveFullAutoPipelineItem[]; total?: number }
+> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/list-active-pipelines',
+        {},
+    ) as Promise<JsonResponse & { pipelines?: ActiveFullAutoPipelineItem[]; total?: number }>;
 }
 
 export async function markBeatDivisionDone(
