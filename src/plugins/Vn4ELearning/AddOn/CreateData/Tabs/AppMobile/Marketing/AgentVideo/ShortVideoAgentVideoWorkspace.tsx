@@ -1209,6 +1209,8 @@ export default function ShortVideoAgentVideoWorkspace({
                 initialBackground={String(editBeatSection?.background || '')}
                 initialImagePrompt={beatImagePromptToText(state.beatImage[editBeatImageId]?.image_prompt || editBeatSection?.image_prompt || '')}
                 initialImageUrl={String(state.beatImage[editBeatImageId]?.image_url || '')}
+                initialVideoUrl={String(state.beatImage[editBeatImageId]?.video_url || '')}
+                initialMediaSource={state.beatImage[editBeatImageId]?.media_source}
                 initialCreativePrompt={String(state.beatImage[editBeatImageId]?.creative_prompt || '')}
                 clipAspect={state.agentClipAspect}
                 saving={state.savingImportHtml}

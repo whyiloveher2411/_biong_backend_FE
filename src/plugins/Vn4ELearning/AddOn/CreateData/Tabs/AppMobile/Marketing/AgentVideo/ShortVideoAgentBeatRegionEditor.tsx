@@ -58,6 +58,7 @@ import WhiteboardBeatImageControl from './WhiteboardBeatImageControl';
 import WhiteboardBeatImagePromptControl from './WhiteboardBeatImagePromptControl';
 import WhiteboardBeatAudioControl from './WhiteboardBeatAudioControl';
 import WhiteboardCustomBackgroundControl from './WhiteboardCustomBackgroundControl';
+import WhiteboardBeatVideoControl from './WhiteboardBeatVideoControl';
 import WhiteboardRegionTimeline, {
     type ManualBeatAdjSession,
     type ManualBeatAdjSlot,
@@ -3858,6 +3859,10 @@ export default function ShortVideoAgentBeatRegionEditor({
     const focusY = parseRatio(currentOverride.focus_y, 0.5);
     const customBgUrl = String(currentOverride.custom_background_url || '').trim();
     const useCustomBg = customBgUrl !== '' && !currentOverride.custom_background_hidden;
+    // Nguồn render của beat: video thay thế (ưu tiên nếu có) hoặc ảnh beat.
+    const beatReplacementVideoUrl = String(state.beatImage?.[beatId]?.video_url || '').trim();
+    const beatReplacementMediaSource: 'image' | 'video' = state.beatImage?.[beatId]?.media_source
+        || (beatReplacementVideoUrl ? 'video' : 'image');
     // Dán toàn bộ ảnh beat lên custom bg (ảnh beat là PNG nền trong suốt) —
     // không cần vùng cutout để thấy nội dung ảnh.
     const beatImageOverBg = useCustomBg && Boolean(currentOverride.beat_image_over_background);
@@ -4630,6 +4635,11 @@ export default function ShortVideoAgentBeatRegionEditor({
                             onOverBackgroundChange={(next) => {
                                 void persistOverride({ beat_image_over_background: next });
                             }}
+                            showSelect
+                            selected={beatReplacementMediaSource === 'image'}
+                            onSelectChange={() => {
+                                void state.handleSetBeatMediaSource(beatId, 'image');
+                            }}
                         />
                         <WhiteboardCustomBackgroundControl
                             shortVideoId={shortVideoId}
@@ -4637,6 +4647,16 @@ export default function ShortVideoAgentBeatRegionEditor({
                             hidden={Boolean(currentOverride.custom_background_hidden)}
                             saving={state.savingWhiteboardBeatOverride}
                             onChange={(patch) => persistOverride(patch)}
+                        />
+                        <WhiteboardBeatVideoControl
+                            videoUrl={beatReplacementVideoUrl}
+                            selected={beatReplacementMediaSource === 'video'}
+                            saving={state.savingImportHtml}
+                            onUploadFile={(file) => state.handleUploadBeatVideoFromFile(beatId, file)}
+                            onClear={() => state.handleDeleteBeatVideo(beatId)}
+                            onSelectChange={(next) => {
+                                void state.handleSetBeatMediaSource(beatId, next ? 'video' : 'image');
+                            }}
                         />
                         </Stack>
                         ) : null}
@@ -5546,6 +5566,37 @@ export default function ShortVideoAgentBeatRegionEditor({
                                 </Stack>
                             ) : null}
                         </Stack>
+
+                        {/* Chọn render bằng video → preview thay ảnh bằng video (click play). */}
+                        {!previewActive && beatReplacementMediaSource === 'video' && beatReplacementVideoUrl ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    zIndex: 3,
+                                    bgcolor: 'common.black',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <Box
+                                    component="video"
+                                    key={beatReplacementVideoUrl}
+                                    src={beatReplacementVideoUrl}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    sx={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'contain',
+                                        display: 'block',
+                                        bgcolor: 'common.black',
+                                    }}
+                                />
+                            </Box>
+                        ) : null}
 
                         {!previewActive && containRect && boxSize ? (
                             <Box

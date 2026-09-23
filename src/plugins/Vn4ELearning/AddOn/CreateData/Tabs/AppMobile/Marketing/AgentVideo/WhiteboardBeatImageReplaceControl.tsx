@@ -16,6 +16,10 @@ type Props = {
     showOverBackground?: boolean;
     overBackground?: boolean;
     onOverBackgroundChange?: (next: boolean) => void;
+    /** Hiện checkbox chọn nguồn render = ảnh beat (thay vì video thay thế). */
+    showSelect?: boolean;
+    selected?: boolean;
+    onSelectChange?: (selected: boolean) => void;
 };
 
 /**
@@ -30,6 +34,9 @@ export default function WhiteboardBeatImageReplaceControl({
     showOverBackground = false,
     overBackground = false,
     onOverBackgroundChange,
+    showSelect = false,
+    selected = false,
+    onSelectChange,
 }: Props) {
     const inputRef = React.useRef<HTMLInputElement | null>(null);
     const beatUrl = String(imageUrl || '').trim();
@@ -125,6 +132,38 @@ export default function WhiteboardBeatImageReplaceControl({
                         >
                             <CircularProgress size={18} sx={{ color: 'common.white' }} />
                         </Box>
+                    ) : null}
+
+                    {showSelect && !busy ? (
+                        <Tooltip
+                            placement="top"
+                            title={selected
+                                ? 'Đang dùng ảnh beat để render'
+                                : 'Dùng ảnh beat để render (thay vì video)'}
+                        >
+                            <Checkbox
+                                size="small"
+                                checked={selected}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => {
+                                    event.stopPropagation();
+                                    onSelectChange?.(event.target.checked);
+                                }}
+                                inputProps={{ 'aria-label': 'Dùng ảnh beat' }}
+                                sx={{
+                                    position: 'absolute',
+                                    top: -2,
+                                    left: -2,
+                                    p: 0.25,
+                                    color: 'common.white',
+                                    bgcolor: 'rgba(0,0,0,0.6)',
+                                    borderRadius: 0.5,
+                                    '&.Mui-checked': { color: 'warning.light' },
+                                    '& .MuiSvgIcon-root': { fontSize: 16 },
+                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.85)' },
+                                }}
+                            />
+                        </Tooltip>
                     ) : null}
 
                     {showOverBackground && !busy ? (

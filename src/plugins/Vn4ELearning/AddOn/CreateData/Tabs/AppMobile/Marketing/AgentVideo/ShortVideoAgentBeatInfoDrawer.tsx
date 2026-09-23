@@ -389,6 +389,8 @@ export default function ShortVideoAgentBeatInfoDrawer({
                             <ShortVideoAgentBeatImagePreview
                                 beatId={beat.id}
                                 imageUrl={String(beatImage?.image_url || '')}
+                                videoUrl={String(beatImage?.video_url || '')}
+                                mediaSource={beatImage?.media_source}
                                 clipAspect={clipAspect}
                                 audioUrl={beatAudioUrl}
                             />

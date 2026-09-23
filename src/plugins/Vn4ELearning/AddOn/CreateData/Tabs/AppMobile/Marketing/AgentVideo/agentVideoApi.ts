@@ -2515,6 +2515,48 @@ export async function uploadAgentVisualImage(shortVideoId: number, file: File): 
     return result;
 }
 
+export async function uploadAgentVisualVideo(shortVideoId: number, file: File): Promise<JsonResponse & {
+    url?: string;
+    preview_url?: string;
+    s3_key?: string;
+    duration_sec?: number;
+}> {
+    const formData = new FormData();
+    formData.append('short_video_id', String(shortVideoId));
+    formData.append('id', String(shortVideoId));
+    formData.append('video', file);
+    formData.append('__l', window.btoa(`${getLanguage().code}#${Date.now()}`));
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAccessToken();
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(
+        convertToURL(
+            getAdminApiPrefix(),
+            'plugin/vn4-e-learning/app-mobile/marketing/short-video/upload-agent-visual-video',
+        ),
+        {
+            method: 'POST',
+            headers,
+            body: formData,
+        },
+    );
+
+    const result = await response.json() as JsonResponse & {
+        url?: string;
+        preview_url?: string;
+        s3_key?: string;
+        duration_sec?: number;
+    };
+    if (!response.ok && !result?.message) {
+        throw new Error(response.statusText || 'Upload video thất bại');
+    }
+    return result;
+}
+
 export async function savePublishFlags(
     shortVideoId: number,
     flags: { postEligible?: boolean; socialPosted?: boolean },
@@ -4799,6 +4841,11 @@ export async function saveAgentImportHtml(
         beatHtml?: string;
         beatImageUrl?: string;
         beatImagePrompt?: string;
+        /** Video thay thế ảnh beat (render bằng video khi media_source = 'video'). */
+        beatVideoUrl?: string;
+        beatVideoDelete?: boolean;
+        /** Nguồn render của beat: 'image' | 'video'. */
+        beatMediaSource?: 'image' | 'video';
         /** Xóa CHỈ ảnh beat (image_url + extra urls) — giữ prompt / chat_url / vùng ảnh. */
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;
@@ -4848,6 +4895,9 @@ export async function saveAgentImportHtml(
         payload.beatHtml !== undefined
         || payload.beatImageUrl !== undefined
         || payload.beatImagePrompt !== undefined
+        || payload.beatVideoUrl !== undefined
+        || payload.beatVideoDelete !== undefined
+        || payload.beatMediaSource !== undefined
         || payload.beatImageDelete !== undefined
         || payload.beatImageChatUrl !== undefined
         || payload.beatImageSyncLatest !== undefined
@@ -4866,6 +4916,15 @@ export async function saveAgentImportHtml(
         }
         if (payload.beatImagePrompt !== undefined) {
             body.beat_image_prompt = payload.beatImagePrompt;
+        }
+        if (payload.beatVideoUrl !== undefined) {
+            body.beat_video_url = payload.beatVideoUrl;
+        }
+        if (payload.beatVideoDelete !== undefined) {
+            body.beat_video_delete = payload.beatVideoDelete === true;
+        }
+        if (payload.beatMediaSource !== undefined) {
+            body.beat_media_source = payload.beatMediaSource;
         }
         if (payload.beatImageDelete !== undefined) {
             body.beat_image_delete = payload.beatImageDelete === true;

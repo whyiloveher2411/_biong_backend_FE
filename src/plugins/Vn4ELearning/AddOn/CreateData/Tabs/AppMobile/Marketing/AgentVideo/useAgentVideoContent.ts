@@ -134,6 +134,7 @@ import {
     uploadAgentBgmMp3,
     fetchBgmPromptSuggestions,
     uploadAgentVisualImage,
+    uploadAgentVisualVideo,
     type AgentRenderMode,
     type AgentVisualMode,
     type AgentVideoSettingField,
@@ -1560,7 +1561,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 }
             });
             Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
-                if (prev[beatId]?.image_url?.trim()) {
+                if (prev[beatId]?.image_url?.trim() || prev[beatId]?.video_url?.trim()) {
                     nextBeatImage[beatId] = prev[beatId];
                 }
             });
@@ -2718,7 +2719,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                     }
                 });
                 Object.keys(beatImageSaveTimerRef.current).forEach((beatId) => {
-                    if (prev[beatId]?.image_url?.trim()) {
+                    if (prev[beatId]?.image_url?.trim() || prev[beatId]?.video_url?.trim()) {
                         nextBeatImage[beatId] = prev[beatId];
                     }
                 });
@@ -2755,6 +2756,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatHtml?: string;
         beatImageUrl?: string;
         beatImagePrompt?: string;
+        beatVideoUrl?: string;
+        beatVideoDelete?: boolean;
+        beatMediaSource?: 'image' | 'video';
         beatImageDelete?: boolean;
         beatImageChatUrl?: string;
         beatImageSyncLatest?: boolean;
@@ -2776,6 +2780,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 beatHtml: payload.beatHtml,
                 beatImageUrl: payload.beatImageUrl,
                 beatImagePrompt: payload.beatImagePrompt,
+                beatVideoUrl: payload.beatVideoUrl,
+                beatVideoDelete: payload.beatVideoDelete,
+                beatMediaSource: payload.beatMediaSource,
                 beatImageDelete: payload.beatImageDelete,
                 beatImageChatUrl: payload.beatImageChatUrl,
                 beatImageSyncLatest: payload.beatImageSyncLatest,
@@ -4225,6 +4232,125 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setSavingImportHtml(false);
         }
     }, [beatImage, beatMap, commitBeatImageChange, shortVideoId, showMessage]);
+
+    /**
+     * Lưu thay đổi video thay thế ảnh beat (upload / chọn nguồn render / xóa video).
+     * Video có URL → mặc định chọn media_source = 'video' (ưu tiên video nếu có).
+     */
+    const commitBeatVideoChange = React.useCallback(async (
+        beatId: string,
+        payload: {
+            videoUrl?: string;
+            videoDurationSec?: number;
+            deleteVideo?: boolean;
+            mediaSource?: 'image' | 'video';
+        },
+    ): Promise<boolean> => {
+        const draftUpdatedAt = new Date().toISOString();
+        setBeatImage((prev) => {
+            const current = prev[beatId];
+            const next: BeatImageEntry = { ...(current || { image_url: '' }) };
+            if (payload.deleteVideo) {
+                delete next.video_url;
+                delete next.video_duration_sec;
+                delete next.video_updated_at;
+                if (next.media_source === 'video') {
+                    next.media_source = 'image';
+                }
+            } else if (payload.videoUrl !== undefined) {
+                next.video_url = payload.videoUrl;
+                next.video_updated_at = draftUpdatedAt;
+                if (payload.videoDurationSec !== undefined) {
+                    next.video_duration_sec = payload.videoDurationSec;
+                }
+                if (payload.mediaSource === undefined && next.media_source !== 'image') {
+                    next.media_source = 'video';
+                }
+            }
+            if (payload.mediaSource !== undefined) {
+                next.media_source = payload.mediaSource;
+            }
+            return { ...prev, [beatId]: next };
+        });
+
+        return persistImportHtml({
+            beatId,
+            ...(payload.deleteVideo ? { beatVideoDelete: true } : {}),
+            ...(payload.videoUrl !== undefined ? { beatVideoUrl: payload.videoUrl } : {}),
+            ...(payload.mediaSource !== undefined ? { beatMediaSource: payload.mediaSource } : {}),
+        });
+    }, [persistImportHtml]);
+
+    const handleUploadBeatVideoFromFile = React.useCallback(async (
+        beatId: string,
+        file: File,
+    ): Promise<string | null> => {
+        const normalizedBeatId = String(beatId || '').trim();
+        if (!normalizedBeatId) {
+            showMessage('Thiếu beat_id để upload video', 'error');
+            return null;
+        }
+        if (!(file instanceof File)) {
+            showMessage('File video không hợp lệ', 'error');
+            return null;
+        }
+
+        setSavingImportHtml(true);
+        try {
+            const uploaded = await uploadAgentVisualVideo(shortVideoId, file);
+            if (!uploaded?.success) {
+                showMessage(parseApiMessage(uploaded?.message) || 'Upload video thất bại', 'error');
+                return null;
+            }
+            const videoUrl = String(uploaded.url || uploaded.preview_url || '').trim();
+            if (!videoUrl) {
+                showMessage('Upload xong nhưng không có URL video', 'error');
+                return null;
+            }
+            const saved = await commitBeatVideoChange(normalizedBeatId, {
+                videoUrl,
+                videoDurationSec: Number(uploaded.duration_sec) > 0
+                    ? Number(uploaded.duration_sec)
+                    : undefined,
+                mediaSource: 'video',
+            });
+            if (!saved) {
+                showMessage('Không lưu được video vào beat hiện tại', 'error');
+                return null;
+            }
+            showMessage(`Đã gắn video vào ${normalizedBeatId}`, 'success');
+            return videoUrl;
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+            return null;
+        } finally {
+            setSavingImportHtml(false);
+        }
+    }, [commitBeatVideoChange, shortVideoId, showMessage]);
+
+    const handleSetBeatMediaSource = React.useCallback(async (
+        beatId: string,
+        mediaSource: 'image' | 'video',
+    ): Promise<boolean> => {
+        const normalizedBeatId = String(beatId || '').trim();
+        if (!normalizedBeatId) {
+            return false;
+        }
+        return commitBeatVideoChange(normalizedBeatId, { mediaSource });
+    }, [commitBeatVideoChange]);
+
+    const handleDeleteBeatVideo = React.useCallback(async (beatId: string): Promise<boolean> => {
+        const normalizedBeatId = String(beatId || '').trim();
+        if (!normalizedBeatId) {
+            showMessage('Thiếu beat_id để xóa video', 'error');
+            return false;
+        }
+        const saved = await commitBeatVideoChange(normalizedBeatId, { deleteVideo: true });
+        if (saved) {
+            showMessage(`Đã xóa video của ${normalizedBeatId}`, 'success');
+        }
+        return saved;
+    }, [commitBeatVideoChange, showMessage]);
 
     /**
      * Xóa CHỈ ảnh beat hiện tại (image_url + extra layers) — giữ nguyên
@@ -9874,10 +10000,14 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         handleBeatHtmlChange,
         commitBeatHtmlChange,
         commitBeatImageChange,
+        commitBeatVideoChange,
         handleBeatImagePromptChange,
         handleOpenBeatImageDuckAiManual,
         handleOpenBeatImageMetaAiManual,
         handleUploadBeatImageFromFile,
+        handleUploadBeatVideoFromFile,
+        handleSetBeatMediaSource,
+        handleDeleteBeatVideo,
         handleDeleteBeatImage,
         handleToggleBeatImageSyncLatest,
         /** @deprecated Alias tương thích cũ */

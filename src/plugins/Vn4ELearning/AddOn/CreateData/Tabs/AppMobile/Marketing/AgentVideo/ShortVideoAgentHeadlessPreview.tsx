@@ -195,7 +195,8 @@ export default function ShortVideoAgentHeadlessPreview({
     void agentGeminiOpenBrowser; // headed Chrome do backend xử lý; không chặn WS preview
     void geminiFillStatus;
     void geminiThumbnailIdeaStatus;
-    const [minimized, setMinimized] = React.useState(false);
+    // Mặc định thu nhỏ — tránh box preview che UI khi refresh/mở trang.
+    const [minimized, setMinimized] = React.useState(true);
     const [showResult, setShowResult] = React.useState(false);
     const [panelWidth, setPanelWidth] = React.useState(storedPreviewWidth);
     const [resizing, setResizing] = React.useState(false);
@@ -270,7 +271,8 @@ export default function ShortVideoAgentHeadlessPreview({
     }, [open, running, shortVideoId]);
 
     React.useEffect(() => {
-        setMinimized(false);
+        // Đổi video (hoặc mở trang) → thu nhỏ mặc định.
+        setMinimized(true);
     }, [shortVideoId]);
 
     React.useEffect(() => {

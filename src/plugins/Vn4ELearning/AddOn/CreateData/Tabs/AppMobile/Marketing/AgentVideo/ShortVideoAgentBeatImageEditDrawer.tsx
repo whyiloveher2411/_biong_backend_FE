@@ -37,6 +37,10 @@ type Props = {
     initialBackground?: string;
     initialImagePrompt: string;
     initialImageUrl?: string;
+    /** Video thay thế ảnh beat (hiển thị trong preview khi mediaSource = 'video'). */
+    initialVideoUrl?: string;
+    /** Nguồn render đang chọn: 'image' | 'video'. */
+    initialMediaSource?: 'image' | 'video';
     initialCreativePrompt?: string;
     clipAspect?: import('./agentVideoClipAspect').ClipAspect;
     saving?: boolean;
@@ -69,6 +73,8 @@ export default function ShortVideoAgentBeatImageEditDrawer({
     initialBackground = '',
     initialImagePrompt,
     initialImageUrl = '',
+    initialVideoUrl = '',
+    initialMediaSource,
     initialCreativePrompt = '',
     clipAspect = '9:16',
     saving = false,
@@ -359,6 +365,8 @@ export default function ShortVideoAgentBeatImageEditDrawer({
                 <ShortVideoAgentBeatImagePreview
                     beatId={beatId}
                     imageUrl={previewUrl}
+                    videoUrl={initialVideoUrl}
+                    mediaSource={initialMediaSource}
                     clipAspect={clipAspect}
                 />
 

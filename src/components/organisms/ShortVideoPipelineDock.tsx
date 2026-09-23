@@ -213,7 +213,8 @@ export default function ShortVideoPipelineDock() {
     const [pinnedItems, setPinnedItems] = React.useState<QuickPreviewItem[]>(() => readQuickPreviewList());
     const [selectedId, setSelectedId] = React.useState<number | null>(null);
     const [stoppingId, setStoppingId] = React.useState<number | null>(null);
-    const [dockCollapsed, setDockCollapsed] = React.useState(false);
+    // Mặc định thu gọn — tránh dock che UI khi refresh/mở trang.
+    const [dockCollapsed, setDockCollapsed] = React.useState(true);
     // Worker chuyển giữa job con có thể khiến 1 nhịp poll trả rỗng — chỉ ẩn pipeline
     // đang chạy sau 2 nhịp liên tiếp để box không nhấp nháy.
     const emptyStreakRef = React.useRef(0);

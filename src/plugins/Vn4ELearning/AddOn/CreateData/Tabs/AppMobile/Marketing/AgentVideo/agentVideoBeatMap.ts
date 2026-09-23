@@ -55,6 +55,16 @@ export type BeatImageEntry = {
     extra_image_urls?: string[];
     image_prompt?: string;
     /**
+     * Video thay thế ảnh beat cho beat này. Khi `media_source = 'video'` (hoặc
+     * media_source trống + có video_url) thì pipeline render dùng video này thay
+     * cho ảnh; tốc độ video được fit về đúng thời lượng audio của beat.
+     */
+    video_url?: string;
+    video_updated_at?: string;
+    video_duration_sec?: number;
+    /** Nguồn render của beat: 'image' (ảnh beat) hoặc 'video' (video thay thế). */
+    media_source?: 'image' | 'video';
+    /**
      * URL chat chatbot (Meta.ai / Duck.ai) đã tạo ảnh beat — user mở lại chat gốc
      * để xem/update ảnh ngay trong conversation đó.
      */
@@ -687,11 +697,16 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
     const imageUrl = String(raw.image_url || '').trim();
     const chatUrl = String(raw.chat_url || '').trim();
     const imagePrompt = String(raw.image_prompt || '').trim();
-    // Ảnh đã xóa nhưng còn metadata (prompt / chat_url) → vẫn parse để nút
-    // "Mở url chatbot" dùng được; chỉ bỏ entry rỗng hoàn toàn.
-    if (!imageUrl && !chatUrl && !imagePrompt) {
+    const videoUrl = String(raw.video_url || '').trim();
+    // Ảnh đã xóa nhưng còn metadata (prompt / chat_url / video) → vẫn parse để nút
+    // "Mở url chatbot" / render video dùng được; chỉ bỏ entry rỗng hoàn toàn.
+    if (!imageUrl && !chatUrl && !imagePrompt && !videoUrl) {
         return null;
     }
+    const mediaSourceRaw = String(raw.media_source || '').trim().toLowerCase();
+    const mediaSource: 'image' | 'video' | undefined = mediaSourceRaw === 'image' || mediaSourceRaw === 'video'
+        ? mediaSourceRaw
+        : undefined;
     const qaStatus = raw.qa_status != null ? normalizeBeatQaStatus(raw.qa_status) : undefined;
     const extraUrls = Array.isArray(raw.extra_image_urls)
         ? raw.extra_image_urls
@@ -702,6 +717,12 @@ export function parseBeatImageEntry(entry: unknown): BeatImageEntry | null {
         image_url: imageUrl,
         extra_image_urls: extraUrls.length ? extraUrls : undefined,
         image_prompt: imagePrompt || undefined,
+        video_url: videoUrl || undefined,
+        video_updated_at: raw.video_updated_at ? String(raw.video_updated_at) : undefined,
+        video_duration_sec: Number.isFinite(Number(raw.video_duration_sec))
+            ? Number(raw.video_duration_sec)
+            : undefined,
+        media_source: mediaSource,
         chat_url: chatUrl || undefined,
         updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
         creative_prompt: raw.creative_prompt != null ? String(raw.creative_prompt) : undefined,
@@ -733,6 +754,20 @@ export function parseBeatImageBlock(raw: unknown): Record<string, BeatImageEntry
         }
     });
     return next;
+}
+
+/**
+ * Beat render bằng video thay vì ảnh? Ưu tiên video khi có `video_url` và user
+ * chưa chọn rõ `media_source = 'image'`.
+ */
+export function beatImageEntryUsesVideo(entry?: BeatImageEntry | null): boolean {
+    if (!entry) {
+        return false;
+    }
+    if (!String(entry.video_url || '').trim()) {
+        return false;
+    }
+    return entry.media_source !== 'image';
 }
 
 export function getBeatImageVisualState(
