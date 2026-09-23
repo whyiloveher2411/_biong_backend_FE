@@ -9,6 +9,7 @@ import { DataResultApiProps } from 'components/atoms/fields/relationship_onetoma
 import { CreatePostTypeData } from 'components/pages/PostType/CreateData';
 import { shouldCloseDrawerAfterPostSave } from 'helpers/postTypeDrawer';
 import {
+    Alert,
     Button,
     Typography,
     SvgIcon,
@@ -44,6 +45,7 @@ import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
+import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
 import FieldForm from 'components/atoms/fields/relationship_onetomany_show/Form';
 import { useSearchParams } from 'react-router-dom';
 import MarketingSourceTablesPanel from './MarketingSourceTablesPanel';
@@ -59,6 +61,12 @@ import MarketingCompetitorChannelDrawer from './MarketingCompetitorChannelDrawer
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
 import AudioScriptStyleManagerDrawer from './AudioScriptStyleManagerDrawer';
+import useConfirmDialog from 'hook/useConfirmDialog';
+import {
+    enqueueShortVideoStorageCleanup,
+    getShortVideoStorageCleanupStatus,
+    type StorageCleanupState,
+} from 'helpers/marketingShortVideoStorageCleanupApi';
 
 const MARKETING_VIEW_PARAM = 'marketing_view';
 
@@ -483,6 +491,65 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
     const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
     const [openWhiteboardTransitionManager, setOpenWhiteboardTransitionManager] = useState(false);
+    const [cleanupRunning, setCleanupRunning] = useState(false);
+    const [cleanupState, setCleanupState] = useState<StorageCleanupState | null>(null);
+    const cleanupConfirm = useConfirmDialog();
+    const cleanupPollRef = React.useRef<number | null>(null);
+
+    const refreshCleanupStatus = React.useCallback(async () => {
+        try {
+            const result = await getShortVideoStorageCleanupStatus();
+            if (result.state) {
+                setCleanupState(result.state);
+            }
+            const running = Boolean(result.running);
+            setCleanupRunning(running);
+            if (running) {
+                if (cleanupPollRef.current === null) {
+                    cleanupPollRef.current = window.setInterval(() => {
+                        void refreshCleanupStatus();
+                    }, 5000);
+                }
+            } else if (cleanupPollRef.current !== null) {
+                window.clearInterval(cleanupPollRef.current);
+                cleanupPollRef.current = null;
+            }
+        } catch {
+            /* bỏ qua lỗi mạng tạm thời */
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (viewMode !== 'short_video') {
+            return;
+        }
+        void refreshCleanupStatus();
+        return () => {
+            if (cleanupPollRef.current !== null) {
+                window.clearInterval(cleanupPollRef.current);
+                cleanupPollRef.current = null;
+            }
+        };
+    }, [viewMode, refreshCleanupStatus]);
+
+    const runStorageCleanup = React.useCallback(async () => {
+        try {
+            await enqueueShortVideoStorageCleanup();
+            setCleanupRunning(true);
+        } finally {
+            void refreshCleanupStatus();
+        }
+    }, [refreshCleanupStatus]);
+
+    const handleStorageCleanupClick = React.useCallback(() => {
+        cleanupConfirm.onConfirm(() => {
+            void runStorageCleanup();
+        }, {
+            title: 'Dọn file local short video',
+            message: 'Xóa toàn bộ file local của video ĐÃ POST SOCIAL (ảnh beat, audio, video trung gian, project render) và các folder mồ côi của video đã xóa. Thao tác không thể hoàn tác. Tiếp tục?',
+            icon: 'DeleteSweepOutlined',
+        });
+    }, [cleanupConfirm, runStorageCleanup]);
 
     React.useEffect(() => {
         setViewMode(parseMarketingViewMode(searchParams));
@@ -848,7 +915,29 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 >
                                     Script Style
                                 </Button>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={cleanupRunning
+                                        ? <CircularProgress size={16} color="inherit" />
+                                        : <DeleteSweepOutlinedIcon fontSize="small" />}
+                                    onClick={handleStorageCleanupClick}
+                                    disabled={cleanupRunning}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    {cleanupRunning ? 'Đang dọn file…' : 'Dọn file local'}
+                                </Button>
                             </Stack>
+                            {cleanupState && cleanupState.ran_at && (
+                                <Alert
+                                    severity={cleanupState.status === 'completed_with_errors' ? 'warning' : 'info'}
+                                    sx={{ mt: 1 }}
+                                >
+                                    {`Lần dọn gần nhất (${moment(cleanupState.ran_at).format('DD/MM/YYYY HH:mm')}): giải phóng ${cleanupState.freed_human || '0 B'} — ${cleanupState.videos_cleaned || 0} video, ${cleanupState.orphans_removed || 0} folder mồ côi.`}
+                                    {cleanupRunning ? ' Đang chạy…' : ''}
+                                </Alert>
+                            )}
                         </>
                     )}
 
@@ -1157,6 +1246,8 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                 open={openScriptStyleDrawer}
                 onClose={() => setOpenScriptStyleDrawer(false)}
             />
+
+            {cleanupConfirm.component}
         </div >
     );
 }
