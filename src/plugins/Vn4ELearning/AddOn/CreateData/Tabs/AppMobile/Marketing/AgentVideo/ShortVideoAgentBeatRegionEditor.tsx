@@ -4657,6 +4657,9 @@ export default function ShortVideoAgentBeatRegionEditor({
                             onSelectChange={(next) => {
                                 void state.handleSetBeatMediaSource(beatId, next ? 'video' : 'image');
                             }}
+                            canAnimate={Boolean(String(imageUrl || '').trim())}
+                            animating={state.animatingBeatVibesIds.includes(beatId)}
+                            onAnimateImage={() => state.handleAnimateBeatVibes(beatId)}
                         />
                         </Stack>
                         ) : null}

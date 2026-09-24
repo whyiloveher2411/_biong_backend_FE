@@ -49,6 +49,14 @@ type Props = {
         total?: number;
         succeeded?: number;
     } | null;
+    /** Tiến độ animate ảnh beat → video (vibes.ai). */
+    vibesFillProgress?: {
+        beatId?: string;
+        current?: number;
+        total?: number;
+        succeeded?: number;
+    } | null;
+    vibesFillStatus?: string;
     /** Backend: true khi có job Puppeteer/headless đang chạy — bật preview realtime tự động. */
     headlessBrowserActive?: boolean;
     /** Chỉ dùng để hiện headed Chrome — không chặn preview realtime. */
@@ -168,6 +176,8 @@ export default function ShortVideoAgentHeadlessPreview({
     shortVideoId,
     pipeline,
     geminiFillProgress,
+    vibesFillProgress = null,
+    vibesFillStatus = 'none',
     headlessBrowserActive = false,
     agentGeminiOpenBrowser = false,
     agentVisualMode = '',
@@ -382,6 +392,7 @@ export default function ShortVideoAgentHeadlessPreview({
         (showWhiteboardRenderProgress && whiteboardRenderProgress?.activeBeatId)
         || (showBeatAudioProgress && beatAudioProgress?.activeBeatId)
         || preview.metadata?.beat_id
+        || vibesFillProgress?.beatId
         || geminiFillProgress?.beatId
         || '',
     ).trim();
@@ -398,19 +409,48 @@ export default function ShortVideoAgentHeadlessPreview({
         (pipelineRunning && currentStep === 'beat_image_fill')
         || isActiveJobStatus(geminiImageFillStatus)
     );
-    const title = showWhiteboardRenderProgress && whiteboardRenderProgress?.active
-        ? whiteboardRenderProgressLabel(whiteboardRenderProgress)
-        : (showBeatAudioProgress && beatAudioTitle
-            ? beatAudioTitle
-            : (isImageFillStep
-                ? imageFillProgressLabel
-                : (pipelineRunning
-                    ? stepLabel(currentStep, agentVisualMode)
-                    : (isActiveJobStatus(geminiScriptPhoneticStatus)
-                        ? stepLabel('script_phonetic_normalize', agentVisualMode)
-                        : (chatgptTtsActive
-                            ? 'Duyệt / TTS (ChatGPT)'
-                            : (geminiJobActive ? 'Gemini headless' : resultLabel(status)))))));
+    const isVibesFillStep = (
+        (pipelineRunning && currentStep === 'beat_video_animate')
+        || isActiveJobStatus(vibesFillStatus)
+    );
+    const vibesFillProgressLabel = (() => {
+        const current = Number(vibesFillProgress?.current || 0);
+        const total = Number(vibesFillProgress?.total || 0);
+        const beatPart = beatId || 'đang chờ beat…';
+        if (total > 0 && current > 0) {
+            return `Animate ảnh · ${beatPart} (${current}/${total})`;
+        }
+        return `Animate ảnh · ${beatPart}`;
+    })();
+    const title = (() => {
+        // Bước đang chạy thực tế phải ưu tiên hơn tiến độ render beat còn "dính"
+        // từ bước trước — tránh hiện «Render ảnh beat» khi đang animate ảnh beat.
+        if (isVibesFillStep) {
+            return vibesFillProgressLabel;
+        }
+        if (showWhiteboardRenderProgress && whiteboardRenderProgress?.active) {
+            return whiteboardRenderProgressLabel(whiteboardRenderProgress);
+        }
+        if (showBeatAudioProgress && beatAudioTitle) {
+            return beatAudioTitle;
+        }
+        if (isImageFillStep) {
+            return imageFillProgressLabel;
+        }
+        if (pipelineRunning) {
+            return stepLabel(currentStep, agentVisualMode);
+        }
+        if (isActiveJobStatus(geminiScriptPhoneticStatus)) {
+            return stepLabel('script_phonetic_normalize', agentVisualMode);
+        }
+        if (chatgptTtsActive) {
+            return 'Duyệt / TTS (ChatGPT)';
+        }
+        if (geminiJobActive) {
+            return 'Gemini headless';
+        }
+        return resultLabel(status);
+    })();
     const whiteboardSubtitle = showWhiteboardRenderProgress
         ? (
             (whiteboardRenderProgress

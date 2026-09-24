@@ -70,9 +70,11 @@ type Props = {
     onOpenGeminiHeadless?: (beatId: string) => void;
     onRenderWhiteboardBeat?: (beatId: string) => void;
     onAddBeatVideoToCapcut?: (beatId: string) => void;
+    onAnimateBeatVibes?: (beatId: string) => void;
     whiteboardBeatRenders?: Record<string, { status?: string; error?: string }>;
     renderingWhiteboardBeatIds?: string[];
     uploadingBeatVideoToCapcutIds?: string[];
+    animatingBeatVibesIds?: string[];
     onSaveBeatQa?: (beatId: string, qaStatus: BeatQaStatus, qaRefineNote?: string) => Promise<boolean>;
     onQuickIterateBeat?: (beatId: string, qaRefineNote?: string) => Promise<boolean>;
     beatVersions?: Record<string, BeatVersion[]>;
@@ -129,6 +131,8 @@ export default function AgentVideoBeatBoundaryOverlay({
     onOpenGeminiHeadless,
     onRenderWhiteboardBeat,
     onAddBeatVideoToCapcut,
+    onAnimateBeatVibes,
+    animatingBeatVibesIds = [],
     whiteboardBeatRenders = {},
     renderingWhiteboardBeatIds = [],
     uploadingBeatVideoToCapcutIds = [],
@@ -247,12 +251,20 @@ export default function AgentVideoBeatBoundaryOverlay({
         );
     const menuIsUploadingBeatVideoToCapcut = menuBeatId !== ''
         && uploadingBeatVideoToCapcutIds.includes(menuBeatId);
+    const menuIsAnimatingBeatVibes = menuBeatId !== ''
+        && animatingBeatVibesIds.includes(menuBeatId);
+    const menuBeatHasImage = menuBeatId !== ''
+        && (
+            Boolean(String(beatImage[menuBeatId]?.image_url || '').trim())
+            || Boolean(String((beatImage[menuBeatId]?.extra_image_urls || [])[0] || '').trim())
+        );
     const menuBeatVideoReady = menuBeatRenderStatus === 'completed';
     const menuIsBusy = menuIsCopying
         || menuIsPasting
         || menuIsDeleting
         || menuIsOpeningGemini
         || menuIsOpeningGeminiHeadless
+        || menuIsAnimatingBeatVibes
         || menuIsQuickIterating;
 
     return (
@@ -1046,6 +1058,28 @@ export default function AgentVideoBeatBoundaryOverlay({
                                     ? 'Thêm vào project CapCut đã cấu hình'
                                     : 'Cần Render video beat trước'
                             }
+                        />
+                    </MenuItem>
+                ) : null}
+
+                {onAnimateBeatVibes && menuBeatHasImage ? (
+                    <MenuItem
+                        disabled={menuIsBusy || savingImportHtml}
+                        onClick={() => {
+                            const beatId = menuBeatId;
+                            runMenuAction(() => { void onAnimateBeatVibes(beatId); });
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                            {menuIsAnimatingBeatVibes ? (
+                                <CircularProgress size={16} />
+                            ) : (
+                                <VideocamOutlinedIcon fontSize="small" />
+                            )}
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Animate video (vibes.ai)"
+                            secondary="Convert ảnh beat → video (headless, có thể chạy ~1–3 phút)"
                         />
                     </MenuItem>
                 ) : null}

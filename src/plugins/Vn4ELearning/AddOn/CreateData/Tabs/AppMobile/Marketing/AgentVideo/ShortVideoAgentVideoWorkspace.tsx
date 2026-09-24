@@ -1031,6 +1031,10 @@ export default function ShortVideoAgentVideoWorkspace({
                     onAddBeatVideoToCapcut={(beatId) => {
                         void state.handleAddBeatVideoToCapcut(beatId);
                     }}
+                    onAnimateBeatVibes={(beatId) => {
+                        void state.handleAnimateBeatVibes(beatId);
+                    }}
+                    animatingBeatVibesIds={state.animatingBeatVibesIds}
                     whiteboardBeatRenders={state.whiteboardBeatRenders}
                     agentWhiteboardBeatOverrides={state.agentWhiteboardBeatOverrides}
                     renderingWhiteboardBeatIds={state.renderingWhiteboardBeatIds}
@@ -1064,7 +1068,7 @@ export default function ShortVideoAgentVideoWorkspace({
                         state.fillingAllMissingBeatGeminiHeadlessProgress
                     }
                     geminiFillStatus={state.geminiFillStatus}
-                    geminiFillProgress={state.geminiFillProgress}
+                geminiFillProgress={state.geminiFillProgress}
                     whisperStatus={state.whisperStatus}
                     openingBeatGeminiBeatIds={state.openingBeatGeminiBeatIds}
                     openingBeatGeminiHeadlessBeatIds={state.openingBeatGeminiHeadlessBeatIds}
@@ -1252,6 +1256,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 shortVideoId={shortVideoId}
                 pipeline={state.fullAutoPipeline}
                 geminiFillProgress={state.geminiFillProgress}
+                vibesFillProgress={state.vibesFillProgress}
                 headlessBrowserActive={state.headlessBrowserActive}
                 agentGeminiOpenBrowser={state.agentGeminiOpenBrowser}
                 agentVisualMode={state.agentVisualMode}
@@ -1267,6 +1272,7 @@ export default function ShortVideoAgentVideoWorkspace({
                 geminiScriptPhoneticStatus={state.geminiScriptPhoneticStatus}
                 geminiDivisionStatus={state.geminiDivisionStatus}
                 geminiImageFillStatus={state.geminiImageFillStatus}
+                vibesFillStatus={state.vibesFillStatus}
                 geminiFillStatus={state.geminiFillStatus}
                 geminiThumbnailFillStatus={state.geminiThumbnailFillStatus}
                 geminiThumbnailIdeaStatus={state.geminiThumbnailIdeaStatus}

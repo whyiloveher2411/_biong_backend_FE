@@ -1470,6 +1470,8 @@ export type ImportHtmlSummary = {
     beats_image_ready?: boolean;
     missing_beat_image_ids?: string[];
     gemini_image_fill?: ImportHtmlGeminiJobBlock;
+    /** Animate ảnh beat → video (vibes.ai) — tiến độ từng beat. */
+    vibes_fill?: ImportHtmlGeminiJobBlock;
     import_html_ready?: boolean;
     missing_beat_ids?: string[];
     beats_render_error_count?: number;
@@ -2036,6 +2038,7 @@ export const FULL_AUTO_PIPELINE_STEP_ORDER = [
     'resource_image_render',
     'beat_fill',
     'beat_image_fill',
+    'beat_video_animate',
     'beat_refine_visual',
     'beat_refine_html',
     'beat_audio',
@@ -2064,6 +2067,7 @@ export const FULL_AUTO_PIPELINE_HEADLESS_STEPS = [
     'resource_image_render',
     'beat_fill',
     'beat_image_fill',
+    'beat_video_animate',
     'beat_refine_visual',
     'beat_refine_html',
     'render',
@@ -2241,6 +2245,7 @@ export const FULL_AUTO_PIPELINE_STEP_LABELS: Record<FullAutoPipelineStepKey, str
     resource_image_render: 'Render ảnh resource',
     beat_fill: 'Fill HTML beat',
     beat_image_fill: 'Ảnh beat',
+    beat_video_animate: 'Animate ảnh',
     beat_refine_visual: 'Refine visual',
     beat_refine_html: 'Refine HTML beat',
     bgm: 'BGM',
@@ -2273,6 +2278,7 @@ export const FULL_AUTO_PIPELINE_STEP_GROUPS = [
             'resource_image_render',
             'beat_fill',
             'beat_image_fill',
+            'beat_video_animate',
             'beat_refine_visual',
             'beat_refine_html',
         ],
@@ -3432,7 +3438,9 @@ export async function enqueueGeminiWebBeatImageFill(
         skipped_active?: number;
         beat_ids?: string[];
         job_ids?: number[];
-        gemini_image_fill?: ImportHtmlGeminiJobBlock;
+    gemini_image_fill?: ImportHtmlGeminiJobBlock;
+    /** Animate ảnh beat → video (vibes.ai) — tiến độ từng beat. */
+    vibes_fill?: ImportHtmlGeminiJobBlock;
     }>;
 }
 
@@ -5226,6 +5234,27 @@ export async function addBeatVideoToCapcut(
         start_sec?: number;
         video_path?: string;
         capcut_last_sync_json?: Record<string, unknown>;
+    }>;
+}
+
+/**
+ * Convert ảnh beat → video bằng vibes.ai headless (đồng bộ, có thể chạy lâu).
+ */
+export async function convertBeatVideoHeadless(
+    shortVideoId: number,
+    beatId: string,
+): Promise<JsonResponse & {
+    beat_id?: string;
+    beat_video_url?: string;
+    project_id?: string;
+}> {
+    return postJson(
+        'plugin/vn4-e-learning/app-mobile/marketing/short-video/convert-beat-video-headless',
+        shortVideoBody(shortVideoId, { beat_id: beatId }),
+    ) as Promise<JsonResponse & {
+        beat_id?: string;
+        beat_video_url?: string;
+        project_id?: string;
     }>;
 }
 

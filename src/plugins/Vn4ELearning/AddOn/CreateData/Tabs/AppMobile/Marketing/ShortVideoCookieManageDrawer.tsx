@@ -88,7 +88,7 @@ function CookieForm({
                 size="small"
                 fullWidth
                 placeholder={SUPPORTED_COOKIE_WEBSITE}
-                helperText="Hiện hỗ trợ meta.ai (render ảnh beat + extension tự set cookie khi mở Meta.ai)"
+                helperText="Hiện hỗ trợ meta.ai (render ảnh beat) và vibes.ai (convert ảnh beat → video headless)"
             />
             <TextField
                 label="Mô tả"

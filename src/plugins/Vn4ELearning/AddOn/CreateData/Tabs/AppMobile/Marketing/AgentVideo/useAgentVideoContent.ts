@@ -84,6 +84,7 @@ import {
     renderWhiteboardAgentBeat,
     getWhiteboardBeatRenders,
     addBeatVideoToCapcut,
+    convertBeatVideoHeadless,
     listAudioScriptStyles,
     saveAgentShowKaraoke,
     saveAgentRenderDebug,
@@ -556,6 +557,25 @@ function resolveGeminiBeatProgress(summary: ImportHtmlSummary | null | undefined
     return null;
 }
 
+/** Tiến độ animate ảnh beat → video (vibes.ai) — block agent_video_json.vibes_fill. */
+function resolveVibesBeatProgress(summary: ImportHtmlSummary | null | undefined): GeminiBeatProgress | null {
+    const block = summary?.vibes_fill;
+    if (!block) {
+        return null;
+    }
+    if (!block.progress && String(block.status || 'none') === 'none') {
+        return null;
+    }
+    return {
+        current: Number(block.progress?.current || 0),
+        total: Number(block.progress?.total || 0),
+        beatId: String(block.progress?.beat_id || ''),
+        succeeded: Number(block.progress?.succeeded || 0),
+        failed: toStringIdList(block.progress?.failed),
+        error: String(block.error || '').trim(),
+    };
+}
+
 type UseAgentVideoContentArgs = {
     open: boolean;
     shortVideoId: number;
@@ -691,6 +711,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         Record<string, WhiteboardBeatRenderEntry>
     >({});
     const [renderingWhiteboardBeatIds, setRenderingWhiteboardBeatIds] = React.useState<string[]>([]);
+    const [animatingBeatVibesIds, setAnimatingBeatVibesIds] = React.useState<string[]>([]);
     const [uploadingBeatVideoToCapcutIds, setUploadingBeatVideoToCapcutIds] = React.useState<string[]>([]);
     const [savingVisualMode, setSavingVisualMode] = React.useState(false);
     const [savingWhiteboardConfig, setSavingWhiteboardConfig] = React.useState(false);
@@ -742,6 +763,15 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         failed: string[];
         error: string;
     } | null>(null);
+    const [vibesFillProgress, setVibesFillProgress] = React.useState<{
+        current: number;
+        total: number;
+        beatId: string;
+        succeeded: number;
+        failed: string[];
+        error: string;
+    } | null>(null);
+    const [vibesFillStatus, setVibesFillStatus] = React.useState('none');
     const [geminiDivisionStatus, setGeminiDivisionStatus] = React.useState('none');
     const [geminiDivisionError, setGeminiDivisionError] = React.useState('');
     const [headlessBrowserActive, setHeadlessBrowserActive] = React.useState(false);
@@ -1354,6 +1384,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setThumbnailImageUrl(String(nextThumbBlock?.image_url || ''));
         const beatProgress = resolveGeminiBeatProgress(res?.import_html);
         setGeminiFillProgress(beatProgress);
+        setVibesFillProgress(resolveVibesBeatProgress(res?.import_html));
+        setVibesFillStatus(String(res?.import_html?.vibes_fill?.status || 'none'));
         const geminiDivision = res?.import_html?.gemini_division;
         setGeminiDivisionStatus(String(geminiDivision?.status || 'none'));
         setGeminiDivisionError(String(geminiDivision?.error || '').trim());
@@ -2676,6 +2708,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
             setThumbnailImageUrl(String(summary.thumbnail.image_url || ''));
         }
         setGeminiFillProgress(resolveGeminiBeatProgress(summary));
+        setVibesFillProgress(resolveVibesBeatProgress(summary));
+        setVibesFillStatus(String(summary?.vibes_fill?.status || 'none'));
         if (summary.gemini_division) {
             setGeminiDivisionStatus(String(summary.gemini_division.status || 'none'));
             setGeminiDivisionError(String(summary.gemini_division.error || '').trim());
@@ -6736,6 +6770,30 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         }
     };
 
+    /**
+     * Convert ảnh beat → video bằng vibes.ai headless (đồng bộ, có thể chạy ~1–3 phút).
+     */
+    const handleAnimateBeatVibes = async (beatId: string) => {
+        const id = String(beatId || '').trim();
+        if (!id || animatingBeatVibesIds.includes(id)) {
+            return;
+        }
+        setAnimatingBeatVibesIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        try {
+            const res = await convertBeatVideoHeadless(shortVideoId, id);
+            if (!res?.success) {
+                showMessage(parseApiMessage(res?.message) || 'Convert video beat (vibes.ai) thất bại', 'error');
+                return;
+            }
+            showMessage(parseApiMessage(res?.message) || 'Đã convert video cho beat', 'success');
+            loadRow();
+        } catch (e) {
+            showMessage(e instanceof Error ? e.message : String(e), 'error');
+        } finally {
+            setAnimatingBeatVibesIds((prev) => prev.filter((x) => x !== id));
+        }
+    };
+
     const applyAvatarSaveResult = (res: {
         agent_avatar_id?: number;
         agent_show_avatar?: boolean;
@@ -9585,6 +9643,8 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         uploadingBeatVideoToCapcutIds,
         handleRenderWhiteboardBeat,
         handleAddBeatVideoToCapcut,
+        animatingBeatVibesIds,
+        handleAnimateBeatVibes,
         agentAvatarId,
         agentShowAvatar,
         agentAvatarAnchor,
@@ -9635,6 +9695,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         setAvatarDrawerOpen,
         geminiFillStatus,
         geminiFillProgress,
+        vibesFillProgress,
         geminiRefineVisualStatus,
         geminiRefineVisualError,
         geminiRefineHtmlStatus,
@@ -9793,6 +9854,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         beatsImageTotal,
         beatsImageCompleted,
         geminiImageFillStatus,
+        vibesFillStatus,
         beatAspectFixStatuses,
         beatsRenderErrorCount,
         beatRenderErrorIds,

@@ -108,7 +108,10 @@ export function deriveWhiteboardRenderProgress(input: DeriveInput): WhiteboardRe
         phase = 'mux';
     } else if (step === 'whiteboard_render' && pipelineRunning) {
         phase = allBeatsDone ? 'concat' : 'rendering';
-    } else if (pending.length > 0 || (completed > 0 && completed < total && failed.length === 0)) {
+    } else if (pending.length > 0) {
+        // Chỉ coi là "đang render" khi có beat thực sự queued/processing.
+        // Không dùng trạng thái "completed một phần" nữa — tránh việc bước khác
+        // (vd beat_video_animate) vẫn hiện nhầm tiến độ «Render ảnh beat».
         phase = 'rendering';
     } else if (allBeatsDone && step === 'whiteboard_render') {
         phase = 'concat';

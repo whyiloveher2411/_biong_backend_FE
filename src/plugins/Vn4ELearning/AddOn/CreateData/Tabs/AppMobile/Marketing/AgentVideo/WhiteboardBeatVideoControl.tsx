@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 type Props = {
     videoUrl?: string | null;
@@ -20,6 +21,12 @@ type Props = {
     onUploadFile: (file: File) => Promise<string | null> | Promise<void> | void;
     onClear: () => Promise<boolean> | void;
     onSelectChange: (selected: boolean) => Promise<boolean> | void;
+    /** Có ảnh beat để animate hay không (nút Animate chỉ bật khi có ảnh). */
+    canAnimate?: boolean;
+    /** Đang chạy animate (vibes.ai). */
+    animating?: boolean;
+    /** Convert ảnh beat → video bằng vibes.ai headless. */
+    onAnimateImage?: () => Promise<void> | void;
 };
 
 /**
@@ -35,6 +42,9 @@ export default function WhiteboardBeatVideoControl({
     onUploadFile,
     onClear,
     onSelectChange,
+    canAnimate = false,
+    animating = false,
+    onAnimateImage,
 }: Props) {
     const inputRef = React.useRef<HTMLInputElement | null>(null);
     const [uploading, setUploading] = React.useState(false);
@@ -64,6 +74,7 @@ export default function WhiteboardBeatVideoControl({
     };
 
     return (
+        <>
         <Box
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
@@ -239,5 +250,64 @@ export default function WhiteboardBeatVideoControl({
                 }}
             />
         </Box>
+
+        {onAnimateImage ? (
+            <Tooltip
+                placement="right"
+                title={canAnimate
+                    ? (hasVideo ? 'Animate lại ảnh beat → video (vibes.ai)' : 'Animate ảnh beat → video (vibes.ai)')
+                    : 'Beat chưa có ảnh để animate'}
+            >
+                <Box
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        if (animating || disabled || !canAnimate) return;
+                        void onAnimateImage();
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            if (!animating && !disabled && canAnimate) void onAnimateImage();
+                        }
+                    }}
+                    sx={{
+                        width: 56,
+                        height: 22,
+                        flexShrink: 0,
+                        alignSelf: 'flex-start',
+                        mt: 0.25,
+                        borderRadius: 1,
+                        border: '1.5px solid',
+                        borderColor: canAnimate ? 'primary.light' : 'rgba(255,255,255,0.3)',
+                        bgcolor: canAnimate ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.35)',
+                        color: canAnimate ? 'common.white' : 'rgba(255,255,255,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.25,
+                        cursor: animating || disabled || !canAnimate ? 'not-allowed' : 'pointer',
+                        opacity: disabled ? 0.55 : 1,
+                        '&:hover': {
+                            bgcolor: canAnimate ? 'primary.dark' : 'rgba(0,0,0,0.35)',
+                        },
+                    }}
+                >
+                    {animating ? (
+                        <CircularProgress size={12} sx={{ color: 'common.white' }} />
+                    ) : (
+                        <AutoAwesomeIcon sx={{ fontSize: 13 }} />
+                    )}
+                    <Typography
+                        variant="caption"
+                        sx={{ fontSize: 9, lineHeight: 1, userSelect: 'none' }}
+                    >
+                        Animate
+                    </Typography>
+                </Box>
+            </Tooltip>
+        ) : null}
+        </>
     );
 }

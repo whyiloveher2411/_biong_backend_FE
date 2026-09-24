@@ -16,6 +16,7 @@ export function resolveHeadlessBrowserActive(
         geminiScriptStatus?: string;
         geminiScriptPhoneticStatus?: string;
         geminiImageFillStatus?: string;
+        vibesFillStatus?: string;
         pipelineHeadlessActive?: boolean;
     },
 ): boolean {
@@ -32,6 +33,9 @@ export function resolveHeadlessBrowserActive(
     if (isActiveGeminiJobStatus(extras?.geminiImageFillStatus)) {
         return true;
     }
+    if (isActiveGeminiJobStatus(extras?.vibesFillStatus)) {
+        return true;
+    }
     void extras?.geminiScriptPhoneticStatus;
     if (!summary) {
         return false;
@@ -39,6 +43,7 @@ export function resolveHeadlessBrowserActive(
     const browserRequiredBlocks: Array<ImportHtmlGeminiJobBlock | undefined> = [
         summary.gemini_division,
         summary.gemini_image_fill,
+        summary.vibes_fill,
     ];
     for (let i = 0; i < browserRequiredBlocks.length; i += 1) {
         if (isActiveGeminiJobStatus(browserRequiredBlocks[i]?.status)) {

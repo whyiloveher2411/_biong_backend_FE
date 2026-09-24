@@ -9,6 +9,7 @@ import { isAgentVideo2sMode, isAgentWhiteboardMode } from './agentVideoVisualMod
 export const EXTENDED_PIPELINE_STEP_LABELS: Record<string, string> = {
     ...FULL_AUTO_PIPELINE_STEP_LABELS,
     beat_image_fill: 'Ảnh beat',
+    beat_video_animate: 'Animate ảnh',
     whiteboard_render: 'Render video từng beat',
     whiteboard_mux: 'Final video',
 };
@@ -23,6 +24,7 @@ export const FULL_AUTO_PIPELINE_HYPERFRAMES_ONLY_STEPS = [
 /** Chỉ thuộc Whiteboard — motion HTML auto-skip, ẩn khỏi UI. */
 export const FULL_AUTO_PIPELINE_WHITEBOARD_ONLY_STEPS = [
     'beat_image_fill',
+    'beat_video_animate',
     'whiteboard_mux',
 ] as const;
 
@@ -45,6 +47,7 @@ const FULL_AUTO_PIPELINE_UI_HIDDEN_EXTRA_STEPS = [
 
 const WHITEBOARD_PIPELINE_STEP_LABELS: Record<string, string> = {
     beat_image_fill: 'Ảnh beat',
+    beat_video_animate: 'Animate ảnh',
     render: 'Render video từng beat',
     whiteboard_render: 'Render video từng beat',
     whiteboard_mux: 'Final video',

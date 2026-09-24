@@ -329,6 +329,8 @@ type Props = {
     onOpenBeatGeminiHeadless?: (beatId: string) => void;
     onRenderWhiteboardBeat?: (beatId: string) => void;
     onAddBeatVideoToCapcut?: (beatId: string) => void;
+    onAnimateBeatVibes?: (beatId: string) => void;
+    animatingBeatVibesIds?: string[];
     whiteboardBeatRenders?: Record<string, { status?: string; error?: string }>;
     agentWhiteboardBeatOverrides?: Record<string, { image_layers?: unknown } | null>;
     renderingWhiteboardBeatIds?: string[];
@@ -439,6 +441,8 @@ export default function ShortVideoAgentVideoTimeline({
     onOpenBeatGeminiHeadless,
     onRenderWhiteboardBeat,
     onAddBeatVideoToCapcut,
+    onAnimateBeatVibes,
+    animatingBeatVibesIds = [],
     whiteboardBeatRenders = {},
     agentWhiteboardBeatOverrides = {},
     renderingWhiteboardBeatIds = [],
@@ -1214,6 +1218,119 @@ export default function ShortVideoAgentVideoTimeline({
                     userSelect: 'none',
                 }}
             >
+                {showPipelineRunControls ? (
+                    <>
+                        <LoadingButton
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            startIcon={<PlayArrowIcon fontSize="small" />}
+                            endIcon={<ArrowDropDownIcon fontSize="small" />}
+                            loading={startingFullAuto}
+                            disabled={pipelineRunning || startingFullAuto}
+                            onClick={(event) => {
+                                setRestartMenuAnchor(event.currentTarget);
+                            }}
+                            sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                        >
+                            Chạy pipeline
+                        </LoadingButton>
+                        <Menu
+                            anchorEl={restartMenuAnchor}
+                            open={Boolean(restartMenuAnchor)}
+                            onClose={() => setRestartMenuAnchor(null)}
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                        >
+                            <PipelineGroupedMenuItems
+                                steps={fullAutoPipeline?.steps}
+                                headlessSteps={fullAutoPipeline?.headless_steps}
+                                aiSteps={fullAutoPipeline?.ai_steps}
+                                qaLoops={fullAutoPipeline?.qa_loops}
+                                agentVisualMode={agentVisualMode}
+                                beatAudioMode={agentState?.agentBeatAudio}
+                                pipelineStatus={fullAutoPipeline?.status}
+                                currentStep={fullAutoPipeline?.current_step}
+                                stepToggles={fullAutoStepToggles}
+                                stepToggleDisabled={savingFullAutoStepToggles || startingFullAuto}
+                                onStepToggleChange={onFullAutoStepToggleChange}
+                                beatImageFillMode={beatImageFillMode}
+                                beatImageFillModeDisabled={savingBeatImageFillMode || startingFullAuto}
+                                beatImageFillOnlyMissing={beatImageFillOnlyMissing}
+                                beatImageFillOnlyMissingDisabled={savingBeatImageFillMode || startingFullAuto}
+                                onBeatImageFillOnlyMissingChange={(checked) => {
+                                    onBeatImageFillOnlyMissingChange?.(checked);
+                                }}
+                                beatImageFillUploadPrevBeats={beatImageFillUploadPrevBeats}
+                                beatImageFillUploadPrevBeatsDisabled={savingBeatImageFillMode || startingFullAuto}
+                                onBeatImageFillUploadPrevBeatsChange={(checked) => {
+                                    onBeatImageFillUploadPrevBeatsChange?.(checked);
+                                }}
+                                onBeatImageFillModeChange={onBeatImageFillModeChange}
+                                onFixBeatImagesAspect={() => {
+                                    setRestartMenuAnchor(null);
+                                    setFixAspectDialogOpen(true);
+                                }}
+                                beatAudioOnlyMissing={beatAudioOnlyMissing}
+                                beatAudioOnlyMissingDisabled={startingFullAuto}
+                                onBeatAudioOnlyMissingChange={(checked) => {
+                                    onBeatAudioOnlyMissingChange?.(checked);
+                                }}
+                                restartableSet={restartableSet}
+                                disabled={startingFullAuto}
+                                onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
+                                    setRestartMenuAnchor(null);
+                                    onStartPipelineFromStep?.(stepKey);
+                                }}
+                                onRunSingleStep={(stepKey: FullAutoPipelineStepKey) => {
+                                    setRestartMenuAnchor(null);
+                                    onRunSinglePipelineStep?.(stepKey);
+                                }}
+                                runSingleStepDisabled={pipelineRunning || startingFullAuto}
+                                runningSingleStep={startingFullAuto}
+                                onRerunRenderUpload={() => {
+                                    setRestartMenuAnchor(null);
+                                    onStartPipelineFromStep?.('render');
+                                }}
+                                rerunningRenderUpload={startingFullAuto}
+                                rerunRenderUploadDisabled={pipelineRunning || startingFullAuto}
+                                onManualBeatDivision={() => {
+                                    setRestartMenuAnchor(null);
+                                    setBeatDivisionManualOpen(true);
+                                }}
+                                manualBeatDivisionDisabled={pipelineRunning || startingFullAuto}
+                                onManualScriptCreate={() => {
+                                    setRestartMenuAnchor(null);
+                                    setScriptManualOpen(true);
+                                }}
+                                manualScriptCreateDisabled={pipelineRunning || startingFullAuto}
+                                onManualScriptPhonetic={() => {
+                                    setRestartMenuAnchor(null);
+                                    setScriptPhoneticManualOpen(true);
+                                }}
+                                manualScriptPhoneticDisabled={pipelineRunning || startingFullAuto}
+                                onManualBgm={() => {
+                                    setRestartMenuAnchor(null);
+                                    setBgmManualOpen(true);
+                                }}
+                                manualBgmDisabled={pipelineRunning || startingFullAuto}
+                            />
+                        </Menu>
+                        {pipelineRunning ? (
+                            <LoadingButton
+                                size="small"
+                                variant="outlined"
+                                color="inherit"
+                                startIcon={<StopIcon fontSize="small" />}
+                                loading={cancellingFullAuto}
+                                disabled={cancellingFullAuto}
+                                onClick={() => { onCancelPipeline?.(); }}
+                                sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
+                            >
+                                Dừng
+                            </LoadingButton>
+                        ) : null}
+                    </>
+                ) : null}
                 <IconButton
                     size="small"
                     aria-label={isPlaying ? 'Tạm dừng' : 'Phát'}
@@ -1450,119 +1567,6 @@ export default function ShortVideoAgentVideoTimeline({
                             value={channelTitle}
                             onClick={() => { setChannelDrawerOpen(true); }}
                         />
-                        {showPipelineRunControls ? (
-                            <>
-                                <LoadingButton
-                                    size="small"
-                                    variant="contained"
-                                    color="success"
-                                    startIcon={<PlayArrowIcon fontSize="small" />}
-                                    endIcon={<ArrowDropDownIcon fontSize="small" />}
-                                    loading={startingFullAuto}
-                                    disabled={pipelineRunning || startingFullAuto}
-                                    onClick={(event) => {
-                                        setRestartMenuAnchor(event.currentTarget);
-                                    }}
-                                    sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                                >
-                                    Chạy pipeline
-                                </LoadingButton>
-                                <Menu
-                                    anchorEl={restartMenuAnchor}
-                                    open={Boolean(restartMenuAnchor)}
-                                    onClose={() => setRestartMenuAnchor(null)}
-                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                                >
-                                    <PipelineGroupedMenuItems
-                                        steps={fullAutoPipeline?.steps}
-                                        headlessSteps={fullAutoPipeline?.headless_steps}
-                                        aiSteps={fullAutoPipeline?.ai_steps}
-                                        qaLoops={fullAutoPipeline?.qa_loops}
-                                        agentVisualMode={agentVisualMode}
-                                        beatAudioMode={agentState?.agentBeatAudio}
-                                        pipelineStatus={fullAutoPipeline?.status}
-                                        currentStep={fullAutoPipeline?.current_step}
-                                        stepToggles={fullAutoStepToggles}
-                                        stepToggleDisabled={savingFullAutoStepToggles || startingFullAuto}
-                                        onStepToggleChange={onFullAutoStepToggleChange}
-                                        beatImageFillMode={beatImageFillMode}
-                                        beatImageFillModeDisabled={savingBeatImageFillMode || startingFullAuto}
-                                        beatImageFillOnlyMissing={beatImageFillOnlyMissing}
-                                        beatImageFillOnlyMissingDisabled={savingBeatImageFillMode || startingFullAuto}
-                                        onBeatImageFillOnlyMissingChange={(checked) => {
-                                            onBeatImageFillOnlyMissingChange?.(checked);
-                                        }}
-                                        beatImageFillUploadPrevBeats={beatImageFillUploadPrevBeats}
-                                        beatImageFillUploadPrevBeatsDisabled={savingBeatImageFillMode || startingFullAuto}
-                                        onBeatImageFillUploadPrevBeatsChange={(checked) => {
-                                            onBeatImageFillUploadPrevBeatsChange?.(checked);
-                                        }}
-                                        onBeatImageFillModeChange={onBeatImageFillModeChange}
-                                        onFixBeatImagesAspect={() => {
-                                            setRestartMenuAnchor(null);
-                                            setFixAspectDialogOpen(true);
-                                        }}
-                                        beatAudioOnlyMissing={beatAudioOnlyMissing}
-                                        beatAudioOnlyMissingDisabled={startingFullAuto}
-                                        onBeatAudioOnlyMissingChange={(checked) => {
-                                            onBeatAudioOnlyMissingChange?.(checked);
-                                        }}
-                                        restartableSet={restartableSet}
-                                        disabled={startingFullAuto}
-                                        onSelectStep={(stepKey: FullAutoPipelineStepKey) => {
-                                            setRestartMenuAnchor(null);
-                                            onStartPipelineFromStep?.(stepKey);
-                                        }}
-                                        onRunSingleStep={(stepKey: FullAutoPipelineStepKey) => {
-                                            setRestartMenuAnchor(null);
-                                            onRunSinglePipelineStep?.(stepKey);
-                                        }}
-                                        runSingleStepDisabled={pipelineRunning || startingFullAuto}
-                                        runningSingleStep={startingFullAuto}
-                                        onRerunRenderUpload={() => {
-                                            setRestartMenuAnchor(null);
-                                            onStartPipelineFromStep?.('render');
-                                        }}
-                                        rerunningRenderUpload={startingFullAuto}
-                                        rerunRenderUploadDisabled={pipelineRunning || startingFullAuto}
-                                        onManualBeatDivision={() => {
-                                            setRestartMenuAnchor(null);
-                                            setBeatDivisionManualOpen(true);
-                                        }}
-                                        manualBeatDivisionDisabled={pipelineRunning || startingFullAuto}
-                                        onManualScriptCreate={() => {
-                                            setRestartMenuAnchor(null);
-                                            setScriptManualOpen(true);
-                                        }}
-                                        manualScriptCreateDisabled={pipelineRunning || startingFullAuto}
-                                        onManualScriptPhonetic={() => {
-                                            setRestartMenuAnchor(null);
-                                            setScriptPhoneticManualOpen(true);
-                                        }}
-                                        manualScriptPhoneticDisabled={pipelineRunning || startingFullAuto}
-                                        onManualBgm={() => {
-                                            setRestartMenuAnchor(null);
-                                            setBgmManualOpen(true);
-                                        }}
-                                        manualBgmDisabled={pipelineRunning || startingFullAuto}
-                                    />
-                                </Menu>
-                                {pipelineRunning ? (
-                                    <LoadingButton
-                                        size="small"
-                                        variant="outlined"
-                                        color="inherit"
-                                        startIcon={<StopIcon fontSize="small" />}
-                                        loading={cancellingFullAuto}
-                                        disabled={cancellingFullAuto}
-                                        onClick={() => { onCancelPipeline?.(); }}
-                                        sx={{ textTransform: 'none', fontSize: 12, py: 0.25 }}
-                                    >
-                                        Dừng
-                                    </LoadingButton>
-                                ) : null}
-                            </>
-                        ) : null}
                         {
                         // eslint-disable-next-line no-constant-condition
                         showImportAssemble && onLaunchImportAssemble && false ? (
@@ -1800,6 +1804,8 @@ export default function ShortVideoAgentVideoTimeline({
                                 onOpenGeminiHeadless={onOpenBeatGeminiHeadless}
                                 onRenderWhiteboardBeat={onRenderWhiteboardBeat}
                                 onAddBeatVideoToCapcut={onAddBeatVideoToCapcut}
+                                onAnimateBeatVibes={onAnimateBeatVibes}
+                                animatingBeatVibesIds={animatingBeatVibesIds}
                                 whiteboardBeatRenders={whiteboardBeatRenders}
                                 agentWhiteboardBeatOverrides={agentWhiteboardBeatOverrides}
                                 renderingWhiteboardBeatIds={renderingWhiteboardBeatIds}
