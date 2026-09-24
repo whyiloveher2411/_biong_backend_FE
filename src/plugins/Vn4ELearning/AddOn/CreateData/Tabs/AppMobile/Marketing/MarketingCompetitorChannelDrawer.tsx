@@ -340,6 +340,17 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
     const [expandedVideoId, setExpandedVideoId] = React.useState<number | null>(null);
     const [copyMenuAnchor, setCopyMenuAnchor] = React.useState<HTMLElement | null>(null);
     const [sortMenuAnchor, setSortMenuAnchor] = React.useState<HTMLElement | null>(null);
+    const [crawlModeAnchor, setCrawlModeAnchor] = React.useState<HTMLElement | null>(null);
+    const [manualJobId, setManualJobId] = React.useState<string | null>(null);
+    const [manualMessage, setManualMessage] = React.useState<string>('');
+    const manualPollRef = React.useRef<number | null>(null);
+
+    const stopManualPoll = React.useCallback(() => {
+        if (manualPollRef.current) {
+            window.clearTimeout(manualPollRef.current);
+            manualPollRef.current = null;
+        }
+    }, []);
 
     React.useEffect(() => {
         if (!open) {
@@ -361,8 +372,12 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             setExpandedVideoId(null);
             setCopyMenuAnchor(null);
             setSortMenuAnchor(null);
+            setCrawlModeAnchor(null);
+            setManualJobId(null);
+            setManualMessage('');
+            stopManualPoll();
         }
-    }, [open]);
+    }, [open, stopManualPoll]);
 
     const loadChannels = React.useCallback((opts?: { silent?: boolean }) => {
         if (!opts?.silent) {
@@ -468,6 +483,10 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
     };
 
     const handleBackToList = () => {
+        stopManualPoll();
+        setCrawling(false);
+        setManualJobId(null);
+        setCrawlStep(0);
         setView('list');
         setCurrentChannel(null);
         setVideos([]);
@@ -477,8 +496,9 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
         loadChannels({ silent: true });
     };
 
-    const handleCrawl = () => {
+    const handleCrawlAuto = () => {
         if (!currentChannel || crawling) return;
+        setCrawlModeAnchor(null);
         setCrawling(true);
         setError(null);
         setInfo(null);
@@ -511,6 +531,88 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             },
         });
     };
+
+    const startManualPoll = React.useCallback((channelId: number, jobId: string) => {
+        stopManualPoll();
+
+        const tick = () => {
+            apiAjaxRef.current({
+                url: 'plugin/vn4-e-learning/app-mobile/marketing/competitor-channel/crawl-status',
+                method: 'POST',
+                data: { channel_id: channelId, job_id: jobId },
+                loading: false,
+                success: (res: {
+                    success?: boolean;
+                    status?: string;
+                    phase?: string;
+                    message?: { content?: string } | string;
+                }) => {
+                    if (res?.status === 'done') {
+                        stopManualPoll();
+                        setCrawling(false);
+                        setManualJobId(null);
+                        setCrawlStep(CRAWL_STEPS.length);
+                        setInfo(parseApiMessage(res));
+                        loadVideos(channelId, { silent: true });
+                        loadChannels({ silent: true });
+                        return;
+                    }
+                    if (res?.status === 'error' || !res?.success) {
+                        stopManualPoll();
+                        setCrawling(false);
+                        setManualJobId(null);
+                        setCrawlStep(0);
+                        setError(parseApiMessage(res));
+                        return;
+                    }
+                    setManualMessage(parseApiMessage(res));
+                    manualPollRef.current = window.setTimeout(tick, 2500);
+                },
+                error: (err: unknown) => {
+                    stopManualPoll();
+                    setCrawling(false);
+                    setManualJobId(null);
+                    setCrawlStep(0);
+                    setError(parseApiMessage(err));
+                },
+            });
+        };
+
+        manualPollRef.current = window.setTimeout(tick, 1500);
+    }, [stopManualPoll, loadVideos, loadChannels]);
+
+    const handleCrawlManual = () => {
+        if (!currentChannel || crawling) return;
+        setCrawlModeAnchor(null);
+        setCrawling(true);
+        setError(null);
+        setInfo(null);
+        setManualJobId(null);
+        setManualMessage('Đang mở browser…');
+
+        api.ajax({
+            url: 'plugin/vn4-e-learning/app-mobile/marketing/competitor-channel/crawl-start',
+            method: 'POST',
+            data: { channel_id: currentChannel.id },
+            loading: false,
+            success: (res: { success?: boolean; job_id?: string }) => {
+                if (!res?.success || !res.job_id) {
+                    setCrawling(false);
+                    setError(parseApiMessage(res));
+                    return;
+                }
+                setManualJobId(res.job_id);
+                setManualMessage('Browser đã mở — hãy cuộn tới hết video rồi bấm nút "Cập nhật danh sách" ở góc trên-trái.');
+                startManualPoll(currentChannel.id, res.job_id);
+            },
+            error: (err: unknown) => {
+                setCrawling(false);
+                setError(parseApiMessage(err));
+            },
+        });
+    };
+
+    React.useEffect(() => () => stopManualPoll(), [stopManualPoll]);
 
     const handleCreate = () => {
         const title = newTitle.trim();
@@ -929,12 +1031,20 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
                     size="small"
                     variant="contained"
                     startIcon={<RefreshIcon fontSize="small" />}
-                    onClick={handleCrawl}
+                    onClick={(e) => setCrawlModeAnchor(e.currentTarget)}
                     disabled={crawling}
                     sx={{ textTransform: 'none', flexShrink: 0 }}
                 >
                     {crawling ? 'Đang lấy data…' : 'Lấy data'}
                 </Button>
+                <Menu
+                    anchorEl={crawlModeAnchor}
+                    open={Boolean(crawlModeAnchor)}
+                    onClose={() => setCrawlModeAnchor(null)}
+                >
+                    <MenuItem onClick={handleCrawlAuto}>Tự động (nhanh)</MenuItem>
+                    <MenuItem onClick={handleCrawlManual}>Thủ công (browser + tự scroll)</MenuItem>
+                </Menu>
             </Stack>
             {currentChannel?.channel_url ? (
                 <Link
@@ -952,29 +1062,43 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
             {crawling && (
                 <Box>
                     <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />
-                    <Stack spacing={0.75}>
-                        {CRAWL_STEPS.map((step, idx) => {
-                            const done = crawlStep > idx;
-                            const active = crawlStep === idx;
-                            return (
-                                <Stack key={step.key} direction="row" spacing={1} alignItems="center">
-                                    {done ? (
-                                        <CheckCircleOutlineIcon fontSize="small" color="success" />
-                                    ) : (
-                                        <RadioButtonUncheckedIcon fontSize="small" color={active ? 'primary' : 'disabled'} />
-                                    )}
-                                    <Typography
-                                        variant="body2"
-                                        color={done || active ? 'text.primary' : 'text.secondary'}
-                                        sx={{ fontWeight: active ? 600 : 400 }}
-                                    >
-                                        {step.label}
-                                        {active ? '…' : ''}
-                                    </Typography>
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
+                    {manualJobId ? (
+                        <Stack spacing={1}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <CircularProgress size={16} />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {manualMessage}
+                                </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                                Cửa sổ Chrome đã mở. Bấm nút đỏ &quot;Cập nhật danh sách&quot; ở góc trên-trái sau khi đã cuộn hết video.
+                            </Typography>
+                        </Stack>
+                    ) : (
+                        <Stack spacing={0.75}>
+                            {CRAWL_STEPS.map((step, idx) => {
+                                const done = crawlStep > idx;
+                                const active = crawlStep === idx;
+                                return (
+                                    <Stack key={step.key} direction="row" spacing={1} alignItems="center">
+                                        {done ? (
+                                            <CheckCircleOutlineIcon fontSize="small" color="success" />
+                                        ) : (
+                                            <RadioButtonUncheckedIcon fontSize="small" color={active ? 'primary' : 'disabled'} />
+                                        )}
+                                        <Typography
+                                            variant="body2"
+                                            color={done || active ? 'text.primary' : 'text.secondary'}
+                                            sx={{ fontWeight: active ? 600 : 400 }}
+                                        >
+                                            {step.label}
+                                            {active ? '…' : ''}
+                                        </Typography>
+                                    </Stack>
+                                );
+                            })}
+                        </Stack>
+                    )}
                 </Box>
             )}
 
@@ -1195,7 +1319,7 @@ export default function MarketingCompetitorChannelDrawer({ open, onClose }: Prop
 
             {videos.length === 0 && !loadingVideos && !crawling ? (
                 <Alert severity="info">
-                    Chưa có dữ liệu video. Bấm &quot;Lấy data&quot; để mở headless browser lấy toàn bộ video của kênh.
+                    Chưa có dữ liệu video. Bấm &quot;Lấy data&quot; rồi chọn <b>Tự động</b> (headless tự scroll) hoặc <b>Thủ công</b> (mở browser, bạn tự scroll rồi bấm nút &quot;Cập nhật danh sách&quot;).
                 </Alert>
             ) : (
                 <Stack spacing={1}>

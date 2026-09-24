@@ -521,6 +521,25 @@ export default function ShortVideoPipelineDock() {
                                             <BookmarkIcon sx={{ fontSize: 14, color: '#ffb74d' }} />
                                         ) : null}
                                     </Box>
+                                    <Tooltip title="View — mở workspace agent video">
+                                        <IconButton
+                                            size="small"
+                                            color="inherit"
+                                            aria-label={`View ${displayTitle(item)}`}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleView(item);
+                                            }}
+                                            sx={{
+                                                mt: 0.1,
+                                                p: 0.25,
+                                                color: 'rgba(255,255,255,0.7)',
+                                                '&:hover': { color: 'common.white' },
+                                            }}
+                                        >
+                                            <LaunchIcon sx={{ fontSize: 15 }} />
+                                        </IconButton>
+                                    </Tooltip>
                                 </Box>
                             );
                         })}
@@ -643,22 +662,6 @@ export default function ShortVideoPipelineDock() {
                                             Dừng
                                         </LoadingButton>
                                     ) : null}
-                                    <LoadingButton
-                                        size="small"
-                                        variant="outlined"
-                                        color="inherit"
-                                        startIcon={<LaunchIcon />}
-                                        onClick={() => handleView(selected)}
-                                        aria-label={`View agent video ${pipelineTitle(selected)}`}
-                                        sx={{
-                                            height: 30,
-                                            px: 1.25,
-                                            color: 'common.white',
-                                            borderColor: 'rgba(255,255,255,0.35)',
-                                        }}
-                                    >
-                                        View
-                                    </LoadingButton>
                                     <Tooltip title={selectedPinned
                                         ? 'Bỏ khỏi danh sách preview nhanh'
                                         : 'Thêm vào danh sách preview nhanh'}>
