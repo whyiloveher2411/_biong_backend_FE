@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Box,
     Button,
+    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -17,12 +18,20 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import HideImageOutlinedIcon from '@mui/icons-material/HideImageOutlined';
 import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
+import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import CloseIcon from '@mui/icons-material/Close';
 
 /** Target xóa hàng loạt — khớp BE bulk-delete-beat-assets. */
 export type BeatAssetDeleteTarget = 'image_prompt' | 'image' | 'audio';
+
+/** 1 beat trong beat-map + cờ cho biết beat đang render bằng video thay ảnh. */
+export type BeatUsage = {
+    id: string;
+    label: string;
+    hasVideo: boolean;
+};
 
 type Props = {
     open: boolean;
@@ -36,6 +45,12 @@ type Props = {
     imagePromptHaveCount: number;
     imageHaveCount: number;
     readyAudioCount: number;
+    /** Toàn bộ beat trong beat-map; beat có `hasVideo` sẽ được tô vàng. */
+    beats: BeatUsage[];
+    /** Beat đang active trên timeline (để highlight chip tương ứng). */
+    activeBeatId: string;
+    /** Click 1 beat → active/seek đến beat đó (kể cả beat không có video). */
+    onSelectBeat: (beatId: string) => void;
     /** Target đang xóa (disable toàn bộ khi bận). */
     deletingTarget: BeatAssetDeleteTarget | '';
     onDelete: (target: BeatAssetDeleteTarget) => void | Promise<void>;
@@ -72,6 +87,9 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
     imagePromptHaveCount,
     imageHaveCount,
     readyAudioCount,
+    beats,
+    activeBeatId,
+    onSelectBeat,
     deletingTarget,
     onDelete,
 }: Props) {
@@ -123,6 +141,7 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
 
     const confirmRow = rows.find((row) => row.target === confirmTarget) || null;
     const totalMissing = rows.reduce((sum, row) => sum + row.missing, 0);
+    const videoCount = beats.filter((beat) => beat.hasVideo).length;
 
     const handleConfirm = async () => {
         if (!confirmTarget) {
@@ -182,6 +201,7 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
                             </Typography>
                         </Box>
                     ) : (
+                        <>
                         <Stack spacing={1.25}>
                             {rows.map((row) => {
                                 const RowIcon = row.Icon;
@@ -291,6 +311,58 @@ export default function ShortVideoAgentBeatAssetsInfoDialog({
                                 );
                             })}
                         </Stack>
+                        <Box sx={{ mt: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                                <MovieOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                                    Danh sách beat
+                                </Typography>
+                                <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+                                    {videoCount}/{totalBeats} dùng video
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {beats.map((beat) => {
+                                    const isActive = beat.id === activeBeatId;
+                                    return (
+                                        <Chip
+                                            key={beat.id}
+                                            size="small"
+                                            label={beat.label}
+                                            onClick={() => {
+                                                onSelectBeat(beat.id);
+                                                onClose();
+                                            }}
+                                            sx={{
+                                                height: 24,
+                                                fontSize: 11,
+                                                cursor: 'pointer',
+                                                fontWeight: beat.hasVideo ? 700 : 500,
+                                                color: beat.hasVideo ? 'warning.dark' : 'text.secondary',
+                                                bgcolor: beat.hasVideo
+                                                    ? alpha(theme.palette.warning.main, 0.18)
+                                                    : alpha(theme.palette.action.hover, 0.04),
+                                                border: 1,
+                                                borderColor: isActive
+                                                    ? 'primary.main'
+                                                    : beat.hasVideo
+                                                        ? alpha(theme.palette.warning.main, 0.55)
+                                                        : 'divider',
+                                                boxShadow: isActive
+                                                    ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.3)}`
+                                                    : 'none',
+                                                '&:hover': {
+                                                    bgcolor: beat.hasVideo
+                                                        ? alpha(theme.palette.warning.main, 0.3)
+                                                        : alpha(theme.palette.action.hover, 0.1),
+                                                },
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </Box>
+                        </Box>
+                        </>
                     )}
                 </DialogContent>
 

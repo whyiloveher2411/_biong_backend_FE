@@ -69,6 +69,7 @@ import TimelineZoomControls, {
     usePersistedTimelineTracksCollapsed,
 } from '../TimelineZoomControls';
 import {
+    beatImageEntryUsesVideo,
     countBeatIdsWithHtml,
     countBeatQaByStatus,
     type BeatHtmlEntry,
@@ -680,6 +681,16 @@ export default function ShortVideoAgentVideoTimeline({
     const beatsWithHtmlCount = React.useMemo(
         () => countBeatIdsWithHtml(beatHtml),
         [beatHtml],
+    );
+
+    /** Toàn bộ beat kèm cờ "đang dùng video" — hiển thị ở panel tài nguyên beat. */
+    const beatUsage = React.useMemo(
+        () => (beatMap?.sections ?? []).map((section, index) => ({
+            id: section.id,
+            label: `Beat ${index + 1}`,
+            hasVideo: beatImageEntryUsesVideo(beatImage[section.id]),
+        })),
+        [beatMap?.sections, beatImage],
     );
     const beatQaCounts = React.useMemo(() => {
         if (isWhiteboardMode) {
@@ -1861,6 +1872,18 @@ export default function ShortVideoAgentVideoTimeline({
                         (beatMap?.sections?.length ?? 0) - agentState.missingBeatImageCount,
                     )}
                     readyAudioCount={Number(agentState.beatAudio?.ready || 0)}
+                    beats={beatUsage}
+                    activeBeatId={activeBeatId}
+                    onSelectBeat={(beatId) => {
+                        onBeatClick?.(beatId);
+                        const section = beatMap?.sections.find((item) => item.id === beatId);
+                        if (section) {
+                            agentState.handleSeekBeatPlayback(
+                                beatId,
+                                (Number(section.startSec) + Number(section.endSec)) / 2,
+                            );
+                        }
+                    }}
                     deletingTarget={agentState.bulkDeletingBeatAsset}
                     onDelete={(target) => {
                         void agentState.handleBulkDeleteBeatAssets(target);
