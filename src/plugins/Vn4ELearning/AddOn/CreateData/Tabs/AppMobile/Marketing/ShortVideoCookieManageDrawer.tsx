@@ -21,6 +21,7 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CookieOutlinedIcon from '@mui/icons-material/CookieOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
@@ -81,14 +82,12 @@ function CookieForm({
                 placeholder="VD: Meta account 1, Meta account 2"
             />
             <TextField
-                label="Website (domain) *"
+                label="Website (domain)"
                 value={form.website}
-                onChange={(e) => onFormChange({ website: e.target.value })}
-                disabled={saving}
+                disabled
                 size="small"
                 fullWidth
-                placeholder={SUPPORTED_COOKIE_WEBSITE}
-                helperText="Hiện hỗ trợ meta.ai (render ảnh beat) và vibes.ai (convert ảnh beat → video headless)"
+                helperText="Domain cố định theo tab — meta.ai (render ảnh beat) hoặc vibes.ai (convert ảnh beat → video)"
             />
             <TextField
                 label="Mô tả"
@@ -130,10 +129,14 @@ function CookieForm({
     );
 }
 
-export default function ShortVideoCookieManageDrawer({
-    open,
-    onClose,
-}: Props) {
+export function ShortVideoCookieManageContent({
+    active = true,
+    website = 'meta.ai',
+}: {
+    active?: boolean;
+    /** Domain cố định cho tab này (meta.ai hoặc vibes.ai). */
+    website?: string;
+}) {
     const { showMessage } = useFloatingMessages();
 
     const [loading, setLoading] = React.useState(false);
@@ -145,10 +148,15 @@ export default function ShortVideoCookieManageDrawer({
     const [deleteTarget, setDeleteTarget] = React.useState<ShortVideoCookie | null>(null);
     const [deleting, setDeleting] = React.useState(false);
 
+    const emptyForm = React.useMemo<CookieFormState>(() => ({
+        ...EMPTY_FORM,
+        website,
+    }), [website]);
+
     const reloadList = React.useCallback(() => {
         setLoading(true);
         setError(null);
-        listShortVideoCookies('')
+        listShortVideoCookies(website)
             .then((result) => {
                 setLoading(false);
                 if (result?.success === false) {
@@ -162,19 +170,19 @@ export default function ShortVideoCookieManageDrawer({
                 setLoading(false);
                 setError(err instanceof Error ? err.message : 'Không tải được danh sách cookie');
             });
-    }, []);
+    }, [website]);
 
     React.useEffect(() => {
-        if (open) {
+        if (active) {
             setMode('list');
-            setForm(EMPTY_FORM);
+            setForm(emptyForm);
             setDeleteTarget(null);
             reloadList();
         }
-    }, [open, reloadList]);
+    }, [active, emptyForm, reloadList]);
 
     const openAddForm = () => {
-        setForm(EMPTY_FORM);
+        setForm(emptyForm);
         setMode('form');
     };
 
@@ -182,7 +190,7 @@ export default function ShortVideoCookieManageDrawer({
         setForm({
             id: cookie.id,
             title: cookie.title || '',
-            website: cookie.website || SUPPORTED_COOKIE_WEBSITE,
+            website: cookie.website || website,
             cookie_value: cookie.cookie_value || '',
             description: cookie.description || '',
         });
@@ -195,7 +203,8 @@ export default function ShortVideoCookieManageDrawer({
 
     const handleSubmit = () => {
         const title = form.title.trim();
-        const website = form.website.trim().toLowerCase() || SUPPORTED_COOKIE_WEBSITE;
+        // Tab cố định domain → luôn lưu theo website của tab (tránh nhảy bảng).
+        const targetWebsite = website.trim().toLowerCase() || SUPPORTED_COOKIE_WEBSITE;
         if (!title) {
             showMessage('Tên cookie không được để trống', 'warning');
             return;
@@ -210,7 +219,7 @@ export default function ShortVideoCookieManageDrawer({
         saveShortVideoCookie({
             id: form.id > 0 ? form.id : 0,
             title,
-            website,
+            website: targetWebsite,
             description: form.description,
             cookie_value: form.cookie_value,
         })
@@ -222,7 +231,7 @@ export default function ShortVideoCookieManageDrawer({
                 }
                 showMessage(form.id > 0 ? 'Đã cập nhật cookie' : 'Đã thêm cookie', 'success');
                 setMode('list');
-                setForm(EMPTY_FORM);
+                setForm(emptyForm);
                 reloadList();
             })
             .catch((err: unknown) => {
@@ -236,7 +245,7 @@ export default function ShortVideoCookieManageDrawer({
             return;
         }
         setDeleting(true);
-        deleteShortVideoCookies([deleteTarget.id])
+        deleteShortVideoCookies([deleteTarget.id], deleteTarget.website)
             .then((result) => {
                 setDeleting(false);
                 if (result?.success === false) {
@@ -254,201 +263,189 @@ export default function ShortVideoCookieManageDrawer({
             });
     };
 
-    const headerAction = (
-        <Stack direction="row" spacing={1} alignItems="center">
-            {mode === 'form' ? (
-                <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<ArrowBackOutlinedIcon />}
-                    onClick={() => setMode('list')}
-                    sx={{ color: 'common.white', borderColor: 'rgba(255,255,255,0.6)' }}
-                >
-                    Danh sách
-                </Button>
-            ) : (
-                <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<AddOutlinedIcon />}
-                    onClick={openAddForm}
-                    sx={{ color: 'common.white', borderColor: 'rgba(255,255,255,0.6)' }}
-                >
-                    Thêm cookie
-                </Button>
-            )}
-        </Stack>
-    );
-
     return (
-        <>
-            <DrawerCustom
-                open={open}
-                onClose={onClose}
-                title="Quản lý cookie chatbot"
-                width={900}
-                activeOnClose
-                headerAction={headerAction}
-                restDialogContent={{
-                    sx: {
-                        backgroundColor: 'body.background',
-                        pt: 2,
-                        px: 3,
-                        pb: 3,
-                    },
-                }}
-            >
-                <Typography>&nbsp;</Typography>
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                )}
-
-                {loading && (
-                    <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-                        <CircularProgress />
-                    </Box>
-                )}
-
-                {!loading && mode === 'form' ? (
-                    <Box
-                        sx={{
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 2,
-                            bgcolor: 'background.paper',
-                            p: 2.5,
-                            maxWidth: 720,
-                        }}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                {mode === 'form' ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<ArrowBackOutlinedIcon />}
+                        onClick={() => setMode('list')}
                     >
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
-                            {form.id > 0 ? 'Sửa cookie' : 'Thêm cookie mới'}
-                        </Typography>
-                        <CookieForm
-                            form={form}
-                            onFormChange={handleFormChange}
-                            saving={saving}
-                            onSubmit={handleSubmit}
-                            onCancel={() => setMode('list')}
-                        />
-                    </Box>
-                ) : null}
-
-                {!loading && mode === 'list' && cookies.length === 0 ? (
-                    <Box
-                        sx={{
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                            borderRadius: 2,
-                            py: 8,
-                            textAlign: 'center',
-                            bgcolor: 'background.paper',
-                        }}
+                        Danh sách
+                    </Button>
+                ) : (
+                    <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<AddOutlinedIcon />}
+                        onClick={openAddForm}
                     >
-                        <CookieOutlinedIcon sx={{ fontSize: 44, color: 'text.disabled' }} />
-                        <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                            Chưa có cookie nào
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                            Cookie pool dùng render ảnh beat (lấy tuần tự round-robin) và extension tự set cookie để
-                            mở Meta.ai.
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            size="small"
-                            startIcon={<AddOutlinedIcon />}
-                            onClick={openAddForm}
+                        Thêm cookie
+                    </Button>
+                )}
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title="Tải lại">
+                    <span>
+                        <IconButton size="small" onClick={reloadList} disabled={loading}>
+                            {loading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+                        </IconButton>
+                    </span>
+                </Tooltip>
+            </Stack>
+
+            {error && (
+                <Alert severity="error">
+                    {error}
+                </Alert>
+            )}
+
+            {loading && (
+                <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+                    <CircularProgress />
+                </Box>
+            )}
+
+            {!loading && mode === 'form' ? (
+                <Box
+                    sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        bgcolor: 'background.paper',
+                        p: 2.5,
+                        maxWidth: 720,
+                    }}
+                >
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+                        {form.id > 0 ? 'Sửa cookie' : 'Thêm cookie mới'}
+                    </Typography>
+                    <CookieForm
+                        form={form}
+                        onFormChange={handleFormChange}
+                        saving={saving}
+                        onSubmit={handleSubmit}
+                        onCancel={() => setMode('list')}
+                    />
+                </Box>
+            ) : null}
+
+            {!loading && mode === 'list' && cookies.length === 0 ? (
+                <Box
+                    sx={{
+                        border: '1px dashed',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        py: 8,
+                        textAlign: 'center',
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    <CookieOutlinedIcon sx={{ fontSize: 44, color: 'text.disabled' }} />
+                    <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                        Chưa có cookie nào
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                        {website === 'vibes.ai'
+                            ? 'Cookie pool vibes.ai dùng convert ảnh beat → video headless (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
+                            : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<AddOutlinedIcon />}
+                        onClick={openAddForm}
+                    >
+                        Thêm cookie
+                    </Button>
+                </Box>
+            ) : null}
+
+            {!loading && mode === 'list' && cookies.length > 0 ? (
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gap: 1.5,
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+                    }}
+                >
+                    {cookies.map((cookie) => (
+                        <Box
+                            key={cookie.id}
+                            sx={{
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                bgcolor: 'background.paper',
+                                p: 1.5,
+                                display: 'flex',
+                                gap: 1.5,
+                                alignItems: 'flex-start',
+                            }}
                         >
-                            Thêm cookie
-                        </Button>
-                    </Box>
-                ) : null}
-
-                {!loading && mode === 'list' && cookies.length > 0 ? (
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gap: 1.5,
-                            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-                        }}
-                    >
-                        {cookies.map((cookie) => (
                             <Box
-                                key={cookie.id}
                                 sx={{
+                                    width: 44,
+                                    height: 44,
+                                    flexShrink: 0,
+                                    borderRadius: 1.5,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    borderRadius: 2,
-                                    bgcolor: 'background.paper',
-                                    p: 1.5,
+                                    bgcolor: 'background.default',
                                     display: 'flex',
-                                    gap: 1.5,
-                                    alignItems: 'flex-start',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                 }}
                             >
-                                <Box
-                                    sx={{
-                                        width: 44,
-                                        height: 44,
-                                        flexShrink: 0,
-                                        borderRadius: 1.5,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        bgcolor: 'background.default',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                    }}
-                                >
-                                    <CookieOutlinedIcon color="action" />
-                                </Box>
-                                <Box sx={{ minWidth: 0, flex: 1 }}>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                                        <Chip
-                                            size="small"
-                                            label={cookie.website || SUPPORTED_COOKIE_WEBSITE}
-                                            color="primary"
-                                            variant="outlined"
-                                            sx={{ maxWidth: 180 }}
-                                        />
-                                        <Chip
-                                            size="small"
-                                            label={String(cookie.cookie_count ?? 0) + ' cookie'}
-                                            variant="outlined"
-                                        />
-                                    </Stack>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
-                                        {cookie.title || '(Không tên)'}
-                                    </Typography>
-                                    {cookie.description ? (
-                                        <Typography
-                                            variant="caption"
-                                            color="text.disabled"
-                                            sx={{ display: 'block' }}
-                                            noWrap
-                                        >
-                                            {cookie.description}
-                                        </Typography>
-                                    ) : null}
-                                </Box>
-                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                    <Tooltip title="Sửa">
-                                        <IconButton size="small" onClick={() => openEditForm(cookie)}>
-                                            <EditOutlinedIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Xóa">
-                                        <IconButton size="small" color="error" onClick={() => setDeleteTarget(cookie)}>
-                                            <DeleteOutlineOutlinedIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                </Stack>
+                                <CookieOutlinedIcon color="action" />
                             </Box>
-                        ))}
-                    </Box>
-                ) : null}
-            </DrawerCustom>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                    <Chip
+                                        size="small"
+                                        label={cookie.website || SUPPORTED_COOKIE_WEBSITE}
+                                        color="primary"
+                                        variant="outlined"
+                                        sx={{ maxWidth: 180 }}
+                                    />
+                                    <Chip
+                                        size="small"
+                                        label={String(cookie.cookie_count ?? 0) + ' cookie'}
+                                        variant="outlined"
+                                    />
+                                </Stack>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
+                                    {cookie.title || '(Không tên)'}
+                                </Typography>
+                                {cookie.description ? (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.disabled"
+                                        sx={{ display: 'block' }}
+                                        noWrap
+                                    >
+                                        {cookie.description}
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                            <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                <Tooltip title="Sửa">
+                                    <IconButton size="small" onClick={() => openEditForm(cookie)}>
+                                        <EditOutlinedIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Xóa">
+                                    <IconButton size="small" color="error" onClick={() => setDeleteTarget(cookie)}>
+                                        <DeleteOutlineOutlinedIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                        </Box>
+                    ))}
+                </Box>
+            ) : null}
+
             <Dialog
                 open={Boolean(deleteTarget)}
                 onClose={() => (deleting ? null : setDeleteTarget(null))}
@@ -470,6 +467,29 @@ export default function ShortVideoCookieManageDrawer({
                     </Button>
                 </DialogActions>
             </Dialog>
-        </>
+        </Box>
+    );
+}
+
+export default function ShortVideoCookieManageDrawer({ open, onClose }: Props) {
+    return (
+        <DrawerCustom
+            open={open}
+            onClose={onClose}
+            title="Quản lý cookie chatbot"
+            width={900}
+            activeOnClose
+            restDialogContent={{
+                sx: {
+                    backgroundColor: 'body.background',
+                    p: 0,
+                    overflow: 'hidden',
+                },
+            }}
+        >
+            <Box sx={{ height: '100%', p: 3, overflowY: 'auto' }} className="custom_scroll">
+                <ShortVideoCookieManageContent active={open} />
+            </Box>
+        </DrawerCustom>
     );
 }

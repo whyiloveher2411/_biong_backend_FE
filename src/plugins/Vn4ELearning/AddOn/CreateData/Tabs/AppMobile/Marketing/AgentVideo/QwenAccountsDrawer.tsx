@@ -8,13 +8,16 @@ import {
     Divider,
     IconButton,
     Stack,
+    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import LoginIcon from '@mui/icons-material/Login';
 import BlockIcon from '@mui/icons-material/Block';
 import KeyIcon from '@mui/icons-material/Key';
 import CookieIcon from '@mui/icons-material/Cookie';
@@ -25,14 +28,16 @@ import LoadingButton from 'components/atoms/LoadingButton';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import useConfirmDialog from 'hook/useConfirmDialog';
 import {
-    deleteSaydiAccount,
-    fetchSaydiAccounts,
-    registerSaydiAccount,
-    seedSaydiAccountsFromEnv,
-    updateSaydiAccountStatus,
-    type SaydiAccountItem,
-    type SaydiAccountStatus,
-} from 'helpers/saydiAccountsApi';
+    addQwenAccount,
+    deleteQwenAccount,
+    fetchQwenAccounts,
+    loginTestQwenAccount,
+    seedQwenAccountsFromEnv,
+    updateQwenAccount,
+    updateQwenAccountStatus,
+    type QwenAccountItem,
+    type QwenAccountStatus,
+} from 'helpers/qwenAccountsApi';
 
 type Props = {
     open: boolean;
@@ -41,7 +46,7 @@ type Props = {
 
 const STATUS_META: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
     active: { label: 'Đang dùng', color: 'success' },
-    exhausted: { label: 'Hết quota hôm nay', color: 'warning' },
+    exhausted: { label: 'Đang chờ (cooldown)', color: 'warning' },
     error: { label: 'Lỗi đăng nhập', color: 'error' },
     disabled: { label: 'Đã tắt', color: 'default' },
 };
@@ -58,45 +63,45 @@ function formatDateTime(value: string): string {
     return trimmed;
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-    return (
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-            <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ minWidth: 118, flexShrink: 0 }}
-            >
-                {label}
-            </Typography>
-            <Typography variant="caption" sx={{ wordBreak: 'break-word', flex: 1 }}>
-                {value}
-            </Typography>
-        </Stack>
-    );
+function formatRemaining(seconds: number): string {
+    const sec = Math.max(0, Number(seconds) || 0);
+    if (sec <= 0) {
+        return '';
+    }
+    const min = Math.ceil(sec / 60);
+    return `còn ~${min} phút`;
 }
 
-export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
+export function QwenAccountsContent({ active = true }: { active?: boolean }) {
     const { showMessage } = useFloatingMessages();
     const confirmDialog = useConfirmDialog();
 
     const [loading, setLoading] = React.useState(false);
-    const [registering, setRegistering] = React.useState(false);
+    const [adding, setAdding] = React.useState(false);
     const [seeding, setSeeding] = React.useState(false);
     const [busyId, setBusyId] = React.useState(0);
-    const [accounts, setAccounts] = React.useState<SaydiAccountItem[]>([]);
+    const [accounts, setAccounts] = React.useState<QwenAccountItem[]>([]);
     const [currentId, setCurrentId] = React.useState(0);
     const [expandedId, setExpandedId] = React.useState(0);
     const [error, setError] = React.useState('');
+    const [loginTestingId, setLoginTestingId] = React.useState(0);
+
+    const [showForm, setShowForm] = React.useState(false);
+    const [editingId, setEditingId] = React.useState(0);
+    const [formEmail, setFormEmail] = React.useState('');
+    const [formPassword, setFormPassword] = React.useState('');
+    const [formToken, setFormToken] = React.useState('');
+    const [formCookie, setFormCookie] = React.useState('');
 
     const load = React.useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const result = await fetchSaydiAccounts();
+            const result = await fetchQwenAccounts();
             setAccounts(Array.isArray(result.accounts) ? result.accounts : []);
             setCurrentId(Number(result.current_id || 0));
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Không tải được danh sách tài khoản Saydi');
+            setError(err instanceof Error ? err.message : 'Không tải được danh sách tài khoản Qwen');
             setAccounts([]);
         } finally {
             setLoading(false);
@@ -109,22 +114,76 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
         }
     }, [active, load]);
 
-    const applyResult = (result: { accounts?: SaydiAccountItem[]; current_id?: number }) => {
+    const applyResult = (result: { accounts?: QwenAccountItem[]; current_id?: number }) => {
         setAccounts(Array.isArray(result.accounts) ? result.accounts : accounts);
         setCurrentId(Number(result.current_id || 0));
     };
 
-    const toggleExpanded = (accountId: number) => {
-        setExpandedId((prev) => (prev === accountId ? 0 : accountId));
+    const resetForm = () => {
+        setEditingId(0);
+        setFormEmail('');
+        setFormPassword('');
+        setFormToken('');
+        setFormCookie('');
     };
 
-    const handleStatus = async (account: SaydiAccountItem, status: SaydiAccountStatus) => {
+    const openAddForm = () => {
+        resetForm();
+        setShowForm(true);
+    };
+
+    const openEditForm = (account: QwenAccountItem) => {
+        setEditingId(account.id);
+        setFormEmail(account.email || '');
+        setFormPassword('');
+        setFormToken('');
+        setFormCookie('');
+        setShowForm(true);
+    };
+
+    const handleAdd = async () => {
+        if (adding) {
+            return;
+        }
+        if (formEmail.trim() === '') {
+            showMessage('Nhập email tài khoản Qwen', 'error');
+            return;
+        }
+        setAdding(true);
+        try {
+            if (editingId > 0) {
+                applyResult(await updateQwenAccount(editingId, {
+                    email: formEmail.trim(),
+                    password: formPassword,
+                    token: formToken.trim(),
+                    cookie: formCookie.trim(),
+                }));
+                showMessage('Đã cập nhật tài khoản Qwen', 'success');
+            } else {
+                applyResult(await addQwenAccount({
+                    email: formEmail.trim(),
+                    password: formPassword,
+                    token: formToken.trim(),
+                    cookie: formCookie.trim(),
+                }));
+                showMessage('Đã thêm tài khoản Qwen', 'success');
+            }
+            resetForm();
+            setShowForm(false);
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Không lưu được tài khoản', 'error');
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleStatus = async (account: QwenAccountItem, status: QwenAccountStatus) => {
         if (busyId > 0) {
             return;
         }
         setBusyId(account.id);
         try {
-            applyResult(await updateSaydiAccountStatus(account.id, status));
+            applyResult(await updateQwenAccountStatus(account.id, status));
             showMessage('Đã cập nhật trạng thái tài khoản', 'success');
         } catch (err) {
             showMessage(err instanceof Error ? err.message : 'Không cập nhật được trạng thái', 'error');
@@ -133,11 +192,33 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
         }
     };
 
-    const handleDelete = (account: SaydiAccountItem) => {
+    const handleLoginTest = async (account: QwenAccountItem) => {
+        if (loginTestingId > 0) {
+            return;
+        }
+        setLoginTestingId(account.id);
+        try {
+            const result = await loginTestQwenAccount(account.id);
+            showMessage(
+                result.logged_in
+                    ? 'Login thành công — đã cập nhật cookie/token mới'
+                    : 'Session hiện tại vẫn hợp lệ',
+                'success',
+            );
+            await load();
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Login test thất bại', 'error');
+            await load();
+        } finally {
+            setLoginTestingId(0);
+        }
+    };
+
+    const handleDelete = (account: QwenAccountItem) => {
         confirmDialog.onConfirm(async () => {
             setBusyId(account.id);
             try {
-                applyResult(await deleteSaydiAccount(account.id));
+                applyResult(await deleteQwenAccount(account.id));
                 showMessage('Đã xoá tài khoản', 'success');
             } catch (err) {
                 showMessage(err instanceof Error ? err.message : 'Không xoá được tài khoản', 'error');
@@ -145,24 +226,9 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                 setBusyId(0);
             }
         }, {
-            title: 'Xoá tài khoản Saydi',
+            title: 'Xoá tài khoản Qwen',
             message: `Xoá tài khoản ${account.email}? Hành động này không thể hoàn tác.`,
         });
-    };
-
-    const handleRegister = async () => {
-        if (registering) {
-            return;
-        }
-        setRegistering(true);
-        try {
-            applyResult(await registerSaydiAccount());
-            showMessage('Đã đăng ký tài khoản Saydi mới', 'success');
-        } catch (err) {
-            showMessage(err instanceof Error ? err.message : 'Đăng ký tài khoản thất bại', 'error');
-        } finally {
-            setRegistering(false);
-        }
     };
 
     const handleSeed = async () => {
@@ -171,7 +237,7 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
         }
         setSeeding(true);
         try {
-            applyResult(await seedSaydiAccountsFromEnv());
+            applyResult(await seedQwenAccountsFromEnv());
             showMessage('Đã nạp tài khoản từ .env', 'success');
         } catch (err) {
             showMessage(err instanceof Error ? err.message : 'Không nạp được tài khoản từ .env', 'error');
@@ -183,24 +249,24 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 0, flex: 1 }}>
             <Alert severity="info" sx={{ py: 0.75 }}>
-                Mỗi tài khoản Saydi có giới hạn ký tự/ngày. Khi hết quota hệ thống tự xoay sang
-                tài khoản khác; hết tài khoản thì tự đăng ký mới bằng browser.
+                Qwen không cho tự đăng ký (cần OTP) nên tài khoản THÊM THỦ CÔNG. Hệ thống tự
+                login bằng email/password và lưu token; token hết hạn sẽ login lại. Khi tài khoản
+                bị Qwen giới hạn, hệ thống tạm nghỉ (cooldown) rồi xoay tài khoản kế.
             </Alert>
 
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-                <LoadingButton
+                <Button
                     size="small"
                     variant="contained"
-                    loading={registering}
                     startIcon={<AddCircleOutlineIcon />}
-                    onClick={() => { void handleRegister(); }}
+                    onClick={() => (showForm ? setShowForm(false) : openAddForm())}
                 >
-                    Đăng ký tài khoản mới
-                </LoadingButton>
+                    {showForm ? 'Đóng form' : 'Thêm tài khoản'}
+                </Button>
                 <Button
                     size="small"
                     variant="outlined"
-                    disabled={seeding || registering}
+                    disabled={seeding}
                     startIcon={<PlayCircleOutlineIcon />}
                     onClick={() => { void handleSeed(); }}
                 >
@@ -216,16 +282,74 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                 </Tooltip>
             </Stack>
 
+            <Collapse in={showForm} timeout="auto" unmountOnExit>
+                <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                        {editingId > 0 ? `Sửa tài khoản: ${formEmail || '—'}` : 'Thêm tài khoản mới'}
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        <TextField
+                            size="small"
+                            label="Email đăng nhập"
+                            value={formEmail}
+                            onChange={(event) => setFormEmail(event.target.value)}
+                            fullWidth
+                            autoComplete="off"
+                        />
+                        <TextField
+                            size="small"
+                            label={editingId > 0 ? 'Password (để trống nếu không đổi)' : 'Password'}
+                            value={formPassword}
+                            onChange={(event) => setFormPassword(event.target.value)}
+                            fullWidth
+                            autoComplete="new-password"
+                        />
+                        <TextField
+                            size="small"
+                            label={editingId > 0
+                                ? 'Token mới (để trống nếu giữ token cũ)'
+                                : 'Token (tuỳ chọn — dán token localStorage chat.qwen.ai)'}
+                            value={formToken}
+                            onChange={(event) => setFormToken(event.target.value)}
+                            fullWidth
+                            multiline
+                            minRows={2}
+                        />
+                        <TextField
+                            size="small"
+                            label={editingId > 0 ? 'Cookie JSON mới (để trống nếu giữ cũ)' : 'Cookie JSON (tuỳ chọn)'}
+                            value={formCookie}
+                            onChange={(event) => setFormCookie(event.target.value)}
+                            fullWidth
+                            multiline
+                            minRows={2}
+                        />
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={adding}
+                                onClick={() => { resetForm(); setShowForm(false); }}
+                            >
+                                Hủy
+                            </Button>
+                            <LoadingButton
+                                size="small"
+                                variant="contained"
+                                loading={adding}
+                                onClick={() => { void handleAdd(); }}
+                            >
+                                {editingId > 0 ? 'Lưu thay đổi' : 'Lưu tài khoản'}
+                            </LoadingButton>
+                        </Stack>
+                    </Stack>
+                </Box>
+            </Collapse>
+
             <Divider />
 
             <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    spacing={1}
-                    sx={{ mb: 1.5 }}
-                >
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary">
                         Danh sách tài khoản
                     </Typography>
@@ -241,7 +365,7 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                         <Alert severity="error">{error}</Alert>
                     ) : accounts.length === 0 ? (
                         <Alert severity="warning">
-                            Chưa có tài khoản Saydi nào. Bấm “Đăng ký tài khoản mới” hoặc “Nạp từ .env”.
+                            Chưa có tài khoản Qwen nào. Bấm “Thêm tài khoản” để thêm thủ công.
                         </Alert>
                     ) : (
                         <Stack spacing={2}>
@@ -251,6 +375,7 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                 const isBusy = busyId === account.id;
                                 const isCurrent = currentId === account.id;
                                 const isExpanded = expandedId === account.id;
+                                const remaining = formatRemaining(account.cooldown_remaining_sec);
                                 return (
                                     <Box
                                         key={account.id}
@@ -260,17 +385,16 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                             borderRadius: 2,
                                             overflow: 'hidden',
                                             bgcolor: 'background.paper',
-                                            transition: 'border-color 0.2s',
                                         }}
                                     >
                                         <Box
                                             role="button"
                                             tabIndex={0}
-                                            onClick={() => toggleExpanded(account.id)}
+                                            onClick={() => setExpandedId((prev) => (prev === account.id ? 0 : account.id))}
                                             onKeyDown={(event) => {
                                                 if (event.key === 'Enter' || event.key === ' ') {
                                                     event.preventDefault();
-                                                    toggleExpanded(account.id);
+                                                    setExpandedId((prev) => (prev === account.id ? 0 : account.id));
                                                 }
                                             }}
                                             sx={{
@@ -292,17 +416,12 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                                     {isCurrent ? (
                                                         <Chip size="small" color="primary" variant="outlined" label="Đang chọn" />
                                                     ) : null}
-                                                    {account.is_primary ? (
-                                                        <Chip size="small" variant="outlined" label=".env" />
-                                                    ) : null}
                                                 </Stack>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    Ký tự hôm nay: <b>{formatNumber(account.chars_used_today)}</b>
-                                                    {account.daily_char_limit > 0
-                                                        ? ` / ${formatNumber(account.daily_char_limit)}`
-                                                        : ''}
-                                                    {' · '}Tổng: {formatNumber(account.total_chars_used)}
+                                                    Video hôm nay: <b>{formatNumber(account.video_used_today)}</b>
+                                                    {' · '}Tổng: {formatNumber(account.total_video_used)}
                                                     {' · '}Dùng cuối: {formatDateTime(account.last_used_at)}
+                                                    {remaining ? ` · ${remaining}` : ''}
                                                 </Typography>
                                             </Stack>
                                             <ExpandMoreIcon
@@ -318,55 +437,35 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                             <Divider />
                                             <Box sx={{ px: 2, py: 1.75, bgcolor: 'grey.50' }}>
                                                 <Stack spacing={1}>
-                                                    <DetailRow label="Saydi UID" value={account.user_uid || '—'} />
-                                                    <DetailRow
-                                                        label="Ký tự hôm nay"
-                                                        value={
-                                                            <>
-                                                                <b>{formatNumber(account.chars_used_today)}</b>
-                                                                {account.daily_char_limit > 0
-                                                                    ? ` / ${formatNumber(account.daily_char_limit)}`
-                                                                    : ''}
-                                                            </>
-                                                        }
-                                                    />
-                                                    <DetailRow label="Tổng ký tự" value={formatNumber(account.total_chars_used)} />
-                                                    <DetailRow label="Ngày đếm" value={account.chars_used_date || '—'} />
-                                                    <DetailRow label="Hết quota lúc" value={formatDateTime(account.quota_exhausted_at)} />
-                                                    <DetailRow label="Dùng cuối" value={formatDateTime(account.last_used_at)} />
-                                                    <DetailRow label="Đăng ký lúc" value={formatDateTime(account.registered_at)} />
-                                                    <DetailRow
-                                                        label="Token"
-                                                        value={(
-                                                            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                                                                <Chip
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    icon={<KeyIcon fontSize="small" />}
-                                                                    label={account.has_access_token ? 'Có access token' : 'Không access token'}
-                                                                    color={account.has_access_token ? 'default' : 'warning'}
-                                                                />
-                                                                <Chip
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    label={account.has_refresh_token ? 'Có refresh token' : 'Không refresh token'}
-                                                                    color={account.has_refresh_token ? 'default' : 'warning'}
-                                                                />
-                                                            </Stack>
-                                                        )}
-                                                    />
-                                                    <DetailRow
-                                                        label="Cookie"
-                                                        value={(
-                                                            <Chip
-                                                                size="small"
-                                                                variant="outlined"
-                                                                icon={<CookieIcon fontSize="small" />}
-                                                                label={account.has_cookie ? 'Có cookie' : 'Không cookie'}
-                                                                color={account.has_cookie ? 'default' : 'warning'}
-                                                            />
-                                                        )}
-                                                    />
+                                                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                                        <Chip
+                                                            size="small"
+                                                            variant="outlined"
+                                                            icon={<KeyIcon fontSize="small" />}
+                                                            label={account.has_token ? 'Có token' : 'Chưa có token'}
+                                                            color={account.has_token ? 'default' : 'warning'}
+                                                        />
+                                                        <Chip
+                                                            size="small"
+                                                            variant="outlined"
+                                                            label={account.has_password ? 'Có password' : 'Không password'}
+                                                            color={account.has_password ? 'default' : 'warning'}
+                                                        />
+                                                        <Chip
+                                                            size="small"
+                                                            variant="outlined"
+                                                            icon={<CookieIcon fontSize="small" />}
+                                                            label={account.has_cookie ? 'Có cookie' : 'Không cookie'}
+                                                            color={account.has_cookie ? 'default' : 'warning'}
+                                                        />
+                                                    </Stack>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Cooldown tới: {formatDateTime(account.cooldown_until)}
+                                                        {remaining ? ` (${remaining})` : ''}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Thêm vào lúc: {formatDateTime(account.registered_at)}
+                                                    </Typography>
                                                 </Stack>
 
                                                 {account.last_error ? (
@@ -377,13 +476,28 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                             </Box>
 
                                             <Divider />
-                                            <Stack
-                                                direction="row"
-                                                spacing={1}
-                                                flexWrap="wrap"
-                                                useFlexGap
-                                                sx={{ px: 2, py: 1.25 }}
-                                            >
+                                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2, py: 1.25 }}>
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="primary"
+                                                    disabled={isBusy}
+                                                    startIcon={<EditOutlinedIcon fontSize="small" />}
+                                                    onClick={() => openEditForm(account)}
+                                                >
+                                                    Sửa
+                                                </Button>
+                                                <LoadingButton
+                                                    size="small"
+                                                    variant="contained"
+                                                    color="info"
+                                                    loading={loginTestingId === account.id}
+                                                    disabled={isBusy || (loginTestingId > 0 && loginTestingId !== account.id)}
+                                                    startIcon={<LoginIcon fontSize="small" />}
+                                                    onClick={() => { void handleLoginTest(account); }}
+                                                >
+                                                    {loginTestingId === account.id ? 'Đang login…' : 'Login test'}
+                                                </LoadingButton>
                                                 {account.status !== 'active' ? (
                                                     <Button
                                                         size="small"
@@ -430,12 +544,12 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
     );
 }
 
-export default function SaydiAccountsDrawer({ open, onClose }: Props) {
+export default function QwenAccountsDrawer({ open, onClose }: Props) {
     return (
         <DrawerCustom
             open={open}
             onClose={onClose}
-            title="Tài khoản Saydi API"
+            title="Tài khoản Qwen (chat.qwen.ai)"
             width={560}
             ModalProps={{ sx: { zIndex: 1500 } }}
             restDialogContent={{
@@ -446,7 +560,7 @@ export default function SaydiAccountsDrawer({ open, onClose }: Props) {
             }}
         >
             <Box sx={{ height: '100%', p: 3, overflowY: 'auto' }} className="custom_scroll">
-                <SaydiAccountsContent active={open} />
+                <QwenAccountsContent active={open} />
             </Box>
         </DrawerCustom>
     );

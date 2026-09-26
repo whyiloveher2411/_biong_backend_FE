@@ -94,7 +94,7 @@ export function saveShortVideoCookie(payload: ShortVideoCookieSavePayload): Prom
     }) as Promise<{ success?: boolean; cookie?: ShortVideoCookie; cookie_id?: number }>;
 }
 
-export function deleteShortVideoCookies(ids: number[]): Promise<{
+export function deleteShortVideoCookies(ids: number[], website = ''): Promise<{
     success?: boolean;
     deleted?: number;
     deleted_ids?: number[];
@@ -103,7 +103,7 @@ export function deleteShortVideoCookies(ids: number[]): Promise<{
         url: `${COOKIE_BASE_PATH}/delete`,
         method: 'POST',
         loading: false,
-        data: { ids },
+        data: { ids, website },
     }) as Promise<{ success?: boolean; deleted?: number; deleted_ids?: number[] }>;
 }
 

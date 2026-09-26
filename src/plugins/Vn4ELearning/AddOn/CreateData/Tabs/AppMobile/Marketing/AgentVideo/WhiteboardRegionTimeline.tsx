@@ -335,6 +335,7 @@ export default function WhiteboardRegionTimeline({
     /** Ô nhập "đi tới beat" — đồng bộ theo beatCurrent khi không focus. */
     const [beatJumpDraft, setBeatJumpDraft] = React.useState('');
     const beatJumpFocusedRef = React.useRef(false);
+    const beatJumpTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     React.useEffect(() => {
         if (!beatJumpFocusedRef.current) {
             setBeatJumpDraft(beatCurrent > 0 ? String(beatCurrent) : '');
@@ -350,6 +351,26 @@ export default function WhiteboardRegionTimeline({
         // Số không có trong beat (ngoài 1..total) → giữ nguyên beat hiện tại.
         setBeatJumpDraft(beatCurrent > 0 ? String(beatCurrent) : '');
     }, [beatCurrent, beatTotal, beatJumpDraft, onGoToBeat]);
+    const commitBeatJumpRef = React.useRef(commitBeatJump);
+    commitBeatJumpRef.current = commitBeatJump;
+    const clearBeatJumpTimer = React.useCallback(() => {
+        if (beatJumpTimerRef.current) {
+            clearTimeout(beatJumpTimerRef.current);
+            beatJumpTimerRef.current = null;
+        }
+    }, []);
+    // Dừng nhập 1s → tự nhảy tới beat đã nhập dù input còn focus.
+    React.useEffect(() => {
+        if (!beatJumpFocusedRef.current || !beatJumpDraft) {
+            return;
+        }
+        clearBeatJumpTimer();
+        beatJumpTimerRef.current = setTimeout(() => {
+            beatJumpTimerRef.current = null;
+            commitBeatJumpRef.current();
+        }, 1000);
+        return clearBeatJumpTimer;
+    }, [beatJumpDraft, clearBeatJumpTimer]);
 
     React.useEffect(() => {
         if (timelineViewMode !== 'group') {
@@ -1023,7 +1044,7 @@ export default function WhiteboardRegionTimeline({
                 >
                     {beatCurrent > 0 && beatTotal > 0 ? (
                         onGoToBeat ? (
-                            <Tooltip title={`Đi tới beat (1–${beatTotal}). Nhập số rồi Enter/blur; số không tồn tại sẽ giữ nguyên beat hiện tại`}>
+                            <Tooltip title={`Đi tới beat (1–${beatTotal}). Tự nhảy sau khi dừng nhập 1s, hoặc Enter/blur; số không tồn tại sẽ giữ nguyên beat hiện tại`}>
                                 <TextField
                                     size="small"
                                     value={beatJumpDraft}
@@ -1035,6 +1056,7 @@ export default function WhiteboardRegionTimeline({
                                     }}
                                     onBlur={() => {
                                         beatJumpFocusedRef.current = false;
+                                        clearBeatJumpTimer();
                                         commitBeatJump();
                                     }}
                                     onKeyDown={(event) => {

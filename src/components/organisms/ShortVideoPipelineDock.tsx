@@ -13,9 +13,9 @@ import {
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
-import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import LaunchIcon from '@mui/icons-material/Launch';
-import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import StopIcon from '@mui/icons-material/Stop';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
@@ -351,18 +351,20 @@ export default function ShortVideoPipelineDock() {
 
     return (
         <Paper
-            elevation={12}
+            elevation={dockCollapsed ? 6 : 12}
             sx={{
                 position: 'fixed',
-                right: dockRight,
-                bottom: dockBottom,
+                right: dockCollapsed ? 0 : dockRight,
+                bottom: dockCollapsed ? 0 : dockBottom,
                 zIndex: 1400,
                 width: dockCollapsed ? 'auto' : `min(${DOCK_MAX_WIDTH}px, ${dockMaxWidth})`,
                 maxWidth: dockMaxWidth,
                 bgcolor: 'rgba(9,12,16,0.97)',
                 color: 'common.white',
                 border: '1px solid rgba(255,255,255,0.16)',
-                borderRadius: 2,
+                borderRadius: dockCollapsed ? '10px 0 0 0' : 2,
+                borderBottom: dockCollapsed ? 'none' : undefined,
+                borderRight: dockCollapsed ? 'none' : undefined,
                 overflow: 'hidden',
                 transition: 'width 160ms ease',
             }}
@@ -372,41 +374,46 @@ export default function ShortVideoPipelineDock() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
-                    px: 1.5,
-                    py: 0.75,
+                    px: dockCollapsed ? 1 : 1.5,
+                    py: dockCollapsed ? 0.25 : 0.75,
                     borderBottom: dockCollapsed ? 'none' : '1px solid rgba(255,255,255,0.08)',
                 }}
             >
-                <AccountTreeOutlinedIcon fontSize="small" sx={{ color: '#29b6f6' }} />
-                <Typography
-                    variant="caption"
-                    fontWeight={800}
-                    noWrap
-                    sx={{ flex: dockCollapsed ? '0 0 auto' : 1 }}
-                >
-                    Pipeline short video
-                </Typography>
+                {!dockCollapsed ? (
+                    <AccountTreeOutlinedIcon fontSize="small" sx={{ color: '#29b6f6' }} />
+                ) : null}
+                {!dockCollapsed ? (
+                    <Typography
+                        variant="caption"
+                        fontWeight={800}
+                        noWrap
+                        sx={{ flex: 1 }}
+                    >
+                        Pipeline short video
+                    </Typography>
+                ) : null}
                 <Chip
                     size="small"
                     label={merged.length}
                     sx={{
-                        height: 20,
+                        height: dockCollapsed ? 16 : 20,
                         bgcolor: 'rgba(41,182,246,0.18)',
                         color: '#90caf9',
                         fontWeight: 800,
-                        '& .MuiChip-label': { px: 1, fontSize: 11 },
+                        '& .MuiChip-label': { px: 1, fontSize: dockCollapsed ? 10 : 11 },
                     }}
                 />
-                <Tooltip title={dockCollapsed ? 'Mở dock' : 'Thu gọn dock'}>
+                <Tooltip title={dockCollapsed ? 'Mở dock pipeline' : 'Thu gọn dock pipeline'}>
                     <IconButton
                         size="small"
                         color="inherit"
                         onClick={() => setDockCollapsed((value) => !value)}
                         aria-label={dockCollapsed ? 'Mở dock pipeline' : 'Thu gọn dock pipeline'}
+                        sx={{ p: dockCollapsed ? 0.125 : 0.5 }}
                     >
                         {dockCollapsed
-                            ? <OpenInFullIcon fontSize="small" />
-                            : <CloseFullscreenIcon fontSize="small" />}
+                            ? <KeyboardArrowUpIcon sx={{ fontSize: dockCollapsed ? 18 : 20 }} />
+                            : <KeyboardArrowDownIcon fontSize="small" />}
                     </IconButton>
                 </Tooltip>
             </Box>

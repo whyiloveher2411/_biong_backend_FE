@@ -1,10 +1,9 @@
 import React from 'react';
-import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import { Box, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import CollectionsOutlinedIcon from '@mui/icons-material/CollectionsOutlined';
-import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
+import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import Button from 'components/atoms/Button';
 import { isKeyboardEditableTarget } from 'helpers/shortVideoEditorKeyboard';
@@ -12,7 +11,7 @@ import ShortVideoAgentLeftPanel from './ShortVideoAgentLeftPanel';
 import ShortVideoAgentWorkflowPanel from './ShortVideoAgentWorkflowPanel';
 import ShortVideoAgentVideoTimeline from './ShortVideoAgentVideoTimeline';
 import ShortVideoResourceManageDrawer from '../ShortVideoResourceManageDrawer';
-import ShortVideoCookieManageDrawer from '../ShortVideoCookieManageDrawer';
+import AccountsManageDrawer from './AccountsManageDrawer';
 import ShortVideoAgentBeatRegionEditor from './ShortVideoAgentBeatRegionEditor';
 import ShortVideoAgentCustomHtmlPreview from './ShortVideoAgentCustomHtmlPreview';
 import ShortVideoAgentBeatQaPanel from './ShortVideoAgentBeatQaPanel';
@@ -41,12 +40,13 @@ type Props = {
 
 const HEADER_BTN_SX = {
     color: 'common.white',
-    bgcolor: 'rgba(255,255,255,0.14)',
-    border: '1px solid rgba(255,255,255,0.5)',
     boxShadow: 'none',
+    whiteSpace: 'nowrap',
     '&:hover': {
-        bgcolor: 'rgba(255,255,255,0.24)',
-        borderColor: 'common.white',
+        color: 'common.white',
+    },
+    '& .MuiButton-startIcon': {
+        color: 'inherit',
     },
 } as const;
 
@@ -180,7 +180,7 @@ export default function ShortVideoAgentVideoWorkspace({
     const [leftPanelOpen, setLeftPanelOpen] = React.useState(false);
     const [leftPanelTab, setLeftPanelTab] = React.useState<ShortVideoAgentLeftTab>(initialTab);
     const [resourceDrawerOpen, setResourceDrawerOpen] = React.useState(false);
-    const [cookieDrawerOpen, setCookieDrawerOpen] = React.useState(false);
+    const [accountsDrawerOpen, setAccountsDrawerOpen] = React.useState(false);
     const [rightPanelOpen, setRightPanelOpen] = React.useState(false);
     const [qaDrawerOpen, setQaDrawerOpen] = React.useState(false);
 
@@ -553,32 +553,42 @@ export default function ShortVideoAgentVideoWorkspace({
         : `Short video #${shortVideoId}`;
 
     const headerAction = (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-            <Chip
-                label={state.statusChip.label}
-                color={state.statusChip.color}
-                size="small"
-                sx={{
-                    bgcolor: 'rgba(255,255,255,0.12)',
-                    color: 'common.white',
-                    borderColor: 'rgba(255,255,255,0.4)',
-                    '& .MuiChip-label': { px: 1 },
-                }}
-                variant="outlined"
-            />
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 1,
+                flexWrap: 'wrap',
+                flexShrink: 0,
+            }}
+        >
             <Button
                 size="small"
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={() => state.loadRow()}
+                variant="contained"
+                color="primary"
+                startIcon={<CollectionsOutlinedIcon />}
+                disabled={shortVideoId <= 0}
+                onClick={() => setResourceDrawerOpen(true)}
                 sx={HEADER_BTN_SX}
             >
-                Refresh
+                Quản lý Resource
+            </Button>
+            <Button
+                size="small"
+                variant="contained"
+                color="success"
+                startIcon={<ManageAccountsOutlinedIcon />}
+                onClick={() => setAccountsDrawerOpen(true)}
+                sx={HEADER_BTN_SX}
+            >
+                Cài đặt chung
             </Button>
             {finalPreviewVideoUrl ? (
                 <Button
                     size="small"
                     variant="contained"
+                    color="error"
                     startIcon={<OpenInNewIcon />}
                     onClick={(event) => {
                         event.preventDefault();
@@ -608,12 +618,7 @@ export default function ShortVideoAgentVideoWorkspace({
                             }
                         }
                     }}
-                    sx={{
-                        color: 'grey.900',
-                        bgcolor: 'warning.main',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                        '&:hover': { bgcolor: 'warning.dark' },
-                    }}
+                    sx={HEADER_BTN_SX}
                 >
                     Mở video
                 </Button>
@@ -726,53 +731,6 @@ export default function ShortVideoAgentVideoWorkspace({
                                 >
                                     YouTube
                                 </Typography>
-                            </Box>
-                            {/* Nút nhỏ ở đáy rail — ít dùng nên gộp cạnh nhau, đặt dưới YouTube. */}
-                            <Box
-                                sx={{
-                                    flexShrink: 0,
-                                    display: 'flex',
-                                    borderTop: 1,
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Tooltip title="Quản lý Resource" placement="right">
-                                    <IconButton
-                                        size="small"
-                                        disabled={shortVideoId <= 0}
-                                        onClick={() => setResourceDrawerOpen(true)}
-                                        sx={{
-                                            flex: 1,
-                                            minWidth: 0,
-                                            p: 0,
-                                            height: 34,
-                                            borderRadius: 0,
-                                            color: 'primary.main',
-                                            '&:hover': { bgcolor: 'primary.main', color: 'common.white' },
-                                        }}
-                                    >
-                                        <CollectionsOutlinedIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Quản lý cookie" placement="right">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setCookieDrawerOpen(true)}
-                                        sx={{
-                                            flex: 1,
-                                            minWidth: 0,
-                                            p: 0,
-                                            height: 34,
-                                            borderRadius: 0,
-                                            borderLeft: 1,
-                                            borderColor: 'divider',
-                                            color: 'info.main',
-                                            '&:hover': { bgcolor: 'info.main', color: 'common.white' },
-                                        }}
-                                    >
-                                        <VpnKeyOutlinedIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
                             </Box>
                         </Box>
                     ) : (
@@ -1184,9 +1142,9 @@ export default function ShortVideoAgentVideoWorkspace({
                 shortVideoId={shortVideoId}
                 shortVideoTitle={state.title || `Short video #${shortVideoId}`}
             />
-            <ShortVideoCookieManageDrawer
-                open={cookieDrawerOpen}
-                onClose={() => setCookieDrawerOpen(false)}
+            <AccountsManageDrawer
+                open={accountsDrawerOpen}
+                onClose={() => setAccountsDrawerOpen(false)}
             />
             <ShortVideoAgentBeatHtmlEditDrawer
                 open={Boolean(editBeatHtmlId)}
