@@ -1145,6 +1145,7 @@ export default function ShortVideoAgentVideoWorkspace({
             <AccountsManageDrawer
                 open={accountsDrawerOpen}
                 onClose={() => setAccountsDrawerOpen(false)}
+                shortVideoId={shortVideoId}
             />
             <ShortVideoAgentBeatHtmlEditDrawer
                 open={Boolean(editBeatHtmlId)}

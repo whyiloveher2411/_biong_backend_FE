@@ -21,14 +21,18 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CookieOutlinedIcon from '@mui/icons-material/CookieOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import FiberManualRecordOutlinedIcon from '@mui/icons-material/FiberManualRecordOutlined';
+import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
+    clearShortVideoCookieCooldown,
     deleteShortVideoCookies,
     listShortVideoCookies,
     parseShortVideoCookieApiMessage,
+    recordCanvaFlow,
     saveShortVideoCookie,
     SUPPORTED_COOKIE_WEBSITE,
     testLoginShortVideoCookie,
@@ -56,6 +60,27 @@ const EMPTY_FORM: CookieFormState = {
     cookie_value: '',
     description: '',
 };
+
+/** Chuỗi "còn lại" cho cooldown (account hết quota đang nghỉ). */
+function formatCooldownRemaining(untilSec: number): string {
+    const now = Math.floor(Date.now() / 1000);
+    let remain = Math.max(0, Math.floor(untilSec) - now);
+    if (remain <= 0) {
+        return '';
+    }
+    const days = Math.floor(remain / 86400);
+    remain -= days * 86400;
+    const hours = Math.floor(remain / 3600);
+    remain -= hours * 3600;
+    const mins = Math.floor(remain / 60);
+    if (days > 0) {
+        return `${days} ngày ${hours}h`;
+    }
+    if (hours > 0) {
+        return `${hours}h ${mins}m`;
+    }
+    return `${mins} phút`;
+}
 
 function CookieForm({
     form,
@@ -134,10 +159,13 @@ function CookieForm({
 export function ShortVideoCookieManageContent({
     active = true,
     website = 'meta.ai',
+    shortVideoId = 0,
 }: {
     active?: boolean;
-    /** Domain cố định cho tab này (meta.ai hoặc vibes.ai). */
+    /** Domain cố định cho tab này (meta.ai / vibes.ai / www.canva.com). */
     website?: string;
+    /** Short video đang mở — cần cho recorder Canva (lấy ảnh beat test). */
+    shortVideoId?: number;
 }) {
     const { showMessage } = useFloatingMessages();
 
@@ -150,10 +178,14 @@ export function ShortVideoCookieManageContent({
     const [deleteTarget, setDeleteTarget] = React.useState<ShortVideoCookie | null>(null);
     const [deleting, setDeleting] = React.useState(false);
     const [testingId, setTestingId] = React.useState<number | null>(null);
+    const [recording, setRecording] = React.useState(false);
+    const [clearingId, setClearingId] = React.useState<number | null>(null);
 
     // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva) — BE mở
     // browser với đúng cookie của site tương ứng.
     const canTestLogin = website === 'meta.ai' || website === 'vibes.ai' || website.includes('canva.com');
+    // Recorder chỉ có cho Canva (học flow image → video thủ công).
+    const canRecordCanva = website.includes('canva.com');
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -274,6 +306,55 @@ export function ShortVideoCookieManageContent({
             });
     };
 
+    const handleRecordCanva = () => {
+        if (shortVideoId <= 0) {
+            showMessage('Cần mở short video trước khi ghi thao tác Canva (dùng ảnh beat làm ảnh test)', 'warning');
+            return;
+        }
+        setRecording(true);
+        recordCanvaFlow(shortVideoId)
+            .then((result) => {
+                setRecording(false);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không mở được recorder Canva'), 'error');
+                    return;
+                }
+                const baseMessage = parseShortVideoCookieApiMessage(
+                    result,
+                    'Đã mở Chrome recorder Canva — thao tác upload → Image to Video → Generate → Download rồi bấm "End test"',
+                );
+                showMessage(
+                    result?.out_dir ? `${baseMessage} — log: ${result.out_dir}` : baseMessage,
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setRecording(false);
+                showMessage(err instanceof Error ? err.message : 'Không mở được recorder Canva', 'error');
+            });
+    };
+
+    const handleClearCooldown = (cookie: ShortVideoCookie) => {
+        if (clearingId !== null) {
+            return;
+        }
+        setClearingId(cookie.id);
+        clearShortVideoCookieCooldown(cookie.id, cookie.website || website)
+            .then((result) => {
+                setClearingId(null);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không bỏ được nghỉ cho cookie'), 'error');
+                    return;
+                }
+                showMessage('Đã bỏ nghỉ (cooldown) cho cookie', 'success');
+                reloadList();
+            })
+            .catch((err: unknown) => {
+                setClearingId(null);
+                showMessage(err instanceof Error ? err.message : 'Không bỏ được nghỉ cho cookie', 'error');
+            });
+    };
+
     const handleConfirmDelete = () => {
         if (!deleteTarget) {
             return;
@@ -319,6 +400,18 @@ export function ShortVideoCookieManageContent({
                         Thêm cookie
                     </Button>
                 )}
+                {canRecordCanva && mode === 'list' ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={recording ? <CircularProgress size={14} color="inherit" /> : <FiberManualRecordOutlinedIcon />}
+                        onClick={handleRecordCanva}
+                        disabled={recording || loading}
+                    >
+                        Ghi lại thao tác
+                    </Button>
+                ) : null}
                 <Box sx={{ flex: 1 }} />
                 <Tooltip title="Tải lại">
                     <span>
@@ -450,6 +543,13 @@ export function ShortVideoCookieManageContent({
                                         label={String(cookie.cookie_count ?? 0) + ' cookie'}
                                         variant="outlined"
                                     />
+                                    {formatCooldownRemaining(Number(cookie.cooldown_until || 0)) ? (
+                                        <Chip
+                                            size="small"
+                                            color="warning"
+                                            label={`Hết quota · còn ${formatCooldownRemaining(Number(cookie.cooldown_until || 0))}`}
+                                        />
+                                    ) : null}
                                 </Stack>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
                                     {cookie.title || '(Không tên)'}
@@ -466,6 +566,24 @@ export function ShortVideoCookieManageContent({
                                 ) : null}
                             </Box>
                             <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                {formatCooldownRemaining(Number(cookie.cooldown_until || 0)) ? (
+                                    <Tooltip title="Bỏ nghỉ (mở lại account dùng ngay)">
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                color="warning"
+                                                onClick={() => handleClearCooldown(cookie)}
+                                                disabled={clearingId !== null}
+                                            >
+                                                {clearingId === cookie.id ? (
+                                                    <CircularProgress size={18} />
+                                                ) : (
+                                                    <LockOpenOutlinedIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
                                 {canTestLogin ? (
                                     <Tooltip title="Test đăng nhập (mở browser kiểm tra cookie)">
                                         <span>

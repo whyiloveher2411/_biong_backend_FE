@@ -32,6 +32,7 @@ type Props = {
 const PLATFORM_HINT: Record<string, string> = {
     'chat.qwen.ai': 'Tài khoản Qwen (pool, xoay vòng) — cần VIDEO PROMPT hoặc prompt chung',
     'vibes.ai': 'Cookie pool vibes.ai — có auto-animate',
+    'www.canva.com': 'Cookie pool www.canva.com — upload ảnh → Image to Video (Smart/Custom)',
 };
 
 /**

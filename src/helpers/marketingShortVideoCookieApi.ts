@@ -26,6 +26,8 @@ export type ShortVideoCookie = {
     cookie_value: string;
     cookie_count?: number;
     cookies?: ShortVideoCookieRaw[];
+    /** Unix giây — account hết quota, đang nghỉ tới mốc này (0 = bình thường). */
+    cooldown_until?: number;
     created_at?: string;
     updated_at?: string;
 };
@@ -105,6 +107,20 @@ export function deleteShortVideoCookies(ids: number[], website = ''): Promise<{
         loading: false,
         data: { ids, website },
     }) as Promise<{ success?: boolean; deleted?: number; deleted_ids?: number[] }>;
+}
+
+/** Bỏ cooldown (hết quota) cho 1 cookie/account — dùng lại ngay. */
+export function clearShortVideoCookieCooldown(cookieId: number, website = ''): Promise<{
+    success?: boolean;
+    message?: string | { content?: string };
+    cookie_id?: number;
+}> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/clear-cooldown`,
+        method: 'POST',
+        loading: false,
+        data: { cookie_id: cookieId, website },
+    }) as Promise<{ success?: boolean; message?: string | { content?: string }; cookie_id?: number }>;
 }
 
 /**
@@ -234,6 +250,35 @@ export async function metaaiCookiePayloadForOpen(cookieId = 0): Promise<Record<s
         );
     }
     return { metaai_cookie: cookie };
+}
+
+export type RecordCanvaFlowResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    pid?: number;
+    out_dir?: string;
+    stdout_log?: string;
+    stderr_log?: string;
+    image_path?: string;
+    beat_id?: string;
+    short_video_id?: number;
+};
+
+/**
+ * RECORDER Canva (DEV): mở Chrome GUI với cookie pool canva.com và ghi lại thao tác thủ
+ * công (upload ảnh beat → Image to Video → Generate → Download). Người dùng bấm "End test"
+ * trong overlay để lưu log vào storage/logs/canva-record/. Trả về ngay sau khi mở browser.
+ */
+export function recordCanvaFlow(
+    shortVideoId: number,
+    beatId = '',
+): Promise<RecordCanvaFlowResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/record-canva`,
+        method: 'POST',
+        loading: false,
+        data: { short_video_id: shortVideoId, beat_id: beatId },
+    }) as Promise<RecordCanvaFlowResult>;
 }
 
 export function shortVideoCookieApiUrl(suffix: string): string {

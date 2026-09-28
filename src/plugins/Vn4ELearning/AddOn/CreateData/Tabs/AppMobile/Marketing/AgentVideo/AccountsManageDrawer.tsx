@@ -14,13 +14,20 @@ type Props = {
     open: boolean;
     onClose: () => void;
     initialTab?: string;
+    /** Short video đang mở — cần cho recorder Canva (lấy ảnh beat test). */
+    shortVideoId?: number;
+};
+
+type AccountTabContext = {
+    active: boolean;
+    shortVideoId: number;
 };
 
 type AccountTab = {
     key: string;
     label: string;
     icon: React.ReactElement;
-    render: (active: boolean) => React.ReactNode;
+    render: (ctx: AccountTabContext) => React.ReactNode;
 };
 
 const ACCOUNT_TABS: AccountTab[] = [
@@ -28,37 +35,39 @@ const ACCOUNT_TABS: AccountTab[] = [
         key: 'convert',
         label: 'Convert video',
         icon: <MovieFilterOutlinedIcon fontSize="small" />,
-        render: (active) => <BeatVideoPlatformsContent active={active} />,
+        render: ({ active }) => <BeatVideoPlatformsContent active={active} />,
     },
     {
         key: 'metaai',
         label: 'Meta.ai Cookie',
         icon: <CookieOutlinedIcon fontSize="small" />,
-        render: (active) => <ShortVideoCookieManageContent active={active} website="meta.ai" />,
+        render: ({ active }) => <ShortVideoCookieManageContent active={active} website="meta.ai" />,
     },
     {
         key: 'vibes',
         label: 'Vibes.ai Cookie',
         icon: <MovieFilterOutlinedIcon fontSize="small" />,
-        render: (active) => <ShortVideoCookieManageContent active={active} website="vibes.ai" />,
+        render: ({ active }) => <ShortVideoCookieManageContent active={active} website="vibes.ai" />,
     },
     {
         key: 'canva',
         label: 'Canva Cookie',
         icon: <MovieFilterOutlinedIcon fontSize="small" />,
-        render: (active) => <ShortVideoCookieManageContent active={active} website="www.canva.com" />,
+        render: ({ active, shortVideoId }) => (
+            <ShortVideoCookieManageContent active={active} website="www.canva.com" shortVideoId={shortVideoId} />
+        ),
     },
     {
         key: 'qwen',
         label: 'Qwen',
         icon: <SmartToyOutlinedIcon fontSize="small" />,
-        render: (active) => <QwenAccountsContent active={active} />,
+        render: ({ active }) => <QwenAccountsContent active={active} />,
     },
     {
         key: 'saydi',
         label: 'Saydi',
         icon: <RecordVoiceOverOutlinedIcon fontSize="small" />,
-        render: (active) => <SaydiAccountsContent active={active} />,
+        render: ({ active }) => <SaydiAccountsContent active={active} />,
     },
 ];
 
@@ -66,7 +75,7 @@ const ACCOUNT_TABS: AccountTab[] = [
  * Drawer CÀI ĐẶT CHUNG dùng chung nhiều nền tảng — mỗi nền tảng 1 tab
  * (Convert video, Cookie, Qwen, Saydi, …). Thêm nền tảng mới = thêm 1 entry vào ACCOUNT_TABS.
  */
-export default function AccountsManageDrawer({ open, onClose, initialTab }: Props) {
+export default function AccountsManageDrawer({ open, onClose, initialTab, shortVideoId = 0 }: Props) {
     const [tabKey, setTabKey] = React.useState(initialTab || ACCOUNT_TABS[0].key);
 
     React.useEffect(() => {
@@ -124,7 +133,7 @@ export default function AccountsManageDrawer({ open, onClose, initialTab }: Prop
                     }}
                     className="custom_scroll"
                 >
-                    {ACCOUNT_TABS[activeIndex]?.render(open)}
+                    {ACCOUNT_TABS[activeIndex]?.render({ active: open, shortVideoId })}
                 </Box>
             </Box>
         </DrawerCustom>
