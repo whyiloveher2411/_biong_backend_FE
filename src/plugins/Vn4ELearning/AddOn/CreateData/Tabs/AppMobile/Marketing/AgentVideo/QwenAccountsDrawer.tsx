@@ -32,6 +32,7 @@ import {
     deleteQwenAccount,
     fetchQwenAccounts,
     loginTestQwenAccount,
+    loginTestQwenAccountGui,
     seedQwenAccountsFromEnv,
     updateQwenAccount,
     updateQwenAccountStatus,
@@ -85,6 +86,7 @@ export function QwenAccountsContent({ active = true }: { active?: boolean }) {
     const [expandedId, setExpandedId] = React.useState(0);
     const [error, setError] = React.useState('');
     const [loginTestingId, setLoginTestingId] = React.useState(0);
+    const [loginTestingGuiId, setLoginTestingGuiId] = React.useState(0);
 
     const [showForm, setShowForm] = React.useState(false);
     const [editingId, setEditingId] = React.useState(0);
@@ -211,6 +213,26 @@ export function QwenAccountsContent({ active = true }: { active?: boolean }) {
             await load();
         } finally {
             setLoginTestingId(0);
+        }
+    };
+
+    const handleLoginTestGui = async (account: QwenAccountItem) => {
+        if (loginTestingGuiId > 0) {
+            return;
+        }
+        setLoginTestingGuiId(account.id);
+        try {
+            const result = await loginTestQwenAccountGui(account.id);
+            showMessage(
+                typeof result?.message === 'string'
+                    ? result.message
+                    : 'Đã mở browser test đăng nhập (chế độ hiện cửa sổ)',
+                'success',
+            );
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Không mở được browser test đăng nhập', 'error');
+        } finally {
+            setLoginTestingGuiId(0);
         }
     };
 
@@ -497,6 +519,17 @@ export function QwenAccountsContent({ active = true }: { active?: boolean }) {
                                                     onClick={() => { void handleLoginTest(account); }}
                                                 >
                                                     {loginTestingId === account.id ? 'Đang login…' : 'Login test'}
+                                                </LoadingButton>
+                                                <LoadingButton
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="info"
+                                                    loading={loginTestingGuiId === account.id}
+                                                    disabled={isBusy || (loginTestingGuiId > 0 && loginTestingGuiId !== account.id)}
+                                                    startIcon={<LoginIcon fontSize="small" />}
+                                                    onClick={() => { void handleLoginTestGui(account); }}
+                                                >
+                                                    {loginTestingGuiId === account.id ? 'Đang mở…' : 'Test đăng nhập (browser)'}
                                                 </LoadingButton>
                                                 {account.status !== 'active' ? (
                                                     <Button

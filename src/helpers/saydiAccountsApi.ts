@@ -34,7 +34,7 @@ export type SaydiAccountsResult = {
     today?: string;
 };
 
-type SaydiAccountsAction = 'list' | 'set_status' | 'delete' | 'register' | 'seed';
+type SaydiAccountsAction = 'list' | 'set_status' | 'delete' | 'register' | 'seed' | 'login_test_gui';
 
 async function callSaydiAccounts(
     action: SaydiAccountsAction,
@@ -74,4 +74,12 @@ export async function registerSaydiAccount(): Promise<SaydiAccountsResult> {
 
 export async function seedSaydiAccountsFromEnv(): Promise<SaydiAccountsResult> {
     return callSaydiAccounts('seed');
+}
+
+/**
+ * Test đăng nhập bằng browser GUI: BE mở Chrome Ở CHẾ ĐỘ HIỆN CỬA SỔ với cookie đã lưu
+ * để user tự đánh giá (không chờ kết quả, browser giữ mở tới khi user đóng).
+ */
+export async function loginTestSaydiAccountGui(accountId: number): Promise<SaydiAccountsResult> {
+    return callSaydiAccounts('login_test_gui', { account_id: accountId, id: accountId });
 }

@@ -36,7 +36,7 @@ export type QwenAccountsResult = {
     valid?: boolean;
 };
 
-type QwenAccountsAction = 'list' | 'add' | 'update' | 'set_status' | 'delete' | 'seed' | 'login_test';
+type QwenAccountsAction = 'list' | 'add' | 'update' | 'set_status' | 'delete' | 'seed' | 'login_test' | 'login_test_gui';
 
 async function callQwenAccounts(
     action: QwenAccountsAction,
@@ -96,4 +96,12 @@ export async function seedQwenAccountsFromEnv(): Promise<QwenAccountsResult> {
  */
 export async function loginTestQwenAccount(accountId: number): Promise<QwenAccountsResult> {
     return callQwenAccounts('login_test', { account_id: accountId, id: accountId });
+}
+
+/**
+ * Test đăng nhập bằng browser GUI: BE mở Chrome Ở CHẾ ĐỘ HIỆN CỬA SỔ với token/cookie
+ * đã lưu để user tự đánh giá (không chờ kết quả, browser giữ mở tới khi user đóng).
+ */
+export async function loginTestQwenAccountGui(accountId: number): Promise<QwenAccountsResult> {
+    return callQwenAccounts('login_test_gui', { account_id: accountId, id: accountId });
 }

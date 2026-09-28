@@ -108,6 +108,35 @@ export function deleteShortVideoCookies(ids: number[], website = ''): Promise<{
 }
 
 /**
+ * Test đăng nhập 1 cookie Meta.ai: BE mở Chrome Ở CHẾ ĐỘ GUI (hiện cửa sổ) với đúng
+ * cookie đã lưu để user tự đánh giá cookie còn dùng được hay không. Trả về ngay sau
+ * khi khởi chạy (browser giữ mở tới khi user đóng).
+ */
+export function testLoginShortVideoCookie(
+    cookieId: number,
+    website = SUPPORTED_COOKIE_WEBSITE,
+): Promise<{
+    success?: boolean;
+    message?: string | { content?: string };
+    pid?: number;
+    cookie_id?: number;
+    log?: string;
+}> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/test-login`,
+        method: 'POST',
+        loading: false,
+        data: { cookie_id: cookieId, website },
+    }) as Promise<{
+        success?: boolean;
+        message?: string | { content?: string };
+        pid?: number;
+        cookie_id?: number;
+        log?: string;
+    }>;
+}
+
+/**
  * Cookie dùng cho luồng MỞ chatbot qua extension (tự set cookie trước khi mở tab):
  * - cookieId > 0 → dùng đúng cookie đã lưu với beat (mở lại chat cũ — session
  *   Meta gắn account);

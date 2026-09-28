@@ -15,6 +15,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import LoginIcon from '@mui/icons-material/Login';
 import BlockIcon from '@mui/icons-material/Block';
 import KeyIcon from '@mui/icons-material/Key';
 import CookieIcon from '@mui/icons-material/Cookie';
@@ -27,6 +28,7 @@ import useConfirmDialog from 'hook/useConfirmDialog';
 import {
     deleteSaydiAccount,
     fetchSaydiAccounts,
+    loginTestSaydiAccountGui,
     registerSaydiAccount,
     seedSaydiAccountsFromEnv,
     updateSaydiAccountStatus,
@@ -87,6 +89,7 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
     const [currentId, setCurrentId] = React.useState(0);
     const [expandedId, setExpandedId] = React.useState(0);
     const [error, setError] = React.useState('');
+    const [loginTestingGuiId, setLoginTestingGuiId] = React.useState(0);
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -148,6 +151,26 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
             title: 'Xoá tài khoản Saydi',
             message: `Xoá tài khoản ${account.email}? Hành động này không thể hoàn tác.`,
         });
+    };
+
+    const handleLoginTestGui = async (account: SaydiAccountItem) => {
+        if (loginTestingGuiId > 0) {
+            return;
+        }
+        setLoginTestingGuiId(account.id);
+        try {
+            const result = await loginTestSaydiAccountGui(account.id);
+            showMessage(
+                typeof result?.message === 'string'
+                    ? result.message
+                    : 'Đã mở browser test đăng nhập (chế độ hiện cửa sổ)',
+                'success',
+            );
+        } catch (err) {
+            showMessage(err instanceof Error ? err.message : 'Không mở được browser test đăng nhập', 'error');
+        } finally {
+            setLoginTestingGuiId(0);
+        }
     };
 
     const handleRegister = async () => {
@@ -406,6 +429,17 @@ export function SaydiAccountsContent({ active = true }: { active?: boolean }) {
                                                         Tắt
                                                     </Button>
                                                 )}
+                                                <LoadingButton
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="info"
+                                                    loading={loginTestingGuiId === account.id}
+                                                    disabled={isBusy || (loginTestingGuiId > 0 && loginTestingGuiId !== account.id)}
+                                                    startIcon={<LoginIcon fontSize="small" />}
+                                                    onClick={() => { void handleLoginTestGui(account); }}
+                                                >
+                                                    {loginTestingGuiId === account.id ? 'Đang mở…' : 'Test đăng nhập (browser)'}
+                                                </LoadingButton>
                                                 <Button
                                                     size="small"
                                                     variant="outlined"

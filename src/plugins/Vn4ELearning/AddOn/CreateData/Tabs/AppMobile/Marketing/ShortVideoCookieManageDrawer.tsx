@@ -21,6 +21,7 @@ import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CookieOutlinedIcon from '@mui/icons-material/CookieOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
@@ -30,6 +31,7 @@ import {
     parseShortVideoCookieApiMessage,
     saveShortVideoCookie,
     SUPPORTED_COOKIE_WEBSITE,
+    testLoginShortVideoCookie,
     validateShortVideoCookieJson,
     type ShortVideoCookie,
 } from 'helpers/marketingShortVideoCookieApi';
@@ -147,6 +149,11 @@ export function ShortVideoCookieManageContent({
     const [saving, setSaving] = React.useState(false);
     const [deleteTarget, setDeleteTarget] = React.useState<ShortVideoCookie | null>(null);
     const [deleting, setDeleting] = React.useState(false);
+    const [testingId, setTestingId] = React.useState<number | null>(null);
+
+    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai) — BE mở browser
+    // với đúng cookie của site tương ứng.
+    const canTestLogin = website === 'meta.ai' || website === 'vibes.ai';
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -177,6 +184,7 @@ export function ShortVideoCookieManageContent({
             setMode('list');
             setForm(emptyForm);
             setDeleteTarget(null);
+            setTestingId(null);
             reloadList();
         }
     }, [active, emptyForm, reloadList]);
@@ -237,6 +245,32 @@ export function ShortVideoCookieManageContent({
             .catch((err: unknown) => {
                 setSaving(false);
                 showMessage(err instanceof Error ? err.message : 'Không lưu được cookie', 'error');
+            });
+    };
+
+    const handleTestLogin = (cookie: ShortVideoCookie) => {
+        setTestingId(cookie.id);
+        testLoginShortVideoCookie(cookie.id, cookie.website || website)
+            .then((result) => {
+                setTestingId(null);
+                if (result?.success === false) {
+                    showMessage(
+                        parseShortVideoCookieApiMessage(result, 'Không mở được browser test đăng nhập'),
+                        'error',
+                    );
+                    return;
+                }
+                showMessage(
+                    parseShortVideoCookieApiMessage(
+                        result,
+                        'Đã mở browser (chế độ hiện cửa sổ) — kiểm tra trạng thái đăng nhập rồi tự đóng cửa sổ khi xong',
+                    ),
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setTestingId(null);
+                showMessage(err instanceof Error ? err.message : 'Không mở được browser test đăng nhập', 'error');
             });
     };
 
@@ -430,6 +464,24 @@ export function ShortVideoCookieManageContent({
                                 ) : null}
                             </Box>
                             <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                {canTestLogin ? (
+                                    <Tooltip title="Test đăng nhập (mở browser kiểm tra cookie)">
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                color="primary"
+                                                onClick={() => handleTestLogin(cookie)}
+                                                disabled={testingId !== null}
+                                            >
+                                                {testingId === cookie.id ? (
+                                                    <CircularProgress size={18} />
+                                                ) : (
+                                                    <LoginOutlinedIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
                                 <Tooltip title="Sửa">
                                     <IconButton size="small" onClick={() => openEditForm(cookie)}>
                                         <EditOutlinedIcon fontSize="small" />
