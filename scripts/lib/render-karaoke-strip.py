@@ -46,6 +46,8 @@ COLOR_ACTIVE = (0, 229, 160, 255)
 COLOR_INACTIVE = (200, 205, 215, 255)
 LINE_HEIGHT_RATIO = 1.2
 NORM_RE = re.compile(r"[^\w]", re.UNICODE)
+# Thẻ cảm xúc `<...>` (vd. `<gasp>`) — chỉ dành cho TTS, không hiển thị karaoke.
+EMOTION_TAG_RE = re.compile(r"<[^<>\n]{1,40}>")
 
 
 def parse_args() -> argparse.Namespace:
@@ -184,6 +186,7 @@ def blocks_from_beats(beats: list[dict]) -> list[dict]:
     blocks = []
     for beat in beats:
         content = str(beat.get("content") or "").strip()
+        content = EMOTION_TAG_RE.sub(" ", content).strip()
         tokens = content.split()
         start = float(beat.get("start") or 0)
         dur = float(beat.get("duration") or 0)

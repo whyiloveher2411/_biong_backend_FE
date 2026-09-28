@@ -44,6 +44,8 @@ export const DEFAULT_DENSITY_MAX = 0.25;
 export const DEFAULT_MAX_TIMING_GAP_SEC = 3;
 
 const OMNIVOICE_EMOTION_TAG_RE = /\[(?:laughter|laugh|sigh|dissatisfaction-hnn)\]/gi;
+/** Thẻ cảm xúc `<...>` (vd. `<gasp>`, `<breath>`) — TTS đọc biểu cảm, KHÔNG phải text karaoke. */
+const EMOTION_TAG_RE = /<[^<>\n]{1,40}>/g;
 
 export const norm = (s) =>
   String(s ?? "")
@@ -63,6 +65,7 @@ export function stripScriptMarkers(text) {
     .replace(/\[SFX:[^\]]*\]/gi, " ")
     .replace(/\[Dừng[^\]]*\]/gi, " ")
     .replace(OMNIVOICE_EMOTION_TAG_RE, " ")
+    .replace(EMOTION_TAG_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

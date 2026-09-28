@@ -33,6 +33,16 @@ describe("caption-script-align", () => {
     assert.equal(stripScriptMarkers(raw), "Thật là đúng rồi");
   });
 
+  it("strip emotion tags <...>", () => {
+    const raw = "<gasp> Con cá <breath> lớn quá!";
+    assert.equal(stripScriptMarkers(raw), "Con cá lớn quá!");
+  });
+
+  it("emotion tags do not become caption tokens", () => {
+    const words = tokenizeScript("<gasp> Con <breath> cá lớn");
+    assert.deepEqual(words, ["Con", "cá", "lớn"]);
+  });
+
   it("exact diacritic: Con cá lớn vs Con ca lớn — text script", () => {
     const script = ["Con", "cá", "lớn"];
     const transcript = tw(["Con", "ca", "lớn"]);
