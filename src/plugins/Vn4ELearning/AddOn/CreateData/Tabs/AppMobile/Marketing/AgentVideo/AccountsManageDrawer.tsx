@@ -43,6 +43,12 @@ const ACCOUNT_TABS: AccountTab[] = [
         render: (active) => <ShortVideoCookieManageContent active={active} website="vibes.ai" />,
     },
     {
+        key: 'canva',
+        label: 'Canva Cookie',
+        icon: <MovieFilterOutlinedIcon fontSize="small" />,
+        render: (active) => <ShortVideoCookieManageContent active={active} website="www.canva.com" />,
+    },
+    {
         key: 'qwen',
         label: 'Qwen',
         icon: <SmartToyOutlinedIcon fontSize="small" />,

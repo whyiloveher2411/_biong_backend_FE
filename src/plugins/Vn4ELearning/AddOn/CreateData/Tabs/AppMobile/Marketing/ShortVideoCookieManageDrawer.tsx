@@ -89,7 +89,7 @@ function CookieForm({
                 disabled
                 size="small"
                 fullWidth
-                helperText="Domain cố định theo tab — meta.ai (render ảnh beat) hoặc vibes.ai (convert ảnh beat → video)"
+                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai hoặc www.canva.com (convert ảnh beat → video)"
             />
             <TextField
                 label="Mô tả"
@@ -151,9 +151,9 @@ export function ShortVideoCookieManageContent({
     const [deleting, setDeleting] = React.useState(false);
     const [testingId, setTestingId] = React.useState<number | null>(null);
 
-    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai) — BE mở browser
-    // với đúng cookie của site tương ứng.
-    const canTestLogin = website === 'meta.ai' || website === 'vibes.ai';
+    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva) — BE mở
+    // browser với đúng cookie của site tương ứng.
+    const canTestLogin = website === 'meta.ai' || website === 'vibes.ai' || website.includes('canva.com');
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -383,7 +383,9 @@ export function ShortVideoCookieManageContent({
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
                         {website === 'vibes.ai'
                             ? 'Cookie pool vibes.ai dùng convert ảnh beat → video headless (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
-                            : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
+                            : website.includes('canva.com')
+                                ? 'Cookie pool www.canva.com dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
+                                : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
                     </Typography>
                     <Button
                         variant="contained"
