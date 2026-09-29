@@ -42,6 +42,7 @@ import VideoLibraryOutlinedIcon from '@mui/icons-material/VideoLibraryOutlined';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import FaceRetouchingNaturalIcon from '@mui/icons-material/FaceRetouchingNatural';
 import SubtitlesOutlinedIcon from '@mui/icons-material/SubtitlesOutlined';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import BrushOutlinedIcon from '@mui/icons-material/BrushOutlined';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
@@ -57,6 +58,7 @@ import MarketingNewsPushConfigDrawer from './MarketingNewsPushConfigDrawer';
 import MarketingGithubTrendingDrawer from './MarketingGithubTrendingDrawer';
 import MarketingShortVideoAvatarDrawer from './MarketingShortVideoAvatarDrawer';
 import MarketingGetScriptDrawer from './MarketingGetScriptDrawer';
+import MarketingCheckMailDrawer from './MarketingCheckMailDrawer';
 import MarketingCompetitorChannelDrawer from './MarketingCompetitorChannelDrawer';
 import MarketingImageToWhiteboardDrawer from './MarketingImageToWhiteboardDrawer';
 import WhiteboardTransitionManagerDrawer from './WhiteboardTransitionManagerDrawer';
@@ -487,6 +489,7 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
     const [openGithubTrendingDrawer, setOpenGithubTrendingDrawer] = useState(false);
     const [openAvatarDrawer, setOpenAvatarDrawer] = useState(false);
     const [openGetScriptDrawer, setOpenGetScriptDrawer] = useState(false);
+    const [openCheckMailDrawer, setOpenCheckMailDrawer] = useState(false);
     const [openCompetitorChannelDrawer, setOpenCompetitorChannelDrawer] = useState(false);
     const [openWhiteboardDrawer, setOpenWhiteboardDrawer] = useState(false);
     const [openScriptStyleDrawer, setOpenScriptStyleDrawer] = useState(false);
@@ -864,6 +867,15 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
                                 <Button
                                     size="small"
                                     variant="outlined"
+                                    startIcon={<EmailOutlinedIcon fontSize="small" />}
+                                    onClick={() => setOpenCheckMailDrawer(true)}
+                                    sx={{ textTransform: 'none', flexShrink: 0 }}
+                                >
+                                    Check mail
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
                                     startIcon={<LeaderboardOutlinedIcon fontSize="small" />}
                                     onClick={() => setOpenCompetitorChannelDrawer(true)}
                                     sx={{ textTransform: 'none', flexShrink: 0 }}
@@ -1225,6 +1237,11 @@ export default function Marketing({ data }: { data: CreatePostTypeData }) {
             <MarketingGetScriptDrawer
                 open={openGetScriptDrawer}
                 onClose={() => setOpenGetScriptDrawer(false)}
+            />
+
+            <MarketingCheckMailDrawer
+                open={openCheckMailDrawer}
+                onClose={() => setOpenCheckMailDrawer(false)}
             />
 
             <MarketingCompetitorChannelDrawer
