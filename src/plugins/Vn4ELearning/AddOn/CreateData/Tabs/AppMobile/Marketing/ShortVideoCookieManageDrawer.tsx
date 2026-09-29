@@ -24,6 +24,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FiberManualRecordOutlinedIcon from '@mui/icons-material/FiberManualRecordOutlined';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
+import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
@@ -33,6 +34,7 @@ import {
     listShortVideoCookies,
     parseShortVideoCookieApiMessage,
     recordCanvaFlow,
+    recordCanvaSignupFlow,
     saveShortVideoCookie,
     SUPPORTED_COOKIE_WEBSITE,
     testLoginShortVideoCookie,
@@ -179,6 +181,7 @@ export function ShortVideoCookieManageContent({
     const [deleting, setDeleting] = React.useState(false);
     const [testingId, setTestingId] = React.useState<number | null>(null);
     const [recording, setRecording] = React.useState(false);
+    const [recordingSignup, setRecordingSignup] = React.useState(false);
     const [clearingId, setClearingId] = React.useState<number | null>(null);
 
     // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva) — BE mở
@@ -217,6 +220,8 @@ export function ShortVideoCookieManageContent({
             setForm(emptyForm);
             setDeleteTarget(null);
             setTestingId(null);
+            setRecording(false);
+            setRecordingSignup(false);
             reloadList();
         }
     }, [active, emptyForm, reloadList]);
@@ -334,6 +339,33 @@ export function ShortVideoCookieManageContent({
             });
     };
 
+    const handleRecordCanvaSignup = () => {
+        if (recordingSignup) {
+            return;
+        }
+        setRecordingSignup(true);
+        recordCanvaSignupFlow()
+            .then((result) => {
+                setRecordingSignup(false);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không mở được recorder đăng ký Canva'), 'error');
+                    return;
+                }
+                const baseMessage = parseShortVideoCookieApiMessage(
+                    result,
+                    'Đã mở Chrome recorder đăng ký Canva — tạo tài khoản tới khi vào được Canva rồi bấm "End test"',
+                );
+                showMessage(
+                    result?.out_dir ? `${baseMessage} — log: ${result.out_dir}` : baseMessage,
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setRecordingSignup(false);
+                showMessage(err instanceof Error ? err.message : 'Không mở được recorder đăng ký Canva', 'error');
+            });
+    };
+
     const handleClearCooldown = (cookie: ShortVideoCookie) => {
         if (clearingId !== null) {
             return;
@@ -380,7 +412,14 @@ export function ShortVideoCookieManageContent({
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 0 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+            <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+                useFlexGap
+                sx={{ flexShrink: 0 }}
+            >
                 {mode === 'form' ? (
                     <Button
                         size="small"
@@ -407,9 +446,21 @@ export function ShortVideoCookieManageContent({
                         color="error"
                         startIcon={recording ? <CircularProgress size={14} color="inherit" /> : <FiberManualRecordOutlinedIcon />}
                         onClick={handleRecordCanva}
-                        disabled={recording || loading}
+                        disabled={recording || recordingSignup || loading}
                     >
                         Ghi lại thao tác
+                    </Button>
+                ) : null}
+                {canRecordCanva && mode === 'list' ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={recordingSignup ? <CircularProgress size={14} color="inherit" /> : <PersonAddAltOutlinedIcon />}
+                        onClick={handleRecordCanvaSignup}
+                        disabled={recordingSignup || recording || loading}
+                    >
+                        Ghi lại đăng ký
                     </Button>
                 ) : null}
                 <Box sx={{ flex: 1 }} />
@@ -421,6 +472,15 @@ export function ShortVideoCookieManageContent({
                     </span>
                 </Tooltip>
             </Stack>
+
+            {canRecordCanva && mode === 'list' ? (
+                <Alert severity="info" sx={{ flexShrink: 0 }}>
+                    Đăng ký tài khoản Canva tự động làm NGAY TRÊN TRANG CANVA: mở <b>canva.com</b> trong
+                    trình duyệt đã cài extension → panel <b>“Đăng ký Canva tự động”</b> hiện ở góc phải
+                    (nhập email + App Password Gmail + nhãn). Panel tự đăng ký, lấy OTP và lưu tài khoản
+                    vào danh sách này.
+                </Alert>
+            ) : null}
 
             {error && (
                 <Alert severity="error">
@@ -530,7 +590,14 @@ export function ShortVideoCookieManageContent({
                                 <CookieOutlinedIcon color="action" />
                             </Box>
                             <Box sx={{ minWidth: 0, flex: 1 }}>
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    alignItems="center"
+                                    flexWrap="wrap"
+                                    useFlexGap
+                                    sx={{ mb: 0.5 }}
+                                >
                                     <Chip
                                         size="small"
                                         label={cookie.website || SUPPORTED_COOKIE_WEBSITE}
@@ -565,7 +632,11 @@ export function ShortVideoCookieManageContent({
                                     </Typography>
                                 ) : null}
                             </Box>
-                            <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                            <Stack
+                                direction="row"
+                                spacing={0.5}
+                                sx={{ flexShrink: 0, alignSelf: 'flex-start', mt: 0.25 }}
+                            >
                                 {formatCooldownRemaining(Number(cookie.cooldown_until || 0)) ? (
                                     <Tooltip title="Bỏ nghỉ (mở lại account dùng ngay)">
                                         <span>

@@ -256,12 +256,15 @@ export type RecordCanvaFlowResult = {
     success?: boolean;
     message?: string | { content?: string };
     pid?: number;
+    mode?: string;
     out_dir?: string;
     stdout_log?: string;
     stderr_log?: string;
     image_path?: string;
     beat_id?: string;
     short_video_id?: number;
+    cookies_path?: string;
+    cookie_count?: number;
 };
 
 /**
@@ -279,6 +282,88 @@ export function recordCanvaFlow(
         loading: false,
         data: { short_video_id: shortVideoId, beat_id: beatId },
     }) as Promise<RecordCanvaFlowResult>;
+}
+
+/**
+ * RECORDER ĐĂNG KÝ Canva (DEV): mở Chrome từ PROFILE SẠCH (không cần cookie pool) tại
+ * trang signup để user ghi lại thao tác tạo tài khoản mới. Khi bấm "End test", runner lưu
+ * log + cookies-export.json (cookie account vừa tạo) vào storage/logs/canva-record/.
+ */
+export function recordCanvaSignupFlow(): Promise<RecordCanvaFlowResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/record-canva-signup`,
+        method: 'POST',
+        loading: false,
+        data: {},
+    }) as Promise<RecordCanvaFlowResult>;
+}
+
+export type SignupCanvaResult = {
+    success?: boolean;
+    message?: string | { content?: string };
+    email?: string;
+    out_dir?: string;
+    cookie_id?: number;
+    cookie_count?: number;
+    session_id?: string;
+    otp?: string;
+    subject?: string;
+};
+
+/** BƯỚC 1 (hybrid): mở browser đăng ký Canva + copy email vào clipboard. */
+export function startCanvaSignupSession(email: string): Promise<SignupCanvaResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/signup-canva-start`,
+        method: 'POST',
+        loading: false,
+        data: { email },
+    }) as Promise<SignupCanvaResult>;
+}
+
+/** BƯỚC 2 (hybrid): chờ + lấy OTP từ Gmail (poll 5s/lần, tối đa 60s). */
+export function checkCanvaSignupOtp(payload: {
+    session_id: string;
+    gmail_password: string;
+    label?: string;
+}): Promise<SignupCanvaResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/signup-canva-otp`,
+        method: 'POST',
+        loading: false,
+        data: {
+            session_id: payload.session_id,
+            gmail_password: payload.gmail_password,
+            label: payload.label ?? '',
+        },
+    }) as Promise<SignupCanvaResult>;
+}
+
+/** BƯỚC 3 (hybrid): lưu account + cookie từ browser đang mở. */
+export function saveCanvaSignupAccount(payload: {
+    session_id: string;
+    email: string;
+    label?: string;
+}): Promise<SignupCanvaResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/signup-canva-save`,
+        method: 'POST',
+        loading: false,
+        data: {
+            session_id: payload.session_id,
+            email: payload.email,
+            label: payload.label ?? '',
+        },
+    }) as Promise<SignupCanvaResult>;
+}
+
+/** Huỷ phiên đăng ký Canva (đóng browser). */
+export function cancelCanvaSignupSession(sessionId: string): Promise<SignupCanvaResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/signup-canva-cancel`,
+        method: 'POST',
+        loading: false,
+        data: { session_id: sessionId },
+    }) as Promise<SignupCanvaResult>;
 }
 
 export function shortVideoCookieApiUrl(suffix: string): string {
