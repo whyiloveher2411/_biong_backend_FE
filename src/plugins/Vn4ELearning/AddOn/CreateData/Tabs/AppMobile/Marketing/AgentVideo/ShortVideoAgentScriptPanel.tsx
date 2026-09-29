@@ -7,8 +7,10 @@ import {
     Chip,
     Collapse,
     Divider,
+    FormControlLabel,
     IconButton,
     Stack,
+    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -323,9 +325,11 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
     const scriptPipeline = resolveScriptPipelineState(state);
     const audioPipeline = resolveAudioPipelineState(state);
     const whisperPipeline = resolveWhisperPipelineState(state);
-    // Video 2s + audio từng beat: thay section Kịch bản/Audio/Whisper bằng 1 ô
-    // "Danh sách beat" — nhập 1 lần là tự chia beat, audio beat do pipeline tự tạo.
-    const video2sBeatListMode = state.isVideo2sMode && state.agentBeatAudio;
+    // Video 2s: LUÔN dùng UI "Danh sách beat" cho cả 2 trạng thái audio từng beat
+    // — bật: audio do pipeline tạo theo từng beat; tắt: upload 1 file audio tổng
+    // (beat vẫn giữ kịch bản riêng). Ẩn hẳn các section Kịch bản/Audio/Whisper.
+    const video2sBeatListMode = state.isVideo2sMode;
+    const showStandardSections = !state.isVideo2sMode;
     const geminiScriptStatus = String(state.geminiScriptStatus || 'none');
     const geminiScriptQueueActive = geminiScriptStatus === 'queued'
         || geminiScriptStatus === 'processing';
@@ -436,13 +440,50 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
             sx={{ height: '100%', overflow: 'auto', p: 2 }}
         >
             <Stack spacing={2}>
+                {state.isVideo2sMode ? (
+                    <Box sx={subPanelSx(SECTION_THEMES.audio)}>
+                        <FormControlLabel
+                            sx={{
+                                m: 0,
+                                width: '100%',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                            }}
+                            control={(
+                                <Switch
+                                    size="small"
+                                    checked={state.agentBeatAudio}
+                                    disabled={state.savingBeatAudio}
+                                    onChange={(e) => {
+                                        void state.handleAgentBeatAudioChange(e.target.checked);
+                                    }}
+                                    inputProps={{ 'aria-label': 'Audio từng beat' }}
+                                />
+                            )}
+                            label={(
+                                <Box sx={{ pt: 0.25 }}>
+                                    <Typography variant="caption" color="text.primary" display="block" fontWeight={600}>
+                                        Audio từng beat
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.35 }}>
+                                        Mỗi beat đọc audio RIÊNG theo đúng content (ảnh khớp 100% audio), ghép lại với
+                                        ngắt nghỉ theo dấu câu. Bật để chia beat và tạo audio từng beat ngay trong tab này.
+                                    </Typography>
+                                </Box>
+                            )}
+                        />
+                    </Box>
+                ) : null}
+
                 {video2sBeatListMode ? (
                     <ShortVideoAgentVideo2sBeatListPanel
                         state={state}
                         onOpenAudioSettings={() => setAudioSettingsOpen(true)}
                         onOpenSaydiAccounts={() => setSaydiAccountsOpen(true)}
                     />
-                ) : (
+                ) : null}
+
+                {showStandardSections ? (
                 <SectionShell
                     step={1}
                     title="Kịch bản"
@@ -780,9 +821,9 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                         </Stack>
                     </Stack>
                 </SectionShell>
-                )}
+                ) : null}
 
-                {!video2sBeatListMode ? (
+                {showStandardSections ? (
                 <SectionShell
                     step={2}
                     title="Audio"
@@ -880,7 +921,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
 
                         <Box sx={subPanelSx(SECTION_THEMES.audio)}>
                             <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" sx={{ mb: 1 }}>
-                                File MP3
+                                File audio (MP3/WAV)
                             </Typography>
                             {manualAudioSegments.length > 0 ? (
                                 <Stack spacing={1}>
@@ -1102,15 +1143,15 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                     {state.ttsPending
                                         ? 'CMS đang sinh MP3 — chờ vài phút.'
                                         : state.scriptApproved
-                                            ? 'Chưa có MP3 — chờ TTS hoặc upload thủ công (có thể upload nhiều file).'
-                                            : 'Duyệt script để queue TTS, hoặc upload MP3 thủ công (có thể nhiều file).'}
+                                            ? 'Chưa có audio — chờ TTS hoặc upload MP3/WAV thủ công (có thể upload nhiều file).'
+                                            : 'Duyệt script để queue TTS, hoặc upload MP3/WAV thủ công (có thể nhiều file).'}
                                 </Alert>
                             )}
 
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept="audio/mpeg,.mp3"
+                                accept="audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"
                                 multiple
                                 hidden
                                 onChange={handleFileChange}
@@ -1124,7 +1165,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                                 sx={{ mt: 1 }}
                                 onClick={() => fileInputRef.current?.click()}
                             >
-                                {manualAudioSegments.length > 0 ? 'Thêm MP3' : 'Upload MP3'}
+                                {manualAudioSegments.length > 0 ? 'Thêm MP3/WAV' : 'Upload MP3/WAV'}
                             </LoadingButton>
                         </Box>
 
@@ -1172,7 +1213,7 @@ export default function ShortVideoAgentScriptPanel({ state }: Props) {
                 </SectionShell>
                 ) : null}
 
-                {!video2sBeatListMode ? (
+                {showStandardSections ? (
                 <SectionShell
                     step={3}
                     title="Whisper"

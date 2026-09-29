@@ -26,6 +26,7 @@ import {
     parseBeatTranslationClipboard,
 } from './agentVideoBeatTranslation';
 import { resolveOmnivoiceDisplaySummary } from './agentVideoUi';
+import ShortVideoAgentManualAudioBlock from './ShortVideoAgentManualAudioBlock';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import { copyTextToClipboard, readTextFromClipboard } from '../../StoreScreenshots/storeScreenshotClipboard';
 import type { useAgentVideoContent } from './useAgentVideoContent';
@@ -187,8 +188,11 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                     <b>Mỗi dòng = 1 beat</b>
                     {' '}
                     (video 2s — ~2 giây đổi 1 ảnh). Có hoặc không số thứ tự đầu dòng
-                    đều được. Bấm <b>Cập nhật beat</b> là hệ thống tự chia beat; audio
-                    của beat thiếu/thay đổi do pipeline <b>Audio từng beat</b> tự tạo.
+                    đều được. Bấm <b>Cập nhật beat</b> là hệ thống tự chia beat.
+                    {state.agentBeatAudio
+                        ? ' Audio của beat thiếu/thay đổi do pipeline Audio từng beat tự tạo.'
+                        : ' Audio dùng 1 file tổng upload bên dưới — beat vẫn giữ kịch bản riêng, không tạo audio từng beat.'}
+                    {' '}
                     Sau đó chỉ cần điền <b>prompt ảnh</b> cho từng beat là xong.
                 </Alert>
 
@@ -207,19 +211,21 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                                 variant="outlined"
                                 label={`${promptFilled}/${marks.length} có prompt ảnh`}
                             />
-                            <Chip
-                                size="small"
-                                color={beatAudioAllReady ? 'success' : 'default'}
-                                variant="outlined"
-                                icon={beatAudioAllReady ? <CheckCircleOutlineIcon fontSize="small" /> : undefined}
-                                label={`audio ${beatAudioReadyCount}/${marks.length}`}
-                            />
+                            {state.agentBeatAudio ? (
+                                <Chip
+                                    size="small"
+                                    color={beatAudioAllReady ? 'success' : 'default'}
+                                    variant="outlined"
+                                    icon={beatAudioAllReady ? <CheckCircleOutlineIcon fontSize="small" /> : undefined}
+                                    label={`audio ${beatAudioReadyCount}/${marks.length}`}
+                                />
+                            ) : null}
                         </>
                     ) : null}
                 </Stack>
 
-                {/* Cấu hình giọng đọc TTS (audio từng beat đọc theo voice này) —
-                    cùng block với section Audio của mode khác để không bị ẩn. */}
+                {state.agentBeatAudio ? (
+                /* Cấu hình giọng đọc TTS (audio từng beat đọc theo voice này). */
                 <Box sx={subPanelSx(SECTION_THEMES.audio)}>
                     <Stack
                         direction="row"
@@ -305,6 +311,11 @@ export default function ShortVideoAgentVideo2sBeatListPanel({ state, onOpenAudio
                         />
                     </Stack>
                 </Box>
+                ) : (
+                    <Box sx={subPanelSx(SECTION_THEMES.audio)}>
+                        <ShortVideoAgentManualAudioBlock state={state} />
+                    </Box>
+                )}
 
                 <TextField
                     multiline

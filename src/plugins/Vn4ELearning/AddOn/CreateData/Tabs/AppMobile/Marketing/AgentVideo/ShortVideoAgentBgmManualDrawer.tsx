@@ -319,7 +319,7 @@ export default function ShortVideoAgentBgmManualDrawer({
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="audio/mpeg,.mp3"
+                        accept="audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"
                         multiple
                         style={{ display: 'none' }}
                         onChange={handleFilesSelected}

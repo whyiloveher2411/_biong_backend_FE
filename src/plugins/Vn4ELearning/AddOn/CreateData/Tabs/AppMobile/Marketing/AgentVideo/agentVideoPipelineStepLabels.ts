@@ -79,6 +79,11 @@ export function isFullAutoPipelineStepRelevantForMode(
     if (beatAudioMode && (FULL_AUTO_PIPELINE_BEAT_AUDIO_SKIPPED_STEPS as readonly string[]).includes(key)) {
         return false;
     }
+    // Audio từng beat TẮT → pipeline bỏ hẳn bước tạo audio từng beat (dùng audio
+    // tổng do user upload thay vì sinh TTS riêng cho từng beat).
+    if (!beatAudioMode && key === 'beat_audio') {
+        return false;
+    }
     // Render ảnh resource chỉ thuộc video 2s — whiteboard/hyperframes auto-skip, ẩn khỏi UI.
     if (key === 'resource_image_render') {
         return isAgentVideo2sMode(agentVisualMode);

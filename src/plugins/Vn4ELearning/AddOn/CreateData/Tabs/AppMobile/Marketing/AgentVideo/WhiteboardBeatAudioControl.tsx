@@ -127,7 +127,7 @@ export default function WhiteboardBeatAudioControl({ state, beatId }: Props) {
             <input
                 ref={inputRef}
                 type="file"
-                accept="audio/mpeg,.mp3"
+                accept="audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"
                 hidden
                 onChange={(e) => {
                     const file = e.target.files?.[0];

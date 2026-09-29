@@ -3289,9 +3289,9 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
         if (!shortVideoId || !Array.isArray(files) || files.length === 0) {
             return;
         }
-        const mp3Files = files.filter((file) => /\.mp3$/i.test(String(file.name || '')));
+        const mp3Files = files.filter((file) => /\.(mp3|wav)$/i.test(String(file.name || '')));
         if (mp3Files.length === 0) {
-            showMessage('Chỉ chấp nhận file MP3', 'warning');
+            showMessage('Chỉ chấp nhận file MP3 hoặc WAV', 'warning');
             return;
         }
 
@@ -9325,23 +9325,23 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
     };
 
     /**
-     * Upload lần lượt từng file MP3 — mỗi file thành 1 đoạn riêng, chưa ghép.
+     * Upload lần lượt từng file MP3/WAV — mỗi file thành 1 đoạn riêng, chưa ghép.
      * Gửi tuần tự để tránh vượt post_max_size khi audio dài.
      */
     const handleUploadMp3 = async (files: File | File[]) => {
         const list = Array.isArray(files) ? files : [files];
-        const mp3Files = list.filter((file) => /\.mp3$/i.test(file.name));
-        if (mp3Files.length !== list.length) {
-            showMessage('Chỉ chấp nhận file MP3 — đã bỏ qua file không hợp lệ', 'warning');
+        const audioFiles = list.filter((file) => /\.(mp3|wav)$/i.test(file.name));
+        if (audioFiles.length !== list.length) {
+            showMessage('Chỉ chấp nhận file MP3 hoặc WAV — đã bỏ qua file không hợp lệ', 'warning');
         }
-        if (mp3Files.length === 0) {
+        if (audioFiles.length === 0) {
             return;
         }
 
         setUploading(true);
         try {
             let uploaded = 0;
-            for (const file of mp3Files) {
+            for (const file of audioFiles) {
                 // eslint-disable-next-line no-await-in-loop
                 const res = await uploadAgentAudioMp3(shortVideoId, file);
                 if (!res?.success) {
@@ -9354,7 +9354,7 @@ export function useAgentVideoContent({ open, shortVideoId, onUploaded }: UseAgen
                 uploaded += 1;
             }
             if (uploaded > 0) {
-                showMessage(`Đã upload ${uploaded} file MP3`, 'success');
+                showMessage(`Đã upload ${uploaded} file audio`, 'success');
                 loadRow();
                 onUploaded?.();
             }
