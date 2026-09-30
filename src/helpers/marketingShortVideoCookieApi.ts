@@ -28,6 +28,10 @@ export type ShortVideoCookie = {
     cookies?: ShortVideoCookieRaw[];
     /** Unix giây — account hết quota, đang nghỉ tới mốc này (0 = bình thường). */
     cooldown_until?: number;
+    /** Leonardo: số video đã generate trong ngày / giới hạn ngày / còn lại. */
+    daily_used?: number;
+    daily_limit?: number;
+    daily_remaining?: number;
     created_at?: string;
     updated_at?: string;
 };
@@ -121,6 +125,36 @@ export function clearShortVideoCookieCooldown(cookieId: number, website = ''): P
         loading: false,
         data: { cookie_id: cookieId, website },
     }) as Promise<{ success?: boolean; message?: string | { content?: string }; cookie_id?: number }>;
+}
+
+/**
+ * Leonardo: đánh dấu / bỏ đánh dấu account "đã dùng hết lượt generate hôm nay" (để test).
+ */
+export function setLeonardoCookieUsage(
+    cookieId: number,
+    consumed: boolean,
+    website = 'app.leonardo.ai',
+): Promise<{
+    success?: boolean;
+    message?: string | { content?: string };
+    cookie_id?: number;
+    daily_used?: number;
+    daily_limit?: number;
+    daily_remaining?: number;
+}> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/leonardo-usage`,
+        method: 'POST',
+        loading: false,
+        data: { cookie_id: cookieId, website, consumed: consumed ? 1 : 0 },
+    }) as Promise<{
+        success?: boolean;
+        message?: string | { content?: string };
+        cookie_id?: number;
+        daily_used?: number;
+        daily_limit?: number;
+        daily_remaining?: number;
+    }>;
 }
 
 /**
@@ -295,6 +329,23 @@ export function recordCanvaSignupFlow(): Promise<RecordCanvaFlowResult> {
         method: 'POST',
         loading: false,
         data: {},
+    }) as Promise<RecordCanvaFlowResult>;
+}
+
+/**
+ * RECORDER Leonardo (DEV): mở Chrome GUI với cookie pool app.leonardo.ai và ghi lại thao
+ * tác thủ công (upload ảnh beat → chọn model Video/Motion → Generate → Download). Người
+ * dùng bấm "End test" trong overlay để lưu log vào storage/logs/leonardo-record/.
+ */
+export function recordLeonardoFlow(
+    shortVideoId: number,
+    beatId = '',
+): Promise<RecordCanvaFlowResult> {
+    return ajax({
+        url: `${COOKIE_BASE_PATH}/record-leonardo`,
+        method: 'POST',
+        loading: false,
+        data: { short_video_id: shortVideoId, beat_id: beatId },
     }) as Promise<RecordCanvaFlowResult>;
 }
 

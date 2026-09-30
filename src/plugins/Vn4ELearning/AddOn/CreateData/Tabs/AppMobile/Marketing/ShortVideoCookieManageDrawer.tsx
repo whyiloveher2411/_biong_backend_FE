@@ -20,12 +20,14 @@ import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CookieOutlinedIcon from '@mui/icons-material/CookieOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import DoNotDisturbOnOutlinedIcon from '@mui/icons-material/DoNotDisturbOnOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FiberManualRecordOutlinedIcon from '@mui/icons-material/FiberManualRecordOutlined';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
@@ -35,7 +37,9 @@ import {
     parseShortVideoCookieApiMessage,
     recordCanvaFlow,
     recordCanvaSignupFlow,
+    recordLeonardoFlow,
     saveShortVideoCookie,
+    setLeonardoCookieUsage,
     SUPPORTED_COOKIE_WEBSITE,
     testLoginShortVideoCookie,
     validateShortVideoCookieJson,
@@ -116,7 +120,7 @@ function CookieForm({
                 disabled
                 size="small"
                 fullWidth
-                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai hoặc www.canva.com (convert ảnh beat → video)"
+                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai, www.canva.com hoặc app.leonardo.ai (convert ảnh beat → video)"
             />
             <TextField
                 label="Mô tả"
@@ -182,13 +186,21 @@ export function ShortVideoCookieManageContent({
     const [testingId, setTestingId] = React.useState<number | null>(null);
     const [recording, setRecording] = React.useState(false);
     const [recordingSignup, setRecordingSignup] = React.useState(false);
+    const [recordingLeonardo, setRecordingLeonardo] = React.useState(false);
     const [clearingId, setClearingId] = React.useState<number | null>(null);
+    const [togglingUsageId, setTogglingUsageId] = React.useState<number | null>(null);
 
-    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva) — BE mở
+    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva / Leonardo) — BE mở
     // browser với đúng cookie của site tương ứng.
-    const canTestLogin = website === 'meta.ai' || website === 'vibes.ai' || website.includes('canva.com');
+    const canTestLogin =
+        website === 'meta.ai' ||
+        website === 'vibes.ai' ||
+        website.includes('canva.com') ||
+        website.includes('leonardo.ai');
     // Recorder chỉ có cho Canva (học flow image → video thủ công).
     const canRecordCanva = website.includes('canva.com');
+    // Recorder Leonardo (DEV) — học flow image → video trên app.leonardo.ai.
+    const canRecordLeonardo = website.includes('leonardo.ai');
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -222,6 +234,8 @@ export function ShortVideoCookieManageContent({
             setTestingId(null);
             setRecording(false);
             setRecordingSignup(false);
+            setRecordingLeonardo(false);
+            setTogglingUsageId(null);
             reloadList();
         }
     }, [active, emptyForm, reloadList]);
@@ -366,6 +380,61 @@ export function ShortVideoCookieManageContent({
             });
     };
 
+    const handleRecordLeonardo = () => {
+        if (recordingLeonardo) {
+            return;
+        }
+        setRecordingLeonardo(true);
+        recordLeonardoFlow(shortVideoId)
+            .then((result) => {
+                setRecordingLeonardo(false);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không mở được recorder Leonardo'), 'error');
+                    return;
+                }
+                const baseMessage = parseShortVideoCookieApiMessage(
+                    result,
+                    'Đã mở Chrome recorder Leonardo — thao tác upload ảnh → chọn model Video/Motion → Generate → Download rồi bấm "End test"',
+                );
+                showMessage(
+                    result?.out_dir ? `${baseMessage} — log: ${result.out_dir}` : baseMessage,
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setRecordingLeonardo(false);
+                showMessage(err instanceof Error ? err.message : 'Không mở được recorder Leonardo', 'error');
+            });
+    };
+
+    const handleToggleLeonardoUsage = (cookie: ShortVideoCookie) => {
+        if (togglingUsageId !== null) {
+            return;
+        }
+        const exhausted = Number(cookie.daily_remaining ?? 1) <= 0;
+        setTogglingUsageId(cookie.id);
+        setLeonardoCookieUsage(cookie.id, !exhausted, cookie.website || website)
+            .then((result) => {
+                setTogglingUsageId(null);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không cập nhật được trạng thái lượt'), 'error');
+                    return;
+                }
+                showMessage(
+                    parseShortVideoCookieApiMessage(
+                        result,
+                        exhausted ? 'Đã bỏ đánh dấu hết lượt' : 'Đã đánh dấu hết lượt hôm nay',
+                    ),
+                    'success',
+                );
+                reloadList();
+            })
+            .catch((err: unknown) => {
+                setTogglingUsageId(null);
+                showMessage(err instanceof Error ? err.message : 'Không cập nhật được trạng thái lượt', 'error');
+            });
+    };
+
     const handleClearCooldown = (cookie: ShortVideoCookie) => {
         if (clearingId !== null) {
             return;
@@ -463,6 +532,18 @@ export function ShortVideoCookieManageContent({
                         Ghi lại đăng ký
                     </Button>
                 ) : null}
+                {canRecordLeonardo && mode === 'list' ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={recordingLeonardo ? <CircularProgress size={14} color="inherit" /> : <FiberManualRecordOutlinedIcon />}
+                        onClick={handleRecordLeonardo}
+                        disabled={recordingLeonardo || loading}
+                    >
+                        Ghi lại thao tác
+                    </Button>
+                ) : null}
                 <Box sx={{ flex: 1 }} />
                 <Tooltip title="Tải lại">
                     <span>
@@ -479,6 +560,15 @@ export function ShortVideoCookieManageContent({
                     trình duyệt đã cài extension → panel <b>“Đăng ký Canva tự động”</b> hiện ở góc phải
                     (nhập email + App Password Gmail + nhãn). Panel tự đăng ký, lấy OTP và lưu tài khoản
                     vào danh sách này.
+                </Alert>
+            ) : null}
+
+            {canRecordLeonardo && mode === 'list' ? (
+                <Alert severity="info" sx={{ flexShrink: 0 }}>
+                    “Ghi lại thao tác” mở Chrome với cookie <b>app.leonardo.ai</b> để bạn thao tác tay
+                    (upload ảnh → chọn model Video/Motion → Generate → Download). Khi xong bấm
+                    <b> “End test”</b> (góc phải trên) — log phục vụ dev viết automation còn được lưu
+                    vào <code>storage/logs/leonardo-record/</code>.
                 </Alert>
             ) : null}
 
@@ -538,7 +628,9 @@ export function ShortVideoCookieManageContent({
                             ? 'Cookie pool vibes.ai dùng convert ảnh beat → video headless (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
                             : website.includes('canva.com')
                                 ? 'Cookie pool www.canva.com dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
-                                : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
+                                : website.includes('leonardo.ai')
+                                    ? 'Cookie pool app.leonardo.ai dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
+                                    : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
                     </Typography>
                     <Button
                         variant="contained"
@@ -610,7 +702,41 @@ export function ShortVideoCookieManageContent({
                                         label={String(cookie.cookie_count ?? 0) + ' cookie'}
                                         variant="outlined"
                                     />
-                                    {formatCooldownRemaining(Number(cookie.cooldown_until || 0)) ? (
+                                    {typeof cookie.daily_limit === 'number' && cookie.daily_limit > 0 ? (
+                                        <Chip
+                                            size="small"
+                                            color={Number(cookie.daily_remaining ?? 0) > 0 ? 'success' : 'default'}
+                                            variant={Number(cookie.daily_remaining ?? 0) > 0 ? 'outlined' : 'filled'}
+                                            label={`Hôm nay ${Number(cookie.daily_used ?? 0)}/${cookie.daily_limit} lượt`}
+                                        />
+                                    ) : null}
+                                {typeof cookie.daily_limit === 'number' && cookie.daily_limit > 0 ? (
+                                    <Tooltip
+                                        title={
+                                            Number(cookie.daily_remaining ?? 0) > 0
+                                                ? 'Đánh dấu đã dùng hết lượt hôm nay'
+                                                : 'Bỏ đánh dấu (dùng lại ngay)'
+                                        }
+                                    >
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                color={Number(cookie.daily_remaining ?? 0) > 0 ? 'default' : 'success'}
+                                                onClick={() => handleToggleLeonardoUsage(cookie)}
+                                                disabled={togglingUsageId !== null}
+                                            >
+                                                {togglingUsageId === cookie.id ? (
+                                                    <CircularProgress size={18} />
+                                                ) : Number(cookie.daily_remaining ?? 0) > 0 ? (
+                                                    <DoNotDisturbOnOutlinedIcon fontSize="small" />
+                                                ) : (
+                                                    <RestartAltOutlinedIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
+                                {formatCooldownRemaining(Number(cookie.cooldown_until || 0)) ? (
                                         <Chip
                                             size="small"
                                             color="warning"

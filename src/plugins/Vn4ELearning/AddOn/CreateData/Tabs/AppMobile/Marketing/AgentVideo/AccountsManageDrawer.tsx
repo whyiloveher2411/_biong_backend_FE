@@ -58,6 +58,14 @@ const ACCOUNT_TABS: AccountTab[] = [
         ),
     },
     {
+        key: 'leonardo',
+        label: 'Leonardo Cookie',
+        icon: <MovieFilterOutlinedIcon fontSize="small" />,
+        render: ({ active, shortVideoId }) => (
+            <ShortVideoCookieManageContent active={active} website="app.leonardo.ai" shortVideoId={shortVideoId} />
+        ),
+    },
+    {
         key: 'qwen',
         label: 'Qwen',
         icon: <SmartToyOutlinedIcon fontSize="small" />,
