@@ -23,10 +23,13 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import LoadingButton from 'components/atoms/LoadingButton';
 import {
     copyYoutubePromptToClipboard,
+    deepseekYoutubeGenerate,
     enqueueYoutubeThumbnailImages,
+    fetchDeepseekYoutubeStatus,
     fetchYoutubeThumbnailStatus,
     generateYoutubeThumbnailImage,
     parseShortVideoPromptMessage,
@@ -164,6 +167,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [copiedKind, setCopiedKind] = React.useState<YoutubePromptKind | ''>('');
     const [pastingKind, setPastingKind] = React.useState<YoutubePromptKind | ''>('');
     const [savingKind, setSavingKind] = React.useState<YoutubePromptKind | ''>('');
+    const [deepseekKind, setDeepseekKind] = React.useState<YoutubePromptKind | ''>('');
     const [generatingRank, setGeneratingRank] = React.useState<string>('');
     const [savingSelectedTitle, setSavingSelectedTitle] = React.useState(false);
     const [hasStyleReference, setHasStyleReference] = React.useState(false);
@@ -182,6 +186,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const [chaptersWarning, setChaptersWarning] = React.useState<string>('');
     const loadedRef = React.useRef<number>(-1);
     const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const deepseekPollRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     React.useEffect(() => {
         if (!shortVideoId) {
@@ -246,6 +251,9 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         return () => {
             if (copiedTimerRef.current) {
                 clearTimeout(copiedTimerRef.current);
+            }
+            if (deepseekPollRef.current) {
+                clearTimeout(deepseekPollRef.current);
             }
         };
     }, []);
@@ -546,6 +554,85 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
         setValues((prev) => ({ ...prev, [kind]: text }));
         await handleSave(kind, text);
     }, [pastingKind, savingKind, shortVideoId, handleSave, state]);
+
+    /**
+     * Đưa job DeepSeek sinh title/thumbnail vào hàng đợi rồi poll trạng thái tới khi xong.
+     * (DeepThink/Search có thể mất vài phút → không giữ HTTP request, worker chạy nền.)
+     */
+    const handleDeepseekGenerate = React.useCallback(async (kind: YoutubePromptKind) => {
+        if (deepseekKind || savingKind) {
+            return;
+        }
+        if (!shortVideoId) {
+            state.showMessage('Thiếu short video — không gọi được DeepSeek', 'warning');
+            return;
+        }
+        setDeepseekKind(kind);
+        try {
+            const enq = await deepseekYoutubeGenerate(shortVideoId, kind);
+            if (!enq?.success) {
+                state.showMessage(
+                    parseShortVideoPromptMessage(enq?.message) || enq?.error || 'Không đưa được yêu cầu DeepSeek vào hàng đợi',
+                    'error',
+                );
+                setDeepseekKind('');
+                return;
+            }
+            state.showMessage(
+                parseShortVideoPromptMessage(enq?.message) || 'DeepSeek đang xử lý — chờ trong giây lát…',
+                'info',
+            );
+
+            const startedAt = Date.now();
+            const maxWaitMs = 15 * 60 * 1000;
+            const poll = async (): Promise<void> => {
+                if (Date.now() - startedAt > maxWaitMs) {
+                    state.showMessage('DeepSeek xử lý quá lâu — kiểm tra lại sau (worker có thể đang bận)', 'warning');
+                    setDeepseekKind('');
+                    return;
+                }
+                const st = await fetchDeepseekYoutubeStatus(shortVideoId).catch(() => null);
+                if (st?.status === 'done') {
+                    const text = String(st.text || '');
+                    setValues((prev) => ({ ...prev, [kind]: text }));
+                    if (st.outputs) {
+                        setOutputs(st.outputs as WorkflowOutputsMap);
+                    } else {
+                        setOutputs((prev) => ({
+                            ...prev,
+                            [YOUTUBE_WORKFLOW_KEY]: {
+                                ...(prev[YOUTUBE_WORKFLOW_KEY] || {}),
+                                [kind]: text,
+                            },
+                        }));
+                    }
+                    state.showMessage(
+                        parseShortVideoPromptMessage(st.message)
+                            || (kind === 'title' ? 'DeepSeek đã sinh & lưu tiêu đề' : 'DeepSeek đã sinh & lưu nội dung ảnh thu nhỏ'),
+                        'success',
+                    );
+                    setDeepseekKind('');
+                    return;
+                }
+                if (st?.status === 'error') {
+                    state.showMessage(
+                        parseShortVideoPromptMessage(st.message) || 'DeepSeek không trả phản hồi',
+                        'error',
+                    );
+                    setDeepseekKind('');
+                    return;
+                }
+                deepseekPollRef.current = setTimeout(() => { void poll(); }, 5000);
+            };
+            void poll();
+        } catch (error) {
+            state.showMessage(
+                error instanceof Error ? error.message : 'Không gọi được DeepSeek',
+                'error',
+            );
+            setDeepseekKind('');
+        }
+    }, [deepseekKind, savingKind, shortVideoId, state]);
 
     const handleSelectTitle = React.useCallback(async (title: string) => {
         if (savingSelectedTitle) {
@@ -896,7 +983,8 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
     const copied = copiedKind === spec.kind;
     const pasting = pastingKind === spec.kind;
     const saving = savingKind === spec.kind;
-    const pasteDisabled = !shortVideoId || Boolean(pastingKind) || Boolean(savingKind);
+    const deepseeking = deepseekKind === spec.kind;
+    const pasteDisabled = !shortVideoId || Boolean(pastingKind) || Boolean(savingKind) || Boolean(deepseekKind);
     const copyDisabled = !shortVideoId || !hasScript || Boolean(copyingKind);
     const copyDisabledReason = !hasScript
         ? 'Cần audio script trước'
@@ -931,7 +1019,7 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                         YouTube
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Copy prompt generate title/thumbnail, gửi lên chatbot, rồi dán kết quả để lưu và phân tích.
+                        Copy prompt generate title/thumbnail, gửi lên chatbot, rồi dán kết quả để lưu và phân tích — hoặc bấm “Mở DeepSeek” để tự động sinh và lưu.
                     </Typography>
                 </Box>
 
@@ -1025,6 +1113,30 @@ export default function ShortVideoAgentYoutubePanel({ state }: Props) {
                             >
                                 {spec.pasteLabel}
                             </Button>
+
+                            <Tooltip
+                                title={
+                                    copyDisabledReason
+                                        ? copyDisabledReason
+                                        : 'Mở DeepSeek (headless) với cookie, tự gửi prompt và lưu phản hồi'
+                                }
+                                placement="top"
+                            >
+                                <span>
+                                    <LoadingButton
+                                        size="small"
+                                        variant="contained"
+                                        color="primary"
+                                        loading={deepseeking}
+                                        disabled={copyDisabled || Boolean(deepseekKind) || Boolean(savingKind)}
+                                        startIcon={<SmartToyOutlinedIcon fontSize="small" />}
+                                        onClick={() => { void handleDeepseekGenerate(spec.kind); }}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        {deepseeking ? 'DeepSeek đang xử lý…' : 'Mở DeepSeek'}
+                                    </LoadingButton>
+                                </span>
+                            </Tooltip>
                         </Stack>
 
                         <CollapsibleResponseField

@@ -296,6 +296,49 @@ export async function fetchYoutubePrompt(
     return postShortVideoPrompt('short-video/get-youtube-prompt', shortVideoId, { kind });
 }
 
+export type DeepseekYoutubeGenerateResponse = {
+    success?: boolean;
+    kind?: YoutubePromptKind;
+    job_id?: number;
+    status?: string;
+    message?: { content?: string } | string;
+    error?: string;
+};
+
+export type DeepseekYoutubeStatusResponse = {
+    success?: boolean;
+    status?: '' | 'queued' | 'processing' | 'done' | 'error';
+    kind?: YoutubePromptKind;
+    message?: string | { content?: string };
+    job_id?: number;
+    text?: string;
+    outputs?: Record<string, Record<string, string>>;
+};
+
+/**
+ * ĐƯA vào hàng đợi job DeepSeek sinh title/thumbnail (BE dựng prompt + gửi headless). Trả về ngay.
+ * Dùng kèm fetchDeepseekYoutubeStatus để poll kết quả (DeepThink/Search có thể mất vài phút).
+ */
+export async function deepseekYoutubeGenerate(
+    shortVideoId: number,
+    kind: YoutubePromptKind,
+    options: { cookieId?: number; deepThink?: boolean; search?: boolean } = {},
+): Promise<DeepseekYoutubeGenerateResponse> {
+    return postShortVideoPrompt('short-video/deepseek-youtube-generate', shortVideoId, {
+        kind,
+        cookie_id: options.cookieId ?? 0,
+        deep_think: options.deepThink ?? true,
+        search: options.search ?? true,
+    }) as Promise<DeepseekYoutubeGenerateResponse>;
+}
+
+/** Trạng thái + kết quả job DeepSeek gần nhất của short video. */
+export async function fetchDeepseekYoutubeStatus(
+    shortVideoId: number,
+): Promise<DeepseekYoutubeStatusResponse> {
+    return postShortVideoPrompt('short-video/deepseek-youtube-status', shortVideoId) as Promise<DeepseekYoutubeStatusResponse>;
+}
+
 export async function copyYoutubePromptToClipboard(
     shortVideoId: number,
     kind: YoutubePromptKind,

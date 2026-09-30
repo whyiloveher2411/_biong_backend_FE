@@ -28,15 +28,20 @@ import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
+import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import DrawerCustom from 'components/molecules/DrawerCustom';
 import { useFloatingMessages } from 'hook/useFloatingMessages';
 import {
     clearShortVideoCookieCooldown,
     deleteShortVideoCookies,
     listShortVideoCookies,
+    normalizeShortVideoCookieValue,
+    normalizeShortVideoLocalStorage,
     parseShortVideoCookieApiMessage,
+    probeShortVideoCookieLogin,
     recordCanvaFlow,
     recordCanvaSignupFlow,
+    recordDeepseekFlow,
     recordLeonardoFlow,
     saveShortVideoCookie,
     setLeonardoCookieUsage,
@@ -56,6 +61,7 @@ type CookieFormState = {
     title: string;
     website: string;
     cookie_value: string;
+    local_storage: string;
     description: string;
 };
 
@@ -64,6 +70,7 @@ const EMPTY_FORM: CookieFormState = {
     title: '',
     website: SUPPORTED_COOKIE_WEBSITE,
     cookie_value: '',
+    local_storage: '',
     description: '',
 };
 
@@ -92,16 +99,19 @@ function CookieForm({
     form,
     onFormChange,
     saving,
+    showLocalStorage = false,
     onSubmit,
     onCancel,
 }: {
     form: CookieFormState;
     onFormChange: (patch: Partial<CookieFormState>) => void;
     saving: boolean;
+    showLocalStorage?: boolean;
     onSubmit: () => void;
     onCancel: () => void;
 }) {
     const validation = validateShortVideoCookieJson(form.cookie_value);
+    const localStorageValidation = normalizeShortVideoLocalStorage(form.local_storage);
 
     return (
         <Stack spacing={2}>
@@ -120,7 +130,7 @@ function CookieForm({
                 disabled
                 size="small"
                 fullWidth
-                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai, www.canva.com hoặc app.leonardo.ai (convert ảnh beat → video)"
+                helperText="Domain cố định theo tab — meta.ai (render ảnh beat), vibes.ai, www.canva.com, app.leonardo.ai (convert ảnh beat → video) hoặc chat.deepseek.com (sinh title/thumbnail)"
             />
             <TextField
                 label="Mô tả"
@@ -133,7 +143,7 @@ function CookieForm({
                 minRows={2}
             />
             <TextField
-                label="Cookie JSON *"
+                label="Cookie (JSON hoặc bảng DevTools) *"
                 value={form.cookie_value}
                 onChange={(e) => onFormChange({ cookie_value: e.target.value })}
                 disabled={saving}
@@ -145,10 +155,29 @@ function CookieForm({
                 error={Boolean(form.cookie_value.trim()) && !validation.ok}
                 helperText={
                     form.cookie_value.trim() && !validation.ok
-                        ? validation.error || 'Cookie JSON không hợp lệ'
-                        : 'Export cookie từ extension Cookie-Editor khi đang login website, rồi paste vào đây'
+                        ? validation.error || 'Cookie không hợp lệ'
+                        : 'Dán cookie export từ extension Cookie-Editor (JSON) — hoặc copy bảng cookie từ Chrome DevTools (dùng cho site chặn export cookie httpOnly như chat.deepseek.com).'
                 }
             />
+            {showLocalStorage ? (
+                <TextField
+                    label="LocalStorage (JSON hoặc bảng Key/Value)"
+                    value={form.local_storage}
+                    onChange={(e) => onFormChange({ local_storage: e.target.value })}
+                    disabled={saving}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={4}
+                    maxRows={12}
+                    error={Boolean(form.local_storage.trim()) && !localStorageValidation.ok}
+                    helperText={
+                        form.local_storage.trim() && !localStorageValidation.ok
+                            ? localStorageValidation.error || 'LocalStorage không hợp lệ'
+                            : 'DeepSeek lưu token đăng nhập ở localStorage key "userToken" (giá trị dạng {"value":"<token>","__version":"0"}). Dán JSON {"key":"value"} hoặc bảng Key/Value từ DevTools (Application → Local Storage). Token thô cũng được — hệ thống tự bọc lại.'
+                    }
+                />
+            ) : null}
             <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button variant="outlined" onClick={onCancel} disabled={saving}>
                     Hủy
@@ -184,23 +213,39 @@ export function ShortVideoCookieManageContent({
     const [deleteTarget, setDeleteTarget] = React.useState<ShortVideoCookie | null>(null);
     const [deleting, setDeleting] = React.useState(false);
     const [testingId, setTestingId] = React.useState<number | null>(null);
+    const [probingId, setProbingId] = React.useState<number | null>(null);
+    const [probeResult, setProbeResult] = React.useState<{
+        cookie: ShortVideoCookie;
+        loggedIn: boolean | null;
+        cookieCount: number;
+        storageKeys: string[];
+        storage: Record<string, string>;
+    } | null>(null);
     const [recording, setRecording] = React.useState(false);
     const [recordingSignup, setRecordingSignup] = React.useState(false);
     const [recordingLeonardo, setRecordingLeonardo] = React.useState(false);
+    const [recordingDeepseek, setRecordingDeepseek] = React.useState(false);
     const [clearingId, setClearingId] = React.useState<number | null>(null);
     const [togglingUsageId, setTogglingUsageId] = React.useState<number | null>(null);
 
-    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva / Leonardo) — BE mở
+    // Test đăng nhập áp dụng cho site dạng cookie (Meta.ai / Vibes.ai / Canva / Leonardo / DeepSeek) — BE mở
     // browser với đúng cookie của site tương ứng.
     const canTestLogin =
         website === 'meta.ai' ||
         website === 'vibes.ai' ||
         website.includes('canva.com') ||
-        website.includes('leonardo.ai');
+        website.includes('leonardo.ai') ||
+        website.includes('deepseek.com');
     // Recorder chỉ có cho Canva (học flow image → video thủ công).
     const canRecordCanva = website.includes('canva.com');
     // Recorder Leonardo (DEV) — học flow image → video trên app.leonardo.ai.
     const canRecordLeonardo = website.includes('leonardo.ai');
+    // Recorder DeepSeek (DEV) — học flow chat (gõ prompt → gửi → đợi phản hồi) trên chat.deepseek.com.
+    const canRecordDeepseek = website.includes('deepseek.com');
+    // Probe đăng nhập headless (dò trạng thái + localStorage) — dùng cho mọi site cookie.
+    const canProbeLogin = canTestLogin;
+    // Field localStorage chỉ hiện với DeepSeek (nơi token login nằm ở localStorage).
+    const showLocalStorage = canRecordDeepseek;
 
     const emptyForm = React.useMemo<CookieFormState>(() => ({
         ...EMPTY_FORM,
@@ -232,9 +277,12 @@ export function ShortVideoCookieManageContent({
             setForm(emptyForm);
             setDeleteTarget(null);
             setTestingId(null);
+            setProbingId(null);
+            setProbeResult(null);
             setRecording(false);
             setRecordingSignup(false);
             setRecordingLeonardo(false);
+            setRecordingDeepseek(false);
             setTogglingUsageId(null);
             reloadList();
         }
@@ -251,6 +299,7 @@ export function ShortVideoCookieManageContent({
             title: cookie.title || '',
             website: cookie.website || website,
             cookie_value: cookie.cookie_value || '',
+            local_storage: cookie.local_storage || '',
             description: cookie.description || '',
         });
         setMode('form');
@@ -268,9 +317,15 @@ export function ShortVideoCookieManageContent({
             showMessage('Tên cookie không được để trống', 'warning');
             return;
         }
-        const validation = validateShortVideoCookieJson(form.cookie_value);
+        const validation = normalizeShortVideoCookieValue(form.cookie_value);
         if (!validation.ok) {
-            showMessage(validation.error || 'Cookie JSON không hợp lệ', 'warning');
+            showMessage(validation.error || 'Cookie không hợp lệ', 'warning');
+            return;
+        }
+
+        const localStorageValidation = normalizeShortVideoLocalStorage(form.local_storage);
+        if (showLocalStorage && !localStorageValidation.ok) {
+            showMessage(localStorageValidation.error || 'LocalStorage không hợp lệ', 'warning');
             return;
         }
 
@@ -280,7 +335,9 @@ export function ShortVideoCookieManageContent({
             title,
             website: targetWebsite,
             description: form.description,
-            cookie_value: form.cookie_value,
+            // Lưu JSON đã chuẩn hoá (bảng DevTools được chuyển thành mảng cookie).
+            cookie_value: validation.value,
+            local_storage: showLocalStorage ? localStorageValidation.value : '',
         })
             .then((result) => {
                 setSaving(false);
@@ -322,6 +379,39 @@ export function ShortVideoCookieManageContent({
             .catch((err: unknown) => {
                 setTestingId(null);
                 showMessage(err instanceof Error ? err.message : 'Không mở được browser test đăng nhập', 'error');
+            });
+    };
+
+    const handleProbeLogin = (cookie: ShortVideoCookie) => {
+        if (probingId !== null) {
+            return;
+        }
+        setProbingId(cookie.id);
+        probeShortVideoCookieLogin(cookie.id, cookie.website || website)
+            .then((result) => {
+                setProbingId(null);
+                if (result?.success === false) {
+                    showMessage(
+                        parseShortVideoCookieApiMessage(result, 'Không probe được trạng thái đăng nhập'),
+                        'error',
+                    );
+                    return;
+                }
+                setProbeResult({
+                    cookie,
+                    loggedIn: result.logged_in ?? null,
+                    cookieCount: Number(result.cookie_count ?? 0),
+                    storageKeys: Array.isArray(result.storage_keys) ? result.storage_keys : [],
+                    storage: result.storage && typeof result.storage === 'object' ? result.storage : {},
+                });
+                showMessage(
+                    parseShortVideoCookieApiMessage(result, 'Đã probe trạng thái đăng nhập'),
+                    result.logged_in === true ? 'success' : 'warning',
+                );
+            })
+            .catch((err: unknown) => {
+                setProbingId(null);
+                showMessage(err instanceof Error ? err.message : 'Không probe được trạng thái đăng nhập', 'error');
             });
     };
 
@@ -404,6 +494,33 @@ export function ShortVideoCookieManageContent({
             .catch((err: unknown) => {
                 setRecordingLeonardo(false);
                 showMessage(err instanceof Error ? err.message : 'Không mở được recorder Leonardo', 'error');
+            });
+    };
+
+    const handleRecordDeepseek = () => {
+        if (recordingDeepseek) {
+            return;
+        }
+        setRecordingDeepseek(true);
+        recordDeepseekFlow(shortVideoId)
+            .then((result) => {
+                setRecordingDeepseek(false);
+                if (result?.success === false) {
+                    showMessage(parseShortVideoCookieApiMessage(result, 'Không mở được recorder DeepSeek'), 'error');
+                    return;
+                }
+                const baseMessage = parseShortVideoCookieApiMessage(
+                    result,
+                    'Đã mở Chrome recorder DeepSeek — gõ prompt → gửi → đợi phản hồi rồi bấm "End test"',
+                );
+                showMessage(
+                    result?.out_dir ? `${baseMessage} — log: ${result.out_dir}` : baseMessage,
+                    'success',
+                );
+            })
+            .catch((err: unknown) => {
+                setRecordingDeepseek(false);
+                showMessage(err instanceof Error ? err.message : 'Không mở được recorder DeepSeek', 'error');
             });
     };
 
@@ -544,6 +661,18 @@ export function ShortVideoCookieManageContent({
                         Ghi lại thao tác
                     </Button>
                 ) : null}
+                {canRecordDeepseek && mode === 'list' ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={recordingDeepseek ? <CircularProgress size={14} color="inherit" /> : <FiberManualRecordOutlinedIcon />}
+                        onClick={handleRecordDeepseek}
+                        disabled={recordingDeepseek || loading}
+                    >
+                        Ghi lại thao tác
+                    </Button>
+                ) : null}
                 <Box sx={{ flex: 1 }} />
                 <Tooltip title="Tải lại">
                     <span>
@@ -569,6 +698,14 @@ export function ShortVideoCookieManageContent({
                     (upload ảnh → chọn model Video/Motion → Generate → Download). Khi xong bấm
                     <b> “End test”</b> (góc phải trên) — log phục vụ dev viết automation còn được lưu
                     vào <code>storage/logs/leonardo-record/</code>.
+                </Alert>
+            ) : null}
+
+            {canRecordDeepseek && mode === 'list' ? (
+                <Alert severity="info" sx={{ flexShrink: 0 }}>
+                    “Ghi lại thao tác” mở Chrome với cookie <b>chat.deepseek.com</b> để bạn thao tác tay
+                    (gõ prompt → gửi → đợi phản hồi). Khi xong bấm <b>“End test”</b> (góc phải trên) —
+                    log phục vụ dev viết automation còn được lưu vào <code>storage/logs/deepseek-record/</code>.
                 </Alert>
             ) : null}
 
@@ -602,6 +739,7 @@ export function ShortVideoCookieManageContent({
                         form={form}
                         onFormChange={handleFormChange}
                         saving={saving}
+                        showLocalStorage={showLocalStorage}
                         onSubmit={handleSubmit}
                         onCancel={() => setMode('list')}
                     />
@@ -630,7 +768,9 @@ export function ShortVideoCookieManageContent({
                                 ? 'Cookie pool www.canva.com dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
                                 : website.includes('leonardo.ai')
                                     ? 'Cookie pool app.leonardo.ai dùng convert ảnh beat → video (xoay vòng, cookie bị giới hạn sẽ tạm nghỉ).'
-                                    : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
+                                    : website.includes('deepseek.com')
+                                        ? 'Cookie pool chat.deepseek.com dùng sinh tiêu đề / nội dung thumbnail YouTube qua headless browser (xoay vòng).'
+                                        : 'Cookie pool meta.ai dùng render ảnh beat (xoay vòng) và extension tự set cookie để mở Meta.ai.'}
                     </Typography>
                     <Button
                         variant="contained"
@@ -799,6 +939,24 @@ export function ShortVideoCookieManageContent({
                                         </span>
                                     </Tooltip>
                                 ) : null}
+                                {canProbeLogin ? (
+                                    <Tooltip title="Probe đăng nhập (headless) — dò trạng thái + localStorage">
+                                        <span>
+                                            <IconButton
+                                                size="small"
+                                                color="secondary"
+                                                onClick={() => handleProbeLogin(cookie)}
+                                                disabled={probingId !== null}
+                                            >
+                                                {probingId === cookie.id ? (
+                                                    <CircularProgress size={18} />
+                                                ) : (
+                                                    <ScienceOutlinedIcon fontSize="small" />
+                                                )}
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
                                 <Tooltip title="Sửa">
                                     <IconButton size="small" onClick={() => openEditForm(cookie)}>
                                         <EditOutlinedIcon fontSize="small" />
@@ -834,6 +992,66 @@ export function ShortVideoCookieManageContent({
                         {deleting ? <CircularProgress size={16} color="inherit" /> : null}
                         Xóa
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={Boolean(probeResult)}
+                onClose={() => setProbeResult(null)}
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle sx={{ fontSize: 16 }}>Kết quả probe đăng nhập</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+                        <Alert severity={probeResult?.loggedIn === true ? 'success' : probeResult?.loggedIn === false ? 'warning' : 'info'} sx={{ py: 0.5 }}>
+                            {probeResult?.loggedIn === true
+                                ? 'ĐÃ đăng nhập'
+                                : probeResult?.loggedIn === false
+                                    ? 'CHƯA đăng nhập'
+                                    : 'Không xác định được trạng thái'}
+                            {' — '}
+                            {probeResult?.cookieCount ?? 0} cookie set
+                        </Alert>
+                        <Typography variant="caption" color="text.secondary">
+                            LocalStorage keys ({probeResult?.storageKeys.length ?? 0})
+                        </Typography>
+                        <Box
+                            sx={{
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1,
+                                maxHeight: 240,
+                                overflow: 'auto',
+                                p: 1,
+                                bgcolor: 'background.default',
+                            }}
+                        >
+                            {(probeResult?.storageKeys.length ?? 0) === 0 ? (
+                                <Typography variant="body2" color="text.secondary">
+                                    Không có localStorage key nào.
+                                </Typography>
+                            ) : (
+                                probeResult?.storageKeys.map((key) => (
+                                    <Box key={key} sx={{ mb: 1 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 700, wordBreak: 'break-all' }}>
+                                            {key}
+                                        </Typography>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{ display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                                        >
+                                            {String(probeResult?.storage[key] ?? '').slice(0, 400) || '(rỗng)'}
+                                        </Typography>
+                                    </Box>
+                                ))
+                            )}
+                        </Box>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setProbeResult(null)}>Đóng</Button>
                 </DialogActions>
             </Dialog>
         </Box>
